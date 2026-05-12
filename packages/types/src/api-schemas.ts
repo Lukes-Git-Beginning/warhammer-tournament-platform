@@ -71,6 +71,7 @@ export const SeasonSummarySchema = z.object({
   start_date: z.string().datetime(),
   end_date: z.string().datetime(),
   is_active: z.boolean(),
+  dlc_tag: z.string().nullable().optional(),
 });
 export type SeasonSummary = z.infer<typeof SeasonSummarySchema>;
 
@@ -152,3 +153,83 @@ export const UserProfileResponseSchema = z.object({
   ),
 });
 export type UserProfileResponse = z.infer<typeof UserProfileResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Factions + Meta
+// ---------------------------------------------------------------------------
+
+export const FactionDtoSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  race: z.string(),
+  category: z.string(),
+  color_hex: z.string(),
+  display_order: z.number().int(),
+  icon_url: z.string().url().nullable(),
+  initials: z.string().length(2),
+});
+export type FactionDto = z.infer<typeof FactionDtoSchema>;
+
+export const FactionStatsDtoSchema = z.object({
+  matches_played: z.number().int(),
+  wins: z.number().int(),
+  losses: z.number().int(),
+  draws: z.number().int(),
+  win_rate: z.number().nullable(),
+  pick_count: z.number().int(),
+  ban_count: z.number().int(),
+});
+export type FactionStatsDto = z.infer<typeof FactionStatsDtoSchema>;
+
+export const FactionWithStatsDtoSchema = z.object({
+  faction: FactionDtoSchema,
+  stats: FactionStatsDtoSchema.nullable(),
+});
+export type FactionWithStatsDto = z.infer<typeof FactionWithStatsDtoSchema>;
+
+export const FactionListResponseSchema = z.object({
+  data: z.array(FactionWithStatsDtoSchema),
+  season: SeasonSummarySchema,
+});
+export type FactionListResponse = z.infer<typeof FactionListResponseSchema>;
+
+export const SnapshotTrendEntrySchema = z.object({
+  date: z.string(), // ISO date YYYY-MM-DD
+  matches_played: z.number().int(),
+  win_rate: z.number().nullable(),
+});
+export type SnapshotTrendEntry = z.infer<typeof SnapshotTrendEntrySchema>;
+
+export const FactionDetailResponseSchema = z.object({
+  faction: FactionDtoSchema,
+  stats: FactionStatsDtoSchema.nullable(),
+  trend: z.array(SnapshotTrendEntrySchema),
+});
+export type FactionDetailResponse = z.infer<typeof FactionDetailResponseSchema>;
+
+export const MetaOverviewResponseSchema = z.object({
+  season: SeasonSummarySchema,
+  top_factions_by_winrate: z.array(FactionWithStatsDtoSchema),
+  top_factions_by_pickrate: z.array(FactionWithStatsDtoSchema),
+  total_matches: z.number().int(),
+  faction_diversity: z.number(),
+});
+export type MetaOverviewResponse = z.infer<typeof MetaOverviewResponseSchema>;
+
+export const MatchupCellSchema = z.object({
+  faction_a_id: z.string(),
+  faction_b_id: z.string(),
+  faction_a_wins: z.number().int(),
+  faction_b_wins: z.number().int(),
+  draws: z.number().int(),
+  total: z.number().int(),
+  winrate_a: z.number().nullable(),
+});
+export type MatchupCell = z.infer<typeof MatchupCellSchema>;
+
+export const MatchupHeatmapResponseSchema = z.object({
+  season_id: z.string().uuid(),
+  cells: z.array(MatchupCellSchema),
+  factions: z.array(FactionDtoSchema),
+});
+export type MatchupHeatmapResponse = z.infer<typeof MatchupHeatmapResponseSchema>;
