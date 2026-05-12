@@ -30,7 +30,7 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   msw.listen({ onUnhandledRequest: 'bypass' });
-  app = await buildApp({ withSocket: false, withRedis: false });
+  app = await buildApp({ withSocket: false, withRedis: false, withCron: false });
   await app.ready();
 });
 

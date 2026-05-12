@@ -6,6 +6,7 @@ import dbPlugin from './plugins/db.js';
 import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
 import socketPlugin from './plugins/socket.js';
+import cronPlugin from './plugins/cron.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import tournamentRoutes from './routes/tournaments.js';
@@ -22,10 +23,12 @@ export interface BuildAppOptions {
   withSocket?: boolean;
   /** Skip redis entirely (only valid when withSocket=false). */
   withRedis?: boolean;
+  /** Skip cron plugin during tests (default true in production). */
+  withCron?: boolean;
 }
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
-  const { withSocket = true, withRedis = true } = opts;
+  const { withSocket = true, withRedis = true, withCron = true } = opts;
   const isProd = process.env.NODE_ENV === 'production';
 
   const app = Fastify({
@@ -55,6 +58,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   if (withRedis) await app.register(redisPlugin);
   await app.register(authPlugin);
   if (withSocket) await app.register(socketPlugin);
+  if (withCron) await app.register(cronPlugin);
 
   await app.register(authRoutes);
   await app.register(userRoutes);

@@ -12,7 +12,7 @@ const U2 = '20000000-0000-0000-0000-000000000002';
 const U3 = '20000000-0000-0000-0000-000000000003';
 
 beforeAll(async () => {
-  app = await buildApp({ withSocket: false, withRedis: false });
+  app = await buildApp({ withSocket: false, withRedis: false, withCron: false });
   await app.ready();
 });
 

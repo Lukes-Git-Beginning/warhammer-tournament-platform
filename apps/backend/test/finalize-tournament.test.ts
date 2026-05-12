@@ -177,7 +177,7 @@ const EACTOR = 'e0000000-0000-0000-0000-000000000099';
 let app: FastifyInstance;
 
 beforeAll(async () => {
-  app = await buildApp({ withSocket: false, withRedis: false });
+  app = await buildApp({ withSocket: false, withRedis: false, withCron: false });
   await app.ready();
 });
 

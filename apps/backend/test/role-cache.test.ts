@@ -12,7 +12,7 @@ const ORGANIZER_ID = 'a0000000-0000-0000-0000-000000000003';
 const DELETED_ID = 'a0000000-0000-0000-0000-000000000004';
 
 beforeAll(async () => {
-  app = await buildApp({ withSocket: false, withRedis: false });
+  app = await buildApp({ withSocket: false, withRedis: false, withCron: false });
   await app.ready();
 });
 

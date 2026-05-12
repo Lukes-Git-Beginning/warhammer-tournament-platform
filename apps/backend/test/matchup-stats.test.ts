@@ -23,7 +23,7 @@ const BRETONNIA = 'bretonnia';
 let app: FastifyInstance;
 
 beforeAll(async () => {
-  app = await buildApp({ withSocket: false, withRedis: false });
+  app = await buildApp({ withSocket: false, withRedis: false, withCron: false });
   await app.ready();
 });
 
