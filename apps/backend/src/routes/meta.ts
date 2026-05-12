@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { cached, cacheKey } from '../lib/cache.js';
 import { asFactionDto, getFactionsWithStats } from '../lib/factions.js';
+import { getMatchupMatrix } from '../lib/heatmap.js';
 
 // ---------------------------------------------------------------------------
 // Query Schemas
@@ -133,27 +134,10 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('meta:matchups', { seasonId: resolvedSeasonId }),
       async () => {
-        const factions = await fastify.prisma.faction.findMany({
-          orderBy: { display_order: 'asc' },
-        });
-
-        // M3.5 will replace cells with raw SQL aggregation
-        const matchupRows = await fastify.prisma.matchupStats.findMany({
-          where: { season_id: resolvedSeasonId },
-        });
-
-        const cells = matchupRows.map((row) => {
-          const total = row.faction_a_wins + row.faction_b_wins + row.draws;
-          return {
-            faction_a_id: row.faction_a_id,
-            faction_b_id: row.faction_b_id,
-            faction_a_wins: row.faction_a_wins,
-            faction_b_wins: row.faction_b_wins,
-            draws: row.draws,
-            total,
-            winrate_a: total > 0 ? row.faction_a_wins / total : null,
-          };
-        });
+        const [cells, factions] = await Promise.all([
+          getMatchupMatrix(fastify.prisma, resolvedSeasonId),
+          fastify.prisma.faction.findMany({ orderBy: { display_order: 'asc' } }),
+        ]);
 
         return {
           season_id: resolvedSeasonId,
