@@ -75,6 +75,9 @@ jobs:
       - name: Prisma generate
         run: pnpm --filter @tww3/db exec prisma generate
 
+      - name: Seed factions and default season
+        run: pnpm db:seed
+
       - name: Lint
         run: pnpm lint
 
