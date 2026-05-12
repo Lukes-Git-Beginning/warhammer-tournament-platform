@@ -384,6 +384,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           await Promise.all([
             invalidate(fastify.redis, 'leaderboard:*'),
             invalidate(fastify.redis, 'tournaments:list:*'),
+            invalidate(fastify.redis, 'factions:*'),
+            invalidate(fastify.redis, 'meta:*'),
           ]);
         } catch (err) {
           request.log.warn({ err, tournamentId: tournament.id }, 'finalize failed');

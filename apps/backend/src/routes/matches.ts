@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { emitMatchResult, emitBracketUpdate } from '../lib/emit.js';
+import { invalidate } from '../lib/cache.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -228,6 +229,14 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       });
+
+      // Invalidate faction and meta caches after successful transaction
+      if (fastify.redis) {
+        await Promise.all([
+          invalidate(fastify.redis, 'factions:*'),
+          invalidate(fastify.redis, 'meta:*'),
+        ]);
+      }
 
       // Emit socket events after successful transaction
       emitMatchResult(fastify.io, {
