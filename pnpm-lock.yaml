@@ -87,6 +87,9 @@ importers:
       '@types/node':
         specifier: ^22.10.5
         version: 22.19.19
+      msw:
+        specifier: ^2.14.6
+        version: 2.14.6(@types/node@22.19.19)(typescript@5.9.3)
       socket.io-client:
         specifier: ^4.8.1
         version: 4.8.3
@@ -3463,8 +3466,7 @@ snapshots:
     dependencies:
       hono: 4.12.18
 
-  '@inquirer/ansi@2.0.5':
-    optional: true
+  '@inquirer/ansi@2.0.5': {}
 
   '@inquirer/confirm@6.0.13(@types/node@22.19.19)':
     dependencies:
@@ -3472,7 +3474,6 @@ snapshots:
       '@inquirer/type': 4.0.5(@types/node@22.19.19)
     optionalDependencies:
       '@types/node': 22.19.19
-    optional: true
 
   '@inquirer/core@11.1.10(@types/node@22.19.19)':
     dependencies:
@@ -3485,15 +3486,12 @@ snapshots:
       signal-exit: 4.1.0
     optionalDependencies:
       '@types/node': 22.19.19
-    optional: true
 
-  '@inquirer/figures@2.0.5':
-    optional: true
+  '@inquirer/figures@2.0.5': {}
 
   '@inquirer/type@4.0.5(@types/node@22.19.19)':
     optionalDependencies:
       '@types/node': 22.19.19
-    optional: true
 
   '@ioredis/commands@1.5.1': {}
 
@@ -3528,22 +3526,17 @@ snapshots:
       is-node-process: 1.2.0
       outvariant: 1.4.3
       strict-event-emitter: 0.5.1
-    optional: true
 
-  '@open-draft/deferred-promise@2.2.0':
-    optional: true
+  '@open-draft/deferred-promise@2.2.0': {}
 
-  '@open-draft/deferred-promise@3.0.0':
-    optional: true
+  '@open-draft/deferred-promise@3.0.0': {}
 
   '@open-draft/logger@0.3.0':
     dependencies:
       is-node-process: 1.2.0
       outvariant: 1.4.3
-    optional: true
 
-  '@open-draft/until@2.1.0':
-    optional: true
+  '@open-draft/until@2.1.0': {}
 
   '@pinojs/redact@0.4.0': {}
 
@@ -4030,10 +4023,8 @@ snapshots:
   '@types/set-cookie-parser@2.4.10':
     dependencies:
       '@types/node': 22.19.19
-    optional: true
 
-  '@types/statuses@2.0.6':
-    optional: true
+  '@types/statuses@2.0.6': {}
 
   '@types/trusted-types@2.0.7':
     optional: true
@@ -4139,13 +4130,11 @@ snapshots:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
-  ansi-regex@5.0.1:
-    optional: true
+  ansi-regex@5.0.1: {}
 
   ansi-styles@4.3.0:
     dependencies:
       color-convert: 2.0.1
-    optional: true
 
   ansi-styles@5.2.0:
     optional: true
@@ -4238,15 +4227,13 @@ snapshots:
     dependencies:
       readdirp: 5.0.0
 
-  cli-width@4.1.0:
-    optional: true
+  cli-width@4.1.0: {}
 
   cliui@8.0.1:
     dependencies:
       string-width: 4.2.3
       strip-ansi: 6.0.1
       wrap-ansi: 7.0.0
-    optional: true
 
   clsx@2.1.1: {}
 
@@ -4255,10 +4242,8 @@ snapshots:
   color-convert@2.0.1:
     dependencies:
       color-name: 1.1.4
-    optional: true
 
-  color-name@1.1.4:
-    optional: true
+  color-name@1.1.4: {}
 
   colorette@2.0.20: {}
 
@@ -4343,8 +4328,7 @@ snapshots:
 
   electron-to-chromium@1.5.353: {}
 
-  emoji-regex@8.0.0:
-    optional: true
+  emoji-regex@8.0.0: {}
 
   empathic@2.0.0: {}
 
@@ -4522,20 +4506,17 @@ snapshots:
 
   fast-safe-stringify@2.1.1: {}
 
-  fast-string-truncated-width@3.0.3:
-    optional: true
+  fast-string-truncated-width@3.0.3: {}
 
   fast-string-width@3.0.2:
     dependencies:
       fast-string-truncated-width: 3.0.3
-    optional: true
 
   fast-uri@3.1.2: {}
 
   fast-wrap-ansi@0.2.0:
     dependencies:
       fast-string-width: 3.0.2
-    optional: true
 
   fastfall@1.5.1:
     dependencies:
@@ -4599,8 +4580,7 @@ snapshots:
 
   gensync@1.0.0-beta.2: {}
 
-  get-caller-file@2.0.5:
-    optional: true
+  get-caller-file@2.0.5: {}
 
   get-port-please@3.2.0: {}
 
@@ -4620,8 +4600,7 @@ snapshots:
 
   graphmatch@1.1.1: {}
 
-  graphql@16.14.0:
-    optional: true
+  graphql@16.14.0: {}
 
   happy-dom@16.8.1:
     dependencies:
@@ -4656,7 +4635,6 @@ snapshots:
     dependencies:
       '@types/set-cookie-parser': 2.4.10
       set-cookie-parser: 3.1.0
-    optional: true
 
   helmet@8.1.0: {}
 
@@ -4701,13 +4679,11 @@ snapshots:
 
   is-decimal@2.0.1: {}
 
-  is-fullwidth-code-point@3.0.0:
-    optional: true
+  is-fullwidth-code-point@3.0.0: {}
 
   is-hexadecimal@2.0.1: {}
 
-  is-node-process@1.2.0:
-    optional: true
+  is-node-process@1.2.0: {}
 
   is-plain-obj@4.1.0: {}
 
@@ -5084,10 +5060,8 @@ snapshots:
       typescript: 5.9.3
     transitivePeerDependencies:
       - '@types/node'
-    optional: true
 
-  mute-stream@3.0.0:
-    optional: true
+  mute-stream@3.0.0: {}
 
   mysql2@3.15.3:
     dependencies:
@@ -5125,8 +5099,7 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  outvariant@1.4.3:
-    optional: true
+  outvariant@1.4.3: {}
 
   parse-entities@4.0.2:
     dependencies:
@@ -5140,8 +5113,7 @@ snapshots:
 
   path-key@3.1.1: {}
 
-  path-to-regexp@6.3.0:
-    optional: true
+  path-to-regexp@6.3.0: {}
 
   pathe@1.1.2: {}
 
@@ -5372,8 +5344,7 @@ snapshots:
 
   remeda@2.33.4: {}
 
-  require-directory@2.1.1:
-    optional: true
+  require-directory@2.1.1: {}
 
   require-from-string@2.0.2: {}
 
@@ -5383,8 +5354,7 @@ snapshots:
 
   retry@0.12.0: {}
 
-  rettime@0.11.11:
-    optional: true
+  rettime@0.11.11: {}
 
   reusify@1.1.0: {}
 
@@ -5449,8 +5419,7 @@ snapshots:
 
   set-cookie-parser@2.7.2: {}
 
-  set-cookie-parser@3.1.0:
-    optional: true
+  set-cookie-parser@3.1.0: {}
 
   shebang-command@2.0.0:
     dependencies:
@@ -5537,8 +5506,7 @@ snapshots:
 
   standard-as-callback@2.1.0: {}
 
-  statuses@2.0.2:
-    optional: true
+  statuses@2.0.2: {}
 
   std-env@3.10.0: {}
 
@@ -5550,15 +5518,13 @@ snapshots:
       fastseries: 1.7.2
       reusify: 1.1.0
 
-  strict-event-emitter@0.5.1:
-    optional: true
+  strict-event-emitter@0.5.1: {}
 
   string-width@4.2.3:
     dependencies:
       emoji-regex: 8.0.0
       is-fullwidth-code-point: 3.0.0
       strip-ansi: 6.0.1
-    optional: true
 
   stringify-entities@4.0.4:
     dependencies:
@@ -5568,7 +5534,6 @@ snapshots:
   strip-ansi@6.0.1:
     dependencies:
       ansi-regex: 5.0.1
-    optional: true
 
   strip-json-comments@5.0.3: {}
 
@@ -5580,8 +5545,7 @@ snapshots:
     dependencies:
       inline-style-parser: 0.2.7
 
-  tagged-tag@1.0.0:
-    optional: true
+  tagged-tag@1.0.0: {}
 
   tailwindcss@4.3.0: {}
 
@@ -5606,13 +5570,11 @@ snapshots:
 
   tinyspy@3.0.2: {}
 
-  tldts-core@7.0.30:
-    optional: true
+  tldts-core@7.0.30: {}
 
   tldts@7.0.30:
     dependencies:
       tldts-core: 7.0.30
-    optional: true
 
   toad-cache@3.7.0: {}
 
@@ -5622,7 +5584,6 @@ snapshots:
   tough-cookie@6.0.1:
     dependencies:
       tldts: 7.0.30
-    optional: true
 
   tournament-pairings@2.0.1:
     dependencies:
@@ -5651,7 +5612,6 @@ snapshots:
   type-fest@5.6.0:
     dependencies:
       tagged-tag: 1.0.0
-    optional: true
 
   typescript@5.9.3: {}
 
@@ -5692,8 +5652,7 @@ snapshots:
       unist-util-is: 6.0.1
       unist-util-visit-parents: 6.0.2
 
-  until-async@3.0.2:
-    optional: true
+  until-async@3.0.2: {}
 
   update-browserslist-db@1.2.3(browserslist@4.28.2):
     dependencies:
@@ -5819,7 +5778,6 @@ snapshots:
       ansi-styles: 4.3.0
       string-width: 4.2.3
       strip-ansi: 6.0.1
-    optional: true
 
   wrappy@1.0.2: {}
 
@@ -5832,13 +5790,11 @@ snapshots:
 
   xtend@4.0.2: {}
 
-  y18n@5.0.8:
-    optional: true
+  y18n@5.0.8: {}
 
   yallist@3.1.1: {}
 
-  yargs-parser@21.1.1:
-    optional: true
+  yargs-parser@21.1.1: {}
 
   yargs@17.7.2:
     dependencies:
@@ -5849,7 +5805,6 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 21.1.1
-    optional: true
 
   zeptomatch@2.1.0:
     dependencies:

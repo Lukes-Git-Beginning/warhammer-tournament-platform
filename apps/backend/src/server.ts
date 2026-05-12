@@ -1,25 +1,24 @@
-// Entry point.
-// M1.1 boots a minimal Fastify with /health only.
-// M1.3 wires plugins (db, redis, auth, socket) and the real route tree.
-
 import 'dotenv/config';
-import Fastify from 'fastify';
+import { buildApp } from './app.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? '0.0.0.0';
 
 async function main(): Promise<void> {
-  const app = Fastify({
-    logger: {
-      level: process.env.LOG_LEVEL ?? 'info',
-      transport:
-        process.env.NODE_ENV === 'production'
-          ? undefined
-          : { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } },
-    },
-  });
+  const app = await buildApp();
 
-  app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
+  const shutdown = async (signal: string): Promise<void> => {
+    app.log.info({ signal }, 'shutting down');
+    try {
+      await app.close();
+      process.exit(0);
+    } catch (err) {
+      app.log.error({ err }, 'shutdown failed');
+      process.exit(1);
+    }
+  };
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
   try {
     await app.listen({ port: PORT, host: HOST });

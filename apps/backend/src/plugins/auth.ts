@@ -1,0 +1,93 @@
+import fp from 'fastify-plugin';
+import fastifyCookie from '@fastify/cookie';
+import fastifyJwt from '@fastify/jwt';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { JwtPayload, Role } from '@tww3/types';
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    signAuthCookie: (reply: FastifyReply, payload: JwtPayload) => void;
+    clearAuthCookie: (reply: FastifyReply) => void;
+    requireRole: (
+      ...roles: Role[]
+    ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  }
+  interface FastifyRequest {
+    user: JwtPayload;
+  }
+}
+
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    payload: JwtPayload;
+    user: JwtPayload;
+  }
+}
+
+export default fp(
+  async (fastify) => {
+    const secret = process.env.JWT_SECRET;
+    if (!secret || secret.length < 32) {
+      throw new Error('JWT_SECRET must be set and at least 32 chars long');
+    }
+
+    const cookieName = process.env.JWT_COOKIE_NAME ?? 'auth_token';
+    const cookieDomain = process.env.JWT_COOKIE_DOMAIN ?? 'localhost';
+    const expiresInSec = Number(process.env.JWT_EXPIRES_IN ?? 604800);
+    const isProd = process.env.NODE_ENV === 'production';
+
+    await fastify.register(fastifyCookie);
+    await fastify.register(fastifyJwt, {
+      secret,
+      cookie: { cookieName, signed: false },
+      sign: { expiresIn: `${expiresInSec}s` },
+    });
+
+    fastify.decorate('authenticate', async (request, reply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.code(401).send({
+          error: 'Unauthorized',
+          message: 'Missing or invalid auth token',
+          statusCode: 401,
+        });
+      }
+    });
+
+    fastify.decorate('requireRole', (...roles: Role[]) => async (request, reply) => {
+      if (!request.user) {
+        return reply.code(401).send({
+          error: 'Unauthorized',
+          message: 'Not authenticated',
+          statusCode: 401,
+        });
+      }
+      if (!roles.includes(request.user.role)) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: `Required role: ${roles.join(' or ')}`,
+          statusCode: 403,
+        });
+      }
+    });
+
+    fastify.decorate('signAuthCookie', (reply, payload) => {
+      const token = fastify.jwt.sign(payload);
+      reply.setCookie(cookieName, token, {
+        path: '/',
+        httpOnly: true,
+        secure: isProd,
+        sameSite: 'lax',
+        domain: cookieDomain,
+        maxAge: expiresInSec,
+      });
+    });
+
+    fastify.decorate('clearAuthCookie', (reply) => {
+      reply.clearCookie(cookieName, { path: '/', domain: cookieDomain });
+    });
+  },
+  { name: 'auth', dependencies: [] },
+);
