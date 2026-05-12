@@ -27,15 +27,15 @@ export function IndexPage() {
         </div>
       )}
 
-      {data && data.items.length === 0 && (
+      {data && data.data.length === 0 && (
         <div className="rounded-md border border-stone-800 bg-stone-900/50 p-10 text-center">
           <p className="text-stone-400">Noch keine Turniere.</p>
         </div>
       )}
 
-      {data && data.items.length > 0 && (
+      {data && data.data.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {data.items.map((t) => (
+          {data.data.map((t) => (
             <TournamentCard key={t.id} tournament={t} />
           ))}
         </div>

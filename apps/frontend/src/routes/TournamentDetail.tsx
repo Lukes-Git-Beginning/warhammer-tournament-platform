@@ -4,19 +4,21 @@ import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
 import { getTournament } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
+import { BracketView } from '@/components/bracket/BracketView';
 
 const FORMAT_LABELS: Record<string, string> = {
   SINGLE_ELIMINATION: 'Single Elimination',
   SWISS: 'Swiss',
   ROUND_ROBIN: 'Round Robin',
+  DOUBLE_ELIMINATION: 'Double Elimination',
 };
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-stone-700 text-stone-300',
-  REGISTRATION: 'bg-emerald-800 text-emerald-200',
-  ACTIVE: 'bg-warhammer-blood text-white',
+  OPEN_REGISTRATION: 'bg-emerald-800 text-emerald-200',
+  REGISTRATION_CLOSED: 'bg-yellow-900 text-yellow-200',
+  ONGOING: 'bg-warhammer-blood text-white',
   COMPLETED: 'bg-stone-600 text-stone-300',
-  CANCELLED: 'bg-red-950 text-red-300',
 };
 
 // Sanitize markdown HTML output via DOMPurify
@@ -174,11 +176,18 @@ export function TournamentDetail() {
       )}
 
       {tournament.rules && (
-        <section>
+        <section className="mb-8">
           <h2 className="font-display text-xl font-semibold text-warhammer-gold mb-3">Regeln</h2>
           <div className="rounded-md border border-stone-800 bg-stone-900/50 p-6 text-stone-300 leading-relaxed">
             <SafeMarkdown>{tournament.rules}</SafeMarkdown>
           </div>
+        </section>
+      )}
+
+      {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
+        <section>
+          <h2 className="font-display text-xl font-semibold text-warhammer-gold mb-3">Bracket</h2>
+          <BracketView slug={tournament.slug} tournamentId={tournament.id} />
         </section>
       )}
     </main>
