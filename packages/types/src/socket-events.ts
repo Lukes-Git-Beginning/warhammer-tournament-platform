@@ -13,7 +13,7 @@ export interface ServerToClientEvents {
   match_result: (payload: {
     tournamentId: string;
     matchId: string;
-    winnerId: string;
+    winnerId: string | null;
     score: string | null;
     nextMatchId: string | null;
   }) => void;

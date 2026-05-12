@@ -7,7 +7,7 @@ import { emitMatchResult, emitBracketUpdate } from '../lib/emit.js';
 // ---------------------------------------------------------------------------
 
 const ReportResultSchema = z.object({
-  winnerId: z.string().uuid(),
+  winnerId: z.string().uuid().nullable(),
   score: z.string().max(64).optional(),
   player1FactionId: z.string().min(1).optional(),
   player2FactionId: z.string().min(1).optional(),
@@ -84,8 +84,8 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Winner must be one of the two players
-      if (winnerId !== match.player1_id && winnerId !== match.player2_id) {
+      // Winner must be one of the two players (null = draw)
+      if (winnerId !== null && winnerId !== match.player1_id && winnerId !== match.player2_id) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
           message: 'winnerId must be player1 or player2 of this match',
@@ -99,9 +99,13 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const effectiveP1FactionId = player1FactionId ?? match.player1_faction_id ?? null;
       const effectiveP2FactionId = player2FactionId ?? match.player2_faction_id ?? null;
 
-      // Winner/loser faction IDs for stats
-      const winnerFactionId = winnerId === match.player1_id ? effectiveP1FactionId : effectiveP2FactionId;
-      const loserFactionId = loserId === match.player1_id ? effectiveP1FactionId : effectiveP2FactionId;
+      // Winner/loser faction IDs for stats (null for draw)
+      const winnerFactionId = winnerId === null
+        ? null
+        : winnerId === match.player1_id ? effectiveP1FactionId : effectiveP2FactionId;
+      const loserFactionId = winnerId === null
+        ? null
+        : loserId === match.player1_id ? effectiveP1FactionId : effectiveP2FactionId;
 
       // Find active season (optional — FactionStats update only when season exists)
       const activeSeason = await fastify.prisma.season.findFirst({
@@ -173,6 +177,38 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
               },
             });
           }
+        }
+
+        // e) MatchupStats update (alphabetical symmetry: faction_a_id < faction_b_id by string sort)
+        if (activeSeason && effectiveP1FactionId && effectiveP2FactionId) {
+          const sorted = [effectiveP1FactionId, effectiveP2FactionId].sort();
+          const aId = sorted[0]!;
+          const bId = sorted[1]!;
+          const isDraw = winnerId === null;
+          const winnerIsA = winnerFactionId === aId;
+
+          await tx.matchupStats.upsert({
+            where: {
+              faction_a_id_faction_b_id_season_id: {
+                faction_a_id: aId,
+                faction_b_id: bId,
+                season_id: activeSeason.id,
+              },
+            },
+            create: {
+              faction_a_id: aId,
+              faction_b_id: bId,
+              season_id: activeSeason.id,
+              faction_a_wins: !isDraw && winnerIsA ? 1 : 0,
+              faction_b_wins: !isDraw && !winnerIsA ? 1 : 0,
+              draws: isDraw ? 1 : 0,
+            },
+            update: isDraw
+              ? { draws: { increment: 1 } }
+              : winnerIsA
+                ? { faction_a_wins: { increment: 1 } }
+                : { faction_b_wins: { increment: 1 } },
+          });
         }
 
         // d) Audit log
