@@ -57,3 +57,95 @@ export const JwtPayloadSchema = z.object({
   role: RoleSchema,
 });
 export type JwtPayload = z.infer<typeof JwtPayloadSchema>;
+
+// ---------------------------------------------------------------------------
+// Leaderboard
+// ---------------------------------------------------------------------------
+
+export const SeasonSummarySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  start_date: z.string().datetime(),
+  end_date: z.string().datetime(),
+  is_active: z.boolean(),
+});
+export type SeasonSummary = z.infer<typeof SeasonSummarySchema>;
+
+export const LeaderboardEntryDtoSchema = z.object({
+  rank: z.number().int(),
+  user: z.object({ id: z.string().uuid(), username: z.string(), avatar_url: z.string().url().nullable() }),
+  total_points: z.number(),
+  elo_rating: z.number().int(),
+  matches_played: z.number().int(),
+  wins: z.number().int(),
+  losses: z.number().int(),
+});
+export type LeaderboardEntryDto = z.infer<typeof LeaderboardEntryDtoSchema>;
+
+export const LeaderboardResponseSchema = z.object({
+  season: SeasonSummarySchema.optional(),
+  entries: z.array(LeaderboardEntryDtoSchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+});
+export type LeaderboardResponse = z.infer<typeof LeaderboardResponseSchema>;
+
+export const AllTimeLeaderboardEntryDtoSchema = LeaderboardEntryDtoSchema.extend({
+  seasons_participated: z.number().int(),
+});
+export type AllTimeLeaderboardEntryDto = z.infer<typeof AllTimeLeaderboardEntryDtoSchema>;
+
+// ---------------------------------------------------------------------------
+// User Profile
+// ---------------------------------------------------------------------------
+
+export const UserProfileResponseSchema = z.object({
+  user: z.object({
+    id: z.string().uuid(),
+    username: z.string(),
+    avatar_url: z.string().url().nullable(),
+    role: RoleSchema,
+    created_at: z.string().datetime(),
+  }),
+  current_season: z
+    .object({
+      season: SeasonSummarySchema,
+      total_points: z.number(),
+      elo_rating: z.number().int(),
+      matches_played: z.number().int(),
+      wins: z.number().int(),
+      losses: z.number().int(),
+    })
+    .nullable(),
+  all_time: z.object({
+    matches_played: z.number().int(),
+    wins: z.number().int(),
+    losses: z.number().int(),
+    tournaments_played: z.number().int(),
+    total_points: z.number(),
+  }),
+  recent_results: z.array(
+    z.object({
+      tournament: z.object({ slug: z.string(), name: z.string(), start_date: z.string().datetime() }),
+      season_name: z.string().nullable(),
+      placement: z.number().int(),
+      points_earned: z.number(),
+      created_at: z.string().datetime(),
+    }),
+  ),
+  recent_matches: z.array(
+    z.object({
+      tournament: z.object({ slug: z.string(), name: z.string() }),
+      round: z.number().int(),
+      opponent: z
+        .object({ id: z.string().uuid(), username: z.string(), avatar_url: z.string().url().nullable() })
+        .nullable(),
+      winnerId: z.string().uuid().nullable(),
+      score: z.string().nullable(),
+      status: z.string(),
+      updatedAt: z.string().datetime(),
+    }),
+  ),
+});
+export type UserProfileResponse = z.infer<typeof UserProfileResponseSchema>;

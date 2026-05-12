@@ -11,7 +11,9 @@ import userRoutes from './routes/users.js';
 import tournamentRoutes from './routes/tournaments.js';
 import participantRoutes from './routes/participants.js';
 import matchRoutes from './routes/matches.js';
+import seasonRoutes from './routes/seasons.js';
 import bracketRoutes from './routes/bracket.js';
+import leaderboardRoutes from './routes/leaderboard.js';
 
 export interface BuildAppOptions {
   /** Skip socket plugin during unit tests (avoids redis adapter init). */
@@ -57,7 +59,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(tournamentRoutes);
   await app.register(participantRoutes);
   await app.register(matchRoutes);
+  await app.register(seasonRoutes);
   await app.register(bracketRoutes);
+  await app.register(leaderboardRoutes);
 
   app.get('/health', async () => ({
     status: 'ok' as const,
