@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { MatchStatus, TournamentFormat, TournamentStatus } from '@tww3/db';
 import type { BracketResponse } from '@tww3/types';
 import { generateSingleElim } from '../lib/bracket.js';
+import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
 
 const bracketRoutes: FastifyPluginAsync = async (fastify) => {
   /**
@@ -191,17 +192,11 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       // Emit socket events after successful transaction.
-      if (fastify.io) {
-        fastify.io
-          .to(`tournament_${tournament.id}`)
-          .emit('tournament_status_change', {
-            tournamentId: tournament.id,
-            status: 'ONGOING',
-          });
-        fastify.io
-          .to(`tournament_${tournament.id}`)
-          .emit('bracket_update', { tournamentId: tournament.id });
-      }
+      emitStatusChange(fastify.io, {
+        tournamentId: tournament.id,
+        status: 'ONGOING',
+      });
+      emitBracketUpdate(fastify.io, tournament.id);
 
       return reply.code(200).send({
         tournamentId: tournament.id,

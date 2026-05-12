@@ -52,13 +52,30 @@ export default fp(
       }
     });
 
+    const uuidRe = /^[0-9a-f-]{36}$/i;
+
     io.on('connection', (socket) => {
       fastify.log.debug(
         { userId: socket.data.userId, sid: socket.id },
         'socket connected',
       );
-      socket.on('join_tournament', (id) => void socket.join(`tournament_${id}`));
+
+      socket.on('join_tournament', (id) => {
+        if (typeof id !== 'string' || !uuidRe.test(id)) {
+          fastify.log.warn({ sid: socket.id, id }, 'join_tournament: invalid UUID, ignoring');
+          return;
+        }
+        void socket.join(`tournament_${id}`);
+      });
+
       socket.on('leave_tournament', (id) => void socket.leave(`tournament_${id}`));
+
+      socket.on('disconnect', (reason) => {
+        fastify.log.debug(
+          { userId: socket.data.userId, sid: socket.id, reason },
+          'socket disconnected',
+        );
+      });
     });
 
     fastify.decorate('io', io);

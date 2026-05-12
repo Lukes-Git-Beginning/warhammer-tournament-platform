@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { generateSlug, validateStatusTransition, TournamentStatus } from '../lib/tournament-utils.js';
+import { emitStatusChange } from '../lib/emit.js';
+import type { TournamentStatusLiteral } from '@tww3/types';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -366,9 +368,9 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Emit socket event on status change
       if (newStatus !== undefined) {
-        fastify.io.to(`tournament_${tournament.id}`).emit('tournament_status_change', {
+        emitStatusChange(fastify.io, {
           tournamentId: tournament.id,
-          status: newStatus,
+          status: newStatus as TournamentStatusLiteral,
         });
       }
 

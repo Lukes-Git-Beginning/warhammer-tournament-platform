@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { emitMatchResult, emitBracketUpdate } from '../lib/emit.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -193,17 +194,15 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       // Emit socket events after successful transaction
-      fastify.io
-        .to(`tournament_${match.tournament_id}`)
-        .emit('match_result', {
-          matchId,
-          winnerId,
-          score: score ?? '',
-        });
+      emitMatchResult(fastify.io, {
+        tournamentId: match.tournament_id,
+        matchId,
+        winnerId,
+        score: score ?? null,
+        nextMatchId: match.next_match_id ?? null,
+      });
 
-      fastify.io
-        .to(`tournament_${match.tournament_id}`)
-        .emit('bracket_update', { tournamentId: match.tournament_id });
+      emitBracketUpdate(fastify.io, match.tournament_id);
 
       request.log.info({ matchId, winnerId }, 'Match result reported');
       return reply.code(200).send({ matchId, winnerId, score: score ?? null });

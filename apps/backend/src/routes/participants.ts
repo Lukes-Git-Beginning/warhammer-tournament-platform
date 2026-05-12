@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { emitParticipantChange } from '../lib/emit.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -124,6 +125,12 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
+        emitParticipantChange(fastify.io, {
+          tournamentId: tournament.id,
+          userId: request.user.sub,
+          action: 'registered',
+        });
+
         request.log.info({ slug, userId: request.user.sub }, 'User registered for tournament');
         return reply.code(201).send(participant);
       } catch (err: unknown) {
@@ -204,6 +211,12 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           old_value: { status: participant.status },
           new_value: { status: 'WITHDREW' },
         },
+      });
+
+      emitParticipantChange(fastify.io, {
+        tournamentId: tournament.id,
+        userId: request.user.sub,
+        action: 'withdrew',
       });
 
       request.log.info({ slug, userId: request.user.sub }, 'User withdrew from tournament');
@@ -300,6 +313,12 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           old_value: { status: participant.status },
           new_value: { status: 'CHECKED_IN' },
         },
+      });
+
+      emitParticipantChange(fastify.io, {
+        tournamentId: tournament.id,
+        userId: parsed.data.user_id,
+        action: 'checked_in',
       });
 
       request.log.info({ slug, targetUserId: parsed.data.user_id }, 'Participant checked in');
