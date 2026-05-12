@@ -1,0 +1,34 @@
+{
+  "name": "tww3-tournament-platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e --filter=e2e",
+    "db:generate": "pnpm --filter @tww3/db prisma generate",
+    "db:migrate": "pnpm --filter @tww3/db prisma migrate dev",
+    "db:migrate:deploy": "pnpm --filter @tww3/db prisma migrate deploy",
+    "db:seed": "pnpm --filter @tww3/db run seed",
+    "db:studio": "pnpm --filter @tww3/db prisma studio",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "prettier": "^3.4.2",
+    "turbo": "^2.9.0",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Cinzel", "Trajan Pro", Georgia, serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+
+  /* Warhammer-inspired palette — refined in M5 polish */
+  --color-warhammer-blood: #8b0000;
+  --color-warhammer-gold: #d4a017;
+  --color-warhammer-parchment: #f4e8c4;
+  --color-warhammer-iron: #3a3a3a;
+}
+
+html {
+  font-family: var(--font-sans);
+}
+
+body {
+  font-feature-settings: "ss01", "ss02";
+}
