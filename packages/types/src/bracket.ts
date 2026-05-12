@@ -1,5 +1,4 @@
 // Bracket-node types shared between backend pairing engine and frontend SVG renderer.
-// Populated in M1.5/M1.8. M1.1 stub.
 
 export interface BracketNode {
   matchId: string;
@@ -8,5 +7,15 @@ export interface BracketNode {
   player1Id: string | null;
   player2Id: string | null;
   winnerId: string | null;
+  score: string | null;
+  status: 'PENDING' | 'ONGOING' | 'COMPLETED' | 'BYE' | 'FORFEIT';
   nextMatchId: string | null;
+  player1FactionId: string | null;
+  player2FactionId: string | null;
+}
+
+export interface BracketResponse {
+  tournamentId: string;
+  rounds: number;
+  matches: BracketNode[];
 }
