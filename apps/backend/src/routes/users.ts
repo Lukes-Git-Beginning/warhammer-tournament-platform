@@ -178,7 +178,11 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       where: { user_id: id },
       orderBy: { created_at: 'desc' },
       take: 10,
-      include: {
+      select: {
+        placement: true,
+        points_earned: true,
+        elo_change: true,
+        created_at: true,
         tournament: { select: { slug: true, name: true, start_date: true } },
         season: { select: { name: true } },
       },
@@ -224,6 +228,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         season_name: r.season?.name ?? null,
         placement: r.placement,
         points_earned: r.points_earned,
+        elo_change: r.elo_change,
         created_at: r.created_at.toISOString(),
       })),
       recent_matches: recentMatches.map((m) => {

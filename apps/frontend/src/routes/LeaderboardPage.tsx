@@ -8,6 +8,7 @@ import {
   type AllTimeEntry,
 } from '@/lib/api';
 import type { LeaderboardEntryDto } from '@tww3/types';
+import { EloRatingDisplay } from '../components/meta/EloRatingDisplay';
 
 type Tab = 'season' | 'all-time';
 
@@ -204,7 +205,9 @@ function LeaderboardTable({
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-right text-stone-200">{entry.total_points}</td>
-                  <td className="px-4 py-3 text-right text-stone-200">{entry.elo_rating}</td>
+                  <td className="px-4 py-3 text-right">
+                    <EloRatingDisplay rating={entry.elo_rating} size="sm" />
+                  </td>
                   <td className="px-4 py-3 text-center text-stone-300">
                     <span className="text-emerald-400">{entry.wins}</span>
                     <span className="text-stone-600"> / </span>

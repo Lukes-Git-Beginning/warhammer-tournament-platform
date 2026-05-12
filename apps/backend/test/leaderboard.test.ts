@@ -21,10 +21,13 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+const T1 = 'a0000000-0000-0000-0000-000000000001';
+
 beforeEach(async () => {
   // Clean up in dependency order — remove our test data AND any stray active seasons
   await prisma.leaderboardEntry.deleteMany({ where: { season_id: S1 } });
   await prisma.tournamentResult.deleteMany({ where: { user_id: { in: [U1, U2, U3] } } });
+  await prisma.tournament.deleteMany({ where: { id: T1 } });
   await prisma.season.deleteMany({ where: { id: S1 } });
   await prisma.user.deleteMany({ where: { id: { in: [U1, U2, U3] } } });
   // Deactivate any other seasons that could interfere with the "no active season" test
@@ -191,5 +194,43 @@ describe('GET /api/users/:id', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ current_season: null }>();
     expect(body.current_season).toBeNull();
+  });
+
+  it('exposes elo_change in recent_results', async () => {
+    await seedBase();
+
+    // Create a tournament with a result that has elo_change=15
+    await prisma.tournament.create({
+      data: {
+        id: T1,
+        slug: 'elo-change-test',
+        name: 'ELO Change Test Tournament',
+        format: 'SWISS',
+        status: 'COMPLETED',
+        timezone: 'Europe/Berlin',
+        organizer_id: U1,
+        start_date: new Date('2026-03-01'),
+      },
+    });
+    await prisma.tournamentResult.create({
+      data: {
+        user_id: U1,
+        tournament_id: T1,
+        season_id: S1,
+        placement: 1,
+        points_earned: 30,
+        elo_change: 15,
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/api/users/${U1}` });
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json<{
+      recent_results: Array<{ placement: number; elo_change: number | null }>;
+    }>();
+
+    expect(body.recent_results).toHaveLength(1);
+    expect(body.recent_results[0]!.elo_change).toBe(15);
   });
 });

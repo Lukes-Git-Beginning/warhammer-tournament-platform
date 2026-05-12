@@ -135,6 +135,7 @@ export const UserProfileResponseSchema = z.object({
       season_name: z.string().nullable(),
       placement: z.number().int(),
       points_earned: z.number(),
+      elo_change: z.number().int().nullable(),
       created_at: z.string().datetime(),
     }),
   ),

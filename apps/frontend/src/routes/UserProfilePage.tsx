@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from '@tanstack/react-router';
 import { getUserProfile } from '@/lib/api';
+import { EloRatingDisplay } from '../components/meta/EloRatingDisplay';
 
 const ROLE_LABELS: Record<string, string> = {
   USER: 'Spieler',
@@ -36,10 +37,17 @@ function Avatar({ url, username, large }: { url: string | null; username: string
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
+function EloDeltaCell({ delta }: { delta: number | null }) {
+  if (delta == null) return <span className="text-stone-500 text-sm">—</span>;
+  if (delta > 0) return <span className="text-sm font-semibold text-emerald-400">▲ +{delta}</span>;
+  if (delta < 0) return <span className="text-sm font-semibold text-red-400">▼ {delta}</span>;
+  return <span className="text-sm text-stone-500">— 0</span>;
+}
+
+function StatCard({ label, value, children }: { label: string; value?: string | number; children?: React.ReactNode }) {
   return (
     <div className="rounded-md border border-stone-800 bg-stone-900/60 p-4 text-center">
-      <div className="text-2xl font-bold text-stone-100">{value}</div>
+      <div className="text-2xl font-bold text-stone-100">{children ?? value}</div>
       <div className="mt-1 text-xs text-stone-500">{label}</div>
     </div>
   );
@@ -105,7 +113,7 @@ export function UserProfilePage() {
             <p className="text-sm text-stone-400 mb-3">{current_season.season.name}</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <StatCard label="Punkte" value={current_season.total_points} />
-              <StatCard label="Elo" value={current_season.elo_rating} />
+              <StatCard label="Elo"><EloRatingDisplay rating={current_season.elo_rating} /></StatCard>
               <StatCard label="Spiele" value={current_season.matches_played} />
               <StatCard label="Siege" value={current_season.wins} />
               <StatCard label="Niederlagen" value={current_season.losses} />
@@ -144,6 +152,7 @@ export function UserProfilePage() {
                   <th className="px-4 py-3 text-left font-medium text-stone-400">Season</th>
                   <th className="px-4 py-3 text-center font-medium text-stone-400">Platz</th>
                   <th className="px-4 py-3 text-right font-medium text-stone-400">Punkte</th>
+                  <th className="px-4 py-3 text-right font-medium text-stone-400">Elo</th>
                   <th className="px-4 py-3 text-right font-medium text-stone-400">Datum</th>
                 </tr>
               </thead>
@@ -162,6 +171,9 @@ export function UserProfilePage() {
                     <td className="px-4 py-3 text-stone-400">{r.season_name ?? '—'}</td>
                     <td className="px-4 py-3 text-center text-stone-200">#{r.placement}</td>
                     <td className="px-4 py-3 text-right text-stone-200">{r.points_earned}</td>
+                    <td className="px-4 py-3 text-right">
+                      <EloDeltaCell delta={r.elo_change} />
+                    </td>
                     <td className="px-4 py-3 text-right text-stone-500">
                       {new Date(r.created_at).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}
                     </td>
