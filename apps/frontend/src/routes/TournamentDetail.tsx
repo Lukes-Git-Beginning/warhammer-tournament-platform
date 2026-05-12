@@ -187,7 +187,11 @@ export function TournamentDetail() {
       {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
         <section>
           <h2 className="font-display text-xl font-semibold text-warhammer-gold mb-3">Bracket</h2>
-          <BracketView slug={tournament.slug} tournamentId={tournament.id} />
+          <BracketView
+            slug={tournament.slug}
+            tournamentId={tournament.id}
+            canManage={!!canManage}
+          />
         </section>
       )}
     </main>

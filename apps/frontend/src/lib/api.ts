@@ -1,6 +1,29 @@
-import type { UserMe, BracketResponse } from '@tww3/types';
+import type {
+  UserMe,
+  BracketResponse,
+  LeaderboardResponse,
+  LeaderboardEntryDto,
+  UserProfileResponse,
+} from '@tww3/types';
 
-export type { BracketResponse };
+export type { BracketResponse, LeaderboardResponse, UserProfileResponse };
+
+export type AllTimeEntry = LeaderboardEntryDto & { seasons_participated: number };
+
+export interface AllTimeLeaderboardResponse {
+  entries: AllTimeEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface SeasonSummary {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+}
 
 // Minimal local Tournament type (full schema arrives with M1.4 backend)
 export interface Tournament {
@@ -109,6 +132,44 @@ export async function logout(): Promise<void> {
 
 export function getBracket(slug: string): Promise<BracketResponse> {
   return apiFetch<BracketResponse>(`/api/tournaments/${slug}/bracket`);
+}
+
+export function getLeaderboard(opts?: {
+  seasonId?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<LeaderboardResponse> {
+  const params = new URLSearchParams();
+  if (opts?.seasonId) params.set('seasonId', opts.seasonId);
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
+  const qs = params.toString();
+  return apiFetch<LeaderboardResponse>(`/api/leaderboard${qs ? `?${qs}` : ''}`);
+}
+
+export function getAllTimeLeaderboard(opts?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<AllTimeLeaderboardResponse> {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
+  const qs = params.toString();
+  return apiFetch<AllTimeLeaderboardResponse>(`/api/leaderboard/all-time${qs ? `?${qs}` : ''}`);
+}
+
+export function getUserProfile(id: string): Promise<UserProfileResponse> {
+  return apiFetch<UserProfileResponse>(`/api/users/${id}`);
+}
+
+export function listSeasons(): Promise<{ data: SeasonSummary[] }> {
+  return apiFetch<{ data: SeasonSummary[] }>('/api/seasons');
+}
+
+export function startNextSwissRound(tournamentId: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/tournaments/${tournamentId}/next-round`, {
+    method: 'POST',
+  });
 }
 
 export function reportMatchResult(

@@ -4,6 +4,8 @@ import { IndexPage } from './routes/IndexPage';
 import { LoginPage } from './routes/LoginPage';
 import { TournamentDetail } from './routes/TournamentDetail';
 import { CreateTournamentPage } from './routes/CreateTournamentPage';
+import { LeaderboardPage } from './routes/LeaderboardPage';
+import { UserProfilePage } from './routes/UserProfilePage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -29,11 +31,25 @@ const tournamentDetailRoute = createRoute({
   component: TournamentDetail,
 });
 
+const leaderboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/leaderboard',
+  component: LeaderboardPage,
+});
+
+const userProfileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/users/$id',
+  component: UserProfilePage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
   createTournamentRoute,
   tournamentDetailRoute,
+  leaderboardRoute,
+  userProfileRoute,
 ]);
 
 export const router = createRouter({ routeTree });

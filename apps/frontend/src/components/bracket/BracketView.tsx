@@ -1,18 +1,22 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import { getBracket } from '@/lib/api';
+import { getBracket, startNextSwissRound } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { SVGBracket } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
+import { SwissStandings } from './SwissStandings';
 
 interface BracketViewProps {
   slug: string;
   tournamentId: string;
+  canManage?: boolean;
+  tournamentSlugForRefresh?: string;
 }
 
-export function BracketView({ slug, tournamentId }: BracketViewProps) {
+export function BracketView({ slug, tournamentId, canManage = false }: BracketViewProps) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['bracket', slug],
@@ -21,6 +25,13 @@ export function BracketView({ slug, tournamentId }: BracketViewProps) {
   });
 
   useLiveBracket(tournamentId);
+
+  const { mutate: doNextRound, isPending: isStartingRound, error: nextRoundError } = useMutation({
+    mutationFn: () => startNextSwissRound(tournamentId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+    },
+  });
 
   if (isLoading) {
     return (
@@ -48,33 +59,69 @@ export function BracketView({ slug, tournamentId }: BracketViewProps) {
     ? data.matches.find((m) => m.matchId === selectedMatchId) ?? null
     : null;
 
-  return (
-    <div className="relative w-full overflow-hidden rounded-md border border-stone-800 bg-stone-950">
-      <TransformWrapper
-        minScale={0.3}
-        maxScale={2}
-        initialScale={1}
-        limitToBounds={false}
-      >
-        <TransformComponent
-          wrapperStyle={{ width: '100%', height: '600px' }}
-          contentStyle={{ padding: '16px' }}
-        >
-          <SVGBracket
-            data={data}
-            onMatchClick={(matchId) => setSelectedMatchId(matchId)}
-          />
-        </TransformComponent>
-      </TransformWrapper>
+  const swiss = data.swiss;
+  const showNextRoundButton =
+    canManage &&
+    swiss !== undefined &&
+    swiss.currentRound < swiss.recommendedRounds;
 
-      {selectedMatch && (
-        <MatchScoreModal
-          matchId={selectedMatch.matchId}
-          player1Id={selectedMatch.player1Id}
-          player2Id={selectedMatch.player2Id}
-          onClose={() => setSelectedMatchId(null)}
+  return (
+    <div>
+      {/* Swiss Standings — shown above bracket when swiss data is present */}
+      {swiss && (
+        <SwissStandings
+          standings={swiss.standings}
+          currentRound={swiss.currentRound}
+          recommendedRounds={swiss.recommendedRounds}
         />
       )}
+
+      {/* Next Swiss Round button — organizer only */}
+      {showNextRoundButton && (
+        <div className="mb-4">
+          {nextRoundError && (
+            <p className="mb-2 text-sm text-red-400">
+              Fehler: {(nextRoundError as Error).message}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => doNextRound()}
+            disabled={isStartingRound}
+            className="rounded border border-warhammer-gold/60 px-4 py-2 text-sm font-medium text-warhammer-gold hover:bg-warhammer-gold/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isStartingRound ? 'Wird gestartet…' : 'Nächste Runde starten'}
+          </button>
+        </div>
+      )}
+
+      <div className="relative w-full overflow-hidden rounded-md border border-stone-800 bg-stone-950">
+        <TransformWrapper
+          minScale={0.3}
+          maxScale={2}
+          initialScale={1}
+          limitToBounds={false}
+        >
+          <TransformComponent
+            wrapperStyle={{ width: '100%', height: '600px' }}
+            contentStyle={{ padding: '16px' }}
+          >
+            <SVGBracket
+              data={data}
+              onMatchClick={(matchId) => setSelectedMatchId(matchId)}
+            />
+          </TransformComponent>
+        </TransformWrapper>
+
+        {selectedMatch && (
+          <MatchScoreModal
+            matchId={selectedMatch.matchId}
+            player1Id={selectedMatch.player1Id}
+            player2Id={selectedMatch.player2Id}
+            onClose={() => setSelectedMatchId(null)}
+          />
+        )}
+      </div>
     </div>
   );
 }
