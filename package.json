@@ -14,7 +14,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:e2e": "turbo run test:e2e --filter=e2e",
+    "test:e2e": "turbo run test:e2e --filter=@tww3/e2e",
     "db:generate": "pnpm --filter @tww3/db prisma generate",
     "db:migrate": "pnpm --filter @tww3/db prisma migrate dev",
     "db:migrate:deploy": "pnpm --filter @tww3/db prisma migrate deploy",
