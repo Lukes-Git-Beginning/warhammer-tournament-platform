@@ -173,10 +173,11 @@ describe('GraphQL — factions query', () => {
     expect(factions.season.isActive).toBe(true);
     expect(factions.data).toHaveLength(24);
 
-    // All factions must have a non-empty colorHex (#RRGGBB) and 2-char initials
+    // All factions must have a non-empty colorHex (#RRGGBB) and 2- or 3-char initials
     for (const item of factions.data) {
       expect(item.faction.colorHex).toMatch(/^#[0-9A-Fa-f]{6}$/);
-      expect(item.faction.initials).toHaveLength(2);
+      expect(item.faction.initials.length).toBeGreaterThanOrEqual(2);
+      expect(item.faction.initials.length).toBeLessThanOrEqual(3);
     }
 
     // Spot check empire
@@ -189,6 +190,14 @@ describe('GraphQL — factions query', () => {
     // high_elves → "HE"
     const highElves = factions.data.find((f) => f.faction.id === 'high_elves');
     expect(highElves!.faction.initials).toBe('HE');
+
+    // Stop-word skip: "Daemons of Chaos" → "DC", "Warriors of Chaos" → "WC"
+    expect(factions.data.find((f) => f.faction.id === 'daemons_of_chaos')!.faction.initials).toBe('DC');
+    expect(factions.data.find((f) => f.faction.id === 'warriors_of_chaos')!.faction.initials).toBe('WC');
+
+    // Collision overrides: vampire_counts → "VCs", vampire_coast → "VCo"
+    expect(factions.data.find((f) => f.faction.id === 'vampire_counts')!.faction.initials).toBe('VCs');
+    expect(factions.data.find((f) => f.faction.id === 'vampire_coast')!.faction.initials).toBe('VCo');
   });
 
   it('1b. stats fields are populated when FactionStats are seeded', async () => {

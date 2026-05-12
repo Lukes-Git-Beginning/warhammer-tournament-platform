@@ -40,19 +40,37 @@ export interface SnapshotTrendEntry {
 // computeInitials
 // ---------------------------------------------------------------------------
 
+const INITIALS_STOP_WORDS = new Set(['of', 'the', 'and']);
+
+const INITIALS_OVERRIDES: Record<string, string> = {
+  vampire_counts: 'VCs',
+  vampire_coast: 'VCo',
+};
+
 /**
- * Derive a 2-char initials string from a faction name.
- * - Multi-word: first letter of first two words, uppercased.
+ * Derive an initials string from a faction name. Usually 2 chars; 3 chars only
+ * for the hardcoded Vampire Counts / Vampire Coast collision override.
+ * - Multi-word: first letter of first two words after dropping stop-words
+ *   ("of", "the", "and"), uppercased.
  * - Single-word: first two letters uppercased.
  *
  * Examples:
- *   "Empire"           → "EM"
- *   "High Elves"       → "HE"
- *   "Daemons of Chaos" → "DC"  (skips prepositions; takes first two words)
- *   "Lizardmen"        → "LI"
+ *   "Empire"            → "EM"
+ *   "High Elves"        → "HE"
+ *   "Daemons of Chaos"  → "DC"  (skips "of")
+ *   "Warriors of Chaos" → "WC"  (skips "of")
+ *   "Vampire Counts"    → "VCs" (override; would otherwise clash with Coast)
+ *   "Vampire Coast"     → "VCo" (override)
+ *   "Lizardmen"         → "LI"
  */
-export function computeInitials(name: string): string {
-  const words = name.trim().split(/\s+/);
+export function computeInitials(name: string, id?: string): string {
+  if (id && id in INITIALS_OVERRIDES) {
+    return INITIALS_OVERRIDES[id]!;
+  }
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .filter((w) => !INITIALS_STOP_WORDS.has(w.toLowerCase()));
   if (words.length === 1) {
     return (words[0] ?? '').slice(0, 2).toUpperCase();
   }
@@ -93,7 +111,7 @@ export function asFactionDto(faction: PrismaFaction): FactionDto {
     color_hex: faction.color_hex,
     display_order: faction.display_order,
     icon_url: faction.icon_url,
-    initials: computeInitials(faction.name),
+    initials: computeInitials(faction.name, faction.id),
   };
 }
 

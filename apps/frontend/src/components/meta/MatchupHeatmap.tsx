@@ -7,10 +7,15 @@ interface MatchupHeatmapProps {
 }
 
 function winrateColor(winrate: number, lowConfidence: boolean): string {
-  // hsl: 0=red, 60=yellow, 120=green — red means losing, green means winning
+  // Diverging scale: red (losing) ↔ near-white (50%) ↔ green (winning).
+  // Saturation and lightness do the heavy lifting; hue stays linear since
+  // the neutral middle is already desaturated.
+  const dist = Math.abs(winrate - 0.5) * 2; // 0 = neutral, 1 = extreme
   const hue = winrate * 120;
+  const saturation = 15 + 55 * dist; // 15% → 70%
+  const lightness = 85 - 55 * dist; // 85% → 30%
   const opacity = lowConfidence ? 0.3 : 1;
-  return `hsla(${hue.toFixed(0)}, 60%, 30%, ${opacity})`;
+  return `hsla(${hue.toFixed(0)}, ${saturation.toFixed(0)}%, ${lightness.toFixed(0)}%, ${opacity})`;
 }
 
 export function MatchupHeatmap({ cells, factions }: MatchupHeatmapProps) {

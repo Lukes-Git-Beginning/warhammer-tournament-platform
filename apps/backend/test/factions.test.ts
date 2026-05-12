@@ -116,6 +116,14 @@ describe('GET /api/factions', () => {
     // Spot check: high_elves → "HE" (H from "High", E from "Elves")
     const highElves = body.data.find((f) => f.faction.id === 'high_elves');
     expect(highElves!.faction.initials).toBe('HE');
+
+    // Stop-word skip: "Daemons of Chaos" → "DC", "Warriors of Chaos" → "WC"
+    expect(body.data.find((f) => f.faction.id === 'daemons_of_chaos')!.faction.initials).toBe('DC');
+    expect(body.data.find((f) => f.faction.id === 'warriors_of_chaos')!.faction.initials).toBe('WC');
+
+    // Collision overrides: vampire_counts → "VCs", vampire_coast → "VCo"
+    expect(body.data.find((f) => f.faction.id === 'vampire_counts')!.faction.initials).toBe('VCs');
+    expect(body.data.find((f) => f.faction.id === 'vampire_coast')!.faction.initials).toBe('VCo');
   });
 
   it('2. returns correct stats and win_rate when FactionStats are present', async () => {
