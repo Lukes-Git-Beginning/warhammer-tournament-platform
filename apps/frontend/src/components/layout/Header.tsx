@@ -39,6 +39,13 @@ export function Header() {
           >
             Leaderboard
           </Link>
+          <Link
+            to="/meta"
+            className="text-sm text-stone-300 hover:text-warhammer-gold transition-colors"
+            activeProps={{ className: 'text-warhammer-gold' }}
+          >
+            Meta
+          </Link>
           {canCreate && (
             <Link
               to="/tournaments/create"

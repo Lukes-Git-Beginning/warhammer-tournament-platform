@@ -6,6 +6,9 @@ import { TournamentDetail } from './routes/TournamentDetail';
 import { CreateTournamentPage } from './routes/CreateTournamentPage';
 import { LeaderboardPage } from './routes/LeaderboardPage';
 import { UserProfilePage } from './routes/UserProfilePage';
+import { MetaDashboard } from './routes/MetaDashboard';
+import { FactionListPage } from './routes/FactionListPage';
+import { FactionDetailPage } from './routes/FactionDetailPage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -43,6 +46,24 @@ const userProfileRoute = createRoute({
   component: UserProfilePage,
 });
 
+const metaRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/meta',
+  component: MetaDashboard,
+});
+
+const factionListRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/factions',
+  component: FactionListPage,
+});
+
+const factionDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/factions/$id',
+  component: FactionDetailPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -50,6 +71,9 @@ const routeTree = rootRoute.addChildren([
   tournamentDetailRoute,
   leaderboardRoute,
   userProfileRoute,
+  metaRoute,
+  factionListRoute,
+  factionDetailRoute,
 ]);
 
 export const router = createRouter({ routeTree });

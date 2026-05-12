@@ -19,7 +19,7 @@ export function useLiveBracket(tournamentId: string): void {
     const handleMatchResult = (payload: {
       tournamentId: string;
       matchId: string;
-      winnerId: string;
+      winnerId: string | null;
       score: string | null;
       nextMatchId: string | null;
     }) => {

@@ -4,9 +4,21 @@ import type {
   LeaderboardResponse,
   LeaderboardEntryDto,
   UserProfileResponse,
+  FactionListResponse,
+  FactionDetailResponse,
+  MetaOverviewResponse,
+  MatchupHeatmapResponse,
 } from '@tww3/types';
 
-export type { BracketResponse, LeaderboardResponse, UserProfileResponse };
+export type {
+  BracketResponse,
+  LeaderboardResponse,
+  UserProfileResponse,
+  FactionListResponse,
+  FactionDetailResponse,
+  MetaOverviewResponse,
+  MatchupHeatmapResponse,
+};
 
 export type AllTimeEntry = LeaderboardEntryDto & { seasons_participated: number };
 
@@ -164,6 +176,34 @@ export function getUserProfile(id: string): Promise<UserProfileResponse> {
 
 export function listSeasons(): Promise<{ data: SeasonSummary[] }> {
   return apiFetch<{ data: SeasonSummary[] }>('/api/seasons');
+}
+
+export function getFactions(seasonId?: string): Promise<FactionListResponse> {
+  const params = new URLSearchParams();
+  if (seasonId) params.set('seasonId', seasonId);
+  const qs = params.toString();
+  return apiFetch<FactionListResponse>(`/api/factions${qs ? `?${qs}` : ''}`);
+}
+
+export function getFaction(id: string, seasonId?: string): Promise<FactionDetailResponse> {
+  const params = new URLSearchParams();
+  if (seasonId) params.set('seasonId', seasonId);
+  const qs = params.toString();
+  return apiFetch<FactionDetailResponse>(`/api/factions/${id}${qs ? `?${qs}` : ''}`);
+}
+
+export function getMetaOverview(seasonId?: string): Promise<MetaOverviewResponse> {
+  const params = new URLSearchParams();
+  if (seasonId) params.set('seasonId', seasonId);
+  const qs = params.toString();
+  return apiFetch<MetaOverviewResponse>(`/api/meta/overview${qs ? `?${qs}` : ''}`);
+}
+
+export function getMatchupHeatmap(seasonId?: string): Promise<MatchupHeatmapResponse> {
+  const params = new URLSearchParams();
+  if (seasonId) params.set('seasonId', seasonId);
+  const qs = params.toString();
+  return apiFetch<MatchupHeatmapResponse>(`/api/meta/matchups${qs ? `?${qs}` : ''}`);
 }
 
 export function startNextSwissRound(tournamentId: string): Promise<{ ok: true }> {
