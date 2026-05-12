@@ -21,6 +21,10 @@ coverage/
 *.db
 *.db-journal
 prisma/migrations/dev/
+packages/db/generated/
+
+# TypeScript build info
+*.tsbuildinfo
 
 # Playwright
 playwright-report/

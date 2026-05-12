@@ -1,0 +1,517 @@
+// =============================================================================
+// TWW3 Tournament Platform — Database Schema
+// Phase 1+2 complete (M1+M2 use). Draft/Stats/Snapshot models are reserved here
+// to avoid late migrations during M3/M4. See ROADMAP.md and plan file.
+// =============================================================================
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "esm"
+  runtime      = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+enum Role {
+  USER
+  ORGANIZER
+  MODERATOR
+  ADMIN
+}
+
+enum TournamentFormat {
+  SWISS
+  SINGLE_ELIMINATION
+  DOUBLE_ELIMINATION
+  ROUND_ROBIN
+  DOUBLE_ROUND_ROBIN
+}
+
+enum TournamentMode {
+  ONE_V_ONE
+  THREE_V_THREE // reserved for Phase 3
+  BLIND_PICK    // reserved for Phase 3
+  SFT           // reserved for Phase 3 — Single Faction Tournament
+}
+
+enum TournamentStatus {
+  DRAFT
+  OPEN_REGISTRATION
+  REGISTRATION_CLOSED
+  ONGOING
+  COMPLETED
+}
+
+enum TournamentVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum ParticipantStatus {
+  REGISTERED
+  CHECKED_IN
+  DISQUALIFIED
+  WITHDREW
+}
+
+enum MatchStatus {
+  PENDING
+  ONGOING
+  COMPLETED
+  BYE      // system-generated walkover (odd participant count)
+  FORFEIT  // organizer-triggered (no-show / DQ)
+}
+
+enum FactionCategory {
+  ORDER
+  DESTRUCTION
+  CHAOS_GODS
+  UNDEAD
+  DEFAULT
+}
+
+enum ArmyListFileType {
+  ARMY_SETUP  // .army_setup binary export
+  SCREENSHOT
+}
+
+enum DraftStatus {
+  PENDING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+// -----------------------------------------------------------------------------
+// Core: Users
+// -----------------------------------------------------------------------------
+
+model User {
+  id                 String    @id @default(uuid()) @db.Uuid
+  discord_id         String    @unique
+  username           String
+  email              String?
+  avatar_url         String?
+  timezone           String? // IANA, e.g. "Europe/Berlin"
+  role               Role      @default(USER)
+  preferred_factions String[]  @default([])
+  last_login         DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  deleted_at         DateTime?
+
+  // Organizer relations
+  organized_tournaments    Tournament[]            @relation("OrganizedTournaments")
+  created_draft_presets    DraftPreset[]           @relation("CreatedDraftPresets")
+
+  // Player relations
+  participations           TournamentParticipant[]
+  matches_as_player1       Match[]                 @relation("MatchPlayer1")
+  matches_as_player2       Match[]                 @relation("MatchPlayer2")
+  matches_won              Match[]                 @relation("MatchWinner")
+  army_lists               ArmyList[]
+  leaderboard_entries      LeaderboardEntry[]
+  tournament_results       TournamentResult[]
+  captained_teams          Team[]                  @relation("TeamCaptain")
+  team_memberships         TeamMember[]
+  audit_logs               AuditLog[]              @relation("AuditActor")
+
+  @@index([role])
+  @@index([deleted_at])
+}
+
+// -----------------------------------------------------------------------------
+// Reference: Factions (seeded, 24 entries)
+// -----------------------------------------------------------------------------
+
+model Faction {
+  id            String          @id // slug, e.g. "high_elves"
+  name          String
+  race          String
+  category      FactionCategory
+  color_hex     String
+  display_order Int             @unique // 1..24, drives heatmap row/col order
+  icon_url      String? // populated in M5 polish
+  game_id       String? // optional external TWW3 internal id
+  created_at    DateTime        @default(now())
+
+  // Reverse relations
+  tournament_allowlists          TournamentFactionAllowlist[]
+  participants                   TournamentParticipant[]
+  matches_as_player1_faction     Match[]                      @relation("MatchPlayer1Faction")
+  matches_as_player2_faction     Match[]                      @relation("MatchPlayer2Faction")
+  army_lists                     ArmyList[]
+  stats                          FactionStats[]
+  stats_snapshots                FactionStatsSnapshot[]
+  matchups_as_a                  MatchupStats[]               @relation("MatchupFactionA")
+  matchups_as_b                  MatchupStats[]               @relation("MatchupFactionB")
+
+  @@index([category])
+}
+
+// -----------------------------------------------------------------------------
+// Tournament + Registration
+// -----------------------------------------------------------------------------
+
+model Tournament {
+  id                      String                @id @default(uuid()) @db.Uuid
+  slug                    String                @unique
+  name                    String
+  description             String?
+  poster_url              String?
+  organizer_id            String                @db.Uuid
+  format                  TournamentFormat
+  mode                    TournamentMode        @default(ONE_V_ONE)
+  status                  TournamentStatus      @default(DRAFT)
+  visibility              TournamentVisibility  @default(PUBLIC)
+  max_participants        Int?
+  start_date              DateTime
+  timezone                String // IANA
+  registration_deadline   DateTime?
+  rules                   String                @default("") // markdown
+  discord_link            String?
+  entry_fee               String? // free-text
+  draft_enabled           Boolean               @default(false)
+  draft_preset_id         String?               @db.Uuid
+  counts_for_leaderboard  Boolean               @default(true)
+  is_major                Boolean               @default(false)
+  created_at              DateTime              @default(now())
+  updated_at              DateTime              @updatedAt
+  deleted_at              DateTime?
+
+  // Relations
+  organizer        User                          @relation("OrganizedTournaments", fields: [organizer_id], references: [id])
+  draft_preset     DraftPreset?                  @relation(fields: [draft_preset_id], references: [id])
+  faction_allowlist TournamentFactionAllowlist[]
+  participants     TournamentParticipant[]
+  matches          Match[]
+  teams            Team[]
+  results          TournamentResult[]
+  major_for_seasons Season[]                     @relation("SeasonMajor")
+
+  @@index([status])
+  @@index([organizer_id])
+  @@index([start_date])
+  @@index([deleted_at])
+}
+
+// Empty allowlist => all factions allowed.
+model TournamentFactionAllowlist {
+  tournament_id String     @db.Uuid
+  faction_id    String
+
+  tournament    Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  faction       Faction    @relation(fields: [faction_id], references: [id])
+
+  @@id([tournament_id, faction_id])
+  @@index([tournament_id])
+}
+
+model TournamentParticipant {
+  id            String            @id @default(uuid()) @db.Uuid
+  tournament_id String            @db.Uuid
+  user_id       String            @db.Uuid
+  team_id       String?           @db.Uuid // null for 1v1 (Phase 1+2)
+  faction_id    String? // pre-pick at registration (SFT mode) or post-draft
+  army_list_id  String?           @db.Uuid
+  status        ParticipantStatus @default(REGISTERED)
+  registered_at DateTime          @default(now())
+  deleted_at    DateTime?
+
+  tournament    Tournament   @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [user_id], references: [id])
+  team          Team?        @relation(fields: [team_id], references: [id])
+  faction       Faction?     @relation(fields: [faction_id], references: [id])
+  army_list     ArmyList?    @relation(fields: [army_list_id], references: [id])
+
+  @@unique([tournament_id, user_id])
+  @@index([tournament_id, status])
+  @@index([user_id])
+}
+
+// -----------------------------------------------------------------------------
+// Match (with self-reference for bracket traversal)
+// -----------------------------------------------------------------------------
+
+model Match {
+  id                  String       @id @default(uuid()) @db.Uuid
+  tournament_id       String       @db.Uuid
+  round               Int
+  match_number        Int
+  player1_id          String?      @db.Uuid
+  player2_id          String?      @db.Uuid
+  winner_id           String?      @db.Uuid
+  score               String?
+  status              MatchStatus  @default(PENDING)
+  scheduled_time      DateTime?
+  next_match_id       String?      @db.Uuid
+  player1_faction_id  String?
+  player2_faction_id  String?
+  created_at          DateTime     @default(now())
+  updated_at          DateTime     @updatedAt
+  deleted_at          DateTime?
+
+  tournament       Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  player1          User?      @relation("MatchPlayer1", fields: [player1_id], references: [id])
+  player2          User?      @relation("MatchPlayer2", fields: [player2_id], references: [id])
+  winner           User?      @relation("MatchWinner", fields: [winner_id], references: [id])
+  next_match       Match?     @relation("BracketProgression", fields: [next_match_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  feeder_matches   Match[]    @relation("BracketProgression")
+  player1_faction  Faction?   @relation("MatchPlayer1Faction", fields: [player1_faction_id], references: [id])
+  player2_faction  Faction?   @relation("MatchPlayer2Faction", fields: [player2_faction_id], references: [id])
+  draft            Draft?
+
+  @@unique([tournament_id, round, match_number])
+  @@index([tournament_id, status])
+  @@index([player1_id])
+  @@index([player2_id])
+  @@index([deleted_at])
+}
+
+// -----------------------------------------------------------------------------
+// Team (stubs for 3v3, Phase 3 — unused in M1-M3)
+// -----------------------------------------------------------------------------
+
+model Team {
+  id            String     @id @default(uuid()) @db.Uuid
+  tournament_id String     @db.Uuid
+  name          String
+  captain_id    String     @db.Uuid
+  created_at    DateTime   @default(now())
+
+  tournament    Tournament   @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  captain       User         @relation("TeamCaptain", fields: [captain_id], references: [id])
+  members       TeamMember[]
+  participants  TournamentParticipant[]
+
+  @@index([tournament_id])
+}
+
+model TeamMember {
+  id       String  @id @default(uuid()) @db.Uuid
+  team_id  String  @db.Uuid
+  user_id  String  @db.Uuid
+  role     String? // e.g. "captain", "core", "sub" — unused in M1
+
+  user User @relation(fields: [user_id], references: [id])
+  team Team @relation(fields: [team_id], references: [id], onDelete: Cascade)
+
+  @@unique([team_id, user_id])
+}
+
+// -----------------------------------------------------------------------------
+// Season + Leaderboard
+// -----------------------------------------------------------------------------
+
+model Season {
+  id                   String   @id @default(uuid()) @db.Uuid
+  name                 String
+  start_date           DateTime
+  end_date             DateTime
+  is_active            Boolean  @default(false)
+  dlc_tag              String?
+  major_tournament_id  String?  @db.Uuid
+  created_at           DateTime @default(now())
+
+  major_tournament Tournament?            @relation("SeasonMajor", fields: [major_tournament_id], references: [id])
+  leaderboard      LeaderboardEntry[]
+  results          TournamentResult[]
+  faction_stats    FactionStats[]
+  matchup_stats    MatchupStats[]
+  stats_snapshots  FactionStatsSnapshot[]
+
+  @@index([is_active])
+  @@index([start_date])
+}
+
+model LeaderboardEntry {
+  id           String   @id @default(uuid()) @db.Uuid
+  user_id      String   @db.Uuid
+  season_id    String   @db.Uuid
+  total_points Float    @default(0)
+  elo_rating   Int      @default(1200)
+  matches_played Int    @default(0)
+  wins         Int      @default(0)
+  losses       Int      @default(0)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  user   User   @relation(fields: [user_id], references: [id])
+  season Season @relation(fields: [season_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, season_id])
+  @@index([season_id, total_points(sort: Desc)])
+}
+
+model TournamentResult {
+  id              String   @id @default(uuid()) @db.Uuid
+  tournament_id   String   @db.Uuid
+  user_id         String   @db.Uuid
+  season_id       String?  @db.Uuid // null if tournament not counted for leaderboard
+  placement       Int
+  points_earned   Float    @default(0)
+  elo_change      Int      @default(0)
+  created_at      DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [user_id], references: [id])
+  season     Season?    @relation(fields: [season_id], references: [id])
+
+  @@unique([tournament_id, user_id])
+  @@index([user_id])
+  @@index([season_id])
+}
+
+// -----------------------------------------------------------------------------
+// Army Lists (M5 implementation, schema reserved here)
+// -----------------------------------------------------------------------------
+
+model ArmyList {
+  id            String           @id @default(uuid()) @db.Uuid
+  user_id       String           @db.Uuid
+  tournament_id String?          @db.Uuid
+  faction_id    String
+  file_url      String
+  file_name     String
+  file_type     ArmyListFileType
+  parsed_data   Json? // { battle_type, lord, units }
+  created_at    DateTime         @default(now())
+
+  user         User                    @relation(fields: [user_id], references: [id])
+  faction      Faction                 @relation(fields: [faction_id], references: [id])
+  participants TournamentParticipant[]
+
+  @@index([user_id])
+  @@index([tournament_id])
+}
+
+// -----------------------------------------------------------------------------
+// Faction Stats (M3 implementation, schema reserved here)
+// -----------------------------------------------------------------------------
+
+model FactionStats {
+  id              String   @id @default(uuid()) @db.Uuid
+  faction_id      String
+  season_id       String   @db.Uuid
+  matches_played  Int      @default(0)
+  wins            Int      @default(0)
+  losses          Int      @default(0)
+  draws           Int      @default(0)
+  pick_count      Int      @default(0)
+  ban_count       Int      @default(0)
+  updated_at      DateTime @updatedAt
+
+  faction Faction @relation(fields: [faction_id], references: [id])
+  season  Season  @relation(fields: [season_id], references: [id], onDelete: Cascade)
+
+  @@unique([faction_id, season_id])
+  @@index([season_id])
+}
+
+// Daily snapshot table to support winrate_trend rolling-30d (M3).
+model FactionStatsSnapshot {
+  id              String   @id @default(uuid()) @db.Uuid
+  faction_id      String
+  season_id       String   @db.Uuid
+  snapshot_date   DateTime @db.Date
+  matches_played  Int
+  wins            Int
+  losses          Int
+  draws           Int
+  pick_count      Int
+  ban_count       Int
+  created_at      DateTime @default(now())
+
+  faction Faction @relation(fields: [faction_id], references: [id])
+  season  Season  @relation(fields: [season_id], references: [id], onDelete: Cascade)
+
+  @@unique([faction_id, season_id, snapshot_date])
+  @@index([faction_id, season_id])
+  @@index([snapshot_date])
+}
+
+// 24x24 matchup heatmap source (M3).
+model MatchupStats {
+  id             String   @id @default(uuid()) @db.Uuid
+  faction_a_id   String
+  faction_b_id   String
+  season_id      String   @db.Uuid
+  faction_a_wins Int      @default(0)
+  faction_b_wins Int      @default(0)
+  draws          Int      @default(0)
+  updated_at     DateTime @updatedAt
+
+  faction_a Faction @relation("MatchupFactionA", fields: [faction_a_id], references: [id])
+  faction_b Faction @relation("MatchupFactionB", fields: [faction_b_id], references: [id])
+  season    Season  @relation(fields: [season_id], references: [id], onDelete: Cascade)
+
+  @@unique([faction_a_id, faction_b_id, season_id])
+  @@index([season_id])
+}
+
+// -----------------------------------------------------------------------------
+// Draft System (M4 implementation, schema reserved here)
+// -----------------------------------------------------------------------------
+
+model DraftPreset {
+  id               String   @id @default(uuid()) @db.Uuid
+  name             String
+  created_by       String   @db.Uuid
+  is_public        Boolean  @default(false)
+  category_limits  Json     @default("{}") // { order: 3, destruction: 3, ... }
+  turns            Json     @default("[]") // ordered array of pick/ban actions
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  creator     User         @relation("CreatedDraftPresets", fields: [created_by], references: [id])
+  tournaments Tournament[]
+  drafts      Draft[]
+
+  @@index([is_public])
+  @@index([created_by])
+}
+
+model Draft {
+  id                 String      @id @default(uuid()) @db.Uuid
+  match_id           String      @unique @db.Uuid
+  preset_id          String      @db.Uuid
+  status             DraftStatus @default(PENDING)
+  current_turn       Int         @default(0)
+  state              Json        @default("{}") // { picks, bans, hidden_picks, hidden_bans, snipes, steals }
+  timer_expires_at   DateTime?
+  created_at         DateTime    @default(now())
+  updated_at         DateTime    @updatedAt
+
+  match  Match       @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  preset DraftPreset @relation(fields: [preset_id], references: [id])
+
+  @@index([status])
+}
+
+// -----------------------------------------------------------------------------
+// Audit Log (M5 admin panel, schema reserved here)
+// -----------------------------------------------------------------------------
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  entity_type String // "Tournament", "Match", "User", ...
+  entity_id   String // stringified (UUID or slug)
+  action      String // "create", "update", "delete", "status_change", "result_report", ...
+  actor_id    String?  @db.Uuid // null for system actions
+  old_value   Json?
+  new_value   Json?
+  created_at  DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actor_id], references: [id])
+
+  @@index([entity_type, entity_id])
+  @@index([actor_id])
+  @@index([created_at])
+}
