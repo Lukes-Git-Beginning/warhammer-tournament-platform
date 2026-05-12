@@ -19,7 +19,7 @@
     "db:migrate": "pnpm --filter @tww3/db prisma migrate dev",
     "db:migrate:deploy": "pnpm --filter @tww3/db prisma migrate deploy",
     "db:seed": "pnpm --filter @tww3/db run seed",
-    "db:studio": "pnpm --filter @tww3/db prisma studio",
+    "db:studio": "pnpm --filter @tww3/db exec prisma studio",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
