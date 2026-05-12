@@ -88,15 +88,33 @@ export function validateStatusTransition(
 }
 
 // ---------------------------------------------------------------------------
-// Points calculation (stub — will be refined in M2)
+// Points calculation (M2.2)
 // ---------------------------------------------------------------------------
 
-/**
- * Calculate placement points for a tournament result.
- * Stub formula: (participantCount - placement + 1) * 10
- * TODO M2: Replace with ELO-weighted formula that accounts for format,
- * is_major flag, and opponent strength.
- */
-export function calculatePoints(placement: number, participantCount: number): number {
-  return Math.max(0, participantCount - placement + 1) * 10;
+export function getPlacementPoints(placement: number, _totalPlayers: number): number {
+  if (placement === 1) return 100;
+  if (placement === 2) return 70;
+  if (placement === 3) return 50;
+  if (placement === 4) return 35;
+  if (placement <= 8) return 20;
+  if (placement <= 16) return 10;
+  return 5;
+}
+
+export function getSizeMultiplier(playerCount: number): number {
+  if (playerCount >= 65) return 1.5;
+  if (playerCount >= 33) return 1.25;
+  if (playerCount >= 17) return 1.0;
+  if (playerCount >= 8) return 0.75;
+  return 0.5;
+}
+
+export function calculateTournamentPoints(opts: {
+  placement: number;
+  playerCount: number;
+  isMajor: boolean;
+}): number {
+  const base = getPlacementPoints(opts.placement, opts.playerCount);
+  const mult = getSizeMultiplier(opts.playerCount) * (opts.isMajor ? 1.5 : 1.0);
+  return Math.max(0, Math.round(base * mult));
 }

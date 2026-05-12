@@ -14,8 +14,28 @@ export interface BracketNode {
   player2FactionId: string | null;
 }
 
+export interface SwissStandingEntry {
+  userId: string;
+  username: string | null;
+  avatarUrl: string | null;
+  score: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  byes: number;
+  buchholz: number;
+}
+
+export interface SwissMeta {
+  recommendedRounds: number;
+  currentRound: number;
+  standings: SwissStandingEntry[];
+}
+
 export interface BracketResponse {
   tournamentId: string;
   rounds: number;
   matches: BracketNode[];
+  /** Present only for SWISS format tournaments */
+  swiss?: SwissMeta;
 }

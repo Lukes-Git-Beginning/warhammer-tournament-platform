@@ -2,6 +2,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { generateSlug, validateStatusTransition, TournamentStatus } from '../lib/tournament-utils.js';
 import { emitStatusChange } from '../lib/emit.js';
+import { finalizeTournament } from '../lib/finalize-tournament.js';
+import { cached, invalidate, cacheKey } from '../lib/cache.js';
 import type { TournamentStatusLiteral } from '@tww3/types';
 
 // ---------------------------------------------------------------------------
@@ -78,35 +80,43 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
     const { page, pageSize } = parsed.data;
     const skip = (page - 1) * pageSize;
 
-    const [tournaments, total] = await Promise.all([
-      fastify.prisma.tournament.findMany({
-        where: { deleted_at: null, visibility: 'PUBLIC' },
-        select: {
-          id: true,
-          slug: true,
-          name: true,
-          format: true,
-          mode: true,
-          status: true,
-          visibility: true,
-          max_participants: true,
-          start_date: true,
-          timezone: true,
-          registration_deadline: true,
-          counts_for_leaderboard: true,
-          is_major: true,
-          created_at: true,
-          organizer: { select: { id: true, username: true, avatar_url: true } },
-          _count: { select: { participants: { where: { deleted_at: null } } } },
-        },
-        orderBy: { start_date: 'desc' },
-        skip,
-        take: pageSize,
-      }),
-      fastify.prisma.tournament.count({ where: { deleted_at: null, visibility: 'PUBLIC' } }),
-    ]);
+    const result = await cached(
+      fastify.redis,
+      cacheKey('tournaments:list', { page, pageSize }),
+      async () => {
+        const [tournaments, total] = await Promise.all([
+          fastify.prisma.tournament.findMany({
+            where: { deleted_at: null, visibility: 'PUBLIC' },
+            select: {
+              id: true,
+              slug: true,
+              name: true,
+              format: true,
+              mode: true,
+              status: true,
+              visibility: true,
+              max_participants: true,
+              start_date: true,
+              timezone: true,
+              registration_deadline: true,
+              counts_for_leaderboard: true,
+              is_major: true,
+              created_at: true,
+              organizer: { select: { id: true, username: true, avatar_url: true } },
+              _count: { select: { participants: { where: { deleted_at: null } } } },
+            },
+            orderBy: { start_date: 'desc' },
+            skip,
+            take: pageSize,
+          }),
+          fastify.prisma.tournament.count({ where: { deleted_at: null, visibility: 'PUBLIC' } }),
+        ]);
+        return { data: tournaments, total, page, pageSize };
+      },
+      { ttlSeconds: 30 },
+    );
 
-    return { data: tournaments, total, page, pageSize };
+    return result;
   });
 
   // POST /api/tournaments
@@ -172,6 +182,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
+      await invalidate(fastify.redis, 'tournaments:list:*');
       request.log.info({ slug: tournament.slug }, 'Tournament created');
       return reply.code(201).send(tournament);
     },
@@ -366,6 +377,21 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
       request.log.info({ slug, changed: Object.keys(changedNew) }, 'Tournament updated');
 
+      // Auto-finalize on COMPLETED transition
+      if (newStatus === 'COMPLETED') {
+        try {
+          await finalizeTournament(fastify.prisma, tournament.id, request.user.sub);
+          await Promise.all([
+            invalidate(fastify.redis, 'leaderboard:*'),
+            invalidate(fastify.redis, 'tournaments:list:*'),
+          ]);
+        } catch (err) {
+          request.log.warn({ err, tournamentId: tournament.id }, 'finalize failed');
+        }
+      } else {
+        await invalidate(fastify.redis, 'tournaments:list:*');
+      }
+
       // Emit socket event on status change
       if (newStatus !== undefined) {
         emitStatusChange(fastify.io, {
@@ -425,6 +451,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
+      await invalidate(fastify.redis, 'tournaments:list:*');
       request.log.info({ slug }, 'Tournament soft-deleted');
       return reply.code(204).send();
     },
