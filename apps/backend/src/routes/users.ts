@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { UpdateMeSchema } from '@tww3/types';
+import { UpdateMeSchema, UpdateUserRoleRequestSchema } from '@tww3/types';
 import { z } from 'zod';
+import { invalidate } from '../lib/cache.js';
 
 const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
@@ -72,6 +73,61 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       };
     },
   );
+  // PATCH /api/users/:id/role — admin only
+  fastify.patch(
+    '/api/users/:id/role',
+    { preHandler: [fastify.authenticate, fastify.requireRole('ADMIN')] },
+    async (request, reply) => {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+
+      const parsed = UpdateUserRoleRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: 'BadRequest',
+          message: parsed.error.message,
+          statusCode: 400,
+        });
+      }
+
+      let user: { id: string; username: string; role: string };
+      try {
+        user = await fastify.prisma.user.update({
+          where: { id, deleted_at: null },
+          data: { role: parsed.data.role },
+          select: { id: true, username: true, role: true },
+        });
+      } catch (err: unknown) {
+        const code = (err as { code?: string }).code;
+        if (code === 'P2025') {
+          return reply.code(404).send({
+            error: 'NotFound',
+            message: 'User not found',
+            statusCode: 404,
+          });
+        }
+        throw err;
+      }
+
+      // Invalidate cached role so requireRole picks up the change immediately
+      const redis = fastify.hasDecorator('redis')
+        ? (fastify as unknown as { redis: import('ioredis').Redis }).redis
+        : undefined;
+      await invalidate(redis, `user:role:${id}`);
+
+      await fastify.prisma.auditLog.create({
+        data: {
+          entity_type: 'User',
+          entity_id: id,
+          action: 'role_update',
+          actor_id: request.user.sub,
+          new_value: { role: parsed.data.role },
+        },
+      });
+
+      return reply.code(200).send(user);
+    },
+  );
+
   // GET /api/users/:id — public
   fastify.get('/api/users/:id', async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);

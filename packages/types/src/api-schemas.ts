@@ -35,6 +35,9 @@ export const UpdateMeSchema = z.object({
 });
 export type UpdateMe = z.infer<typeof UpdateMeSchema>;
 
+export const UpdateUserRoleRequestSchema = z.object({ role: RoleSchema });
+export type UpdateUserRoleRequest = z.infer<typeof UpdateUserRoleRequestSchema>;
+
 export const DiscordCallbackQuerySchema = z.object({
   code: z.string().optional(),
   state: z.string().optional(),

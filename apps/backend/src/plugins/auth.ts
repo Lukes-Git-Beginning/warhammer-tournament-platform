@@ -3,6 +3,7 @@ import fastifyCookie from '@fastify/cookie';
 import fastifyJwt from '@fastify/jwt';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { JwtPayload, Role } from '@tww3/types';
+import { cached } from '../lib/cache.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -64,7 +65,44 @@ export default fp(
           statusCode: 401,
         });
       }
-      if (!roles.includes(request.user.role)) {
+
+      const userId = request.user.sub;
+      const cacheKey = `user:role:${userId}`;
+      const redis = fastify.hasDecorator('redis')
+        ? (fastify as unknown as { redis: import('ioredis').Redis }).redis
+        : undefined;
+
+      let role: Role | null;
+      try {
+        role = await cached<Role | null>(
+          redis,
+          cacheKey,
+          async () => {
+            const dbUser = await fastify.prisma.user.findUnique({
+              where: { id: userId, deleted_at: null },
+              select: { role: true },
+            });
+            return dbUser ? (dbUser.role as Role) : null;
+          },
+          { ttlSeconds: 60 },
+        );
+      } catch {
+        return reply.code(500).send({
+          error: 'InternalServerError',
+          message: 'Failed to verify role',
+          statusCode: 500,
+        });
+      }
+
+      if (role === null) {
+        return reply.code(401).send({
+          error: 'Unauthorized',
+          message: 'User not found or deleted',
+          statusCode: 401,
+        });
+      }
+
+      if (!roles.includes(role)) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: `Required role: ${roles.join(' or ')}`,
