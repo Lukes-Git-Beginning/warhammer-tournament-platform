@@ -7,6 +7,7 @@ import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
 import socketPlugin from './plugins/socket.js';
 import cronPlugin from './plugins/cron.js';
+import graphqlPlugin from './plugins/graphql.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import tournamentRoutes from './routes/tournaments.js';
@@ -25,10 +26,12 @@ export interface BuildAppOptions {
   withRedis?: boolean;
   /** Skip cron plugin during tests (default true in production). */
   withCron?: boolean;
+  /** Register the /graphql mercurius endpoint (default true). */
+  withGraphql?: boolean;
 }
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
-  const { withSocket = true, withRedis = true, withCron = true } = opts;
+  const { withSocket = true, withRedis = true, withCron = true, withGraphql = true } = opts;
   const isProd = process.env.NODE_ENV === 'production';
 
   const app = Fastify({
@@ -70,6 +73,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(leaderboardRoutes);
   await app.register(factionsRoutes);
   await app.register(metaRoutes);
+  if (withGraphql) await app.register(graphqlPlugin);
 
   app.get('/health', async () => ({
     status: 'ok' as const,
