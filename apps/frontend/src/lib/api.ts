@@ -42,7 +42,6 @@ export interface SeasonSummary {
   is_active: boolean;
 }
 
-// Minimal local Tournament type (full schema arrives with M1.4 backend)
 export interface Tournament {
   id: string;
   slug: string;
