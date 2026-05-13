@@ -553,7 +553,7 @@ export class DraftService {
     }
 
     // Store submission
-    let newState = DraftSM.submitParallel(snapshot.state, actor, factionId);
+    const newState = DraftSM.submitParallel(snapshot.state, actor, factionId);
 
     if (DraftSM.isParallelComplete(newState)) {
       // Both submitted — commit

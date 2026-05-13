@@ -467,7 +467,17 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           request.log.warn({ err, tournamentId: tournament.id }, 'finalize failed');
         }
       } else {
-        await invalidate(fastify.redis, 'tournaments:list:*');
+        const invalidations: Promise<number>[] = [
+          invalidate(fastify.redis, 'tournaments:list:*'),
+        ];
+        // When draft config changes, also flush the preset caches so callers
+        // see up-to-date "in use" state (e.g. preset-detail permission checks).
+        const draftConfigChanged =
+          'draft_enabled' in changedNew || 'draft_preset_id' in changedNew;
+        if (draftConfigChanged) {
+          invalidations.push(invalidate(fastify.redis, 'draft-presets:*'));
+        }
+        await Promise.all(invalidations);
       }
 
       // Emit socket event on status change
