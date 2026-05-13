@@ -1,17 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAdminAuditLog, type AuditLogEntry } from '@/lib/api';
+import { formatInUserTimezone } from '@/lib/timezone';
 
 const PAGE_SIZE = 20;
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString('de-DE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatInUserTimezone(iso);
 }
 
 function truncate(str: string, maxLen = 12): string {

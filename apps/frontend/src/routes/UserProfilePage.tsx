@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from '@tanstack/react-router';
 import { getUserProfile } from '@/lib/api';
+import { formatInUserTimezone } from '@/lib/timezone';
 import { EloRatingDisplay } from '../components/meta/EloRatingDisplay';
 import { ArmyListList } from '../components/tournament/ArmyListList';
 import { ArmyListUpload } from '../components/tournament/ArmyListUpload';
@@ -84,9 +85,7 @@ export function UserProfilePage() {
 
   const { user, current_season, all_time, recent_results, recent_matches } = data;
 
-  const joinedDate = new Date(user.created_at).toLocaleString('de-DE', {
-    dateStyle: 'medium',
-  });
+  const joinedDate = formatInUserTimezone(user.created_at, undefined, { showTime: false });
 
   const roleLabel = ROLE_LABELS[user.role] ?? user.role;
   const roleColor = ROLE_COLORS[user.role] ?? 'bg-stone-700 text-stone-300';
@@ -177,7 +176,7 @@ export function UserProfilePage() {
                       <EloDeltaCell delta={r.elo_change} />
                     </td>
                     <td className="px-4 py-3 text-right text-stone-500">
-                      {new Date(r.created_at).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}
+                      {formatInUserTimezone(r.created_at)}
                     </td>
                   </tr>
                 ))}
@@ -258,10 +257,7 @@ export function UserProfilePage() {
                       </td>
                       <td className="px-4 py-3 text-center text-stone-400">{m.score ?? '—'}</td>
                       <td className="px-4 py-3 text-right text-stone-500">
-                        {new Date(m.updatedAt).toLocaleString('de-DE', {
-                          dateStyle: 'medium',
-                          timeStyle: 'short',
-                        })}
+                        {formatInUserTimezone(m.updatedAt)}
                       </td>
                     </tr>
                   );

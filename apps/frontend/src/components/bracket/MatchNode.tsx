@@ -7,13 +7,22 @@ interface MatchNodeProps {
   onClick?: () => void;
 }
 
+export const statusColors: Record<string, string> = {
+  ONGOING: 'border-green-600 bg-green-900/40',
+  COMPLETED: 'border-stone-600 bg-stone-800/60',
+  PENDING: 'border-stone-700 bg-stone-900/40',
+  BYE: 'border-stone-800 bg-stone-900/30 opacity-60',
+  FORFEIT: 'border-amber-700 bg-amber-950/40',
+};
+
 export function MatchNode({ match, player1Name, player2Name, onClick }: MatchNodeProps) {
   const isBye = match.status === 'BYE';
   const isOngoing = match.status === 'ONGOING';
 
-  const borderClass = isBye
-    ? 'border border-dashed border-stone-600'
-    : 'border border-stone-700';
+  const statusCls = statusColors[match.status] ?? 'border-stone-700 bg-stone-900/40';
+
+  // BYE uses dashed border style in addition to status colors
+  const borderStyle = isBye ? 'border border-dashed' : 'border';
 
   const p1Winner = match.winnerId && match.winnerId === match.player1Id;
   const p2Winner = match.winnerId && match.winnerId === match.player2Id;
@@ -24,7 +33,7 @@ export function MatchNode({ match, player1Name, player2Name, onClick }: MatchNod
 
   return (
     <div
-      className={`w-full h-full bg-stone-900 ${borderClass} rounded flex flex-col overflow-hidden ${
+      className={`w-full h-full ${borderStyle} ${statusCls} rounded flex flex-col overflow-hidden ${
         onClick ? 'cursor-pointer hover:border-warhammer-gold transition-colors' : ''
       } relative`}
       onClick={onClick}

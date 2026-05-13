@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { formatInUserTimezone } from '@/lib/timezone';
 
 interface ArmyList {
   id: string;
@@ -32,7 +33,7 @@ export function ArmyListList() {
             <div>
               <p className="text-stone-200">{l.file_name}</p>
               <p className="text-xs text-stone-500">
-                {l.file_type} · {new Date(l.created_at).toLocaleString()}
+                {l.file_type} · {formatInUserTimezone(l.created_at)}
                 {l.parsed_data?.lord && ` · Lord: ${l.parsed_data.lord}`}
               </p>
             </div>

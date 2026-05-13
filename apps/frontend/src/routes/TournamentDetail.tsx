@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
 import { getTournament, getBracket } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
+import { formatInUserTimezone } from '@/lib/timezone';
 import { BracketView } from '@/components/bracket/BracketView';
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -83,10 +84,7 @@ export function TournamentDetail() {
 
   const statusColor = STATUS_COLORS[tournament.status] ?? 'bg-stone-700 text-stone-300';
   const formatLabel = FORMAT_LABELS[tournament.format] ?? tournament.format;
-  const startDate = new Date(tournament.start_date).toLocaleString('de-DE', {
-    dateStyle: 'full',
-    timeStyle: 'short',
-  });
+  const startDate = formatInUserTimezone(tournament.start_date, user?.timezone ?? undefined);
 
   const canManage =
     user &&

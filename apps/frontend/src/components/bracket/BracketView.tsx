@@ -99,18 +99,51 @@ export function BracketView({ slug, tournamentId, canManage = false }: BracketVi
         <TransformWrapper
           minScale={0.3}
           maxScale={2}
-          initialScale={1}
+          initialScale={data.matches.length > 32 ? 0.6 : 1}
           limitToBounds={false}
+          wheel={{ step: 0.1 }}
         >
-          <TransformComponent
-            wrapperStyle={{ width: '100%', height: '600px' }}
-            contentStyle={{ padding: '16px' }}
-          >
-            <SVGBracket
-              data={data}
-              onMatchClick={(matchId) => setSelectedMatchId(matchId)}
-            />
-          </TransformComponent>
+          {({ zoomIn, zoomOut, resetTransform }) => (
+            <>
+              {/* Zoom controls — always visible for pan/zoom capable container */}
+              <div className="absolute right-3 top-3 z-10 flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => zoomIn()}
+                  aria-label="Zoom in"
+                  className="rounded bg-stone-800 px-2 py-1 text-xs text-stone-200 hover:bg-stone-700 transition-colors select-none"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={() => zoomOut()}
+                  aria-label="Zoom out"
+                  className="rounded bg-stone-800 px-2 py-1 text-xs text-stone-200 hover:bg-stone-700 transition-colors select-none"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  onClick={() => resetTransform()}
+                  aria-label="Reset zoom"
+                  className="rounded bg-stone-800 px-2 py-1 text-xs text-stone-200 hover:bg-stone-700 transition-colors select-none"
+                >
+                  ⟲
+                </button>
+              </div>
+
+              <TransformComponent
+                wrapperStyle={{ width: '100%', height: '600px' }}
+                contentStyle={{ padding: '16px' }}
+              >
+                <SVGBracket
+                  data={data}
+                  onMatchClick={(matchId) => setSelectedMatchId(matchId)}
+                />
+              </TransformComponent>
+            </>
+          )}
         </TransformWrapper>
 
         {selectedMatch && (

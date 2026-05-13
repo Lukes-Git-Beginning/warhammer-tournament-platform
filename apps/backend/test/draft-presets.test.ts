@@ -48,6 +48,16 @@ afterAll(async () => {
 
 beforeEach(async () => {
   // Cleanup order must respect FK constraints:
+  // 0. Audit-logs do not cascade — clean up entries scoped to our test presets/users
+  //    so leftover rows from previous failed runs cannot poison findFirst() queries.
+  await prisma.auditLog.deleteMany({
+    where: {
+      OR: [
+        { entity_type: 'DraftPreset', entity_id: { in: [PRESET_A, PRESET_B, PRESET_C] } },
+        { actor_id: { in: [USER_ID, ORGANIZER_ID, ADMIN_ID, OTHER_ID] } },
+      ],
+    },
+  });
   // 1. Remove tournament referencing preset
   await prisma.tournament.deleteMany({ where: { id: TOURNAMENT_ID } });
   // 2. Remove test presets (the two seed presets from seed.ts survive — they have different IDs)

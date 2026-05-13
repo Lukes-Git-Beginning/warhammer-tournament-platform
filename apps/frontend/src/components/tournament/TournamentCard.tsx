@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import { formatInUserTimezone } from '@/lib/timezone';
 
 interface TournamentCardProps {
   tournament: {
@@ -27,11 +28,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function TournamentCard({ tournament }: TournamentCardProps) {
-  const startDate = new Date(tournament.start_date).toLocaleDateString('de-DE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  const startDate = formatInUserTimezone(tournament.start_date, undefined, { showTime: false });
 
   const statusColor = STATUS_COLORS[tournament.status] ?? 'bg-stone-700 text-stone-300';
   const formatLabel = FORMAT_LABELS[tournament.format] ?? tournament.format;
