@@ -8,6 +8,11 @@ import type {
   FactionDetailResponse,
   MetaOverviewResponse,
   MatchupHeatmapResponse,
+  DraftPreset,
+  CreateDraftPresetRequest,
+  UpdateDraftPresetRequest,
+  DraftView,
+  DraftEventsResponse,
 } from '@tww3/types';
 
 export type {
@@ -77,6 +82,8 @@ export interface TournamentCreate {
   rules?: string;
   discord_link?: string;
   description?: string;
+  draft_enabled?: boolean;
+  draft_preset_id?: string;
 }
 
 export interface ApiError extends Error {
@@ -225,4 +232,53 @@ export function reportMatchResult(
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Draft Presets
+// ---------------------------------------------------------------------------
+
+export function listDraftPresets(): Promise<DraftPreset[]> {
+  return apiFetch<{ presets: DraftPreset[] }>('/api/draft-presets').then((r) => r.presets);
+}
+
+export function getDraftPreset(id: string): Promise<DraftPreset> {
+  return apiFetch<DraftPreset>(`/api/draft-presets/${id}`);
+}
+
+export function createDraftPreset(input: CreateDraftPresetRequest): Promise<DraftPreset> {
+  return apiFetch<DraftPreset>('/api/draft-presets', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateDraftPreset(
+  id: string,
+  input: UpdateDraftPresetRequest,
+): Promise<DraftPreset> {
+  return apiFetch<DraftPreset>(`/api/draft-presets/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteDraftPreset(id: string): Promise<void> {
+  return apiFetch<void>(`/api/draft-presets/${id}`, { method: 'DELETE' });
+}
+
+// ---------------------------------------------------------------------------
+// Draft Lobby
+// ---------------------------------------------------------------------------
+
+export function getDraftView(id: string): Promise<DraftView> {
+  return apiFetch<DraftView>(`/api/drafts/${id}`);
+}
+
+export function getDraftEvents(id: string): Promise<DraftEventsResponse> {
+  return apiFetch<DraftEventsResponse>(`/api/drafts/${id}/events`);
+}
+
+export function cancelDraft(id: string): Promise<void> {
+  return apiFetch<void>(`/api/drafts/${id}/cancel`, { method: 'POST' });
 }

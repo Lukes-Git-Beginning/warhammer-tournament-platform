@@ -9,6 +9,10 @@ import { UserProfilePage } from './routes/UserProfilePage';
 import { MetaDashboard } from './routes/MetaDashboard';
 import { FactionListPage } from './routes/FactionListPage';
 import { FactionDetailPage } from './routes/FactionDetailPage';
+import { DraftLobbyPage } from './routes/DraftLobbyPage';
+import { DraftSpectatorPage } from './routes/DraftSpectatorPage';
+import { PresetListPage } from './routes/PresetListPage';
+import { PresetEditorPage } from './routes/PresetEditorPage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -64,6 +68,36 @@ const factionDetailRoute = createRoute({
   component: FactionDetailPage,
 });
 
+const draftLobbyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/drafts/$id',
+  component: DraftLobbyPage,
+});
+
+const draftSpectatorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/drafts/$id/spectate',
+  component: DraftSpectatorPage,
+});
+
+const presetListRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/presets',
+  component: PresetListPage,
+});
+
+const presetNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/presets/new',
+  component: PresetEditorPage,
+});
+
+const presetEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/presets/$id/edit',
+  component: PresetEditorPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -74,6 +108,11 @@ const routeTree = rootRoute.addChildren([
   metaRoute,
   factionListRoute,
   factionDetailRoute,
+  draftLobbyRoute,
+  draftSpectatorRoute,
+  presetListRoute,
+  presetNewRoute,
+  presetEditRoute,
 ]);
 
 export const router = createRouter({ routeTree });
