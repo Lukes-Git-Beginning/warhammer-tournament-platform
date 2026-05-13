@@ -1,20 +1,26 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { createTournament, listDraftPresets } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select } from '@/components/ui/select';
+import { Label, FieldError, FieldHint } from '@/components/ui/label';
 
 const TournamentCreateSchema = z.object({
-  name: z.string().min(3, 'Name muss mindestens 3 Zeichen haben').max(128),
+  name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
   format: z.enum(['SINGLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN']),
   mode: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).default('ONE_V_ONE'),
-  start_date: z.string().min(1, 'Startdatum erforderlich'),
+  start_date: z.string().min(1),
   timezone: z.string().min(1),
   max_participants: z.coerce.number().int().positive().optional().or(z.literal('')),
   registration_deadline: z.string().optional(),
   rules: z.string().max(10000).optional(),
-  discord_link: z.string().url('Ungültige URL').optional().or(z.literal('')),
+  discord_link: z.string().url().optional().or(z.literal('')),
   draft_enabled: z.boolean().default(false),
   draft_preset_id: z.string().uuid().nullable().optional(),
 });
@@ -22,6 +28,7 @@ const TournamentCreateSchema = z.object({
 type FormData = z.infer<typeof TournamentCreateSchema>;
 
 export function TournamentCreateForm() {
+  const { t } = useTranslation();
   const router = useRouter();
   const defaultTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -54,7 +61,6 @@ export function TournamentCreateForm() {
     setForm((prev) => ({
       ...prev,
       [name]: newValue,
-      // Reset preset when draft_enabled is unchecked
       ...(name === 'draft_enabled' && !checked ? { draft_preset_id: null } : {}),
     }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
@@ -67,14 +73,28 @@ export function TournamentCreateForm() {
       const fieldErrors: Partial<Record<keyof FormData, string>> = {};
       for (const issue of result.error.issues) {
         const key = issue.path[0] as keyof FormData;
-        if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+        if (!fieldErrors[key]) {
+          // Map Zod-Codes auf i18n-Keys
+          if (key === 'name') fieldErrors[key] = t('tournament.form.errors.name_min');
+          else if (key === 'start_date') fieldErrors[key] = t('tournament.form.errors.start_required');
+          else if (key === 'discord_link') fieldErrors[key] = t('tournament.form.errors.discord_invalid');
+          else fieldErrors[key] = issue.message;
+        }
       }
       setErrors(fieldErrors);
       return;
     }
 
-    const { max_participants, discord_link, registration_deadline, description, rules, draft_enabled, draft_preset_id, ...rest } =
-      result.data;
+    const {
+      max_participants,
+      discord_link,
+      registration_deadline,
+      description,
+      rules,
+      draft_enabled,
+      draft_preset_id,
+      ...rest
+    } = result.data;
 
     mutation.mutate({
       ...rest,
@@ -89,196 +109,198 @@ export function TournamentCreateForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
+    <form onSubmit={handleSubmit} className="w-full space-y-6">
       {mutation.error && (
-        <div className="rounded-md border border-red-800 bg-red-950/50 p-4 text-red-300 text-sm">
+        <div className="rounded-md border border-red-800 bg-red-950/50 p-4 text-sm text-red-300">
           {(mutation.error as Error).message}
         </div>
       )}
 
       <div>
-        <label className="block text-sm font-medium text-stone-300 mb-1">
-          Name <span className="text-red-400">*</span>
-        </label>
-        <input
+        <Label htmlFor="tcf-name" required>
+          {t('tournament.form.name')}
+        </Label>
+        <Input
+          id="tcf-name"
           name="name"
           value={form.name ?? ''}
           onChange={handleChange}
-          placeholder="Turniername"
-          className="w-full rounded-md border border-stone-700 bg-stone-800 px-3 py-2 text-stone-100 placeholder:text-stone-500 focus:border-warhammer-gold focus:outline-none"
+          placeholder={t('tournament.form.name_placeholder')}
         />
-        {errors.name && <p className="mt-1 text-xs text-red-400">{errors.name}</p>}
+        <FieldError message={errors.name} />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-stone-300 mb-1">Beschreibung</label>
-        <textarea
+        <Label htmlFor="tcf-description">{t('tournament.form.description')}</Label>
+        <Textarea
+          id="tcf-description"
           name="description"
           value={form.description ?? ''}
           onChange={handleChange}
           rows={4}
-          placeholder="Optionale Beschreibung…"
-          className="w-full rounded-md border border-stone-700 bg-stone-800 px-3 py-2 text-stone-100 placeholder:text-stone-500 focus:border-warhammer-gold focus:outline-none"
+          placeholder={t('tournament.form.description_placeholder')}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label className="block text-sm font-medium text-stone-300 mb-1">
-            Format <span className="text-red-400">*</span>
-          </label>
-          <select
+        <div className="min-w-0">
+          <Label htmlFor="tcf-format" required>
+            {t('tournament.form.format')}
+          </Label>
+          <Select
+            id="tcf-format"
             name="format"
             value={form.format ?? 'SINGLE_ELIMINATION'}
             onChange={handleChange}
-            className="w-full rounded-md border border-stone-700 bg-stone-800 px-3 py-2 text-stone-100 focus:border-warhammer-gold focus:outline-none"
           >
-            <option value="SINGLE_ELIMINATION">Single Elimination</option>
-            <option value="SWISS">Swiss</option>
-            <option value="ROUND_ROBIN">Round Robin</option>
-          </select>
+            <option value="SINGLE_ELIMINATION">{t('tournament.format.single_elim')}</option>
+            <option value="SWISS">{t('tournament.format.swiss')}</option>
+            <option value="ROUND_ROBIN">{t('tournament.format.round_robin')}</option>
+          </Select>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-stone-300 mb-1">Modus</label>
-          <select
+        <div className="min-w-0">
+          <Label htmlFor="tcf-mode">{t('tournament.form.mode')}</Label>
+          <Select
+            id="tcf-mode"
             name="mode"
             value="ONE_V_ONE"
             disabled
-            className="w-full rounded-md border border-stone-700 bg-stone-800 px-3 py-2 text-stone-500 cursor-not-allowed"
+            className="cursor-not-allowed text-karaz-stone-500"
           >
-            <option value="ONE_V_ONE">1v1 (M1)</option>
-          </select>
+            <option value="ONE_V_ONE">{t('tournament.form.mode_1v1')}</option>
+          </Select>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label className="block text-sm font-medium text-stone-300 mb-1">
-            Startdatum <span className="text-red-400">*</span>
-          </label>
-          <input
+        <div className="min-w-0">
+          <Label htmlFor="tcf-start" required>
+            {t('tournament.form.start_date')}
+          </Label>
+          <Input
+            id="tcf-start"
             type="datetime-local"
             name="start_date"
             value={form.start_date ?? ''}
             onChange={handleChange}
-            className="w-full rounded-md border border-stone-700 bg-stone-800 px-3 py-2 text-stone-100 focus:border-warhammer-gold focus:outline-none"
           />
-          {errors.start_date && <p className="mt-1 text-xs text-red-400">{errors.start_date}</p>}
+          <FieldError message={errors.start_date} />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-stone-300 mb-1">Zeitzone</label>
-          <input
+        <div className="min-w-0">
+          <Label htmlFor="tcf-tz">{t('tournament.form.timezone')}</Label>
+          <Input
+            id="tcf-tz"
             name="timezone"
             value={form.timezone ?? defaultTimezone}
             onChange={handleChange}
-            className="w-full rounded-md border border-stone-700 bg-stone-800 px-3 py-2 text-stone-100 focus:border-warhammer-gold focus:outline-none"
           />
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label className="block text-sm font-medium text-stone-300 mb-1">Max. Teilnehmer</label>
-          <input
+        <div className="min-w-0">
+          <Label htmlFor="tcf-max">{t('tournament.form.max_participants')}</Label>
+          <Input
+            id="tcf-max"
             type="number"
             name="max_participants"
             value={form.max_participants ?? ''}
             onChange={handleChange}
             min={2}
-            placeholder="Unbegrenzt"
-            className="w-full rounded-md border border-stone-700 bg-stone-800 px-3 py-2 text-stone-100 placeholder:text-stone-500 focus:border-warhammer-gold focus:outline-none"
+            placeholder={t('tournament.form.max_participants_placeholder')}
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-stone-300 mb-1">
-            Anmeldeschluss
-          </label>
-          <input
+        <div className="min-w-0">
+          <Label htmlFor="tcf-deadline">{t('tournament.form.registration_deadline')}</Label>
+          <Input
+            id="tcf-deadline"
             type="datetime-local"
             name="registration_deadline"
             value={form.registration_deadline ?? ''}
             onChange={handleChange}
-            className="w-full rounded-md border border-stone-700 bg-stone-800 px-3 py-2 text-stone-100 focus:border-warhammer-gold focus:outline-none"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-stone-300 mb-1">Regeln (Markdown)</label>
-        <textarea
+        <Label htmlFor="tcf-rules">{t('tournament.form.rules')}</Label>
+        <Textarea
+          id="tcf-rules"
           name="rules"
           value={form.rules ?? ''}
           onChange={handleChange}
           rows={6}
-          placeholder="Turnier-Regeln im Markdown-Format…"
-          className="w-full rounded-md border border-stone-700 bg-stone-800 px-3 py-2 text-stone-100 placeholder:text-stone-500 font-mono text-sm focus:border-warhammer-gold focus:outline-none"
+          placeholder={t('tournament.form.rules_placeholder')}
+          className="font-mono text-sm"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-stone-300 mb-1">Discord-Link</label>
-        <input
+        <Label htmlFor="tcf-discord">{t('tournament.form.discord_link')}</Label>
+        <Input
+          id="tcf-discord"
           name="discord_link"
           value={form.discord_link ?? ''}
           onChange={handleChange}
           placeholder="https://discord.gg/…"
-          className="w-full rounded-md border border-stone-700 bg-stone-800 px-3 py-2 text-stone-100 placeholder:text-stone-500 focus:border-warhammer-gold focus:outline-none"
         />
-        {errors.discord_link && (
-          <p className="mt-1 text-xs text-red-400">{errors.discord_link}</p>
-        )}
+        <FieldError message={errors.discord_link} />
       </div>
 
-      <div className="space-y-4 rounded-md border border-stone-700 bg-stone-900/50 p-4">
-        <h3 className="text-sm font-semibold text-stone-300">Draft-System</h3>
-        <label className="flex items-center gap-3 cursor-pointer">
+      <fieldset className="space-y-4 rounded-md border border-karaz-iron-700 bg-karaz-iron-900/60 p-4">
+        <legend className="px-1 text-sm font-semibold text-karaz-stone-200">
+          {t('tournament.form.draft_section')}
+        </legend>
+        <label className="flex cursor-pointer items-center gap-3">
           <input
             type="checkbox"
             name="draft_enabled"
             checked={form.draft_enabled ?? false}
             onChange={handleChange}
-            className="h-4 w-4 rounded border-stone-600 bg-stone-800 text-warhammer-gold focus:ring-warhammer-gold"
+            className="h-4 w-4 rounded border-karaz-iron-600 bg-karaz-iron-800 text-karaz-gold-500 focus:ring-karaz-gold-500"
           />
-          <span className="text-sm text-stone-300">Draft-System aktivieren</span>
+          <span className="text-sm text-karaz-stone-300">
+            {t('tournament.form.draft_enable')}
+          </span>
         </label>
 
         {form.draft_enabled && (
           <div>
-            <label className="block text-sm font-medium text-stone-300 mb-1">
-              Draft-Preset <span className="text-red-400">*</span>
-            </label>
-            <select
+            <Label htmlFor="tcf-preset" required>
+              {t('tournament.form.draft_preset')}
+            </Label>
+            <Select
+              id="tcf-preset"
               name="draft_preset_id"
               value={form.draft_preset_id ?? ''}
               onChange={handleChange}
-              className="w-full rounded-md border border-stone-700 bg-stone-800 px-3 py-2 text-stone-100 focus:border-warhammer-gold focus:outline-none"
             >
-              <option value="">— Preset wählen —</option>
+              <option value="">— {t('tournament.form.draft_preset_placeholder')} —</option>
               {draftPresets?.map((preset) => (
                 <option key={preset.id} value={preset.id}>
-                  {preset.name} ({preset.turns.length} Züge, {preset.turn_seconds}s pro Zug)
+                  {preset.name} ({preset.turns.length} {t('tournament.form.turns')},{' '}
+                  {preset.turn_seconds}s {t('tournament.form.per_turn')})
                 </option>
               ))}
-            </select>
+            </Select>
             {form.draft_enabled && !form.draft_preset_id && (
-              <p className="mt-1 text-xs text-amber-400">
-                Bitte ein Preset wählen, um das Draft-System zu aktivieren.
-              </p>
+              <FieldHint>{t('tournament.form.draft_preset_required')}</FieldHint>
             )}
           </div>
         )}
-      </div>
+      </fieldset>
 
-      <button
+      <Button
         type="submit"
+        variant="forge"
+        size="md"
         disabled={mutation.isPending || !!(form.draft_enabled && !form.draft_preset_id)}
-        className="rounded-md bg-warhammer-gold px-6 py-2.5 font-semibold text-stone-950 transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        {mutation.isPending ? 'Wird erstellt…' : 'Turnier erstellen'}
-      </button>
+        {mutation.isPending ? t('tournament.form.submitting') : t('tournament.form.submit')}
+      </Button>
     </form>
   );
 }

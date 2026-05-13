@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { motion, useReducedMotion } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -18,6 +19,7 @@ const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
  * empty / loading states gracefully.
  */
 export function RollOfHonourSection() {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['leaderboard', 'landing-top-10'],
@@ -33,14 +35,14 @@ export function RollOfHonourSection() {
       <div className="mx-auto max-w-[60rem] px-4 sm:px-6 lg:px-8">
         <div className="mb-8 text-center lg:mb-12">
           <span className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-karaz-gold-500">
-            Sealed in Stone
+            {t('roll_of_honour.eyebrow')}
           </span>
           <h2
             id="roll-heading"
             className="mt-2 font-display font-bold text-karaz-stone-100"
             style={{ fontSize: 'clamp(1.625rem, 3.5vw, 2.5rem)', lineHeight: 1.15 }}
           >
-            The Roll of Honour
+            {t('roll_of_honour.heading')}
           </h2>
           <p
             aria-hidden="true"
@@ -77,18 +79,16 @@ export function RollOfHonourSection() {
               />
               <div>
                 <h3 className="font-display text-xl font-semibold text-karaz-stone-100">
-                  A blank Roll.
+                  {t('roll_of_honour.empty_title')}
                 </h3>
-                <p className="mt-2 text-karaz-stone-300">
-                  The forge awaits its first strike.
-                </p>
+                <p className="mt-2 text-karaz-stone-300">{t('roll_of_honour.empty_body')}</p>
                 <p
                   aria-hidden="true"
                   lang="la"
                   title="Sealed in stone"
                   className="mt-3 font-display italic text-sm tracking-wider text-karaz-gold-500/70"
                 >
-                  "In Lapide Sigillata"
+                  {t('roll_of_honour.empty_motto')}
                 </p>
               </div>
             </div>
@@ -141,7 +141,7 @@ export function RollOfHonourSection() {
           <div className="px-5 py-4 text-center">
             <Button asChild variant="etched" size="sm">
               <Link to="/leaderboard">
-                View the full Roll of Honour
+                {t('roll_of_honour.view_all')}
                 <ArrowRight className="size-3.5" strokeWidth={1.5} />
               </Link>
             </Button>

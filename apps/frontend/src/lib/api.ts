@@ -88,12 +88,41 @@ export interface TournamentCreate {
 
 export interface ApiError extends Error {
   status: number;
+  /** i18n key if the error message was matched to a known backend string */
+  i18nKey?: string;
 }
 
 function makeApiError(message: string, status: number): ApiError {
   const err = new Error(message) as ApiError;
   err.status = status;
   return err;
+}
+
+/**
+ * Maps known backend error strings to i18n keys in the `errors.*` namespace.
+ * Key: exact backend `message` string (case-insensitive match via lowercase).
+ * Value: i18n key (without the `errors.` prefix — callers prepend it).
+ *
+ * Unknown strings fall through as-is (raw message from the server).
+ */
+const BACKEND_ERROR_MAP: Record<string, string> = {
+  'tournament not found': 'errors.not_found',
+  'user not found': 'errors.not_found',
+  'not found': 'errors.not_found',
+  unauthorized: 'errors.unauthorized',
+  'not authorized': 'errors.unauthorized',
+  forbidden: 'errors.forbidden',
+  'access denied': 'errors.forbidden',
+  'validation error': 'errors.validation',
+  'invalid input': 'errors.validation',
+};
+
+/**
+ * Looks up a backend error message and returns the i18n key if known.
+ * Returns `undefined` for unknown messages (caller should display raw message).
+ */
+export function getErrorI18nKey(message: string): string | undefined {
+  return BACKEND_ERROR_MAP[message.toLowerCase()];
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -114,7 +143,9 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     } catch {
       // ignore parse errors
     }
-    throw makeApiError(message, res.status);
+    const err = makeApiError(message, res.status);
+    err.i18nKey = getErrorI18nKey(message);
+    throw err;
   }
 
   if (res.status === 204) return undefined as T;

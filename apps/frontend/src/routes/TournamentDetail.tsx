@@ -1,17 +1,20 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
 import { getTournament, getBracket } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { BracketView } from '@/components/bracket/BracketView';
+import { PageShell } from '@/components/layout/PageShell';
 
-const FORMAT_LABELS: Record<string, string> = {
-  SINGLE_ELIMINATION: 'Single Elimination',
-  SWISS: 'Swiss',
-  ROUND_ROBIN: 'Round Robin',
-  DOUBLE_ELIMINATION: 'Double Elimination',
+// Format labels are now handled via i18n — see t('tournament.format.*')
+const FORMAT_KEY_MAP: Record<string, string> = {
+  SINGLE_ELIMINATION: 'tournament.format.single_elim',
+  SWISS: 'tournament.format.swiss',
+  ROUND_ROBIN: 'tournament.format.round_robin',
+  DOUBLE_ELIMINATION: 'tournament.format.double_elim',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -46,6 +49,7 @@ function SafeMarkdown({ children }: { children: string }) {
 }
 
 export function TournamentDetail() {
+  const { t } = useTranslation();
   const { slug } = useParams({ from: '/tournaments/$slug' });
   const { data: user } = useAuthQuery();
 
@@ -68,22 +72,25 @@ export function TournamentDetail() {
 
   if (isLoading) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-10 text-stone-400">Wird geladen…</main>
+      <PageShell variant="narrow" className="text-karaz-stone-400">
+        {t('common.loading')}
+      </PageShell>
     );
   }
 
   if (error || !tournament) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-10">
+      <PageShell variant="narrow">
         <div className="rounded-md border border-red-900 bg-red-950/40 p-6 text-red-300 text-sm">
-          Turnier nicht gefunden oder nicht erreichbar.
+          {t('tournament.detail.not_found')}
         </div>
-      </main>
+      </PageShell>
     );
   }
 
   const statusColor = STATUS_COLORS[tournament.status] ?? 'bg-stone-700 text-stone-300';
-  const formatLabel = FORMAT_LABELS[tournament.format] ?? tournament.format;
+  const formatKey = FORMAT_KEY_MAP[tournament.format];
+  const formatLabel = formatKey ? t(formatKey) : tournament.format;
   const startDate = formatInUserTimezone(tournament.start_date, user?.timezone ?? undefined);
 
   const canManage =
@@ -92,9 +99,9 @@ export function TournamentDetail() {
       (user.role === 'ORGANIZER' && tournament.organizer?.id === user.id));
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10">
+    <PageShell variant="narrow">
       <div className="flex flex-wrap items-start gap-3 mb-6">
-        <h1 className="font-display text-3xl font-bold text-warhammer-gold flex-1">
+        <h1 className="font-display text-3xl font-bold text-karaz-gold-500 flex-1">
           {tournament.name}
         </h1>
         <div className="flex gap-2">
@@ -116,7 +123,7 @@ export function TournamentDetail() {
               // Stub: Edit — M2+
             }}
           >
-            Bearbeiten
+            {t('tournament.detail.edit')}
           </button>
           <button
             type="button"
@@ -125,7 +132,7 @@ export function TournamentDetail() {
               // Stub: Delete — M2+
             }}
           >
-            Löschen
+            {t('tournament.detail.delete')}
           </button>
         </div>
       )}
@@ -134,20 +141,23 @@ export function TournamentDetail() {
         <section className="mb-6 rounded-md border border-warhammer-blood/60 bg-warhammer-blood/10 p-4">
           <h2 className="font-display text-base font-semibold text-warhammer-gold mb-3 flex items-center gap-2">
             <span className="inline-block h-2 w-2 rounded-full bg-warhammer-blood animate-pulse" />
-            Laufende Drafts
+            {t('tournament.detail.live_drafts')}
           </h2>
           <ul className="space-y-2">
             {activeDraftMatches.map((match) => (
               <li key={match.matchId} className="flex items-center justify-between rounded bg-stone-800/60 px-4 py-2">
                 <span className="text-sm text-stone-300">
-                  Live Draft — Match #{match.matchNumber} (Runde {match.round})
+                  {t('tournament.detail.live_draft_label', {
+                    matchNumber: match.matchNumber,
+                    round: match.round,
+                  })}
                 </span>
                 <Link
                   to="/drafts/$id/spectate"
                   params={{ id: match.draft_id! }}
                   className="rounded bg-warhammer-blood px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors"
                 >
-                  Live zuschauen
+                  {t('tournament.detail.live_watch')}
                 </Link>
               </li>
             ))}
@@ -158,28 +168,28 @@ export function TournamentDetail() {
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-8">
         <div className="space-y-2 text-sm">
           <div>
-            <span className="text-stone-500">Start:</span>{' '}
+            <span className="text-stone-500">{t('tournament.detail.start')}</span>{' '}
             <span className="text-stone-200">{startDate}</span>
           </div>
           <div>
-            <span className="text-stone-500">Zeitzone:</span>{' '}
+            <span className="text-stone-500">{t('tournament.detail.timezone')}</span>{' '}
             <span className="text-stone-200">{tournament.timezone}</span>
           </div>
           {tournament.max_participants && (
             <div>
-              <span className="text-stone-500">Max. Teilnehmer:</span>{' '}
+              <span className="text-stone-500">{t('tournament.detail.max_participants')}</span>{' '}
               <span className="text-stone-200">{tournament.max_participants}</span>
             </div>
           )}
           {tournament.participantCount !== undefined && (
             <div>
-              <span className="text-stone-500">Angemeldet:</span>{' '}
+              <span className="text-stone-500">{t('tournament.detail.registered')}</span>{' '}
               <span className="text-stone-200">{tournament.participantCount}</span>
             </div>
           )}
           {tournament.organizer && (
             <div>
-              <span className="text-stone-500">Organisator:</span>{' '}
+              <span className="text-stone-500">{t('tournament.detail.organizer')}</span>{' '}
               <span className="text-stone-200">{tournament.organizer.username}</span>
             </div>
           )}
@@ -191,7 +201,7 @@ export function TournamentDetail() {
                 rel="noopener noreferrer"
                 className="text-[#5865F2] hover:underline"
               >
-                Discord-Server
+                {t('tournament.detail.discord_server')}
               </a>
             </div>
           )}
@@ -201,7 +211,7 @@ export function TournamentDetail() {
       {tournament.description && (
         <section className="mb-8">
           <h2 className="font-display text-xl font-semibold text-warhammer-gold mb-3">
-            Beschreibung
+            {t('tournament.detail.description')}
           </h2>
           <div className="text-stone-300 leading-relaxed">
             <SafeMarkdown>{tournament.description}</SafeMarkdown>
@@ -211,7 +221,9 @@ export function TournamentDetail() {
 
       {tournament.rules && (
         <section className="mb-8">
-          <h2 className="font-display text-xl font-semibold text-warhammer-gold mb-3">Regeln</h2>
+          <h2 className="font-display text-xl font-semibold text-warhammer-gold mb-3">
+            {t('tournament.detail.rules')}
+          </h2>
           <div className="rounded-md border border-stone-800 bg-stone-900/50 p-6 text-stone-300 leading-relaxed">
             <SafeMarkdown>{tournament.rules}</SafeMarkdown>
           </div>
@@ -220,7 +232,9 @@ export function TournamentDetail() {
 
       {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
         <section>
-          <h2 className="font-display text-xl font-semibold text-warhammer-gold mb-3">Bracket</h2>
+          <h2 className="font-display text-xl font-semibold text-karaz-gold-500 mb-3">
+            {t('tournament.detail.bracket')}
+          </h2>
           <BracketView
             slug={tournament.slug}
             tournamentId={tournament.id}
@@ -228,6 +242,6 @@ export function TournamentDetail() {
           />
         </section>
       )}
-    </main>
+    </PageShell>
   );
 }

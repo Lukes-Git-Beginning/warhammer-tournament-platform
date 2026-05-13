@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { KarazWordmarkImage } from '@/components/icons/KarazWordmarkImage';
 import { Separator } from '@/components/ui/separator';
 
@@ -8,12 +9,13 @@ import { Separator } from '@/components/ui/separator';
  * navigation links, Games Workshop disclaimer.
  */
 export function Footer() {
+  const { t } = useTranslation();
   return (
     <footer className="relative isolate overflow-hidden bg-karaz-obsidian py-12">
       {/* Stone-wall texture */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 bg-stone-wall-texture bg-[length:1024px_1024px] opacity-[0.06] mix-blend-overlay"
+        className="pointer-events-none absolute inset-0 -z-10 bg-stone-wall-texture bg-[length:1024px_1024px] opacity-[0.08] mix-blend-soft-light"
       />
 
       <div className="mx-auto max-w-[80rem] px-4 sm:px-6 lg:px-8 xl:px-12">
@@ -38,22 +40,22 @@ export function Footer() {
             <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
               <li>
                 <Link to="/" className="hover:text-karaz-gold-400 transition-colors">
-                  Home
+                  {t('header.home')}
                 </Link>
               </li>
               <li>
                 <Link to="/leaderboard" className="hover:text-karaz-gold-400 transition-colors">
-                  Roll of Honour
+                  {t('header.leaderboard')}
                 </Link>
               </li>
               <li>
                 <Link to="/meta" className="hover:text-karaz-gold-400 transition-colors">
-                  Meta
+                  {t('header.meta')}
                 </Link>
               </li>
               <li>
                 <Link to="/factions" className="hover:text-karaz-gold-400 transition-colors">
-                  Factions
+                  {t('header.factions')}
                 </Link>
               </li>
             </ul>

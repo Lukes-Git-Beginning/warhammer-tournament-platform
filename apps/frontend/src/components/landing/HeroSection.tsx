@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { motion, useReducedMotion } from 'motion/react';
 import { KarazWordmarkImage } from '@/components/icons/KarazWordmarkImage';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import { ScrollCue } from './ScrollCue';
  * Honors prefers-reduced-motion by cutting to final state with a single fade.
  */
 export function HeroSection() {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
 
   return (
@@ -41,7 +43,7 @@ export function HeroSection() {
       />
 
       {/* Content column */}
-      <div className="relative z-10 mx-auto flex min-h-[100svh] max-w-[90rem] flex-col items-center justify-center px-4 py-24 text-center sm:px-6 lg:px-8 xl:px-12">
+      <div className="relative z-10 mx-auto flex min-h-[88svh] max-w-[80rem] flex-col items-center justify-center px-4 py-16 text-center sm:px-6 lg:px-8 lg:py-20 xl:px-12">
         {/* Wordmark — generated raster asset (sigil + lettering combined) */}
         <motion.div
           initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.92, y: 8 }}
@@ -74,7 +76,7 @@ export function HeroSection() {
             textShadow: '0 2px 12px rgba(0,0,0,0.7)',
           }}
         >
-          Where Lists Are Forged
+          {t('hero.tagline')}
         </motion.p>
 
         {/* Latin sub-motto */}
@@ -112,7 +114,7 @@ export function HeroSection() {
             }}
           >
             <Button asChild variant="forge" size="lg">
-              <Link to="/login">Take Up Arms</Link>
+              <Link to="/login">{t('hero.cta_primary')}</Link>
             </Button>
           </motion.div>
           <motion.div
@@ -122,7 +124,7 @@ export function HeroSection() {
             }}
           >
             <Button asChild variant="iron" size="lg">
-              <Link to="/leaderboard">View the Roll of Honour</Link>
+              <Link to="/leaderboard">{t('hero.cta_secondary')}</Link>
             </Button>
           </motion.div>
         </motion.div>

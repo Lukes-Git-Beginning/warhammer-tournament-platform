@@ -105,6 +105,8 @@ model User {
   role               Role      @default(USER)
   preferred_factions String[]  @default([])
   last_login         DateTime?
+  onboarded_at       DateTime?
+  onboarding_stage   Int       @default(0)
   created_at         DateTime  @default(now())
   updated_at         DateTime  @updatedAt
   deleted_at         DateTime?

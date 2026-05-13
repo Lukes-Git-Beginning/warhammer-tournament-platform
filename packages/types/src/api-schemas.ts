@@ -25,6 +25,8 @@ export const UserMeSchema = UserPublicSchema.extend({
   timezone: z.string().nullable(),
   preferred_factions: z.array(z.string()),
   last_login: z.string().datetime().nullable(),
+  onboarded_at: z.string().datetime().nullable(),
+  onboarding_stage: z.number().int().min(0).max(4),
   created_at: z.string().datetime(),
 });
 export type UserMe = z.infer<typeof UserMeSchema>;
@@ -32,8 +34,14 @@ export type UserMe = z.infer<typeof UserMeSchema>;
 export const UpdateMeSchema = z.object({
   timezone: z.string().min(1).max(64).optional(),
   preferred_factions: z.array(z.string()).max(24).optional(),
+  reset_onboarding: z.literal(true).optional(),
 });
 export type UpdateMe = z.infer<typeof UpdateMeSchema>;
+
+export const UpdateOnboardingStageSchema = z.object({
+  stage: z.number().int().min(0).max(4),
+});
+export type UpdateOnboardingStage = z.infer<typeof UpdateOnboardingStageSchema>;
 
 export const UpdateUserRoleRequestSchema = z.object({ role: RoleSchema });
 export type UpdateUserRoleRequest = z.infer<typeof UpdateUserRoleRequestSchema>;

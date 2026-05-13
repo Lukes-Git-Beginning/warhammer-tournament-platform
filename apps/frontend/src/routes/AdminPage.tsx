@@ -1,53 +1,65 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuthQuery } from '@/lib/auth';
 import { AuditLogTable } from '@/components/admin/AuditLogTable';
 import { StatsDashboard } from '@/components/admin/StatsDashboard';
 import { UserBanTab } from '@/components/admin/UserBanTab';
 import { PresetLibraryAdmin } from '@/components/admin/PresetLibraryAdmin';
+import { PageShell } from '@/components/layout/PageShell';
 
 type Tab = 'audit' | 'dashboard' | 'users' | 'presets';
 
-const TAB_LABELS: Record<Tab, string> = {
-  dashboard: 'Dashboard',
-  audit: 'Audit-Log',
-  users: 'User-Verwaltung',
-  presets: 'Preset-Library',
-};
-
 export function AdminPage() {
+  const { t } = useTranslation();
   const { data: user } = useAuthQuery();
   const [tab, setTab] = useState<Tab>('dashboard');
 
+  const TAB_LABELS: Record<Tab, string> = {
+    dashboard: t('admin.tabs.dashboard'),
+    audit: t('admin.tabs.audit'),
+    users: t('admin.tabs.users'),
+    presets: t('admin.tabs.presets'),
+  };
+
   if (!user) {
-    return <div className="p-6 text-stone-400">Bitte einloggen.</div>;
+    return (
+      <PageShell variant="narrow" spacing="tight" className="text-karaz-stone-400">
+        {t('admin.login_required')}
+      </PageShell>
+    );
   }
 
   if (user.role !== 'ADMIN') {
     return (
-      <div className="p-6 text-stone-400">
-        Keine Berechtigung (ADMIN-Rolle erforderlich).
-      </div>
+      <PageShell variant="narrow" spacing="tight" className="text-karaz-stone-400">
+        {t('admin.permission_denied')}
+      </PageShell>
     );
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-6">
-      <h1 className="font-display text-3xl font-bold text-warhammer-gold mb-6">Admin-Panel</h1>
+    <PageShell variant="wide" spacing="tight">
+      <h1 className="font-display text-3xl font-bold text-karaz-gold-500 mb-6">
+        {t('admin.title')}
+      </h1>
 
-      <nav className="flex gap-4 border-b border-stone-800 mb-6" aria-label="Admin-Tabs">
-        {(['dashboard', 'audit', 'users', 'presets'] as Tab[]).map((t) => (
+      <nav
+        className="flex gap-4 border-b border-karaz-iron-700 mb-6"
+        aria-label={t('admin.tabs_aria')}
+      >
+        {(['dashboard', 'audit', 'users', 'presets'] as Tab[]).map((tabKey) => (
           <button
-            key={t}
+            key={tabKey}
             type="button"
-            onClick={() => setTab(t)}
-            aria-current={tab === t ? 'page' : undefined}
+            onClick={() => setTab(tabKey)}
+            aria-current={tab === tabKey ? 'page' : undefined}
             className={`px-3 py-2 text-sm transition-colors ${
-              tab === t
-                ? 'border-b-2 border-warhammer-gold text-warhammer-gold'
-                : 'text-stone-400 hover:text-stone-200'
+              tab === tabKey
+                ? 'border-b-2 border-karaz-gold-500 text-karaz-gold-500'
+                : 'text-karaz-stone-400 hover:text-karaz-stone-200'
             }`}
           >
-            {TAB_LABELS[t]}
+            {TAB_LABELS[tabKey]}
           </button>
         ))}
       </nav>
@@ -58,6 +70,6 @@ export function AdminPage() {
         {tab === 'users' && <UserBanTab />}
         {tab === 'presets' && <PresetLibraryAdmin />}
       </div>
-    </main>
+    </PageShell>
   );
 }

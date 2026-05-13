@@ -1,17 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { getUserProfile } from '@/lib/api';
+import { useAuthQuery } from '@/lib/auth';
+import { useOnboarding } from '@/lib/onboarding';
 import { formatInUserTimezone } from '@/lib/timezone';
+import { Button } from '@/components/ui/button';
+import { PageShell } from '@/components/layout/PageShell';
 import { EloRatingDisplay } from '../components/meta/EloRatingDisplay';
 import { ArmyListList } from '../components/tournament/ArmyListList';
 import { ArmyListUpload } from '../components/tournament/ArmyListUpload';
 
-const ROLE_LABELS: Record<string, string> = {
-  USER: 'Spieler',
-  ORGANIZER: 'Organisator',
-  MODERATOR: 'Moderator',
-  ADMIN: 'Admin',
-};
+// Role labels are now served via i18n — see t('user_profile.roles.*')
 
 const ROLE_COLORS: Record<string, string> = {
   USER: 'bg-stone-700 text-stone-300',
@@ -57,7 +57,11 @@ function StatCard({ label, value, children }: { label: string; value?: string | 
 }
 
 export function UserProfilePage() {
+  const { t } = useTranslation();
   const { id } = useParams({ from: '/users/$id' });
+  const { data: me } = useAuthQuery();
+  const { reset, isResetting } = useOnboarding();
+  const isOwnProfile = me?.id === id;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['user-profile', id],
@@ -67,19 +71,19 @@ export function UserProfilePage() {
 
   if (isLoading) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-10 text-stone-400 text-sm">
-        Wird geladen…
-      </main>
+      <PageShell variant="narrow" className="text-karaz-stone-400 text-sm">
+        {t('common.loading')}
+      </PageShell>
     );
   }
 
   if (error || !data) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-10">
+      <PageShell variant="narrow">
         <div className="rounded-md border border-red-900 bg-red-950/40 p-6 text-red-300 text-sm">
-          Spielerprofil nicht gefunden oder nicht erreichbar.
+          {t('user_profile.not_found')}
         </div>
-      </main>
+      </PageShell>
     );
   }
 
@@ -87,11 +91,11 @@ export function UserProfilePage() {
 
   const joinedDate = formatInUserTimezone(user.created_at, undefined, { showTime: false });
 
-  const roleLabel = ROLE_LABELS[user.role] ?? user.role;
+  const roleLabel = t(`user_profile.roles.${user.role}`, { defaultValue: user.role });
   const roleColor = ROLE_COLORS[user.role] ?? 'bg-stone-700 text-stone-300';
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10 space-y-8">
+    <PageShell variant="narrow" className="space-y-8">
       {/* Header Card */}
       <div className="flex items-center gap-5 rounded-md border border-stone-800 bg-stone-900/40 p-6">
         <Avatar url={user.avatar_url} username={user.username} large />
@@ -100,61 +104,63 @@ export function UserProfilePage() {
           <span className={`rounded px-2 py-0.5 text-xs font-medium w-fit ${roleColor}`}>
             {roleLabel}
           </span>
-          <p className="text-xs text-stone-500">Dabei seit {joinedDate}</p>
+          <p className="text-xs text-stone-500">{t('user_profile.joined', { date: joinedDate })}</p>
         </div>
       </div>
 
       {/* Aktuelle Season */}
       <section>
         <h2 className="font-display text-lg font-semibold text-warhammer-gold mb-3">
-          Aktuelle Season
+          {t('user_profile.current_season')}
         </h2>
         {current_season ? (
           <div>
             <p className="text-sm text-stone-400 mb-3">{current_season.season.name}</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <StatCard label="Punkte" value={current_season.total_points} />
-              <StatCard label="Elo"><EloRatingDisplay rating={current_season.elo_rating} /></StatCard>
-              <StatCard label="Spiele" value={current_season.matches_played} />
-              <StatCard label="Siege" value={current_season.wins} />
-              <StatCard label="Niederlagen" value={current_season.losses} />
+              <StatCard label={t('user_profile.stats.points')} value={current_season.total_points} />
+              <StatCard label={t('user_profile.stats.elo')}><EloRatingDisplay rating={current_season.elo_rating} /></StatCard>
+              <StatCard label={t('user_profile.stats.games')} value={current_season.matches_played} />
+              <StatCard label={t('user_profile.stats.wins')} value={current_season.wins} />
+              <StatCard label={t('user_profile.stats.losses')} value={current_season.losses} />
             </div>
           </div>
         ) : (
-          <p className="text-sm text-stone-500">Keine aktive Season.</p>
+          <p className="text-sm text-stone-500">{t('user_profile.no_season')}</p>
         )}
       </section>
 
       {/* All-Time */}
       <section>
-        <h2 className="font-display text-lg font-semibold text-warhammer-gold mb-3">All-Time</h2>
+        <h2 className="font-display text-lg font-semibold text-warhammer-gold mb-3">
+          {t('user_profile.all_time')}
+        </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <StatCard label="Spiele" value={all_time.matches_played} />
-          <StatCard label="Siege" value={all_time.wins} />
-          <StatCard label="Niederlagen" value={all_time.losses} />
-          <StatCard label="Turniere" value={all_time.tournaments_played} />
-          <StatCard label="Punkte" value={all_time.total_points} />
+          <StatCard label={t('user_profile.stats.games')} value={all_time.matches_played} />
+          <StatCard label={t('user_profile.stats.wins')} value={all_time.wins} />
+          <StatCard label={t('user_profile.stats.losses')} value={all_time.losses} />
+          <StatCard label={t('user_profile.stats.tournaments')} value={all_time.tournaments_played} />
+          <StatCard label={t('user_profile.stats.points')} value={all_time.total_points} />
         </div>
       </section>
 
       {/* Recent Tournaments */}
       <section>
         <h2 className="font-display text-lg font-semibold text-warhammer-gold mb-3">
-          Letzte Turniere
+          {t('user_profile.recent_tournaments')}
         </h2>
         {recent_results.length === 0 ? (
-          <p className="text-sm text-stone-500">Noch keine Turnierteilnahmen.</p>
+          <p className="text-sm text-stone-500">{t('user_profile.no_tournaments')}</p>
         ) : (
           <div className="overflow-x-auto rounded-md border border-stone-800">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-stone-800 bg-stone-900/60">
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">Turnier</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone-400">{t('user_profile.stats.tournaments')}</th>
                   <th className="px-4 py-3 text-left font-medium text-stone-400">Season</th>
-                  <th className="px-4 py-3 text-center font-medium text-stone-400">Platz</th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400">Punkte</th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400">Elo</th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400">Datum</th>
+                  <th className="px-4 py-3 text-center font-medium text-stone-400">{t('leaderboard.columns.rank')}</th>
+                  <th className="px-4 py-3 text-right font-medium text-stone-400">{t('leaderboard.columns.points')}</th>
+                  <th className="px-4 py-3 text-right font-medium text-stone-400">{t('leaderboard.columns.elo')}</th>
+                  <th className="px-4 py-3 text-right font-medium text-stone-400">{t('common.date')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-800/60">
@@ -189,7 +195,7 @@ export function UserProfilePage() {
       {/* Army-Listen */}
       <section>
         <h2 className="font-display text-lg font-semibold text-warhammer-gold mb-3">
-          Meine Army-Listen
+          {t('user_profile.army_lists')}
         </h2>
         <div className="space-y-4">
           <ArmyListList />
@@ -197,30 +203,55 @@ export function UserProfilePage() {
         </div>
       </section>
 
-      {/* Recent Matches */}
+      {/* The Workshop — only on own profile */}
+      {isOwnProfile && (
+        <section
+          aria-labelledby="workshop-heading"
+          className="rounded-md border border-karaz-iron-700 bg-karaz-iron-900/60 p-6"
+        >
+          <h2
+            id="workshop-heading"
+            className="font-display text-lg font-semibold text-karaz-gold-400 mb-2"
+          >
+            {t('user_profile.workshop_title')}
+          </h2>
+          <p className="text-sm text-karaz-stone-300 mb-4">
+            {t('user_profile.workshop_body')}
+          </p>
+          <Button
+            variant="etched"
+            size="sm"
+            onClick={() => void reset()}
+            disabled={isResetting}
+          >
+            {isResetting ? t('user_profile.workshop_cta_loading') : t('user_profile.workshop_cta')}
+          </Button>
+        </section>
+      )}
+
+      {/* Recent Matches — closing tag moved below */}
       <section>
         <h2 className="font-display text-lg font-semibold text-warhammer-gold mb-3">
-          Letzte Matches
+          {t('user_profile.recent_matches')}
         </h2>
         {recent_matches.length === 0 ? (
-          <p className="text-sm text-stone-500">Noch keine Matches.</p>
+          <p className="text-sm text-stone-500">{t('user_profile.no_matches')}</p>
         ) : (
           <div className="overflow-x-auto rounded-md border border-stone-800">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-stone-800 bg-stone-900/60">
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">Turnier / Runde</th>
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">Gegner</th>
-                  <th className="px-4 py-3 text-center font-medium text-stone-400">Ergebnis</th>
-                  <th className="px-4 py-3 text-center font-medium text-stone-400">Score</th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400">Datum</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone-400">{t('user_profile.stats.tournaments')} / {t('common.round')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone-400">{t('user_profile.match.opponent')}</th>
+                  <th className="px-4 py-3 text-center font-medium text-stone-400">{t('user_profile.match.result')}</th>
+                  <th className="px-4 py-3 text-center font-medium text-stone-400">{t('user_profile.match.score')}</th>
+                  <th className="px-4 py-3 text-right font-medium text-stone-400">{t('common.date')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-800/60">
                 {recent_matches.map((m, i) => {
                   const won = m.winnerId === user.id;
-                  const lost = m.winnerId !== null && m.winnerId !== user.id;
-                  const resultLabel = m.winnerId === null ? '—' : won ? 'Sieg' : 'Niederlage';
+                  const resultLabel = m.winnerId === null ? '—' : won ? t('user_profile.match.win') : t('user_profile.match.loss');
                   const resultColor =
                     m.winnerId === null
                       ? 'text-stone-500'
@@ -249,7 +280,7 @@ export function UserProfilePage() {
                             {m.opponent.username}
                           </Link>
                         ) : (
-                          <span className="text-stone-500">BYE</span>
+                          <span className="text-stone-500">{t('user_profile.match.bye')}</span>
                         )}
                       </td>
                       <td className={`px-4 py-3 text-center font-medium ${resultColor}`}>
@@ -267,6 +298,6 @@ export function UserProfilePage() {
           </div>
         )}
       </section>
-    </main>
+    </PageShell>
   );
 }

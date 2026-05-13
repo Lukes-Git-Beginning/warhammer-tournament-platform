@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { motion, useReducedMotion } from 'motion/react';
 import { ExternalLink } from 'lucide-react';
 import { KarazSigil } from '@/components/icons/KarazSigil';
@@ -9,6 +10,7 @@ import { Button } from '@/components/ui/button';
  * Final-CTA chamber. Centered sigil + motto + community links.
  */
 export function SigillumSection() {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
 
   return (
@@ -19,7 +21,7 @@ export function SigillumSection() {
       {/* Stone-wall texture background */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-stone-wall-texture bg-[length:1024px_1024px] opacity-[0.08] mix-blend-overlay"
+        className="pointer-events-none absolute inset-0 bg-stone-wall-texture bg-[length:1024px_1024px] opacity-[0.12] mix-blend-soft-light"
       />
       {/* Forge-radial glow centered on sigil */}
       <div
@@ -52,7 +54,7 @@ export function SigillumSection() {
           className="font-display font-bold text-karaz-stone-100"
           style={{ fontSize: 'clamp(2rem, 4.5vw, 3.5rem)', lineHeight: 1.1 }}
         >
-          Join the Realm
+          {t('sigillum.heading')}
         </motion.h2>
 
         <motion.p
@@ -77,7 +79,7 @@ export function SigillumSection() {
           className="mt-10"
         >
           <Button asChild variant="forge" size="lg">
-            <Link to="/login">Take Up Arms</Link>
+            <Link to="/login">{t('sigillum.cta')}</Link>
           </Button>
         </motion.div>
 

@@ -1,0 +1,299 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "back": "Back",
+    "next": "Next",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "submit": "Submit",
+    "close": "Close",
+    "page_of": "Page {{page}} / {{total}}",
+    "date": "Date",
+    "round": "Round"
+  },
+  "language": {
+    "label": "Language",
+    "de": "DE",
+    "en": "EN",
+    "switch_aria": "Switch language"
+  },
+  "brand": {
+    "name": "Karaz Lists",
+    "tagline": "Where Lists Are Forged",
+    "motto": "Karaz Ankor"
+  },
+  "header": {
+    "home": "Hall",
+    "leaderboard": "Roll of Honour",
+    "meta": "Meta",
+    "factions": "Factions",
+    "drafts": "Drafts",
+    "create_tournament": "Call the Muster",
+    "logout": "Lay Down Arms",
+    "login": "Take Up Arms",
+    "profile": "My Profile",
+    "admin": "Admin"
+  },
+  "hero": {
+    "tagline": "Where Lists Are Forged",
+    "cta_primary": "Take Up Arms",
+    "cta_secondary": "View the Roll of Honour",
+    "scroll_cue": "Discover more"
+  },
+  "forge_section": {
+    "eyebrow": "The Forge",
+    "heading_line1": "Every list is forged",
+    "heading_line2": "in iron and resolve.",
+    "body": "Every campaign begins with the list. Every list is forged in iron and resolve. Here we record each muster, each toll of the bell, and every triumph and fall — so that the marshals of the Old World may stand on the Roll of Honour, their deeds sealed in stone.",
+    "motto": "\"Ex Ferro, Lex.\"",
+    "cta": "Read the Manifesto"
+  },
+  "musters": {
+    "eyebrow": "Now Mustering",
+    "heading": "Active Musters",
+    "view_all": "View all",
+    "answer_call": "Answer the Call",
+    "marshals": "Marshals",
+    "empty_title": "The musters stand empty.",
+    "empty_body": "When marshals call, they will be listed here.",
+    "empty_motto": "\"Memento Pugnae\"",
+    "status_live": "Live",
+    "status_upcoming": "Upcoming",
+    "status_completed": "Completed"
+  },
+  "roll_of_honour": {
+    "eyebrow": "Sealed in Stone",
+    "heading": "The Roll of Honour",
+    "view_all": "View the full Roll of Honour",
+    "empty_title": "A blank Roll.",
+    "empty_body": "The forge awaits its first strike.",
+    "empty_motto": "\"In Lapide Sigillata\""
+  },
+  "conclave": {
+    "eyebrow": "How We Muster",
+    "heading": "The Conclave",
+    "cta": "Enter the Conclave",
+    "pillars": {
+      "swiss": {
+        "title": "Swiss Toll",
+        "body": "Every marshal plays a fixed number of tolls, paired against opponents of equal standing. No one is eliminated; the Roll decides."
+      },
+      "bracket": {
+        "title": "Lineage",
+        "body": "Single- and double-elimination brackets. Each engagement carves the lineage tree, until only one banner remains."
+      },
+      "draft": {
+        "title": "The Choosing",
+        "body": "Live Captain's Mode draft. Marshals claim and forbid factions in real time — the choice is the first battle."
+      }
+    }
+  },
+  "sigillum": {
+    "heading": "Join the Realm",
+    "subline": "Every list, every triumph, every fall — eternal.",
+    "cta": "Take Up Arms"
+  },
+  "footer": {
+    "tagline": "Where Lists Are Forged",
+    "motto": "Karaz Ankor",
+    "imprint": "Imprint",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "github": "GitHub",
+    "discord": "Discord"
+  },
+  "login": {
+    "title": "Take Up Arms",
+    "subtitle": "Sign in with your Discord account to enter tournaments or call your own musters.",
+    "discord_button": "Sign in with Discord"
+  },
+  "leaderboard": {
+    "title": "Roll of Honour",
+    "tabs": {
+      "season": "Season",
+      "all_time": "All-Time"
+    },
+    "season_select": "Season:",
+    "season_active": "(active)",
+    "season_all": "All Seasons",
+    "columns": {
+      "rank": "Rank",
+      "player": "Player",
+      "points": "Points",
+      "elo": "Elo",
+      "wl": "W / L",
+      "games": "Games",
+      "seasons": "Seasons"
+    },
+    "load_error": "Failed to load the Roll of Honour.",
+    "empty": "No entries yet."
+  },
+  "tournament": {
+    "create": {
+      "title": "Call the Muster",
+      "subtitle": "Create a new tournament for the Karaz Lists community.",
+      "role_warning": "You need the Organizer role to create tournaments. Contact an administrator to upgrade your role."
+    },
+    "form": {
+      "name": "Name",
+      "name_placeholder": "Tournament name",
+      "description": "Description",
+      "description_placeholder": "Optional description…",
+      "format": "Format",
+      "mode": "Mode",
+      "mode_1v1": "1v1 (M1)",
+      "start_date": "Start date",
+      "timezone": "Timezone",
+      "max_participants": "Max. participants",
+      "max_participants_placeholder": "Unlimited",
+      "registration_deadline": "Registration deadline",
+      "rules": "Rules (Markdown)",
+      "rules_placeholder": "Tournament rules in Markdown…",
+      "discord_link": "Discord link",
+      "draft_section": "Draft system",
+      "draft_enable": "Enable draft system",
+      "draft_preset": "Draft preset",
+      "draft_preset_placeholder": "Choose preset",
+      "draft_preset_required": "Please select a preset to enable the draft system.",
+      "turns": "turns",
+      "per_turn": "per turn",
+      "submit": "Create tournament",
+      "submitting": "Creating…",
+      "errors": {
+        "name_min": "Name must be at least 3 characters.",
+        "start_required": "Start date is required.",
+        "discord_invalid": "Invalid URL."
+      }
+    },
+    "format": {
+      "single_elim": "Single Elimination",
+      "swiss": "Swiss",
+      "round_robin": "Round Robin",
+      "double_elim": "Double Elimination"
+    },
+    "detail": {
+      "not_found": "Tournament not found or unreachable.",
+      "bracket": "Bracket",
+      "description": "Description",
+      "rules": "Rules",
+      "edit": "Edit",
+      "delete": "Delete",
+      "live_drafts": "Live drafts",
+      "live_draft_label": "Live draft — Match #{{matchNumber}} (Round {{round}})",
+      "live_watch": "Watch live",
+      "start": "Start:",
+      "timezone": "Timezone:",
+      "max_participants": "Max. participants:",
+      "registered": "Registered:",
+      "organizer": "Organizer:",
+      "discord_server": "Discord server"
+    }
+  },
+  "user_profile": {
+    "not_found": "Player profile not found or unreachable.",
+    "joined": "Joined {{date}}",
+    "current_season": "Current Season",
+    "all_time": "All-Time",
+    "no_season": "No active season.",
+    "recent_tournaments": "Recent Tournaments",
+    "no_tournaments": "No tournament participation yet.",
+    "army_lists": "My Army Lists",
+    "recent_matches": "Recent Matches",
+    "no_matches": "No matches yet.",
+    "workshop_title": "The Workshop",
+    "workshop_body": "Re-walk the forge if you've forgotten the way.",
+    "workshop_cta": "Revisit the Forge",
+    "workshop_cta_loading": "Re-kindling…",
+    "stats": {
+      "points": "Points",
+      "elo": "Elo",
+      "games": "Games",
+      "wins": "Wins",
+      "losses": "Losses",
+      "tournaments": "Tournaments"
+    },
+    "roles": {
+      "USER": "Player",
+      "ORGANIZER": "Organizer",
+      "MODERATOR": "Moderator",
+      "ADMIN": "Admin"
+    },
+    "match": {
+      "win": "Win",
+      "loss": "Loss",
+      "bye": "BYE",
+      "opponent": "Opponent",
+      "result": "Result",
+      "score": "Score"
+    }
+  },
+  "admin": {
+    "title": "Admin Panel",
+    "login_required": "Please sign in.",
+    "permission_denied": "Insufficient permissions (ADMIN role required).",
+    "tabs_aria": "Admin sections",
+    "tabs": {
+      "dashboard": "Dashboard",
+      "audit": "Audit Log",
+      "users": "User Management",
+      "presets": "Preset Library"
+    }
+  },
+  "preset": {
+    "editor": {
+      "create_title": "Create new preset",
+      "edit_title": "Edit preset",
+      "permission_denied": "You need the Organizer role to create presets.",
+      "save_error": "Failed to save"
+    }
+  },
+  "onboarding": {
+    "stage1": {
+      "title": "Heed the Call, Marshal.",
+      "body": "Your sigil is now sealed in the Roll. Before you take the field, let us forge your standing.",
+      "cta": "Enter the Forge"
+    },
+    "stage2": {
+      "title": "The Workshop",
+      "body": "Pick your favoured factions and timezone so we can place you correctly.",
+      "factions_label": "Favoured factions",
+      "skip": "Skip — set it later",
+      "save": "Strike",
+      "saving": "Striking…"
+    },
+    "stage3": {
+      "title": "Forge Your First List.",
+      "body": "A Marshal without a list enters the field blind.",
+      "later": "The forge can wait",
+      "cta": "Forge the List"
+    },
+    "stage5": {
+      "title": "The Roll Awaits, Marshal.",
+      "body": "Your standing is sealed. Take the field.",
+      "cta": "Enter the Conclave",
+      "cta_loading": "Sealing the Roll…"
+    }
+  },
+  "draft": {
+    "status": {
+      "completed": "Draft complete",
+      "cancelled": "Draft cancelled",
+      "waiting": "Waiting for players…",
+      "your_turn": "YOUR TURN:",
+      "opponent_turn": "Host/Guest is up:",
+      "waiting_next": "Waiting for next turn…",
+      "reveal_picks": "REVEAL PICKS",
+      "reveal_bans": "REVEAL BANS"
+    }
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "network": "Network error. Please check your connection.",
+    "unauthorized": "Not signed in.",
+    "forbidden": "Insufficient permissions.",
+    "not_found": "Not found.",
+    "validation": "Invalid input."
+  }
+}

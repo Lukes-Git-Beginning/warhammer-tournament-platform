@@ -72,7 +72,7 @@
   --container-tight: 40rem;
   --container-narrow: 60rem;
   --container-wide: 80rem;
-  --container-full: 90rem;
+  --container-page: 90rem;
 
   /* ─────────────────────────────────────────────────────────── */
   /* Radius — Souls-like sharp                                     */
@@ -185,6 +185,7 @@ html {
   background: var(--color-karaz-iron-950);
   color: var(--color-karaz-stone-200);
   color-scheme: dark;
+  overflow-x: clip;
 }
 
 body {
@@ -192,6 +193,7 @@ body {
   font-variant-numeric: tabular-nums;
   min-height: 100svh;
   background: var(--color-karaz-iron-950);
+  overflow-x: clip;
 }
 
 h1,
@@ -324,6 +326,74 @@ h6 {
     url('/textures/parchment-aged.avif') type('image/avif'),
     url('/textures/parchment-aged.webp') type('image/webp'),
     url('/textures/parchment-aged.png') type('image/png')
+  );
+}
+
+@utility bg-forge-embers-texture {
+  background-image: image-set(
+    url('/textures/forge-embers.avif') type('image/avif'),
+    url('/textures/forge-embers.webp') type('image/webp'),
+    url('/textures/forge-embers.png') type('image/png')
+  );
+}
+
+@utility bg-chainmail-fine-texture {
+  background-image: image-set(
+    url('/textures/chainmail-fine.avif') type('image/avif'),
+    url('/textures/chainmail-fine.webp') type('image/webp'),
+    url('/textures/chainmail-fine.png') type('image/png')
+  );
+}
+
+@utility bg-leather-worn-texture {
+  background-image: image-set(
+    url('/textures/leather-worn.avif') type('image/avif'),
+    url('/textures/leather-worn.webp') type('image/webp'),
+    url('/textures/leather-worn.png') type('image/png')
+  );
+}
+
+/* ───────────────────────────────────────────────────────────── */
+/* Container width utilities — exposes design tokens to Tailwind. */
+/* Used by <PageShell variant="…"> and ad-hoc layouts.            */
+/* ───────────────────────────────────────────────────────────── */
+@utility container-tight {
+  max-width: var(--container-tight);
+}
+
+@utility container-narrow {
+  max-width: var(--container-narrow);
+}
+
+@utility container-wide {
+  max-width: var(--container-wide);
+}
+
+@utility container-full {
+  max-width: var(--container-page);
+}
+
+/* ───────────────────────────────────────────────────────────── */
+/* Vignette utility — radial darken from edges. Use on full-page  */
+/* wrappers (e.g. <body> or <main>) to add cinematic falloff.     */
+/* ───────────────────────────────────────────────────────────── */
+@utility bg-karaz-vignette {
+  background-image: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(8, 7, 10, 0.45) 100%
+  );
+}
+
+/* ───────────────────────────────────────────────────────────── */
+/* Forge glow utility — bottom-anchored warm radial. Pair with    */
+/* the stone-wall page texture for atmospheric layering.          */
+/* ───────────────────────────────────────────────────────────── */
+@utility bg-karaz-forge-glow {
+  background-image: radial-gradient(
+    ellipse 70% 50% at 50% 100%,
+    rgba(216, 99, 42, 0.07) 0%,
+    transparent 60%
   );
 }
 

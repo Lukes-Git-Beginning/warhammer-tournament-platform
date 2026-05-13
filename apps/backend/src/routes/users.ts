@@ -1,7 +1,50 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { UpdateMeSchema, UpdateUserRoleRequestSchema } from '@tww3/types';
+import {
+  UpdateMeSchema,
+  UpdateOnboardingStageSchema,
+  UpdateUserRoleRequestSchema,
+} from '@tww3/types';
 import { z } from 'zod';
 import { invalidate } from '../lib/cache.js';
+
+const meSelect = {
+  id: true,
+  discord_id: true,
+  username: true,
+  email: true,
+  avatar_url: true,
+  timezone: true,
+  role: true,
+  preferred_factions: true,
+  last_login: true,
+  onboarded_at: true,
+  onboarding_stage: true,
+  created_at: true,
+} as const;
+
+type MeRow = {
+  id: string;
+  discord_id: string;
+  username: string;
+  email: string | null;
+  avatar_url: string | null;
+  timezone: string | null;
+  role: 'USER' | 'ORGANIZER' | 'MODERATOR' | 'ADMIN';
+  preferred_factions: string[];
+  last_login: Date | null;
+  onboarded_at: Date | null;
+  onboarding_stage: number;
+  created_at: Date;
+};
+
+function serializeMe(user: MeRow) {
+  return {
+    ...user,
+    last_login: user.last_login?.toISOString() ?? null,
+    onboarded_at: user.onboarded_at?.toISOString() ?? null,
+    created_at: user.created_at.toISOString(),
+  };
+}
 
 const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
@@ -10,18 +53,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const user = await fastify.prisma.user.findUnique({
         where: { id: request.user.sub },
-        select: {
-          id: true,
-          discord_id: true,
-          username: true,
-          email: true,
-          avatar_url: true,
-          timezone: true,
-          role: true,
-          preferred_factions: true,
-          last_login: true,
-          created_at: true,
-        },
+        select: meSelect,
       });
       if (!user) {
         return reply.code(404).send({
@@ -30,11 +62,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           statusCode: 404,
         });
       }
-      return {
-        ...user,
-        last_login: user.last_login?.toISOString() ?? null,
-        created_at: user.created_at.toISOString(),
-      };
+      return serializeMe(user);
     },
   );
 
@@ -50,27 +78,52 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           statusCode: 400,
         });
       }
+      const { reset_onboarding, ...patch } = parsed.data;
+      const data: Record<string, unknown> = { ...patch };
+      if (reset_onboarding) {
+        data.onboarded_at = null;
+        data.onboarding_stage = 0;
+      }
       const user = await fastify.prisma.user.update({
         where: { id: request.user.sub },
-        data: parsed.data,
-        select: {
-          id: true,
-          discord_id: true,
-          username: true,
-          email: true,
-          avatar_url: true,
-          timezone: true,
-          role: true,
-          preferred_factions: true,
-          last_login: true,
-          created_at: true,
-        },
+        data,
+        select: meSelect,
       });
-      return {
-        ...user,
-        last_login: user.last_login?.toISOString() ?? null,
-        created_at: user.created_at.toISOString(),
-      };
+      return serializeMe(user);
+    },
+  );
+
+  fastify.patch(
+    '/api/users/me/onboarding-stage',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const parsed = UpdateOnboardingStageSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: 'BadRequest',
+          message: parsed.error.message,
+          statusCode: 400,
+        });
+      }
+      await fastify.prisma.user.update({
+        where: { id: request.user.sub },
+        data: { onboarding_stage: parsed.data.stage },
+        select: { id: true },
+      });
+      return { ok: true } as const;
+    },
+  );
+
+  fastify.post(
+    '/api/users/me/onboarding-complete',
+    { preHandler: fastify.authenticate },
+    async (request) => {
+      const user = await fastify.prisma.user.update({
+        where: { id: request.user.sub },
+        data: { onboarded_at: new Date(), onboarding_stage: 0 },
+        select: meSelect,
+      });
+      return serializeMe(user);
     },
   );
   // PATCH /api/users/:id/role — admin only

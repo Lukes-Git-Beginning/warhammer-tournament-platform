@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, Users, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,7 @@ function formatDate(iso: string): string {
 }
 
 function MusterCard({ tournament }: { tournament: Tournament }) {
+  const { t } = useTranslation();
   const state = tournamentState(tournament);
   return (
     <Card variant="banner" interactive className="group h-full">
@@ -38,17 +40,17 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
         {state === 'live' && (
           <Badge variant="forge" className="self-start">
             <span className="size-1.5 rounded-full bg-karaz-forge-400 animate-karaz-pulse" />
-            Live
+            {t('musters.status_live')}
           </Badge>
         )}
         {state === 'upcoming' && (
           <Badge variant="gold" className="self-start">
-            Upcoming
+            {t('musters.status_upcoming')}
           </Badge>
         )}
         {state === 'completed' && (
           <Badge variant="default" className="self-start">
-            Completed
+            {t('musters.status_completed')}
           </Badge>
         )}
         <CardTitle className="line-clamp-2">{tournament.name}</CardTitle>
@@ -59,7 +61,7 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
               {tournament.participantCount ?? '—'}
               {tournament.max_participants ? ` / ${tournament.max_participants}` : ''}
             </span>
-            <span className="text-xs uppercase tracking-wider">Marshals</span>
+            <span className="text-xs uppercase tracking-wider">{t('musters.marshals')}</span>
           </span>
           <span className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider">
             <span className="font-mono">{tournament.format.replace(/_/g, ' ')}</span>
@@ -82,7 +84,7 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
         </time>
         <Button asChild variant="etched" size="sm">
           <Link to="/tournaments/$slug" params={{ slug: tournament.slug }}>
-            Answer the Call
+            {t('musters.answer_call')}
             <ArrowRight className="size-3.5" strokeWidth={1.5} />
           </Link>
         </Button>
@@ -92,6 +94,7 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
 }
 
 function EmptyState() {
+  const { t } = useTranslation();
   return (
     <Card variant="banner" className="mx-auto max-w-3xl overflow-hidden">
       <div className="grid grid-cols-1 items-center gap-6 p-6 sm:grid-cols-[auto_1fr] sm:gap-8 sm:p-8">
@@ -104,18 +107,16 @@ function EmptyState() {
         />
         <div className="text-center sm:text-left">
           <h3 className="font-display text-2xl font-semibold text-karaz-stone-100">
-            The musters stand empty.
+            {t('musters.empty_title')}
           </h3>
-          <p className="mt-3 text-karaz-stone-300">
-            When marshals call, they will be listed here.
-          </p>
+          <p className="mt-3 text-karaz-stone-300">{t('musters.empty_body')}</p>
           <p
             aria-hidden="true"
             lang="la"
             title="Remember the fight"
             className="mt-4 font-display italic text-sm tracking-wider text-karaz-gold-500/70"
           >
-            "Memento Pugnae"
+            {t('musters.empty_motto')}
           </p>
         </div>
       </div>
@@ -139,6 +140,7 @@ function LoadingGrid() {
  * gracefully degrades to an empty/loading state.
  */
 export function ActiveMustersSection() {
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['tournaments', 1, 6],
@@ -151,23 +153,28 @@ export function ActiveMustersSection() {
 
   return (
     <section aria-labelledby="musters-heading" className="relative py-16 lg:py-24">
-      <div className="mx-auto max-w-[80rem] px-4 sm:px-6 lg:px-8 xl:px-12">
+      {/* Section atmospheric texture — chainmail grid suggests list structure */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-chainmail-fine-texture bg-[length:480px_480px] opacity-[0.06] mix-blend-soft-light"
+      />
+      <div className="relative mx-auto max-w-[80rem] px-4 sm:px-6 lg:px-8 xl:px-12">
         <div className="mb-8 flex items-end justify-between gap-4 lg:mb-12">
           <div>
             <span className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-karaz-gold-500">
-              Now Mustering
+              {t('musters.eyebrow')}
             </span>
             <h2
               id="musters-heading"
               className="mt-2 font-display font-bold text-karaz-stone-100"
               style={{ fontSize: 'clamp(1.625rem, 3.5vw, 2.5rem)', lineHeight: 1.15 }}
             >
-              Active Musters
+              {t('musters.heading')}
             </h2>
           </div>
           <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
             <Link to="/" className="!normal-case">
-              View all
+              {t('musters.view_all')}
               <ArrowRight className="size-3.5" strokeWidth={1.5} />
             </Link>
           </Button>

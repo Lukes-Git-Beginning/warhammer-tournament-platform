@@ -1,11 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { getDraftPreset, createDraftPreset, updateDraftPreset } from '@/lib/api';
 import { useRequireAuth } from '@/lib/auth';
 import { PresetEditor } from '@/components/draft/PresetEditor';
+import { PageShell } from '@/components/layout/PageShell';
 import type { CreateDraftPresetRequest } from '@tww3/types';
 
 export function PresetEditorPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: user, isLoading: authLoading } = useRequireAuth();
@@ -48,7 +51,9 @@ export function PresetEditorPage() {
 
   if (authLoading || (presetId && presetLoading)) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-10 text-stone-400 text-sm">Wird geladen…</main>
+      <PageShell variant="narrow" className="text-karaz-stone-400 text-sm">
+        {t('common.loading')}
+      </PageShell>
     );
   }
 
@@ -61,30 +66,30 @@ export function PresetEditorPage() {
 
   if (!presetId && !canCreate) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-10">
-        <div className="rounded-md border border-warhammer-gold/30 bg-warhammer-gold/10 p-4 text-sm text-warhammer-gold">
-          Du benötigst die Organizer-Rolle, um Presets zu erstellen.
+      <PageShell variant="narrow">
+        <div className="rounded-md border border-karaz-gold-500/30 bg-karaz-gold-500/10 p-4 text-sm text-karaz-gold-500">
+          {t('preset.editor.permission_denied')}
         </div>
-      </main>
+      </PageShell>
     );
   }
 
   const isEditMode = !!presetId && !!existingPreset;
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10">
+    <PageShell variant="narrow">
       <div className="mb-6">
-        <h1 className="font-display text-3xl font-bold text-warhammer-gold">
-          {isEditMode ? 'Preset bearbeiten' : 'Neuen Preset erstellen'}
+        <h1 className="font-display text-3xl font-bold text-karaz-gold-500">
+          {isEditMode ? t('preset.editor.edit_title') : t('preset.editor.create_title')}
         </h1>
         {isEditMode && (
-          <p className="text-stone-500 text-sm mt-1">{existingPreset.name}</p>
+          <p className="text-karaz-stone-500 text-sm mt-1">{existingPreset.name}</p>
         )}
       </div>
 
       {(createMutation.error || updateMutation.error) && (
         <div className="mb-6 rounded-md border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
-          {(createMutation.error ?? updateMutation.error)?.message ?? 'Fehler beim Speichern'}
+          {(createMutation.error ?? updateMutation.error)?.message ?? t('preset.editor.save_error')}
         </div>
       )}
 
@@ -92,6 +97,6 @@ export function PresetEditorPage() {
         initialPreset={isEditMode ? existingPreset : undefined}
         onSave={handleSave}
       />
-    </main>
+    </PageShell>
   );
 }
