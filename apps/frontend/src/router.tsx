@@ -13,6 +13,7 @@ import { DraftLobbyPage } from './routes/DraftLobbyPage';
 import { DraftSpectatorPage } from './routes/DraftSpectatorPage';
 import { PresetListPage } from './routes/PresetListPage';
 import { PresetEditorPage } from './routes/PresetEditorPage';
+import { AdminPage } from './routes/AdminPage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -98,6 +99,12 @@ const presetEditRoute = createRoute({
   component: PresetEditorPage,
 });
 
+const adminRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin',
+  component: AdminPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -113,6 +120,7 @@ const routeTree = rootRoute.addChildren([
   presetListRoute,
   presetNewRoute,
   presetEditRoute,
+  adminRoute,
 ]);
 
 export const router = createRouter({ routeTree });

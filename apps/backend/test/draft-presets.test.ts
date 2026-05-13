@@ -520,6 +520,70 @@ describe('ADMIN override', () => {
 });
 
 // ---------------------------------------------------------------------------
+// PATCH /api/draft-presets/:id/promote
+// ---------------------------------------------------------------------------
+
+describe('PATCH /api/draft-presets/:id/promote', () => {
+  it('ADMIN promotes private preset → 200 + is_public=true + AuditLog', async () => {
+    await prisma.draftPreset.create({
+      data: {
+        id: PRESET_A,
+        name: 'Private Preset to Promote',
+        description: null,
+        created_by: ORGANIZER_ID,
+        is_public: false,
+        category_limits: [],
+        turns: VALID_PRESET_BODY.turns,
+        turn_seconds: 30,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/draft-presets/${PRESET_A}/promote`,
+      headers: { cookie: cookieFor(ADMIN_ID, 'ADMIN') },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ id: string; name: string; is_public: boolean }>();
+    expect(body.id).toBe(PRESET_A);
+    expect(body.is_public).toBe(true);
+
+    // Verify in DB
+    const inDb = await prisma.draftPreset.findUnique({ where: { id: PRESET_A } });
+    expect(inDb?.is_public).toBe(true);
+
+    // Verify AuditLog entry
+    const auditEntry = await prisma.auditLog.findFirst({
+      where: { entity_type: 'DraftPreset', entity_id: PRESET_A, action: 'PROMOTE' },
+    });
+    expect(auditEntry).not.toBeNull();
+    expect(auditEntry?.actor_id).toBe(ADMIN_ID);
+  });
+
+  it('USER role gets 403 on promote', async () => {
+    await prisma.draftPreset.create({
+      data: {
+        id: PRESET_A,
+        name: 'Preset to Guard',
+        description: null,
+        created_by: ORGANIZER_ID,
+        is_public: false,
+        category_limits: [],
+        turns: VALID_PRESET_BODY.turns,
+        turn_seconds: 30,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/draft-presets/${PRESET_A}/promote`,
+      headers: { cookie: cookieFor(USER_ID, 'USER') },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // POST without auth → 401
 // ---------------------------------------------------------------------------
 

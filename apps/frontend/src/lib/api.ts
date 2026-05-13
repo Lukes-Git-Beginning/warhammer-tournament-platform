@@ -282,3 +282,74 @@ export function getDraftEvents(id: string): Promise<DraftEventsResponse> {
 export function cancelDraft(id: string): Promise<void> {
   return apiFetch<void>(`/api/drafts/${id}/cancel`, { method: 'POST' });
 }
+
+export function promotePreset(id: string): Promise<{ id: string; name: string; is_public: boolean }> {
+  return apiFetch(`/api/draft-presets/${id}/promote`, { method: 'PATCH' });
+}
+
+// ---------------------------------------------------------------------------
+// Admin
+// ---------------------------------------------------------------------------
+
+export interface AuditLogEntry {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  actor_id: string;
+  actor_username: string | null;
+  actor_avatar_url: string | null;
+  old_value: unknown;
+  new_value: unknown;
+  created_at: string;
+}
+
+export interface AdminStats {
+  activeUsers: number;
+  tournaments: { total: number; active: number; completed: number };
+  matchesPlayed: number;
+  currentSeason: string | null;
+  topFactions: { faction_id: string; faction_name: string; pick_count: number }[];
+}
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  discord_id: string;
+  avatar_url: string | null;
+  role: string;
+  is_banned: boolean;
+}
+
+export function getAdminAuditLog(opts?: {
+  page?: number;
+  pageSize?: number;
+  entity_type?: string;
+}): Promise<{ entries: AuditLogEntry[]; total: number; page: number; pageSize: number }> {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
+  if (opts?.entity_type) params.set('entity_type', opts.entity_type);
+  const qs = params.toString();
+  return apiFetch(`/api/admin/audit-log${qs ? `?${qs}` : ''}`);
+}
+
+export function getAdminStats(): Promise<AdminStats> {
+  return apiFetch('/api/admin/stats');
+}
+
+export function searchUsers(search: string): Promise<{ users: AdminUser[] }> {
+  const params = new URLSearchParams({ search });
+  return apiFetch(`/api/users?${params.toString()}`);
+}
+
+export function banUser(userId: string, reason?: string): Promise<void> {
+  return apiFetch(`/api/admin/users/${userId}/ban`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function unbanUser(userId: string): Promise<void> {
+  return apiFetch(`/api/admin/users/${userId}/ban`, { method: 'DELETE' });
+}

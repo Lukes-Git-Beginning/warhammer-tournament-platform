@@ -45,3 +45,7 @@ Thumbs.db
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
+
+# Uploads (army-lists, etc.)
+apps/backend/uploads/
+uploads/

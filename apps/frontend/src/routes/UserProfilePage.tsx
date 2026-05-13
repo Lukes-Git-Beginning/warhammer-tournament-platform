@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from '@tanstack/react-router';
 import { getUserProfile } from '@/lib/api';
 import { EloRatingDisplay } from '../components/meta/EloRatingDisplay';
+import { ArmyListList } from '../components/tournament/ArmyListList';
+import { ArmyListUpload } from '../components/tournament/ArmyListUpload';
 
 const ROLE_LABELS: Record<string, string> = {
   USER: 'Spieler',
@@ -183,6 +185,17 @@ export function UserProfilePage() {
             </table>
           </div>
         )}
+      </section>
+
+      {/* Army-Listen */}
+      <section>
+        <h2 className="font-display text-lg font-semibold text-warhammer-gold mb-3">
+          Meine Army-Listen
+        </h2>
+        <div className="space-y-4">
+          <ArmyListList />
+          <ArmyListUpload factionId="" />
+        </div>
       </section>
 
       {/* Recent Matches */}

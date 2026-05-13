@@ -374,6 +374,56 @@ const draftPresetRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // -------------------------------------------------------------------------
+  // PATCH /api/draft-presets/:id/promote  — ADMIN or MODERATOR only
+  // -------------------------------------------------------------------------
+  fastify.patch<{ Params: { id: string } }>(
+    '/api/draft-presets/:id/promote',
+    { preHandler: [fastify.authenticate, fastify.requireRole('ADMIN', 'MODERATOR')] },
+    async (request, reply) => {
+      const paramParsed = PresetParamSchema.safeParse(request.params);
+      if (!paramParsed.success) {
+        return reply.code(400).send({
+          error: 'BadRequest',
+          message: paramParsed.error.message,
+          statusCode: 400,
+        });
+      }
+      const { id: presetId } = paramParsed.data;
+
+      const preset = await fastify.prisma.draftPreset.findUnique({ where: { id: presetId } });
+      if (!preset) {
+        return reply.code(404).send({
+          error: 'NotFound',
+          message: 'Preset not found',
+          statusCode: 404,
+        });
+      }
+
+      const updated = await fastify.prisma.$transaction(async (tx) => {
+        const p = await tx.draftPreset.update({
+          where: { id: presetId },
+          data: { is_public: true },
+        });
+        await tx.auditLog.create({
+          data: {
+            entity_type: 'DraftPreset',
+            entity_id: presetId,
+            action: 'PROMOTE',
+            actor_id: request.user.sub,
+            old_value: { is_public: preset.is_public },
+            new_value: { is_public: true },
+          },
+        });
+        return p;
+      });
+
+      await invalidate(redis, 'draft-presets:*');
+
+      return { id: updated.id, name: updated.name, is_public: updated.is_public };
+    },
+  );
+
+  // -------------------------------------------------------------------------
   // DELETE /api/draft-presets/:id  — creator or ADMIN
   // -------------------------------------------------------------------------
   fastify.delete(

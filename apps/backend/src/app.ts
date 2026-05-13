@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyCors from '@fastify/cors';
 import fastifyRateLimit from '@fastify/rate-limit';
+import fastifyMultipart from '@fastify/multipart';
 import dbPlugin from './plugins/db.js';
 import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
@@ -21,6 +22,8 @@ import factionsRoutes from './routes/factions.js';
 import metaRoutes from './routes/meta.js';
 import draftPresetRoutes from './routes/draft-presets.js';
 import draftRoutes from './routes/drafts.js';
+import adminRoutes from './routes/admin.js';
+import armyListsRoutes from './routes/army-lists.js';
 
 export interface BuildAppOptions {
   /** Skip socket plugin during unit tests (avoids redis adapter init). */
@@ -59,6 +62,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   });
 
   await app.register(fastifyHelmet, { contentSecurityPolicy: false });
+  await app.register(fastifyMultipart, { limits: { fileSize: 5 * 1024 * 1024 } }); // 5 MB
   await app.register(fastifyCors, {
     origin: process.env.FRONTEND_URL ?? 'http://localhost:5173',
     credentials: true,
@@ -87,6 +91,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(metaRoutes);
   await app.register(draftPresetRoutes);
   await app.register(draftRoutes);
+  await app.register(adminRoutes);
+  await app.register(armyListsRoutes);
   if (withGraphql) await app.register(graphqlPlugin);
 
   app.get('/health', async () => ({

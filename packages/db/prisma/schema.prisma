@@ -80,6 +80,8 @@ enum FactionCategory {
 enum ArmyListFileType {
   ARMY_SETUP  // .army_setup binary export
   SCREENSHOT
+  TXT         // plain-text army list (M5.4 upload)
+  PDF         // PDF army list (M5.4 upload)
 }
 
 enum DraftStatus {
