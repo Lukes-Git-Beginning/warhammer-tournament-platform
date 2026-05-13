@@ -463,10 +463,12 @@ model MatchupStats {
 model DraftPreset {
   id               String   @id @default(uuid()) @db.Uuid
   name             String
+  description      String?
   created_by       String   @db.Uuid
   is_public        Boolean  @default(false)
-  category_limits  Json     @default("{}") // { order: 3, destruction: 3, ... }
-  turns            Json     @default("[]") // ordered array of pick/ban actions
+  category_limits  Json     @default("[]") // array of { category_name, factions[], max_picks, max_bans }
+  turns            Json     @default("[]") // ordered array of pick/ban/snipe/steal/reveal actions
+  turn_seconds     Int      @default(30)
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 
@@ -479,20 +481,45 @@ model DraftPreset {
 }
 
 model Draft {
-  id                 String      @id @default(uuid()) @db.Uuid
-  match_id           String      @unique @db.Uuid
-  preset_id          String      @db.Uuid
-  status             DraftStatus @default(PENDING)
-  current_turn       Int         @default(0)
-  state              Json        @default("{}") // { picks, bans, hidden_picks, hidden_bans, snipes, steals }
-  timer_expires_at   DateTime?
-  created_at         DateTime    @default(now())
-  updated_at         DateTime    @updatedAt
+  id                   String      @id @default(uuid()) @db.Uuid
+  match_id             String      @unique @db.Uuid
+  preset_id            String      @db.Uuid
+  status               DraftStatus @default(PENDING)
+  current_turn         Int         @default(0)
+  state                Json        @default("{}") // DraftState shape — see packages/types/src/draft.ts
+  timer_expires_at     DateTime?
+  host_user_id         String?     @db.Uuid    // populated at startDraft (= match.player1_id)
+  guest_user_id        String?     @db.Uuid    // populated at startDraft (= match.player2_id)
+  completed_at         DateTime?
+  final_host_factions  String[]    @default([])
+  final_guest_factions String[]    @default([])
+  created_at           DateTime    @default(now())
+  updated_at           DateTime    @updatedAt
 
-  match  Match       @relation(fields: [match_id], references: [id], onDelete: Cascade)
-  preset DraftPreset @relation(fields: [preset_id], references: [id])
+  match  Match        @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  preset DraftPreset  @relation(fields: [preset_id], references: [id])
+  events DraftEvent[]
 
   @@index([status])
+  @@index([host_user_id])
+  @@index([guest_user_id])
+}
+
+model DraftEvent {
+  id                String   @id @default(uuid()) @db.Uuid
+  draft_id          String   @db.Uuid
+  turn_index        Int
+  actor             String   // 'host' | 'guest' | 'admin' | 'system'
+  action            String   // 'pick' | 'ban' | 'snipe' | 'steal' | 'reveal_picks' | 'reveal_bans' | 'reveal_all' | 'auto_select' | 'start' | 'complete' | 'cancel'
+  faction_id        String?
+  is_auto_selected  Boolean  @default(false)
+  payload           Json?    // free-form (as_opponent target, revealed list, etc.)
+  created_at        DateTime @default(now())
+
+  draft Draft @relation(fields: [draft_id], references: [id], onDelete: Cascade)
+
+  @@index([draft_id, turn_index])
+  @@index([created_at])
 }
 
 // -----------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, FactionCategory } from '../generated/prisma/client.js';
+import { PrismaClient, FactionCategory, Role } from '../generated/prisma/client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
@@ -89,10 +89,111 @@ async function seedDefaultSeason(): Promise<void> {
   console.log(`  ✓ Default season created: "${season.name}" (${season.id})`);
 }
 
+const SYSTEM_DISCORD_ID = 'system-tww3';
+
+async function seedSystemUser(): Promise<string> {
+  const existing = await prisma.user.findUnique({ where: { discord_id: SYSTEM_DISCORD_ID } });
+  if (existing) {
+    console.log(`  ✓ System user already exists (${existing.id})`);
+    return existing.id;
+  }
+  const sys = await prisma.user.create({
+    data: {
+      discord_id: SYSTEM_DISCORD_ID,
+      username: 'system',
+      role: Role.ADMIN,
+    },
+  });
+  console.log(`  ✓ System user created (${sys.id})`);
+  return sys.id;
+}
+
+const ALL_DEFAULT_CATEGORY = { category_name: 'default', factions: [] as string[], max_picks: null, max_bans: null };
+
+interface SeedPreset {
+  slug: string; // synthetic identifier — we match by name for idempotency
+  name: string;
+  description: string;
+  turn_seconds: number;
+  category_limits: typeof ALL_DEFAULT_CATEGORY[];
+  turns: Array<{
+    order: number;
+    actor: 'host' | 'guest' | 'admin';
+    action: 'pick' | 'ban' | 'snipe' | 'steal' | 'reveal_picks' | 'reveal_bans' | 'reveal_all';
+    variant: 'global' | 'exclusive' | 'nonexclusive' | null;
+    is_hidden: boolean;
+    is_parallel: boolean;
+    as_opponent: boolean;
+    category: string;
+  }>;
+}
+
+const SEED_PRESETS: SeedPreset[] = [
+  {
+    slug: 'standard_1v1',
+    name: 'Standard 1v1',
+    description: 'Klassische Ban-Ban-Pick-Pick-Sequenz. Host bannt zuerst, dann Picks im Wechsel.',
+    turn_seconds: 30,
+    category_limits: [],
+    turns: [
+      { order: 1, actor: 'host',  action: 'ban',  variant: 'global', is_hidden: false, is_parallel: false, as_opponent: false, category: 'default' },
+      { order: 2, actor: 'guest', action: 'ban',  variant: 'global', is_hidden: false, is_parallel: false, as_opponent: false, category: 'default' },
+      { order: 3, actor: 'host',  action: 'pick', variant: 'global', is_hidden: false, is_parallel: false, as_opponent: false, category: 'default' },
+      { order: 4, actor: 'guest', action: 'pick', variant: 'global', is_hidden: false, is_parallel: false, as_opponent: false, category: 'default' },
+    ],
+  },
+  {
+    slug: 'captains_mode_classic',
+    name: "Captain's Mode Classic",
+    description: 'Versteckte Anfangs-Picks, dann Reveal, dann Bans basierend auf Gegner-Pick, final ein zweiter Pick. Spannungsbogen wie aoe2cm.net.',
+    turn_seconds: 30,
+    category_limits: [],
+    turns: [
+      { order: 1, actor: 'host',  action: 'pick', variant: 'exclusive', is_hidden: true,  is_parallel: true,  as_opponent: false, category: 'default' },
+      { order: 2, actor: 'guest', action: 'pick', variant: 'exclusive', is_hidden: true,  is_parallel: true,  as_opponent: false, category: 'default' },
+      { order: 3, actor: 'admin', action: 'reveal_picks', variant: null, is_hidden: false, is_parallel: false, as_opponent: false, category: 'default' },
+      { order: 4, actor: 'host',  action: 'ban',  variant: 'global', is_hidden: false, is_parallel: false, as_opponent: false, category: 'default' },
+      { order: 5, actor: 'guest', action: 'ban',  variant: 'global', is_hidden: false, is_parallel: false, as_opponent: false, category: 'default' },
+      { order: 6, actor: 'host',  action: 'pick', variant: 'exclusive', is_hidden: false, is_parallel: false, as_opponent: false, category: 'default' },
+      { order: 7, actor: 'guest', action: 'pick', variant: 'exclusive', is_hidden: false, is_parallel: false, as_opponent: false, category: 'default' },
+    ],
+  },
+];
+
+async function seedDraftPresets(systemUserId: string): Promise<void> {
+  let created = 0;
+  let existed = 0;
+  for (const preset of SEED_PRESETS) {
+    const existing = await prisma.draftPreset.findFirst({
+      where: { name: preset.name, created_by: systemUserId },
+      select: { id: true },
+    });
+    if (existing) {
+      existed += 1;
+      continue;
+    }
+    await prisma.draftPreset.create({
+      data: {
+        name: preset.name,
+        description: preset.description,
+        created_by: systemUserId,
+        is_public: true,
+        category_limits: preset.category_limits,
+        turns: preset.turns,
+        turn_seconds: preset.turn_seconds,
+      },
+    });
+    created += 1;
+  }
+  console.log(`  ✓ DraftPresets: ${created} created, ${existed} already existed`);
+}
+
 async function main(): Promise<void> {
   console.log('Seeding database…');
   await seedFactions();
   await seedDefaultSeason();
+  const systemUserId = await seedSystemUser();
+  await seedDraftPresets(systemUserId);
   console.log('Done.');
 }
 
