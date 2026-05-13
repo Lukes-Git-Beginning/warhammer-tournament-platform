@@ -1,7 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { emitMatchResult, emitBracketUpdate } from '../lib/emit.js';
+import { emitMatchResult, emitBracketUpdate, emitStatusChange } from '../lib/emit.js';
 import { invalidate } from '../lib/cache.js';
+import { InvalidActionError } from '../lib/draft-service.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -253,6 +254,200 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(200).send({ matchId, winnerId, score: score ?? null });
     },
   );
+
+  // -------------------------------------------------------------------------
+  // PATCH /api/matches/:id/start
+  // Organizer / Moderator / Admin: set match PENDING→ONGOING, start draft if enabled.
+  // -------------------------------------------------------------------------
+  fastify.patch(
+    '/api/matches/:id/start',
+    {
+      preHandler: [fastify.authenticate, fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN')],
+    },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const user = request.user;
+
+      // Load match with tournament + draft info
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        include: {
+          tournament: {
+            select: {
+              id: true,
+              organizer_id: true,
+              status: true,
+              draft_enabled: true,
+              draft_preset_id: true,
+            },
+          },
+          draft: {
+            select: { id: true, status: true },
+          },
+        },
+      });
+
+      if (!match) {
+        return reply.code(404).send({
+          error: 'NotFound',
+          message: `Match "${matchId}" not found`,
+          statusCode: 404,
+        });
+      }
+
+      // ORGANIZER can only start matches in their own tournament
+      const isModOrAdmin = user.role === 'MODERATOR' || user.role === 'ADMIN';
+      const isOwnOrganizer = user.sub === match.tournament.organizer_id;
+
+      if (!isModOrAdmin && !isOwnOrganizer) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'You are not the organizer of this tournament',
+          statusCode: 403,
+        });
+      }
+
+      // Tournament must be ONGOING (bracket generated)
+      if (match.tournament.status !== 'ONGOING') {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'Tournament not in ONGOING status',
+          statusCode: 422,
+        });
+      }
+
+      // Validate: draft_enabled with no preset
+      if (match.tournament.draft_enabled && !match.tournament.draft_preset_id) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'Tournament has draft enabled but no preset configured',
+          statusCode: 422,
+        });
+      }
+
+      // Idempotency: if already ONGOING and draft exists, return existing
+      if (match.status === 'ONGOING') {
+        const draftId = match.draft?.id ?? null;
+        return reply.code(200).send({
+          match_id: matchId,
+          status: 'ONGOING',
+          draft_id: draftId,
+        });
+      }
+
+      // Validate: match must be PENDING
+      if (match.status !== 'PENDING') {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: `Match is already ${match.status} and cannot be started`,
+          statusCode: 422,
+        });
+      }
+
+      // Validate: both players must be assigned
+      if (!match.player1_id || !match.player2_id) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'Cannot start match without both players',
+          statusCode: 422,
+        });
+      }
+
+      // Update match status to ONGOING
+      await fastify.prisma.match.update({
+        where: { id: matchId },
+        data: { status: 'ONGOING' },
+      });
+
+      // Emit status change
+      emitStatusChange(fastify.io, {
+        tournamentId: match.tournament.id,
+        status: 'ONGOING',
+      });
+
+      // Start draft if enabled
+      let draftId: string | null = null;
+
+      if (match.tournament.draft_enabled && match.tournament.draft_preset_id) {
+        // Check idempotency: existing draft for this match?
+        const existingDraft = await fastify.prisma.draft.findUnique({
+          where: { match_id: matchId },
+          select: { id: true },
+        });
+
+        if (existingDraft) {
+          draftId = existingDraft.id;
+        } else {
+          try {
+            const result = await fastify.draftService.startDraft({
+              matchId,
+              presetId: match.tournament.draft_preset_id,
+              hostUserId: match.player1_id,
+              guestUserId: match.player2_id,
+              allFactionIds: [], // service caches faction IDs
+            });
+            draftId = result.draftId;
+          } catch (err) {
+            if (err instanceof InvalidActionError) {
+              return reply.code(422).send({
+                error: 'UnprocessableEntity',
+                message: (err as Error).message,
+                statusCode: 422,
+              });
+            }
+            throw err;
+          }
+        }
+      }
+
+      request.log.info({ matchId, draftId }, 'Match started');
+
+      return reply.code(200).send({
+        match_id: matchId,
+        status: 'ONGOING',
+        draft_id: draftId,
+      });
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // GET /api/matches/:id/draft
+  // Optional auth — lookup the current draft for a match (frontend convenience).
+  // -------------------------------------------------------------------------
+  fastify.get('/api/matches/:id/draft', async (request, reply) => {
+    const { id: matchId } = request.params as { id: string };
+
+    // Optional auth
+    try {
+      await request.jwtVerify();
+    } catch {
+      // anonymous — still allowed to look up draft metadata
+    }
+
+    // Check match exists
+    const match = await fastify.prisma.match.findFirst({
+      where: { id: matchId, deleted_at: null },
+      select: { id: true },
+    });
+
+    if (!match) {
+      return reply.code(404).send({
+        error: 'NotFound',
+        message: `Match "${matchId}" not found`,
+        statusCode: 404,
+      });
+    }
+
+    const draft = await fastify.prisma.draft.findUnique({
+      where: { match_id: matchId },
+      select: { id: true, status: true },
+    });
+
+    return reply.code(200).send({
+      draft_id: draft?.id ?? null,
+      status: draft?.status ?? null,
+    });
+  });
 };
 
 export default matchRoutes;

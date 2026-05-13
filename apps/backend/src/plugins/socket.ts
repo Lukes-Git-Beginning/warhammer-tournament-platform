@@ -9,6 +9,7 @@ import type {
   ServerToClientEvents,
   SocketData,
 } from '@tww3/types';
+import { DraftNotFoundError } from '../lib/draft-service.js';
 
 export type AppIOServer = IOServer<
   ClientToServerEvents,
@@ -70,6 +71,94 @@ export default fp(
 
       socket.on('leave_tournament', (id) => void socket.leave(`tournament_${id}`));
 
+      // ------------------------------------------------------------------
+      // M4.5 Draft-Room handlers
+      // ------------------------------------------------------------------
+
+      socket.on('join_draft', async (draftId) => {
+        if (typeof draftId !== 'string' || !uuidRe.test(draftId)) {
+          fastify.log.warn({ sid: socket.id, draftId }, 'join_draft: invalid UUID');
+          return;
+        }
+        try {
+          const view = await fastify.draftService.getDraftView(draftId, socket.data.userId);
+
+          if (
+            view.viewer_role === 'host' ||
+            view.viewer_role === 'guest' ||
+            view.viewer_role === 'admin'
+          ) {
+            void socket.join(`draft_${draftId}`);
+            void socket.join(`draft_${draftId}:player_${socket.data.userId}`);
+          } else {
+            // Spectator — even if they called join_draft they go into spec room
+            void socket.join(`draft_${draftId}:spec`);
+          }
+
+          socket.emit('draft_state_sync', {
+            draftId: view.id,
+            state: view.state,
+            currentTurn: view.current_turn,
+            timerExpiresAt: view.timer_expires_at,
+            status: view.status,
+          });
+        } catch (err) {
+          if (err instanceof DraftNotFoundError) {
+            fastify.log.warn({ draftId }, 'join_draft: draft not found');
+            return;
+          }
+          fastify.log.error({ err, draftId }, 'join_draft failed');
+        }
+      });
+
+      socket.on('watch_draft', async (draftId) => {
+        if (typeof draftId !== 'string' || !uuidRe.test(draftId)) return;
+        try {
+          // null = spectator perspective (no hidden data)
+          const view = await fastify.draftService.getDraftView(draftId, null);
+          void socket.join(`draft_${draftId}:spec`);
+          socket.emit('draft_state_sync', {
+            draftId: view.id,
+            state: view.state,
+            currentTurn: view.current_turn,
+            timerExpiresAt: view.timer_expires_at,
+            status: view.status,
+          });
+        } catch (err) {
+          if (err instanceof DraftNotFoundError) return;
+          fastify.log.error({ err, draftId }, 'watch_draft failed');
+        }
+      });
+
+      socket.on('leave_draft', (draftId) => {
+        if (typeof draftId !== 'string' || !uuidRe.test(draftId)) return;
+        void socket.leave(`draft_${draftId}`);
+        void socket.leave(`draft_${draftId}:player_${socket.data.userId}`);
+        void socket.leave(`draft_${draftId}:spec`);
+      });
+
+      socket.on('draft_action', async (payload) => {
+        if (
+          !payload ||
+          typeof payload.draftId !== 'string' ||
+          typeof payload.factionId !== 'string'
+        )
+          return;
+        if (!uuidRe.test(payload.draftId)) return;
+        try {
+          await fastify.draftService.handleAction(
+            payload.draftId,
+            socket.data.userId,
+            payload.factionId,
+          );
+        } catch (err) {
+          fastify.log.warn(
+            { err, userId: socket.data.userId, draftId: payload.draftId },
+            'draft_action rejected',
+          );
+        }
+      });
+
       socket.on('disconnect', (reason) => {
         fastify.log.debug(
           { userId: socket.data.userId, sid: socket.id, reason },
@@ -83,5 +172,5 @@ export default fp(
       await io.close();
     });
   },
-  { name: 'socket', dependencies: ['auth', 'redis'] },
+  { name: 'socket', dependencies: ['auth', 'redis', 'draft'] },
 );

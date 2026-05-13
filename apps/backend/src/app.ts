@@ -20,6 +20,7 @@ import leaderboardRoutes from './routes/leaderboard.js';
 import factionsRoutes from './routes/factions.js';
 import metaRoutes from './routes/meta.js';
 import draftPresetRoutes from './routes/draft-presets.js';
+import draftRoutes from './routes/drafts.js';
 
 export interface BuildAppOptions {
   /** Skip socket plugin during unit tests (avoids redis adapter init). */
@@ -70,9 +71,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(dbPlugin);
   if (withRedis) await app.register(redisPlugin);
   await app.register(authPlugin);
+  if (withDraft && withRedis) await app.register(draftPlugin);
   if (withSocket) await app.register(socketPlugin);
   if (withCron) await app.register(cronPlugin);
-  if (withDraft && withRedis) await app.register(draftPlugin);
 
   await app.register(authRoutes);
   await app.register(userRoutes);
@@ -85,6 +86,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(factionsRoutes);
   await app.register(metaRoutes);
   await app.register(draftPresetRoutes);
+  await app.register(draftRoutes);
   if (withGraphql) await app.register(graphqlPlugin);
 
   app.get('/health', async () => ({
