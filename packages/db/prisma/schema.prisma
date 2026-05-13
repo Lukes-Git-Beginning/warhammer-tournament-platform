@@ -542,3 +542,19 @@ model AuditLog {
   @@index([actor_id])
   @@index([created_at])
 }
+
+// -----------------------------------------------------------------------------
+// Scraper: Import Log (M5.3 — records each scraper run for observability)
+// -----------------------------------------------------------------------------
+
+model ImportLog {
+  id               String    @id @default(uuid()) @db.Uuid
+  source           String    // "totaltavern_factions" | "totaltavern_tournament"
+  status           String    // "success" | "partial" | "error"
+  records_imported Int       @default(0)
+  error_message    String?
+  started_at       DateTime  @default(now())
+  finished_at      DateTime?
+
+  @@index([source, started_at])
+}

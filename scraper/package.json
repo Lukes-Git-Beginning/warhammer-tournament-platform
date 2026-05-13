@@ -1,0 +1,33 @@
+{
+  "name": "@tww3/scraper",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "tww3-scraper": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "lint": "eslint src",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@tww3/db": "workspace:*",
+    "axios": "^1.7.9",
+    "cheerio": "^1.0.0",
+    "cli-progress": "^3.12.0",
+    "commander": "^12.1.0",
+    "winston": "^3.17.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/cli-progress": "^3.11.6",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
