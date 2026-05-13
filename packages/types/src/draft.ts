@@ -76,6 +76,17 @@ const HostGuestNullableSchema = z.object({
   guest: z.string().nullable(),
 });
 
+/**
+ * Context passed to the pure state-machine functions.
+ * Decouples the engine from DB/Redis — caller provides the faction list and
+ * category limits that the engine needs for available-calculation.
+ */
+export const ApplyContextSchema = z.object({
+  allFactions: z.array(z.string()),
+  categoryLimits: z.array(CategoryLimitSchema),
+});
+export type ApplyContext = z.infer<typeof ApplyContextSchema>;
+
 export const DraftStateSchema = z.object({
   picks: HostGuestArraySchema,
   bans: z.array(z.string()),
@@ -83,6 +94,15 @@ export const DraftStateSchema = z.object({
   hidden_picks: HostGuestArraySchema,
   hidden_bans: HostGuestArraySchema,
   parallel_pending: HostGuestNullableSchema,
+  /**
+   * Parallel variant-tracking arrays for hidden picks/bans.
+   * Index i in hidden_picks[actor] maps to index i in hidden_pick_variants[actor].
+   * Required so that reveal_picks/reveal_bans can correctly re-apply the variant
+   * effects (global→bans.push, exclusive→exclusive_bans.push) that were deferred
+   * when the hidden action was first executed.
+   */
+  hidden_pick_variants: HostGuestArraySchema,
+  hidden_ban_variants: HostGuestArraySchema,
 });
 export type DraftState = z.infer<typeof DraftStateSchema>;
 
