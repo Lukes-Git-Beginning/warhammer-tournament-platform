@@ -19,7 +19,7 @@ export function Footer() {
       <div className="mx-auto max-w-[80rem] px-4 sm:px-6 lg:px-8 xl:px-12">
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
           <Link to="/" aria-label="Karaz Lists — home" className="inline-flex items-center transition-opacity hover:opacity-90">
-            <KarazWordmarkImage bronze className="h-10 w-auto" width={160} loading="lazy" />
+            <KarazWordmarkImage bronze className="h-12 w-auto" loading="lazy" />
           </Link>
           <p
             aria-hidden="true"

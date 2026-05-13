@@ -4,7 +4,11 @@ import { cn } from '@/lib/utils';
 export interface KarazWordmarkImageProps extends HTMLAttributes<HTMLImageElement> {
   /** Use the bronze "etched ground" variant. */
   bronze?: boolean;
-  /** Width in pixels. Height scales automatically (aspect-ratio of asset). */
+  /**
+   * Width in pixels. Height scales automatically (aspect-ratio of asset).
+   * Do NOT combine with `h-*` Tailwind classes — that forces both dimensions
+   * and breaks the natural aspect ratio (1.5:1 for the wordmark asset).
+   */
   width?: number;
   /** Loading strategy. Default 'eager' for header, 'lazy' for footer. */
   loading?: 'eager' | 'lazy';

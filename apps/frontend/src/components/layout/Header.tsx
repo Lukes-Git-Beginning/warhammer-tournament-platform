@@ -57,7 +57,7 @@ export function Header() {
           aria-label="Karaz Lists — home"
           className="inline-flex items-center transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-karaz-gold-500 focus-visible:ring-offset-2 focus-visible:ring-offset-karaz-iron-950 rounded-sm"
         >
-          <KarazWordmarkImage className="h-10 w-auto sm:h-12" width={180} />
+          <KarazWordmarkImage className="h-12 w-auto sm:h-14" />
         </Link>
 
         {/* Desktop Nav */}
