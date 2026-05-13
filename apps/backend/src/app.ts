@@ -7,6 +7,7 @@ import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
 import socketPlugin from './plugins/socket.js';
 import cronPlugin from './plugins/cron.js';
+import draftPlugin from './plugins/draft.js';
 import graphqlPlugin from './plugins/graphql.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
@@ -18,6 +19,7 @@ import bracketRoutes from './routes/bracket.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import factionsRoutes from './routes/factions.js';
 import metaRoutes from './routes/meta.js';
+import draftPresetRoutes from './routes/draft-presets.js';
 
 export interface BuildAppOptions {
   /** Skip socket plugin during unit tests (avoids redis adapter init). */
@@ -28,10 +30,18 @@ export interface BuildAppOptions {
   withCron?: boolean;
   /** Register the /graphql mercurius endpoint (default true). */
   withGraphql?: boolean;
+  /** Register the DraftService plugin (default true, requires redis). */
+  withDraft?: boolean;
 }
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
-  const { withSocket = true, withRedis = true, withCron = true, withGraphql = true } = opts;
+  const {
+    withSocket = true,
+    withRedis = true,
+    withCron = true,
+    withGraphql = true,
+    withDraft = true,
+  } = opts;
   const isProd = process.env.NODE_ENV === 'production';
 
   const app = Fastify({
@@ -62,6 +72,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(authPlugin);
   if (withSocket) await app.register(socketPlugin);
   if (withCron) await app.register(cronPlugin);
+  if (withDraft && withRedis) await app.register(draftPlugin);
 
   await app.register(authRoutes);
   await app.register(userRoutes);
@@ -73,6 +84,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(leaderboardRoutes);
   await app.register(factionsRoutes);
   await app.register(metaRoutes);
+  await app.register(draftPresetRoutes);
   if (withGraphql) await app.register(graphqlPlugin);
 
   app.get('/health', async () => ({
