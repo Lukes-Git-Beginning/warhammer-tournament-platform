@@ -120,3 +120,83 @@ describe('Discord OAuth callback', () => {
     expect(cleared!.value).toBe('');
   });
 });
+
+// ---------------------------------------------------------------------------
+// POST /auth/test-login (NODE_ENV=test only)
+// ---------------------------------------------------------------------------
+
+describe('POST /auth/test-login (NODE_ENV=test only)', () => {
+  // Cleanup: test-user aus dieser Sektion entfernen
+  afterEach(async () => {
+    await prisma.user.deleteMany({ where: { discord_id: { startsWith: 'test-login-' } } });
+  });
+
+  it('returns 403 when NODE_ENV is not test', async () => {
+    const original = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/test-login',
+        payload: { userId: 'does-not-matter' },
+      });
+      expect(res.statusCode).toBe(403);
+      const body = res.json<{ error: string; statusCode: number }>();
+      expect(body.error).toBe('Forbidden');
+    } finally {
+      process.env.NODE_ENV = original;
+    }
+  });
+
+  it('returns 400 when userId missing', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/test-login',
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    const body = res.json<{ error: string }>();
+    expect(body.error).toBe('BadRequest');
+  });
+
+  it('returns 404 when user does not exist', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/test-login',
+      payload: { userId: '00000000-0000-0000-0000-000000000000' },
+    });
+    expect(res.statusCode).toBe(404);
+    const body = res.json<{ error: string }>();
+    expect(body.error).toBe('NotFound');
+  });
+
+  it('returns 200 and sets auth cookie for valid user', async () => {
+    // Benutzer für diesen Test anlegen
+    const created = await prisma.user.create({
+      data: {
+        discord_id: 'test-login-bypass-user',
+        username: 'TestLoginUser',
+        email: null,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/test-login',
+      payload: { userId: created.id },
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    // JWT-Cookie muss gesetzt sein
+    const authCookie = res.cookies.find((c) => c.name === 'auth_token');
+    expect(authCookie).toBeDefined();
+    expect(authCookie!.value.length).toBeGreaterThan(40);
+
+    // Response-Body enthält ok + user
+    const body = res.json<{ ok: boolean; user: { id: string; username: string } }>();
+    expect(body.ok).toBe(true);
+    expect(body.user.id).toBe(created.id);
+    expect(body.user.username).toBe('TestLoginUser');
+  });
+});

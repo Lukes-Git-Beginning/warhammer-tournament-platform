@@ -135,16 +135,16 @@ test('header contains Drafts navigation link pointing to /presets', async ({ pag
 });
 
 // ---------------------------------------------------------------------------
-// Full two-player draft flow — skipped until test-auth bypass exists
+// Full two-player draft flow — deferred to M5.2.2 (tournament-fixture helper)
 // ---------------------------------------------------------------------------
 
 /**
- * This test implements the full M4 scenario described in the plan.
- * It is skipped because it requires a POST /auth/test-login endpoint (or
- * equivalent test-user cookie injection) that does not yet exist.
- *
- * To enable: implement a test-auth bypass in the backend (guarded by
- * NODE_ENV=test), then replace test.skip with test.
+ * POST /auth/test-login is now available (M5.1.1, guarded by NODE_ENV=test) but
+ * accepts { userId } rather than { role }. Pre-seeded test users with deterministic
+ * roles do not yet exist. The full cycle (tournament create → bracket → match start
+ * → draft picks) will be implemented in M5.2.2 with a dedicated tournament-fixture
+ * helper (apps/e2e/tests/helpers/tournament-fixture.ts) that creates users via
+ * prisma, then signs them in via /auth/test-login by userId.
  */
 test.skip(
   'full draft cycle: tournament → match start → both players pick → draft complete',
@@ -233,7 +233,8 @@ test.skip(
 );
 
 /**
- * Spectator view — skipped for same auth reason as above.
+ * Spectator view — skipped until M5.2.2 for full live-draft coverage with spectator path.
+ * see M5.2.2 for full live-draft coverage with spectator path
  */
 test.skip('spectator can watch live draft read-only', async ({ browser }) => {
   // Implementation follows same pattern as above but with a third context

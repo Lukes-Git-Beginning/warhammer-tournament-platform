@@ -1,16 +1,19 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { prisma } from '@tww3/db';
-
-// ---------------------------------------------------------------------------
-// Deterministic IDs
-// ---------------------------------------------------------------------------
-
-const S1 = 'a0000000-0000-0000-0000-000000000001'; // season
-const U1 = 'b0000000-0000-0000-0000-000000000001'; // player1 (organizer)
-const U2 = 'b0000000-0000-0000-0000-000000000002'; // player2
-const T1 = 'c0000000-0000-0000-0000-000000000001'; // tournament
+import {
+  createTestUser,
+  createTestSeason,
+  createTestTournament,
+  cleanupSeason,
+  cleanupTournament,
+  cleanupUsers,
+  type TestUser,
+  type TestSeason,
+  type TestTournament,
+} from './helpers/db-fixtures.js';
 
 // Factions used across tests (must exist in DB — seeded at startup)
 const EMPIRE = 'empire';
@@ -33,64 +36,37 @@ afterAll(async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Cleanup helper — removes all data created by these tests in dependency order
+// Per-test state — created fresh in beforeEach, cleaned up in afterEach
 // ---------------------------------------------------------------------------
 
-async function cleanup() {
-  await prisma.matchupStats.deleteMany({ where: { season_id: S1 } });
-  await prisma.factionStats.deleteMany({ where: { season_id: S1 } });
-  await prisma.auditLog.deleteMany({ where: { entity_type: 'Match' } });
-  await prisma.match.deleteMany({ where: { tournament_id: T1 } });
-  await prisma.tournamentParticipant.deleteMany({ where: { tournament_id: T1 } });
-  await prisma.tournament.deleteMany({ where: { id: T1 } });
-  await prisma.season.deleteMany({ where: { id: S1 } });
-  await prisma.user.deleteMany({ where: { id: { in: [U1, U2] } } });
-}
+let testUser1: TestUser | undefined;
+let testUser2: TestUser | undefined;
+let testSeason: TestSeason | undefined;
+let testTournament: TestTournament | undefined;
 
-beforeEach(cleanup);
+beforeEach(async () => {
+  testUser1 = undefined;
+  testUser2 = undefined;
+  testSeason = undefined;
+  testTournament = undefined;
+
+  testUser1 = await createTestUser({ username: 'EmpirePlayer' });
+  testUser2 = await createTestUser({ username: 'BretonniaPlayer' });
+  testSeason = await createTestSeason({ is_active: true });
+  testTournament = await createTestTournament({ organizerId: testUser1!.id });
+});
+
+afterEach(async () => {
+  // Clean up in dependency order — scoped to this run's IDs only
+  if (testTournament) await cleanupTournament(testTournament.id);
+  if (testSeason) await cleanupSeason(testSeason!.id);
+  const ids = [testUser1?.id, testUser2?.id].filter(Boolean) as string[];
+  if (ids.length > 0) await cleanupUsers(ids);
+});
 
 // ---------------------------------------------------------------------------
-// Seed helpers
+// Helpers
 // ---------------------------------------------------------------------------
-
-async function seedBase() {
-  await prisma.user.createMany({
-    data: [
-      { id: U1, discord_id: 'disc_mu_1', username: 'EmpirePlayer', email: null },
-      { id: U2, discord_id: 'disc_mu_2', username: 'BretonniaPlayer', email: null },
-    ],
-    skipDuplicates: true,
-  });
-
-  await prisma.season.create({
-    data: {
-      id: S1,
-      name: 'MatchupStats Test Season',
-      start_date: new Date('2026-01-01'),
-      end_date: new Date('2026-12-31'),
-      is_active: true,
-    },
-  });
-
-  // Deactivate any other active seasons that could interfere
-  await prisma.season.updateMany({
-    where: { is_active: true, id: { not: S1 } },
-    data: { is_active: false },
-  });
-
-  await prisma.tournament.create({
-    data: {
-      id: T1,
-      slug: 'matchup-test-tournament',
-      name: 'Matchup Test Tournament',
-      organizer_id: U1,
-      format: 'SWISS',
-      status: 'ONGOING',
-      start_date: new Date('2026-06-01'),
-      timezone: 'Europe/Berlin',
-    },
-  });
-}
 
 async function createMatch(opts: {
   matchId: string;
@@ -103,7 +79,7 @@ async function createMatch(opts: {
   await prisma.match.create({
     data: {
       id: matchId,
-      tournament_id: T1,
+      tournament_id: testTournament!.id,
       round: 1,
       match_number: parseInt(matchId.slice(-4), 16) % 1000 || 1,
       player1_id: p1Id,
@@ -117,7 +93,12 @@ async function createMatch(opts: {
 }
 
 function makeToken(userId: string, role: 'ADMIN' | 'ORGANIZER' | 'USER' = 'ADMIN') {
-  return app.jwt.sign({ sub: userId, discord_id: 'disc_mu_1', username: 'EmpirePlayer', role });
+  return app.jwt.sign({
+    sub: userId,
+    discord_id: testUser1!.discord_id,
+    username: testUser1!.username,
+    role,
+  });
 }
 
 async function reportResult(opts: {
@@ -147,11 +128,10 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
   it('1. Normal-Match: empire (p1) wins vs bretonnia (p2) → faction_b_wins=1 (empire is b in sort)', async () => {
     // sort(['empire', 'bretonnia']) → ['bretonnia', 'empire'] → aId='bretonnia', bId='empire'
     // winner=empire → winnerIsA = (empire === bretonnia) = false → faction_b_wins=1
-    await seedBase();
-    const M = 'e0000000-0000-0000-0000-000000000001';
-    await createMatch({ matchId: M, p1Id: U1, p2Id: U2, p1Faction: EMPIRE, p2Faction: BRETONNIA });
+    const M = randomUUID();
+    await createMatch({ matchId: M, p1Id: testUser1!.id, p2Id: testUser2!.id, p1Faction: EMPIRE, p2Faction: BRETONNIA });
 
-    const res = await reportResult({ matchId: M, winnerId: U1, token: makeToken(U1) });
+    const res = await reportResult({ matchId: M, winnerId: testUser1!.id, token: makeToken(testUser1!.id) });
     expect(res.statusCode).toBe(200);
 
     const row = await prisma.matchupStats.findUnique({
@@ -159,7 +139,7 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
         faction_a_id_faction_b_id_season_id: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
-          season_id: S1,
+          season_id: testSeason!.id,
         },
       },
     });
@@ -175,11 +155,10 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
   it('2. Mirror-Match: empire vs empire, p1 wins → single row with faction_a_wins=1', async () => {
     // sort(['empire', 'empire']) → ['empire', 'empire'] → aId=bId='empire'
     // winner=p1 (empire) → winnerFactionId='empire' === aId='empire' → winnerIsA=true → faction_a_wins=1
-    await seedBase();
-    const M = 'e0000000-0000-0000-0000-000000000002';
-    await createMatch({ matchId: M, p1Id: U1, p2Id: U2, p1Faction: EMPIRE, p2Faction: EMPIRE });
+    const M = randomUUID();
+    await createMatch({ matchId: M, p1Id: testUser1!.id, p2Id: testUser2!.id, p1Faction: EMPIRE, p2Faction: EMPIRE });
 
-    const res = await reportResult({ matchId: M, winnerId: U1, token: makeToken(U1) });
+    const res = await reportResult({ matchId: M, winnerId: testUser1!.id, token: makeToken(testUser1!.id) });
     expect(res.statusCode).toBe(200);
 
     const row = await prisma.matchupStats.findUnique({
@@ -187,7 +166,7 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
         faction_a_id_faction_b_id_season_id: {
           faction_a_id: EMPIRE,
           faction_b_id: EMPIRE,
-          season_id: S1,
+          season_id: testSeason!.id,
         },
       },
     });
@@ -199,17 +178,16 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
   });
 
   it('3. Inkrement: 2× empire wins vs bretonnia → faction_b_wins=2', async () => {
-    await seedBase();
-    const M1 = 'e0000000-0000-0000-0000-000000000003';
-    const M2 = 'e0000000-0000-0000-0000-000000000004';
+    const M1 = randomUUID();
+    const M2 = randomUUID();
 
-    await createMatch({ matchId: M1, p1Id: U1, p2Id: U2, p1Faction: EMPIRE, p2Faction: BRETONNIA });
-    const res1 = await reportResult({ matchId: M1, winnerId: U1, token: makeToken(U1) });
+    await createMatch({ matchId: M1, p1Id: testUser1!.id, p2Id: testUser2!.id, p1Faction: EMPIRE, p2Faction: BRETONNIA });
+    const res1 = await reportResult({ matchId: M1, winnerId: testUser1!.id, token: makeToken(testUser1!.id) });
     expect(res1.statusCode).toBe(200);
 
     // Second match — player positions flipped so both can play
-    await createMatch({ matchId: M2, p1Id: U2, p2Id: U1, p1Faction: BRETONNIA, p2Faction: EMPIRE });
-    const res2 = await reportResult({ matchId: M2, winnerId: U1, token: makeToken(U1) });
+    await createMatch({ matchId: M2, p1Id: testUser2!.id, p2Id: testUser1!.id, p1Faction: BRETONNIA, p2Faction: EMPIRE });
+    const res2 = await reportResult({ matchId: M2, winnerId: testUser1!.id, token: makeToken(testUser1!.id) });
     expect(res2.statusCode).toBe(200);
 
     const row = await prisma.matchupStats.findUnique({
@@ -217,7 +195,7 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
         faction_a_id_faction_b_id_season_id: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
-          season_id: S1,
+          season_id: testSeason!.id,
         },
       },
     });
@@ -229,19 +207,18 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
   });
 
   it('4. Seitensymmetrie: egal ob p1=empire/p2=bretonnia oder umgekehrt → selber Row', async () => {
-    await seedBase();
     // Match A: p1=empire wins vs p2=bretonnia
-    const MA = 'e0000000-0000-0000-0000-000000000005';
-    await createMatch({ matchId: MA, p1Id: U1, p2Id: U2, p1Faction: EMPIRE, p2Faction: BRETONNIA });
-    await reportResult({ matchId: MA, winnerId: U1, token: makeToken(U1) });
+    const MA = randomUUID();
+    await createMatch({ matchId: MA, p1Id: testUser1!.id, p2Id: testUser2!.id, p1Faction: EMPIRE, p2Faction: BRETONNIA });
+    await reportResult({ matchId: MA, winnerId: testUser1!.id, token: makeToken(testUser1!.id) });
 
-    // Match B: p1=bretonnia, p2=empire, empire (U1) wins
-    const MB = 'e0000000-0000-0000-0000-000000000006';
-    await createMatch({ matchId: MB, p1Id: U2, p2Id: U1, p1Faction: BRETONNIA, p2Faction: EMPIRE });
-    await reportResult({ matchId: MB, winnerId: U1, token: makeToken(U1) });
+    // Match B: p1=bretonnia, p2=empire, empire (testUser1) wins
+    const MB = randomUUID();
+    await createMatch({ matchId: MB, p1Id: testUser2!.id, p2Id: testUser1!.id, p1Faction: BRETONNIA, p2Faction: EMPIRE });
+    await reportResult({ matchId: MB, winnerId: testUser1!.id, token: makeToken(testUser1!.id) });
 
     // Only one row should exist (symmetric key)
-    const rows = await prisma.matchupStats.findMany({ where: { season_id: S1 } });
+    const rows = await prisma.matchupStats.findMany({ where: { season_id: testSeason!.id } });
     expect(rows).toHaveLength(1);
 
     const row = rows[0]!;
@@ -254,11 +231,10 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
   });
 
   it('5. Draw: winnerId=null → draws=1, faction_a_wins=0, faction_b_wins=0', async () => {
-    await seedBase();
-    const M = 'e0000000-0000-0000-0000-000000000007';
-    await createMatch({ matchId: M, p1Id: U1, p2Id: U2, p1Faction: EMPIRE, p2Faction: BRETONNIA });
+    const M = randomUUID();
+    await createMatch({ matchId: M, p1Id: testUser1!.id, p2Id: testUser2!.id, p1Faction: EMPIRE, p2Faction: BRETONNIA });
 
-    const res = await reportResult({ matchId: M, winnerId: null, token: makeToken(U1) });
+    const res = await reportResult({ matchId: M, winnerId: null, token: makeToken(testUser1!.id) });
     expect(res.statusCode).toBe(200);
 
     const row = await prisma.matchupStats.findUnique({
@@ -266,7 +242,7 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
         faction_a_id_faction_b_id_season_id: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
-          season_id: S1,
+          season_id: testSeason!.id,
         },
       },
     });
@@ -275,5 +251,55 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
     expect(row!.faction_a_wins).toBe(0);
     expect(row!.faction_b_wins).toBe(0);
     expect(row!.draws).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FactionStats pick_count — M5.1.2
+// ---------------------------------------------------------------------------
+
+describe('FactionStats pick_count — POST /api/matches/:id/result', () => {
+  it('increments pick_count on match-result-report (create path: pick_count=1)', async () => {
+    const M = randomUUID();
+    await createMatch({ matchId: M, p1Id: testUser1!.id, p2Id: testUser2!.id, p1Faction: EMPIRE, p2Faction: BRETONNIA });
+
+    const res = await reportResult({ matchId: M, winnerId: testUser1!.id, token: makeToken(testUser1!.id) });
+    expect(res.statusCode).toBe(200);
+
+    const empireStats = await prisma.factionStats.findUnique({
+      where: { faction_id_season_id: { faction_id: EMPIRE, season_id: testSeason!.id } },
+    });
+    const bretonniaStats = await prisma.factionStats.findUnique({
+      where: { faction_id_season_id: { faction_id: BRETONNIA, season_id: testSeason!.id } },
+    });
+
+    expect(empireStats).not.toBeNull();
+    expect(empireStats!.pick_count).toBe(1);
+    expect(bretonniaStats).not.toBeNull();
+    expect(bretonniaStats!.pick_count).toBe(1);
+  });
+
+  it('increments pick_count on match-result-report (update path: pick_count=2 after two matches)', async () => {
+    const M1 = randomUUID();
+    const M2 = randomUUID();
+
+    await createMatch({ matchId: M1, p1Id: testUser1!.id, p2Id: testUser2!.id, p1Faction: EMPIRE, p2Faction: BRETONNIA });
+    const r1 = await reportResult({ matchId: M1, winnerId: testUser1!.id, token: makeToken(testUser1!.id) });
+    expect(r1.statusCode).toBe(200);
+
+    await createMatch({ matchId: M2, p1Id: testUser2!.id, p2Id: testUser1!.id, p1Faction: BRETONNIA, p2Faction: EMPIRE });
+    const r2 = await reportResult({ matchId: M2, winnerId: testUser2!.id, token: makeToken(testUser1!.id) });
+    expect(r2.statusCode).toBe(200);
+
+    const empireStats = await prisma.factionStats.findUnique({
+      where: { faction_id_season_id: { faction_id: EMPIRE, season_id: testSeason!.id } },
+    });
+    const bretonniaStats = await prisma.factionStats.findUnique({
+      where: { faction_id_season_id: { faction_id: BRETONNIA, season_id: testSeason!.id } },
+    });
+
+    // Beide Fraktionen wurden je 2× gespielt
+    expect(empireStats!.pick_count).toBe(2);
+    expect(bretonniaStats!.pick_count).toBe(2);
   });
 });

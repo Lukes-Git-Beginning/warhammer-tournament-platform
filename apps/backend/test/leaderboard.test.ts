@@ -1,15 +1,24 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { prisma } from '@tww3/db';
+import {
+  createTestUser,
+  createTestSeason,
+  cleanupSeason,
+  cleanupTournament,
+  cleanupUsers,
+  type TestUser,
+  type TestSeason,
+  type TestTournament,
+} from './helpers/db-fixtures.js';
 
 let app: FastifyInstance;
 
-// Deterministic UUIDs
-const S1 = '10000000-0000-0000-0000-000000000001'; // season
-const U1 = '20000000-0000-0000-0000-000000000001';
-const U2 = '20000000-0000-0000-0000-000000000002';
-const U3 = '20000000-0000-0000-0000-000000000003';
+// ---------------------------------------------------------------------------
+// App lifecycle
+// ---------------------------------------------------------------------------
 
 beforeAll(async () => {
   app = await buildApp({ withSocket: false, withRedis: false, withCron: false });
@@ -21,53 +30,56 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-const T1 = 'a0000000-0000-0000-0000-000000000001';
+// ---------------------------------------------------------------------------
+// Per-test state — created fresh in beforeEach for tests that need it
+// ---------------------------------------------------------------------------
+
+let testUser1: TestUser;
+let testUser2: TestUser;
+let testUser3: TestUser;
+let testSeason: TestSeason | null = null;
+let testTournament: TestTournament | null = null;
 
 beforeEach(async () => {
-  // Clean up in dependency order — remove our test data AND any stray active seasons
-  await prisma.leaderboardEntry.deleteMany({ where: { season_id: S1 } });
-  await prisma.tournamentResult.deleteMany({ where: { user_id: { in: [U1, U2, U3] } } });
-  await prisma.tournament.deleteMany({ where: { id: T1 } });
-  await prisma.season.deleteMany({ where: { id: S1 } });
-  await prisma.user.deleteMany({ where: { id: { in: [U1, U2, U3] } } });
-  // Deactivate any other seasons that could interfere with the "no active season" test
-  await prisma.season.updateMany({ where: { is_active: true }, data: { is_active: false } });
+  testSeason = null;
+  testTournament = null;
+  testUser1 = await createTestUser({ username: 'Alpha' });
+  testUser2 = await createTestUser({ username: 'Beta' });
+  testUser3 = await createTestUser({ username: 'Gamma' });
 });
 
-async function seedBase() {
-  await prisma.user.createMany({
-    data: [
-      { id: U1, discord_id: 'disc_lb_1', username: 'Alpha', email: null },
-      { id: U2, discord_id: 'disc_lb_2', username: 'Beta', email: null },
-      { id: U3, discord_id: 'disc_lb_3', username: 'Gamma', email: null },
-    ],
-    skipDuplicates: true,
-  });
+afterEach(async () => {
+  // Clean up in dependency order — scoped to this run's IDs only
+  if (testTournament) await cleanupTournament(testTournament.id);
+  if (testSeason) await cleanupSeason(testSeason.id);
+  await cleanupUsers([testUser1.id, testUser2.id, testUser3.id]);
+});
 
-  await prisma.season.create({
-    data: {
-      id: S1,
-      name: 'Season Test',
-      start_date: new Date('2026-01-01'),
-      end_date: new Date('2026-12-31'),
-      is_active: true,
-    },
-  });
+// ---------------------------------------------------------------------------
+// Seed helper — creates season + leaderboard entries for this test run
+// ---------------------------------------------------------------------------
+
+async function seedBase() {
+  testSeason = await createTestSeason({ is_active: true });
 
   await prisma.leaderboardEntry.createMany({
     data: [
-      { user_id: U1, season_id: S1, total_points: 100, elo_rating: 1400, matches_played: 10, wins: 8, losses: 2 },
-      { user_id: U2, season_id: S1, total_points: 80, elo_rating: 1300, matches_played: 8, wins: 6, losses: 2 },
-      { user_id: U3, season_id: S1, total_points: 60, elo_rating: 1200, matches_played: 6, wins: 4, losses: 2 },
+      { user_id: testUser1.id, season_id: testSeason.id, total_points: 100, elo_rating: 1400, matches_played: 10, wins: 8, losses: 2 },
+      { user_id: testUser2.id, season_id: testSeason.id, total_points: 80, elo_rating: 1300, matches_played: 8, wins: 6, losses: 2 },
+      { user_id: testUser3.id, season_id: testSeason.id, total_points: 60, elo_rating: 1200, matches_played: 6, wins: 4, losses: 2 },
     ],
   });
 }
 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 describe('GET /api/leaderboard', () => {
-  it('returns 3 entries in correct rank order for active season', async () => {
+  it('returns entries in correct rank order when queried by explicit seasonId', async () => {
     await seedBase();
 
-    const res = await app.inject({ method: 'GET', url: '/api/leaderboard' });
+    const res = await app.inject({ method: 'GET', url: `/api/leaderboard?seasonId=${testSeason!.id}` });
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{
@@ -76,7 +88,7 @@ describe('GET /api/leaderboard', () => {
       total: number;
     }>();
 
-    expect(body.season.id).toBe(S1);
+    expect(body.season.id).toBe(testSeason!.id);
     expect(body.season.is_active).toBe(true);
     expect(body.total).toBe(3);
     expect(body.entries).toHaveLength(3);
@@ -89,23 +101,26 @@ describe('GET /api/leaderboard', () => {
     expect(body.entries[2]!.rank).toBe(3);
   });
 
-  it('returns 404 when no active season and no seasonId given', async () => {
-    // No seed — no active season
-    const res = await app.inject({ method: 'GET', url: '/api/leaderboard' });
+  it('returns 404 when seasonId does not exist', async () => {
+    const fakeId = randomUUID();
+    const res = await app.inject({ method: 'GET', url: `/api/leaderboard?seasonId=${fakeId}` });
     expect(res.statusCode).toBe(404);
     const body = res.json<{ message: string }>();
-    expect(body.message).toBe('No active season');
+    expect(body.message).toBe('Season not found');
   });
 
-  it('returns 404 for non-existent seasonId', async () => {
-    const fakeId = '99999999-0000-0000-0000-000000000000';
+  it('returns 404 for non-existent UUID season', async () => {
+    const fakeId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
     const res = await app.inject({ method: 'GET', url: `/api/leaderboard?seasonId=${fakeId}` });
     expect(res.statusCode).toBe(404);
   });
 
-  it('pagination: page 2 returns empty for 3 entries with pageSize 2', async () => {
+  it('pagination: page 2 returns 1 entry for 3 entries with pageSize 2', async () => {
     await seedBase();
-    const res = await app.inject({ method: 'GET', url: `/api/leaderboard?seasonId=${S1}&page=2&pageSize=2` });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/leaderboard?seasonId=${testSeason!.id}&page=2&pageSize=2`,
+    });
     expect(res.statusCode).toBe(200);
     const body = res.json<{ entries: unknown[]; total: number; page: number }>();
     expect(body.total).toBe(3);
@@ -134,10 +149,14 @@ describe('GET /api/leaderboard/all-time', () => {
       total: number;
     }>();
 
-    expect(body.total).toBe(3);
-    expect(body.entries[0]!.total_points).toBe(100);
-    expect(body.entries[0]!.seasons_participated).toBe(1);
-    expect(body.entries[0]!.rank).toBe(1);
+    // At least 3 entries from our test season (may include entries from other seasons in test DB)
+    expect(body.total).toBeGreaterThanOrEqual(3);
+
+    // Alpha has most points in our seeded data — find her in the response
+    const alphaEntry = body.entries.find((e) => e.user.username === 'Alpha');
+    expect(alphaEntry).toBeDefined();
+    expect(alphaEntry!.total_points).toBe(100);
+    expect(alphaEntry!.seasons_participated).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -157,7 +176,7 @@ describe('GET /api/users/:id', () => {
   it('returns 200 with correct stats for known user', async () => {
     await seedBase();
 
-    const res = await app.inject({ method: 'GET', url: `/api/users/${U1}` });
+    const res = await app.inject({ method: 'GET', url: `/api/users/${testUser1.id}` });
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{
@@ -168,7 +187,7 @@ describe('GET /api/users/:id', () => {
       recent_matches: unknown[];
     }>();
 
-    expect(body.user.id).toBe(U1);
+    expect(body.user.id).toBe(testUser1.id);
     expect(body.user.username).toBe('Alpha');
 
     expect(body.current_season).not.toBeNull();
@@ -184,15 +203,11 @@ describe('GET /api/users/:id', () => {
     expect(Array.isArray(body.recent_matches)).toBe(true);
   });
 
-  it('returns null current_season when no active season', async () => {
-    // Create user without season
-    await prisma.user.create({
-      data: { id: U1, discord_id: 'disc_lb_1', username: 'Alpha', email: null },
-    });
-
-    const res = await app.inject({ method: 'GET', url: `/api/users/${U1}` });
+  it('returns null current_season when user has no leaderboard entry in any active season', async () => {
+    // testUser1 exists but has no leaderboard entries — current_season should be null
+    const res = await app.inject({ method: 'GET', url: `/api/users/${testUser1.id}` });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ current_season: null }>();
+    const body = res.json<{ current_season: null | { total_points: number } }>();
     expect(body.current_season).toBeNull();
   });
 
@@ -200,30 +215,32 @@ describe('GET /api/users/:id', () => {
     await seedBase();
 
     // Create a tournament with a result that has elo_change=15
+    const tournamentId = randomUUID();
+    testTournament = { id: tournamentId, slug: `elo-change-test-${tournamentId}` };
     await prisma.tournament.create({
       data: {
-        id: T1,
-        slug: 'elo-change-test',
+        id: tournamentId,
+        slug: testTournament.slug,
         name: 'ELO Change Test Tournament',
         format: 'SWISS',
         status: 'COMPLETED',
         timezone: 'Europe/Berlin',
-        organizer_id: U1,
+        organizer_id: testUser1.id,
         start_date: new Date('2026-03-01'),
       },
     });
     await prisma.tournamentResult.create({
       data: {
-        user_id: U1,
-        tournament_id: T1,
-        season_id: S1,
+        user_id: testUser1.id,
+        tournament_id: tournamentId,
+        season_id: testSeason!.id,
         placement: 1,
         points_earned: 30,
         elo_change: 15,
       },
     });
 
-    const res = await app.inject({ method: 'GET', url: `/api/users/${U1}` });
+    const res = await app.inject({ method: 'GET', url: `/api/users/${testUser1.id}` });
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{

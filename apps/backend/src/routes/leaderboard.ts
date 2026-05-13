@@ -42,13 +42,41 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
       async () => {
         const total = await fastify.prisma.leaderboardEntry.count({ where: { season_id: resolvedSeasonId } });
 
-        const entries = await fastify.prisma.leaderboardEntry.findMany({
-          where: { season_id: resolvedSeasonId },
-          include: { user: { select: { id: true, username: true, avatar_url: true } } },
-          orderBy: [{ total_points: 'desc' }, { wins: 'desc' }],
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        });
+        type LeaderboardRow = {
+          id: string;
+          user_id: string;
+          season_id: string;
+          total_points: number;
+          elo_rating: number;
+          matches_played: number;
+          wins: number;
+          losses: number;
+          rank: bigint;
+          username: string;
+          avatar_url: string | null;
+        };
+
+        const rows = await fastify.prisma.$queryRaw<LeaderboardRow[]>`
+          SELECT
+            le.id,
+            le.user_id,
+            le.season_id,
+            le.total_points,
+            le.elo_rating,
+            le.matches_played,
+            le.wins,
+            le.losses,
+            u.username,
+            u.avatar_url,
+            RANK() OVER (
+              ORDER BY le.total_points DESC, le.elo_rating DESC, le.wins DESC
+            ) AS rank
+          FROM "LeaderboardEntry" le
+          INNER JOIN "User" u ON u.id = le.user_id
+          WHERE le.season_id = ${resolvedSeasonId}::uuid
+          ORDER BY le.total_points DESC, le.elo_rating DESC, le.wins DESC
+          LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize};
+        `;
 
         return {
           season: {
@@ -58,14 +86,14 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
             end_date: season!.end_date.toISOString(),
             is_active: season!.is_active,
           },
-          entries: entries.map((e, idx) => ({
-            rank: (page - 1) * pageSize + idx + 1,
-            user: { id: e.user.id, username: e.user.username, avatar_url: e.user.avatar_url },
-            total_points: e.total_points,
-            elo_rating: e.elo_rating,
-            matches_played: e.matches_played,
-            wins: e.wins,
-            losses: e.losses,
+          entries: rows.map((r) => ({
+            rank: Number(r.rank),
+            user: { id: r.user_id, username: r.username, avatar_url: r.avatar_url },
+            total_points: r.total_points,
+            elo_rating: r.elo_rating,
+            matches_played: r.matches_played,
+            wins: r.wins,
+            losses: r.losses,
           })),
           total,
           page,

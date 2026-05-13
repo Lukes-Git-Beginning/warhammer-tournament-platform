@@ -1,5 +1,18 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const isCI = !!process.env['CI'];
+
+// In CI: use pre-built artifacts (faster, stable).
+// Backend: `start` runs `node dist/server.js` (built by the prior Build step).
+// Frontend: `preview` serves the Vite production build (also built in Build step).
+// Locally: dev servers with HMR for fast iteration.
+const backendCmd = isCI
+  ? 'pnpm --filter @tww3/backend start'
+  : 'pnpm --filter @tww3/backend dev';
+const frontendCmd = isCI
+  ? 'pnpm --filter @tww3/frontend preview'
+  : 'pnpm --filter @tww3/frontend dev';
+
 export default defineConfig({
   testDir: './tests',
   timeout: 30_000,
@@ -18,14 +31,16 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'pnpm --filter @tww3/backend dev',
+      command: backendCmd,
       port: 3000,
-      reuseExistingServer: !process.env['CI'],
+      reuseExistingServer: !isCI,
+      timeout: isCI ? 60_000 : 30_000,
     },
     {
-      command: 'pnpm --filter @tww3/frontend dev',
+      command: frontendCmd,
       port: 5173,
-      reuseExistingServer: !process.env['CI'],
+      reuseExistingServer: !isCI,
+      timeout: isCI ? 60_000 : 30_000,
     },
   ],
 });

@@ -5,14 +5,19 @@ import type { FactionStats, PrismaClient } from '@tww3/db';
  * Idempotent: duplicate rows (same faction_id + season_id + snapshot_date) are
  * silently skipped via skipDuplicates.
  *
+ * @param prisma  Prisma client instance.
+ * @param opts    Optional overrides — pass `seasonId` to target a specific season
+ *                (used in tests to avoid relying on the global active-season lookup).
  * @returns Number of newly created snapshot rows (0 if no active season or all dupes).
  */
-export async function takeFactionsSnapshot(prisma: PrismaClient): Promise<number> {
+export async function takeFactionsSnapshot(
+  prisma: PrismaClient,
+  opts?: { seasonId?: string },
+): Promise<number> {
   // 1. Load active season
-  const season = await prisma.season.findFirst({
-    where: { is_active: true },
-    select: { id: true },
-  });
+  const season = opts?.seasonId
+    ? await prisma.season.findUnique({ where: { id: opts.seasonId }, select: { id: true } })
+    : await prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
 
   // 2. No active season → nothing to snapshot
   if (!season) {

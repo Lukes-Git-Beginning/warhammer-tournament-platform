@@ -170,11 +170,12 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
                 wins: isWinner ? 1 : 0,
                 losses: isWinner ? 0 : 1,
                 draws: 0,
-                pick_count: 0,
+                pick_count: 1,
                 ban_count: 0,
               },
               update: {
                 matches_played: { increment: 1 },
+                pick_count: { increment: 1 },
                 ...(isWinner ? { wins: { increment: 1 } } : { losses: { increment: 1 } }),
               },
             });

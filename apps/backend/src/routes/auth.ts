@@ -112,6 +112,48 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.clearAuthCookie(reply);
     return { ok: true };
   });
+
+  // Test-only: directly issue JWT cookie for a given userId.
+  // Guarded by NODE_ENV=test — returns 403 in dev/prod.
+  fastify.post('/auth/test-login', async (request, reply) => {
+    if (process.env.NODE_ENV !== 'test') {
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: 'Test-login endpoint is only available in test environment',
+        statusCode: 403,
+      });
+    }
+
+    const body = request.body as { userId?: string } | undefined;
+    if (!body?.userId || typeof body.userId !== 'string') {
+      return reply.code(400).send({
+        error: 'BadRequest',
+        message: 'userId is required',
+        statusCode: 400,
+      });
+    }
+
+    const user = await fastify.prisma.user.findUnique({
+      where: { id: body.userId, deleted_at: null },
+      select: { id: true, discord_id: true, username: true, role: true },
+    });
+    if (!user) {
+      return reply.code(404).send({
+        error: 'NotFound',
+        message: 'User not found',
+        statusCode: 404,
+      });
+    }
+
+    const payload: JwtPayload = {
+      sub: user.id,
+      discord_id: user.discord_id,
+      username: user.username,
+      role: user.role as Role,
+    };
+    fastify.signAuthCookie(reply, payload);
+    return { ok: true, user };
+  });
 };
 
 declare module 'fastify' {

@@ -47,6 +47,13 @@ export function Header() {
             Meta
           </Link>
           <Link
+            to="/factions"
+            className="text-sm text-stone-300 hover:text-warhammer-gold transition-colors"
+            activeProps={{ className: 'text-warhammer-gold' }}
+          >
+            Fraktionen
+          </Link>
+          <Link
             to="/presets"
             className="text-sm text-stone-300 hover:text-warhammer-gold transition-colors"
             activeProps={{ className: 'text-warhammer-gold' }}
