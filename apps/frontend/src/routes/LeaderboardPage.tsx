@@ -178,10 +178,10 @@ function LeaderboardTable({
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-md border border-stone-800">
+      <div className="overflow-x-auto rounded-md border border-karaz-iron-700/70 bg-karaz-iron-900/50 bg-parchment-aged-texture bg-[length:512px_512px] bg-blend-overlay backdrop-blur-sm">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b border-stone-800 bg-stone-900/60">
+            <tr className="border-b border-karaz-iron-800/80 bg-karaz-iron-900/60">
               <th className="px-4 py-3 text-left font-medium text-stone-400">{t('leaderboard.columns.rank')}</th>
               <th className="px-4 py-3 text-left font-medium text-stone-400">{t('leaderboard.columns.player')}</th>
               <th className="px-4 py-3 text-right font-medium text-stone-400">{t('leaderboard.columns.points')}</th>

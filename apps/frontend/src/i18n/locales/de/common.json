@@ -138,7 +138,15 @@
     "create": {
       "title": "Ruf zur Musterung",
       "subtitle": "Erstelle ein neues Turnier für die Karaz-Lists-Gemeinde.",
-      "role_warning": "Du benötigst die Organisator-Rolle, um Turniere zu erstellen. Wende dich an einen Administrator, um deine Rolle zu erhöhen."
+      "role_warning": "Du benötigst die Organisator-Rolle, um Turniere zu erstellen. Wende dich an einen Administrator, um deine Rolle zu erhöhen.",
+      "aside": {
+        "heading": "Was ist ein Ruf?",
+        "body": "Ein Ruf zur Musterung ist die formelle Einberufung einer Schlacht. Du legst Format, Modus und Regeln fest — andere Marschälle treten bei.",
+        "bullet_format": "Das <strong>Format</strong> bestimmt die Bracket-Struktur — Single Elimination, Swiss oder Round Robin.",
+        "bullet_mode": "Der <strong>Modus</strong> regelt die Spielgröße — 1v1 oder Team-Begegnungen.",
+        "bullet_draft": "Optional: Aktiviere das <strong>Draft-System</strong> für Live-Picks mit Echtzeit-Stream.",
+        "footnote": "Du kannst alle Felder nach dem Erstellen noch anpassen."
+      }
     },
     "form": {
       "name": "Name",
@@ -320,5 +328,38 @@
     "forbidden": "Keine Berechtigung.",
     "not_found": "Nicht gefunden.",
     "validation": "Ungültige Eingabe."
+  },
+  "meta_page": {
+    "title": "Meta-Dashboard",
+    "season_label": "Season: {{name}}",
+    "error": "Fehler beim Laden der Meta-Daten.",
+    "no_season_title": "Noch keine offene Season.",
+    "no_season_body": "Sobald die Karaz-Räte eine Season eröffnen, erscheinen hier Fraktions- und Matchup-Statistiken.",
+    "no_season_motto": "\"Tempus Expectandi\"",
+    "no_season_motto_title": "A time of waiting",
+    "stat_total_matches": "Gesamt-Matches",
+    "stat_faction_diversity": "Fraktions-Vielfalt",
+    "top_winrate": "Top-Winrate-Fraktionen",
+    "most_picked": "Meistgespielte Fraktionen",
+    "matches_count": "{{count}} Spiele",
+    "heatmap": {
+      "title": "Matchup-Heatmap",
+      "legend": "Grün = Vorteil aus Zeilenperspektive · Rot = Nachteil · Transparenz = wenige Daten (<5 Matches)",
+      "loading": "Heatmap wird geladen…",
+      "error": "Fehler beim Laden der Heatmap.",
+      "empty": "Noch keine Matchups erfasst — die Schmiede wartet auf die ersten Schläge."
+    }
+  },
+  "factions_page": {
+    "title": "Fraktionen",
+    "season_label": "Season: {{name}}",
+    "error": "Fehler beim Laden der Fraktionen.",
+    "no_season_title": "Noch keine offene Season.",
+    "no_season_body": "Sobald eine Season läuft, listen wir hier alle Fraktionen mit ihren Statistiken.",
+    "no_season_motto": "\"Patientia Ferraria\"",
+    "no_season_motto_title": "Iron patience",
+    "no_stats": "Keine Daten",
+    "matches_count": "{{count}} Spiele",
+    "winrate_short": "{{percent}}% WR"
   }
 }

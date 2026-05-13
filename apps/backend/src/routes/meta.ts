@@ -41,7 +41,13 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     } else {
       season = await fastify.prisma.season.findFirst({ where: { is_active: true } });
       if (!season) {
-        return reply.code(404).send({ error: 'NotFound', message: 'No active season', statusCode: 404 });
+        return {
+          season: null,
+          top_factions_by_winrate: [],
+          top_factions_by_pickrate: [],
+          total_matches: 0,
+          faction_diversity: 0,
+        };
       }
     }
 
@@ -124,7 +130,11 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     } else {
       season = await fastify.prisma.season.findFirst({ where: { is_active: true } });
       if (!season) {
-        return reply.code(404).send({ error: 'NotFound', message: 'No active season', statusCode: 404 });
+        return {
+          season_id: null,
+          cells: [],
+          factions: [],
+        };
       }
     }
 

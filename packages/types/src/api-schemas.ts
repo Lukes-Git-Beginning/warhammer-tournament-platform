@@ -198,7 +198,7 @@ export type FactionWithStatsDto = z.infer<typeof FactionWithStatsDtoSchema>;
 
 export const FactionListResponseSchema = z.object({
   data: z.array(FactionWithStatsDtoSchema),
-  season: SeasonSummarySchema,
+  season: SeasonSummarySchema.nullable(),
 });
 export type FactionListResponse = z.infer<typeof FactionListResponseSchema>;
 
@@ -217,7 +217,7 @@ export const FactionDetailResponseSchema = z.object({
 export type FactionDetailResponse = z.infer<typeof FactionDetailResponseSchema>;
 
 export const MetaOverviewResponseSchema = z.object({
-  season: SeasonSummarySchema,
+  season: SeasonSummarySchema.nullable(),
   top_factions_by_winrate: z.array(FactionWithStatsDtoSchema),
   top_factions_by_pickrate: z.array(FactionWithStatsDtoSchema),
   total_matches: z.number().int(),
@@ -237,7 +237,7 @@ export const MatchupCellSchema = z.object({
 export type MatchupCell = z.infer<typeof MatchupCellSchema>;
 
 export const MatchupHeatmapResponseSchema = z.object({
-  season_id: z.string().uuid(),
+  season_id: z.string().uuid().nullable(),
   cells: z.array(MatchupCellSchema),
   factions: z.array(FactionDtoSchema),
 });

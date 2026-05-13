@@ -48,7 +48,10 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
     } else {
       season = await fastify.prisma.season.findFirst({ where: { is_active: true } });
       if (!season) {
-        return reply.code(404).send({ error: 'NotFound', message: 'No active season', statusCode: 404 });
+        return {
+          data: [],
+          season: null,
+        };
       }
     }
 

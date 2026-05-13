@@ -138,7 +138,15 @@
     "create": {
       "title": "Call the Muster",
       "subtitle": "Create a new tournament for the Karaz Lists community.",
-      "role_warning": "You need the Organizer role to create tournaments. Contact an administrator to upgrade your role."
+      "role_warning": "You need the Organizer role to create tournaments. Contact an administrator to upgrade your role.",
+      "aside": {
+        "heading": "What is a Muster Call?",
+        "body": "A Muster Call is the formal summons to battle. You define format, mode and rules — other marshals fall in.",
+        "bullet_format": "The <strong>format</strong> sets the bracket structure — Single Elimination, Swiss or Round Robin.",
+        "bullet_mode": "The <strong>mode</strong> sets the match size — 1v1 or team encounters.",
+        "bullet_draft": "Optional: Enable the <strong>draft system</strong> for live picks with real-time streaming.",
+        "footnote": "You can edit every field after the tournament has been forged."
+      }
     },
     "form": {
       "name": "Name",
@@ -320,5 +328,38 @@
     "forbidden": "Insufficient permissions.",
     "not_found": "Not found.",
     "validation": "Invalid input."
+  },
+  "meta_page": {
+    "title": "Meta Dashboard",
+    "season_label": "Season: {{name}}",
+    "error": "Failed to load meta data.",
+    "no_season_title": "No open season yet.",
+    "no_season_body": "Once a season is opened by the Karaz council, faction and matchup statistics will appear here.",
+    "no_season_motto": "\"Tempus Expectandi\"",
+    "no_season_motto_title": "A time of waiting",
+    "stat_total_matches": "Total matches",
+    "stat_faction_diversity": "Faction diversity",
+    "top_winrate": "Top winrate factions",
+    "most_picked": "Most-picked factions",
+    "matches_count": "{{count}} matches",
+    "heatmap": {
+      "title": "Matchup heatmap",
+      "legend": "Green = advantage from row perspective · Red = disadvantage · Transparent = sparse data (<5 matches)",
+      "loading": "Loading heatmap…",
+      "error": "Failed to load heatmap.",
+      "empty": "No matchups recorded yet — the forge awaits the first strikes."
+    }
+  },
+  "factions_page": {
+    "title": "Factions",
+    "season_label": "Season: {{name}}",
+    "error": "Failed to load factions.",
+    "no_season_title": "No open season yet.",
+    "no_season_body": "Once a season is running, every faction and its statistics will be listed here.",
+    "no_season_motto": "\"Patientia Ferraria\"",
+    "no_season_motto_title": "Iron patience",
+    "no_stats": "No data",
+    "matches_count": "{{count}} matches",
+    "winrate_short": "{{percent}}% WR"
   }
 }

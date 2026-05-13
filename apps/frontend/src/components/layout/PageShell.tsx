@@ -1,6 +1,7 @@
 import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
+import { PageBackdrop } from './PageBackdrop';
 
 const pageShellVariants = cva('relative mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-12', {
   variants: {
@@ -28,19 +29,24 @@ export interface PageShellProps
     VariantProps<typeof pageShellVariants> {
   as?: 'main' | 'section' | 'div';
   children: ReactNode;
+  /** Render the atmospheric inner-page backdrop. Defaults to true. */
+  backdrop?: boolean;
 }
 
 export const PageShell = forwardRef<HTMLElement, PageShellProps>(
-  ({ className, variant, spacing, as: Tag = 'main', children, ...props }, ref) => {
+  ({ className, variant, spacing, as: Tag = 'main', backdrop = true, children, ...props }, ref) => {
     const Component = Tag as 'main';
     return (
-      <Component
-        ref={ref as React.Ref<HTMLElement>}
-        className={cn(pageShellVariants({ variant, spacing, className }))}
-        {...props}
-      >
-        {children}
-      </Component>
+      <>
+        {backdrop && <PageBackdrop />}
+        <Component
+          ref={ref as React.Ref<HTMLElement>}
+          className={cn(pageShellVariants({ variant, spacing, className }))}
+          {...props}
+        >
+          {children}
+        </Component>
+      </>
     );
   },
 );
