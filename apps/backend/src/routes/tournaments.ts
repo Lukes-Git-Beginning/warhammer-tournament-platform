@@ -28,7 +28,8 @@ const CreateTournamentSchema = z.object({
   visibility: z.enum(['PUBLIC', 'PRIVATE']).optional(),
   counts_for_leaderboard: z.boolean().optional(),
   is_major: z.boolean().optional(),
-  draft_enabled: z.boolean().optional(),
+  draft_enabled: z.boolean().default(false),
+  draft_preset_id: z.string().uuid().nullable().optional(),
   description: z.string().max(2000).optional(),
 });
 
@@ -43,6 +44,8 @@ const PatchTournamentSchema = z.object({
   max_participants: z.number().int().min(2).max(512).optional().nullable(),
   visibility: z.enum(['PUBLIC', 'PRIVATE']).optional(),
   status: z.enum(['DRAFT', 'OPEN_REGISTRATION', 'REGISTRATION_CLOSED', 'ONGOING', 'COMPLETED']).optional(),
+  draft_enabled: z.boolean().optional(),
+  draft_preset_id: z.string().uuid().nullable().optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
 
 // ---------------------------------------------------------------------------
@@ -134,6 +137,41 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const data = parsed.data;
+
+      // Semantic validation: draft_enabled requires draft_preset_id
+      if (data.draft_enabled && !data.draft_preset_id) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'Tournament with draft enabled requires a preset_id',
+          statusCode: 422,
+        });
+      }
+
+      // Verify preset exists and access rights
+      if (data.draft_preset_id) {
+        const preset = await fastify.prisma.draftPreset.findUnique({
+          where: { id: data.draft_preset_id },
+          select: { id: true, is_public: true, created_by: true },
+        });
+        if (!preset) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'Preset not found',
+            statusCode: 422,
+          });
+        }
+        const user = request.user;
+        const isAdmin = user.role === 'ADMIN';
+        const isCreator = preset.created_by === user.sub;
+        if (!preset.is_public && !isCreator && !isAdmin) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'Preset is private and not accessible to this user',
+            statusCode: 422,
+          });
+        }
+      }
+
       const baseSlug = generateSlug(data.name);
       const slug = await resolveSlug(fastify.prisma, baseSlug);
 
@@ -156,6 +194,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           counts_for_leaderboard: data.counts_for_leaderboard ?? true,
           is_major: data.is_major ?? false,
           draft_enabled: data.draft_enabled ?? false,
+          draft_preset_id: data.draft_preset_id ?? null,
           description: data.description,
           organizer_id: request.user.sub,
         },
@@ -315,6 +354,43 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const { status: newStatus, ...rest } = parsed.data;
+
+      // Semantic validation: draft_enabled requires draft_preset_id
+      // Note: draft_preset_id can be undefined (not sent) or explicitly null (sent as null).
+      // We use 'in' to distinguish "not provided" from "explicitly null".
+      const patchDraftEnabled = rest.draft_enabled;
+      const patchDraftPresetId = 'draft_preset_id' in rest ? rest.draft_preset_id : undefined;
+
+      if (patchDraftEnabled === true && (patchDraftPresetId === null || patchDraftPresetId === undefined)) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'Tournament with draft enabled requires a preset_id',
+          statusCode: 422,
+        });
+      }
+
+      if (patchDraftPresetId !== undefined && patchDraftPresetId !== null) {
+        const preset = await fastify.prisma.draftPreset.findUnique({
+          where: { id: patchDraftPresetId },
+          select: { id: true, is_public: true, created_by: true },
+        });
+        if (!preset) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'Preset not found',
+            statusCode: 422,
+          });
+        }
+        const isAdmin = user.role === 'ADMIN';
+        const isCreator = preset.created_by === user.sub;
+        if (!preset.is_public && !isCreator && !isAdmin) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'Preset is private and not accessible to this user',
+            statusCode: 422,
+          });
+        }
+      }
 
       // Validate status transition
       if (newStatus !== undefined) {

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { z } from 'zod';
-import { createTournament } from '@/lib/api';
+import { createTournament, listDraftPresets } from '@/lib/api';
 
 const TournamentCreateSchema = z.object({
   name: z.string().min(3, 'Name muss mindestens 3 Zeichen haben').max(128),
@@ -15,6 +15,8 @@ const TournamentCreateSchema = z.object({
   registration_deadline: z.string().optional(),
   rules: z.string().max(10000).optional(),
   discord_link: z.string().url('Ungültige URL').optional().or(z.literal('')),
+  draft_enabled: z.boolean().default(false),
+  draft_preset_id: z.string().uuid().nullable().optional(),
 });
 
 type FormData = z.infer<typeof TournamentCreateSchema>;
@@ -27,8 +29,14 @@ export function TournamentCreateForm() {
     format: 'SINGLE_ELIMINATION',
     mode: 'ONE_V_ONE',
     timezone: defaultTimezone,
+    draft_enabled: false,
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+
+  const { data: draftPresets } = useQuery({
+    queryKey: ['draft-presets'],
+    queryFn: listDraftPresets,
+  });
 
   const mutation = useMutation({
     mutationFn: createTournament,
@@ -40,8 +48,15 @@ export function TournamentCreateForm() {
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+    const newValue = type === 'checkbox' ? checked : value;
+    setForm((prev) => ({
+      ...prev,
+      [name]: newValue,
+      // Reset preset when draft_enabled is unchecked
+      ...(name === 'draft_enabled' && !checked ? { draft_preset_id: null } : {}),
+    }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
   }
 
@@ -58,7 +73,7 @@ export function TournamentCreateForm() {
       return;
     }
 
-    const { max_participants, discord_link, registration_deadline, description, rules, ...rest } =
+    const { max_participants, discord_link, registration_deadline, description, rules, draft_enabled, draft_preset_id, ...rest } =
       result.data;
 
     mutation.mutate({
@@ -68,6 +83,8 @@ export function TournamentCreateForm() {
       ...(registration_deadline ? { registration_deadline } : {}),
       ...(description ? { description } : {}),
       ...(rules ? { rules } : {}),
+      draft_enabled: draft_enabled ?? false,
+      ...(draft_preset_id ? { draft_preset_id } : {}),
     });
   }
 
@@ -215,9 +232,49 @@ export function TournamentCreateForm() {
         )}
       </div>
 
+      <div className="space-y-4 rounded-md border border-stone-700 bg-stone-900/50 p-4">
+        <h3 className="text-sm font-semibold text-stone-300">Draft-System</h3>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            name="draft_enabled"
+            checked={form.draft_enabled ?? false}
+            onChange={handleChange}
+            className="h-4 w-4 rounded border-stone-600 bg-stone-800 text-warhammer-gold focus:ring-warhammer-gold"
+          />
+          <span className="text-sm text-stone-300">Draft-System aktivieren</span>
+        </label>
+
+        {form.draft_enabled && (
+          <div>
+            <label className="block text-sm font-medium text-stone-300 mb-1">
+              Draft-Preset <span className="text-red-400">*</span>
+            </label>
+            <select
+              name="draft_preset_id"
+              value={form.draft_preset_id ?? ''}
+              onChange={handleChange}
+              className="w-full rounded-md border border-stone-700 bg-stone-800 px-3 py-2 text-stone-100 focus:border-warhammer-gold focus:outline-none"
+            >
+              <option value="">— Preset wählen —</option>
+              {draftPresets?.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name} ({preset.turns.length} Züge, {preset.turn_seconds}s pro Zug)
+                </option>
+              ))}
+            </select>
+            {form.draft_enabled && !form.draft_preset_id && (
+              <p className="mt-1 text-xs text-amber-400">
+                Bitte ein Preset wählen, um das Draft-System zu aktivieren.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
       <button
         type="submit"
-        disabled={mutation.isPending}
+        disabled={mutation.isPending || !!(form.draft_enabled && !form.draft_preset_id)}
         className="rounded-md bg-warhammer-gold px-6 py-2.5 font-semibold text-stone-950 transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {mutation.isPending ? 'Wird erstellt…' : 'Turnier erstellen'}

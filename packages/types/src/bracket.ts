@@ -12,6 +12,8 @@ export interface BracketNode {
   nextMatchId: string | null;
   player1FactionId: string | null;
   player2FactionId: string | null;
+  draft_id?: string | null;
+  draft_status?: 'PENDING' | 'ONGOING' | 'COMPLETED' | 'CANCELLED' | null;
 }
 
 export interface SwissStandingEntry {

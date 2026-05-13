@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from '@tanstack/react-router';
+import { useParams, Link } from '@tanstack/react-router';
 import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
-import { getTournament } from '@/lib/api';
+import { getTournament, getBracket } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
 import { BracketView } from '@/components/bracket/BracketView';
 
@@ -53,6 +53,17 @@ export function TournamentDetail() {
     queryFn: () => getTournament(slug),
     retry: false,
   });
+
+  const { data: bracket } = useQuery({
+    queryKey: ['bracket', slug],
+    queryFn: () => getBracket(slug),
+    enabled: !!tournament && (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED'),
+    refetchInterval: 15000,
+  });
+
+  const activeDraftMatches = (bracket?.matches ?? []).filter(
+    (m) => m.draft_id != null && m.draft_status === 'ONGOING',
+  );
 
   if (isLoading) {
     return (
@@ -119,6 +130,31 @@ export function TournamentDetail() {
             Löschen
           </button>
         </div>
+      )}
+
+      {activeDraftMatches.length > 0 && (
+        <section className="mb-6 rounded-md border border-warhammer-blood/60 bg-warhammer-blood/10 p-4">
+          <h2 className="font-display text-base font-semibold text-warhammer-gold mb-3 flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-warhammer-blood animate-pulse" />
+            Laufende Drafts
+          </h2>
+          <ul className="space-y-2">
+            {activeDraftMatches.map((match) => (
+              <li key={match.matchId} className="flex items-center justify-between rounded bg-stone-800/60 px-4 py-2">
+                <span className="text-sm text-stone-300">
+                  Live Draft — Match #{match.matchNumber} (Runde {match.round})
+                </span>
+                <Link
+                  to="/drafts/$id/spectate"
+                  params={{ id: match.draft_id! }}
+                  className="rounded bg-warhammer-blood px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors"
+                >
+                  Live zuschauen
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-8">

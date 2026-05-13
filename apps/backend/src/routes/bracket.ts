@@ -49,6 +49,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           next_match_id: true,
           player1_faction_id: true,
           player2_faction_id: true,
+          draft: { select: { id: true, status: true } },
         },
       });
 
@@ -69,6 +70,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           nextMatchId: m.next_match_id,
           player1FactionId: m.player1_faction_id,
           player2FactionId: m.player2_faction_id,
+          draft_id: m.draft?.id ?? null,
+          draft_status: (m.draft?.status ?? null) as BracketResponse['matches'][number]['draft_status'],
         })),
       };
 
