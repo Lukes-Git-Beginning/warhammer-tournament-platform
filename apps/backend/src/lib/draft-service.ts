@@ -446,6 +446,8 @@ export class DraftService {
         if (existing && existing.status) {
           // Redis has data — use it as SoT
           snapshot = this.parseRedisSnapshot(draft.id, existing, presetTurns, categoryLimits);
+          // Ensure draft:active is maintained even if only the Set was lost
+          await this.redis.sadd(REDIS_ACTIVE_KEY, draft.id);
         } else {
           // Rehydrate from DB
           const dbState = draft.state as unknown as DraftState;
