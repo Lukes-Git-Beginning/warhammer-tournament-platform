@@ -1,7 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { listDraftPresets, deleteDraftPreset } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import type { DraftPreset } from '@tww3/types';
 
 function PresetCard({
@@ -64,6 +67,7 @@ function PresetCard({
 }
 
 export function PresetListPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: user } = useAuthQuery();
@@ -92,45 +96,42 @@ export function PresetListPage() {
     <main className="mx-auto max-w-5xl px-4 py-10">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-display text-3xl font-bold text-warhammer-gold">Draft-Presets</h1>
-          <p className="text-stone-500 text-sm mt-1">
-            Vordefinierte Sequenzen für den Captain&apos;s-Mode-Draft
-          </p>
+          <h1 className="font-display text-3xl font-bold text-warhammer-gold">
+            {t('preset.list_title')}
+          </h1>
         </div>
         {canCreate && (
-          <button
-            type="button"
-            onClick={() => void navigate({ to: '/presets/new' })}
-            className="rounded border border-warhammer-gold/60 bg-warhammer-gold/10 px-4 py-2 text-sm font-medium text-warhammer-gold hover:bg-warhammer-gold/20 transition-colors"
-          >
-            + Neuen Preset erstellen
-          </button>
+          <Button variant="iron" size="sm" onClick={() => void navigate({ to: '/presets/new' })}>
+            {t('preset.create_button')}
+          </Button>
         )}
       </div>
 
       {isLoading && (
-        <div className="py-8 text-center text-stone-400 text-sm">Wird geladen…</div>
+        <div className="py-8 text-center text-stone-400 text-sm">{t('preset.loading')}</div>
       )}
 
       {error && (
         <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
-          Fehler beim Laden der Presets.
+          {t('preset.load_error')}
         </div>
       )}
 
       {presets && presets.length === 0 && (
-        <div className="rounded-md border border-stone-800 bg-stone-900/40 p-12 text-center">
-          <p className="text-stone-400 text-sm">Noch keine Presets vorhanden.</p>
-          {canCreate && (
-            <button
-              type="button"
-              onClick={() => void navigate({ to: '/presets/new' })}
-              className="mt-4 text-sm text-warhammer-gold hover:underline"
-            >
-              Ersten Preset erstellen →
-            </button>
-          )}
-        </div>
+        <EmptyState
+          variant="sigil"
+          title={t('preset.empty_title')}
+          body={t('preset.empty_body')}
+          motto={t('preset.empty_motto')}
+          mottoTitle={t('preset.empty_motto_title')}
+          cta={
+            canCreate ? (
+              <Button variant="forge" size="md" onClick={() => void navigate({ to: '/presets/new' })}>
+                {t('preset.empty_cta_first')}
+              </Button>
+            ) : undefined
+          }
+        />
       )}
 
       {presets && presets.length > 0 && (
@@ -141,7 +142,7 @@ export function PresetListPage() {
               preset={preset}
               canEdit={canEditPreset(preset)}
               onDelete={() => {
-                if (confirm(`Preset „${preset.name}" wirklich löschen?`)) {
+                if (confirm(t('preset.delete_confirm', { name: preset.name }))) {
                   deleteMutation.mutate(preset.id);
                 }
               }}

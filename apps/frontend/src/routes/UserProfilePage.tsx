@@ -6,6 +6,7 @@ import { useAuthQuery } from '@/lib/auth';
 import { useOnboarding } from '@/lib/onboarding';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageShell } from '@/components/layout/PageShell';
 import { EloRatingDisplay } from '../components/meta/EloRatingDisplay';
 import { ArmyListList } from '../components/tournament/ArmyListList';
@@ -125,7 +126,11 @@ export function UserProfilePage() {
             </div>
           </div>
         ) : (
-          <p className="text-sm text-stone-500">{t('user_profile.no_season')}</p>
+          <EmptyState
+            variant="compact"
+            title={t('user_profile.empties.season.title')}
+            body={t('user_profile.empties.season.body')}
+          />
         )}
       </section>
 
@@ -149,7 +154,11 @@ export function UserProfilePage() {
           {t('user_profile.recent_tournaments')}
         </h2>
         {recent_results.length === 0 ? (
-          <p className="text-sm text-stone-500">{t('user_profile.no_tournaments')}</p>
+          <EmptyState
+            variant="compact"
+            title={t('user_profile.empties.tournaments.title')}
+            body={t('user_profile.empties.tournaments.body')}
+          />
         ) : (
           <div className="overflow-x-auto rounded-md border border-stone-800">
             <table className="min-w-full text-sm">
@@ -235,7 +244,11 @@ export function UserProfilePage() {
           {t('user_profile.recent_matches')}
         </h2>
         {recent_matches.length === 0 ? (
-          <p className="text-sm text-stone-500">{t('user_profile.no_matches')}</p>
+          <EmptyState
+            variant="compact"
+            title={t('user_profile.empties.matches.title')}
+            body={t('user_profile.empties.matches.body')}
+          />
         ) : (
           <div className="overflow-x-auto rounded-md border border-stone-800">
             <table className="min-w-full text-sm">

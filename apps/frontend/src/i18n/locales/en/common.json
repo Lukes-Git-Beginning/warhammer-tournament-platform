@@ -128,7 +128,11 @@
       "seasons": "Seasons"
     },
     "load_error": "Failed to load the Roll of Honour.",
-    "empty": "No entries yet."
+    "empty": "No entries yet.",
+    "empty_title": "The Roll awaits.",
+    "empty_body": "Once the first marshals leave their mark, the standings appear here.",
+    "empty_motto": "\"Honor Vacat\"",
+    "empty_motto_title": "The honour stands empty"
   },
   "tournament": {
     "create": {
@@ -196,12 +200,23 @@
     "joined": "Joined {{date}}",
     "current_season": "Current Season",
     "all_time": "All-Time",
-    "no_season": "No active season.",
     "recent_tournaments": "Recent Tournaments",
-    "no_tournaments": "No tournament participation yet.",
     "army_lists": "My Army Lists",
     "recent_matches": "Recent Matches",
-    "no_matches": "No matches yet.",
+    "empties": {
+      "season": {
+        "title": "No active season.",
+        "body": "The next forge has not yet been named."
+      },
+      "tournaments": {
+        "title": "No musters yet.",
+        "body": "Heed the next call and join a battle."
+      },
+      "matches": {
+        "title": "No engagements yet.",
+        "body": "Once the first blow falls, it will be recorded here."
+      }
+    },
     "workshop_title": "The Workshop",
     "workshop_body": "Re-walk the forge if you've forgotten the way.",
     "workshop_cta": "Revisit the Forge",
@@ -242,6 +257,16 @@
     }
   },
   "preset": {
+    "list_title": "Preset Library",
+    "loading": "Loading…",
+    "load_error": "Failed to load presets.",
+    "create_button": "Create new preset",
+    "delete_confirm": "Really delete preset \"{{name}}\"?",
+    "empty_title": "The workbench is bare.",
+    "empty_body": "A preset bundles draft sequences, limits, and rules into a reusable template.",
+    "empty_motto": "\"Forgia Quiescit\"",
+    "empty_motto_title": "The forge rests",
+    "empty_cta_first": "Forge the first preset →",
     "editor": {
       "create_title": "Create new preset",
       "edit_title": "Edit preset",

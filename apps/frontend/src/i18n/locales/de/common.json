@@ -128,7 +128,11 @@
       "seasons": "Seasons"
     },
     "load_error": "Fehler beim Laden der Ehrenliste.",
-    "empty": "Noch keine Einträge."
+    "empty": "Noch keine Einträge.",
+    "empty_title": "Die Rolle wartet.",
+    "empty_body": "Sobald die ersten Marschälle ihre Spuren hinterlassen, erscheint die Rangliste hier.",
+    "empty_motto": "\"Honor Vacat\"",
+    "empty_motto_title": "The honour stands empty"
   },
   "tournament": {
     "create": {
@@ -196,12 +200,23 @@
     "joined": "Dabei seit {{date}}",
     "current_season": "Aktuelle Season",
     "all_time": "Allzeit",
-    "no_season": "Keine aktive Season.",
     "recent_tournaments": "Letzte Turniere",
-    "no_tournaments": "Noch keine Turnierteilnahmen.",
     "army_lists": "Meine Armee-Listen",
     "recent_matches": "Letzte Matches",
-    "no_matches": "Noch keine Matches.",
+    "empties": {
+      "season": {
+        "title": "Keine aktive Season.",
+        "body": "Die nächste Schmiede ist noch ungetauft."
+      },
+      "tournaments": {
+        "title": "Noch keine Musterungen.",
+        "body": "Folge dem nächsten Ruf und tritt einer Schlacht bei."
+      },
+      "matches": {
+        "title": "Noch keine Begegnungen.",
+        "body": "Sobald der erste Wurf fällt, steht er hier verzeichnet."
+      }
+    },
     "workshop_title": "Die Werkstatt",
     "workshop_body": "Durchschreite die Schmiede erneut, wenn du den Weg vergessen hast.",
     "workshop_cta": "Schmiede erneut betreten",
@@ -242,6 +257,16 @@
     }
   },
   "preset": {
+    "list_title": "Preset-Bibliothek",
+    "loading": "Wird geladen…",
+    "load_error": "Fehler beim Laden der Presets.",
+    "create_button": "Neues Preset erstellen",
+    "delete_confirm": "Preset „{{name}}\" wirklich löschen?",
+    "empty_title": "Die Werkbank ist leer.",
+    "empty_body": "Ein Preset bündelt Draft-Sequenzen, Limits und Regeln zu einer wiederverwendbaren Vorlage.",
+    "empty_motto": "\"Forgia Quiescit\"",
+    "empty_motto_title": "The forge rests",
+    "empty_cta_first": "Ersten Preset schmieden →",
     "editor": {
       "create_title": "Neues Preset erstellen",
       "edit_title": "Preset bearbeiten",

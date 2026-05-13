@@ -6,7 +6,7 @@ import { ArrowRight, Users, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Picture } from '@/components/ui/picture';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { listTournaments, type Tournament } from '@/lib/api';
@@ -93,37 +93,6 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
   );
 }
 
-function EmptyState() {
-  const { t } = useTranslation();
-  return (
-    <Card variant="banner" className="mx-auto max-w-3xl overflow-hidden">
-      <div className="grid grid-cols-1 items-center gap-6 p-6 sm:grid-cols-[auto_1fr] sm:gap-8 sm:p-8">
-        <Picture
-          src="/img/empty-musters"
-          alt=""
-          width={1448}
-          height={1086}
-          className="mx-auto h-44 w-auto rounded-md ring-1 ring-karaz-iron-700/60"
-        />
-        <div className="text-center sm:text-left">
-          <h3 className="font-display text-2xl font-semibold text-karaz-stone-100">
-            {t('musters.empty_title')}
-          </h3>
-          <p className="mt-3 text-karaz-stone-300">{t('musters.empty_body')}</p>
-          <p
-            aria-hidden="true"
-            lang="la"
-            title="Remember the fight"
-            className="mt-4 font-display italic text-sm tracking-wider text-karaz-gold-500/70"
-          >
-            {t('musters.empty_motto')}
-          </p>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 function LoadingGrid() {
   return (
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
@@ -181,7 +150,16 @@ export function ActiveMustersSection() {
         </div>
 
         {isLoading && <LoadingGrid />}
-        {!isLoading && (isError || !hasTournaments) && <EmptyState />}
+        {!isLoading && (isError || !hasTournaments) && (
+          <EmptyState
+            variant="banner"
+            title={t('musters.empty_title')}
+            body={t('musters.empty_body')}
+            motto={t('musters.empty_motto')}
+            mottoTitle="Remember the fight"
+            image={{ src: '/img/empty-musters', alt: '', width: 1448, height: 1086 }}
+          />
+        )}
         {hasTournaments && (
           <motion.ul
             initial="hidden"

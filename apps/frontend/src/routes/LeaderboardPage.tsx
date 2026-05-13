@@ -11,6 +11,7 @@ import {
 import type { LeaderboardEntryDto } from '@tww3/types';
 import { EloRatingDisplay } from '../components/meta/EloRatingDisplay';
 import { PageShell } from '@/components/layout/PageShell';
+import { EmptyState } from '@/components/ui/empty-state';
 
 type Tab = 'season' | 'all-time';
 
@@ -165,7 +166,13 @@ function LeaderboardTable({
 
   if (entries.length === 0) {
     return (
-      <div className="py-8 text-center text-stone-500 text-sm">{t('leaderboard.empty')}</div>
+      <EmptyState
+        variant="sigil"
+        title={t('leaderboard.empty_title')}
+        body={t('leaderboard.empty_body')}
+        motto={t('leaderboard.empty_motto')}
+        mottoTitle={t('leaderboard.empty_motto_title')}
+      />
     );
   }
 
