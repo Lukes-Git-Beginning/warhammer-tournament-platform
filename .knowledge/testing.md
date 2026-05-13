@@ -1,0 +1,216 @@
+> Read-when: Tests schreiben (Unit, Integration, E2E), Fixture-Helper finden, Vitest/Playwright-Config.
+
+**TL;DR**
+- Backend-Unit-Tests laufen mit Vitest (`pool: 'forks'`, `singleFork: true`) in `apps/backend/test/` — 25 Test-Files, kein Parallel-State-Conflict.
+- E2E-Tests laufen mit Playwright (Chromium-only, `baseURL: http://localhost:5173`) in `apps/e2e/tests/` — 9 Spec-Files.
+- Hermetic-Cleanup via `db-fixtures.ts` (Backend) bzw. `tournament-fixture.ts` (E2E): randomUUID-basierte Entities, gezieltes Delete — nie globales `deleteMany`. Siehe auch `.knowledge/database.md`.
+
+---
+
+## Backend-Unit-Tests
+
+- Pfad: `apps/backend/test/*.test.ts`
+- Config: `apps/backend/vitest.config.ts`
+- Wichtige Optionen:
+
+```typescript
+{
+  environment: 'node',
+  include: ['test/**/*.test.ts'],
+  testTimeout: 20_000,
+  hookTimeout: 20_000,
+  pool: 'forks',
+  poolOptions: { forks: { singleFork: true } },
+}
+```
+
+`singleFork: true` verhindert parallele DB-State-Konflikte — alle Tests laufen sequenziell in einem Worker-Prozess. Aktuell 25 Test-Files:
+
+| Bereich | Files |
+|---|---|
+| Bracket/Format | `bracket.test.ts`, `swiss.test.ts`, `round-robin.test.ts` |
+| Draft | `draft-state.test.ts`, `draft-service.test.ts`, `draft-socket.test.ts`, `draft-reconnect.test.ts`, `drafts-routes.test.ts`, `tournament-with-draft.test.ts`, `draft-presets.test.ts` |
+| Match | `match-start.test.ts`, `finalize-tournament.test.ts` |
+| Stats/Leaderboard | `elo.test.ts`, `leaderboard.test.ts`, `matchup-stats.test.ts`, `faction-snapshot.test.ts`, `factions.test.ts`, `heatmap.test.ts` |
+| Infra | `cache.test.ts`, `role-cache.test.ts`, `auth.test.ts`, `graphql.test.ts` |
+| Admin/Army | `admin-routes.test.ts`, `army-parser.test.ts`, `army-lists.test.ts` |
+
+---
+
+## buildApp() für Tests
+
+Isolierte Fastify-Instanz ohne echte Infrastruktur:
+
+```typescript
+import { buildApp } from '../src/app.js';
+
+const app = await buildApp({ withSocket: false, withRedis: false, withCron: false });
+await app.ready();
+// ...
+await app.close();
+```
+
+`withSocket: false` verhindert Socket.IO-Initialisierung, `withRedis: false` überspringt Redis-Connect, `withCron: false` startet keine Cron-Jobs. Ideal für reine Route-/Service-Tests.
+
+---
+
+## db-fixtures.ts API
+
+Pfad: `apps/backend/test/helpers/db-fixtures.ts`
+
+Alle Factories generieren IDs via `randomUUID()` — keine Kollisionen bei parallelen Test-Runs.
+
+```typescript
+// Factories
+createTestUser(overrides?: { username?: string }): Promise<TestUser>
+// Felder: id, discord_id, username — discord_id = `test-disc-${uuid}`
+
+createTestSeason(overrides?: { is_active?: boolean }): Promise<TestSeason>
+// Felder: id, name — name = `test-season-${uuid}`
+
+createTestTournament(opts: { organizerId: string; slug?: string }): Promise<TestTournament>
+// Felder: id, slug — format: 'SWISS', status: 'ONGOING'
+
+// Cleanup (cascade-geordnet, scoped auf generierte IDs)
+cleanupUsers(userIds: string[]): Promise<void>
+cleanupSeason(seasonId: string): Promise<void>
+cleanupTournament(tournamentId: string): Promise<void>
+```
+
+`cleanupTournament` löscht in Reihenfolge: `AuditLog` → `Match` → `TournamentParticipant` → `TournamentResult` → `Tournament`.
+`cleanupSeason` löscht: `FactionStatsSnapshot` → `MatchupStats` → `FactionStats` → `LeaderboardEntry` → `TournamentResult` → `Season`.
+
+---
+
+## Frontend-Unit-Tests
+
+- Pfad: `apps/frontend/src/**/*.test.tsx` (oder `apps/frontend/test/`)
+- Config: `apps/frontend/vitest.config.ts`
+- Wichtige Optionen:
+
+```typescript
+{
+  environment: 'happy-dom',  // nicht jsdom — leichter, schneller
+  globals: true,
+  alias: { '@/': './src/' },
+}
+```
+
+Command: `pnpm -F @tww3/frontend test`
+
+---
+
+## E2E (Playwright)
+
+- Pfad: `apps/e2e/tests/*.spec.ts`
+- Config: `apps/e2e/playwright.config.ts`
+- Browser: Chromium only (`devices['Desktop Chrome']`)
+- `baseURL`: `http://localhost:5173`
+- `timeout`: 30 000 ms pro Test, `expect.timeout`: 5 000 ms
+
+**webServer-Strategie:**
+
+| Umgebung | Backend | Frontend |
+|---|---|---|
+| Lokal | `pnpm --filter @tww3/backend dev` | `pnpm --filter @tww3/frontend dev` |
+| CI | `pnpm --filter @tww3/backend start` (pre-built) | `pnpm --filter @tww3/frontend preview` |
+
+`NODE_ENV=test` wird automatisch an den Backend-Prozess übergeben — aktiviert den Test-Login-Bypass.
+
+**Spec-Files:**
+
+| File | Zweck |
+|---|---|
+| `tournament-happy-path.spec.ts` | 16-Player Single-Elim, vollständiger Turnier-Lifecycle |
+| `live-draft.spec.ts` | 2 Browser-Tabs, echte WebSocket-Draft-Session (~38 s) |
+| `swiss-rematch-avoidance.spec.ts` | 8 Spieler / 3 Runden Swiss, kein Rematch-Pairing |
+| `leaderboard-correctness.spec.ts` | 3 Turniere, ELO + Points-Verifizierung |
+| `reconnect-recovery.spec.ts` | Socket-Disconnect + Redis-Rehydrate |
+| `smoke.spec.ts` | Basis-Smoke (Navigation, Health) |
+| `draft.spec.ts` | Draft-Smoke (kleinerer Umfang als `live-draft`) |
+| `meta.spec.ts` | Meta-Seiten-Smoke (Faction-Stats, Heatmap) |
+| `production-smoke.spec.ts` | Separat — läuft gegen `PLAYWRIGHT_BASE_URL`, kein Auth |
+
+---
+
+## E2E-Fixture-Helper
+
+Pfad: `apps/e2e/tests/helpers/tournament-fixture.ts`
+
+```typescript
+// User-Management
+createTestUsers(count: number, opts?: { role?: TestRole; usernamePrefix?: string }): Promise<TestUser[]>
+// TestRole: 'USER' | 'PLAYER' | 'ORGANIZER' | 'MODERATOR' | 'ADMIN'
+// 'PLAYER' ist Alias für 'USER' (kein PLAYER im DB-Schema)
+
+// Auth
+signInRequest(request: APIRequestContext, userId: string, backendURL?): Promise<void>
+// POST /auth/test-login auf APIRequestContext — setzt Auth-Cookie automatisch
+
+signInBrowser(ctx: BrowserContext, userId: string, backendURL?): Promise<void>
+// Gleich, aber auf BrowserContext (Cookie auf Browser-Context gesetzt)
+
+// Season
+ensureActiveSeason(): Promise<string>
+// Idempotent — aktiviert erste Season falls keine aktiv. Pflicht in beforeAll.
+
+// Tournament-Lifecycle
+createTournament(request, opts: { name, format, draft_enabled?, draft_preset_id?, rounds? }, backendURL?): Promise<{ id, slug }>
+// POST /api/tournaments → DRAFT → OPEN_REGISTRATION (2 API-Calls)
+
+registerUsers(slug: string, users: TestUser[], backendURL?): Promise<void>
+// Jeder User meldet sich sequenziell an (eigener temporärer Request-Context)
+
+generateBracket(request, slug: string, backendURL?): Promise<void>
+// PATCH → REGISTRATION_CLOSED, dann POST /api/tournaments/:id/start
+
+startMatch(request, matchId: string, backendURL?): Promise<{ draftId?: string }>
+// PATCH /api/matches/:id/start — gibt draftId zurück wenn Draft-aktiviert
+
+reportMatchResult(request, matchId, opts: { winner_id, p1_score?, p2_score?, p1_faction_id?, p2_faction_id? }, backendURL?): Promise<void>
+// POST /api/matches/:id/result
+
+// Cleanup
+cleanupTestData(userIds: string[]): Promise<void>
+// Löscht cascade-geordnet alle Daten der Test-User inkl. deren Tournaments
+```
+
+---
+
+## Test-Bypass-Login
+
+`POST /auth/test-login` ist nur aktiv wenn `NODE_ENV === 'test'`. Playwright übergibt `NODE_ENV=test` via `playwright.config.ts` an den Backend-webServer — kein manuelles Setup nötig.
+
+E2E-Tests nutzen ausschließlich `signInRequest`/`signInBrowser` — kein UI-Login-Flow über Discord-OAuth.
+
+Siehe `.knowledge/auth.md` für Implementierungsdetails des Bypass-Endpoints.
+
+---
+
+## Commands
+
+```bash
+pnpm test                                          # alle Unit-Tests (Backend + Frontend) via Turbo
+pnpm -F @tww3/backend test                         # nur Backend-Unit-Tests
+pnpm -F @tww3/backend test -- --reporter=verbose   # mit ausführlicher Ausgabe
+pnpm -F @tww3/backend test -- bracket              # Pattern-Filter (z.B. bracket.test.ts)
+pnpm -F @tww3/frontend test                        # Frontend-Unit-Tests
+
+pnpm test:e2e                                      # alle E2E (ohne production-smoke)
+pnpm -F @tww3/e2e test -- --grep "happy-path"      # bestimmten Test filtern
+pnpm -F @tww3/e2e test -- --headed                 # Browser sichtbar (Debugging)
+pnpm -F @tww3/e2e test -- --debug                  # Playwright Inspector
+```
+
+---
+
+## Hermetic-Cleanup-Konvention
+
+**Wichtig:** Kein globales `prisma.*.deleteMany()` ohne Where-Scope in Tests. Das würde Seed-User löschen und andere parallele Test-Runs zerstören.
+
+Korrekte Konvention:
+1. Entities mit `randomUUID()`-basierten IDs/Namen erstellen (Factories erledigen das automatisch)
+2. IDs im `afterEach`/`afterAll` sammeln
+3. Scoped Cleanup via `cleanupUsers(ids)` / `cleanupTournament(id)` / `cleanupTestData(userIds)`
+
+Siehe `.knowledge/database.md` für die vollständige hermetic-Cleanup-Strategie und FK-Violation-Vermeidung.
