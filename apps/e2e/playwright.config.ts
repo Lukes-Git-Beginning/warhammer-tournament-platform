@@ -35,6 +35,7 @@ export default defineConfig({
       port: 3000,
       reuseExistingServer: !isCI,
       timeout: isCI ? 60_000 : 30_000,
+      env: { NODE_ENV: 'test' },
     },
     {
       command: frontendCmd,
