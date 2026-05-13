@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import { Menu, X } from 'lucide-react';
 import { useAuthQuery, useLogout } from '@/lib/auth';
 import { DiscordLoginButton } from '@/components/auth/DiscordLoginButton';
+import { KarazWordmarkImage } from '@/components/icons/KarazWordmarkImage';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 const NAV_LINK_CLASS =
-  'text-sm text-stone-300 hover:text-warhammer-gold transition-colors';
-const NAV_LINK_ACTIVE_PROPS = { className: 'text-warhammer-gold' };
+  'font-display text-[13px] uppercase tracking-wider text-karaz-stone-300 hover:text-karaz-gold-400 transition-colors';
+const NAV_LINK_ACTIVE_PROPS = { className: 'text-karaz-gold-400' };
 
 export function Header() {
   const { data: user } = useAuthQuery();
@@ -21,13 +25,13 @@ export function Header() {
         Home
       </Link>
       <Link to="/leaderboard" className={NAV_LINK_CLASS} activeProps={NAV_LINK_ACTIVE_PROPS}>
-        Leaderboard
+        Roll of Honour
       </Link>
       <Link to="/meta" className={NAV_LINK_CLASS} activeProps={NAV_LINK_ACTIVE_PROPS}>
         Meta
       </Link>
       <Link to="/factions" className={NAV_LINK_CLASS} activeProps={NAV_LINK_ACTIVE_PROPS}>
-        Fraktionen
+        Factions
       </Link>
       <Link to="/presets" className={NAV_LINK_CLASS} activeProps={NAV_LINK_ACTIVE_PROPS}>
         Drafts
@@ -38,22 +42,28 @@ export function Header() {
           className={NAV_LINK_CLASS}
           activeProps={NAV_LINK_ACTIVE_PROPS}
         >
-          Erstellen
+          Call the Muster
         </Link>
       )}
     </>
   );
 
   return (
-    <header className="sticky top-0 z-50 border-b border-stone-800 bg-stone-950/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-        {/* Logo */}
-        <Link to="/" className="font-display text-xl font-bold text-warhammer-gold hover:opacity-90">
-          TWW3 Cup
+    <header className="sticky top-0 z-20 border-b border-karaz-iron-700 bg-karaz-iron-950/92 backdrop-blur-md">
+      <div className="mx-auto flex max-w-[80rem] items-center justify-between px-4 py-3 sm:px-6 lg:px-8 xl:px-12">
+        {/* Logo lockup */}
+        <Link
+          to="/"
+          aria-label="Karaz Lists — home"
+          className="inline-flex items-center transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-karaz-gold-500 focus-visible:ring-offset-2 focus-visible:ring-offset-karaz-iron-950 rounded-sm"
+        >
+          <KarazWordmarkImage className="h-10 w-auto sm:h-12" width={180} />
         </Link>
 
         {/* Desktop Nav */}
-        <nav className="hidden items-center gap-6 sm:flex">{navLinks}</nav>
+        <nav aria-label="Primary" className="hidden items-center gap-6 sm:flex">
+          {navLinks}
+        </nav>
 
         {/* Auth area + Hamburger */}
         <div className="flex items-center gap-3">
@@ -62,19 +72,21 @@ export function Header() {
               {user.avatar_url && (
                 <img
                   src={user.avatar_url}
-                  alt={user.username}
-                  className="h-8 w-8 rounded-full border border-stone-700"
+                  alt=""
+                  className="h-8 w-8 rounded-full ring-2 ring-karaz-gold-500/40 ring-offset-1 ring-offset-karaz-iron-950"
                 />
               )}
-              <span className="hidden text-sm text-stone-300 sm:inline">{user.username}</span>
-              <button
-                type="button"
+              <span className="hidden text-sm text-karaz-stone-300 sm:inline">
+                {user.username}
+              </span>
+              <Button
+                variant="etched"
+                size="sm"
                 onClick={() => doLogout()}
                 disabled={isPending}
-                className="rounded border border-stone-700 px-3 py-1.5 text-xs text-stone-400 hover:border-stone-500 hover:text-stone-200 disabled:opacity-50 transition-colors"
               >
-                Abmelden
-              </button>
+                Lay Down Arms
+              </Button>
             </>
           ) : (
             <DiscordLoginButton />
@@ -83,26 +95,19 @@ export function Header() {
           {/* Mobile-only Hamburger */}
           <button
             type="button"
-            className="sm:hidden p-2 text-stone-300"
-            aria-label="Menü öffnen"
+            className={cn(
+              'sm:hidden p-2 text-karaz-stone-300 hover:text-karaz-gold-400 transition-colors rounded-sm',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-karaz-gold-500',
+            )}
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={mobileMenuOpen}
             onClick={() => setMobileMenuOpen((v) => !v)}
           >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
+            {mobileMenuOpen ? (
+              <X className="size-5" strokeWidth={1.5} aria-hidden="true" />
+            ) : (
+              <Menu className="size-5" strokeWidth={1.5} aria-hidden="true" />
+            )}
           </button>
         </div>
       </div>
@@ -110,7 +115,8 @@ export function Header() {
       {/* Mobile Nav Dropdown */}
       {mobileMenuOpen && (
         <nav
-          className="sm:hidden border-t border-stone-800 bg-stone-950 px-4 py-3 flex flex-col gap-3"
+          aria-label="Mobile"
+          className="sm:hidden border-t border-karaz-iron-700 bg-karaz-iron-950 px-4 py-4 flex flex-col gap-3"
           data-testid="mobile-menu"
         >
           {navLinks}

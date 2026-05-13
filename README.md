@@ -1,8 +1,11 @@
-# TWW3 Tournament Platform
+# Karaz Lists
 
-Total War: Warhammer 3 Tournament-Plattform — Discord-Login, Tournaments mit Swiss/Single-Elim/Double-Elim/Round-Robin, Live-Brackets via WebSocket, Captain's-Mode-Draft (Phase 2), Faction-Stats & Leaderboard (Phase 3).
+> *Where Lists Are Forged.*
 
-> **Single Source of Truth:** [`ROADMAP.md`](./ROADMAP.md)
+Tournament platform for Total War: Warhammer 3 (formerly known as "TWW3 Tournament Platform"). Discord-Login, Tournaments mit Swiss / Single-Elim / Double-Elim / Round-Robin, Live-Brackets via WebSocket, Captain's-Mode-Draft, Faction-Stats und Leaderboard ("Roll of Honour").
+
+> **Brand & Design SSOT:** [`docs/design/README.md`](./docs/design/README.md)
+> **Roadmap SSOT:** [`ROADMAP.md`](./ROADMAP.md)
 
 ## Quickstart
 

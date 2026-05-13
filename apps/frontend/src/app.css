@@ -1,20 +1,351 @@
+/*
+ * Karaz Lists — Tailwind v4 CSS-first configuration.
+ * Source of truth for all design tokens.
+ * See docs/design/03-tokens.md and docs/design/05-color-system.md
+ * for the meaning of each token. Migration / implementation guide:
+ * docs/design/14-implementation.md.
+ */
+
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Cinzel", "Trajan Pro", Georgia, serif;
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  /* ─────────────────────────────────────────────────────────── */
+  /* Font tokens                                                  */
+  /* ─────────────────────────────────────────────────────────── */
+  --font-display: "Cinzel Variable", "Cinzel", "Trajan Pro", Georgia, serif;
+  --font-headline: "Cinzel Decorative", "Cinzel Variable", Georgia, serif;
+  --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  --font-script: "IM Fell English", "EB Garamond", Georgia, serif;
 
-  /* Warhammer-inspired palette — refined in M5 polish */
-  --color-warhammer-blood: #8b0000;
-  --color-warhammer-gold: #d4a017;
-  --color-warhammer-parchment: #f4e8c4;
-  --color-warhammer-iron: #3a3a3a;
+  /* ─────────────────────────────────────────────────────────── */
+  /* Color tokens — Iron & Stone (base)                            */
+  /* ─────────────────────────────────────────────────────────── */
+  --color-karaz-obsidian: #08070a;
+  --color-karaz-iron-950: #110f0e;
+  --color-karaz-iron-900: #181513;
+  --color-karaz-iron-800: #221e1b;
+  --color-karaz-iron-700: #2d2823;
+  --color-karaz-iron-600: #3d3631;
+  --color-karaz-iron-500: #5c5249;
+  --color-karaz-stone-400: #837a6f;
+  --color-karaz-stone-300: #a89e92;
+  --color-karaz-stone-200: #ccc2b6;
+  --color-karaz-stone-100: #e8dfd0;
+  --color-karaz-parchment: #f4e8c4;
+
+  /* ─────────────────────────────────────────────────────────── */
+  /* Color tokens — Forge, Gold, Blood, Bronze (accent)            */
+  /* ─────────────────────────────────────────────────────────── */
+  --color-karaz-gold-300: #f4d479;
+  --color-karaz-gold-400: #e4b432;
+  --color-karaz-gold-500: #d4a017;
+  --color-karaz-gold-600: #a87a0e;
+  --color-karaz-bronze: #b08d57;
+  --color-karaz-forge-400: #e87b3d;
+  --color-karaz-forge-500: #d8632a;
+  --color-karaz-forge-600: #b04d18;
+  --color-karaz-blood-500: #8b0000;
+  --color-karaz-blood-600: #5e0000;
+
+  /* ─────────────────────────────────────────────────────────── */
+  /* Color tokens — Semantic                                       */
+  /* ─────────────────────────────────────────────────────────── */
+  --color-karaz-success: #6b8e5b;
+  --color-karaz-warning: #d4a017;
+  --color-karaz-danger: #8b0000;
+  --color-karaz-info: #5d7b8f;
+
+  /* ─────────────────────────────────────────────────────────── */
+  /* Legacy aliases — temporary migration shims                     */
+  /* TODO(2026-Q3): remove once apps/frontend/src/** is migrated.   */
+  /* See docs/design/14-implementation.md "Migration policy".       */
+  /* ─────────────────────────────────────────────────────────── */
+  --color-warhammer-blood: var(--color-karaz-blood-500);
+  --color-warhammer-gold: var(--color-karaz-gold-500);
+  --color-warhammer-parchment: var(--color-karaz-parchment);
+  --color-warhammer-iron: var(--color-karaz-iron-600);
+
+  /* ─────────────────────────────────────────────────────────── */
+  /* Container widths                                              */
+  /* ─────────────────────────────────────────────────────────── */
+  --container-tight: 40rem;
+  --container-narrow: 60rem;
+  --container-wide: 80rem;
+  --container-full: 90rem;
+
+  /* ─────────────────────────────────────────────────────────── */
+  /* Radius — Souls-like sharp                                     */
+  /* ─────────────────────────────────────────────────────────── */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 10px;
+
+  /* ─────────────────────────────────────────────────────────── */
+  /* Shadows                                                       */
+  /* ─────────────────────────────────────────────────────────── */
+  --shadow-karaz-engrave: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+  --shadow-karaz-emboss: 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 -1px 0 rgba(0, 0, 0, 0.4);
+  --shadow-karaz-forge-glow: 0 0 32px rgba(216, 99, 42, 0.35),
+    0 0 8px rgba(244, 212, 121, 0.25),
+    inset 0 0 0 1px rgba(244, 212, 121, 0.4);
+  --shadow-karaz-gold-glow: 0 0 24px rgba(212, 160, 23, 0.3),
+    inset 0 0 0 1px rgba(212, 160, 23, 0.4);
+  --shadow-karaz-banner: 0 10px 30px rgba(0, 0, 0, 0.7),
+    0 4px 8px rgba(0, 0, 0, 0.5);
+  --shadow-karaz-stone-vignette: inset 0 0 120px rgba(0, 0, 0, 0.7);
+
+  /* ─────────────────────────────────────────────────────────── */
+  /* Easings & durations                                           */
+  /* ─────────────────────────────────────────────────────────── */
+  --ease-forge: cubic-bezier(0.2, 0.8, 0.2, 1.4);
+  --ease-burn: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-quick: cubic-bezier(0.4, 0, 1, 1);
+  --duration-instant: 80ms;
+  --duration-fast: 160ms;
+  --duration-base: 240ms;
+  --duration-medium: 320ms;
+  --duration-slow: 560ms;
+  --duration-epic: 1000ms;
+
+  /* ─────────────────────────────────────────────────────────── */
+  /* Named animations (exposed as Tailwind utilities)              */
+  /* ─────────────────────────────────────────────────────────── */
+  --animate-karaz-pulse: karaz-pulse 1.5s var(--ease-burn) infinite;
+  --animate-karaz-ember: karaz-ember 2.5s var(--ease-burn) infinite;
+  --animate-karaz-rise: karaz-rise var(--duration-slow) var(--ease-burn) both;
+  --animate-karaz-draw: karaz-draw 1.5s var(--ease-burn) forwards;
+  --animate-karaz-shimmer: karaz-shimmer 3s linear infinite;
 }
 
+/* ───────────────────────────────────────────────────────────── */
+/* Keyframes                                                      */
+/* ───────────────────────────────────────────────────────────── */
+@keyframes karaz-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(216, 99, 42, 0.4);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 6px rgba(216, 99, 42, 0);
+  }
+}
+
+@keyframes karaz-ember {
+  0%,
+  100% {
+    opacity: 0.6;
+    filter: hue-rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    filter: hue-rotate(-6deg);
+  }
+}
+
+@keyframes karaz-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes karaz-draw {
+  from {
+    stroke-dashoffset: var(--karaz-draw-length, 1000);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes karaz-shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────── */
+/* Base styles                                                    */
+/* ───────────────────────────────────────────────────────────── */
 html {
   font-family: var(--font-sans);
+  background: var(--color-karaz-iron-950);
+  color: var(--color-karaz-stone-200);
+  color-scheme: dark;
 }
 
 body {
-  font-feature-settings: "ss01", "ss02";
+  font-feature-settings: "ss01", "ss02", "cv11", "calt", "liga";
+  font-variant-numeric: tabular-nums;
+  min-height: 100svh;
+  background: var(--color-karaz-iron-950);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  color: var(--color-karaz-stone-100);
+  letter-spacing: 0.02em;
+}
+
+::selection {
+  background: var(--color-karaz-gold-500);
+  color: var(--color-karaz-iron-950);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-karaz-gold-500);
+  outline-offset: 2px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-karaz-iron-600) transparent;
+}
+
+/* ───────────────────────────────────────────────────────────── */
+/* Karaz utilities (component-scoped helpers)                      */
+/* ───────────────────────────────────────────────────────────── */
+
+.dropcap::first-letter {
+  font-family: var(--font-script);
+  font-size: 4.5em;
+  float: left;
+  line-height: 0.85;
+  margin-right: 0.12em;
+  margin-top: 0.05em;
+  color: var(--color-karaz-gold-400);
+  text-shadow: 0 0 12px rgba(212, 160, 23, 0.3);
+}
+.dropcap-stone::first-letter {
+  color: var(--color-karaz-stone-100);
+  text-shadow: none;
+}
+
+.karaz-seam {
+  height: 1px;
+  background-image: linear-gradient(
+    to right,
+    transparent 0%,
+    var(--color-karaz-iron-600) 10%,
+    var(--color-karaz-bronze) 50%,
+    var(--color-karaz-iron-600) 90%,
+    transparent 100%
+  );
+}
+
+.karaz-photo-frame {
+  position: relative;
+  overflow: hidden;
+}
+.karaz-photo-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(216, 99, 42, 0.06) 0%,
+    transparent 40%,
+    rgba(8, 7, 10, 0.2) 100%
+  );
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  z-index: 1;
+}
+.karaz-photo-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 45%,
+    rgba(17, 15, 14, 0.6) 80%,
+    rgba(17, 15, 14, 0.92) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+.karaz-photo-frame img,
+.karaz-photo-frame video {
+  filter: saturate(0.85) contrast(1.05);
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.karaz-photo-frame picture {
+  display: contents;
+}
+
+/* ───────────────────────────────────────────────────────────── */
+/* Texture utility classes — image-set() with AVIF/WebP/PNG       */
+/* fallback. Used as background-image on decorative bg layers     */
+/* (page bg, card variants, section bg overlays).                 */
+/* ───────────────────────────────────────────────────────────── */
+@utility bg-stone-wall-texture {
+  background-image: image-set(
+    url('/textures/stone-wall.avif') type('image/avif'),
+    url('/textures/stone-wall.webp') type('image/webp'),
+    url('/textures/stone-wall.png') type('image/png')
+  );
+}
+
+@utility bg-bronze-plate-texture {
+  background-image: image-set(
+    url('/textures/bronze-plate.avif') type('image/avif'),
+    url('/textures/bronze-plate.webp') type('image/webp'),
+    url('/textures/bronze-plate.png') type('image/png')
+  );
+}
+
+@utility bg-parchment-aged-texture {
+  background-image: image-set(
+    url('/textures/parchment-aged.avif') type('image/avif'),
+    url('/textures/parchment-aged.webp') type('image/webp'),
+    url('/textures/parchment-aged.png') type('image/png')
+  );
+}
+
+/* ───────────────────────────────────────────────────────────── */
+/* Reduced-motion override                                        */
+/* ───────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────── */
+/* View transitions (TanStack Router invokes startViewTransition)  */
+/* ───────────────────────────────────────────────────────────── */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }

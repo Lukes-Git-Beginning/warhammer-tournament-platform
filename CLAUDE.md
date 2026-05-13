@@ -1,10 +1,10 @@
-# TWW3 Tournament Platform
+# Karaz Lists (vormals TWW3 Tournament Platform)
 
 ## Projekt-Übersicht
 
-Discord-Auth-basierte Tournament-Plattform für Warhammer: The Old World — Spieler authentifizieren sich per Discord-OAuth2, erstellen Turniere, spielen Swiss- oder Bracket-Runden und verfolgen Draft-Picks in Echtzeit.
-Stack: Fastify 5 + Prisma 7 (driver-adapter) + Socket.IO 4 + Vite 6 + React 19 + TanStack Router/Query + Tailwind CSS 4, Monorepo mit pnpm 9 + Turborepo 2.
-Stand: Milestone 5 vollständig abgeschlossen (2026-05-13), Production-Launch-Ready.
+**Karaz Lists** — *Where Lists Are Forged.* Discord-Auth-basierte Tournament-Plattform für Warhammer: The Old World. Spieler authentifizieren sich per Discord-OAuth2, erstellen Turniere, spielen Swiss- oder Bracket-Runden und verfolgen Draft-Picks in Echtzeit. Branding & Design-System wurde 2026-05-13 unter `docs/design/` etabliert (15 Topic-Files, Souls-like/Grimdark-Aesthetik).
+Stack: Fastify 5 + Prisma 7 (driver-adapter) + Socket.IO 4 + Vite 6 + React 19 + TanStack Router/Query + Tailwind CSS 4 + shadcn/ui + motion. Monorepo mit pnpm 9 + Turborepo 2.
+Stand: Milestone 5 vollständig abgeschlossen (2026-05-13), Production-Launch-Ready. Workspace-Names bleiben `@tww3/*` (Rename auf `@karaz/*` ist separater Folge-PR).
 
 ## Monorepo-Commands
 
@@ -84,19 +84,20 @@ fastify.addHook('preHandler', fastify.requireRole('admin'));  // danach optional
 
 ## .knowledge/-Verweise
 
-| Thema / Frage                           | Hub-File                          |
-|-----------------------------------------|-----------------------------------|
-| Caching (Redis, `cached()`, TTL)        | `.knowledge/caching.md`           |
-| Auth, JWT, Discord-OAuth2               | `.knowledge/auth.md`              |
-| Socket.IO, Realtime, Events             | `.knowledge/realtime.md`          |
-| Draft-System, State-Machine             | `.knowledge/draft-system.md`      |
-| DB-Schema, Prisma, Migrations           | `.knowledge/database.md`          |
-| Frontend-Patterns, Router, Query        | `.knowledge/frontend-patterns.md` |
-| Tests schreiben (Vitest, Playwright)    | `.knowledge/testing.md`           |
-| ELO, Swiss-Pairing, Bracket-Algorithmen | `.knowledge/algorithms.md`        |
-| Shared Types, Zod-Contracts             | `.knowledge/types-contracts.md`   |
-| Backend-Architektur, Plugins, Routen    | `.knowledge/backend-architecture.md` |
-| Stack, Workspaces, Top-Level-Commands   | `.knowledge/stack.md`             |
+| Thema / Frage                                | Hub-File                              |
+|----------------------------------------------|---------------------------------------|
+| **Design-System, Tokens, Brand, Voice**      | **`docs/design/README.md`**           |
+| Caching (Redis, `cached()`, TTL)             | `.knowledge/caching.md`               |
+| Auth, JWT, Discord-OAuth2                    | `.knowledge/auth.md`                  |
+| Socket.IO, Realtime, Events                  | `.knowledge/realtime.md`              |
+| Draft-System, State-Machine                  | `.knowledge/draft-system.md`          |
+| DB-Schema, Prisma, Migrations                | `.knowledge/database.md`              |
+| Frontend-Patterns, Router, Query             | `.knowledge/frontend-patterns.md`     |
+| Tests schreiben (Vitest, Playwright)         | `.knowledge/testing.md`               |
+| ELO, Swiss-Pairing, Bracket-Algorithmen      | `.knowledge/algorithms.md`            |
+| Shared Types, Zod-Contracts                  | `.knowledge/types-contracts.md`       |
+| Backend-Architektur, Plugins, Routen         | `.knowledge/backend-architecture.md`  |
+| Stack, Workspaces, Top-Level-Commands        | `.knowledge/stack.md`                 |
 
 ## Update-Trigger für den Hub
 
