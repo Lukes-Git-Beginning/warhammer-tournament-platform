@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getSocket } from '@/lib/socket';
-import type { ServerToClientEvents } from '@tww3/types';
+import type { ServerToClientEvents } from '@rizzotto/types';
 
 export interface UseDraftSocketOptions {
   draftId: string;

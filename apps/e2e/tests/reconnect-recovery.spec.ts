@@ -234,9 +234,9 @@ test.describe('Draft Reconnect Recovery — state rehydrates from Redis', () => 
       // turn_started not received — may already have been emitted before join
     }
 
-    // Fallback: load faction IDs directly from Prisma via @tww3/db
+    // Fallback: load faction IDs directly from Prisma via @rizzotto/db
     if (!pickedFactionId) {
-      const { prisma } = await import('@tww3/db');
+      const { prisma } = await import('@rizzotto/db');
       const factions = await prisma.faction.findMany({
         select: { id: true },
         orderBy: { display_order: 'asc' },

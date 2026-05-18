@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { prisma } from '@tww3/db';
+import { prisma } from '@rizzotto/db';
 
 // ---------------------------------------------------------------------------
 // Types

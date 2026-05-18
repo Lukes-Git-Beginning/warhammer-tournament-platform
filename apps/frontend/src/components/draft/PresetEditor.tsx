@@ -16,8 +16,8 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CreateDraftPresetSchema } from '@tww3/types';
-import type { DraftPreset, DraftTurn, CategoryLimit, CreateDraftPresetRequest } from '@tww3/types';
+import { CreateDraftPresetSchema } from '@rizzotto/types';
+import type { DraftPreset, DraftTurn, CategoryLimit, CreateDraftPresetRequest } from '@rizzotto/types';
 import { TurnEditor } from './TurnEditor';
 import { CategoryLimitsEditor } from './CategoryLimitsEditor';
 import { DraftSequenceTimeline } from './DraftSequenceTimeline';

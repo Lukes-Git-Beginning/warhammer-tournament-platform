@@ -307,7 +307,7 @@ h1, h2, h3, h4, h5, h6 {
 ### Step 1 — install dependencies
 
 ```pwsh
-pnpm -F @tww3/frontend add `
+pnpm -F @rizzotto/frontend add `
   class-variance-authority `
   clsx `
   tailwind-merge `
@@ -320,7 +320,7 @@ Then the @fontsource font packages for self-hosted variable fonts (no
 Google Fonts roundtrip in production):
 
 ```pwsh
-pnpm -F @tww3/frontend add `
+pnpm -F @rizzotto/frontend add `
   @fontsource-variable/cinzel `
   @fontsource-variable/inter `
   @fontsource-variable/jetbrains-mono `
@@ -386,7 +386,7 @@ not shadcn's HSL-variable scheme.)
 ### Step 4 — install primitives
 
 ```pwsh
-pnpm -F @tww3/frontend dlx shadcn@latest add button card input label textarea select checkbox switch radio-group dialog sheet dropdown-menu tooltip tabs badge separator sonner skeleton scroll-area avatar
+pnpm -F @rizzotto/frontend dlx shadcn@latest add button card input label textarea select checkbox switch radio-group dialog sheet dropdown-menu tooltip tabs badge separator sonner skeleton scroll-area avatar
 ```
 
 After install, each generated component in `src/components/ui/` is hand-edited
@@ -575,16 +575,16 @@ After all phases applied:
 
 ```pwsh
 # Type-check
-pnpm -F @tww3/frontend typecheck
+pnpm -F @rizzotto/frontend typecheck
 
 # Build
-pnpm -F @tww3/frontend build
+pnpm -F @rizzotto/frontend build
 
 # Lint (will flag any obvious mistakes)
-pnpm -F @tww3/frontend lint
+pnpm -F @rizzotto/frontend lint
 
 # Dev server — open browser at http://localhost:5173
-pnpm -F @tww3/frontend dev
+pnpm -F @rizzotto/frontend dev
 ```
 
 Browser smoke-test (per [12-hero-anatomy.md](./12-hero-anatomy.md)):

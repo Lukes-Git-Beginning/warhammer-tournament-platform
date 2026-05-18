@@ -1,4 +1,4 @@
-import type { FactionStats, PrismaClient } from '@tww3/db';
+import type { FactionStats, PrismaClient } from '@rizzotto/db';
 
 /**
  * Takes a daily snapshot of all FactionStats for the currently active season.

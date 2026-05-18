@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import fastifyOauth2 from '@fastify/oauth2';
-import type { Role, JwtPayload } from '@tww3/types';
+import type { Role, JwtPayload } from '@rizzotto/types';
 
 const DISCORD_AUTH_URL = 'https://discord.com/api/oauth2/authorize';
 const DISCORD_TOKEN_URL = 'https://discord.com/api/oauth2/token';

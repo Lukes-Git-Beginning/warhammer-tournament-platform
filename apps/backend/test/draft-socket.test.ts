@@ -12,7 +12,7 @@ import {
   draftSpectatorRoom,
   emitDraftStateSync,
 } from '../src/lib/draft-emit.js';
-import type { DraftState } from '@tww3/types';
+import type { DraftState } from '@rizzotto/types';
 
 // ---------------------------------------------------------------------------
 // Shared fixtures

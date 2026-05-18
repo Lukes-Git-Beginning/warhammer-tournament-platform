@@ -8,7 +8,7 @@ import {
   listSeasons,
   type AllTimeEntry,
 } from '@/lib/api';
-import type { LeaderboardEntryDto } from '@tww3/types';
+import type { LeaderboardEntryDto } from '@rizzotto/types';
 import { EloRatingDisplay } from '../components/meta/EloRatingDisplay';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/ui/empty-state';

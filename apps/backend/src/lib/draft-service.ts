@@ -8,11 +8,11 @@
  *  - Socket emit via draft-emit helpers
  *  - Concurrency guard via Redis SETNX lock
  */
-import { type PrismaClient, Prisma } from '@tww3/db';
+import { type PrismaClient, Prisma } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import type { AppIOServer } from '../plugins/socket.js';
-import type { DraftState, DraftTurn, ApplyContext, DraftView } from '@tww3/types';
-import { DraftTurnSchema, CategoryLimitSchema } from '@tww3/types';
+import type { DraftState, DraftTurn, ApplyContext, DraftView } from '@rizzotto/types';
+import { DraftTurnSchema, CategoryLimitSchema } from '@rizzotto/types';
 import * as DraftSM from './draft-state.js';
 import * as DraftEmit from './draft-emit.js';
 import { z } from 'zod';

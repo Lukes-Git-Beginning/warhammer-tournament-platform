@@ -9,7 +9,7 @@
  *   - 1 i18n toggle smoke: DE→EN switch + reload persistence
  *
  * First run: execute with --update-snapshots to create baseline screenshots.
- *   pnpm -F @tww3/e2e test -- --update-snapshots --grep landing-overhaul
+ *   pnpm -F @rizzotto/e2e test -- --update-snapshots --grep landing-overhaul
  *
  * Subsequent runs compare against the stored baseline (5 % pixel tolerance).
  */

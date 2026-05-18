@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MatchupHeatmap } from './MatchupHeatmap';
-import type { FactionDto, MatchupCell } from '@tww3/types';
+import type { FactionDto, MatchupCell } from '@rizzotto/types';
 
 function makeFaction(id: string, order: number): FactionDto {
   return {

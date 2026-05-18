@@ -14,7 +14,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { prisma } from '@tww3/db';
+import { prisma } from '@rizzotto/db';
 import {
   createTestUsers,
   signInRequest,

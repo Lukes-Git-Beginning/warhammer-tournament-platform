@@ -96,7 +96,7 @@ cleanupTournament(tournamentId: string): Promise<void>
 }
 ```
 
-Command: `pnpm -F @tww3/frontend test`
+Command: `pnpm -F @rizzotto/frontend test`
 
 ---
 
@@ -112,8 +112,8 @@ Command: `pnpm -F @tww3/frontend test`
 
 | Umgebung | Backend | Frontend |
 |---|---|---|
-| Lokal | `pnpm --filter @tww3/backend dev` | `pnpm --filter @tww3/frontend dev` |
-| CI | `pnpm --filter @tww3/backend start` (pre-built) | `pnpm --filter @tww3/frontend preview` |
+| Lokal | `pnpm --filter @rizzotto/backend dev` | `pnpm --filter @rizzotto/frontend dev` |
+| CI | `pnpm --filter @rizzotto/backend start` (pre-built) | `pnpm --filter @rizzotto/frontend preview` |
 
 `NODE_ENV=test` wird automatisch an den Backend-Prozess übergeben — aktiviert den Test-Login-Bypass.
 
@@ -191,15 +191,15 @@ Siehe `.knowledge/auth.md` für Implementierungsdetails des Bypass-Endpoints.
 
 ```bash
 pnpm test                                          # alle Unit-Tests (Backend + Frontend) via Turbo
-pnpm -F @tww3/backend test                         # nur Backend-Unit-Tests
-pnpm -F @tww3/backend test -- --reporter=verbose   # mit ausführlicher Ausgabe
-pnpm -F @tww3/backend test -- bracket              # Pattern-Filter (z.B. bracket.test.ts)
-pnpm -F @tww3/frontend test                        # Frontend-Unit-Tests
+pnpm -F @rizzotto/backend test                         # nur Backend-Unit-Tests
+pnpm -F @rizzotto/backend test -- --reporter=verbose   # mit ausführlicher Ausgabe
+pnpm -F @rizzotto/backend test -- bracket              # Pattern-Filter (z.B. bracket.test.ts)
+pnpm -F @rizzotto/frontend test                        # Frontend-Unit-Tests
 
 pnpm test:e2e                                      # alle E2E (ohne production-smoke)
-pnpm -F @tww3/e2e test -- --grep "happy-path"      # bestimmten Test filtern
-pnpm -F @tww3/e2e test -- --headed                 # Browser sichtbar (Debugging)
-pnpm -F @tww3/e2e test -- --debug                  # Playwright Inspector
+pnpm -F @rizzotto/e2e test -- --grep "happy-path"      # bestimmten Test filtern
+pnpm -F @rizzotto/e2e test -- --headed                 # Browser sichtbar (Debugging)
+pnpm -F @rizzotto/e2e test -- --debug                  # Playwright Inspector
 ```
 
 ---

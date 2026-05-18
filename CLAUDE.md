@@ -4,7 +4,7 @@
 
 **Rizzotto** — *Where Lists Are Forged.* Discord-Auth-basierte Tournament-Plattform für Warhammer: The Old World. Spieler authentifizieren sich per Discord-OAuth2, erstellen Turniere, spielen Swiss- oder Bracket-Runden und verfolgen Draft-Picks in Echtzeit. Branding & Design-System wurde 2026-05-13 unter `docs/design/` etabliert (15 Topic-Files, Souls-like/Grimdark-Aesthetik). Rizzotto ist die visuelle Marke (Domain: rizzotto.gg); das Khazalid-Lexikon (Karaz Ankor, Roll of Honour, Conclave) bleibt als Atmospheric-Layer im UI erhalten.
 Stack: Fastify 5 + Prisma 7 (driver-adapter) + Socket.IO 4 + Vite 6 + React 19 + TanStack Router/Query + Tailwind CSS 4 + shadcn/ui + motion. Monorepo mit pnpm 9 + Turborepo 2.
-Stand: Milestone 5 vollständig abgeschlossen (2026-05-13), Production-Launch-Ready. Workspace-Names bleiben `@tww3/*` (Rename ist separater Folge-PR).
+Stand: Milestone 5 vollständig abgeschlossen (2026-05-13), Production-Launch-Ready. Workspace-Namen wurden auf `@rizzotto/*` umgestellt (Rename erfolgt in feat/rizzotto-rebrand).
 
 ## Monorepo-Commands
 
@@ -14,8 +14,8 @@ pnpm dev                                        # alle Workspaces parallel (Turb
 pnpm docker:up                                  # Postgres + Redis lokal hochfahren
 
 # Einzelne Workspaces
-pnpm -F @tww3/backend dev                       # nur Backend
-pnpm -F @tww3/frontend dev                      # nur Frontend
+pnpm -F @rizzotto/backend dev                   # nur Backend
+pnpm -F @rizzotto/frontend dev                  # nur Frontend
 
 # Build
 pnpm build                                      # alle Workspaces in Dependency-Reihenfolge
@@ -23,7 +23,7 @@ pnpm typecheck                                  # tsc --noEmit über alle Worksp
 
 # Tests
 pnpm test                                       # Vitest (backend, frontend, scraper)
-pnpm -F @tww3/backend test                      # nur Backend-Tests
+pnpm -F @rizzotto/backend test                  # nur Backend-Tests
 pnpm test:e2e                                   # Playwright E2E (braucht laufende Services)
 
 # Datenbank
@@ -104,7 +104,7 @@ fastify.addHook('preHandler', fastify.requireRole('admin'));  // danach optional
 Wenn sich folgende Bereiche ändern, das entsprechende Hub-File mitpflegen:
 
 - **Prisma-Migration (neues Model / Feld)** → `.knowledge/database.md`
-- **Neuer Socket-Event in `@tww3/types`** → `.knowledge/realtime.md` + `.knowledge/types-contracts.md`
+- **Neuer Socket-Event in `@rizzotto/types`** → `.knowledge/realtime.md` + `.knowledge/types-contracts.md`
 - **Draft-State-Machine-Änderung** → `.knowledge/draft-system.md`
 - **Neue Route in `apps/frontend/src/router.tsx`** → `.knowledge/frontend-patterns.md`
 - **Neuer Fastify-Plugin oder Route-Group** → `.knowledge/backend-architecture.md`

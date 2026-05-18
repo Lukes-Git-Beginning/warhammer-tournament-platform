@@ -8,7 +8,7 @@ import type {
   JwtPayload,
   ServerToClientEvents,
   SocketData,
-} from '@tww3/types';
+} from '@rizzotto/types';
 import { DraftNotFoundError } from '../lib/draft-service.js';
 
 export type AppIOServer = IOServer<

@@ -8,9 +8,9 @@ Chromium-only E2E-Tests gegen `baseURL: http://localhost:5173` (`apps/e2e/tests/
 
 ```bash
 pnpm test:e2e                                      # alle E2E (ohne production-smoke)
-pnpm -F @tww3/e2e test -- --grep "draft"           # einzelnen Test filtern
-pnpm -F @tww3/e2e test -- --headed                 # Browser sichtbar (lokales Debugging)
-pnpm -F @tww3/e2e test -- --debug                  # Playwright Inspector
+pnpm -F @rizzotto/e2e test -- --grep "draft"           # einzelnen Test filtern
+pnpm -F @rizzotto/e2e test -- --headed                 # Browser sichtbar (lokales Debugging)
+pnpm -F @rizzotto/e2e test -- --debug                  # Playwright Inspector
 ```
 
 ---

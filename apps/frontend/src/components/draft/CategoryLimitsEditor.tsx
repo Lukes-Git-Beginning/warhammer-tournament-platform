@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { CategoryLimit } from '@tww3/types';
+import type { CategoryLimit } from '@rizzotto/types';
 import type { FactionListResponse } from '@/lib/api';
 import { getFactions } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';

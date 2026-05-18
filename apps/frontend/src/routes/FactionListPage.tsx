@@ -5,7 +5,7 @@ import { getFactions } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/ui/empty-state';
-import type { FactionWithStatsDto } from '@tww3/types';
+import type { FactionWithStatsDto } from '@rizzotto/types';
 
 function FactionCard({ entry }: { entry: FactionWithStatsDto }) {
   const { t } = useTranslation();

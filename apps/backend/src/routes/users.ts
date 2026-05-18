@@ -3,7 +3,7 @@ import {
   UpdateMeSchema,
   UpdateOnboardingStageSchema,
   UpdateUserRoleRequestSchema,
-} from '@tww3/types';
+} from '@rizzotto/types';
 import { z } from 'zod';
 import { invalidate } from '../lib/cache.js';
 

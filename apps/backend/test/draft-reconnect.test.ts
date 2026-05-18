@@ -11,15 +11,15 @@
  * Requirements:
  *  - Real Redis (REDIS_URL in .env)
  *  - Real PostgreSQL (DATABASE_URL in .env)
- *  - Factions seeded (pnpm --filter @tww3/db prisma db seed)
+ *  - Factions seeded (pnpm --filter @rizzotto/db prisma db seed)
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { Redis } from 'ioredis';
 import { buildApp } from '../src/app.js';
-import { prisma } from '@tww3/db';
+import { prisma } from '@rizzotto/db';
 import { DraftService } from '../src/lib/draft-service.js';
-import type { DraftTurn } from '@tww3/types';
+import type { DraftTurn } from '@rizzotto/types';
 
 // ---------------------------------------------------------------------------
 // Deterministic UUIDs (different from draft-service.test.ts to avoid conflicts)

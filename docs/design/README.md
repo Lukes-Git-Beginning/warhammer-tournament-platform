@@ -110,4 +110,4 @@ with `Lies zuerst docs/design/<file>.md` for any visual or copy-related work.
 - **Sound.** Reserved as a premium add-on (forge-thunk, hover-clink, ambient).
 - **Internationalization of motto strings.** Latin/Khazalid mottos are decorative
   and remain as-is across locales.
-- **Workspace rename `@tww3/*` → `@karaz/*`.** Separate PR; high blast radius.
+- **Workspace rename `@tww3/*` → `@rizzotto/*`.** ✅ Done in `feat/rizzotto-rebrand` (2026-05-18).

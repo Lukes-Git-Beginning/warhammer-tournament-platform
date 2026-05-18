@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@tww3/db';
+import type { PrismaClient } from '@rizzotto/db';
 
 // ---------------------------------------------------------------------------
 // Types (local — mirrors Zod DTOs without importing from packages/types)

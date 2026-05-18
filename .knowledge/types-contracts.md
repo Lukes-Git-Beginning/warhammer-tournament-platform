@@ -1,8 +1,8 @@
 > Read-when: Shared Types/Zod-Schemas brauchen, Socket-Event-Payload-Shape, Frontend-Backend-Contract-Check.
 
 **TL;DR:**
-- `@tww3/types` ist Single Source of Truth für Zod-Schemas + Socket-Events + Bracket/Draft-Types.
-- Alles per `packages/types/src/index.ts` re-exportiert — ein `import { ... } from '@tww3/types'` reicht.
+- `@rizzotto/types` ist Single Source of Truth für Zod-Schemas + Socket-Events + Bracket/Draft-Types.
+- Alles per `packages/types/src/index.ts` re-exportiert — ein `import { ... } from '@rizzotto/types'` reicht.
 - Backend, Frontend und E2E importieren daraus; wenige lokale Types in `apps/frontend/src/lib/api.ts` sind noch nicht migriert (Inkonsistenz, siehe unten).
 
 ---
@@ -11,12 +11,12 @@
 
 | Feld | Wert |
 |---|---|
-| Name | `@tww3/types` |
+| Name | `@rizzotto/types` |
 | Source | `packages/types/src/` |
 | Entry | `packages/types/src/index.ts` (re-exportiert alle Module) |
 
 ```typescript
-import { JwtPayloadSchema, BracketNode, ServerToClientEvents } from '@tww3/types';
+import { JwtPayloadSchema, BracketNode, ServerToClientEvents } from '@rizzotto/types';
 ```
 
 ---
@@ -151,13 +151,13 @@ interface DraftPreset {
 
 `apps/frontend/src/lib/api.ts` definiert **lokal**: `Tournament`, `TournamentCreate`, `SeasonSummary` (dupliziert!), `AuditLogEntry`, `AdminStats`, `AdminUser`, `AllTimeEntry`, `AllTimeLeaderboardResponse`.
 
-Diese sollten idealerweise in `@tww3/types` migrieren — aktuell existiert eine Inkonsistenz zwischen lokalen Frontend-Types und den shared Zod-Schemas (z.B. `SeasonSummary` ist doppelt definiert).
+Diese sollten idealerweise in `@rizzotto/types` migrieren — aktuell existiert eine Inkonsistenz zwischen lokalen Frontend-Types und den shared Zod-Schemas (z.B. `SeasonSummary` ist doppelt definiert).
 
 ---
 
 ## Konvention bei neuen Events/Schemas
 
 1. **Neues Schema:** Zuerst in `packages/types/src/api-schemas.ts` oder `draft.ts` definieren (Zod-Schema + abgeleiteter `type`).
-2. **Backend + Frontend** importieren ausschließlich aus `@tww3/types` — nie lokal duplizieren.
+2. **Backend + Frontend** importieren ausschließlich aus `@rizzotto/types` — nie lokal duplizieren.
 3. **Neues Socket-Event:** Interface in `socket-events.ts` erweitern (beide Richtungen prüfen), dann Emit-Helper in `apps/backend/src/lib/emit.ts` ergänzen.
-4. Nach Änderungen: `pnpm --filter @tww3/types build` damit `dist/` aktuell bleibt.
+4. Nach Änderungen: `pnpm --filter @rizzotto/types build` damit `dist/` aktuell bleibt.

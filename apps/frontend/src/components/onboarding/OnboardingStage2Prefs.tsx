@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import type { UserMe } from '@tww3/types';
+import type { UserMe } from '@rizzotto/types';
 import { Button } from '@/components/ui/button';
 import { patchMePreferences } from '@/lib/onboarding';
 import { FactionPickerGrid } from './FactionPickerGrid';

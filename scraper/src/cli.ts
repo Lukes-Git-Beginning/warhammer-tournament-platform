@@ -8,7 +8,7 @@
  */
 import { Command } from 'commander';
 import cliProgress from 'cli-progress';
-import { prisma } from '@tww3/db';
+import { prisma } from '@rizzotto/db';
 import { createHttpClient, logger } from './lib/http.js';
 import { fetchFactions } from './scrapers/factions.js';
 import { fetchTournamentRange } from './scrapers/tournament.js';

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listDraftPresets, promotePreset } from '@/lib/api';
-import type { DraftPreset } from '@tww3/types';
+import type { DraftPreset } from '@rizzotto/types';
 
 export function PresetLibraryAdmin() {
   const queryClient = useQueryClient();

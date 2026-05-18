@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { UserMe } from '@tww3/types';
+import type { UserMe } from '@rizzotto/types';
 import { apiFetch } from './api';
 import { useAuthQuery } from './auth';
 

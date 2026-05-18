@@ -54,7 +54,7 @@ pnpm install --frozen-lockfile
 pnpm build
 
 # 2. Apply migrations
-pnpm --filter @tww3/db exec prisma migrate deploy
+pnpm --filter @rizzotto/db exec prisma migrate deploy
 
 # 3. Seed default data (idempotent — only on first deploy)
 pnpm db:seed
@@ -121,7 +121,7 @@ volumes:
 
 ```bash
 PLAYWRIGHT_BASE_URL=https://staging.rizzotto.gg \
-  pnpm --filter @tww3/e2e exec playwright test production-smoke.spec.ts
+  pnpm --filter @rizzotto/e2e exec playwright test production-smoke.spec.ts
 ```
 
 Alternativ mit separater API-URL (wenn Backend auf anderem Port/Host):
@@ -129,7 +129,7 @@ Alternativ mit separater API-URL (wenn Backend auf anderem Port/Host):
 ```bash
 PLAYWRIGHT_BASE_URL=https://staging.rizzotto.gg \
 PLAYWRIGHT_API_URL=https://api.staging.rizzotto.gg \
-  pnpm --filter @tww3/e2e exec playwright test production-smoke.spec.ts
+  pnpm --filter @rizzotto/e2e exec playwright test production-smoke.spec.ts
 ```
 
 ## Domain + TLS

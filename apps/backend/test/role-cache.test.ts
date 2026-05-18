@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
-import { prisma } from '@tww3/db';
+import { prisma } from '@rizzotto/db';
 
 let app: FastifyInstance;
 

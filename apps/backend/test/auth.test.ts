@@ -3,7 +3,7 @@ import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
-import { prisma } from '@tww3/db';
+import { prisma } from '@rizzotto/db';
 
 const DISCORD_USER = {
   id: '999000111222333444',

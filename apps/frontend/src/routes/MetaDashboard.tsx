@@ -5,7 +5,7 @@ import { FactionBadge } from '@/components/meta/FactionBadge';
 import { MatchupHeatmap } from '@/components/meta/MatchupHeatmap';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/ui/empty-state';
-import type { FactionWithStatsDto } from '@tww3/types';
+import type { FactionWithStatsDto } from '@rizzotto/types';
 
 function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (

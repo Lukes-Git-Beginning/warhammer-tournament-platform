@@ -1,4 +1,4 @@
-import type { DraftTurn } from '@tww3/types';
+import type { DraftTurn } from '@rizzotto/types';
 
 export interface TurnEditorProps {
   turn: DraftTurn;

@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { act } from 'react';
-import type { BracketNode } from '@tww3/types';
+import type { BracketNode } from '@rizzotto/types';
 import { MatchNode, statusColors } from './MatchNode';
 
 function makeMatch(overrides: Partial<BracketNode> = {}): BracketNode {

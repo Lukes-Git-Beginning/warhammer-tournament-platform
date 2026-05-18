@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useDraftSocket, sendDraftAction } from '@/hooks/useDraftSocket';
 import { getFactions } from '@/lib/api';
-import type { DraftView, DraftTurn } from '@tww3/types';
+import type { DraftView, DraftTurn } from '@rizzotto/types';
 import { DraftSequenceTimeline } from './DraftSequenceTimeline';
 import { DraftTimer } from './DraftTimer';
 import { DraftStatusBanner } from './DraftStatusBanner';

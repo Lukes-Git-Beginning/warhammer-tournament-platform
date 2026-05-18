@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
-import type { ServerToClientEvents, ClientToServerEvents } from '@tww3/types';
+import type { ServerToClientEvents, ClientToServerEvents } from '@rizzotto/types';
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 

@@ -5,7 +5,7 @@ import {
   type TournamentVisibility,
   type ParticipantStatus,
   type MatchStatus,
-} from '@tww3/db';
+} from '@rizzotto/db';
 
 // Re-export enums so routes can import from one place
 export {

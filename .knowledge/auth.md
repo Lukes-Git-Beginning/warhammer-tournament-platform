@@ -20,7 +20,7 @@ Quellen: `apps/backend/src/routes/auth.ts`, `apps/backend/src/plugins/auth.ts`
 
 ## JWT-Payload-Shape
 
-Typ `JwtPayload` aus `@tww3/types`, befüllt in `routes/auth.ts`:
+Typ `JwtPayload` aus `@rizzotto/types`, befüllt in `routes/auth.ts`:
 
 ```typescript
 const payload: JwtPayload = {

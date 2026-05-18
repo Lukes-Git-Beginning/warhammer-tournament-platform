@@ -12,8 +12,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
-import { prisma } from '@tww3/db';
-import type { DraftTurn } from '@tww3/types';
+import { prisma } from '@rizzotto/db';
+import type { DraftTurn } from '@rizzotto/types';
 
 // ---------------------------------------------------------------------------
 // Deterministic UUIDs — prefix c7400000 to avoid collisions

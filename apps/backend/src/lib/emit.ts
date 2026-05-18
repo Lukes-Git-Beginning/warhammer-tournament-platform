@@ -4,7 +4,7 @@ import type {
   InterServerEvents,
   ServerToClientEvents,
   SocketData,
-} from '@tww3/types';
+} from '@rizzotto/types';
 
 type Io = Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
 

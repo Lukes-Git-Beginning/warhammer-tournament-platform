@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Use tsx to run the TypeScript CLI source directly so @tww3/db (Prisma 7 TS-output)
+// Use tsx to run the TypeScript CLI source directly so @rizzotto/db (Prisma 7 TS-output)
 // resolves correctly without a pre-built db package.
 // On Windows, tsx lives as tsx.CMD in node_modules/.bin — use shell:true so the
 // OS resolves the .CMD extension automatically.

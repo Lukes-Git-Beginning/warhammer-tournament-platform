@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import type { DraftView, DraftTurn } from '@tww3/types';
+import type { DraftView, DraftTurn } from '@rizzotto/types';
 
 interface DraftStatusBannerProps {
   draft: DraftView;

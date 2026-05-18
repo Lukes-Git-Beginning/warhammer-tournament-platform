@@ -13,7 +13,7 @@ import type {
   UpdateDraftPresetRequest,
   DraftView,
   DraftEventsResponse,
-} from '@tww3/types';
+} from '@rizzotto/types';
 
 export type {
   BracketResponse,

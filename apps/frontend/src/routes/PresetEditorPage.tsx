@@ -5,7 +5,7 @@ import { getDraftPreset, createDraftPreset, updateDraftPreset } from '@/lib/api'
 import { useRequireAuth } from '@/lib/auth';
 import { PresetEditor } from '@/components/draft/PresetEditor';
 import { PageShell } from '@/components/layout/PageShell';
-import type { CreateDraftPresetRequest } from '@tww3/types';
+import type { CreateDraftPresetRequest } from '@rizzotto/types';
 
 export function PresetEditorPage() {
   const { t } = useTranslation();

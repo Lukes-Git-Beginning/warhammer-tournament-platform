@@ -9,7 +9,7 @@
 ## TL;DR
 
 - **M1–M5 sind durch** (Launch-Ready, 2026-05-13). Plattform ist live-tauglich für Single-Elim, Swiss, Round-Robin, Double-Round-Robin + Draft.
-- **Heute offen (Tech-Debt):** DOUBLE_ELIMINATION als 501-Stub, `@tww3/*` Workspace-Rename, kosmetische Kommentare. Visual-Snapshots + M1.4-Kommentar wurden 2026-05-13 nachgezogen.
+- **Heute offen (Tech-Debt):** DOUBLE_ELIMINATION als 501-Stub, kosmetische Kommentare. Visual-Snapshots + M1.4-Kommentar wurden 2026-05-13 nachgezogen. `@tww3/*` → `@rizzotto/*` Workspace-Rename erfolgt in feat/rizzotto-rebrand (2026-05-18).
 - **Kurzfristiger Asset-Block:** 24 Faction-Crests im "Sigil in the Stone"-Stil generieren (KI, sobald ChatGPT-Limit resettet) — ersetzt die aktuellen Initialen-Bubbles auf `/fraktionen`.
 - **Mid-Term Hub-Roadmap:** M6 Quick-Wins → M7 Datentiefe → M8 UGC → M9 Team-Play. Details unten.
 - **Bewusst geparkt:** In-App-Listenbauer, Live-Stream-Embed, Coaching/Mentorship, Achievements (siehe Out-of-Scope).
@@ -40,7 +40,7 @@ Punch-List, nach Severity sortiert:
 | 1 | **DOUBLE_ELIMINATION** wirft 501, obwohl Enum + UI das Format anbieten | `apps/backend/src/routes/bracket.ts:191,257` | Mittel — silent feature break | Eigener Feature-Block, s. unten |
 | 2 | Visual-Test-Snapshots committed | `apps/e2e/tests/visual/landing-overhaul.spec.ts-snapshots/` | — | ✅ `b898fa5` |
 | 3 | Faction-Artwork sind Initialen-Platzhalter | `packages/db/prisma/seed.ts:33`, `apps/frontend/src/components/meta/FactionBadge.tsx` | Niedrig — Ästhetik | M6, blockiert auf Assets |
-| 4 | `@tww3/*` Workspace-Rename ausstehend | Monorepo-weit | Niedrig — Tech-Debt | M6 |
+| 4 | `@tww3/*` → `@rizzotto/*` Workspace-Rename | Monorepo-weit | — | ✅ `feat/rizzotto-rebrand` (2026-05-18) |
 | 5 | Veralteter M1.4-Kommentar in `api.ts` | `apps/frontend/src/lib/api.ts:46` | Trivial | ✅ `a5cc0d5` |
 | 6 | `Tournament.poster_url` nie als Upload-Flow umgesetzt | `packages/db/prisma/schema.prisma:172` | Niedrig | M6 optional |
 | 7 | `SigillumSection`-Community-Links sind Platzhalter | `apps/frontend/src/components/landing/SigillumSection.tsx:93` | Niedrig | M6 |
@@ -146,7 +146,7 @@ Die Plattform fühlt sich nach M6 personalisiert, hierarchisch und visuell konsi
 5. **Major/Regular Tournament UI-Distinction** — Badge auf Cards, Filter auf Liste, Landingpage-Hervorhebung. `Tournament.is_major`-Flag existiert ungenutzt (`schema.prisma:187`)
 6. **Echte Community-Links setzen** — Discord-Server-ID, GitHub-Repo, Reddit (`SigillumSection.tsx:93`)
 7. **ImportLog Admin-UI** — Scraper-Lauf-Sichtbarkeit, paginierte Liste analog zu AuditLog
-8. **Tech-Debt-Hausputz:** `@tww3/*` Workspace-Rename als dedizierter Refactor-PR
+8. ~~**Tech-Debt-Hausputz:** `@tww3/*` → `@rizzotto/*` Workspace-Rename~~ ✅ done (`feat/rizzotto-rebrand`)
 9. **`Tournament.poster_url`-Upload-Flow** (optional, niedrige Prio)
 
 ### Out: DOUBLE_ELIMINATION

@@ -11,12 +11,12 @@ Orchestrierung via Turborepo (`turbo.json`).
 
 | Pfad                | Package-Name      | Zweck                                             |
 |---------------------|-------------------|---------------------------------------------------|
-| `apps/backend`      | `@tww3/backend`   | Fastify 5 API-Server, Socket.IO, Auth, Draft-Logic |
-| `apps/frontend`     | `@tww3/frontend`  | React 19 + Vite 6 SPA, TanStack Router/Query      |
-| `apps/e2e`          | `@tww3/e2e`       | Playwright E2E-Tests (5 kritische Journeys)       |
-| `packages/db`       | `@tww3/db`        | Prisma 7 Client + Migrations + Seed               |
-| `packages/types`    | `@tww3/types`     | Shared Zod-Schemas + Socket-Event-Types           |
-| `scraper`           | `@tww3/scraper`   | CLI-Scraper für totaltavern.com (CI-deaktiviert)  |
+| `apps/backend`      | `@rizzotto/backend`   | Fastify 5 API-Server, Socket.IO, Auth, Draft-Logic |
+| `apps/frontend`     | `@rizzotto/frontend`  | React 19 + Vite 6 SPA, TanStack Router/Query      |
+| `apps/e2e`          | `@rizzotto/e2e`       | Playwright E2E-Tests (5 kritische Journeys)       |
+| `packages/db`       | `@rizzotto/db`        | Prisma 7 Client + Migrations + Seed               |
+| `packages/types`    | `@rizzotto/types`     | Shared Zod-Schemas + Socket-Event-Types           |
+| `scraper`           | `@rizzotto/scraper`   | CLI-Scraper für totaltavern.com (CI-deaktiviert)  |
 
 ## Versionen
 
@@ -51,20 +51,20 @@ Alle Commands werden im Repo-Root ausgeführt (pnpm delegiert via Turborepo).
 | `pnpm dev`               | Startet alle Workspaces parallel im Watch-Modus (via Turbo)      |
 | `pnpm build`             | Baut alle Workspaces in Dependency-Reihenfolge (`^build`)        |
 | `pnpm test`              | Führt Vitest in `backend`, `frontend`, `scraper` aus             |
-| `pnpm test:e2e`          | Playwright E2E nur im `@tww3/e2e`-Workspace                      |
+| `pnpm test:e2e`          | Playwright E2E nur im `@rizzotto/e2e`-Workspace                      |
 | `pnpm lint`              | ESLint über alle Workspaces via Turbo                            |
 | `pnpm typecheck`         | `tsc --noEmit` in allen Workspaces (nach `^build`)               |
-| `pnpm db:generate`       | `prisma generate` im `@tww3/db`-Workspace                        |
-| `pnpm db:migrate`        | `prisma migrate dev` im `@tww3/db`-Workspace                     |
+| `pnpm db:generate`       | `prisma generate` im `@rizzotto/db`-Workspace                        |
+| `pnpm db:migrate`        | `prisma migrate dev` im `@rizzotto/db`-Workspace                     |
 | `pnpm db:migrate:deploy` | `prisma migrate deploy` für Production                           |
-| `pnpm db:seed`           | Seed-Script (`prisma/seed.ts`) im `@tww3/db`-Workspace           |
+| `pnpm db:seed`           | Seed-Script (`prisma/seed.ts`) im `@rizzotto/db`-Workspace           |
 | `pnpm db:studio`         | Prisma Studio öffnen                                             |
 | `pnpm docker:up`         | `docker compose up -d` (Postgres + Redis lokal)                  |
 | `pnpm docker:down`       | `docker compose down`                                            |
 | `pnpm format`            | Prettier über alle TS/TSX/JSON/MD/YAML-Files                     |
 | `pnpm clean`             | `dist/`, `.turbo/`, `node_modules/` in allen Workspaces löschen  |
 
-Einzelne Workspaces filtern: `pnpm -F @tww3/backend test`, `pnpm -F @tww3/frontend dev`.
+Einzelne Workspaces filtern: `pnpm -F @rizzotto/backend test`, `pnpm -F @rizzotto/frontend dev`.
 
 ## Turborepo-Pipeline
 

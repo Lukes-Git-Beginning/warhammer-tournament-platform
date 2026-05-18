@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import type { UserMe } from '@tww3/types';
+import type { UserMe } from '@rizzotto/types';
 import { Button } from '@/components/ui/button';
 
 interface OnboardingStage4ActionProps {

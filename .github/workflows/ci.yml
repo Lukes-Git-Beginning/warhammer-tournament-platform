@@ -70,10 +70,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Prisma migrate deploy
-        run: pnpm --filter @tww3/db exec prisma migrate deploy
+        run: pnpm --filter @rizzotto/db exec prisma migrate deploy
 
       - name: Prisma generate
-        run: pnpm --filter @tww3/db exec prisma generate
+        run: pnpm --filter @rizzotto/db exec prisma generate
 
       - name: Seed factions and default season
         run: pnpm db:seed
@@ -91,10 +91,10 @@ jobs:
         run: pnpm build
 
       - name: Install Playwright Chromium
-        run: pnpm --filter @tww3/e2e exec playwright install --with-deps chromium
+        run: pnpm --filter @rizzotto/e2e exec playwright install --with-deps chromium
 
       - name: E2E (Playwright)
-        run: pnpm --filter @tww3/e2e test
+        run: pnpm --filter @rizzotto/e2e test
         env:
           NODE_ENV: test
           CI: "true"

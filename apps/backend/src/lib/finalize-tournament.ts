@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@tww3/db';
+import type { PrismaClient } from '@rizzotto/db';
 import { calculateTournamentPoints } from './tournament-utils.js';
 import { computeEloDeltas } from './elo.js';
 

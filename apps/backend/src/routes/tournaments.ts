@@ -4,7 +4,7 @@ import { generateSlug, validateStatusTransition, TournamentStatus } from '../lib
 import { emitStatusChange } from '../lib/emit.js';
 import { finalizeTournament } from '../lib/finalize-tournament.js';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
-import type { TournamentStatusLiteral } from '@tww3/types';
+import type { TournamentStatusLiteral } from '@rizzotto/types';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
