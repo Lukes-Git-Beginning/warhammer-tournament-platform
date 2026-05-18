@@ -4,9 +4,9 @@ const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:5173';
 const API_URL = process.env.PLAYWRIGHT_API_URL ?? BASE_URL.replace(':5173', ':3000');
 
 test.describe('Production Smoke — public pages only, no auth', () => {
-  test('homepage loads with TWW3 Cup heading', async ({ page }) => {
+  test('homepage loads with Rizzotto tagline', async ({ page }) => {
     await page.goto(BASE_URL);
-    await expect(page.getByText(/tww3 cup/i)).toBeVisible();
+    await expect(page.getByText(/where lists are forged/i)).toBeVisible();
   });
 
   test('GET /api/leaderboard returns 200 (or 404 if no active season)', async ({ request }) => {
