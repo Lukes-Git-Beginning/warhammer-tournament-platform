@@ -25,44 +25,46 @@ interface FactionSeed {
   category: FactionCategory;
   color_hex: string;
   display_order: number;
-  icon_url: string;
+  icon_url: string | null;
 }
 
 // 24 factions validated against Steam Community Guide (id=3241235739) and Wargamer.com.
-// icon_url points to SVG placeholders in apps/frontend/public/icons/factions/<id>.svg
-// TODO: replace placeholder SVGs with actual faction artwork before production launch.
+// icon_url points to PNG default-sigils in apps/frontend/public/icons/factions/<id>.png
+// (sourced from AI-generated sub-faction crest pack 2026-05-18, default sigil per race).
+// Khorne/Nurgle/Tzeentch/Slaanesh share daemons_of_chaos.png.
+// Norsca + Ogre Kingdoms fall back to initials-circle (no crest available).
 const FACTIONS: FactionSeed[] = [
   // ORDER (7)
-  { id: 'empire',           name: 'Empire',            race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#FFCC00', display_order: 1,  icon_url: '/icons/factions/empire.svg' },
-  { id: 'bretonnia',        name: 'Bretonnia',         race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#1A4FA0', display_order: 2,  icon_url: '/icons/factions/bretonnia.svg' },
-  { id: 'kislev',           name: 'Kislev',            race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#4AA8D8', display_order: 3,  icon_url: '/icons/factions/kislev.svg' },
-  { id: 'grand_cathay',     name: 'Grand Cathay',      race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#C8102E', display_order: 4,  icon_url: '/icons/factions/grand_cathay.svg' },
-  { id: 'dwarfs',           name: 'Dwarfs',            race: 'Dwarf',       category: FactionCategory.ORDER,       color_hex: '#B8860B', display_order: 5,  icon_url: '/icons/factions/dwarfs.svg' },
-  { id: 'high_elves',       name: 'High Elves',        race: 'High Elf',    category: FactionCategory.ORDER,       color_hex: '#4169E1', display_order: 6,  icon_url: '/icons/factions/high_elves.svg' },
-  { id: 'lizardmen',        name: 'Lizardmen',         race: 'Lizardman',   category: FactionCategory.ORDER,       color_hex: '#2E8B57', display_order: 7,  icon_url: '/icons/factions/lizardmen.svg' },
+  { id: 'empire',           name: 'Empire',            race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#FFCC00', display_order: 1,  icon_url: '/icons/factions/empire.png' },
+  { id: 'bretonnia',        name: 'Bretonnia',         race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#1A4FA0', display_order: 2,  icon_url: '/icons/factions/bretonnia.png' },
+  { id: 'kislev',           name: 'Kislev',            race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#4AA8D8', display_order: 3,  icon_url: '/icons/factions/kislev.png' },
+  { id: 'grand_cathay',     name: 'Grand Cathay',      race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#C8102E', display_order: 4,  icon_url: '/icons/factions/grand_cathay.png' },
+  { id: 'dwarfs',           name: 'Dwarfs',            race: 'Dwarf',       category: FactionCategory.ORDER,       color_hex: '#B8860B', display_order: 5,  icon_url: '/icons/factions/dwarfs.png' },
+  { id: 'high_elves',       name: 'High Elves',        race: 'High Elf',    category: FactionCategory.ORDER,       color_hex: '#4169E1', display_order: 6,  icon_url: '/icons/factions/high_elves.png' },
+  { id: 'lizardmen',        name: 'Lizardmen',         race: 'Lizardman',   category: FactionCategory.ORDER,       color_hex: '#2E8B57', display_order: 7,  icon_url: '/icons/factions/lizardmen.png' },
 
   // DESTRUCTION (6)
-  { id: 'greenskins',       name: 'Greenskins',        race: 'Orc',         category: FactionCategory.DESTRUCTION, color_hex: '#4A7C2F', display_order: 8,  icon_url: '/icons/factions/greenskins.svg' },
-  { id: 'dark_elves',       name: 'Dark Elves',        race: 'Dark Elf',    category: FactionCategory.DESTRUCTION, color_hex: '#6A0DAD', display_order: 9,  icon_url: '/icons/factions/dark_elves.svg' },
-  { id: 'skaven',           name: 'Skaven',            race: 'Skaven',      category: FactionCategory.DESTRUCTION, color_hex: '#8B8000', display_order: 10, icon_url: '/icons/factions/skaven.svg' },
-  { id: 'norsca',           name: 'Norsca',            race: 'Norscan',     category: FactionCategory.DESTRUCTION, color_hex: '#5F7F9F', display_order: 11, icon_url: '/icons/factions/norsca.svg' },
-  { id: 'ogre_kingdoms',    name: 'Ogre Kingdoms',     race: 'Ogre',        category: FactionCategory.DESTRUCTION, color_hex: '#C2956C', display_order: 12, icon_url: '/icons/factions/ogre_kingdoms.svg' },
-  { id: 'beastmen',         name: 'Beastmen',          race: 'Beastman',    category: FactionCategory.DESTRUCTION, color_hex: '#5C4A1E', display_order: 13, icon_url: '/icons/factions/beastmen.svg' },
+  { id: 'greenskins',       name: 'Greenskins',        race: 'Orc',         category: FactionCategory.DESTRUCTION, color_hex: '#4A7C2F', display_order: 8,  icon_url: '/icons/factions/greenskins.png' },
+  { id: 'dark_elves',       name: 'Dark Elves',        race: 'Dark Elf',    category: FactionCategory.DESTRUCTION, color_hex: '#6A0DAD', display_order: 9,  icon_url: '/icons/factions/dark_elves.png' },
+  { id: 'skaven',           name: 'Skaven',            race: 'Skaven',      category: FactionCategory.DESTRUCTION, color_hex: '#8B8000', display_order: 10, icon_url: '/icons/factions/skaven.png' },
+  { id: 'norsca',           name: 'Norsca',            race: 'Norscan',     category: FactionCategory.DESTRUCTION, color_hex: '#5F7F9F', display_order: 11, icon_url: null },
+  { id: 'ogre_kingdoms',    name: 'Ogre Kingdoms',     race: 'Ogre',        category: FactionCategory.DESTRUCTION, color_hex: '#C2956C', display_order: 12, icon_url: null },
+  { id: 'beastmen',         name: 'Beastmen',          race: 'Beastman',    category: FactionCategory.DESTRUCTION, color_hex: '#5C4A1E', display_order: 13, icon_url: '/icons/factions/beastmen.png' },
 
   // CHAOS GODS / CHAOS-ALIGNED (7)
-  { id: 'khorne',           name: 'Khorne',            race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#8B0000', display_order: 14, icon_url: '/icons/factions/khorne.svg' },
-  { id: 'nurgle',           name: 'Nurgle',            race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#4A6741', display_order: 15, icon_url: '/icons/factions/nurgle.svg' },
-  { id: 'tzeentch',         name: 'Tzeentch',          race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#1B6CA8', display_order: 16, icon_url: '/icons/factions/tzeentch.svg' },
-  { id: 'slaanesh',         name: 'Slaanesh',          race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#D4689A', display_order: 17, icon_url: '/icons/factions/slaanesh.svg' },
-  { id: 'daemons_of_chaos', name: 'Daemons of Chaos',  race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#7B2FBE', display_order: 18, icon_url: '/icons/factions/daemons_of_chaos.svg' },
-  { id: 'warriors_of_chaos',name: 'Warriors of Chaos', race: 'Human',       category: FactionCategory.CHAOS_GODS,  color_hex: '#3D3D3D', display_order: 19, icon_url: '/icons/factions/warriors_of_chaos.svg' },
-  { id: 'chaos_dwarfs',     name: 'Chaos Dwarfs',      race: 'Chaos Dwarf', category: FactionCategory.CHAOS_GODS,  color_hex: '#B03010', display_order: 20, icon_url: '/icons/factions/chaos_dwarfs.svg' },
+  { id: 'khorne',           name: 'Khorne',            race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#8B0000', display_order: 14, icon_url: '/icons/factions/daemons_of_chaos.png' },
+  { id: 'nurgle',           name: 'Nurgle',            race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#4A6741', display_order: 15, icon_url: '/icons/factions/daemons_of_chaos.png' },
+  { id: 'tzeentch',         name: 'Tzeentch',          race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#1B6CA8', display_order: 16, icon_url: '/icons/factions/daemons_of_chaos.png' },
+  { id: 'slaanesh',         name: 'Slaanesh',          race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#D4689A', display_order: 17, icon_url: '/icons/factions/daemons_of_chaos.png' },
+  { id: 'daemons_of_chaos', name: 'Daemons of Chaos',  race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#7B2FBE', display_order: 18, icon_url: '/icons/factions/daemons_of_chaos.png' },
+  { id: 'warriors_of_chaos',name: 'Warriors of Chaos', race: 'Human',       category: FactionCategory.CHAOS_GODS,  color_hex: '#3D3D3D', display_order: 19, icon_url: '/icons/factions/warriors_of_chaos.png' },
+  { id: 'chaos_dwarfs',     name: 'Chaos Dwarfs',      race: 'Chaos Dwarf', category: FactionCategory.CHAOS_GODS,  color_hex: '#B03010', display_order: 20, icon_url: '/icons/factions/chaos_dwarfs.png' },
 
   // UNDEAD / NEUTRAL (4)
-  { id: 'vampire_counts',   name: 'Vampire Counts',    race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#6B0F1A', display_order: 21, icon_url: '/icons/factions/vampire_counts.svg' },
-  { id: 'vampire_coast',    name: 'Vampire Coast',     race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#1A5276', display_order: 22, icon_url: '/icons/factions/vampire_coast.svg' },
-  { id: 'tomb_kings',       name: 'Tomb Kings',        race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#C8A800', display_order: 23, icon_url: '/icons/factions/tomb_kings.svg' },
-  { id: 'wood_elves',       name: 'Wood Elves',        race: 'Wood Elf',    category: FactionCategory.DEFAULT,     color_hex: '#228B22', display_order: 24, icon_url: '/icons/factions/wood_elves.svg' },
+  { id: 'vampire_counts',   name: 'Vampire Counts',    race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#6B0F1A', display_order: 21, icon_url: '/icons/factions/vampire_counts.png' },
+  { id: 'vampire_coast',    name: 'Vampire Coast',     race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#1A5276', display_order: 22, icon_url: '/icons/factions/vampire_coast.png' },
+  { id: 'tomb_kings',       name: 'Tomb Kings',        race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#C8A800', display_order: 23, icon_url: '/icons/factions/tomb_kings.png' },
+  { id: 'wood_elves',       name: 'Wood Elves',        race: 'Wood Elf',    category: FactionCategory.DEFAULT,     color_hex: '#228B22', display_order: 24, icon_url: '/icons/factions/wood_elves.png' },
 ];
 
 async function seedFactions(): Promise<void> {
@@ -70,7 +72,24 @@ async function seedFactions(): Promise<void> {
     data: FACTIONS,
     skipDuplicates: true,
   });
-  console.log(`  ✓ Factions: ${result.count} created (${FACTIONS.length - result.count} already existed)`);
+  // Refresh mutable fields on existing rows so the seed stays the source of truth
+  // for icon_url, color_hex, race, etc. as the metadata evolves.
+  let updated = 0;
+  for (const f of FACTIONS) {
+    await prisma.faction.update({
+      where: { id: f.id },
+      data: {
+        name: f.name,
+        race: f.race,
+        category: f.category,
+        color_hex: f.color_hex,
+        display_order: f.display_order,
+        icon_url: f.icon_url,
+      },
+    });
+    updated += 1;
+  }
+  console.log(`  ✓ Factions: ${result.count} created, ${updated} synced (icon_url, colors)`);
 }
 
 async function seedDefaultSeason(): Promise<void> {
