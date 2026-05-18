@@ -1,28 +1,28 @@
 import { forwardRef, type SVGProps } from 'react';
 import { cn } from '@/lib/utils';
 
-export interface KarazSigilProps extends Omit<SVGProps<SVGSVGElement>, 'children'> {
+export interface RizzottoSigilProps extends Omit<SVGProps<SVGSVGElement>, 'children'> {
   /** Stroke thickness for the line variant. Defaults to 1.25. */
   strokeWidth?: number;
   /**
    * If true, the strokeDasharray will be applied to allow a draw-in animation
-   * via the `--karaz-draw-length` CSS variable + `animate-karaz-draw` utility.
+   * via the `--rizzotto-draw-length` CSS variable + `animate-rizzotto-draw` utility.
    */
   drawable?: boolean;
 }
 
 /**
- * Karaz Lists brand sigil — SVG-based, color-inheritable via `currentColor`.
+ * Rizzotto brand sigil — SVG-based, color-inheritable via `currentColor`.
  *
  * Used for tinted / inline placements where we want the sigil to take on a
  * Tailwind text-color (footer mini, sigillum-section reveal animation,
  * decorative inline icons).
  *
  * For the photographically-rendered logo lockup (header, hero, OG),
- * use `KarazWordmarkImage` instead — that one consumes the AI-generated
+ * use `RizzottoWordmarkImage` instead — that one consumes the AI-generated
  * raster asset.
  */
-export const KarazSigil = forwardRef<SVGSVGElement, KarazSigilProps>(
+export const RizzottoSigil = forwardRef<SVGSVGElement, RizzottoSigilProps>(
   ({ className, strokeWidth = 1.25, drawable = false, style, ...rest }, ref) => (
     <svg
       ref={ref}
@@ -32,17 +32,17 @@ export const KarazSigil = forwardRef<SVGSVGElement, KarazSigilProps>(
       strokeWidth={strokeWidth}
       strokeLinecap="square"
       strokeLinejoin="miter"
-      className={cn('text-karaz-gold-400', className)}
-      style={drawable ? ({ '--karaz-draw-length': 600 } as React.CSSProperties) : style}
+      className={cn('text-rizzotto-gold-400', className)}
+      style={drawable ? ({ '--rizzotto-draw-length': 600 } as React.CSSProperties) : style}
       role="img"
-      aria-label="Karaz Lists sigil"
+      aria-label="Rizzotto sigil"
       {...rest}
     >
       {/* outer carved tablet */}
       <path
         d="M8 6 L56 6 L60 12 L60 52 L56 58 L8 58 L4 52 L4 12 Z"
         strokeDasharray={drawable ? '600' : undefined}
-        className={drawable ? 'animate-karaz-draw' : undefined}
+        className={drawable ? 'animate-rizzotto-draw' : undefined}
       />
       {/* inner double-frame (engraving) */}
       <path
@@ -66,4 +66,4 @@ export const KarazSigil = forwardRef<SVGSVGElement, KarazSigilProps>(
     </svg>
   ),
 );
-KarazSigil.displayName = 'KarazSigil';
+RizzottoSigil.displayName = 'RizzottoSigil';

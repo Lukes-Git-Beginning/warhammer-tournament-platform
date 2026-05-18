@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { KarazWordmarkImage } from '@/components/icons/KarazWordmarkImage';
+import { RizzottoWordmarkImage } from '@/components/icons/RizzottoWordmarkImage';
 import { Separator } from '@/components/ui/separator';
 
 /**
@@ -20,8 +20,8 @@ export function Footer() {
 
       <div className="mx-auto max-w-[80rem] px-4 sm:px-6 lg:px-8 xl:px-12">
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
-          <Link to="/" aria-label="Karaz Lists — home" className="inline-flex items-center transition-opacity hover:opacity-90">
-            <KarazWordmarkImage bronze className="h-12 w-auto" loading="lazy" />
+          <Link to="/" aria-label="Rizzotto — home" className="inline-flex items-center transition-opacity hover:opacity-90">
+            <RizzottoWordmarkImage bronze className="h-12 w-auto" loading="lazy" />
           </Link>
           <p
             aria-hidden="true"
@@ -60,7 +60,7 @@ export function Footer() {
               </li>
             </ul>
           </nav>
-          <p className="font-mono text-xs">© 2026 Karaz Lists</p>
+          <p className="font-mono text-xs">© 2026 Rizzotto</p>
         </div>
 
         <p className="mt-6 text-center text-[11px] leading-relaxed text-karaz-stone-400/80">

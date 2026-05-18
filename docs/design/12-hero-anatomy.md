@@ -220,7 +220,7 @@ On viewport entry: stagger-fade rows top-to-bottom, 60ms between rows.
 
 ### Composition
 
-3-column feature grid showcasing the formats Karaz Lists supports.
+3-column feature grid showcasing the formats Rizzotto supports.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -290,9 +290,9 @@ Sigil has a slow `karaz-shimmer` animation (3s loop, very subtle).
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ [mini sigil 24px] KARAZ LISTS                                │  ← font-display, gold-500
+│ [mini sigil 24px] RIZZOTTO                                   │  ← font-display, gold-500
 │                                                                │
-│ Karaz Ankor  ·  © 2026 Karaz Lists  ·  Where Lists Are Forged│  ← caption, stone-400
+│ Karaz Ankor  ·  © 2026 Rizzotto  ·  Where Lists Are Forged   │  ← caption, stone-400
 │                                                                │
 │ [Discord] [GitHub] [Reddit]  ·  [Rules] [Privacy] [Imprint]   │  ← link list
 │                                                                │
@@ -333,24 +333,24 @@ Strategies:
 ## SEO meta block (in `index.html` `<head>`)
 
 ```html
-<title>Karaz Lists — Where Lists Are Forged</title>
+<title>Rizzotto — Where Lists Are Forged</title>
 <meta name="description" content="Tournaments for Warhammer: The Old World. Forge your army list, answer the muster, and stand on the Roll of Honour." />
 <meta name="theme-color" content="#110F0E" />
 
-<meta property="og:title" content="Karaz Lists — Where Lists Are Forged" />
+<meta property="og:title" content="Rizzotto — Where Lists Are Forged" />
 <meta property="og:description" content="Tournaments for Warhammer: The Old World. Forge your army list, answer the muster, and stand on the Roll of Honour." />
 <meta property="og:type" content="website" />
 <meta property="og:image" content="/og-image.png" />
 <meta property="og:url" content="%VITE_PUBLIC_URL%" />
 
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Karaz Lists" />
+<meta name="twitter:title" content="Rizzotto" />
 <meta name="twitter:description" content="Where Lists Are Forged." />
 <meta name="twitter:image" content="/og-image.png" />
 ```
 
-Open Graph image (`og-image.png`): the Karaz Sigil over a tightly-cropped
-hero photo, with the wordmark "KARAZ LISTS" bottom-aligned. 1200×630 px.
+Open Graph image (`og-image.png`): the Rizzotto sigil over a tightly-cropped
+hero photo, with the wordmark "RIZZOTTO" bottom-aligned. 1200×630 px.
 
 ---
 

@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import { KarazSigil } from '@/components/icons/KarazSigil';
+import { RizzottoSigil } from '@/components/icons/RizzottoSigil';
 import { Button } from '@/components/ui/button';
 
 interface OnboardingStage1WelcomeProps {
@@ -26,7 +26,7 @@ export function OnboardingStage1Welcome({ onAdvance }: OnboardingStage1WelcomePr
         }
         className="text-karaz-gold-400 drop-shadow-[0_0_36px_rgba(212,160,23,0.32)]"
       >
-        <KarazSigil
+        <RizzottoSigil
           className="size-32 sm:size-40"
           drawable={!reduced}
           strokeWidth={1.5}

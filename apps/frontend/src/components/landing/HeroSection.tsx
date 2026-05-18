@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { motion, useReducedMotion } from 'motion/react';
-import { KarazWordmarkImage } from '@/components/icons/KarazWordmarkImage';
+import { RizzottoWordmarkImage } from '@/components/icons/RizzottoWordmarkImage';
 import { Button } from '@/components/ui/button';
 import { Picture } from '@/components/ui/picture';
 import { ScrollCue } from './ScrollCue';
@@ -55,7 +55,7 @@ export function HeroSection() {
           }
           className="drop-shadow-[0_0_48px_rgba(212,160,23,0.25)]"
         >
-          <KarazWordmarkImage
+          <RizzottoWordmarkImage
             className="mx-auto w-[min(640px,90vw)]"
             loading="eager"
           />

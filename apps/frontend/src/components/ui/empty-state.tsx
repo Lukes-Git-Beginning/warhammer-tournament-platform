@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Card, CardContent } from './card';
 import { Picture } from './picture';
-import { KarazSigil } from '../icons/KarazSigil';
+import { RizzottoSigil } from '../icons/RizzottoSigil';
 import { cn } from '@/lib/utils';
 
 export type EmptyStateVariant = 'banner' | 'sigil' | 'compact';
@@ -43,7 +43,7 @@ export function EmptyState({
         data-testid="empty-state-compact"
         className={cn('flex items-center gap-3 px-4 py-6', className)}
       >
-        <KarazSigil
+        <RizzottoSigil
           aria-hidden="true"
           className="size-8 text-karaz-iron-600 opacity-50 shrink-0"
         />
@@ -103,7 +103,7 @@ export function EmptyState({
               className="mx-auto h-44 w-auto rounded-md ring-1 ring-karaz-iron-700/60"
             />
           ) : (
-            <KarazSigil
+            <RizzottoSigil
               aria-hidden="true"
               className="mx-auto size-32 text-karaz-iron-600 opacity-60"
             />
@@ -122,7 +122,7 @@ export function EmptyState({
         className,
       )}
     >
-      <KarazSigil
+      <RizzottoSigil
         aria-hidden="true"
         className="pointer-events-none absolute right-6 top-1/2 size-48 -translate-y-1/2 text-karaz-iron-700 opacity-30 max-sm:left-1/2 max-sm:-translate-x-1/2"
       />

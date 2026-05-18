@@ -1,4 +1,4 @@
-# ROADMAP — Karaz Lists
+# ROADMAP — Rizzotto
 
 > **Stand:** 2026-05-13 · **Phase:** Post-Launch · **Nächstes Ziel:** M6 Hub-Foundation
 >
@@ -9,7 +9,7 @@
 ## TL;DR
 
 - **M1–M5 sind durch** (Launch-Ready, 2026-05-13). Plattform ist live-tauglich für Single-Elim, Swiss, Round-Robin, Double-Round-Robin + Draft.
-- **Heute offen (Tech-Debt):** DOUBLE_ELIMINATION als 501-Stub, `@tww3 → @karaz` Workspace-Rename, kosmetische Kommentare. Visual-Snapshots + M1.4-Kommentar wurden 2026-05-13 nachgezogen.
+- **Heute offen (Tech-Debt):** DOUBLE_ELIMINATION als 501-Stub, `@tww3/*` Workspace-Rename, kosmetische Kommentare. Visual-Snapshots + M1.4-Kommentar wurden 2026-05-13 nachgezogen.
 - **Kurzfristiger Asset-Block:** 24 Faction-Crests im "Sigil in the Stone"-Stil generieren (KI, sobald ChatGPT-Limit resettet) — ersetzt die aktuellen Initialen-Bubbles auf `/fraktionen`.
 - **Mid-Term Hub-Roadmap:** M6 Quick-Wins → M7 Datentiefe → M8 UGC → M9 Team-Play. Details unten.
 - **Bewusst geparkt:** In-App-Listenbauer, Live-Stream-Embed, Coaching/Mentorship, Achievements (siehe Out-of-Scope).
@@ -24,7 +24,7 @@
 | **M2 — Swiss & Leaderboard** | Woche 5–7 | ✅ done | Swiss/RR/DRR via `tournament-pairings`, Season-Modell, ELO-Leaderboard, Redis-Caching |
 | **M3 — Faction-Stats & Meta** | Woche 8–10 | ✅ done | GraphQL via mercurius, `FactionStats`, 24×24-Matchup-Heatmap, Meta-Dashboard, 30-Tage-Trend-Snapshots |
 | **M4 — Draft-System** | Woche 11–17 | ✅ done | Draft-Engine als Service, Redis-Timer-Rehydration, Lobby-UI, Preset-Editor, Event-Log |
-| **M5 — Polish, Scraper, Admin, E2E** | Woche 18–22 | ✅ done | Army-Upload + Parser, totaltavern-Scraper (read-only), Admin-Panel, Playwright-E2E, SEO, **Karaz-Rebrand** |
+| **M5 — Polish, Scraper, Admin, E2E** | Woche 18–22 | ✅ done | Army-Upload + Parser, totaltavern-Scraper (read-only), Admin-Panel, Playwright-E2E, SEO, **Rizzotto-Rebrand** |
 | **M5.5 — UI-Overhaul + Onboarding** | 2026-05 | ✅ done | Souls-like-Atmospheric-UI, DRY EmptyStates, Onboarding-Flow, Inner-Page-Atmosphere (`f185eec` … `ef0fdd2`) |
 
 **Verdict:** Die Original-Schätzung (17–22 Wochen) wurde eingehalten. Plattform ist produktionsreif.
@@ -40,7 +40,7 @@ Punch-List, nach Severity sortiert:
 | 1 | **DOUBLE_ELIMINATION** wirft 501, obwohl Enum + UI das Format anbieten | `apps/backend/src/routes/bracket.ts:191,257` | Mittel — silent feature break | Eigener Feature-Block, s. unten |
 | 2 | Visual-Test-Snapshots committed | `apps/e2e/tests/visual/landing-overhaul.spec.ts-snapshots/` | — | ✅ `b898fa5` |
 | 3 | Faction-Artwork sind Initialen-Platzhalter | `packages/db/prisma/seed.ts:33`, `apps/frontend/src/components/meta/FactionBadge.tsx` | Niedrig — Ästhetik | M6, blockiert auf Assets |
-| 4 | `@tww3/*` → `@karaz/*` Workspace-Rename ausstehend | Monorepo-weit | Niedrig — Tech-Debt | M6 |
+| 4 | `@tww3/*` Workspace-Rename ausstehend | Monorepo-weit | Niedrig — Tech-Debt | M6 |
 | 5 | Veralteter M1.4-Kommentar in `api.ts` | `apps/frontend/src/lib/api.ts:46` | Trivial | ✅ `a5cc0d5` |
 | 6 | `Tournament.poster_url` nie als Upload-Flow umgesetzt | `packages/db/prisma/schema.prisma:172` | Niedrig | M6 optional |
 | 7 | `SigillumSection`-Community-Links sind Platzhalter | `apps/frontend/src/components/landing/SigillumSection.tsx:93` | Niedrig | M6 |
@@ -146,7 +146,7 @@ Die Plattform fühlt sich nach M6 personalisiert, hierarchisch und visuell konsi
 5. **Major/Regular Tournament UI-Distinction** — Badge auf Cards, Filter auf Liste, Landingpage-Hervorhebung. `Tournament.is_major`-Flag existiert ungenutzt (`schema.prisma:187`)
 6. **Echte Community-Links setzen** — Discord-Server-ID, GitHub-Repo, Reddit (`SigillumSection.tsx:93`)
 7. **ImportLog Admin-UI** — Scraper-Lauf-Sichtbarkeit, paginierte Liste analog zu AuditLog
-8. **Tech-Debt-Hausputz:** `@tww3 → @karaz` Workspace-Rename als dedizierter Refactor-PR
+8. **Tech-Debt-Hausputz:** `@tww3/*` Workspace-Rename als dedizierter Refactor-PR
 9. **`Tournament.poster_url`-Upload-Flow** (optional, niedrige Prio)
 
 ### Out: DOUBLE_ELIMINATION
@@ -157,7 +157,7 @@ Bewusst nicht in M6 — eigenständiger Feature-Block (s.u.), weil Schema-Migrat
 ## M7 — Datentiefe & Army-List-Database *(2–3 Wochen, sehr hoher Impact)*
 
 ### Ziele
-Karaz wird zur **Inspirationsdatenbank** für Listenbau-Phase + bekommt echte externe Daten.
+Rizzotto wird zur **Inspirationsdatenbank** für Listenbau-Phase + bekommt echte externe Daten.
 
 ### Scope
 

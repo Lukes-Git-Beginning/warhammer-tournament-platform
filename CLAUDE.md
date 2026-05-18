@@ -1,10 +1,10 @@
-# Karaz Lists (vormals TWW3 Tournament Platform)
+# Rizzotto (vormals TWW3 Tournament Platform)
 
 ## Projekt-Übersicht
 
-**Karaz Lists** — *Where Lists Are Forged.* Discord-Auth-basierte Tournament-Plattform für Warhammer: The Old World. Spieler authentifizieren sich per Discord-OAuth2, erstellen Turniere, spielen Swiss- oder Bracket-Runden und verfolgen Draft-Picks in Echtzeit. Branding & Design-System wurde 2026-05-13 unter `docs/design/` etabliert (15 Topic-Files, Souls-like/Grimdark-Aesthetik).
+**Rizzotto** — *Where Lists Are Forged.* Discord-Auth-basierte Tournament-Plattform für Warhammer: The Old World. Spieler authentifizieren sich per Discord-OAuth2, erstellen Turniere, spielen Swiss- oder Bracket-Runden und verfolgen Draft-Picks in Echtzeit. Branding & Design-System wurde 2026-05-13 unter `docs/design/` etabliert (15 Topic-Files, Souls-like/Grimdark-Aesthetik). Rizzotto ist die visuelle Marke (Domain: rizzotto.gg); das Khazalid-Lexikon (Karaz Ankor, Roll of Honour, Conclave) bleibt als Atmospheric-Layer im UI erhalten.
 Stack: Fastify 5 + Prisma 7 (driver-adapter) + Socket.IO 4 + Vite 6 + React 19 + TanStack Router/Query + Tailwind CSS 4 + shadcn/ui + motion. Monorepo mit pnpm 9 + Turborepo 2.
-Stand: Milestone 5 vollständig abgeschlossen (2026-05-13), Production-Launch-Ready. Workspace-Names bleiben `@tww3/*` (Rename auf `@karaz/*` ist separater Folge-PR).
+Stand: Milestone 5 vollständig abgeschlossen (2026-05-13), Production-Launch-Ready. Workspace-Names bleiben `@tww3/*` (Rename ist separater Folge-PR).
 
 ## Monorepo-Commands
 

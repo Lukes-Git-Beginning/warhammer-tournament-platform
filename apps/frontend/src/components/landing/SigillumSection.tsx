@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { motion, useReducedMotion } from 'motion/react';
 import { ExternalLink } from 'lucide-react';
-import { KarazSigil } from '@/components/icons/KarazSigil';
+import { RizzottoSigil } from '@/components/icons/RizzottoSigil';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -42,7 +42,7 @@ export function SigillumSection() {
           className="mb-8"
           style={{ filter: 'drop-shadow(0 0 28px rgba(212, 160, 23, 0.25))' }}
         >
-          <KarazSigil className="size-32 text-karaz-gold-500 sm:size-40" strokeWidth={1.2} />
+          <RizzottoSigil className="size-32 text-karaz-gold-500 sm:size-40" strokeWidth={1.2} />
         </motion.div>
 
         <motion.h2

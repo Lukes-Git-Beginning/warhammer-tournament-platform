@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Menu, X } from 'lucide-react';
 import { useAuthQuery, useLogout } from '@/lib/auth';
 import { DiscordLoginButton } from '@/components/auth/DiscordLoginButton';
-import { KarazWordmarkImage } from '@/components/icons/KarazWordmarkImage';
+import { RizzottoWordmarkImage } from '@/components/icons/RizzottoWordmarkImage';
 import { Button } from '@/components/ui/button';
 import { LanguageToggle } from '@/components/layout/LanguageToggle';
 import { cn } from '@/lib/utils';
@@ -72,10 +72,10 @@ export function Header() {
         {/* Logo lockup */}
         <Link
           to="/"
-          aria-label="Karaz Lists — home"
+          aria-label="Rizzotto — home"
           className="inline-flex items-center transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-karaz-gold-500 focus-visible:ring-offset-2 focus-visible:ring-offset-karaz-iron-950 rounded-sm"
         >
-          <KarazWordmarkImage className="h-12 w-auto sm:h-14" />
+          <RizzottoWordmarkImage className="h-12 w-auto sm:h-14" />
         </Link>
 
         {/* Desktop Nav */}

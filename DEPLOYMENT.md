@@ -20,21 +20,21 @@ REDIS_URL=redis://redis-host:6379
 
 JWT_SECRET=<32+ char random string>
 JWT_COOKIE_NAME=auth_token
-JWT_COOKIE_DOMAIN=tww3.example.com
+JWT_COOKIE_DOMAIN=rizzotto.gg
 JWT_EXPIRES_IN=604800
 
 DISCORD_CLIENT_ID=<id>
 DISCORD_CLIENT_SECRET=<secret>
-DISCORD_REDIRECT_URI=https://tww3.example.com/auth/discord/callback
+DISCORD_REDIRECT_URI=https://rizzotto.gg/auth/discord/callback
 DISCORD_SCOPES=identify email
 
-FRONTEND_URL=https://tww3.example.com
+FRONTEND_URL=https://rizzotto.gg
 
 NODE_ENV=production
 LOG_LEVEL=info
 
 UPLOAD_DIR=/var/lib/tww3/uploads/army-lists
-VITE_PUBLIC_URL=https://tww3.example.com
+VITE_PUBLIC_URL=https://rizzotto.gg
 ```
 
 ## SEO-Vorbereitungen vor Deploy
@@ -120,15 +120,15 @@ volumes:
 ## Production-Smoke vor Live-Schaltung
 
 ```bash
-PLAYWRIGHT_BASE_URL=https://staging.tww3.example.com \
+PLAYWRIGHT_BASE_URL=https://staging.rizzotto.gg \
   pnpm --filter @tww3/e2e exec playwright test production-smoke.spec.ts
 ```
 
 Alternativ mit separater API-URL (wenn Backend auf anderem Port/Host):
 
 ```bash
-PLAYWRIGHT_BASE_URL=https://staging.tww3.example.com \
-PLAYWRIGHT_API_URL=https://api.staging.tww3.example.com \
+PLAYWRIGHT_BASE_URL=https://staging.rizzotto.gg \
+PLAYWRIGHT_API_URL=https://api.staging.rizzotto.gg \
   pnpm --filter @tww3/e2e exec playwright test production-smoke.spec.ts
 ```
 

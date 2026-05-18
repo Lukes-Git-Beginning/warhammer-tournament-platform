@@ -4,4 +4,4 @@ Disallow: /admin
 Disallow: /api/
 Disallow: /auth/
 
-Sitemap: https://example.com/sitemap.xml
+Sitemap: https://rizzotto.gg/sitemap.xml

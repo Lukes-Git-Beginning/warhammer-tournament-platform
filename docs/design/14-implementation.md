@@ -16,7 +16,7 @@ Replace the entire file contents with this:
 
 ```css
 /*
- * Karaz Lists — Tailwind v4 CSS-first configuration.
+ * Rizzotto — Tailwind v4 CSS-first configuration.
  * Source of truth for all design tokens.
  * See docs/design/03-tokens.md and docs/design/05-color-system.md
  * for the meaning of each token.
@@ -455,8 +455,8 @@ export function IndexPage() {
 
 In `apps/frontend/src/components/layout/Header.tsx`:
 
-- Replace the hardcoded text `TWW3 Cup` (line 52) with a `<KarazSigilWordmark />`
-  lockup component (sigil + "KARAZ LISTS" wordmark side-by-side).
+- Replace the hardcoded text `TWW3 Cup` (line 52) with a `<RizzottoWordmark />`
+  lockup component (sigil + "RIZZOTTO" wordmark side-by-side).
 - Update nav link classes: replace `text-warhammer-gold` →
   `text-karaz-gold-500`, replace `text-stone-300` → `text-karaz-stone-300`.
 - Wrap navigation in `<nav aria-label="Primary">`.
@@ -508,7 +508,7 @@ export const router = createRouter({
 ### `apps/frontend/index.html`
 
 Replace the existing `<head>` block (per [12-hero-anatomy.md](./12-hero-anatomy.md))
-with the Karaz Lists meta block, font preconnect, and updated favicon.
+with the Rizzotto meta block, font preconnect, and updated favicon.
 
 Body class becomes:
 
@@ -526,7 +526,7 @@ asset is replaced once the Gemini-generated SVG lands.
 Top of file:
 
 ```md
-# Karaz Lists
+# Rizzotto
 
 > *Where Lists Are Forged.*
 
@@ -589,10 +589,10 @@ pnpm -F @tww3/frontend dev
 
 Browser smoke-test (per [12-hero-anatomy.md](./12-hero-anatomy.md)):
 
-- [ ] Tab title reads "Karaz Lists — Where Lists Are Forged".
+- [ ] Tab title reads "Rizzotto — Where Lists Are Forged".
 - [ ] Hero renders, sigil animates once on first paint.
 - [ ] All 7 sections present and scrollable.
-- [ ] Header shows Karaz Sigil + "KARAZ LISTS" wordmark.
+- [ ] Header shows Rizzotto sigil + "RIZZOTTO" wordmark.
 - [ ] Buttons show forge-glow on hover.
 - [ ] `prefers-reduced-motion: reduce` (OS toggle) disables animations.
 - [ ] Lighthouse Accessibility ≥ 95.
