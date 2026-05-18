@@ -24,23 +24,19 @@ export interface RizzottoWordmarkImageProps extends HTMLAttributes<HTMLImageElem
  */
 export const RizzottoWordmarkImage = forwardRef<HTMLImageElement, RizzottoWordmarkImageProps>(
   ({ className, bronze = false, width, loading = 'eager', style, ...rest }, ref) => {
-    const base = bronze ? '/img/rizzotto-wordmark-bronze' : '/img/rizzotto-wordmark';
+    const src = bronze ? '/img/rizzotto-wordmark-bronze.png' : '/img/rizzotto-wordmark.png';
     return (
-      <picture>
-        <source srcSet={`${base}.avif`} type="image/avif" />
-        <source srcSet={`${base}.webp`} type="image/webp" />
-        <img
-          ref={ref}
-          src={`${base}.png`}
-          alt="Rizzotto"
-          loading={loading}
-          decoding="async"
-          width={width}
-          className={cn('h-auto select-none', className)}
-          style={{ ...style, ...(width ? { width: `${width}px` } : undefined) }}
-          {...rest}
-        />
-      </picture>
+      <img
+        ref={ref}
+        src={src}
+        alt="Rizzotto"
+        loading={loading}
+        decoding="async"
+        width={width}
+        className={cn('h-auto select-none', className)}
+        style={{ ...style, ...(width ? { width: `${width}px` } : undefined) }}
+        {...rest}
+      />
     );
   },
 );
