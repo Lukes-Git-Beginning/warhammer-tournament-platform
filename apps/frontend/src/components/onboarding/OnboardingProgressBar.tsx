@@ -20,16 +20,16 @@ export function OnboardingProgressBar({ current }: OnboardingProgressBarProps) {
           >
             <div
               className={cn(
-                'h-[3px] w-full overflow-hidden rounded-sm bg-karaz-iron-800',
+                'h-[3px] w-full overflow-hidden rounded-sm bg-rizzotto-iron-800',
               )}
             >
               <motion.div
                 className={cn(
                   'h-full origin-left',
                   done
-                    ? 'bg-karaz-gold-500'
+                    ? 'bg-rizzotto-gold-500'
                     : active
-                      ? 'bg-gradient-to-r from-karaz-gold-500 via-karaz-gold-400 to-karaz-forge-500'
+                      ? 'bg-gradient-to-r from-rizzotto-gold-500 via-rizzotto-gold-400 to-rizzotto-forge-500'
                       : 'bg-transparent',
                 )}
                 initial={{ scaleX: done ? 1 : 0 }}

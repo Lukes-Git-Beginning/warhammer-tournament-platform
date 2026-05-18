@@ -17,7 +17,7 @@ export function LanguageToggle({ className }: { className?: string }) {
       role="group"
       aria-label={t('language.switch_aria')}
       className={cn(
-        'inline-flex items-center gap-px rounded-sm border border-karaz-iron-600 bg-karaz-iron-900 p-px text-[11px] font-display font-semibold uppercase tracking-wider',
+        'inline-flex items-center gap-px rounded-sm border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-px text-[11px] font-display font-semibold uppercase tracking-wider',
         className,
       )}
     >
@@ -28,8 +28,8 @@ export function LanguageToggle({ className }: { className?: string }) {
         className={cn(
           'rounded-[2px] px-2 py-1 transition-colors',
           current === 'de'
-            ? 'bg-karaz-gold-500/20 text-karaz-gold-400'
-            : 'text-karaz-stone-400 hover:text-karaz-stone-200',
+            ? 'bg-rizzotto-gold-500/20 text-rizzotto-gold-400'
+            : 'text-rizzotto-stone-400 hover:text-rizzotto-stone-200',
         )}
       >
         {t('language.de')}
@@ -41,8 +41,8 @@ export function LanguageToggle({ className }: { className?: string }) {
         className={cn(
           'rounded-[2px] px-2 py-1 transition-colors',
           current === 'en'
-            ? 'bg-karaz-gold-500/20 text-karaz-gold-400'
-            : 'text-karaz-stone-400 hover:text-karaz-stone-200',
+            ? 'bg-rizzotto-gold-500/20 text-rizzotto-gold-400'
+            : 'text-rizzotto-stone-400 hover:text-rizzotto-stone-200',
         )}
       >
         {t('language.en')}

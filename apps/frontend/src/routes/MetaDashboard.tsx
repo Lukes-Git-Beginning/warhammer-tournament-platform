@@ -9,9 +9,9 @@ import type { FactionWithStatsDto } from '@tww3/types';
 
 function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-karaz-iron-700/60 bg-karaz-iron-900/50 p-4 backdrop-blur-sm">
-      <p className="text-xs text-karaz-stone-500 uppercase tracking-wide mb-1">{label}</p>
-      <p className="font-display text-2xl font-bold text-karaz-stone-100">{value}</p>
+    <div className="rounded-md border border-rizzotto-iron-700/60 bg-rizzotto-iron-900/50 p-4 backdrop-blur-sm">
+      <p className="text-xs text-rizzotto-stone-500 uppercase tracking-wide mb-1">{label}</p>
+      <p className="font-display text-2xl font-bold text-rizzotto-stone-100">{value}</p>
     </div>
   );
 }
@@ -28,15 +28,15 @@ function FactionRow({
   const { faction } = entry;
   return (
     <div className="flex items-center gap-3 py-2">
-      <span className="w-5 text-right text-xs text-karaz-stone-600">#{rank}</span>
+      <span className="w-5 text-right text-xs text-rizzotto-stone-600">#{rank}</span>
       <FactionBadge
         colorHex={faction.color_hex}
         initials={faction.initials}
         name={faction.name}
         size="sm"
       />
-      <span className="flex-1 text-sm text-karaz-stone-200">{faction.name}</span>
-      <span className="text-sm text-karaz-stone-400">{trailing}</span>
+      <span className="flex-1 text-sm text-rizzotto-stone-200">{faction.name}</span>
+      <span className="text-sm text-rizzotto-stone-400">{trailing}</span>
     </div>
   );
 }
@@ -69,18 +69,18 @@ export function MetaDashboard() {
   return (
     <PageShell variant="wide">
       <header className="mb-8">
-        <h1 className="font-display text-3xl font-bold text-karaz-gold-500">
+        <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
           {t('meta_page.title')}
         </h1>
         {overview?.season && (
-          <p className="mt-1 text-sm text-karaz-stone-500">
+          <p className="mt-1 text-sm text-rizzotto-stone-500">
             {t('meta_page.season_label', { name: overview.season.name })}
           </p>
         )}
       </header>
 
       {overviewLoading && (
-        <div className="py-8 text-center text-karaz-stone-400 text-sm">
+        <div className="py-8 text-center text-rizzotto-stone-400 text-sm">
           {t('common.loading')}
         </div>
       )}
@@ -115,11 +115,11 @@ export function MetaDashboard() {
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 mb-10">
-            <section className="rounded-md border border-karaz-iron-700/60 bg-karaz-iron-900/40 p-5 backdrop-blur-sm">
-              <h2 className="font-display text-lg font-semibold text-karaz-stone-100 mb-4">
+            <section className="rounded-md border border-rizzotto-iron-700/60 bg-rizzotto-iron-900/40 p-5 backdrop-blur-sm">
+              <h2 className="font-display text-lg font-semibold text-rizzotto-stone-100 mb-4">
                 {t('meta_page.top_winrate')}
               </h2>
-              <div className="divide-y divide-karaz-iron-800/60">
+              <div className="divide-y divide-rizzotto-iron-800/60">
                 {overview.top_factions_by_winrate.map((entry, i) => (
                   <FactionRow
                     key={entry.faction.id}
@@ -135,11 +135,11 @@ export function MetaDashboard() {
               </div>
             </section>
 
-            <section className="rounded-md border border-karaz-iron-700/60 bg-karaz-iron-900/40 p-5 backdrop-blur-sm">
-              <h2 className="font-display text-lg font-semibold text-karaz-stone-100 mb-4">
+            <section className="rounded-md border border-rizzotto-iron-700/60 bg-rizzotto-iron-900/40 p-5 backdrop-blur-sm">
+              <h2 className="font-display text-lg font-semibold text-rizzotto-stone-100 mb-4">
                 {t('meta_page.most_picked')}
               </h2>
-              <div className="divide-y divide-karaz-iron-800/60">
+              <div className="divide-y divide-rizzotto-iron-800/60">
                 {overview.top_factions_by_pickrate.map((entry, i) => (
                   <FactionRow
                     key={entry.faction.id}
@@ -154,14 +154,14 @@ export function MetaDashboard() {
             </section>
           </div>
 
-          <section className="rounded-md border border-karaz-iron-700/60 bg-karaz-iron-900/40 p-5 backdrop-blur-sm">
-            <h2 className="font-display text-lg font-semibold text-karaz-stone-100 mb-1">
+          <section className="rounded-md border border-rizzotto-iron-700/60 bg-rizzotto-iron-900/40 p-5 backdrop-blur-sm">
+            <h2 className="font-display text-lg font-semibold text-rizzotto-stone-100 mb-1">
               {t('meta_page.heatmap.title')}
             </h2>
-            <p className="text-xs text-karaz-stone-500 mb-4">{t('meta_page.heatmap.legend')}</p>
+            <p className="text-xs text-rizzotto-stone-500 mb-4">{t('meta_page.heatmap.legend')}</p>
 
             {heatmapLoading && (
-              <div className="py-8 text-center text-karaz-stone-400 text-sm">
+              <div className="py-8 text-center text-rizzotto-stone-400 text-sm">
                 {t('meta_page.heatmap.loading')}
               </div>
             )}
@@ -173,7 +173,7 @@ export function MetaDashboard() {
             )}
 
             {heatmap && heatmap.cells.length === 0 && (
-              <p className="py-6 text-center text-sm text-karaz-stone-500 italic">
+              <p className="py-6 text-center text-sm text-rizzotto-stone-500 italic">
                 {t('meta_page.heatmap.empty')}
               </p>
             )}

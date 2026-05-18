@@ -51,7 +51,7 @@ export function PresetEditorPage() {
 
   if (authLoading || (presetId && presetLoading)) {
     return (
-      <PageShell variant="narrow" className="text-karaz-stone-400 text-sm">
+      <PageShell variant="narrow" className="text-rizzotto-stone-400 text-sm">
         {t('common.loading')}
       </PageShell>
     );
@@ -67,7 +67,7 @@ export function PresetEditorPage() {
   if (!presetId && !canCreate) {
     return (
       <PageShell variant="narrow">
-        <div className="rounded-md border border-karaz-gold-500/30 bg-karaz-gold-500/10 p-4 text-sm text-karaz-gold-500">
+        <div className="rounded-md border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/10 p-4 text-sm text-rizzotto-gold-500">
           {t('preset.editor.permission_denied')}
         </div>
       </PageShell>
@@ -79,11 +79,11 @@ export function PresetEditorPage() {
   return (
     <PageShell variant="narrow">
       <div className="mb-6">
-        <h1 className="font-display text-3xl font-bold text-karaz-gold-500">
+        <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
           {isEditMode ? t('preset.editor.edit_title') : t('preset.editor.create_title')}
         </h1>
         {isEditMode && (
-          <p className="text-karaz-stone-500 text-sm mt-1">{existingPreset.name}</p>
+          <p className="text-rizzotto-stone-500 text-sm mt-1">{existingPreset.name}</p>
         )}
       </div>
 

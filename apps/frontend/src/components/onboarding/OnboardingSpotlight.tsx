@@ -174,12 +174,12 @@ export function OnboardingSpotlight({
                   maxWidth: '22rem',
                 }
           }
-          className="z-[61] pointer-events-auto rounded-md border border-karaz-gold-500/40 bg-karaz-iron-900 p-5 shadow-karaz-gold-glow"
+          className="z-[61] pointer-events-auto rounded-md border border-rizzotto-gold-500/40 bg-rizzotto-iron-900 p-5 shadow-rizzotto-gold-glow"
         >
-          <h3 className="font-display text-[15px] uppercase tracking-wider text-karaz-gold-400">
+          <h3 className="font-display text-[15px] uppercase tracking-wider text-rizzotto-gold-400">
             {title}
           </h3>
-          <p className="mt-2 font-sans text-sm leading-relaxed text-karaz-stone-200">{body}</p>
+          <p className="mt-2 font-sans text-sm leading-relaxed text-rizzotto-stone-200">{body}</p>
           {controls && <div className="mt-4 flex items-center justify-between gap-3">{controls}</div>}
         </motion.div>
       </AnimatePresence>

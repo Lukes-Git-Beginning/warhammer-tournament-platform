@@ -241,7 +241,7 @@ h6 {
   text-shadow: none;
 }
 
-.karaz-seam {
+.rizzotto-seam {
   height: 1px;
   background-image: linear-gradient(
     to right,
@@ -254,11 +254,11 @@ h6 {
 }
 
 @layer components {
-  .karaz-photo-frame {
+  .rizzotto-photo-frame {
     position: relative;
     overflow: hidden;
   }
-  .karaz-photo-frame::before {
+  .rizzotto-photo-frame::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -272,7 +272,7 @@ h6 {
     pointer-events: none;
     z-index: 1;
   }
-  .karaz-photo-frame::after {
+  .rizzotto-photo-frame::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -286,14 +286,14 @@ h6 {
     pointer-events: none;
     z-index: 1;
   }
-  .karaz-photo-frame img,
-  .karaz-photo-frame video {
+  .rizzotto-photo-frame img,
+  .rizzotto-photo-frame video {
     filter: saturate(0.85) contrast(1.05);
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-  .karaz-photo-frame picture {
+  .rizzotto-photo-frame picture {
     display: block;
     width: 100%;
     height: 100%;
@@ -377,7 +377,7 @@ h6 {
 /* Vignette utility — radial darken from edges. Use on full-page  */
 /* wrappers (e.g. <body> or <main>) to add cinematic falloff.     */
 /* ───────────────────────────────────────────────────────────── */
-@utility bg-karaz-vignette {
+@utility bg-rizzotto-vignette {
   background-image: radial-gradient(
     ellipse at center,
     transparent 40%,
@@ -389,7 +389,7 @@ h6 {
 /* Forge glow utility — bottom-anchored warm radial. Pair with    */
 /* the stone-wall page texture for atmospheric layering.          */
 /* ───────────────────────────────────────────────────────────── */
-@utility bg-karaz-forge-glow {
+@utility bg-rizzotto-forge-glow {
   background-image: radial-gradient(
     ellipse 70% 50% at 50% 100%,
     rgba(216, 99, 42, 0.07) 0%,

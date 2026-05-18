@@ -23,7 +23,7 @@ export function HeroSection() {
       className="relative isolate min-h-[100svh] w-full overflow-hidden"
     >
       {/* Hero photo (full-bleed background) */}
-      <div aria-hidden="true" className="karaz-photo-frame absolute inset-0 -z-10">
+      <div aria-hidden="true" className="rizzotto-photo-frame absolute inset-0 -z-10">
         <Picture
           src="/img/hero-knight"
           alt=""
@@ -39,7 +39,7 @@ export function HeroSection() {
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10"
-        style={{ boxShadow: 'var(--shadow-karaz-stone-vignette)' }}
+        style={{ boxShadow: 'var(--shadow-rizzotto-stone-vignette)' }}
       />
 
       {/* Content column */}
@@ -70,7 +70,7 @@ export function HeroSection() {
               ? { duration: 0.24 }
               : { duration: 0.6, ease: [0.4, 0, 0.2, 1], delay: 1.0 }
           }
-          className="mt-6 font-display italic text-karaz-stone-200"
+          className="mt-6 font-display italic text-rizzotto-stone-200"
           style={{
             fontSize: 'clamp(1.125rem, 2.4vw, 1.625rem)',
             textShadow: '0 2px 12px rgba(0,0,0,0.7)',
@@ -88,7 +88,7 @@ export function HeroSection() {
             reduced ? { duration: 0.24 } : { duration: 0.6, delay: 1.15 }
           }
           lang="la"
-          className="mt-1 font-display text-[11px] uppercase tracking-[0.4em] text-karaz-gold-500/80"
+          className="mt-1 font-display text-[11px] uppercase tracking-[0.4em] text-rizzotto-gold-500/80"
           title="Everlasting Realm"
           style={{ textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}
         >

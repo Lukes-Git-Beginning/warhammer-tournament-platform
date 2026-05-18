@@ -5,8 +5,8 @@ export function MusterCallAside() {
   const { t } = useTranslation();
 
   return (
-    <aside className="flex flex-col gap-6 rounded-md border border-karaz-iron-700/50 bg-karaz-iron-900/40 p-6 backdrop-blur-sm">
-      <div className="relative overflow-hidden rounded-md ring-1 ring-karaz-iron-700/60">
+    <aside className="flex flex-col gap-6 rounded-md border border-rizzotto-iron-700/50 bg-rizzotto-iron-900/40 p-6 backdrop-blur-sm">
+      <div className="relative overflow-hidden rounded-md ring-1 ring-rizzotto-iron-700/60">
         <Picture
           src="/img/faction-banner-template"
           alt=""
@@ -25,32 +25,32 @@ export function MusterCallAside() {
       </div>
 
       <div>
-        <h2 className="font-display text-xl font-semibold text-karaz-gold-500">
+        <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500">
           {t('tournament.create.aside.heading')}
         </h2>
-        <p className="mt-3 text-sm leading-relaxed text-karaz-stone-300">
+        <p className="mt-3 text-sm leading-relaxed text-rizzotto-stone-300">
           {t('tournament.create.aside.body')}
         </p>
       </div>
 
-      <ul className="flex flex-col gap-3 text-sm text-karaz-stone-300">
+      <ul className="flex flex-col gap-3 text-sm text-rizzotto-stone-300">
         {(['bullet_format', 'bullet_mode', 'bullet_draft'] as const).map((key) => (
           <li key={key} className="flex gap-3">
             <span
               aria-hidden="true"
-              className="mt-2 inline-block size-1.5 shrink-0 rounded-full bg-karaz-gold-500/70"
+              className="mt-2 inline-block size-1.5 shrink-0 rounded-full bg-rizzotto-gold-500/70"
             />
             <span className="leading-relaxed">
               <Trans
                 i18nKey={`tournament.create.aside.${key}`}
-                components={{ strong: <strong className="text-karaz-stone-100 font-semibold" /> }}
+                components={{ strong: <strong className="text-rizzotto-stone-100 font-semibold" /> }}
               />
             </span>
           </li>
         ))}
       </ul>
 
-      <p className="border-t border-karaz-iron-800/60 pt-4 text-xs italic text-karaz-stone-500">
+      <p className="border-t border-rizzotto-iron-800/60 pt-4 text-xs italic text-rizzotto-stone-500">
         {t('tournament.create.aside.footnote')}
       </p>
     </aside>

@@ -7,12 +7,12 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-karaz-iron-800 border-karaz-iron-600 text-karaz-stone-200',
-        gold: 'bg-karaz-gold-500/15 border-karaz-gold-500/40 text-karaz-gold-400',
-        forge: 'bg-karaz-forge-500/20 border-karaz-forge-500/40 text-karaz-forge-400',
-        blood: 'bg-karaz-blood-500/15 border-karaz-blood-500/40 text-karaz-blood-500',
-        bronze: 'bg-karaz-bronze/15 border-karaz-bronze/40 text-karaz-bronze',
-        success: 'bg-karaz-success/15 border-karaz-success/40 text-karaz-success',
+        default: 'bg-rizzotto-iron-800 border-rizzotto-iron-600 text-rizzotto-stone-200',
+        gold: 'bg-rizzotto-gold-500/15 border-rizzotto-gold-500/40 text-rizzotto-gold-400',
+        forge: 'bg-rizzotto-forge-500/20 border-rizzotto-forge-500/40 text-rizzotto-forge-400',
+        blood: 'bg-rizzotto-blood-500/15 border-rizzotto-blood-500/40 text-rizzotto-blood-500',
+        bronze: 'bg-rizzotto-bronze/15 border-rizzotto-bronze/40 text-rizzotto-bronze',
+        success: 'bg-rizzotto-success/15 border-rizzotto-success/40 text-rizzotto-success',
       },
     },
     defaultVariants: { variant: 'default' },

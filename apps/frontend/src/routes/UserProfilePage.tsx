@@ -72,7 +72,7 @@ export function UserProfilePage() {
 
   if (isLoading) {
     return (
-      <PageShell variant="narrow" className="text-karaz-stone-400 text-sm">
+      <PageShell variant="narrow" className="text-rizzotto-stone-400 text-sm">
         {t('common.loading')}
       </PageShell>
     );
@@ -216,15 +216,15 @@ export function UserProfilePage() {
       {isOwnProfile && (
         <section
           aria-labelledby="workshop-heading"
-          className="rounded-md border border-karaz-iron-700 bg-karaz-iron-900/60 p-6"
+          className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-6"
         >
           <h2
             id="workshop-heading"
-            className="font-display text-lg font-semibold text-karaz-gold-400 mb-2"
+            className="font-display text-lg font-semibold text-rizzotto-gold-400 mb-2"
           >
             {t('user_profile.workshop_title')}
           </h2>
-          <p className="text-sm text-karaz-stone-300 mb-4">
+          <p className="text-sm text-rizzotto-stone-300 mb-4">
             {t('user_profile.workshop_body')}
           </p>
           <Button

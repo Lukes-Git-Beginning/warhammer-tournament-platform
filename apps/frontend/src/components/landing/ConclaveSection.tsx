@@ -36,12 +36,12 @@ export function ConclaveSection() {
     <section aria-labelledby="conclave-heading" className="relative py-16 lg:py-24">
       <div className="mx-auto max-w-[80rem] px-4 sm:px-6 lg:px-8 xl:px-12">
         <div className="mb-12 text-center lg:mb-16">
-          <span className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-karaz-gold-500">
+          <span className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-rizzotto-gold-500">
             {t('conclave.eyebrow')}
           </span>
           <h2
             id="conclave-heading"
-            className="mt-2 font-display font-bold text-karaz-stone-100"
+            className="mt-2 font-display font-bold text-rizzotto-stone-100"
             style={{ fontSize: 'clamp(1.625rem, 3.5vw, 2.5rem)', lineHeight: 1.15 }}
           >
             {t('conclave.heading')}
@@ -67,7 +67,7 @@ export function ConclaveSection() {
               }}
             >
               <ArchHeader icon={p.icon} title={p.title} />
-              <p className="mx-auto mt-6 max-w-xs text-center text-karaz-stone-300 leading-relaxed">
+              <p className="mx-auto mt-6 max-w-xs text-center text-rizzotto-stone-300 leading-relaxed">
                 {p.description}
               </p>
             </motion.li>
