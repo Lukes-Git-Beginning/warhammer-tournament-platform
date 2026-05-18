@@ -208,9 +208,34 @@ once available. The component API stays identical.
 
 ## Faction icons
 
-Faction icons live separately under `public/icons/factions/` and are
+Faction icons live separately under `public/icons/factions/<slug>.png` and are
 *not* part of this system — they are content. Use them via `<img>` or
 inline-SVG render; do not stroke-tint them (they ship with their own colors).
+
+### Naming + sourcing convention
+
+- One **default sigil per race** (24 DB factions, file named after the DB slug:
+  `empire.png`, `grand_cathay.png`, `daemons_of_chaos.png`, etc.). PNG 256×256, RGBA.
+- The default sigil for a race is curated by hand from the AI-generated
+  sub-faction crest pack (see `13-asset-generation.md`). We pick the "hero slot"
+  per race (Reikland for Empire, Karaz-a-Karak for Dwarfs, Clan Mors for Skaven,
+  Couronne for Bretonnia, etc.).
+- **Chaos mono-gods** (`khorne`, `nurgle`, `tzeentch`, `slaanesh`) all point at
+  `daemons_of_chaos.png` — they don't have dedicated AoB books for TOW.
+- **Norsca + Ogre Kingdoms** intentionally have `icon_url = null` — no AoB book,
+  no crest. They fall back to the initials circle in `FactionBadge`.
+- Sub-faction crests (3 per race in the source pack) are **not** committed; they
+  belong to a future Sub-Faction-Picker (M6+).
+
+### Render rules
+
+- Always use `<FactionBadge ... iconUrl={faction.icon_url}>`. The component
+  handles the `<img>` ↔ initials-circle fallback internally — never render the
+  `<img>` ad-hoc in callers.
+- Sigils render inside a colored ring matching `faction.color_hex` so the
+  badge still reads as "Faction X" at small sizes even if the sigil isn't
+  recognizable.
+- Do not crop, recolor, or filter sigils. They are content, not iconography.
 
 ---
 
