@@ -84,6 +84,7 @@ export function FactionDetailPage() {
           initials={faction.initials}
           name={faction.name}
           size="lg"
+          iconUrl={faction.icon_url}
         />
         <div>
           <h1 className="font-display text-3xl font-bold text-warhammer-gold">{faction.name}</h1>

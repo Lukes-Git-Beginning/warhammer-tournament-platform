@@ -34,6 +34,7 @@ function FactionRow({
         initials={faction.initials}
         name={faction.name}
         size="sm"
+        iconUrl={faction.icon_url}
       />
       <span className="flex-1 text-sm text-rizzotto-stone-200">{faction.name}</span>
       <span className="text-sm text-rizzotto-stone-400">{trailing}</span>

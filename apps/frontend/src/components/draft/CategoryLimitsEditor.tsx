@@ -143,6 +143,7 @@ export function CategoryLimitsEditor({ limits, onChange }: CategoryLimitsEditorP
                         initials={faction.initials}
                         name={faction.name}
                         size="sm"
+                        iconUrl={faction.icon_url}
                       />
                     </button>
                   );

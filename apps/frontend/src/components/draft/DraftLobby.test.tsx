@@ -178,6 +178,20 @@ describe('FactionGrid', () => {
     expect(html).toContain('disabled');
   });
 
+  it('rendert <img>-Sigil wenn Faction icon_url hat', () => {
+    const factions = [{ ...makeFaction('zz'), icon_url: '/icons/factions/skaven.png' }];
+    const html = renderToStaticMarkup(
+      <FactionGrid
+        allFactions={factions}
+        state={emptyState()}
+        currentTurn={null}
+        viewerRole="spectator"
+        onPick={() => undefined}
+      />,
+    );
+    expect(html).toContain('src="/icons/factions/skaven.png"');
+  });
+
   it('picked-host Faction erhält "Host" Badge', () => {
     const factions = [makeFaction('emp')];
     const state = emptyState();
