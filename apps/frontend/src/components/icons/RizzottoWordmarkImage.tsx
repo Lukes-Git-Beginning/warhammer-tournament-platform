@@ -1,7 +1,7 @@
 import { forwardRef, type HTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
-export interface KarazWordmarkImageProps extends HTMLAttributes<HTMLImageElement> {
+export interface RizzottoWordmarkImageProps extends HTMLAttributes<HTMLImageElement> {
   /** Use the bronze "etched ground" variant. */
   bronze?: boolean;
   /**
@@ -15,16 +15,16 @@ export interface KarazWordmarkImageProps extends HTMLAttributes<HTMLImageElement
 }
 
 /**
- * Karaz Lists wordmark lockup as a generated raster asset.
- * Combines the heraldic sigil tablet + the "Karaz Lists" inscription
- * in a single image. See public/img/karaz-wordmark.png.
+ * Rizzotto wordmark lockup as a generated raster asset.
+ * Combines the heraldic sigil tablet + the "Rizzotto" inscription
+ * in a single image. See public/img/rizzotto-wordmark.png.
  *
  * For tinted / inline use (footer mini, sigillum reveal animation),
- * use the SVG-based KarazSigil component instead.
+ * use the SVG-based RizzottoSigil component instead.
  */
-export const KarazWordmarkImage = forwardRef<HTMLImageElement, KarazWordmarkImageProps>(
+export const RizzottoWordmarkImage = forwardRef<HTMLImageElement, RizzottoWordmarkImageProps>(
   ({ className, bronze = false, width, loading = 'eager', style, ...rest }, ref) => {
-    const base = bronze ? '/img/karaz-wordmark-bronze' : '/img/karaz-wordmark';
+    const base = bronze ? '/img/rizzotto-wordmark-bronze' : '/img/rizzotto-wordmark';
     return (
       <picture>
         <source srcSet={`${base}.avif`} type="image/avif" />
@@ -32,7 +32,7 @@ export const KarazWordmarkImage = forwardRef<HTMLImageElement, KarazWordmarkImag
         <img
           ref={ref}
           src={`${base}.png`}
-          alt="Karaz Lists"
+          alt="Rizzotto"
           loading={loading}
           decoding="async"
           width={width}
@@ -44,4 +44,4 @@ export const KarazWordmarkImage = forwardRef<HTMLImageElement, KarazWordmarkImag
     );
   },
 );
-KarazWordmarkImage.displayName = 'KarazWordmarkImage';
+RizzottoWordmarkImage.displayName = 'RizzottoWordmarkImage';

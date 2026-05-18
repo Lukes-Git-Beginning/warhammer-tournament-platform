@@ -7,7 +7,7 @@ import {
   CategoryLimitSchema,
   type DraftTurn,
   type CategoryLimit,
-} from '@tww3/types';
+} from '@rizzotto/types';
 import { cached, invalidate } from '../lib/cache.js';
 
 // ---------------------------------------------------------------------------

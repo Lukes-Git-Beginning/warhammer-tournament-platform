@@ -166,7 +166,7 @@ export function TournamentCreateForm() {
             name="mode"
             value="ONE_V_ONE"
             disabled
-            className="cursor-not-allowed text-karaz-stone-500"
+            className="cursor-not-allowed text-rizzotto-stone-500"
           >
             <option value="ONE_V_ONE">{t('tournament.form.mode_1v1')}</option>
           </Select>
@@ -250,8 +250,8 @@ export function TournamentCreateForm() {
         <FieldError message={errors.discord_link} />
       </div>
 
-      <fieldset className="space-y-4 rounded-md border border-karaz-iron-700 bg-karaz-iron-900/60 p-4">
-        <legend className="px-1 text-sm font-semibold text-karaz-stone-200">
+      <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+        <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
           {t('tournament.form.draft_section')}
         </legend>
         <label className="flex cursor-pointer items-center gap-3">
@@ -260,9 +260,9 @@ export function TournamentCreateForm() {
             name="draft_enabled"
             checked={form.draft_enabled ?? false}
             onChange={handleChange}
-            className="h-4 w-4 rounded border-karaz-iron-600 bg-karaz-iron-800 text-karaz-gold-500 focus:ring-karaz-gold-500"
+            className="h-4 w-4 rounded border-rizzotto-iron-600 bg-rizzotto-iron-800 text-rizzotto-gold-500 focus:ring-rizzotto-gold-500"
           />
-          <span className="text-sm text-karaz-stone-300">
+          <span className="text-sm text-rizzotto-stone-300">
             {t('tournament.form.draft_enable')}
           </span>
         </label>

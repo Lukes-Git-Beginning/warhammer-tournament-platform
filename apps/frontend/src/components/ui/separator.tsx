@@ -15,10 +15,10 @@ export const Separator = forwardRef<HTMLDivElement, SeparatorProps>(
       aria-orientation={orientation}
       className={cn(
         engraved
-          ? 'karaz-seam'
+          ? 'rizzotto-seam'
           : orientation === 'horizontal'
-            ? 'h-px w-full bg-karaz-iron-700'
-            : 'h-full w-px bg-karaz-iron-700',
+            ? 'h-px w-full bg-rizzotto-iron-700'
+            : 'h-full w-px bg-rizzotto-iron-700',
         className,
       )}
       {...props}

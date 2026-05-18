@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import type { UserMe } from '@tww3/types';
+import type { UserMe } from '@rizzotto/types';
 import { Button } from '@/components/ui/button';
 
 interface OnboardingStage4ActionProps {
@@ -29,12 +29,12 @@ export function OnboardingStage4Action({ user, onAdvance }: OnboardingStage4Acti
             ? { duration: 0.24 }
             : { duration: 0.55, ease: [0.2, 0.8, 0.2, 1] }
         }
-        className="w-full rounded-md border border-karaz-iron-700 bg-karaz-iron-900 p-8 shadow-karaz-banner text-center"
+        className="w-full rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900 p-8 shadow-rizzotto-banner text-center"
       >
-        <h2 className="font-headline text-karaz-stone-100" style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)' }}>
+        <h2 className="font-headline text-rizzotto-stone-100" style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)' }}>
           {t('onboarding.stage3.title')}
         </h2>
-        <p className="mt-3 font-sans text-sm leading-relaxed text-karaz-stone-300">
+        <p className="mt-3 font-sans text-sm leading-relaxed text-rizzotto-stone-300">
           {t('onboarding.stage3.body')}
         </p>
 
@@ -42,7 +42,7 @@ export function OnboardingStage4Action({ user, onAdvance }: OnboardingStage4Acti
           aria-hidden="true"
           lang="la"
           title="Forge of Eternity"
-          className="mt-5 font-display text-[10px] uppercase tracking-[0.4em] text-karaz-gold-500/70"
+          className="mt-5 font-display text-[10px] uppercase tracking-[0.4em] text-rizzotto-gold-500/70"
         >
           Forgia Aeternitatis
         </p>

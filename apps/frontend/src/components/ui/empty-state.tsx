@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Card, CardContent } from './card';
 import { Picture } from './picture';
-import { KarazSigil } from '../icons/KarazSigil';
+import { RizzottoSigil } from '../icons/RizzottoSigil';
 import { cn } from '@/lib/utils';
 
 export type EmptyStateVariant = 'banner' | 'sigil' | 'compact';
@@ -25,7 +25,7 @@ export interface EmptyStateProps {
 }
 
 const epigraphClass =
-  'font-display italic text-sm tracking-wider text-karaz-gold-500/70';
+  'font-display italic text-sm tracking-wider text-rizzotto-gold-500/70';
 
 export function EmptyState({
   title,
@@ -43,15 +43,15 @@ export function EmptyState({
         data-testid="empty-state-compact"
         className={cn('flex items-center gap-3 px-4 py-6', className)}
       >
-        <KarazSigil
+        <RizzottoSigil
           aria-hidden="true"
-          className="size-8 text-karaz-iron-600 opacity-50 shrink-0"
+          className="size-8 text-rizzotto-iron-600 opacity-50 shrink-0"
         />
         <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
-          <span className="font-display text-sm font-semibold text-karaz-stone-200">
+          <span className="font-display text-sm font-semibold text-rizzotto-stone-200">
             {title}
           </span>
-          <span className="text-sm text-karaz-stone-400">{body}</span>
+          <span className="text-sm text-rizzotto-stone-400">{body}</span>
         </div>
       </div>
     );
@@ -59,10 +59,10 @@ export function EmptyState({
 
   const headingAndCopy = (
     <div className={variant === 'banner' ? 'text-center sm:text-left' : 'text-center'}>
-      <h3 className="font-display text-2xl font-semibold text-karaz-stone-100">
+      <h3 className="font-display text-2xl font-semibold text-rizzotto-stone-100">
         {title}
       </h3>
-      <p className="mt-3 text-karaz-stone-300">{body}</p>
+      <p className="mt-3 text-rizzotto-stone-300">{body}</p>
       {motto && (
         <p
           aria-hidden="true"
@@ -100,12 +100,12 @@ export function EmptyState({
               alt={image.alt ?? ''}
               width={image.width}
               height={image.height}
-              className="mx-auto h-44 w-auto rounded-md ring-1 ring-karaz-iron-700/60"
+              className="mx-auto h-44 w-auto rounded-md ring-1 ring-rizzotto-iron-700/60"
             />
           ) : (
-            <KarazSigil
+            <RizzottoSigil
               aria-hidden="true"
-              className="mx-auto size-32 text-karaz-iron-600 opacity-60"
+              className="mx-auto size-32 text-rizzotto-iron-600 opacity-60"
             />
           )}
           {headingAndCopy}
@@ -118,13 +118,13 @@ export function EmptyState({
     <div
       data-testid="empty-state-sigil"
       className={cn(
-        'relative overflow-hidden rounded-md border border-karaz-iron-700 bg-karaz-iron-900/40',
+        'relative overflow-hidden rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/40',
         className,
       )}
     >
-      <KarazSigil
+      <RizzottoSigil
         aria-hidden="true"
-        className="pointer-events-none absolute right-6 top-1/2 size-48 -translate-y-1/2 text-karaz-iron-700 opacity-30 max-sm:left-1/2 max-sm:-translate-x-1/2"
+        className="pointer-events-none absolute right-6 top-1/2 size-48 -translate-y-1/2 text-rizzotto-iron-700 opacity-30 max-sm:left-1/2 max-sm:-translate-x-1/2"
       />
       <div className="relative z-10 mx-auto max-w-prose px-6 py-10 sm:px-10">
         {headingAndCopy}

@@ -5,7 +5,7 @@ import { getFactions } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/ui/empty-state';
-import type { FactionWithStatsDto } from '@tww3/types';
+import type { FactionWithStatsDto } from '@rizzotto/types';
 
 function FactionCard({ entry }: { entry: FactionWithStatsDto }) {
   const { t } = useTranslation();
@@ -15,7 +15,7 @@ function FactionCard({ entry }: { entry: FactionWithStatsDto }) {
     <Link
       to="/factions/$id"
       params={{ id: faction.id }}
-      className="group flex flex-col items-center gap-2 rounded-md border border-karaz-iron-700/60 bg-karaz-iron-900/60 p-4 backdrop-blur-sm transition-colors hover:border-karaz-gold-500/50 hover:bg-karaz-iron-800/50"
+      className="group flex flex-col items-center gap-2 rounded-md border border-rizzotto-iron-700/60 bg-rizzotto-iron-900/60 p-4 backdrop-blur-sm transition-colors hover:border-rizzotto-gold-500/50 hover:bg-rizzotto-iron-800/50"
     >
       <FactionBadge
         colorHex={faction.color_hex}
@@ -23,11 +23,11 @@ function FactionCard({ entry }: { entry: FactionWithStatsDto }) {
         name={faction.name}
         size="md"
       />
-      <span className="text-sm font-medium text-karaz-stone-200 text-center group-hover:text-karaz-gold-500 transition-colors leading-tight">
+      <span className="text-sm font-medium text-rizzotto-stone-200 text-center group-hover:text-rizzotto-gold-500 transition-colors leading-tight">
         {faction.name}
       </span>
       {stats ? (
-        <div className="flex gap-3 text-xs text-karaz-stone-500">
+        <div className="flex gap-3 text-xs text-rizzotto-stone-500">
           <span>{t('factions_page.matches_count', { count: stats.matches_played })}</span>
           <span>
             {stats.win_rate !== null
@@ -38,7 +38,7 @@ function FactionCard({ entry }: { entry: FactionWithStatsDto }) {
           </span>
         </div>
       ) : (
-        <div className="text-xs text-karaz-stone-600">{t('factions_page.no_stats')}</div>
+        <div className="text-xs text-rizzotto-stone-600">{t('factions_page.no_stats')}</div>
       )}
     </Link>
   );
@@ -57,18 +57,18 @@ export function FactionListPage() {
   return (
     <PageShell variant="wide">
       <header className="mb-8">
-        <h1 className="font-display text-3xl font-bold text-karaz-gold-500">
+        <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
           {t('factions_page.title')}
         </h1>
         {data?.season && (
-          <p className="mt-1 text-sm text-karaz-stone-500">
+          <p className="mt-1 text-sm text-rizzotto-stone-500">
             {t('factions_page.season_label', { name: data.season.name })}
           </p>
         )}
       </header>
 
       {isLoading && (
-        <div className="py-8 text-center text-karaz-stone-400 text-sm">
+        <div className="py-8 text-center text-rizzotto-stone-400 text-sm">
           {t('common.loading')}
         </div>
       )}

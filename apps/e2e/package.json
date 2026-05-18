@@ -1,5 +1,5 @@
 {
-  "name": "@tww3/e2e",
+  "name": "@rizzotto/e2e",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "install-browsers": "playwright install --with-deps chromium"
   },
   "dependencies": {
-    "@tww3/db": "workspace:*"
+    "@rizzotto/db": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",

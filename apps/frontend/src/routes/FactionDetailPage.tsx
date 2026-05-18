@@ -2,7 +2,7 @@ import { useParams } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { getFaction } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
-import type { SnapshotTrendEntry } from '@tww3/types';
+import type { SnapshotTrendEntry } from '@rizzotto/types';
 
 function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (

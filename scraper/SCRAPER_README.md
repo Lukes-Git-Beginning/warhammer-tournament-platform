@@ -19,7 +19,7 @@ Scraping unterbinden, indem sie diesen User-Agent blocken.
 Build im Monorepo-Root:
 
 ```bash
-pnpm --filter @tww3/scraper build
+pnpm --filter @rizzotto/scraper build
 ```
 
 ## Usage

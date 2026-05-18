@@ -11,7 +11,7 @@ export function CreateTournamentPage() {
 
   if (isLoading) {
     return (
-      <PageShell variant="narrow" className="text-karaz-stone-400">
+      <PageShell variant="narrow" className="text-rizzotto-stone-400">
         {t('common.loading')}
       </PageShell>
     );
@@ -24,16 +24,16 @@ export function CreateTournamentPage() {
   return (
     <PageShell variant="wide">
       <header className="mb-8 max-w-2xl">
-        <h1 className="font-display text-3xl font-bold text-karaz-gold-500">
+        <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
           {t('tournament.create.title')}
         </h1>
-        <p className="mt-2 text-sm text-karaz-stone-400">
+        <p className="mt-2 text-sm text-rizzotto-stone-400">
           {t('tournament.create.subtitle')}
         </p>
       </header>
 
       {user.role === 'USER' && (
-        <div className="mb-8 rounded-md border border-karaz-gold-500/30 bg-karaz-gold-500/10 p-4 text-sm text-karaz-gold-500">
+        <div className="mb-8 rounded-md border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/10 p-4 text-sm text-rizzotto-gold-500">
           {t('tournament.create.role_warning')}
         </div>
       )}

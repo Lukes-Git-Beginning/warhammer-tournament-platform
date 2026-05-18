@@ -12,16 +12,16 @@ const cardVariants = cva(
   {
     variants: {
       variant: {
-        stone: 'bg-karaz-iron-900 border border-karaz-iron-600 rounded-lg shadow-karaz-emboss',
+        stone: 'bg-rizzotto-iron-900 border border-rizzotto-iron-600 rounded-lg shadow-rizzotto-emboss',
         banner:
-          'bg-karaz-iron-900 border border-karaz-iron-600 rounded-lg shadow-karaz-banner before:absolute before:inset-0 before:bg-bronze-plate-texture before:bg-[length:512px_512px] before:opacity-[0.12] before:pointer-events-none before:mix-blend-overlay',
+          'bg-rizzotto-iron-900 border border-rizzotto-iron-600 rounded-lg shadow-rizzotto-banner before:absolute before:inset-0 before:bg-bronze-plate-texture before:bg-[length:512px_512px] before:opacity-[0.12] before:pointer-events-none before:mix-blend-overlay',
         parchment:
-          'bg-karaz-iron-900 border border-karaz-bronze/30 rounded-lg shadow-karaz-banner before:absolute before:inset-0 before:bg-parchment-aged-texture before:bg-[length:512px_512px] before:opacity-[0.18] before:pointer-events-none before:mix-blend-overlay',
+          'bg-rizzotto-iron-900 border border-rizzotto-bronze/30 rounded-lg shadow-rizzotto-banner before:absolute before:inset-0 before:bg-parchment-aged-texture before:bg-[length:512px_512px] before:opacity-[0.18] before:pointer-events-none before:mix-blend-overlay',
         forge:
-          'bg-karaz-iron-900 border border-karaz-forge-500/40 rounded-lg shadow-karaz-banner before:absolute before:inset-0 before:bg-[radial-gradient(ellipse_at_center,rgba(216,99,42,0.16),transparent_70%)] before:pointer-events-none',
+          'bg-rizzotto-iron-900 border border-rizzotto-forge-500/40 rounded-lg shadow-rizzotto-banner before:absolute before:inset-0 before:bg-[radial-gradient(ellipse_at_center,rgba(216,99,42,0.16),transparent_70%)] before:pointer-events-none',
       },
       interactive: {
-        true: 'cursor-pointer hover:border-karaz-iron-500 hover:bg-karaz-iron-800 hover:-translate-y-0.5 hover:shadow-karaz-banner',
+        true: 'cursor-pointer hover:border-rizzotto-iron-500 hover:bg-rizzotto-iron-800 hover:-translate-y-0.5 hover:shadow-rizzotto-banner',
         false: '',
       },
     },
@@ -56,7 +56,7 @@ export const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadi
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('font-display text-xl font-semibold text-karaz-stone-100', className)}
+      className={cn('font-display text-xl font-semibold text-rizzotto-stone-100', className)}
       {...props}
     />
   ),
@@ -65,7 +65,7 @@ CardTitle.displayName = 'CardTitle';
 
 export const CardDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLParagraphElement>>(
   ({ className, ...props }, ref) => (
-    <p ref={ref} className={cn('text-sm text-karaz-stone-400 leading-relaxed', className)} {...props} />
+    <p ref={ref} className={cn('text-sm text-rizzotto-stone-400 leading-relaxed', className)} {...props} />
   ),
 );
 CardDescription.displayName = 'CardDescription';

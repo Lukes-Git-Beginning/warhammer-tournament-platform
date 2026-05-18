@@ -238,6 +238,6 @@ Checkliste für neue Endpunkte:
    fastify.get('/api/foo', { preHandler: fastify.authenticate }, handler);
    ```
 5. **Reihenfolge:** Immer `authenticate` vor `requireRole` — `requireRole` liest `request.user`, das erst nach JWT-Verify verfügbar ist.
-6. **Validation:** Zod-Schemas aus `@tww3/types` verwenden; `.safeParse()` und bei Fehler 400 zurückgeben.
+6. **Validation:** Zod-Schemas aus `@rizzotto/types` verwenden; `.safeParse()` und bei Fehler 400 zurückgeben.
 7. **ESM-Imports:** Alle lokalen Imports mit `.js`-Extension (`../lib/cache.js`).
 8. **Caching:** Read-Through-Pattern mit `cached(fastify.redis, key, compute, { ttlSeconds })` wo sinnvoll [siehe `.knowledge/caching.md`].

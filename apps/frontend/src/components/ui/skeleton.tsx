@@ -8,7 +8,7 @@ export const Skeleton = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement
       aria-busy="true"
       aria-live="polite"
       className={cn(
-        'animate-pulse rounded-sm bg-karaz-iron-800 motion-reduce:animate-none',
+        'animate-pulse rounded-sm bg-rizzotto-iron-800 motion-reduce:animate-none',
         className,
       )}
       {...props}

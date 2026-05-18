@@ -2,13 +2,13 @@ import { forwardRef, type InputHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
 export const inputClasses = cn(
-  'flex h-11 w-full min-w-0 rounded-md border border-karaz-iron-600 bg-karaz-iron-800',
-  'px-3 py-2 text-sm text-karaz-stone-100',
-  'placeholder:text-karaz-stone-500',
+  'flex h-11 w-full min-w-0 rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-800',
+  'px-3 py-2 text-sm text-rizzotto-stone-100',
+  'placeholder:text-rizzotto-stone-500',
   'transition-colors duration-base ease-burn',
-  'focus:outline-none focus:border-karaz-gold-500 focus:ring-1 focus:ring-karaz-gold-500/60',
+  'focus:outline-none focus:border-rizzotto-gold-500 focus:ring-1 focus:ring-rizzotto-gold-500/60',
   'disabled:cursor-not-allowed disabled:opacity-50',
-  'file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-karaz-stone-300',
+  'file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-rizzotto-stone-300',
 );
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(

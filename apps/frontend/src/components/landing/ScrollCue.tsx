@@ -19,12 +19,12 @@ export function ScrollCue({ className }: { className?: string }) {
     <div
       aria-hidden="true"
       className={cn(
-        'pointer-events-none flex flex-col items-center gap-2 text-karaz-stone-400 transition-opacity duration-base ease-burn',
+        'pointer-events-none flex flex-col items-center gap-2 text-rizzotto-stone-400 transition-opacity duration-base ease-burn',
         visible ? 'opacity-80' : 'opacity-0',
         className,
       )}
     >
-      <span className="font-display text-[10px] tracking-[0.3em] uppercase text-karaz-gold-500/80">
+      <span className="font-display text-[10px] tracking-[0.3em] uppercase text-rizzotto-gold-500/80">
         Begin the Muster
       </span>
       <ChevronDown

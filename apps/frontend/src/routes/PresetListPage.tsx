@@ -5,7 +5,7 @@ import { listDraftPresets, deleteDraftPreset } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import type { DraftPreset } from '@tww3/types';
+import type { DraftPreset } from '@rizzotto/types';
 
 function PresetCard({
   preset,

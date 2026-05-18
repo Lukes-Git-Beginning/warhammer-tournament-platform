@@ -4,7 +4,7 @@
  * Provides user creation, auth, tournament lifecycle helpers, and cleanup.
  */
 import type { APIRequestContext, BrowserContext } from '@playwright/test';
-import { prisma } from '@tww3/db';
+import { prisma } from '@rizzotto/db';
 import { randomUUID } from 'node:crypto';
 
 // ---------------------------------------------------------------------------

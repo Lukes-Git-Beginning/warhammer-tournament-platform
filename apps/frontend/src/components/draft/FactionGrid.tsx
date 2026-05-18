@@ -1,4 +1,4 @@
-import type { FactionDto, PublicDraftState, DraftTurn } from '@tww3/types';
+import type { FactionDto, PublicDraftState, DraftTurn } from '@rizzotto/types';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 
 type FactionStatus =

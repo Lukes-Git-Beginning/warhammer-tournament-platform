@@ -13,7 +13,7 @@ import type {
   UpdateDraftPresetRequest,
   DraftView,
   DraftEventsResponse,
-} from '@tww3/types';
+} from '@rizzotto/types';
 
 export type {
   BracketResponse,
@@ -42,7 +42,6 @@ export interface SeasonSummary {
   is_active: boolean;
 }
 
-// Minimal local Tournament type (full schema arrives with M1.4 backend)
 export interface Tournament {
   id: string;
   slug: string;

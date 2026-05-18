@@ -8,7 +8,7 @@
  *
  * NOT a regression test — does not assert anything; just logs.
  * Run:
- *   pnpm -F @tww3/e2e test -- --grep "overflow forensik" --reporter=line
+ *   pnpm -F @rizzotto/e2e test -- --grep "overflow forensik" --reporter=line
  *
  * Output is intentionally console-only so the developer can scan for the
  * root cause without parsing report XML.

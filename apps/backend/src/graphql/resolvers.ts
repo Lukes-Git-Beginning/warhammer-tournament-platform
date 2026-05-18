@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@tww3/db';
+import type { PrismaClient } from '@rizzotto/db';
 import { asFactionDto, asFactionStatsDto, getFactionsWithStats } from '../lib/factions.js';
 import { getMatchupMatrix } from '../lib/heatmap.js';
 

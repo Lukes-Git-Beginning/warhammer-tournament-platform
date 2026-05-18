@@ -1,4 +1,4 @@
-import type { MatchupCell, FactionDto } from '@tww3/types';
+import type { MatchupCell, FactionDto } from '@rizzotto/types';
 import { FactionBadge } from './FactionBadge';
 
 interface MatchupHeatmapProps {

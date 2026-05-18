@@ -1,4 +1,4 @@
-import type { BracketResponse } from '@tww3/types';
+import type { BracketResponse } from '@rizzotto/types';
 import { computeBracketLayout, MATCH_WIDTH, MATCH_HEIGHT, ROUND_GAP } from './computeBracketLayout';
 import { MatchNode } from './MatchNode';
 

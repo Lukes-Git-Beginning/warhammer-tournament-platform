@@ -1,4 +1,4 @@
-import type { BracketNode } from '@tww3/types';
+import type { BracketNode } from '@rizzotto/types';
 
 export interface MatchPosition {
   x: number;

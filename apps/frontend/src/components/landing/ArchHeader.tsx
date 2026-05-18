@@ -17,7 +17,7 @@ export function ArchHeader({ icon, title, className }: ArchHeaderProps) {
       <svg
         viewBox="0 0 120 80"
         aria-hidden="true"
-        className="mb-[-1.25rem] w-32 text-karaz-iron-600"
+        className="mb-[-1.25rem] w-32 text-rizzotto-iron-600"
         fill="none"
         stroke="currentColor"
         strokeWidth="1"
@@ -32,10 +32,10 @@ export function ArchHeader({ icon, title, className }: ArchHeaderProps) {
         {/* base detail */}
         <path d="M4 78 L116 78" />
       </svg>
-      <div className="z-10 mb-3 flex size-14 items-center justify-center rounded-full bg-karaz-iron-900 ring-1 ring-karaz-iron-600 text-karaz-gold-500">
+      <div className="z-10 mb-3 flex size-14 items-center justify-center rounded-full bg-rizzotto-iron-900 ring-1 ring-rizzotto-iron-600 text-rizzotto-gold-500">
         {icon}
       </div>
-      <h3 className="font-display text-xl font-semibold uppercase tracking-wider text-karaz-stone-100">
+      <h3 className="font-display text-xl font-semibold uppercase tracking-wider text-rizzotto-stone-100">
         {title}
       </h3>
     </div>

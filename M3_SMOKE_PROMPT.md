@@ -14,8 +14,8 @@ Wir machen jetzt einen geführten End-to-End-Smoke-Test der gerade fertig gepush
 
 1. **Stack hochfahren** — als drei Background-Tasks (run_in_background), warte auf Ready via `until grep -q ... log` Polling. Keine Sleep-Loops.
    - Docker prüfen: `tww3-postgres` und `tww3-redis` Container müssen `healthy` sein (sind sie aktuell). Falls nicht: `pnpm docker:up`.
-   - Backend: `pnpm --filter @tww3/backend dev` → wartet auf "listening" in stdout, lauscht auf Port 3000.
-   - Frontend: `pnpm --filter @tww3/frontend dev` → wartet auf "Local:" oder "ready in", Port 5173.
+   - Backend: `pnpm --filter @rizzotto/backend dev` → wartet auf "listening" in stdout, lauscht auf Port 3000.
+   - Frontend: `pnpm --filter @rizzotto/frontend dev` → wartet auf "Local:" oder "ready in", Port 5173.
    - Prisma Studio: `pnpm db:studio` → Port 5555. Bekannte Falle: Studio hält einen zufälligen Hilfs-Port (z.B. 51212). Wenn EADDRINUSE: in PowerShell `Get-NetTCPConnection -LocalPort 51212 -State Listen | Stop-Process -Id $_.OwningProcess -Force` (analog für andere Ports im 49152+ Range). Falls ein orphan Socket im LISTENING-State ohne aktiven Prozess hängt: Windows TCP needs a real reset — `Restart-Service -Name "iphlpsvc"` oder Neustart des Terminals, sonst Studio einfach NICHT starten und stattdessen Prisma-Daten via `curl http://localhost:3000/api/...` lesen.
    - Smoke-Check: `curl http://localhost:3000/health` muss `{"status":"ok",...}` geben.
 
@@ -57,7 +57,7 @@ Wir machen jetzt einen geführten End-to-End-Smoke-Test der gerade fertig gepush
 
 3. **Daily-Snapshot manuell triggern (M3.8) — optional aber empfohlen:**
    - `node -e "import('./apps/backend/dist/lib/faction-snapshot.js').then(m => import('./packages/db/dist/index.js').then(db => m.takeFactionsSnapshot(db.prisma).then(console.log)))"` (Pfade ggf. anpassen, ggf. `pnpm build` vorher)
-   - Oder über `pnpm --filter @tww3/backend exec tsx -e "..."` mit Source-Imports.
+   - Oder über `pnpm --filter @rizzotto/backend exec tsx -e "..."` mit Source-Imports.
    - Erwartung: returns N (Anzahl FactionStats-Rows der aktiven Season), und `FactionStatsSnapshot`-Tabelle hat N neue Rows mit heutigem Datum. Zweiter Aufruf returns 0 (skipDuplicates).
 
 4. **Aufräumen:** Am Ende alle drei Background-Tasks via TaskStop beenden, oder PowerShell-Kill via `Get-NetTCPConnection -LocalPort 3000,5173,5555 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`.
@@ -87,7 +87,7 @@ Alle Tests T1–T5 + M3.8 grün. Inline gefixt:
 ## Follow-up-TODOs
 
 - [ ] **A — Test-Suite nicht hermetisch.** Zwei Symptome aufgefallen:
-  1. Nach `pnpm -F @tww3/backend test` ist `Season.is_active` für alle Rows `false` — „Season 2026" muss reaktiviert werden, sonst liefert `/api/factions` 404.
+  1. Nach `pnpm -F @rizzotto/backend test` ist `Season.is_active` für alle Rows `false` — „Season 2026" muss reaktiviert werden, sonst liefert `/api/factions` 404.
   2. Tests `matchup-stats.test.ts`, `leaderboard.test.ts`, `faction-snapshot.test.ts` nutzen hardcoded Seed-User-IDs (`b0000000-…-001` = EmpirePlayer, `2000…-001` = Alpha etc.) und löschen die per `deleteMany`. Wenn der echte Stack diese User als `TournamentParticipant` oder `LeaderboardEntry` referenziert (wie in unserem Smoke geschehen), schlägt der Cleanup mit FK-Violation fehl. **Cleanup vor nächstem Test-Lauf nötig**: alle `TournamentResult`/`LeaderboardEntry`/`MatchupStats`/`FactionStats`/`FactionStatsSnapshot` für `Season 2026` (`4faf7717-…`) löschen (Docker war abgestürzt, die Smoke-Daten sind noch da). Strukturell: Tests sollten eigene Test-Users mit unique-Prefix anlegen (`test-…`) statt Seed-IDs zu greifen.
 - [ ] **B — `pick_count` ist 0 statt `matches_played` in der API-Response.** Plan-Sektion D sagte „M3 setzt nur matches_played, exponiert das als pick_count in Response", aber `asFactionStatsDto` reicht das DB-Feld `pick_count` (in M3 nicht befüllt) durch. Im Response steht z. B. `matches_played: 3, pick_count: 0`. Fix passt in M4-Draft (wenn pick/ban-Counts ohnehin angefasst werden).
 - [ ] **C — Kein Header-Nav-Link zu `/factions` und `/factions/$id`.** Routes existieren, aber sind nur direkt per URL erreichbar. Header hat nur „Meta". M5-Polish: Card-Click in MetaDashboard → FactionDetailPage, plus optional „Factions"-Link.

@@ -72,7 +72,7 @@ export function TournamentDetail() {
 
   if (isLoading) {
     return (
-      <PageShell variant="narrow" className="text-karaz-stone-400">
+      <PageShell variant="narrow" className="text-rizzotto-stone-400">
         {t('common.loading')}
       </PageShell>
     );
@@ -101,7 +101,7 @@ export function TournamentDetail() {
   return (
     <PageShell variant="narrow">
       <div className="flex flex-wrap items-start gap-3 mb-6">
-        <h1 className="font-display text-3xl font-bold text-karaz-gold-500 flex-1">
+        <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500 flex-1">
           {tournament.name}
         </h1>
         <div className="flex gap-2">
@@ -232,7 +232,7 @@ export function TournamentDetail() {
 
       {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
         <section>
-          <h2 className="font-display text-xl font-semibold text-karaz-gold-500 mb-3">
+          <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-3">
             {t('tournament.detail.bracket')}
           </h2>
           <BracketView

@@ -8,7 +8,7 @@ import {
   listSeasons,
   type AllTimeEntry,
 } from '@/lib/api';
-import type { LeaderboardEntryDto } from '@tww3/types';
+import type { LeaderboardEntryDto } from '@rizzotto/types';
 import { EloRatingDisplay } from '../components/meta/EloRatingDisplay';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -178,10 +178,10 @@ function LeaderboardTable({
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-md border border-karaz-iron-700/70 bg-karaz-iron-900/50 bg-parchment-aged-texture bg-[length:512px_512px] bg-blend-overlay backdrop-blur-sm">
+      <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-parchment-aged-texture bg-[length:512px_512px] bg-blend-overlay backdrop-blur-sm">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b border-karaz-iron-800/80 bg-karaz-iron-900/60">
+            <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
               <th className="px-4 py-3 text-left font-medium text-stone-400">{t('leaderboard.columns.rank')}</th>
               <th className="px-4 py-3 text-left font-medium text-stone-400">{t('leaderboard.columns.player')}</th>
               <th className="px-4 py-3 text-right font-medium text-stone-400">{t('leaderboard.columns.points')}</th>
@@ -272,12 +272,12 @@ export function LeaderboardPage() {
 
   return (
     <PageShell variant="wide">
-      <h1 className="font-display text-3xl font-bold text-karaz-gold-500 mb-6">
+      <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500 mb-6">
         {t('leaderboard.title')}
       </h1>
 
       {/* Tabs */}
-      <div className="mb-6 flex gap-1 rounded-md border border-karaz-iron-700 bg-karaz-iron-900/60 p-1 w-fit">
+      <div className="mb-6 flex gap-1 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-1 w-fit">
         {(['season', 'all-time'] as const).map((tab) => (
           <button
             key={tab}
@@ -285,8 +285,8 @@ export function LeaderboardPage() {
             onClick={() => setActiveTab(tab)}
             className={`rounded px-4 py-1.5 text-sm font-medium transition-colors ${
               activeTab === tab
-                ? 'bg-karaz-gold-500/20 text-karaz-gold-500'
-                : 'text-karaz-stone-400 hover:text-karaz-stone-200'
+                ? 'bg-rizzotto-gold-500/20 text-rizzotto-gold-500'
+                : 'text-rizzotto-stone-400 hover:text-rizzotto-stone-200'
             }`}
           >
             {tab === 'season' ? t('leaderboard.tabs.season') : t('leaderboard.tabs.all_time')}

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Swiss as SwissPair } from 'tournament-pairings';
-import type { MatchStatus } from '@tww3/db';
+import type { MatchStatus } from '@rizzotto/db';
 
 // ---------- Public interfaces ----------
 

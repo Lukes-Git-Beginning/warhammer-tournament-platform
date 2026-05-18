@@ -21,7 +21,7 @@ io.adapter(createAdapter(fastify.redisPub, fastify.redisSub));
 fastify.decorate('io', io);
 ```
 
-`AppIOServer` ist ein typisierter Alias über alle vier generischen Interfaces aus `@tww3/types` (`ClientToServerEvents`, `ServerToClientEvents`, `InterServerEvents`, `SocketData`). [siehe `.knowledge/caching.md`] für `redisPub`/`redisSub`.
+`AppIOServer` ist ein typisierter Alias über alle vier generischen Interfaces aus `@rizzotto/types` (`ClientToServerEvents`, `ServerToClientEvents`, `InterServerEvents`, `SocketData`). [siehe `.knowledge/caching.md`] für `redisPub`/`redisSub`.
 
 ---
 

@@ -7,7 +7,7 @@
  *   - spectator: sees neither side's hidden arrays
  */
 import type { AppIOServer } from '../plugins/socket.js';
-import type { DraftState, PublicDraftState } from '@tww3/types';
+import type { DraftState, PublicDraftState } from '@rizzotto/types';
 
 // ---------------------------------------------------------------------------
 // Room helpers

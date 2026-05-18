@@ -8,7 +8,7 @@ void i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
-    fallbackLng: 'de',
+    fallbackLng: 'en',
     supportedLngs: ['de', 'en'],
     defaultNS: 'common',
     ns: ['common'],
@@ -19,7 +19,7 @@ void i18n
     detection: {
       order: ['localStorage', 'navigator', 'htmlTag'],
       caches: ['localStorage'],
-      lookupLocalStorage: 'karaz_locale',
+      lookupLocalStorage: 'rizzotto_locale',
     },
     interpolation: { escapeValue: false },
     returnNull: false,
@@ -32,7 +32,7 @@ i18n.on('languageChanged', (lng) => {
 });
 
 if (typeof document !== 'undefined') {
-  document.documentElement.lang = i18n.resolvedLanguage ?? 'de';
+  document.documentElement.lang = i18n.resolvedLanguage ?? 'en';
 }
 
 export default i18n;

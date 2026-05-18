@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { getDraftEvents } from '@/lib/api';
-import type { DraftEventDto } from '@tww3/types';
+import type { DraftEventDto } from '@rizzotto/types';
 
 interface DraftHistoryProps {
   draftId: string;

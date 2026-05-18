@@ -23,7 +23,7 @@ export function AdminPage() {
 
   if (!user) {
     return (
-      <PageShell variant="narrow" spacing="tight" className="text-karaz-stone-400">
+      <PageShell variant="narrow" spacing="tight" className="text-rizzotto-stone-400">
         {t('admin.login_required')}
       </PageShell>
     );
@@ -31,7 +31,7 @@ export function AdminPage() {
 
   if (user.role !== 'ADMIN') {
     return (
-      <PageShell variant="narrow" spacing="tight" className="text-karaz-stone-400">
+      <PageShell variant="narrow" spacing="tight" className="text-rizzotto-stone-400">
         {t('admin.permission_denied')}
       </PageShell>
     );
@@ -39,12 +39,12 @@ export function AdminPage() {
 
   return (
     <PageShell variant="wide" spacing="tight">
-      <h1 className="font-display text-3xl font-bold text-karaz-gold-500 mb-6">
+      <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500 mb-6">
         {t('admin.title')}
       </h1>
 
       <nav
-        className="flex gap-4 border-b border-karaz-iron-700 mb-6"
+        className="flex gap-4 border-b border-rizzotto-iron-700 mb-6"
         aria-label={t('admin.tabs_aria')}
       >
         {(['dashboard', 'audit', 'users', 'presets'] as Tab[]).map((tabKey) => (
@@ -55,8 +55,8 @@ export function AdminPage() {
             aria-current={tab === tabKey ? 'page' : undefined}
             className={`px-3 py-2 text-sm transition-colors ${
               tab === tabKey
-                ? 'border-b-2 border-karaz-gold-500 text-karaz-gold-500'
-                : 'text-karaz-stone-400 hover:text-karaz-stone-200'
+                ? 'border-b-2 border-rizzotto-gold-500 text-rizzotto-gold-500'
+                : 'text-rizzotto-stone-400 hover:text-rizzotto-stone-200'
             }`}
           >
             {TAB_LABELS[tabKey]}

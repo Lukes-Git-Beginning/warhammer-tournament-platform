@@ -1,5 +1,5 @@
 {
-  "name": "@tww3/scraper",
+  "name": "@rizzotto/scraper",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,7 +15,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@tww3/db": "workspace:*",
+    "@rizzotto/db": "workspace:*",
     "axios": "^1.7.9",
     "cheerio": "^1.0.0",
     "cli-progress": "^3.12.0",

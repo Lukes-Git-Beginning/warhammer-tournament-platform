@@ -39,7 +39,7 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
       <CardHeader>
         {state === 'live' && (
           <Badge variant="forge" className="self-start">
-            <span className="size-1.5 rounded-full bg-karaz-forge-400 animate-karaz-pulse" />
+            <span className="size-1.5 rounded-full bg-rizzotto-forge-400 animate-rizzotto-pulse" />
             {t('musters.status_live')}
           </Badge>
         )}
@@ -54,7 +54,7 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
           </Badge>
         )}
         <CardTitle className="line-clamp-2">{tournament.name}</CardTitle>
-        <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-karaz-stone-400">
+        <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-rizzotto-stone-400">
           <span className="inline-flex items-center gap-1.5">
             <Users className="size-3.5" strokeWidth={1.5} />
             <span className="font-mono">
@@ -70,14 +70,14 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
       </CardHeader>
       <CardContent>
         {tournament.description && (
-          <p className="line-clamp-2 text-sm text-karaz-stone-300">{tournament.description}</p>
+          <p className="line-clamp-2 text-sm text-rizzotto-stone-300">{tournament.description}</p>
         )}
       </CardContent>
       <Separator engraved className="mx-6 my-2" />
       <CardFooter>
         <time
           dateTime={tournament.start_date}
-          className="inline-flex items-center gap-1.5 font-mono text-xs text-karaz-stone-400"
+          className="inline-flex items-center gap-1.5 font-mono text-xs text-rizzotto-stone-400"
         >
           <Clock className="size-3.5" strokeWidth={1.5} />
           {formatDate(tournament.start_date)}
@@ -130,12 +130,12 @@ export function ActiveMustersSection() {
       <div className="relative mx-auto max-w-[80rem] px-4 sm:px-6 lg:px-8 xl:px-12">
         <div className="mb-8 flex items-end justify-between gap-4 lg:mb-12">
           <div>
-            <span className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-karaz-gold-500">
+            <span className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-rizzotto-gold-500">
               {t('musters.eyebrow')}
             </span>
             <h2
               id="musters-heading"
-              className="mt-2 font-display font-bold text-karaz-stone-100"
+              className="mt-2 font-display font-bold text-rizzotto-stone-100"
               style={{ fontSize: 'clamp(1.625rem, 3.5vw, 2.5rem)', lineHeight: 1.15 }}
             >
               {t('musters.heading')}

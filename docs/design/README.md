@@ -1,9 +1,9 @@
-# Karaz Lists — Design System
+# Rizzotto — Design System
 
 > *"Where Lists Are Forged."*
 
 This is the **single source of truth** for everything that touches the visual,
-verbal, and interactive layer of Karaz Lists. Sub-agents, designers, and future
+verbal, and interactive layer of Rizzotto. Sub-agents, designers, and future
 contributors read these files before designing or building anything.
 
 The system is intentionally **dark, heraldic, and uncompromising** — modeled on
@@ -81,7 +81,7 @@ off-brand.
 
 | Field        | Value                                                           |
 |--------------|-----------------------------------------------------------------|
-| Name         | **Karaz Lists**                                                 |
+| Name         | **Rizzotto**                                                    |
 | Tagline      | *Where Lists Are Forged*                                        |
 | Motto pool   | "Karaz Ankor" · "In Lapide Sigillata" · "Forgia Aeternitatis"   |
 | Core colors  | `karaz-iron-950` (bg) · `karaz-gold-500` (accent) · `karaz-forge-500` (heat) |
@@ -110,4 +110,4 @@ with `Lies zuerst docs/design/<file>.md` for any visual or copy-related work.
 - **Sound.** Reserved as a premium add-on (forge-thunk, hover-clink, ambient).
 - **Internationalization of motto strings.** Latin/Khazalid mottos are decorative
   and remain as-is across locales.
-- **Workspace rename `@tww3/*` → `@karaz/*`.** Separate PR; high blast radius.
+- **Workspace rename `@tww3/*` → `@rizzotto/*`.** ✅ Done in `feat/rizzotto-rebrand` (2026-05-18).

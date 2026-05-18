@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { PresetEditor } from './PresetEditor';
-import type { CreateDraftPresetRequest } from '@tww3/types';
+import type { CreateDraftPresetRequest } from '@rizzotto/types';
 
 // Mock @dnd-kit modules — they rely on browser APIs not available in happy-dom
 vi.mock('@dnd-kit/core', () => ({

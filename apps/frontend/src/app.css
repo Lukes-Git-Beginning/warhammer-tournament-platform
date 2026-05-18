@@ -21,50 +21,50 @@
   /* ─────────────────────────────────────────────────────────── */
   /* Color tokens — Iron & Stone (base)                            */
   /* ─────────────────────────────────────────────────────────── */
-  --color-karaz-obsidian: #08070a;
-  --color-karaz-iron-950: #110f0e;
-  --color-karaz-iron-900: #181513;
-  --color-karaz-iron-800: #221e1b;
-  --color-karaz-iron-700: #2d2823;
-  --color-karaz-iron-600: #3d3631;
-  --color-karaz-iron-500: #5c5249;
-  --color-karaz-stone-400: #837a6f;
-  --color-karaz-stone-300: #a89e92;
-  --color-karaz-stone-200: #ccc2b6;
-  --color-karaz-stone-100: #e8dfd0;
-  --color-karaz-parchment: #f4e8c4;
+  --color-rizzotto-obsidian: #08070a;
+  --color-rizzotto-iron-950: #110f0e;
+  --color-rizzotto-iron-900: #181513;
+  --color-rizzotto-iron-800: #221e1b;
+  --color-rizzotto-iron-700: #2d2823;
+  --color-rizzotto-iron-600: #3d3631;
+  --color-rizzotto-iron-500: #5c5249;
+  --color-rizzotto-stone-400: #837a6f;
+  --color-rizzotto-stone-300: #a89e92;
+  --color-rizzotto-stone-200: #ccc2b6;
+  --color-rizzotto-stone-100: #e8dfd0;
+  --color-rizzotto-parchment: #f4e8c4;
 
   /* ─────────────────────────────────────────────────────────── */
   /* Color tokens — Forge, Gold, Blood, Bronze (accent)            */
   /* ─────────────────────────────────────────────────────────── */
-  --color-karaz-gold-300: #f4d479;
-  --color-karaz-gold-400: #e4b432;
-  --color-karaz-gold-500: #d4a017;
-  --color-karaz-gold-600: #a87a0e;
-  --color-karaz-bronze: #b08d57;
-  --color-karaz-forge-400: #e87b3d;
-  --color-karaz-forge-500: #d8632a;
-  --color-karaz-forge-600: #b04d18;
-  --color-karaz-blood-500: #8b0000;
-  --color-karaz-blood-600: #5e0000;
+  --color-rizzotto-gold-300: #f4d479;
+  --color-rizzotto-gold-400: #e4b432;
+  --color-rizzotto-gold-500: #d4a017;
+  --color-rizzotto-gold-600: #a87a0e;
+  --color-rizzotto-bronze: #b08d57;
+  --color-rizzotto-forge-400: #e87b3d;
+  --color-rizzotto-forge-500: #d8632a;
+  --color-rizzotto-forge-600: #b04d18;
+  --color-rizzotto-blood-500: #8b0000;
+  --color-rizzotto-blood-600: #5e0000;
 
   /* ─────────────────────────────────────────────────────────── */
   /* Color tokens — Semantic                                       */
   /* ─────────────────────────────────────────────────────────── */
-  --color-karaz-success: #6b8e5b;
-  --color-karaz-warning: #d4a017;
-  --color-karaz-danger: #8b0000;
-  --color-karaz-info: #5d7b8f;
+  --color-rizzotto-success: #6b8e5b;
+  --color-rizzotto-warning: #d4a017;
+  --color-rizzotto-danger: #8b0000;
+  --color-rizzotto-info: #5d7b8f;
 
   /* ─────────────────────────────────────────────────────────── */
   /* Legacy aliases — temporary migration shims                     */
   /* TODO(2026-Q3): remove once apps/frontend/src/** is migrated.   */
   /* See docs/design/14-implementation.md "Migration policy".       */
   /* ─────────────────────────────────────────────────────────── */
-  --color-warhammer-blood: var(--color-karaz-blood-500);
-  --color-warhammer-gold: var(--color-karaz-gold-500);
-  --color-warhammer-parchment: var(--color-karaz-parchment);
-  --color-warhammer-iron: var(--color-karaz-iron-600);
+  --color-warhammer-blood: var(--color-rizzotto-blood-500);
+  --color-warhammer-gold: var(--color-rizzotto-gold-500);
+  --color-warhammer-parchment: var(--color-rizzotto-parchment);
+  --color-warhammer-iron: var(--color-rizzotto-iron-600);
 
   /* ─────────────────────────────────────────────────────────── */
   /* Container widths                                              */
@@ -85,18 +85,18 @@
   /* ─────────────────────────────────────────────────────────── */
   /* Shadows                                                       */
   /* ─────────────────────────────────────────────────────────── */
-  --shadow-karaz-engrave: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+  --shadow-rizzotto-engrave: inset 0 1px 0 rgba(255, 255, 255, 0.04),
     inset 0 -1px 0 rgba(0, 0, 0, 0.6);
-  --shadow-karaz-emboss: 0 1px 0 rgba(255, 255, 255, 0.06),
+  --shadow-rizzotto-emboss: 0 1px 0 rgba(255, 255, 255, 0.06),
     0 -1px 0 rgba(0, 0, 0, 0.4);
-  --shadow-karaz-forge-glow: 0 0 32px rgba(216, 99, 42, 0.35),
+  --shadow-rizzotto-forge-glow: 0 0 32px rgba(216, 99, 42, 0.35),
     0 0 8px rgba(244, 212, 121, 0.25),
     inset 0 0 0 1px rgba(244, 212, 121, 0.4);
-  --shadow-karaz-gold-glow: 0 0 24px rgba(212, 160, 23, 0.3),
+  --shadow-rizzotto-gold-glow: 0 0 24px rgba(212, 160, 23, 0.3),
     inset 0 0 0 1px rgba(212, 160, 23, 0.4);
-  --shadow-karaz-banner: 0 10px 30px rgba(0, 0, 0, 0.7),
+  --shadow-rizzotto-banner: 0 10px 30px rgba(0, 0, 0, 0.7),
     0 4px 8px rgba(0, 0, 0, 0.5);
-  --shadow-karaz-stone-vignette: inset 0 0 120px rgba(0, 0, 0, 0.7);
+  --shadow-rizzotto-stone-vignette: inset 0 0 120px rgba(0, 0, 0, 0.7);
 
   /* ─────────────────────────────────────────────────────────── */
   /* Easings & durations                                           */
@@ -114,17 +114,17 @@
   /* ─────────────────────────────────────────────────────────── */
   /* Named animations (exposed as Tailwind utilities)              */
   /* ─────────────────────────────────────────────────────────── */
-  --animate-karaz-pulse: karaz-pulse 1.5s var(--ease-burn) infinite;
-  --animate-karaz-ember: karaz-ember 2.5s var(--ease-burn) infinite;
-  --animate-karaz-rise: karaz-rise var(--duration-slow) var(--ease-burn) both;
-  --animate-karaz-draw: karaz-draw 1.5s var(--ease-burn) forwards;
-  --animate-karaz-shimmer: karaz-shimmer 3s linear infinite;
+  --animate-rizzotto-pulse: rizzotto-pulse 1.5s var(--ease-burn) infinite;
+  --animate-rizzotto-ember: rizzotto-ember 2.5s var(--ease-burn) infinite;
+  --animate-rizzotto-rise: rizzotto-rise var(--duration-slow) var(--ease-burn) both;
+  --animate-rizzotto-draw: rizzotto-draw 1.5s var(--ease-burn) forwards;
+  --animate-rizzotto-shimmer: rizzotto-shimmer 3s linear infinite;
 }
 
 /* ───────────────────────────────────────────────────────────── */
 /* Keyframes                                                      */
 /* ───────────────────────────────────────────────────────────── */
-@keyframes karaz-pulse {
+@keyframes rizzotto-pulse {
   0%,
   100% {
     opacity: 1;
@@ -136,7 +136,7 @@
   }
 }
 
-@keyframes karaz-ember {
+@keyframes rizzotto-ember {
   0%,
   100% {
     opacity: 0.6;
@@ -148,7 +148,7 @@
   }
 }
 
-@keyframes karaz-rise {
+@keyframes rizzotto-rise {
   from {
     opacity: 0;
     transform: translateY(16px);
@@ -159,16 +159,16 @@
   }
 }
 
-@keyframes karaz-draw {
+@keyframes rizzotto-draw {
   from {
-    stroke-dashoffset: var(--karaz-draw-length, 1000);
+    stroke-dashoffset: var(--rizzotto-draw-length, 1000);
   }
   to {
     stroke-dashoffset: 0;
   }
 }
 
-@keyframes karaz-shimmer {
+@keyframes rizzotto-shimmer {
   from {
     background-position: -200% 0;
   }
@@ -182,8 +182,8 @@
 /* ───────────────────────────────────────────────────────────── */
 html {
   font-family: var(--font-sans);
-  background: var(--color-karaz-iron-950);
-  color: var(--color-karaz-stone-200);
+  background: var(--color-rizzotto-iron-950);
+  color: var(--color-rizzotto-stone-200);
   color-scheme: dark;
   overflow-x: clip;
 }
@@ -192,7 +192,7 @@ body {
   font-feature-settings: "ss01", "ss02", "cv11", "calt", "liga";
   font-variant-numeric: tabular-nums;
   min-height: 100svh;
-  background: var(--color-karaz-iron-950);
+  background: var(--color-rizzotto-iron-950);
   overflow-x: clip;
 }
 
@@ -203,23 +203,23 @@ h4,
 h5,
 h6 {
   font-family: var(--font-display);
-  color: var(--color-karaz-stone-100);
+  color: var(--color-rizzotto-stone-100);
   letter-spacing: 0.02em;
 }
 
 ::selection {
-  background: var(--color-karaz-gold-500);
-  color: var(--color-karaz-iron-950);
+  background: var(--color-rizzotto-gold-500);
+  color: var(--color-rizzotto-iron-950);
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-karaz-gold-500);
+  outline: 2px solid var(--color-rizzotto-gold-500);
   outline-offset: 2px;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-karaz-iron-600) transparent;
+  scrollbar-color: var(--color-rizzotto-iron-600) transparent;
 }
 
 /* ───────────────────────────────────────────────────────────── */
@@ -233,32 +233,32 @@ h6 {
   line-height: 0.85;
   margin-right: 0.12em;
   margin-top: 0.05em;
-  color: var(--color-karaz-gold-400);
+  color: var(--color-rizzotto-gold-400);
   text-shadow: 0 0 12px rgba(212, 160, 23, 0.3);
 }
 .dropcap-stone::first-letter {
-  color: var(--color-karaz-stone-100);
+  color: var(--color-rizzotto-stone-100);
   text-shadow: none;
 }
 
-.karaz-seam {
+.rizzotto-seam {
   height: 1px;
   background-image: linear-gradient(
     to right,
     transparent 0%,
-    var(--color-karaz-iron-600) 10%,
-    var(--color-karaz-bronze) 50%,
-    var(--color-karaz-iron-600) 90%,
+    var(--color-rizzotto-iron-600) 10%,
+    var(--color-rizzotto-bronze) 50%,
+    var(--color-rizzotto-iron-600) 90%,
     transparent 100%
   );
 }
 
 @layer components {
-  .karaz-photo-frame {
+  .rizzotto-photo-frame {
     position: relative;
     overflow: hidden;
   }
-  .karaz-photo-frame::before {
+  .rizzotto-photo-frame::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -272,7 +272,7 @@ h6 {
     pointer-events: none;
     z-index: 1;
   }
-  .karaz-photo-frame::after {
+  .rizzotto-photo-frame::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -286,14 +286,14 @@ h6 {
     pointer-events: none;
     z-index: 1;
   }
-  .karaz-photo-frame img,
-  .karaz-photo-frame video {
+  .rizzotto-photo-frame img,
+  .rizzotto-photo-frame video {
     filter: saturate(0.85) contrast(1.05);
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-  .karaz-photo-frame picture {
+  .rizzotto-photo-frame picture {
     display: block;
     width: 100%;
     height: 100%;
@@ -377,7 +377,7 @@ h6 {
 /* Vignette utility — radial darken from edges. Use on full-page  */
 /* wrappers (e.g. <body> or <main>) to add cinematic falloff.     */
 /* ───────────────────────────────────────────────────────────── */
-@utility bg-karaz-vignette {
+@utility bg-rizzotto-vignette {
   background-image: radial-gradient(
     ellipse at center,
     transparent 40%,
@@ -389,7 +389,7 @@ h6 {
 /* Forge glow utility — bottom-anchored warm radial. Pair with    */
 /* the stone-wall page texture for atmospheric layering.          */
 /* ───────────────────────────────────────────────────────────── */
-@utility bg-karaz-forge-glow {
+@utility bg-rizzotto-forge-glow {
   background-image: radial-gradient(
     ellipse 70% 50% at 50% 100%,
     rgba(216, 99, 42, 0.07) 0%,

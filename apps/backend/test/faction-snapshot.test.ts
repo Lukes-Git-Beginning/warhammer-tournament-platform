@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { prisma } from '@tww3/db';
+import { prisma } from '@rizzotto/db';
 import { takeFactionsSnapshot } from '../src/lib/faction-snapshot.js';
 import {
   createTestSeason,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { BracketNode } from '@tww3/types';
+import type { BracketNode } from '@rizzotto/types';
 import {
   computeBracketLayout,
   MATCH_HEIGHT,

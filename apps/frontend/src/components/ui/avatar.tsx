@@ -13,7 +13,7 @@ export const Avatar = forwardRef<HTMLSpanElement, AvatarProps>(
       className={cn(
         'relative inline-flex shrink-0 overflow-hidden rounded-full',
         goldRim &&
-          'ring-2 ring-karaz-gold-500/40 ring-offset-2 ring-offset-karaz-iron-950',
+          'ring-2 ring-rizzotto-gold-500/40 ring-offset-2 ring-offset-rizzotto-iron-950',
         className,
       )}
       {...props}
@@ -53,7 +53,7 @@ export const AvatarFallback = forwardRef<HTMLSpanElement, AvatarFallbackProps>(
     <span
       ref={ref}
       className={cn(
-        'flex h-full w-full items-center justify-center bg-karaz-iron-800 font-display text-sm font-semibold text-karaz-gold-400 uppercase',
+        'flex h-full w-full items-center justify-center bg-rizzotto-iron-800 font-display text-sm font-semibold text-rizzotto-gold-400 uppercase',
         className,
       )}
       {...props}

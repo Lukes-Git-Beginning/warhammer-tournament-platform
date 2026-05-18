@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import type { SwissMeta } from '@tww3/types';
+import type { SwissMeta } from '@rizzotto/types';
 
 interface SwissStandingsProps {
   standings: SwissMeta['standings'];

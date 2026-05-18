@@ -1,5 +1,5 @@
-import type { PrismaClient } from '@tww3/db';
-import type { MatchupCell } from '@tww3/types';
+import type { PrismaClient } from '@rizzotto/db';
+import type { MatchupCell } from '@rizzotto/types';
 
 // ---------------------------------------------------------------------------
 // Raw row shape returned by Postgres $queryRaw

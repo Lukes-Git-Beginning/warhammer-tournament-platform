@@ -2,22 +2,14 @@
 
 ## Name
 
-**Karaz Lists**
+**Rizzotto**
 
-Two-word, three-syllable, monosyllabic stress (*KÁR-az LÍSTS*). It is short
-enough to live in a browser tab title, a 32px favicon, and the corner of a
-phone screen without breaking. It is heavy enough on consonants — *K, R, Z,
-T, S* — to feel forged rather than cute.
+[RIZZOTTO-ETYMOLOGY — Luke ergänzt]
 
-## Etymology
-
-| Word    | Origin                              | Meaning                                                                |
-|---------|-------------------------------------|------------------------------------------------------------------------|
-| Karaz   | Khazalid (Warhammer Dwarf-tongue)   | "rock", "fortress", "everlasting" — as in *Karaz-a-Karak*, *Karaz Ankor* |
-| Lists   | Middle English (medieval tournament terminology) | The lists = the jousting arena; also the parchment army list each player brings to a Warhammer tournament |
-
-The double meaning is the soul of the name. *Lore-deep players nod. Outsiders
-read "tournament listings".* Everyone is right.
+The visual brand is **Rizzotto** (domain: rizzotto.gg). The Khazalid
+atmospheric layer — *Karaz Ankor*, *Roll of Honour*, *Conclave*, Latin
+mottos — is preserved in the UI as ceremonial decoration, not as brand
+identity. See [02-voice.md](./02-voice.md) for the full lexicon.
 
 ## Mission
 
@@ -83,7 +75,7 @@ The fastest way to stay on-brand is to know what to refuse.
 | Bright fantasy / "WoW gaming" colors       | We are anthracite + one warm spark, not rainbow gradient.        |
 | Cartoon / chibi / emoji-heavy              | We do not use emoji in product UI. Lucide icons only.            |
 | Loud marketing-speak ("Crush your foes!")  | Voice is restrained, archaic, never imperative-shouty.           |
-| Memeable / ironic                          | Karaz Lists takes itself seriously, on purpose.                  |
+| Memeable / ironic                          | Rizzotto takes itself seriously, on purpose.                     |
 | Single-faction-coded (Empire-bias etc.)    | Visual identity reads neutral; no faction wins the palette.      |
 | Glassmorphism-spa wellness aesthetic       | No frosted-glass cards. We use **stone**, not glass.             |
 | Cute mascots / kawaii                      | The only animate creature in our brand is a knight without a face. |

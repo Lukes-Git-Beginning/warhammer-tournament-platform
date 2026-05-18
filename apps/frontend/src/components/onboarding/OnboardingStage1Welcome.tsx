@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import { KarazSigil } from '@/components/icons/KarazSigil';
+import { RizzottoSigil } from '@/components/icons/RizzottoSigil';
 import { Button } from '@/components/ui/button';
 
 interface OnboardingStage1WelcomeProps {
@@ -24,9 +24,9 @@ export function OnboardingStage1Welcome({ onAdvance }: OnboardingStage1WelcomePr
             ? { duration: 0.32 }
             : { duration: 0.9, ease: [0.2, 0.8, 0.2, 1], delay: 0.15 }
         }
-        className="text-karaz-gold-400 drop-shadow-[0_0_36px_rgba(212,160,23,0.32)]"
+        className="text-rizzotto-gold-400 drop-shadow-[0_0_36px_rgba(212,160,23,0.32)]"
       >
-        <KarazSigil
+        <RizzottoSigil
           className="size-32 sm:size-40"
           drawable={!reduced}
           strokeWidth={1.5}
@@ -41,7 +41,7 @@ export function OnboardingStage1Welcome({ onAdvance }: OnboardingStage1WelcomePr
             ? { duration: 0.32 }
             : { duration: 0.6, ease: [0.4, 0, 0.2, 1], delay: reduced ? 0 : 1.6 }
         }
-        className="mt-10 font-headline text-karaz-stone-100"
+        className="mt-10 font-headline text-rizzotto-stone-100"
         style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)' }}
       >
         {t('onboarding.stage1.title')}
@@ -55,7 +55,7 @@ export function OnboardingStage1Welcome({ onAdvance }: OnboardingStage1WelcomePr
             ? { duration: 0.24 }
             : { duration: 0.6, ease: [0.4, 0, 0.2, 1], delay: reduced ? 0 : 1.9 }
         }
-        className="mt-6 max-w-xl font-sans text-base leading-relaxed text-karaz-stone-300"
+        className="mt-6 max-w-xl font-sans text-base leading-relaxed text-rizzotto-stone-300"
       >
         {t('onboarding.stage1.body')}
       </motion.p>
@@ -69,7 +69,7 @@ export function OnboardingStage1Welcome({ onAdvance }: OnboardingStage1WelcomePr
         transition={
           reduced ? { duration: 0.24 } : { duration: 0.6, delay: reduced ? 0 : 2.1 }
         }
-        className="mt-3 font-display text-[11px] uppercase tracking-[0.4em] text-karaz-gold-500/70"
+        className="mt-3 font-display text-[11px] uppercase tracking-[0.4em] text-rizzotto-gold-500/70"
       >
         In Lapide Sigillata
       </motion.p>

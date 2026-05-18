@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { MatchStatus, TournamentFormat, TournamentStatus } from '@tww3/db';
-import type { BracketResponse, SwissStandingEntry } from '@tww3/types';
+import { MatchStatus, TournamentFormat, TournamentStatus } from '@rizzotto/db';
+import type { BracketResponse, SwissStandingEntry } from '@rizzotto/types';
 import { generateSingleElim } from '../lib/bracket.js';
 import { generateRoundRobin } from '../lib/round-robin.js';
 import {

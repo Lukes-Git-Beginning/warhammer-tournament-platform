@@ -6,10 +6,10 @@ Entry-Point `src/main.tsx`, Router-Definition in `src/router.tsx`, CSS-Einstieg 
 ## Commands
 
 ```bash
-pnpm -F @tww3/frontend dev          # Dev-Server auf Port 5173
-pnpm -F @tww3/frontend build        # tsc -b && vite build
-pnpm -F @tww3/frontend test         # vitest run
-pnpm -F @tww3/frontend typecheck    # tsc -b --noEmit
+pnpm -F @rizzotto/frontend dev          # Dev-Server auf Port 5173
+pnpm -F @rizzotto/frontend build        # tsc -b && vite build
+pnpm -F @rizzotto/frontend test         # vitest run
+pnpm -F @rizzotto/frontend typecheck    # tsc -b --noEmit
 ```
 
 ## Vite-Proxy
@@ -38,4 +38,4 @@ Alle Requests → `http://localhost:3000` (Fastify-Backend):
 - `.knowledge/frontend-patterns.md` — vollständige Route-Tabelle, Query-Key-Konventionen, Component-Struktur, API-Layer
 - `.knowledge/realtime.md` — Socket.IO-Hooks und Server-Events
 - `.knowledge/auth.md` — Discord-OAuth-Flow, Frontend-Auth-Hooks (`useAuthQuery`, `useLogout`, `useRequireAuth`)
-- `.knowledge/types-contracts.md` — `@tww3/types`-DTOs und Shared-Typen
+- `.knowledge/types-contracts.md` — `@rizzotto/types`-DTOs und Shared-Typen

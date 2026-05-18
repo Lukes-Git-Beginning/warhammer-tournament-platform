@@ -1,7 +1,7 @@
 import fp from 'fastify-plugin';
 import mercurius from 'mercurius';
 import type { MercuriusContext } from 'mercurius';
-import type { PrismaClient } from '@tww3/db';
+import type { PrismaClient } from '@rizzotto/db';
 import { schema } from '../graphql/schema.js';
 import { resolvers } from '../graphql/resolvers.js';
 

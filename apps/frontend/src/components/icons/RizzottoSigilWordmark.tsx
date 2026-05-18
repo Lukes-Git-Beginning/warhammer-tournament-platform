@@ -1,8 +1,8 @@
 import { forwardRef, type HTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
-import { KarazSigil } from './KarazSigil';
+import { RizzottoSigil } from './RizzottoSigil';
 
-export interface KarazSigilWordmarkProps extends HTMLAttributes<HTMLSpanElement> {
+export interface RizzottoSigilWordmarkProps extends HTMLAttributes<HTMLSpanElement> {
   /** Size of the sigil. Wordmark size scales accordingly. */
   size?: 'sm' | 'md' | 'lg';
 }
@@ -13,27 +13,27 @@ const sizeMap = {
   lg: { sigil: 'size-12', word: 'text-3xl' },
 };
 
-export const KarazSigilWordmark = forwardRef<HTMLSpanElement, KarazSigilWordmarkProps>(
+export const RizzottoSigilWordmark = forwardRef<HTMLSpanElement, RizzottoSigilWordmarkProps>(
   ({ className, size = 'md', ...rest }, ref) => {
     const cls = sizeMap[size];
     return (
       <span
         ref={ref}
         className={cn('inline-flex items-center gap-2.5', className)}
-        aria-label="Karaz Lists"
+        aria-label="Rizzotto"
         {...rest}
       >
-        <KarazSigil className={cn(cls.sigil, 'text-karaz-gold-500')} aria-hidden="true" />
+        <RizzottoSigil className={cn(cls.sigil, 'text-rizzotto-gold-500')} aria-hidden="true" />
         <span
           className={cn(
-            'font-display font-semibold tracking-[0.16em] uppercase text-karaz-gold-500',
+            'font-display font-semibold tracking-[0.16em] uppercase text-rizzotto-gold-500',
             cls.word,
           )}
         >
-          Karaz Lists
+          Rizzotto
         </span>
       </span>
     );
   },
 );
-KarazSigilWordmark.displayName = 'KarazSigilWordmark';
+RizzottoSigilWordmark.displayName = 'RizzottoSigilWordmark';

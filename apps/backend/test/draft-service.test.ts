@@ -13,9 +13,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import type { FastifyInstance } from 'fastify';
 import { Redis } from 'ioredis';
 import { buildApp } from '../src/app.js';
-import { prisma } from '@tww3/db';
+import { prisma } from '@rizzotto/db';
 import { DraftService, BusyError, InvalidActionError, DraftNotFoundError } from '../src/lib/draft-service.js';
-import type { DraftTurn } from '@tww3/types';
+import type { DraftTurn } from '@rizzotto/types';
 
 // ---------------------------------------------------------------------------
 // Deterministic UUIDs

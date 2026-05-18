@@ -7,11 +7,11 @@ const isCI = !!process.env['CI'];
 // Frontend: `preview` serves the Vite production build (also built in Build step).
 // Locally: dev servers with HMR for fast iteration.
 const backendCmd = isCI
-  ? 'pnpm --filter @tww3/backend start'
-  : 'pnpm --filter @tww3/backend dev';
+  ? 'pnpm --filter @rizzotto/backend start'
+  : 'pnpm --filter @rizzotto/backend dev';
 const frontendCmd = isCI
-  ? 'pnpm --filter @tww3/frontend preview'
-  : 'pnpm --filter @tww3/frontend dev';
+  ? 'pnpm --filter @rizzotto/frontend preview'
+  : 'pnpm --filter @rizzotto/frontend dev';
 
 export default defineConfig({
   testDir: './tests',

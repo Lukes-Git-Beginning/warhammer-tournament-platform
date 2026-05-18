@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import { KarazSigil } from '@/components/icons/KarazSigil';
+import { RizzottoSigil } from '@/components/icons/RizzottoSigil';
 import { Button } from '@/components/ui/button';
 
 interface OnboardingStage5DoneProps {
@@ -25,10 +25,10 @@ export function OnboardingStage5Done({ onComplete, pending }: OnboardingStage5Do
             ? { duration: 0.32 }
             : { duration: 0.9, ease: [0.2, 0.8, 0.2, 1], delay: 0.1 }
         }
-        className="text-karaz-gold-400 drop-shadow-[0_0_36px_rgba(212,160,23,0.4)]"
+        className="text-rizzotto-gold-400 drop-shadow-[0_0_36px_rgba(212,160,23,0.4)]"
       >
-        <KarazSigil
-          className="size-32 sm:size-40 animate-karaz-shimmer"
+        <RizzottoSigil
+          className="size-32 sm:size-40 animate-rizzotto-shimmer"
           drawable={!reduced}
           strokeWidth={1.5}
         />
@@ -42,7 +42,7 @@ export function OnboardingStage5Done({ onComplete, pending }: OnboardingStage5Do
             ? { duration: 0.32 }
             : { duration: 0.6, ease: [0.4, 0, 0.2, 1], delay: reduced ? 0 : 1.5 }
         }
-        className="mt-10 font-headline text-karaz-stone-100"
+        className="mt-10 font-headline text-rizzotto-stone-100"
         style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)' }}
       >
         {t('onboarding.stage5.title')}
@@ -56,7 +56,7 @@ export function OnboardingStage5Done({ onComplete, pending }: OnboardingStage5Do
             ? { duration: 0.24 }
             : { duration: 0.6, ease: [0.4, 0, 0.2, 1], delay: reduced ? 0 : 1.8 }
         }
-        className="mt-6 max-w-xl font-sans text-base leading-relaxed text-karaz-stone-300"
+        className="mt-6 max-w-xl font-sans text-base leading-relaxed text-rizzotto-stone-300"
       >
         {t('onboarding.stage5.body')}
       </motion.p>

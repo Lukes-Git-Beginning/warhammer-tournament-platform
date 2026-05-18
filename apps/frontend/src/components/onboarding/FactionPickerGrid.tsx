@@ -57,10 +57,10 @@ export function FactionPickerGrid({
               disabled={disabled}
               data-selected={active}
               className={cn(
-                'group relative flex h-12 items-center gap-2 rounded-sm border border-karaz-iron-600 bg-karaz-iron-900 px-3 text-left transition-[border-color,background-color,color] duration-base ease-burn',
-                'hover:border-karaz-gold-500/60 hover:bg-karaz-iron-800',
-                active && 'border-karaz-gold-500 bg-karaz-iron-800 text-karaz-gold-300',
-                disabled && 'cursor-not-allowed opacity-40 hover:border-karaz-iron-600 hover:bg-karaz-iron-900',
+                'group relative flex h-12 items-center gap-2 rounded-sm border border-rizzotto-iron-600 bg-rizzotto-iron-900 px-3 text-left transition-[border-color,background-color,color] duration-base ease-burn',
+                'hover:border-rizzotto-gold-500/60 hover:bg-rizzotto-iron-800',
+                active && 'border-rizzotto-gold-500 bg-rizzotto-iron-800 text-rizzotto-gold-300',
+                disabled && 'cursor-not-allowed opacity-40 hover:border-rizzotto-iron-600 hover:bg-rizzotto-iron-900',
               )}
             >
               <span
@@ -75,7 +75,7 @@ export function FactionPickerGrid({
           );
         })}
       </div>
-      <p className="mt-3 text-[11px] uppercase tracking-wider text-karaz-stone-400">
+      <p className="mt-3 text-[11px] uppercase tracking-wider text-rizzotto-stone-400">
         {selected.length} / {maxSelections} chosen — optional
       </p>
     </div>

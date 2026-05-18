@@ -34,12 +34,12 @@ export function RollOfHonourSection() {
     <section aria-labelledby="roll-heading" className="relative py-16 lg:py-24">
       <div className="mx-auto max-w-[60rem] px-4 sm:px-6 lg:px-8">
         <div className="mb-8 text-center lg:mb-12">
-          <span className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-karaz-gold-500">
+          <span className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-rizzotto-gold-500">
             {t('roll_of_honour.eyebrow')}
           </span>
           <h2
             id="roll-heading"
-            className="mt-2 font-display font-bold text-karaz-stone-100"
+            className="mt-2 font-display font-bold text-rizzotto-stone-100"
             style={{ fontSize: 'clamp(1.625rem, 3.5vw, 2.5rem)', lineHeight: 1.15 }}
           >
             {t('roll_of_honour.heading')}
@@ -48,7 +48,7 @@ export function RollOfHonourSection() {
             aria-hidden="true"
             lang="la"
             title="Sealed in stone"
-            className="mt-2 font-display italic text-karaz-gold-500/70 text-sm tracking-wider"
+            className="mt-2 font-display italic text-rizzotto-gold-500/70 text-sm tracking-wider"
           >
             In Lapide Sigillata
           </p>
@@ -68,7 +68,7 @@ export function RollOfHonourSection() {
         {(isLoading || hasEntries) && (
           <Card variant="banner" className="overflow-hidden">
             {isLoading && (
-              <ul className="divide-y divide-karaz-iron-700">
+              <ul className="divide-y divide-rizzotto-iron-700">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <li key={i} className="grid grid-cols-[2.5rem_2.5rem_1fr_auto] items-center gap-4 px-5 py-3">
                     <Skeleton className="h-6 w-6" />
@@ -91,7 +91,7 @@ export function RollOfHonourSection() {
                     transition: { staggerChildren: reduced ? 0 : 0.06 },
                   },
                 }}
-                className="divide-y divide-karaz-iron-700"
+                className="divide-y divide-rizzotto-iron-700"
               >
                 {entries.slice(0, 10).map((entry, idx) => (
                   <motion.li
@@ -100,10 +100,10 @@ export function RollOfHonourSection() {
                       hidden: reduced ? { opacity: 0 } : { opacity: 0, y: 10 },
                       visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: [0.4, 0, 0.2, 1] } },
                     }}
-                    className="group grid grid-cols-[2.5rem_2.5rem_1fr_auto] items-center gap-4 px-5 py-3 transition-colors hover:bg-karaz-iron-800/70"
+                    className="group grid grid-cols-[2.5rem_2.5rem_1fr_auto] items-center gap-4 px-5 py-3 transition-colors hover:bg-rizzotto-iron-800/70"
                   >
                     <span
-                      className="font-display text-xl font-semibold tabular-nums text-karaz-bronze group-hover:text-karaz-gold-400"
+                      className="font-display text-xl font-semibold tabular-nums text-rizzotto-bronze group-hover:text-rizzotto-gold-400"
                       aria-label={`Rank ${idx + 1}`}
                     >
                       {ROMAN[idx] ?? idx + 1}
@@ -112,10 +112,10 @@ export function RollOfHonourSection() {
                       {entry.user.avatar_url && <AvatarImage src={entry.user.avatar_url} alt="" />}
                       <AvatarFallback>{entry.user.username[0]?.toUpperCase()}</AvatarFallback>
                     </Avatar>
-                    <span className="truncate font-medium text-karaz-stone-100 group-hover:text-karaz-gold-300">
+                    <span className="truncate font-medium text-rizzotto-stone-100 group-hover:text-rizzotto-gold-300">
                       {entry.user.username}
                     </span>
-                    <span className="font-mono tabular-nums text-karaz-gold-400">
+                    <span className="font-mono tabular-nums text-rizzotto-gold-400">
                       {Math.round(entry.elo_rating ?? 0)}
                     </span>
                   </motion.li>

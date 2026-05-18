@@ -42,7 +42,7 @@ describe('EmptyState', () => {
     expect(html).not.toContain('lang="la"');
   });
 
-  it('variant=banner mit image rendert <picture>, ohne image rendert KarazSigil', () => {
+  it('variant=banner mit image rendert <picture>, ohne image rendert RizzottoSigil', () => {
     const withImg = renderToStaticMarkup(
       <EmptyState
         variant="banner"

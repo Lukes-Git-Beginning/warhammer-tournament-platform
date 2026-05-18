@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { motion, useReducedMotion } from 'motion/react';
 import { ExternalLink } from 'lucide-react';
-import { KarazSigil } from '@/components/icons/KarazSigil';
+import { RizzottoSigil } from '@/components/icons/RizzottoSigil';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -42,7 +42,7 @@ export function SigillumSection() {
           className="mb-8"
           style={{ filter: 'drop-shadow(0 0 28px rgba(212, 160, 23, 0.25))' }}
         >
-          <KarazSigil className="size-32 text-karaz-gold-500 sm:size-40" strokeWidth={1.2} />
+          <RizzottoSigil className="size-32 text-rizzotto-gold-500 sm:size-40" strokeWidth={1.2} />
         </motion.div>
 
         <motion.h2
@@ -51,7 +51,7 @@ export function SigillumSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="font-display font-bold text-karaz-stone-100"
+          className="font-display font-bold text-rizzotto-stone-100"
           style={{ fontSize: 'clamp(2rem, 4.5vw, 3.5rem)', lineHeight: 1.1 }}
         >
           {t('sigillum.heading')}
@@ -65,7 +65,7 @@ export function SigillumSection() {
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="mt-3 font-display italic text-karaz-gold-500/80"
+          className="mt-3 font-display italic text-rizzotto-gold-500/80"
           style={{ fontSize: 'clamp(1rem, 2vw, 1.25rem)' }}
         >
           Karaz Ankor
@@ -88,13 +88,13 @@ export function SigillumSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.4 }}
-          className="mt-8 flex items-center justify-center gap-6 text-karaz-stone-400"
+          className="mt-8 flex items-center justify-center gap-6 text-rizzotto-stone-400"
         >
           <a
             href="https://discord.gg/"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm font-display tracking-wider uppercase hover:text-karaz-gold-400 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-display tracking-wider uppercase hover:text-rizzotto-gold-400 transition-colors"
           >
             Discord
             <ExternalLink className="size-3.5" strokeWidth={1.5} />
@@ -103,7 +103,7 @@ export function SigillumSection() {
             href="https://github.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm font-display tracking-wider uppercase hover:text-karaz-gold-400 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-display tracking-wider uppercase hover:text-rizzotto-gold-400 transition-colors"
           >
             GitHub
             <ExternalLink className="size-3.5" strokeWidth={1.5} />
@@ -112,7 +112,7 @@ export function SigillumSection() {
             href="https://reddit.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm font-display tracking-wider uppercase hover:text-karaz-gold-400 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-display tracking-wider uppercase hover:text-rizzotto-gold-400 transition-colors"
           >
             Reddit
             <ExternalLink className="size-3.5" strokeWidth={1.5} />

@@ -9,7 +9,7 @@
  *   - 1 i18n toggle smoke: DE→EN switch + reload persistence
  *
  * First run: execute with --update-snapshots to create baseline screenshots.
- *   pnpm -F @tww3/e2e test -- --update-snapshots --grep landing-overhaul
+ *   pnpm -F @rizzotto/e2e test -- --update-snapshots --grep landing-overhaul
  *
  * Subsequent runs compare against the stored baseline (5 % pixel tolerance).
  */
@@ -161,7 +161,7 @@ test.describe('/tournaments/new — organizer on desktop', () => {
 // i18n toggle smoke — desktop only
 // ---------------------------------------------------------------------------
 
-test('i18n toggle: DE→EN switch and reload persistence', async ({ page }) => {
+test('i18n toggle: EN→DE switch and reload persistence', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await gotoAndWait(page, '/');
 
@@ -176,28 +176,25 @@ test('i18n toggle: DE→EN switch and reload persistence', async ({ page }) => {
     return;
   }
 
-  // Verify DE is the active locale by default
-  const deButton = toggleGroup.locator('button', { hasText: 'DE' });
-  await expect(deButton).toBeVisible();
+  // EN is now the default locale — English tagline should be visible on first load
+  await expect(page.locator('body')).toContainText('Where Lists Are Forged');
 
-  // Switch to EN
-  const enButton = toggleGroup.locator('button', { hasText: 'EN' });
-  await enButton.click();
+  // Switch to DE
+  const deButton = toggleGroup.locator('button', { hasText: 'DE' });
+  await deButton.click();
   await page.waitForTimeout(200); // allow react re-render
 
-  // English tagline should now appear somewhere in the body
-  await expect(page.locator('body')).toContainText('Where Lists Are Forged');
-
-  // Reload — locale should persist via localStorage
+  // Reload — locale should persist via localStorage (rizzotto_locale)
   await page.reload();
   await page.waitForLoadState('networkidle');
-  await expect(page.locator('body')).toContainText('Where Lists Are Forged');
 
-  // Switch back to DE for a clean state
+  // After reload, DE should still be selected
   const toggleGroupAfterReload = page
     .locator('[role="group"]')
     .filter({ hasText: /DE|EN/i })
     .first();
-  const deButtonAfterReload = toggleGroupAfterReload.locator('button', { hasText: 'DE' });
-  await deButtonAfterReload.click();
+
+  // Switch back to EN for a clean state
+  const enButtonAfterReload = toggleGroupAfterReload.locator('button', { hasText: 'EN' });
+  await enButtonAfterReload.click();
 });

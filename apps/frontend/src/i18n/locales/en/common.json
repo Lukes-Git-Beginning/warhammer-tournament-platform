@@ -20,7 +20,7 @@
     "switch_aria": "Switch language"
   },
   "brand": {
-    "name": "Karaz Lists",
+    "name": "Rizzotto",
     "tagline": "Where Lists Are Forged",
     "motto": "Karaz Ankor"
   },
@@ -30,9 +30,9 @@
     "meta": "Meta",
     "factions": "Factions",
     "drafts": "Drafts",
-    "create_tournament": "Call the Muster",
-    "logout": "Lay Down Arms",
-    "login": "Take Up Arms",
+    "create_tournament": "Create Tournament",
+    "logout": "Sign Out",
+    "login": "Sign In",
     "profile": "My Profile",
     "admin": "Admin"
   },
@@ -54,7 +54,7 @@
     "eyebrow": "Now Mustering",
     "heading": "Active Musters",
     "view_all": "View all",
-    "answer_call": "Answer the Call",
+    "answer_call": "View Tournament",
     "marshals": "Marshals",
     "empty_title": "The musters stand empty.",
     "empty_body": "When marshals call, they will be listed here.",
@@ -93,7 +93,7 @@
   "sigillum": {
     "heading": "Join the Realm",
     "subline": "Every list, every triumph, every fall — eternal.",
-    "cta": "Take Up Arms"
+    "cta": "Join Now"
   },
   "footer": {
     "tagline": "Where Lists Are Forged",
@@ -105,7 +105,7 @@
     "discord": "Discord"
   },
   "login": {
-    "title": "Take Up Arms",
+    "title": "Sign In",
     "subtitle": "Sign in with your Discord account to enter tournaments or call your own musters.",
     "discord_button": "Sign in with Discord"
   },
@@ -137,7 +137,7 @@
   "tournament": {
     "create": {
       "title": "Call the Muster",
-      "subtitle": "Create a new tournament for the Karaz Lists community.",
+      "subtitle": "Create a new tournament for the Rizzotto community.",
       "role_warning": "You need the Organizer role to create tournaments. Contact an administrator to upgrade your role.",
       "aside": {
         "heading": "What is a Muster Call?",
@@ -284,7 +284,7 @@
   },
   "onboarding": {
     "stage1": {
-      "title": "Heed the Call, Marshal.",
+      "title": "Welcome aboard.",
       "body": "Your sigil is now sealed in the Roll. Before you take the field, let us forge your standing.",
       "cta": "Enter the Forge"
     },
@@ -307,15 +307,53 @@
       "body": "Your standing is sealed. Take the field.",
       "cta": "Enter the Conclave",
       "cta_loading": "Sealing the Roll…"
+    },
+    "tour": {
+      "btn_back": "Back",
+      "btn_next": "Next",
+      "btn_finish": "Finish",
+      "dot_aria": "Stop {{current}} of {{total}}",
+      "stops": {
+        "roll_of_honour": {
+          "title": "The Roll of Honour",
+          "body": "Every Marshal's standing — etched in stone. Your name will join the roll."
+        },
+        "factions": {
+          "title": "The Factions",
+          "body": "Twenty-four banners ride the Old World. Know each before the muster is called."
+        },
+        "meta": {
+          "title": "The Heatmap",
+          "body": "Matchup balance, season by season. Read the field before you ride it."
+        },
+        "sigil": {
+          "title": "Your Sigil",
+          "body": "Your sigil binds your army lists and your results. Keep it sharp."
+        }
+      }
     }
   },
   "draft": {
+    "action": {
+      "pick": "PICK",
+      "ban": "BAN",
+      "snipe": "SNIPE",
+      "steal": "STEAL",
+      "reveal_picks": "REVEAL PICKS",
+      "reveal_bans": "REVEAL BANS",
+      "reveal_all": "REVEAL ALL"
+    },
+    "actor": {
+      "host": "Host",
+      "guest": "Guest",
+      "admin": "Admin"
+    },
     "status": {
       "completed": "Draft complete",
       "cancelled": "Draft cancelled",
       "waiting": "Waiting for players…",
       "your_turn": "YOUR TURN:",
-      "opponent_turn": "Host/Guest is up:",
+      "opponent_turn": "{{actor}}'s turn:",
       "waiting_next": "Waiting for next turn…",
       "reveal_picks": "REVEAL PICKS",
       "reveal_bans": "REVEAL BANS"
@@ -334,7 +372,7 @@
     "season_label": "Season: {{name}}",
     "error": "Failed to load meta data.",
     "no_season_title": "No open season yet.",
-    "no_season_body": "Once a season is opened by the Karaz council, faction and matchup statistics will appear here.",
+    "no_season_body": "Once a season is opened by the Rizzotto community, faction and matchup statistics will appear here.",
     "no_season_motto": "\"Tempus Expectandi\"",
     "no_season_motto_title": "A time of waiting",
     "stat_total_matches": "Total matches",
@@ -361,5 +399,8 @@
     "no_stats": "No data",
     "matches_count": "{{count}} matches",
     "winrate_short": "{{percent}}% WR"
+  },
+  "a11y": {
+    "skip_to_content": "Skip to content"
   }
 }

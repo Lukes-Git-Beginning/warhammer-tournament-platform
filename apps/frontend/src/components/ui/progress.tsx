@@ -20,13 +20,13 @@ export const Progress = forwardRef<HTMLDivElement, ProgressProps>(
         aria-valuenow={clamped}
         aria-label={label}
         className={cn(
-          'relative h-[3px] w-full overflow-hidden rounded-sm bg-karaz-iron-800',
+          'relative h-[3px] w-full overflow-hidden rounded-sm bg-rizzotto-iron-800',
           className,
         )}
         {...props}
       >
         <div
-          className="h-full origin-left bg-gradient-to-r from-karaz-gold-500 via-karaz-gold-400 to-karaz-forge-500 transition-transform duration-base ease-burn motion-reduce:transition-none"
+          className="h-full origin-left bg-gradient-to-r from-rizzotto-gold-500 via-rizzotto-gold-400 to-rizzotto-forge-500 transition-transform duration-base ease-burn motion-reduce:transition-none"
           style={{ transform: `scaleX(${ratio})` }}
         />
       </div>

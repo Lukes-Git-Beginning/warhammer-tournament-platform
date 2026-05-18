@@ -12,7 +12,7 @@
 Import im gesamten Monorepo:
 
 ```ts
-import { prisma } from '@tww3/db';
+import { prisma } from '@rizzotto/db';
 ```
 
 Der Singleton ist in `packages/db/src/index.ts` definiert. Er nutzt `globalThis` um Hot-Reload-Verbindungslecks in Dev zu vermeiden:
@@ -221,7 +221,7 @@ enum DraftStatus {
 
 ## Migration-Workflow
 
-Alle Befehle aus dem Workspace-Root über `pnpm --filter @tww3/db`:
+Alle Befehle aus dem Workspace-Root über `pnpm --filter @rizzotto/db`:
 
 | Zweck | Befehl (Root) |
 |---|---|

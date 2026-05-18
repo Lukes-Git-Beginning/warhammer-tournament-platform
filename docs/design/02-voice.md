@@ -6,7 +6,7 @@ brand. Treat copy as a craft, not an afterthought.
 
 ## Tonality Statement
 
-> Karaz Lists speaks like a marshal addressing their order before muster:
+> Rizzotto speaks like a marshal addressing their order before muster:
 > measured, archaic, weighty for ceremonial moments — clear and modern for
 > functional ones. No exclamation marks. No emojis. No casual hype.
 

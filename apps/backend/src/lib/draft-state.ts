@@ -2,7 +2,7 @@
  * Pure Draft State-Machine — M4.1
  *
  * No I/O. No imports from prisma / redis / socket / fastify.
- * Only plain TypeScript + types from @tww3/types.
+ * Only plain TypeScript + types from @rizzotto/types.
  *
  * All functions return new state objects (no mutation).
  */
@@ -13,7 +13,7 @@ import type {
   DraftState,
   DraftTurn,
   DraftVariant,
-} from '@tww3/types';
+} from '@rizzotto/types';
 
 // ---------------------------------------------------------------------------
 // Re-export ApplyContext so consumers can import from this module directly.

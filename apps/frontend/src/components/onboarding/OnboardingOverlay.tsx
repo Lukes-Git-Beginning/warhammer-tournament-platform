@@ -53,7 +53,7 @@ export function OnboardingOverlay() {
             disabled={isCompleting}
             className={cn(
               'font-display text-[11px] uppercase tracking-[0.18em]',
-              'text-karaz-stone-400 hover:text-karaz-gold-400',
+              'text-rizzotto-stone-400 hover:text-rizzotto-gold-400',
               'transition-colors duration-base ease-burn',
               'disabled:opacity-50',
             )}
@@ -67,7 +67,7 @@ export function OnboardingOverlay() {
       {isTour ? (
         <OnboardingStage3Tour onAdvance={() => advance(3)} />
       ) : (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-karaz-iron-950/97 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-rizzotto-iron-950/97 backdrop-blur-sm">
           <div className="flex min-h-screen w-full items-center justify-center px-4 py-16 sm:py-20">
             <AnimatePresence mode="wait">
               <motion.div

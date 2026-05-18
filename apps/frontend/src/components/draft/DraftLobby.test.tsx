@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { DraftView, DraftTurn, PublicDraftState } from '@tww3/types';
+import type { DraftView, DraftTurn, PublicDraftState } from '@rizzotto/types';
 import { DraftStatusBanner } from './DraftStatusBanner';
 import { DraftTimer } from './DraftTimer';
 import { FactionGrid } from './FactionGrid';
-import type { FactionDto } from '@tww3/types';
+import type { FactionDto } from '@rizzotto/types';
 
 // ---------------------------------------------------------------------------
 // Helpers

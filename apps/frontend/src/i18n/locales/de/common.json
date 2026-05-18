@@ -20,7 +20,7 @@
     "switch_aria": "Sprache wechseln"
   },
   "brand": {
-    "name": "Karaz Lists",
+    "name": "Rizzotto",
     "tagline": "Wo Listen geschmiedet werden",
     "motto": "Karaz Ankor"
   },
@@ -30,9 +30,9 @@
     "meta": "Meta",
     "factions": "Fraktionen",
     "drafts": "Drafts",
-    "create_tournament": "Ruf zur Musterung",
-    "logout": "Waffen niederlegen",
-    "login": "In den Kampf",
+    "create_tournament": "Turnier erstellen",
+    "logout": "Abmelden",
+    "login": "Anmelden",
     "profile": "Mein Profil",
     "admin": "Admin"
   },
@@ -54,7 +54,7 @@
     "eyebrow": "Sammelruf läuft",
     "heading": "Aktive Musterungen",
     "view_all": "Alle anzeigen",
-    "answer_call": "Dem Ruf folgen",
+    "answer_call": "Turnier ansehen",
     "marshals": "Marschälle",
     "empty_title": "Die Musterungen stehen leer.",
     "empty_body": "Wenn Marschälle rufen, erscheinen sie hier.",
@@ -93,7 +93,7 @@
   "sigillum": {
     "heading": "Tritt dem Reich bei",
     "subline": "Jede Liste, jeder Triumph, jeder Fall — verewigt.",
-    "cta": "In den Kampf"
+    "cta": "Jetzt mitmachen"
   },
   "footer": {
     "tagline": "Wo Listen geschmiedet werden",
@@ -105,7 +105,7 @@
     "discord": "Discord"
   },
   "login": {
-    "title": "In den Kampf",
+    "title": "Anmelden",
     "subtitle": "Melde dich mit deinem Discord-Konto an, um an Turnieren teilzunehmen oder eigene Musterungen auszurufen.",
     "discord_button": "Mit Discord anmelden"
   },
@@ -137,7 +137,7 @@
   "tournament": {
     "create": {
       "title": "Ruf zur Musterung",
-      "subtitle": "Erstelle ein neues Turnier für die Karaz-Lists-Gemeinde.",
+      "subtitle": "Erstelle ein neues Turnier für die Rizzotto-Gemeinde.",
       "role_warning": "Du benötigst die Organisator-Rolle, um Turniere zu erstellen. Wende dich an einen Administrator, um deine Rolle zu erhöhen.",
       "aside": {
         "heading": "Was ist ein Ruf?",
@@ -284,7 +284,7 @@
   },
   "onboarding": {
     "stage1": {
-      "title": "Folge dem Ruf, Marschall.",
+      "title": "Willkommen.",
       "body": "Dein Siegel ist nun in der Rolle versiegelt. Bevor du das Feld betrittst, lass uns deinen Stand schmieden.",
       "cta": "Die Schmiede betreten"
     },
@@ -307,15 +307,53 @@
       "body": "Dein Stand ist gesiegelt. Betritt das Feld.",
       "cta": "Ins Konzil eintreten",
       "cta_loading": "Die Rolle wird gesiegelt…"
+    },
+    "tour": {
+      "btn_back": "Zurück",
+      "btn_next": "Weiter",
+      "btn_finish": "Fertig",
+      "dot_aria": "Schritt {{current}} von {{total}}",
+      "stops": {
+        "roll_of_honour": {
+          "title": "Ehrenliste",
+          "body": "Jeder Marschall hat hier seinen Stand — in Stein geritzt. Dein Name wird sich einreihen."
+        },
+        "factions": {
+          "title": "Die Fraktionen",
+          "body": "Vierundzwanzig Banner reiten durch die Alte Welt. Kenne jede, bevor der Ruf erschallt."
+        },
+        "meta": {
+          "title": "Die Heatmap",
+          "body": "Matchup-Balance, Season für Season. Lies das Schlachtfeld, bevor du es betrittst."
+        },
+        "sigil": {
+          "title": "Dein Siegel",
+          "body": "Dein Siegel bindet deine Armee-Listen und deine Ergebnisse. Halte es scharf."
+        }
+      }
     }
   },
   "draft": {
+    "action": {
+      "pick": "PICK",
+      "ban": "BAN",
+      "snipe": "SNIPE",
+      "steal": "STEAL",
+      "reveal_picks": "PICKS AUFDECKEN",
+      "reveal_bans": "BANS AUFDECKEN",
+      "reveal_all": "ALLE AUFDECKEN"
+    },
+    "actor": {
+      "host": "Host",
+      "guest": "Gast",
+      "admin": "Admin"
+    },
     "status": {
       "completed": "Draft abgeschlossen",
       "cancelled": "Draft abgebrochen",
       "waiting": "Warte auf Spieler…",
       "your_turn": "DEIN ZUG:",
-      "opponent_turn": "Host/Gast ist am Zug:",
+      "opponent_turn": "{{actor}} ist am Zug:",
       "waiting_next": "Warte auf nächsten Zug…",
       "reveal_picks": "PICKS AUFDECKEN",
       "reveal_bans": "BANS AUFDECKEN"
@@ -334,7 +372,7 @@
     "season_label": "Season: {{name}}",
     "error": "Fehler beim Laden der Meta-Daten.",
     "no_season_title": "Noch keine offene Season.",
-    "no_season_body": "Sobald die Karaz-Räte eine Season eröffnen, erscheinen hier Fraktions- und Matchup-Statistiken.",
+    "no_season_body": "Sobald die Rizzotto-Gemeinde eine Season eröffnet, erscheinen hier Fraktions- und Matchup-Statistiken.",
     "no_season_motto": "\"Tempus Expectandi\"",
     "no_season_motto_title": "A time of waiting",
     "stat_total_matches": "Gesamt-Matches",
@@ -361,5 +399,8 @@
     "no_stats": "Keine Daten",
     "matches_count": "{{count}} Spiele",
     "winrate_short": "{{percent}}% WR"
+  },
+  "a11y": {
+    "skip_to_content": "Zum Inhalt springen"
   }
 }

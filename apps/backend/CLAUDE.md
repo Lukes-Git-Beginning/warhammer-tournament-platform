@@ -5,11 +5,11 @@ Fastify 5 API-Server mit Prisma 7 (DB), Socket.IO (Realtime), Redis (Cache + Pub
 ## Commands
 
 ```bash
-pnpm -F @tww3/backend dev
-pnpm -F @tww3/backend test
-pnpm -F @tww3/backend test -- <pattern>
-pnpm -F @tww3/backend typecheck
-pnpm -F @tww3/backend lint
+pnpm -F @rizzotto/backend dev
+pnpm -F @rizzotto/backend test
+pnpm -F @rizzotto/backend test -- <pattern>
+pnpm -F @rizzotto/backend typecheck
+pnpm -F @rizzotto/backend lint
 ```
 
 ## Plugin-Reihenfolge
@@ -49,7 +49,7 @@ const app = await buildApp({ withSocket: false, withRedis: false, withCron: fals
 
 - **ESM-Imports:** Alle lokalen Imports mit `.js`-Extension (`../lib/cache.js`, nicht `../lib/cache`)
 - **Auth-Hook-Reihenfolge:** `authenticate` vor `requireRole` — `requireRole` liest `request.user`, das erst nach JWT-Verify gesetzt ist
-- **Zod-Validation:** Schemas aus `@tww3/types` oder lokal definiert; immer `.safeParse()` → bei Fehler `reply.code(400).send({ error: 'BadRequest', message: ..., statusCode: 400 })`
+- **Zod-Validation:** Schemas aus `@rizzotto/types` oder lokal definiert; immer `.safeParse()` → bei Fehler `reply.code(400).send({ error: 'BadRequest', message: ..., statusCode: 400 })`
 - **Error-Shape:** `{ error: string, message: string, statusCode: number }` — konsistent in allen Handlers
 - **Caching:** `cached(fastify.redis, key, compute, { ttlSeconds })` für Read-Through; `invalidate(fastify.redis, key)` nach Schreiboperationen
 

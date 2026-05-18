@@ -16,7 +16,7 @@ Replace the entire file contents with this:
 
 ```css
 /*
- * Karaz Lists — Tailwind v4 CSS-first configuration.
+ * Rizzotto — Tailwind v4 CSS-first configuration.
  * Source of truth for all design tokens.
  * See docs/design/03-tokens.md and docs/design/05-color-system.md
  * for the meaning of each token.
@@ -307,7 +307,7 @@ h1, h2, h3, h4, h5, h6 {
 ### Step 1 — install dependencies
 
 ```pwsh
-pnpm -F @tww3/frontend add `
+pnpm -F @rizzotto/frontend add `
   class-variance-authority `
   clsx `
   tailwind-merge `
@@ -320,7 +320,7 @@ Then the @fontsource font packages for self-hosted variable fonts (no
 Google Fonts roundtrip in production):
 
 ```pwsh
-pnpm -F @tww3/frontend add `
+pnpm -F @rizzotto/frontend add `
   @fontsource-variable/cinzel `
   @fontsource-variable/inter `
   @fontsource-variable/jetbrains-mono `
@@ -386,7 +386,7 @@ not shadcn's HSL-variable scheme.)
 ### Step 4 — install primitives
 
 ```pwsh
-pnpm -F @tww3/frontend dlx shadcn@latest add button card input label textarea select checkbox switch radio-group dialog sheet dropdown-menu tooltip tabs badge separator sonner skeleton scroll-area avatar
+pnpm -F @rizzotto/frontend dlx shadcn@latest add button card input label textarea select checkbox switch radio-group dialog sheet dropdown-menu tooltip tabs badge separator sonner skeleton scroll-area avatar
 ```
 
 After install, each generated component in `src/components/ui/` is hand-edited
@@ -455,8 +455,8 @@ export function IndexPage() {
 
 In `apps/frontend/src/components/layout/Header.tsx`:
 
-- Replace the hardcoded text `TWW3 Cup` (line 52) with a `<KarazSigilWordmark />`
-  lockup component (sigil + "KARAZ LISTS" wordmark side-by-side).
+- Replace the hardcoded text `TWW3 Cup` (line 52) with a `<RizzottoWordmark />`
+  lockup component (sigil + "RIZZOTTO" wordmark side-by-side).
 - Update nav link classes: replace `text-warhammer-gold` →
   `text-karaz-gold-500`, replace `text-stone-300` → `text-karaz-stone-300`.
 - Wrap navigation in `<nav aria-label="Primary">`.
@@ -508,7 +508,7 @@ export const router = createRouter({
 ### `apps/frontend/index.html`
 
 Replace the existing `<head>` block (per [12-hero-anatomy.md](./12-hero-anatomy.md))
-with the Karaz Lists meta block, font preconnect, and updated favicon.
+with the Rizzotto meta block, font preconnect, and updated favicon.
 
 Body class becomes:
 
@@ -526,7 +526,7 @@ asset is replaced once the Gemini-generated SVG lands.
 Top of file:
 
 ```md
-# Karaz Lists
+# Rizzotto
 
 > *Where Lists Are Forged.*
 
@@ -575,24 +575,24 @@ After all phases applied:
 
 ```pwsh
 # Type-check
-pnpm -F @tww3/frontend typecheck
+pnpm -F @rizzotto/frontend typecheck
 
 # Build
-pnpm -F @tww3/frontend build
+pnpm -F @rizzotto/frontend build
 
 # Lint (will flag any obvious mistakes)
-pnpm -F @tww3/frontend lint
+pnpm -F @rizzotto/frontend lint
 
 # Dev server — open browser at http://localhost:5173
-pnpm -F @tww3/frontend dev
+pnpm -F @rizzotto/frontend dev
 ```
 
 Browser smoke-test (per [12-hero-anatomy.md](./12-hero-anatomy.md)):
 
-- [ ] Tab title reads "Karaz Lists — Where Lists Are Forged".
+- [ ] Tab title reads "Rizzotto — Where Lists Are Forged".
 - [ ] Hero renders, sigil animates once on first paint.
 - [ ] All 7 sections present and scrollable.
-- [ ] Header shows Karaz Sigil + "KARAZ LISTS" wordmark.
+- [ ] Header shows Rizzotto sigil + "RIZZOTTO" wordmark.
 - [ ] Buttons show forge-glow on hover.
 - [ ] `prefers-reduced-motion: reduce` (OS toggle) disables animations.
 - [ ] Lighthouse Accessibility ≥ 95.

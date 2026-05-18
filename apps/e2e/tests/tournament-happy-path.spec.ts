@@ -10,7 +10,7 @@
  * in the public bracket API — bracket endpoint returns all rounds at once).
  */
 import { test, expect, request as playwrightRequest } from '@playwright/test';
-import { prisma } from '@tww3/db';
+import { prisma } from '@rizzotto/db';
 import {
   createTestUsers,
   signInRequest,

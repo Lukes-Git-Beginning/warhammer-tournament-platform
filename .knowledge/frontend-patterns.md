@@ -111,7 +111,7 @@ useQuery({
 })
 ```
 
-Typen kommen aus `@tww3/types` [siehe `.knowledge/types-contracts.md`].
+Typen kommen aus `@rizzotto/types` [siehe `.knowledge/types-contracts.md`].
 
 ---
 
