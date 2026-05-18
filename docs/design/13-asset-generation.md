@@ -1,8 +1,14 @@
 # 13 — Asset Generation (AI Prompt Library)
 
-Karaz Lists uses AI image generation (Gemini, ChatGPT-Image, optionally
+Rizzotto uses AI image generation (Gemini, ChatGPT-Image, optionally
 Midjourney) for hero photography, sigils, textures, and decorative banners.
 This file is the **prompt library** — paste-ready, style-locked, ratio-tagged.
+
+The Rizzotto sigil is a stylised aubergine (the co-founder's GG handle is
+"Rizzotto" and an aubergine is the recognisable mascot). All prompts below
+re-interpret this mascot in the platform's Grimdark/Souls-like aesthetic —
+bas-relief stone, iron filigree, cold gold inlay, never the glossy neon-pop
+form the mascot has in casual use.
 
 Every asset generated for the site must use one of these prompts (or a
 clearly-derived variant). Consistency comes from the prompt grammar, not
@@ -70,50 +76,72 @@ request unless the tool supports persistent style memory.
 
 ---
 
-## 2. The Karaz Sigil
+## 2. The Rizzotto Sigil
 
 ### 2a. Sigil mark (1:1, transparent)
 
-**Use**: Brand mark, logo, favicon, every place the sigil appears.
+**Use**: Brand mark, favicon, every place the sigil appears as a standalone
+emblem (inline JSX component `RizzottoSigil`).
 
 **Prompt**:
-> [shared preamble] **Heraldic emblem, single weathered Khazalid dwarf rune
-> at center — abstract geometric shape with crossed strokes — carved into
-> a rectangular stone tablet with rounded corners. Wreathed by iron filigree
-> with subtle gothic engravings. Two crossed warhammers behind the tablet,
-> visible above and below. Banner ribbon below the tablet inscribed
-> 'KARAZ ANKOR' in Latin small-caps lettering. Monochrome anthracite tones
-> with cold gold highlights only on the rune mark and inscription. Gothic
-> engraving line-art style, vector-clean lines suitable for logo use,
-> perfectly symmetric, transparent background. 1:1 square. No background.**
+> [shared preamble] **Heraldic emblem, single stylised aubergine silhouette
+> at center — bulbous teardrop body, leafy calyx-crown on top — carved as
+> bas-relief into a rectangular anthracite stone tablet with rounded
+> corners and weathered edges. The aubergine is rendered as engraved
+> line-art with cold gold inlay tracing its curves, calyx, and stem.
+> Wreathed by gothic iron filigree border. Two crossed warhammers behind
+> the tablet, visible above and below. Banner ribbon below the tablet
+> inscribed 'RIZZOTTO' in Latin small-caps lettering. Monochrome anthracite
+> tones with cold gold highlights only on the aubergine outline and the
+> inscription. Gothic engraving line-art style, vector-clean lines suitable
+> for logo use, perfectly symmetric, transparent background. 1:1 square.
+> No background. No glossy shine, no neon, no purple fill — the aubergine
+> reads as an engraved heraldic device, not as a fruit photograph.**
 
 **Post-processing**:
 - Raster the result → vector trace (Illustrator, Figma, or `svgo` + manual
   cleanup) → a clean SVG with strokes.
 - Replace fills with `currentColor` so it inherits text color (see
   [06-iconography.md](./06-iconography.md)).
-- Save at `apps/frontend/src/components/icons/KarazSigil.tsx` as inline JSX.
+- Save at `apps/frontend/src/components/icons/RizzottoSigil.tsx` as inline JSX.
 
 ### 2b. Sigil wordmark (3:1, transparent)
 
 **Use**: Header logo lockup, footer.
 
 **Prompt**:
-> [shared preamble] **Heraldic emblem on the left — small Khazalid rune
-> carved into stone tablet wreathed in iron filigree — to the right of
-> which appears the wordmark 'KARAZ LISTS' in Cinzel-style classical Roman
-> serif caps, slightly distressed/weathered. Monochrome anthracite + cold
-> gold. The wordmark sits horizontally aligned with the tablet. 3:1
-> horizontal aspect ratio. Transparent background.**
+> [shared preamble] **Heraldic emblem on the left — small stylised aubergine
+> (engraved heraldic device, anthracite + cold gold inlay, not a glossy
+> fruit) carved into a stone tablet wreathed in iron filigree — to the
+> right of which appears the wordmark 'RIZZOTTO' in Cinzel-style classical
+> Roman serif caps, slightly distressed/weathered. Monochrome anthracite
+> + cold gold. The wordmark sits horizontally aligned with the tablet.
+> 3:1 horizontal aspect ratio. Transparent background.**
 
 ### 2c. Sigil — etched ground variant
 
-**Use**: Footer mini-sigil, faction-neutral decoration.
+**Use**: Footer mini-sigil, atmospheric decoration.
 
 **Prompt**:
-> [shared preamble] **The same Karaz Sigil, but rendered as if etched into
-> aged bronze plate. Monochrome bronze tones, very subtle gold highlights,
-> slight oxidation patina at edges. 1:1 square, transparent background.**
+> [shared preamble] **The same Rizzotto Sigil, but rendered as if etched
+> into aged bronze plate. Monochrome bronze tones, very subtle gold
+> highlights on the aubergine outline, slight oxidation patina at the
+> edges. 1:1 square, transparent background.**
+
+### 2d. Favicon (32×32, SVG)
+
+**Use**: `apps/frontend/public/favicon.svg`. Browser tab icon.
+
+**Prompt**:
+> [shared preamble] **Minimalist favicon, single stylised aubergine
+> silhouette rendered as cold-gold line-art (no fill, just a 2px stroke)
+> on a deep anthracite circular background. Bulbous teardrop body, leafy
+> calyx crown on top. 32×32 px, vector-clean, perfectly centered, suitable
+> for browser tab. No text.**
+
+**Post-processing**: Hand-trace in Figma/Illustrator to clean SVG, then
+save directly to `apps/frontend/public/favicon.svg`. Keep the file under
+2 KB.
 
 ---
 
@@ -292,12 +320,13 @@ dominant.
 **Prompt**:
 > [shared preamble] **OpenGraph social card composition, 1200×630 pixels.
 > Background: tightly-cropped cinematic hero photo (knight in wildflowers,
-> golden hour) at 40% brightness. Centered foreground: Karaz Sigil
-> emblem (anthracite + gold filigree, ~280px tall). Below the sigil:
-> wordmark 'KARAZ LISTS' in Cinzel-style Roman serif caps, gold (#D4A017),
-> letter-spaced wide. Below the wordmark: small italic line
-> 'Where Lists Are Forged' in stone-cream. Composition centered,
-> well-padded. No URL, no decorative borders. 1200×630.**
+> golden hour) at 40% brightness. Centered foreground: Rizzotto Sigil
+> emblem — stylised aubergine engraved as bas-relief on an anthracite
+> stone tablet with iron filigree wreath and cold gold inlay, ~280px
+> tall. Below the sigil: wordmark 'RIZZOTTO' in Cinzel-style Roman serif
+> caps, gold (#D4A017), letter-spaced wide. Below the wordmark: small
+> italic line 'Where Lists Are Forged' in stone-cream. Composition
+> centered, well-padded. No URL, no decorative borders. 1200×630.**
 
 ---
 
@@ -406,8 +435,10 @@ The current contents of `icons/factions/` are M5 placeholders (coloured
 initials, see `packages/db/prisma/seed.ts:33`) and will be overwritten
 by the 4a output.
 
-The Karaz Sigil lives in `apps/frontend/src/components/icons/KarazSigil.tsx`
-as inline JSX, not in `public/`.
+The Rizzotto Sigil lives in `apps/frontend/src/components/icons/RizzottoSigil.tsx`
+as inline JSX, not in `public/`. The header/footer wordmark image (2b/2c)
+lives in `apps/frontend/public/img/rizzotto-wordmark.{png,avif,webp}` and
+`rizzotto-wordmark-bronze.{png,avif,webp}`.
 
 ---
 
