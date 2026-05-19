@@ -6,7 +6,7 @@
   "scripts": {
     "build": "pnpm run images:optimize && tsc -b && vite build",
     "dev": "vite",
-    "preview": "vite preview",
+    "preview": "vite preview --port 5173",
     "lint": "eslint src",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
