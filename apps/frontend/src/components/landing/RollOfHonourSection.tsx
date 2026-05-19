@@ -44,14 +44,6 @@ export function RollOfHonourSection() {
           >
             {t('roll_of_honour.heading')}
           </h2>
-          <p
-            aria-hidden="true"
-            lang="la"
-            title="Sealed in stone"
-            className="mt-2 font-display italic text-rizzotto-gold-500/70 text-sm tracking-wider"
-          >
-            In Lapide Sigillata
-          </p>
         </div>
 
         {!isLoading && (isError || !hasEntries) && (

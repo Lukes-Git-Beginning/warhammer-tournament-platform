@@ -16,6 +16,7 @@ import {
 } from '@rizzotto/types';
 import { resolveMatchResult, disputeMatch } from '../lib/match-result-service.js';
 import { tournamentRoom } from '../lib/emit.js';
+import { notifyDispute } from '../lib/discord-notify.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -201,6 +202,28 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
               userId,
               fastify.io,
             );
+
+            // Notify organizer + moderators of the dispute via Discord DM (non-fatal)
+            try {
+              const tournamentForNotify = await fastify.prisma.tournament.findUnique({
+                where: { id: match.tournament_id },
+                select: { id: true, name: true, slug: true, start_date: true },
+              });
+              const reporterUser = await fastify.prisma.user.findUnique({
+                where: { id: userId },
+                select: { id: true, username: true, discord_id: true },
+              });
+              if (tournamentForNotify && reporterUser) {
+                await notifyDispute(
+                  { id: matchId, tournament: tournamentForNotify },
+                  { id: reporterUser.id, username: reporterUser.username, discord_id: reporterUser.discord_id },
+                ).catch((err) => {
+                  fastify.log.warn({ err, matchId }, 'notifyDispute failed (non-fatal)');
+                });
+              }
+            } catch (notifyErr) {
+              fastify.log.warn({ notifyErr, matchId }, 'Dispute notify error (non-fatal)');
+            }
           }
           finalMatchStatus = 'DISPUTED';
         }

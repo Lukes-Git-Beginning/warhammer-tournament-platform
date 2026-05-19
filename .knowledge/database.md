@@ -2,7 +2,7 @@
 
 **TL;DR:**
 - Prisma 7 (`^7.8.0`) mit driver-adapter `PrismaPg` aus `@prisma/adapter-pg` — kein nativer Prisma-Connection-String-Modus.
-- 20 Models in `packages/db/prisma/schema.prisma` (User, Faction, Tournament, TournamentFactionAllowlist, TournamentParticipant, Match, Team, TeamMember, Season, LeaderboardEntry, TournamentResult, ArmyList, FactionStats, FactionStatsSnapshot, MatchupStats, DraftPreset, Draft, DraftEvent, AuditLog, ImportLog).
+- 30 Models in `packages/db/prisma/schema.prisma` (nach Welle 2). Neue Models: Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, FactionMastery, FactionMatchupStat, AntiFarmCap, AdminConfig.
 - **Gotcha:** `datasource.url` steht NICHT in `schema.prisma`, sondern in `prisma.config.ts` — `schema.prisma` enthält nur `provider = "postgresql"`.
 
 ---
@@ -243,6 +243,9 @@ Das Seed-Script liegt bei `packages/db/prisma/seed.ts` und wird via `tsx` ausgef
 | `20260513092053_m4_draft_event` | `DraftEvent`-Model hinzugefügt |
 | `20260513115214_add_import_log` | `ImportLog`-Model hinzugefügt |
 | `20260513140543_army_list_file_type_txt_pdf` | `TXT` und `PDF` Werte zu `ArmyListFileType` hinzugefügt |
+| `20260513150000_add_onboarding` | Onboarding-Felder an `User` + `TournamentParticipant.lists_locked_at` |
+| `20260519090818_beta_match_flow_plus_de` | Beta-Match-Flow (Q1/Q3/Q4/Q12), DE-Bracket-Felder, `MatchReport`, `BracketSide`, `MatchResultType` |
+| `20260519122538_welle2_tournament_mechanics_and_mmr` | **Welle 2 (Plan 2 + Plan 3)** — Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, FactionMastery, FactionMatchupStat, AntiFarmCap, AdminConfig; neue Enums PlayoffFormat, MatchFormat, MapDecisionMode, StatsSource; TournamentMode +OPEN/BPT/SLT; Tournament +6 Felder (rounds_count, playoff_format, swiss_match_format, playoff_match_format, finale_match_format, map_decision_mode) |
 
 Migrations-Lock unter `packages/db/prisma/migrations/migration_lock.toml`.
 

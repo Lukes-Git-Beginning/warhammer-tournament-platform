@@ -661,6 +661,53 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(204).send();
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // GET /api/tournaments/:slug/maps
+  // Public — returns the map pool snapshot for a specific tournament.
+  // Cached 5 min (maps are immutable after tournament start).
+  // ---------------------------------------------------------------------------
+  fastify.get('/api/tournaments/:slug/maps', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+
+    const tournament = await fastify.prisma.tournament.findFirst({
+      where: { slug, deleted_at: null },
+      select: { id: true },
+    });
+
+    if (!tournament) {
+      return reply.code(404).send({
+        error: 'NotFound',
+        message: `Tournament "${slug}" not found`,
+        statusCode: 404,
+      });
+    }
+
+    return cached(
+      fastify.redis,
+      cacheKey('tournament:maps', { tournamentId: tournament.id }),
+      async () => {
+        const pool = await fastify.prisma.tournamentMapPool.findMany({
+          where: { tournament_id: tournament.id },
+          select: {
+            map: {
+              select: {
+                id: true,
+                slug: true,
+                name: true,
+                description: true,
+                image_url: true,
+              },
+            },
+          },
+          orderBy: { map: { name: 'asc' } },
+        });
+
+        return { data: pool.map((p) => p.map) };
+      },
+      { ttlSeconds: 300 },
+    );
+  });
 };
 
 export default tournamentRoutes;

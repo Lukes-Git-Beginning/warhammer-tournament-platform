@@ -33,6 +33,7 @@ export interface SwissStandingEntry {
   draws: number;
   byes: number;
   buchholz: number;
+  solkoff: number;
 }
 
 export interface SwissMeta {

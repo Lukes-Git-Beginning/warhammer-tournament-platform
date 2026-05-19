@@ -24,9 +24,9 @@
     "@fontsource/cinzel-decorative": "^5.2.8",
     "@fontsource/im-fell-english": "^5.2.6",
     "@radix-ui/react-slot": "^1.2.4",
+    "@rizzotto/types": "workspace:*",
     "@tanstack/react-query": "^5.62.16",
     "@tanstack/react-router": "^1.95.0",
-    "@rizzotto/types": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dompurify": "^3.2.3",
@@ -39,6 +39,7 @@
     "react-i18next": "^17.0.7",
     "react-markdown": "^9.0.3",
     "react-zoom-pan-pinch": "^3.7.0",
+    "recharts": "^3.8.1",
     "socket.io-client": "^4.8.1",
     "tailwind-merge": "^3.6.0",
     "zod": "^3.24.1"

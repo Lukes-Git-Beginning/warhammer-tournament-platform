@@ -79,22 +79,6 @@ export function HeroSection() {
           {t('hero.tagline')}
         </motion.p>
 
-        {/* Latin sub-motto */}
-        <motion.p
-          aria-hidden="true"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={
-            reduced ? { duration: 0.24 } : { duration: 0.6, delay: 1.15 }
-          }
-          lang="la"
-          className="mt-1 font-display text-[11px] uppercase tracking-[0.4em] text-rizzotto-gold-500/80"
-          title="Everlasting Realm"
-          style={{ textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}
-        >
-          Karaz Ankor
-        </motion.p>
-
         {/* CTAs */}
         <motion.div
           initial="hidden"

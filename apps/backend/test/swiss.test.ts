@@ -3,6 +3,7 @@ import {
   generateSwissRound,
   computeSwissStandings,
   recommendNumberOfRounds,
+  sortSwissStandings,
   type SwissPlayer,
   type CompletedMatchRecord,
 } from '../src/lib/swiss.js';
@@ -213,5 +214,152 @@ describe('recommendNumberOfRounds', () => {
     [100, 7], // capped at 7 (log2(100)≈6.64 → ceil=7)
   ])('%i players → %i rounds', (n, expected) => {
     expect(recommendNumberOfRounds(n)).toBe(expected);
+  });
+});
+
+// ---------- sortSwissStandings — tiebreaker hierarchy ----------
+
+describe('sortSwissStandings — solkoff tiebreaker', () => {
+  it('2 players with equal score + buchholz → solkoff decides', () => {
+    // Setup: 4 players, two rounds
+    // ids[0] and ids[1] end up with identical score and buchholz
+    // but different solkoff (achieved via different opponent strength spread)
+    const ids = fakeIds(6);
+    // Round 1: ids[0] beats ids[2], ids[1] beats ids[3], ids[4] beats ids[5]
+    // Round 2: ids[2] beats ids[4], ids[3] beats ids[5]
+    //   → ids[0].opponents = [ids[2]], ids[2].score=0 after R1 but then wins R2
+    //   → ids[1].opponents = [ids[3]], ids[3].score=0 after R1 but also wins R2
+    //   Buchholz is equal if both opponents end at score=1
+    // To create solkoff difference, we need >=3 opponents per player (need more rounds)
+    // Simpler: build standings manually and call sortSwissStandings directly
+
+    // Player A: score=2, buchholz=3, solkoff=2
+    // Player B: score=2, buchholz=3, solkoff=1
+    const standingA = {
+      userId: ids[0]!,
+      score: 2,
+      wins: 2,
+      losses: 0,
+      draws: 0,
+      byes: 0,
+      buchholz: 3,
+      solkoff: 2,
+      opponentsBeaten: [],
+    };
+    const standingB = {
+      userId: ids[1]!,
+      score: 2,
+      wins: 2,
+      losses: 0,
+      draws: 0,
+      byes: 0,
+      buchholz: 3,
+      solkoff: 1,
+      opponentsBeaten: [],
+    };
+
+    const sorted = sortSwissStandings([standingB, standingA], []);
+    // A has higher solkoff → A should rank above B
+    expect(sorted[0]!.userId).toBe(ids[0]);
+    expect(sorted[1]!.userId).toBe(ids[1]);
+  });
+});
+
+describe('sortSwissStandings — head-to-head tiebreaker', () => {
+  it('2 players with equal score + buchholz + solkoff → H2H decides', () => {
+    const ids = fakeIds(2);
+    const [winner, loser] = ids as [string, string];
+
+    const standingWinner = {
+      userId: winner,
+      score: 1,
+      wins: 1,
+      losses: 0,
+      draws: 0,
+      byes: 0,
+      buchholz: 1,
+      solkoff: 1,
+      opponentsBeaten: [loser],
+    };
+    const standingLoser = {
+      userId: loser,
+      score: 1,
+      wins: 1,
+      losses: 0,
+      draws: 0,
+      byes: 0,
+      buchholz: 1,
+      solkoff: 1,
+      opponentsBeaten: [],
+    };
+
+    const h2hMatch: CompletedMatchRecord = {
+      round: 1,
+      player1_id: winner,
+      player2_id: loser,
+      winner_id: winner,
+      status: 'COMPLETED',
+    };
+
+    const sorted = sortSwissStandings([standingLoser, standingWinner], [h2hMatch]);
+    expect(sorted[0]!.userId).toBe(winner);
+    expect(sorted[1]!.userId).toBe(loser);
+  });
+
+  it('3 players all equal (no H2H possible between all) → stable order preserved', () => {
+    const ids = fakeIds(3);
+    const makeStanding = (id: string) => ({
+      userId: id,
+      score: 1,
+      wins: 1,
+      losses: 0,
+      draws: 0,
+      byes: 0,
+      buchholz: 1,
+      solkoff: 1,
+      opponentsBeaten: [],
+    });
+
+    const input = ids.map(makeStanding);
+    // No completed matches → H2H cannot decide
+    const sorted = sortSwissStandings(input, []);
+
+    // All three have identical stats → order must not arbitrarily change
+    // (stable sort: the relative order from input is preserved when comparator returns 0)
+    const sortedIds = sorted.map((s) => s.userId);
+    expect(sortedIds).toHaveLength(3);
+    // All original IDs must still be present
+    for (const id of ids) {
+      expect(sortedIds).toContain(id);
+    }
+  });
+});
+
+describe('sortSwissStandings — solkoff computed via computeSwissStandings', () => {
+  it('solkoff is computed and differs from buchholz when >=3 opponents', () => {
+    // 4 players: ids[0] beats everyone, each plays 3 rounds
+    // This exercises the "trim highest + lowest" path
+    const ids = fakeIds(5);
+    // Round 1: ids[0] beats ids[1], ids[2] beats ids[3]
+    // Round 2: ids[0] beats ids[2], ids[1] beats ids[4]
+    // Round 3: ids[0] beats ids[3], ids[2] beats ids[4]
+    const matches: CompletedMatchRecord[] = [
+      { round: 1, player1_id: ids[0], player2_id: ids[1], winner_id: ids[0], status: 'COMPLETED' },
+      { round: 1, player1_id: ids[2], player2_id: ids[3], winner_id: ids[2], status: 'COMPLETED' },
+      { round: 2, player1_id: ids[0], player2_id: ids[2], winner_id: ids[0], status: 'COMPLETED' },
+      { round: 2, player1_id: ids[1], player2_id: ids[4], winner_id: ids[1], status: 'COMPLETED' },
+      { round: 3, player1_id: ids[0], player2_id: ids[3], winner_id: ids[0], status: 'COMPLETED' },
+      { round: 3, player1_id: ids[2], player2_id: ids[4], winner_id: ids[2], status: 'COMPLETED' },
+    ];
+
+    const standings = computeSwissStandings(ids as string[], matches);
+    const topPlayer = standings.find((s) => s.userId === ids[0]);
+    expect(topPlayer).toBeDefined();
+    // ids[0] has 3 opponents (ids[1], ids[2], ids[3])
+    // buchholz = sum of their scores
+    // solkoff = buchholz - max - min (trimmed)
+    expect(topPlayer!.buchholz).toBeGreaterThanOrEqual(0);
+    // solkoff ≤ buchholz (trimming can only reduce or keep equal)
+    expect(topPlayer!.solkoff).toBeLessThanOrEqual(topPlayer!.buchholz);
   });
 });

@@ -209,12 +209,8 @@ export function generateDoubleElim(
       const id = wbIds[r]![i]!;
 
       // next_match_id: WB final (r === R_W-1) goes to Grand Final; otherwise next WB round match i/2
-      let next_match_id: string | null = null;
-      if (r === R_W - 1) {
-        next_match_id = grandFinalId;
-      } else {
-        next_match_id = wbIds[r + 1]![Math.floor(i / 2)]!;
-      }
+      const next_match_id: string | null =
+        r === R_W - 1 ? grandFinalId : (wbIds[r + 1]![Math.floor(i / 2)]! ?? null);
 
       // loser_next_match_id: which LB match receives this WB loser?
       // WB round r (0-indexed) losers drop into LB round (2r) (0-indexed).
@@ -281,23 +277,17 @@ export function generateDoubleElim(
       const id = lbIds[r]![i]!;
 
       // next_match_id: last LB round goes to Grand Final, otherwise next LB round match floor(i/2)
-      let next_match_id: string | null = null;
-      if (r === R_L - 1) {
-        next_match_id = grandFinalId;
-      } else {
-        // Consol rounds (odd r) and drop rounds (even r) both feed forward:
-        // After each "pair" (drop + consol) the count halves, so from any round r to r+1
-        // match i feeds into floor(i/2) of round r+1 (for consol rounds).
-        // From consol (odd) to next drop (even): match i feeds into match i of next round
-        // (counts are equal between consecutive drop and consol rounds).
-        if (r % 2 === 0) {
-          // drop round → next consol round: same count, 1:1 mapping
-          next_match_id = lbIds[r + 1]![i]!;
-        } else {
-          // consol round → next drop round: count halves, floor(i/2)
-          next_match_id = lbIds[r + 1]![Math.floor(i / 2)]!;
-        }
-      }
+      // Consol rounds (odd r) and drop rounds (even r) both feed forward:
+      // After each "pair" (drop + consol) the count halves, so from any round r to r+1
+      // match i feeds into floor(i/2) of round r+1 (for consol rounds).
+      // From consol (odd) to next drop (even): match i feeds into match i of next round
+      // (counts are equal between consecutive drop and consol rounds).
+      const next_match_id: string | null =
+        r === R_L - 1
+          ? grandFinalId
+          : r % 2 === 0
+            ? (lbIds[r + 1]![i]! ?? null) // drop → consol: 1:1
+            : (lbIds[r + 1]![Math.floor(i / 2)]! ?? null); // consol → drop: halves
 
       all.push({
         id,

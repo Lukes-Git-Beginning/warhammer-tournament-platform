@@ -2,6 +2,8 @@
 // Rizzotto — Database Schema
 // Phase 1+2 complete (M1+M2 use). Draft/Stats/Snapshot models are reserved here
 // to avoid late migrations during M3/M4. See ROADMAP.md and plan file.
+// Welle 2 (Plan 2 + Plan 3): Map-Pool, Match-Decision, Blind-Pick, Army-Lists,
+// Steam-Link, FactionMastery, FactionMatchupStat, AntiFarmCap, AdminConfig.
 // =============================================================================
 
 generator client {
@@ -35,10 +37,36 @@ enum TournamentFormat {
 }
 
 enum TournamentMode {
-  ONE_V_ONE
+  OPEN          // no restriction (new default, casual)
+  ONE_V_ONE     // legacy 1v1
   THREE_V_THREE // reserved for Phase 3
   BLIND_PICK    // reserved for Phase 3
-  SFT           // reserved for Phase 3 — Single Faction Tournament
+  BPT           // Blind Pick Tournament — every match has blind faction pick
+  SFT           // Single Faction Tournament — faction pre-pick at registration
+  SLT           // Single List Tournament — army list pre-upload at registration
+}
+
+enum PlayoffFormat {
+  NONE
+  TOP4
+  TOP8
+}
+
+enum MatchFormat {
+  BO1
+  BO3
+  BO5
+}
+
+enum MapDecisionMode {
+  RANDOM
+  PICK_BAN
+}
+
+enum StatsSource {
+  TT_SEED
+  OWN_DATA
+  HYBRID
 }
 
 enum TournamentStatus {
@@ -81,6 +109,14 @@ enum BracketSide {
   WINNERS
   LOSERS
   GRAND_FINAL
+}
+
+enum MatchPhase {
+  GROUP_STAGE  // reserved for future team-league formats
+  SWISS        // Swiss rounds
+  PLAYOFF_QF   // Quarter-Final
+  PLAYOFF_SF   // Semi-Final
+  PLAYOFF_FINAL // Grand Final
 }
 
 enum FactionCategory {
@@ -135,12 +171,16 @@ model User {
   matches_as_player2       Match[]                 @relation("MatchPlayer2")
   matches_won              Match[]                 @relation("MatchWinner")
   army_lists               ArmyList[]
+  tournament_army_lists    TournamentArmyList[]
   leaderboard_entries      LeaderboardEntry[]
   tournament_results       TournamentResult[]
   captained_teams          Team[]                  @relation("TeamCaptain")
   team_memberships         TeamMember[]
   audit_logs               AuditLog[]              @relation("AuditActor")
   match_reports            MatchReport[]           @relation("MatchReportReporter")
+  // Welle 2
+  steam_link               SteamLink?
+  faction_masteries        FactionMastery[]
 
   @@index([role])
   @@index([deleted_at])
@@ -171,6 +211,10 @@ model Faction {
   stats_snapshots                FactionStatsSnapshot[]
   matchups_as_a                  MatchupStats[]               @relation("MatchupFactionA")
   matchups_as_b                  MatchupStats[]               @relation("MatchupFactionB")
+  // Welle 2
+  faction_masteries              FactionMastery[]
+  matchup_stats_as_a             FactionMatchupStat[]         @relation("FactionMatchupA")
+  matchup_stats_as_b             FactionMatchupStat[]         @relation("FactionMatchupB")
 
   @@index([category])
 }
@@ -187,7 +231,7 @@ model Tournament {
   poster_url              String?
   organizer_id            String                @db.Uuid
   format                  TournamentFormat
-  mode                    TournamentMode        @default(ONE_V_ONE)
+  mode                    TournamentMode        @default(OPEN)
   status                  TournamentStatus      @default(DRAFT)
   visibility              TournamentVisibility  @default(PUBLIC)
   max_participants        Int?
@@ -201,19 +245,28 @@ model Tournament {
   draft_preset_id         String?               @db.Uuid
   counts_for_leaderboard  Boolean               @default(true)
   is_major                Boolean               @default(false)
+  // Welle 2 — Tournament-Mechanik
+  rounds_count            Int                   @default(5) // 3–6 via constraint
+  playoff_format          PlayoffFormat         @default(NONE)
+  swiss_match_format      MatchFormat           @default(BO1)
+  playoff_match_format    MatchFormat           @default(BO3)
+  finale_match_format     MatchFormat           @default(BO3)
+  map_decision_mode       MapDecisionMode       @default(PICK_BAN)
   created_at              DateTime              @default(now())
   updated_at              DateTime              @updatedAt
   deleted_at              DateTime?
 
   // Relations
-  organizer        User                          @relation("OrganizedTournaments", fields: [organizer_id], references: [id])
-  draft_preset     DraftPreset?                  @relation(fields: [draft_preset_id], references: [id])
-  faction_allowlist TournamentFactionAllowlist[]
-  participants     TournamentParticipant[]
-  matches          Match[]
-  teams            Team[]
-  results          TournamentResult[]
-  major_for_seasons Season[]                     @relation("SeasonMajor")
+  organizer             User                          @relation("OrganizedTournaments", fields: [organizer_id], references: [id])
+  draft_preset          DraftPreset?                  @relation(fields: [draft_preset_id], references: [id])
+  faction_allowlist     TournamentFactionAllowlist[]
+  participants          TournamentParticipant[]
+  matches               Match[]
+  teams                 Team[]
+  results               TournamentResult[]
+  major_for_seasons     Season[]                      @relation("SeasonMajor")
+  map_pool              TournamentMapPool[]
+  tournament_army_lists TournamentArmyList[]
 
   @@index([status])
   @@index([organizer_id])
@@ -277,6 +330,7 @@ model Match {
   next_match_id       String?          @db.Uuid
   loser_next_match_id String?          @db.Uuid // DE: where the losing player drops to in lower bracket (NULL for SE/Swiss)
   bracket_side        BracketSide? // DE: WINNERS / LOSERS / GRAND_FINAL (NULL for SE/Swiss/RR)
+  phase               MatchPhase?  // Welle 2: discriminator between Swiss/Playoff phases (NULL = legacy/SE/RR)
   player1_faction_id  String?
   player2_faction_id  String?
   created_at          DateTime         @default(now())
@@ -295,12 +349,47 @@ model Match {
   player2_faction  Faction?      @relation("MatchPlayer2Faction", fields: [player2_faction_id], references: [id])
   draft            Draft?
   reports          MatchReport[]
+  map_decision     MatchMapDecision?
+  blind_pick       MatchBlindPick?
 
   @@unique([tournament_id, round, match_number])
   @@index([tournament_id, status])
   @@index([player1_id])
   @@index([player2_id])
   @@index([deleted_at])
+}
+
+// Welle 2: Map decision (coin-flip, pick/ban) per match game.
+model MatchMapDecision {
+  match_id         String          @id @db.Uuid
+  game_index       Int             @default(0) // Bo3/Bo5: Game 1=0, Game 2=1, …
+  mode             MapDecisionMode
+  coin_flip_seed   String
+  top_player_id    String          @db.Uuid
+  bottom_player_id String          @db.Uuid
+  bans_top         String[]        // Map IDs banned by top player
+  bans_bottom      String[]        // Map IDs banned by bottom player
+  picked_map_id    String? // final picked Map ID
+  decided_at       DateTime?
+
+  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+
+  @@index([match_id])
+}
+
+// Welle 2: Blind faction pick per match game (BPT mode).
+model MatchBlindPick {
+  match_id           String    @id @db.Uuid
+  game_index         Int       @default(0)
+  player1_faction_id String?
+  player2_faction_id String?
+  player1_locked_at  DateTime?
+  player2_locked_at  DateTime?
+  revealed_at        DateTime?
+
+  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+
+  @@index([match_id])
 }
 
 // Q4: Dual-submit match reports. Each player submits their own report; agreement
@@ -368,33 +457,38 @@ model Season {
   major_tournament_id  String?  @db.Uuid
   created_at           DateTime @default(now())
 
-  major_tournament Tournament?            @relation("SeasonMajor", fields: [major_tournament_id], references: [id])
-  leaderboard      LeaderboardEntry[]
-  results          TournamentResult[]
-  faction_stats    FactionStats[]
-  matchup_stats    MatchupStats[]
-  stats_snapshots  FactionStatsSnapshot[]
+  major_tournament      Tournament?            @relation("SeasonMajor", fields: [major_tournament_id], references: [id])
+  leaderboard           LeaderboardEntry[]
+  results               TournamentResult[]
+  faction_stats         FactionStats[]
+  matchup_stats         MatchupStats[]
+  stats_snapshots       FactionStatsSnapshot[]
+  // Welle 2
+  faction_matchup_stats FactionMatchupStat[]
+  anti_farm_caps        AntiFarmCap[]
 
   @@index([is_active])
   @@index([start_date])
 }
 
 model LeaderboardEntry {
-  id           String   @id @default(uuid()) @db.Uuid
-  user_id      String   @db.Uuid
-  season_id    String   @db.Uuid
-  total_points Float    @default(0)
-  elo_rating   Int      @default(1200)
-  matches_played Int    @default(0)
-  wins         Int      @default(0)
-  losses       Int      @default(0)
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  id             String   @id @default(uuid()) @db.Uuid
+  user_id        String   @db.Uuid
+  season_id      String   @db.Uuid
+  total_points   Float    @default(0)
+  season_points  Int      @default(0) // MMR-earned season points (replaces total_points as primary sort key for Welle 2)
+  elo_rating     Int      @default(1200)
+  matches_played Int      @default(0)
+  wins           Int      @default(0)
+  losses         Int      @default(0)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
 
   user   User   @relation(fields: [user_id], references: [id])
   season Season @relation(fields: [season_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, season_id])
+  @@index([season_id, season_points(sort: Desc)])
   @@index([season_id, total_points(sort: Desc)])
 }
 
@@ -415,6 +509,76 @@ model TournamentResult {
   @@unique([tournament_id, user_id])
   @@index([user_id])
   @@index([season_id])
+}
+
+// -----------------------------------------------------------------------------
+// Maps (Welle 2 — master pool, admin-managed)
+// -----------------------------------------------------------------------------
+
+model Map {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  description String?
+  image_url   String?
+  deleted_at  DateTime?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  tournament_pools TournamentMapPool[]
+
+  @@index([deleted_at])
+}
+
+// Snapshot of maps assigned to a tournament at creation time.
+// Isolates tournament from later global pool changes.
+model TournamentMapPool {
+  tournament_id String @db.Uuid
+  map_id        String
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  map        Map        @relation(fields: [map_id], references: [id])
+
+  @@id([tournament_id, map_id])
+  @@index([tournament_id])
+}
+
+// -----------------------------------------------------------------------------
+// Tournament Army Lists (Welle 2 — SLT mode, per-tournament per-user)
+// Composite PK tournament_id + user_id (one list per player per tournament).
+// Separate from the legacy ArmyList (per-faction upload, M5).
+// -----------------------------------------------------------------------------
+
+model TournamentArmyList {
+  tournament_id            String    @db.Uuid
+  user_id                  String    @db.Uuid
+  file_url                 String? // .army_setup binary
+  screenshot_url           String // primary proof screenshot
+  parsed_json              Json?
+  locked_at                DateTime?
+  revealed_to_opponents_at DateTime?
+  revealed_publicly_at     DateTime?
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [user_id], references: [id])
+
+  @@id([tournament_id, user_id])
+  @@index([user_id])
+}
+
+// -----------------------------------------------------------------------------
+// Steam Link (Welle 2 — required gate post-Discord-login)
+// -----------------------------------------------------------------------------
+
+model SteamLink {
+  user_id     String    @unique @db.Uuid
+  steam_id    String    @unique
+  persona     String
+  avatar_url  String?
+  profile_url String?
+  verified_at DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
 // -----------------------------------------------------------------------------
@@ -606,4 +770,77 @@ model ImportLog {
   finished_at      DateTime?
 
   @@index([source, started_at])
+}
+
+// -----------------------------------------------------------------------------
+// MMR / Mastery (Welle 2 — Plan 3)
+// -----------------------------------------------------------------------------
+
+// Per-player per-faction ELO-like rating. Persists across seasons.
+model FactionMastery {
+  user_id        String    @db.Uuid
+  faction_id     String
+  rating         Int       @default(1200)
+  games_played   Int       @default(0)
+  wins           Int       @default(0)
+  losses         Int       @default(0)
+  last_played_at DateTime?
+
+  user    User    @relation(fields: [user_id], references: [id])
+  faction Faction @relation(fields: [faction_id], references: [id])
+
+  @@id([user_id, faction_id])
+  @@index([user_id])
+  @@index([faction_id])
+}
+
+// Per-season faction-vs-faction win-rate stats (resets per season; meta changes).
+model FactionMatchupStat {
+  season_id    String      @db.Uuid
+  faction_a_id String
+  faction_b_id String
+  wins         Int         @default(0)
+  losses       Int         @default(0)
+  win_rate     Decimal     @default(0.5) @db.Decimal(5, 4)
+  source       StatsSource @default(TT_SEED)
+  confidence   Decimal     @default(0.5) @db.Decimal(3, 2)
+  updated_at   DateTime    @updatedAt
+
+  season    Season  @relation(fields: [season_id], references: [id], onDelete: Cascade)
+  faction_a Faction @relation("FactionMatchupA", fields: [faction_a_id], references: [id])
+  faction_b Faction @relation("FactionMatchupB", fields: [faction_b_id], references: [id])
+
+  @@id([season_id, faction_a_id, faction_b_id])
+  @@index([season_id])
+  @@index([faction_a_id, faction_b_id])
+}
+
+// Anti-farming cap: limits points per (player-pair × faction-combo × season) in casual.
+// Tournaments always ignore this cap.
+model AntiFarmCap {
+  season_id    String   @db.Uuid
+  player_a_id  String   @db.Uuid
+  player_b_id  String   @db.Uuid
+  faction_a_id String
+  faction_b_id String
+  points_earned Int     @default(0)
+  max_cap      Int      @default(200)
+  updated_at   DateTime @updatedAt
+
+  season Season @relation(fields: [season_id], references: [id], onDelete: Cascade)
+
+  @@id([season_id, player_a_id, player_b_id, faction_a_id, faction_b_id])
+  @@index([season_id, player_a_id, player_b_id])
+}
+
+// -----------------------------------------------------------------------------
+// Admin Config (Welle 2 — Plan 3 Live-Settings)
+// Generic key-value store for admin-configurable settings.
+// -----------------------------------------------------------------------------
+
+model AdminConfig {
+  key        String   @id
+  value      Json
+  updated_by String? // discord_id or null for system
+  updated_at DateTime @updatedAt
 }

@@ -1,18 +1,27 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { getUserProfile } from '@/lib/api';
-import { useAuthQuery } from '@/lib/auth';
-import { useOnboarding } from '@/lib/onboarding';
-import { formatInUserTimezone } from '@/lib/timezone';
-import { Button } from '@/components/ui/button';
-import { EmptyState } from '@/components/ui/empty-state';
-import { PageShell } from '@/components/layout/PageShell';
-import { EloRatingDisplay } from '../components/meta/EloRatingDisplay';
-import { ArmyListList } from '../components/tournament/ArmyListList';
-import { ArmyListUpload } from '../components/tournament/ArmyListUpload';
-
-// Role labels are now served via i18n — see t('user_profile.roles.*')
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from 'recharts';
+import { getUserProfile, getUserStats } from '@/lib/api.js';
+import type { UserFactionWinRate, UserFactionMastery, EloHistoryEntry } from '@/lib/api.js';
+import { useAuthQuery } from '@/lib/auth.js';
+import { useOnboarding } from '@/lib/onboarding.js';
+import { formatInUserTimezone } from '@/lib/timezone.js';
+import { Button } from '@/components/ui/button.js';
+import { EmptyState } from '@/components/ui/empty-state.js';
+import { PageShell } from '@/components/layout/PageShell.js';
+import { EloRatingDisplay } from '../components/meta/EloRatingDisplay.js';
+import { ArmyListList } from '../components/tournament/ArmyListList.js';
+import { ArmyListUpload } from '../components/tournament/ArmyListUpload.js';
 
 const ROLE_COLORS: Record<string, string> = {
   USER: 'bg-stone-700 text-stone-300',
@@ -56,6 +65,230 @@ function StatCard({ label, value, children }: { label: string; value?: string | 
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Stats Section
+// ---------------------------------------------------------------------------
+
+function TrendArrow({ trend }: { trend?: number }) {
+  if (trend == null || trend === 0) return null;
+  if (trend > 0) return <span className="text-emerald-400 text-sm">▲ +{(trend * 100).toFixed(1)}%</span>;
+  return <span className="text-red-400 text-sm">▼ {(trend * 100).toFixed(1)}%</span>;
+}
+
+function WinLossCard({
+  wins,
+  losses,
+  winRate,
+  trend,
+}: {
+  wins: number;
+  losses: number;
+  winRate: number;
+  trend?: number;
+}) {
+  return (
+    <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
+      <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">Win / Loss</p>
+      <div className="flex items-end gap-2">
+        <span className="text-3xl font-bold text-rizzotto-gold-400">
+          {(winRate * 100).toFixed(1)}%
+        </span>
+        <TrendArrow trend={trend} />
+      </div>
+      <div className="mt-2 flex gap-4 text-sm">
+        <span className="text-emerald-400">{wins}W</span>
+        <span className="text-stone-600">/</span>
+        <span className="text-red-400">{losses}L</span>
+      </div>
+    </div>
+  );
+}
+
+function EloHistoryCard({ history }: { history: EloHistoryEntry[] }) {
+  if (history.length === 0) {
+    return (
+      <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
+        <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">ELO History</p>
+        <p className="text-sm text-stone-600">No ELO history yet.</p>
+      </div>
+    );
+  }
+
+  const values = history.map((h) => h.elo);
+  const minElo = Math.min(...values);
+  const maxElo = Math.max(...values);
+
+  const chartData = history.map((h) => ({
+    date: h.date.slice(0, 10),
+    elo: h.elo,
+  }));
+
+  return (
+    <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
+      <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">ELO History (90d)</p>
+      <div className="flex gap-4 text-xs text-stone-400 mb-2">
+        <span>Min: <span className="text-red-400 font-semibold">{minElo}</span></span>
+        <span>Max: <span className="text-emerald-400 font-semibold">{maxElo}</span></span>
+      </div>
+      <ResponsiveContainer width="100%" height={120}>
+        <LineChart data={chartData} margin={{ left: -16, right: 8, top: 4, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#292524" />
+          <XAxis dataKey="date" tick={{ fill: '#78716c', fontSize: 9 }} hide />
+          <YAxis domain={['auto', 'auto']} tick={{ fill: '#78716c', fontSize: 9 }} />
+          <Tooltip
+            formatter={(v) => [v, 'ELO']}
+            contentStyle={{
+              background: '#1c1917',
+              border: '1px solid #44403c',
+              borderRadius: 6,
+              fontSize: 11,
+            }}
+          />
+          <ReferenceLine y={minElo} stroke="#ef4444" strokeDasharray="3 2" strokeOpacity={0.4} />
+          <ReferenceLine y={maxElo} stroke="#34d399" strokeDasharray="3 2" strokeOpacity={0.4} />
+          <Line
+            type="monotone"
+            dataKey="elo"
+            stroke="#d4a853"
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4, fill: '#d4a853' }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function PerFactionCard({ data }: { data: UserFactionWinRate[] }) {
+  const top5 = [...data].sort((a, b) => b.games_played - a.games_played).slice(0, 5);
+
+  return (
+    <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
+      <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">Per-Faction Win Rate</p>
+      {top5.length === 0 ? (
+        <p className="text-sm text-stone-600">No faction data yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {top5.map((f) => (
+            <div key={f.faction_id} className="flex items-center gap-2">
+              {f.icon_url ? (
+                <img src={f.icon_url} alt={f.faction_name} className="h-5 w-5 object-contain" />
+              ) : (
+                <span className="h-5 w-5 flex items-center justify-center rounded bg-stone-800 text-[10px] text-stone-500">
+                  {f.faction_name.slice(0, 2).toUpperCase()}
+                </span>
+              )}
+              <span className="flex-1 text-xs text-stone-300 truncate">{f.faction_name}</span>
+              <span className="text-xs text-stone-500">{f.games_played}g</span>
+              <span
+                className={`text-xs font-semibold ${
+                  f.is_tt_data ? 'text-stone-500' : 'text-rizzotto-gold-400'
+                }`}
+              >
+                {(f.win_rate * 100).toFixed(0)}%
+              </span>
+              {f.is_tt_data && (
+                <span className="text-[9px] text-stone-600 italic">TT</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FactionMasteryCard({ data }: { data: UserFactionMastery[] }) {
+  return (
+    <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
+      <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">Faction Mastery</p>
+      {data.length === 0 ? (
+        <p className="text-sm text-stone-600">No mastery data yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {data.map((f) => (
+            <div key={f.faction_id} className="flex items-center gap-2">
+              {f.icon_url ? (
+                <img src={f.icon_url} alt={f.faction_name} className="h-5 w-5 object-contain" />
+              ) : (
+                <span className="h-5 w-5 flex items-center justify-center rounded bg-stone-800 text-[10px] text-stone-500">
+                  {f.faction_name.slice(0, 2).toUpperCase()}
+                </span>
+              )}
+              <span className="flex-1 text-xs text-stone-300 truncate">{f.faction_name}</span>
+              <div className="flex items-center gap-1">
+                <div className="h-1.5 rounded-full bg-stone-800 w-16 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-rizzotto-gold-500/70"
+                    style={{ width: `${Math.min(100, f.mastery_rating)}%` }}
+                  />
+                </div>
+                <span className="text-xs text-stone-400 w-6 text-right">
+                  {Math.round(f.mastery_rating)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface StatsSectionProps {
+  userId: string;
+  isOwnProfile: boolean;
+}
+
+function StatsSection({ userId, isOwnProfile }: StatsSectionProps) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['user-stats', userId],
+    queryFn: () => getUserStats(userId),
+    retry: false,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-32 rounded-md border border-stone-800 bg-stone-900/60 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="rounded-md border border-stone-800 bg-stone-900/40 px-4 py-3 text-sm text-stone-500">
+        No stats available yet.
+      </div>
+    );
+  }
+
+  const showMastery = isOwnProfile && (data.faction_mastery_top5?.length ?? 0) > 0;
+
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <WinLossCard
+        wins={data.total_wins}
+        losses={data.total_losses}
+        winRate={data.win_rate}
+        trend={data.win_rate_trend}
+      />
+      <EloHistoryCard history={data.elo_history} />
+      <PerFactionCard data={data.per_faction_winrate} />
+      {showMastery && (
+        <FactionMasteryCard data={data.faction_mastery_top5!} />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export function UserProfilePage() {
   const { t } = useTranslation();
@@ -148,6 +381,14 @@ export function UserProfilePage() {
         </div>
       </section>
 
+      {/* Statistics Section (neue Cards) */}
+      <section>
+        <h2 className="font-display text-lg font-semibold text-warhammer-gold mb-3">
+          Statistics
+        </h2>
+        <StatsSection userId={id} isOwnProfile={isOwnProfile} />
+      </section>
+
       {/* Recent Tournaments */}
       <section>
         <h2 className="font-display text-lg font-semibold text-warhammer-gold mb-3">
@@ -238,7 +479,7 @@ export function UserProfilePage() {
         </section>
       )}
 
-      {/* Recent Matches — closing tag moved below */}
+      {/* Recent Matches */}
       <section>
         <h2 className="font-display text-lg font-semibold text-warhammer-gold mb-3">
           {t('user_profile.recent_matches')}

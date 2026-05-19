@@ -3,11 +3,14 @@ import { useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
-import { getTournament, getBracket } from '@/lib/api';
+import { getTournament, getBracket, getParticipantMe } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { BracketView } from '@/components/bracket/BracketView';
 import { PageShell } from '@/components/layout/PageShell';
+import { CheckInButton } from '@/components/tournament/CheckInButton';
+import { ArmyListUploader } from '@/components/tournament/ArmyListUploader';
+import type { ParticipantStatus } from '@/lib/api';
 
 // Format labels are now handled via i18n — see t('tournament.format.*')
 const FORMAT_KEY_MAP: Record<string, string> = {
@@ -66,6 +69,14 @@ export function TournamentDetail() {
     refetchInterval: 15000,
   });
 
+  // Fetch participant status for current user from the new endpoint
+  const { data: participantData } = useQuery({
+    queryKey: ['participant-me', slug],
+    queryFn: () => getParticipantMe(slug),
+    enabled: !!user,
+    retry: false,
+  });
+
   const activeDraftMatches = (bracket?.matches ?? []).filter(
     (m) => m.draft_id != null && m.draft_status === 'ONGOING',
   );
@@ -97,6 +108,23 @@ export function TournamentDetail() {
     user &&
     (user.role === 'MODERATOR' || user.role === 'ADMIN' ||
       (user.role === 'ORGANIZER' && tournament.organizer?.id === user.id));
+
+  // Derive participant status from the /participants/me endpoint
+  const participantStatus: ParticipantStatus | null = participantData?.status ?? null;
+
+  // Derive current opponent from the active bracket match where user is a player
+  const currentMatchOpponentId: string | undefined = (() => {
+    if (!user || !bracket) return undefined;
+    const activeMatch = bracket.matches.find(
+      (m) =>
+        (m.status === 'ONGOING' || m.status === 'PENDING') &&
+        (m.player1Id === user.id || m.player2Id === user.id),
+    );
+    if (!activeMatch) return undefined;
+    return activeMatch.player1Id === user.id
+      ? (activeMatch.player2Id ?? undefined)
+      : (activeMatch.player1Id ?? undefined);
+  })();
 
   return (
     <PageShell variant="narrow">
@@ -135,6 +163,30 @@ export function TournamentDetail() {
             {t('tournament.detail.delete')}
           </button>
         </div>
+      )}
+
+      {/* ─── Check-in (for registered participants) ─── */}
+      {user && participantStatus && (
+        tournament.status === 'REGISTRATION_CLOSED' || tournament.status === 'ONGOING' || tournament.status === 'OPEN_REGISTRATION'
+      ) && participantStatus !== 'WITHDRAWN' && participantStatus !== 'DISQUALIFIED' && (
+        <section className="mb-6">
+          <CheckInButton tournament={tournament} participantStatus={participantStatus} />
+        </section>
+      )}
+
+      {/* ─── Army List Uploader (SLT only) ─── */}
+      {user && tournament.mode === 'SLT' && participantStatus && (
+        participantStatus === 'REGISTERED' || participantStatus === 'CHECKED_IN'
+      ) && (
+        <section className="mb-6">
+          <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
+            Army List
+          </h2>
+          <ArmyListUploader
+            tournament={tournament}
+            currentMatchOpponentId={currentMatchOpponentId}
+          />
+        </section>
       )}
 
       {activeDraftMatches.length > 0 && (

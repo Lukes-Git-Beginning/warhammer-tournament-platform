@@ -22,11 +22,12 @@
   "brand": {
     "name": "Rizzotto",
     "tagline": "Wo Listen geschmiedet werden",
-    "motto": "Karaz Ankor"
+    "motto": "Where Lists Are Forged."
   },
   "header": {
-    "home": "Halle",
-    "leaderboard": "Ehrenliste",
+    "home": "Home",
+    "leaderboard": "Leaderboard",
+    "tournaments": "Turniere",
     "meta": "Meta",
     "factions": "Fraktionen",
     "drafts": "Drafts",
@@ -39,25 +40,25 @@
   "hero": {
     "tagline": "Wo Listen geschmiedet werden",
     "cta_primary": "In den Kampf",
-    "cta_secondary": "Zur Ehrenliste",
+    "cta_secondary": "Zum Leaderboard",
     "scroll_cue": "Mehr entdecken"
   },
   "forge_section": {
-    "eyebrow": "Die Schmiede",
+    "eyebrow": "Bibliothek",
     "heading_line1": "Jede Liste wird geschmiedet",
     "heading_line2": "in Eisen und Entschluss.",
-    "body": "Jeder Feldzug beginnt mit der Liste. Jede Liste wird geschmiedet in Eisen und Entschluss. Hier verzeichnen wir jede Musterung, jeden Glockenschlag, und jeden Triumph und Fall — damit die Marschälle der Alten Welt auf der Ehrenliste stehen, ihre Taten in Stein gesiegelt.",
+    "body": "Jeder Feldzug beginnt mit der Liste. Jede Liste wird geschmiedet in Eisen und Entschluss. Hier verzeichnen wir jedes Turnier, jede Runde, und jeden Triumph und Fall — damit die Spieler der Alten Welt auf dem Leaderboard stehen, ihre Taten in Stein gesiegelt.",
     "motto": "\"Ex Ferro, Lex.\"",
     "cta": "Manifest lesen"
   },
   "musters": {
-    "eyebrow": "Sammelruf läuft",
-    "heading": "Aktive Musterungen",
+    "eyebrow": "Live-Turniere",
+    "heading": "Live-Turniere",
     "view_all": "Alle anzeigen",
     "answer_call": "Turnier ansehen",
-    "marshals": "Marschälle",
-    "empty_title": "Die Musterungen stehen leer.",
-    "empty_body": "Wenn Marschälle rufen, erscheinen sie hier.",
+    "marshals": "Spieler",
+    "empty_title": "Keine Live-Turniere gerade.",
+    "empty_body": "Wenn ein Turnier startet, erscheint es hier.",
     "empty_motto": "\"Memento Pugnae\"",
     "status_live": "Live",
     "status_upcoming": "Bevorstehend",
@@ -65,28 +66,28 @@
   },
   "roll_of_honour": {
     "eyebrow": "In Stein gesiegelt",
-    "heading": "Die Ehrenliste",
-    "view_all": "Vollständige Ehrenliste",
-    "empty_title": "Eine leere Rolle.",
+    "heading": "Leaderboard",
+    "view_all": "Vollständiges Leaderboard",
+    "empty_title": "Das Leaderboard ist leer.",
     "empty_body": "Die Schmiede wartet auf den ersten Schlag.",
-    "empty_motto": "\"In Lapide Sigillata\""
+    "empty_motto": "\"\""
   },
   "conclave": {
-    "eyebrow": "Wie wir mustern",
-    "heading": "Das Konzil",
-    "cta": "Ins Konzil eintreten",
+    "eyebrow": "So spielen wir",
+    "heading": "Profil",
+    "cta": "Profil ansehen",
     "pillars": {
       "swiss": {
-        "title": "Swiss Toll",
-        "body": "Jeder Marschall spielt eine feste Anzahl von Glockenschlägen, gepaart gegen Gegner gleichen Standes. Niemand wird eliminiert; die Rolle entscheidet."
+        "title": "Swiss-Runden",
+        "body": "Jeder Spieler spielt eine feste Anzahl von Runden, gepaart gegen Gegner gleichen Standes. Niemand wird eliminiert; die Rangliste entscheidet."
       },
       "bracket": {
-        "title": "Lineage",
-        "body": "K.O.- und Doppel-K.O.-Brackets. Jeder Schlagabtausch schnitzt den Stammbaum, bis nur ein Banner übrig bleibt."
+        "title": "Brackets",
+        "body": "K.O.- und Doppel-K.O.-Brackets. Jedes Match schnitzt den Bracket-Baum, bis nur ein Banner übrig bleibt."
       },
       "draft": {
-        "title": "The Choosing",
-        "body": "Live-Captains-Mode-Draft. Marschälle beanspruchen und verbieten Fraktionen in Echtzeit — The Choosing ist die erste Schlacht."
+        "title": "Der Draft",
+        "body": "Live-Captains-Mode-Draft. Spieler beanspruchen und verbieten Fraktionen in Echtzeit — der Draft ist die erste Schlacht."
       }
     }
   },
@@ -96,8 +97,8 @@
     "cta": "Jetzt mitmachen"
   },
   "footer": {
-    "tagline": "Wo Listen geschmiedet werden",
-    "motto": "Karaz Ankor",
+    "tagline": "Where Lists Are Forged.",
+    "motto": "Where Lists Are Forged.",
     "imprint": "Impressum",
     "privacy": "Datenschutz",
     "terms": "Nutzungsbedingungen",
@@ -106,11 +107,11 @@
   },
   "login": {
     "title": "Anmelden",
-    "subtitle": "Melde dich mit deinem Discord-Konto an, um an Turnieren teilzunehmen oder eigene Musterungen auszurufen.",
+    "subtitle": "Melde dich mit deinem Discord-Konto an, um an Turnieren teilzunehmen oder eigene zu erstellen.",
     "discord_button": "Mit Discord anmelden"
   },
   "leaderboard": {
-    "title": "Ehrenliste",
+    "title": "Leaderboard",
     "tabs": {
       "season": "Season",
       "all_time": "Allzeit"
@@ -127,25 +128,25 @@
       "games": "Spiele",
       "seasons": "Seasons"
     },
-    "load_error": "Fehler beim Laden der Ehrenliste.",
+    "load_error": "Fehler beim Laden des Leaderboards.",
     "empty": "Noch keine Einträge.",
-    "empty_title": "Die Rolle wartet.",
-    "empty_body": "Sobald die ersten Marschälle ihre Spuren hinterlassen, erscheint die Rangliste hier.",
+    "empty_title": "Das Leaderboard wartet.",
+    "empty_body": "Sobald die ersten Spieler ihre Spuren hinterlassen, erscheint die Rangliste hier.",
     "empty_motto": "\"Honor Vacat\"",
     "empty_motto_title": "The honour stands empty"
   },
   "tournament": {
     "create": {
-      "title": "Ruf zur Musterung",
+      "title": "Turnier erstellen",
       "subtitle": "Erstelle ein neues Turnier für die Rizzotto-Gemeinde.",
       "role_warning": "Du benötigst die Organisator-Rolle, um Turniere zu erstellen. Wende dich an einen Administrator, um deine Rolle zu erhöhen.",
       "aside": {
-        "heading": "Was ist ein Ruf?",
-        "body": "Ein Ruf zur Musterung ist die formelle Einberufung einer Schlacht. Du legst Format, Modus und Regeln fest — andere Marschälle treten bei.",
+        "heading": "Was ist ein Turnier?",
+        "body": "Ein Turnier bringt Spieler zusammen, um gegeneinander anzutreten. Du legst Format, Modus und Regeln fest — andere melden sich an.",
         "bullet_format": "Das <strong>Format</strong> bestimmt die Bracket-Struktur — Single Elimination, Swiss oder Round Robin.",
         "bullet_mode": "Der <strong>Modus</strong> regelt die Spielgröße — 1v1 oder Team-Begegnungen.",
         "bullet_draft": "Optional: Aktiviere das <strong>Draft-System</strong> für Live-Picks mit Echtzeit-Stream.",
-        "footnote": "Du kannst alle Felder nach dem Erstellen noch anpassen."
+        "footnote": "Du kannst alle Felder nach der Erstellung noch anpassen."
       }
     },
     "form": {
@@ -214,21 +215,21 @@
     "empties": {
       "season": {
         "title": "Keine aktive Season.",
-        "body": "Die nächste Schmiede ist noch ungetauft."
+        "body": "Die nächste Season ist noch nicht angekündigt."
       },
       "tournaments": {
-        "title": "Noch keine Musterungen.",
-        "body": "Folge dem nächsten Ruf und tritt einer Schlacht bei."
+        "title": "Noch keine Turniere.",
+        "body": "Nimm am nächsten Turnier teil und betritt das Feld."
       },
       "matches": {
-        "title": "Noch keine Begegnungen.",
-        "body": "Sobald der erste Wurf fällt, steht er hier verzeichnet."
+        "title": "Noch keine Matches.",
+        "body": "Sobald das erste Match gespielt wird, steht es hier verzeichnet."
       }
     },
-    "workshop_title": "Die Werkstatt",
-    "workshop_body": "Durchschreite die Schmiede erneut, wenn du den Weg vergessen hast.",
-    "workshop_cta": "Schmiede erneut betreten",
-    "workshop_cta_loading": "Glut wird neu entfacht…",
+    "workshop_title": "Einstellungen",
+    "workshop_body": "Aktualisiere deine Einstellungen und dein Profil.",
+    "workshop_cta": "Bibliothek öffnen",
+    "workshop_cta_loading": "Wird geöffnet…",
     "stats": {
       "points": "Punkte",
       "elo": "Elo",
@@ -274,7 +275,7 @@
     "empty_body": "Ein Preset bündelt Draft-Sequenzen, Limits und Regeln zu einer wiederverwendbaren Vorlage.",
     "empty_motto": "\"Forgia Quiescit\"",
     "empty_motto_title": "The forge rests",
-    "empty_cta_first": "Ersten Preset schmieden →",
+    "empty_cta_first": "Erstes Preset anlegen →",
     "editor": {
       "create_title": "Neues Preset erstellen",
       "edit_title": "Preset bearbeiten",
@@ -285,28 +286,28 @@
   "onboarding": {
     "stage1": {
       "title": "Willkommen.",
-      "body": "Dein Siegel ist nun in der Rolle versiegelt. Bevor du das Feld betrittst, lass uns deinen Stand schmieden.",
-      "cta": "Die Schmiede betreten"
+      "body": "Dein Konto ist eingerichtet. Lass uns zuerst dein Profil fertigstellen.",
+      "cta": "Bibliothek öffnen"
     },
     "stage2": {
-      "title": "Die Werkstatt",
+      "title": "Einstellungen",
       "body": "Wähle deine bevorzugten Fraktionen und Zeitzone, damit wir dich richtig einordnen.",
       "factions_label": "Bevorzugte Fraktionen",
       "skip": "Überspringen — später festlegen",
-      "save": "Schmieden",
-      "saving": "Schmieden…"
+      "save": "Speichern",
+      "saving": "Wird gespeichert…"
     },
     "stage3": {
-      "title": "Schmiede deine erste Liste.",
-      "body": "Ein Marschall ohne Liste betritt das Feld blind.",
-      "later": "Die Schmiede kann warten",
-      "cta": "Die Liste schmieden"
+      "title": "Erstelle deine erste Liste.",
+      "body": "Ein Spieler ohne Liste betritt das Feld blind.",
+      "later": "Später erledigen",
+      "cta": "Liste speichern"
     },
     "stage5": {
-      "title": "Die Rolle wartet, Marschall.",
-      "body": "Dein Stand ist gesiegelt. Betritt das Feld.",
-      "cta": "Ins Konzil eintreten",
-      "cta_loading": "Die Rolle wird gesiegelt…"
+      "title": "Alles bereit.",
+      "body": "Dein Profil ist fertig. Betritt das Feld.",
+      "cta": "Zum Profil",
+      "cta_loading": "Profil wird geladen…"
     },
     "tour": {
       "btn_back": "Zurück",
@@ -315,12 +316,12 @@
       "dot_aria": "Schritt {{current}} von {{total}}",
       "stops": {
         "roll_of_honour": {
-          "title": "Ehrenliste",
-          "body": "Jeder Marschall hat hier seinen Stand — in Stein geritzt. Dein Name wird sich einreihen."
+          "title": "Leaderboard",
+          "body": "Jeder Spieler hat hier seinen Stand — in Stein geritzt. Dein Name wird sich einreihen."
         },
         "factions": {
           "title": "Die Fraktionen",
-          "body": "Vierundzwanzig Banner reiten durch die Alte Welt. Kenne jede, bevor der Ruf erschallt."
+          "body": "Vierundzwanzig Banner reiten durch die Alte Welt. Kenne jede, bevor das Turnier startet."
         },
         "meta": {
           "title": "Die Heatmap",

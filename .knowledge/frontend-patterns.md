@@ -78,6 +78,9 @@ export const router = createRouter({ routeTree });
 | `/presets/new` | `PresetEditorPage` | `routes/PresetEditorPage.tsx` |
 | `/presets/$id/edit` | `PresetEditorPage` | `routes/PresetEditorPage.tsx` |
 | `/admin` | `AdminPage` | `routes/AdminPage.tsx` |
+| `/connect-steam` | `SteamConnectPage` | `routes/SteamConnectPage.tsx` |
+| `/matches/$matchId` | `MatchDetailPage` | `routes/MatchDetailPage.tsx` |
+| `/matches/$matchId/decision` | `MatchDecisionPage` | `routes/MatchDecisionPage.tsx` |
 
 ---
 
@@ -138,6 +141,12 @@ Verifiziert gegen `src/routes/*.tsx` und `src/hooks/*.ts`:
 | `['draft-presets']` | Preset-Liste |
 | `['draft-preset', id]` | einzelnes Preset |
 | `['user-profile', id]` | User-Profil-Seite |
+| `['maps']` | alle Maps (`MapDto[]`) |
+| `['match-decision', matchId]` | Match-Decision-State |
+| `['army-list-me', slug]` | eigene Army-Liste im Tournament |
+| `['army-list', slug, userId]` | Gegner-Army-Liste |
+| `['army-lists-all', slug]` | alle Listen (nach Tournament complete) |
+| `['tournament-participants', slug]` | Teilnehmer-Liste inkl. Status |
 
 ---
 
@@ -177,9 +186,11 @@ Verzeichnis: `apps/frontend/src/components/`
 
 **`tournament/`**
 - `TournamentCard.tsx` — Karten-Darstellung in Listen
-- `TournamentCreateForm.tsx` — Erstellungsformular
-- `ArmyListUpload.tsx` — TXT-Upload-Component
+- `TournamentCreateForm.tsx` — Erstellungsformular (Welle 2: Mode, Rounds, Playoff, MapPool, MatchFormat)
+- `ArmyListUpload.tsx` — TXT-Upload-Component (Legacy)
+- `ArmyListUploader.tsx` — Drag-Drop SLT-Army-List-Upload (Welle 2: Screenshot + .army_setup)
 - `ArmyListList.tsx` — Liste hochgeladener Army-Lists
+- `CheckInButton.tsx` — Self-Service Check-in mit Live-Countdown (Welle 2)
 
 **`layout/`**
 - `Header.tsx` — globale Navigation

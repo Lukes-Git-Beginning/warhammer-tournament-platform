@@ -423,6 +423,57 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // ---------------------------------------------------------------------------
+  // GET /api/tournaments/:slug/participants/me
+  // Auth-required — returns the current user's participant status for a tournament.
+  // ---------------------------------------------------------------------------
+  fastify.get(
+    '/api/tournaments/:slug/participants/me',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { slug, deleted_at: null },
+        select: { id: true },
+      });
+
+      if (!tournament) {
+        return reply.code(404).send({
+          error: 'NotFound',
+          message: `Tournament "${slug}" not found`,
+          statusCode: 404,
+        });
+      }
+
+      const participant = await fastify.prisma.tournamentParticipant.findFirst({
+        where: {
+          tournament_id: tournament.id,
+          user_id: request.user.sub,
+          deleted_at: null,
+        },
+        select: {
+          status: true,
+          registered_at: true,
+          faction_id: true,
+          lists_locked_at: true,
+        },
+      });
+
+      if (!participant) {
+        // Not registered — return null status (not an error)
+        return reply.code(200).send({ status: null });
+      }
+
+      return reply.code(200).send({
+        status: participant.status,
+        registered_at: participant.registered_at,
+        faction_id: participant.faction_id ?? null,
+        checked_in_at: participant.status === 'CHECKED_IN' ? participant.lists_locked_at : null,
+      });
+    },
+  );
+
   // GET /api/tournaments/:slug/participants
   fastify.get('/api/tournaments/:slug/participants', async (request, reply) => {
     const { slug } = request.params as { slug: string };

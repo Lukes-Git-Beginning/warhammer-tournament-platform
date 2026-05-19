@@ -22,11 +22,12 @@
   "brand": {
     "name": "Rizzotto",
     "tagline": "Where Lists Are Forged",
-    "motto": "Karaz Ankor"
+    "motto": "Where Lists Are Forged."
   },
   "header": {
-    "home": "Hall",
-    "leaderboard": "Roll of Honour",
+    "home": "Home",
+    "leaderboard": "Leaderboard",
+    "tournaments": "Tournaments",
     "meta": "Meta",
     "factions": "Factions",
     "drafts": "Drafts",
@@ -39,25 +40,25 @@
   "hero": {
     "tagline": "Where Lists Are Forged",
     "cta_primary": "Take Up Arms",
-    "cta_secondary": "View the Roll of Honour",
+    "cta_secondary": "View the Leaderboard",
     "scroll_cue": "Discover more"
   },
   "forge_section": {
-    "eyebrow": "The Forge",
+    "eyebrow": "Library",
     "heading_line1": "Every list is forged",
     "heading_line2": "in iron and resolve.",
-    "body": "Every campaign begins with the list. Every list is forged in iron and resolve. Here we record each muster, each toll of the bell, and every triumph and fall — so that the marshals of the Old World may stand on the Roll of Honour, their deeds sealed in stone.",
+    "body": "Every campaign begins with the list. Every list is forged in iron and resolve. Here we record each tournament, each round, and every triumph and fall — so that the players of the Old World may stand on the Leaderboard, their deeds sealed in stone.",
     "motto": "\"Ex Ferro, Lex.\"",
     "cta": "Read the Manifesto"
   },
   "musters": {
-    "eyebrow": "Now Mustering",
-    "heading": "Active Musters",
+    "eyebrow": "Live Tournaments",
+    "heading": "Live Tournaments",
     "view_all": "View all",
     "answer_call": "View Tournament",
-    "marshals": "Marshals",
-    "empty_title": "The musters stand empty.",
-    "empty_body": "When marshals call, they will be listed here.",
+    "marshals": "Players",
+    "empty_title": "No live tournaments at the moment.",
+    "empty_body": "When a tournament goes live, it will be listed here.",
     "empty_motto": "\"Memento Pugnae\"",
     "status_live": "Live",
     "status_upcoming": "Upcoming",
@@ -65,28 +66,28 @@
   },
   "roll_of_honour": {
     "eyebrow": "Sealed in Stone",
-    "heading": "The Roll of Honour",
-    "view_all": "View the full Roll of Honour",
-    "empty_title": "A blank Roll.",
+    "heading": "Leaderboard",
+    "view_all": "View full Leaderboard",
+    "empty_title": "The Leaderboard is empty.",
     "empty_body": "The forge awaits its first strike.",
-    "empty_motto": "\"In Lapide Sigillata\""
+    "empty_motto": "\"\""
   },
   "conclave": {
-    "eyebrow": "How We Muster",
-    "heading": "The Conclave",
-    "cta": "Enter the Conclave",
+    "eyebrow": "How We Play",
+    "heading": "Profile",
+    "cta": "View Profile",
     "pillars": {
       "swiss": {
-        "title": "Swiss Toll",
-        "body": "Every marshal plays a fixed number of tolls, paired against opponents of equal standing. No one is eliminated; the Roll decides."
+        "title": "Swiss Rounds",
+        "body": "Every player plays a fixed number of rounds, paired against opponents of equal standing. No one is eliminated; the standings decide."
       },
       "bracket": {
-        "title": "Lineage",
-        "body": "Single- and double-elimination brackets. Each engagement carves the lineage tree, until only one banner remains."
+        "title": "Brackets",
+        "body": "Single- and double-elimination brackets. Each match carves the bracket tree, until only one banner remains."
       },
       "draft": {
-        "title": "The Choosing",
-        "body": "Live Captain's Mode draft. Marshals claim and forbid factions in real time — the choice is the first battle."
+        "title": "The Draft",
+        "body": "Live Captain's Mode draft. Players claim and forbid factions in real time — the draft is the first battle."
       }
     }
   },
@@ -96,8 +97,8 @@
     "cta": "Join Now"
   },
   "footer": {
-    "tagline": "Where Lists Are Forged",
-    "motto": "Karaz Ankor",
+    "tagline": "Where Lists Are Forged.",
+    "motto": "Where Lists Are Forged.",
     "imprint": "Imprint",
     "privacy": "Privacy",
     "terms": "Terms",
@@ -106,11 +107,11 @@
   },
   "login": {
     "title": "Sign In",
-    "subtitle": "Sign in with your Discord account to enter tournaments or call your own musters.",
+    "subtitle": "Sign in with your Discord account to enter tournaments or create your own.",
     "discord_button": "Sign in with Discord"
   },
   "leaderboard": {
-    "title": "Roll of Honour",
+    "title": "Leaderboard",
     "tabs": {
       "season": "Season",
       "all_time": "All-Time"
@@ -127,25 +128,25 @@
       "games": "Games",
       "seasons": "Seasons"
     },
-    "load_error": "Failed to load the Roll of Honour.",
+    "load_error": "Failed to load the Leaderboard.",
     "empty": "No entries yet.",
-    "empty_title": "The Roll awaits.",
-    "empty_body": "Once the first marshals leave their mark, the standings appear here.",
+    "empty_title": "The Leaderboard awaits.",
+    "empty_body": "Once the first players leave their mark, the standings appear here.",
     "empty_motto": "\"Honor Vacat\"",
     "empty_motto_title": "The honour stands empty"
   },
   "tournament": {
     "create": {
-      "title": "Call the Muster",
+      "title": "Create Tournament",
       "subtitle": "Create a new tournament for the Rizzotto community.",
       "role_warning": "You need the Organizer role to create tournaments. Contact an administrator to upgrade your role.",
       "aside": {
-        "heading": "What is a Muster Call?",
-        "body": "A Muster Call is the formal summons to battle. You define format, mode and rules — other marshals fall in.",
+        "heading": "What is a Tournament?",
+        "body": "A tournament brings players together to compete. You define the format, mode, and rules — others sign up and play.",
         "bullet_format": "The <strong>format</strong> sets the bracket structure — Single Elimination, Swiss or Round Robin.",
         "bullet_mode": "The <strong>mode</strong> sets the match size — 1v1 or team encounters.",
         "bullet_draft": "Optional: Enable the <strong>draft system</strong> for live picks with real-time streaming.",
-        "footnote": "You can edit every field after the tournament has been forged."
+        "footnote": "You can edit every field after the tournament has been created."
       }
     },
     "form": {
@@ -214,21 +215,21 @@
     "empties": {
       "season": {
         "title": "No active season.",
-        "body": "The next forge has not yet been named."
+        "body": "The next season has not yet been announced."
       },
       "tournaments": {
-        "title": "No musters yet.",
-        "body": "Heed the next call and join a battle."
+        "title": "No tournaments yet.",
+        "body": "Join the next tournament and take the field."
       },
       "matches": {
-        "title": "No engagements yet.",
-        "body": "Once the first blow falls, it will be recorded here."
+        "title": "No matches yet.",
+        "body": "Once the first match is played, it will be recorded here."
       }
     },
-    "workshop_title": "The Workshop",
-    "workshop_body": "Re-walk the forge if you've forgotten the way.",
-    "workshop_cta": "Revisit the Forge",
-    "workshop_cta_loading": "Re-kindling…",
+    "workshop_title": "Settings",
+    "workshop_body": "Update your preferences and profile settings.",
+    "workshop_cta": "Open Library",
+    "workshop_cta_loading": "Opening…",
     "stats": {
       "points": "Points",
       "elo": "Elo",
@@ -274,7 +275,7 @@
     "empty_body": "A preset bundles draft sequences, limits, and rules into a reusable template.",
     "empty_motto": "\"Forgia Quiescit\"",
     "empty_motto_title": "The forge rests",
-    "empty_cta_first": "Forge the first preset →",
+    "empty_cta_first": "Create your first preset →",
     "editor": {
       "create_title": "Create new preset",
       "edit_title": "Edit preset",
@@ -285,28 +286,28 @@
   "onboarding": {
     "stage1": {
       "title": "Welcome aboard.",
-      "body": "Your sigil is now sealed in the Roll. Before you take the field, let us forge your standing.",
-      "cta": "Enter the Forge"
+      "body": "Your account is set up. Before you take the field, let us get your profile ready.",
+      "cta": "Open Library"
     },
     "stage2": {
-      "title": "The Workshop",
+      "title": "Settings",
       "body": "Pick your favoured factions and timezone so we can place you correctly.",
       "factions_label": "Favoured factions",
       "skip": "Skip — set it later",
-      "save": "Strike",
-      "saving": "Striking…"
+      "save": "Save",
+      "saving": "Saving…"
     },
     "stage3": {
-      "title": "Forge Your First List.",
-      "body": "A Marshal without a list enters the field blind.",
-      "later": "The forge can wait",
-      "cta": "Forge the List"
+      "title": "Build Your First List.",
+      "body": "A player without a list enters the field blind.",
+      "later": "Do it later",
+      "cta": "Save List"
     },
     "stage5": {
-      "title": "The Roll Awaits, Marshal.",
-      "body": "Your standing is sealed. Take the field.",
-      "cta": "Enter the Conclave",
-      "cta_loading": "Sealing the Roll…"
+      "title": "You're all set.",
+      "body": "Your profile is ready. Take the field.",
+      "cta": "Go to Profile",
+      "cta_loading": "Loading profile…"
     },
     "tour": {
       "btn_back": "Back",
@@ -315,12 +316,12 @@
       "dot_aria": "Stop {{current}} of {{total}}",
       "stops": {
         "roll_of_honour": {
-          "title": "The Roll of Honour",
-          "body": "Every Marshal's standing — etched in stone. Your name will join the roll."
+          "title": "Leaderboard",
+          "body": "Every player's standing — etched in stone. Your name will join the ranks."
         },
         "factions": {
-          "title": "The Factions",
-          "body": "Twenty-four banners ride the Old World. Know each before the muster is called."
+          "title": "Factions",
+          "body": "Twenty-four banners ride the Old World. Know each before the tournament is called."
         },
         "meta": {
           "title": "The Heatmap",
