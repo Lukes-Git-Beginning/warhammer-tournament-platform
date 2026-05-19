@@ -90,11 +90,13 @@ Datei: `apps/frontend/src/lib/api.ts`
 
 ```typescript
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
-    ...init,
-  });
+  const headers: HeadersInit = { ...(init?.headers ?? {}) };
+  // Only declare a JSON content-type when we actually send a body — Fastify
+  // rejects bodyless POSTs with Content-Type: application/json (FST_ERR_CTP_EMPTY_JSON_BODY).
+  if (init?.body != null && !(headers as Record<string, string>)['Content-Type']) {
+    (headers as Record<string, string>)['Content-Type'] = 'application/json';
+  }
+  const res = await fetch(path, { credentials: 'include', ...init, headers });
   if (!res.ok) { /* wirft ApiError mit .status */ }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -104,6 +106,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 - Fügt automatisch `credentials: 'include'` hinzu (Cookie-Auth).
 - Wirft `ApiError` (extends `Error`) mit `.status: number` auf Non-2xx.
 - HTTP 204 → gibt `undefined` zurück (kein JSON-Parse-Fehler).
+- **Content-Type-Header wird nur gesetzt, wenn `init.body` existiert.** Vor 2026-05-19 war der Header unconditionally gesetzt; das brach `POST /auth/logout` und alle anderen bodyless POSTs mit HTTP 400.
 
 **Beispiel in einer Route:**
 
@@ -115,6 +118,27 @@ useQuery({
 ```
 
 Typen kommen aus `@rizzotto/types` [siehe `.knowledge/types-contracts.md`].
+
+### Datetime-Felder an das Backend senden
+
+HTML `<input type="datetime-local">` emits `"YYYY-MM-DDTHH:mm"` ohne Sekunden und ohne Timezone — `z.string().datetime()` im Backend rejected das mit `invalid_string/datetime`. Pre-Submit konvertieren:
+
+```typescript
+const toIsoOrInvalid = (local: string) => {
+  const d = new Date(local);
+  return Number.isNaN(d.getTime()) ? local : d.toISOString();
+};
+
+mutation.mutate({
+  ...data,
+  start_date: toIsoOrInvalid(data.start_date),
+  ...(data.registration_deadline
+    ? { registration_deadline: toIsoOrInvalid(data.registration_deadline) }
+    : {}),
+});
+```
+
+`new Date(local)` interpretiert den Wert in der Browser-Zeitzone (= dem default-gewählten `timezone` im Form). Wenn Tournament-spezifische Zeitzone vom Browser abweicht, gehört das semantisch in einen separaten Konvertierungs-Schritt — ist heute kein realer Fall.
 
 ---
 

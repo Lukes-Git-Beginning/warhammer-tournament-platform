@@ -111,13 +111,12 @@ Wenn sich folgende Bereiche ändern, das entsprechende Hub-File mitpflegen:
 
 ## Referenz-Docs
 
-| Datei                                          | Inhalt                                      |
-|------------------------------------------------|---------------------------------------------|
-| `ROADMAP.md`                                   | Milestone-SSOT (M1–M5 + geplante Features)  |
-| `DEPLOYMENT.md`                                | Production-Setup, Env-Vars, Deploy-Prozess  |
-| `WARHAMMER_PLATFORM_PROMPT_TEIL_1.md`          | Vollständige Spec, Teil 1 (von 3592 Zeilen) |
-| `WARHAMMER_PLATFORM_PROMPT_TEIL_2.md`          | Vollständige Spec, Teil 2                   |
-| `WARHAMMER_PLATFORM_PROMPT_TEIL_3.md`          | Vollständige Spec, Teil 3                   |
+| Datei                                          | Inhalt                                                     |
+|------------------------------------------------|------------------------------------------------------------|
+| `ROADMAP.md`                                   | Zentrale SSOT — Stand, offene Items, Milestones, Out-of-Scope |
+| `DEPLOYMENT.md`                                | Production-Setup, Env-Vars, Deploy-Prozess                 |
+| `docs/design/README.md`                        | Design-System-Index (15 Topic-Files)                       |
+| `docs/archive/`                                | Historische Plan-/Spec-Dateien (Welle-2-Pläne, alte Specs) |
 
 ## Sub-Agent-Konvention
 

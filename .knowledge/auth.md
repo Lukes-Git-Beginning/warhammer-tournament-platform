@@ -15,7 +15,7 @@ Quellen: `apps/backend/src/routes/auth.ts`, `apps/backend/src/plugins/auth.ts`
 1. **Browser → `GET /auth/discord`** — `@fastify/oauth2` leitet direkt zu Discord weiter (`startRedirectPath: '/auth/discord'`). Scopes: `identify email` (konfigurierbar via `DISCORD_SCOPES`).
 2. **Discord → `GET /auth/discord/callback`** — Token-Exchange via `fastify.discordOAuth2.getAccessTokenFromAuthorizationCodeFlow(request)`. Danach `fetch('https://discord.com/api/users/@me')` mit dem Access-Token.
 3. **Backend: `prisma.user.upsert({ where: { discord_id } })`** — Legt neuen User an oder aktualisiert `username`, `email`, `avatar_url`, `last_login`. Gibt `id`, `discord_id`, `username`, `role` zurück.
-4. **Backend: `fastify.signAuthCookie(reply, payload)`** — Signiert JWT mit `JWT_SECRET`, setzt HTTP-Only-Cookie, leitet dann zu `FRONTEND_URL` weiter.
+4. **Backend: `fastify.signAuthCookie(reply, payload)`** — Signiert JWT mit `JWT_SECRET`, setzt HTTP-Only-Cookie. Anschließend Hard-Gate-Routing: wenn `user.steam_link == null` → Redirect zu `${FRONTEND_URL}/connect-steam`, sonst zu `FRONTEND_URL`. Damit greift der Steam-Gate **vor** dem Frontend-Guard und der User landet nie auf `/` ohne Steam-Link (siehe §Steam-OpenID-2.0 Hard-Gate).
 
 ---
 
@@ -110,7 +110,9 @@ Quelle: `apps/frontend/src/lib/auth.ts`
 | `useLogout()` | Mutation → `logout()` → `queryClient.setQueryData(['me'], null)` → Navigate zu `/login`. |
 | `useRequireAuth()` | Ruft `useAuthQuery()` auf, navigiert bei `error.status === 401` zu `/login`. Gibt die Query zurück. |
 
-`getMe` und `logout` kommen aus `./api` und sprechen den Backend-Endpunkt `/auth/me` bzw. `POST /auth/logout` an.
+`getMe` ruft `GET /api/users/me`, `logout` ruft `POST /auth/logout`. Beide laufen über `apiFetch` — dieser setzt seit 2026-05-19 den `Content-Type: application/json`-Header **nur, wenn ein Body mitgeschickt wird**, sonst wirft Fastify auf bodyless POSTs `FST_ERR_CTP_EMPTY_JSON_BODY`.
+
+`/api/users/me` liefert `UserMe` inklusive `steam_link: SteamLink | null` — das Feld ist in `meSelect` (`apps/backend/src/routes/users.ts`) included und in `serializeMe` von Prisma-Namen (`persona`, `verified_at`) auf Zod-Schema-Namen (`steam_username`, `linked_at`) gemapped.
 
 ---
 
@@ -145,7 +147,7 @@ Alex-Spec: jeder User muss nach Discord-Login zwingend einen Steam-Account verli
 
 ### Flow
 
-1. **Discord-Login** wie bisher → JWT-Cookie gesetzt, `/api/users/me` liefert `steam_link: SteamLink | null`.
+1. **Discord-Login** wie bisher → JWT-Cookie gesetzt, `/api/users/me` liefert `steam_link: SteamLink | null`. Der Discord-Callback **redirected schon serverseitig auf `/connect-steam`** wenn der User keinen SteamLink hat — der Frontend-Guard ist nur Fallback für Navigation innerhalb der App.
 2. **Frontend** (`apps/frontend/src/routes/__root.tsx`) ruft `useRequireSteamLink()` global auf. Bei `steam_link == null` und non-whitelisted Pfad → Redirect auf `/connect-steam?return_to=<current>`.
 3. **`SteamConnectPage`** zeigt CTA "Connect Steam" → `window.location = '/auth/steam/login?return_to=…'`.
 4. **`GET /auth/steam/login`** (in `apps/backend/src/routes/auth.ts`) konstruiert OpenID-2.0-Redirect zu `https://steamcommunity.com/openid/login` mit `openid.mode=checkid_setup`.
@@ -164,7 +166,8 @@ Alex-Spec: jeder User muss nach Discord-Login zwingend einen Steam-Account verli
 
 `useRequireSteamLink()` in `apps/frontend/src/lib/auth.ts`:
 - Whitelist: `/`, `/connect-steam`, `/auth/*`, `/login`
-- Bei `user.steam_link == null` + non-whitelisted Pfad → `navigate({ to: '/connect-steam', search: { return_to: currentPath } })`
+- Bei `user.steam_link == null` + non-whitelisted Pfad → `navigate({ to: '/connect-steam', search: { return_to: location.href } })`
+- **Wichtig:** `location.href` (string, pathname+search+hash). Niemals `location.search` direkt konkatenieren — das ist in TanStack Router ein parsed Object und triggert `TypeError: Cannot convert object to primitive value`.
 - Aktiviert global in `__root.tsx`
 
 ### ENV-Vars
