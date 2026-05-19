@@ -41,7 +41,6 @@ async function waitForTable(page: Page, timeout = 30_000): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
   await page.waitForFunction(
     /* istanbul ignore next */
-    // @ts-expect-error – executes in browser context where `document` is defined
     () => {
       /* eslint-disable @typescript-eslint/no-explicit-any */
       const tables = (globalThis as any).document.querySelectorAll('table');
@@ -62,7 +61,6 @@ async function waitForTable(page: Page, timeout = 30_000): Promise<void> {
 async function extractTableRows(page: Page, tableIndex: number): Promise<{ cells: string[] }[]> {
   return page.evaluate(
     /* istanbul ignore next */
-    // @ts-expect-error – executes in browser context where `document` is defined
     ([idx]: [number]) => {
       /* eslint-disable @typescript-eslint/no-explicit-any */
       const tables = (globalThis as any).document.querySelectorAll('table');
@@ -168,7 +166,6 @@ function parseMatchupRow(cells: string[]): TTMatchupRow | null {
 async function clickFaction(page: Page, factionName: string): Promise<boolean> {
   return page.evaluate(
     /* istanbul ignore next */
-    // @ts-expect-error – executes in browser context where `document` is defined
     ([name]: [string]) => {
       /* eslint-disable @typescript-eslint/no-explicit-any */
       // Versuche <a>, <button>, <td> mit exaktem Text in Tabellen
@@ -243,7 +240,6 @@ export async function scrapeTotalTavernFactionStats(timeoutMs = 30_000): Promise
         await page
           .waitForFunction(
             /* istanbul ignore next */
-            // @ts-expect-error – executes in browser context where `document` is defined
             () => {
               /* eslint-disable @typescript-eslint/no-explicit-any */
               const tables = (globalThis as any).document.querySelectorAll('table');

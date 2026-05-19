@@ -60,15 +60,16 @@ describe('Header', () => {
     expect(container.querySelector('header')).toBeTruthy();
   });
 
-  it('zeigt TWW3 Cup Logo-Link', () => {
+  it('zeigt Rizzotto Logo-Link zum Home', () => {
     renderHeader();
     const logo = container.querySelector('a[href="/"]');
-    expect(logo?.textContent).toContain('TWW3 Cup');
+    expect(logo).toBeTruthy();
+    expect(logo?.getAttribute('aria-label')).toContain('Rizzotto');
   });
 
   it('Hamburger-Button ist initial vorhanden', () => {
     renderHeader();
-    const btn = container.querySelector('button[aria-label="Menü öffnen"]');
+    const btn = container.querySelector('button[aria-label="Open menu"]');
     expect(btn).toBeTruthy();
   });
 
@@ -80,7 +81,7 @@ describe('Header', () => {
 
   it('Klick auf Hamburger öffnet Mobile-Menü', () => {
     renderHeader();
-    const btn = container.querySelector('button[aria-label="Menü öffnen"]') as HTMLButtonElement;
+    const btn = container.querySelector('button[aria-label="Open menu"]') as HTMLButtonElement;
     act(() => {
       btn.click();
     });
@@ -90,12 +91,13 @@ describe('Header', () => {
 
   it('Erneuter Klick auf Hamburger schließt Mobile-Menü wieder', () => {
     renderHeader();
-    const btn = container.querySelector('button[aria-label="Menü öffnen"]') as HTMLButtonElement;
+    const openBtn = container.querySelector('button[aria-label="Open menu"]') as HTMLButtonElement;
     act(() => {
-      btn.click();
+      openBtn.click();
     });
+    const closeBtn = container.querySelector('button[aria-label="Close menu"]') as HTMLButtonElement;
     act(() => {
-      btn.click();
+      closeBtn.click();
     });
     const mobileMenu = container.querySelector('[data-testid="mobile-menu"]');
     expect(mobileMenu).toBeNull();
