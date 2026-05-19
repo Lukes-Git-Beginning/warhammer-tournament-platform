@@ -30,10 +30,7 @@ interface FactionSeed {
 }
 
 // 24 factions validated against Steam Community Guide (id=3241235739) and Wargamer.com.
-// icon_url points to PNG default-sigils in apps/frontend/public/icons/factions/<id>.png
-// (sourced from AI-generated sub-faction crest pack 2026-05-18, default sigil per race).
-// Khorne/Nurgle/Tzeentch/Slaanesh share daemons_of_chaos.png.
-// Norsca + Ogre Kingdoms fall back to initials-circle (no crest available).
+// icon_url points to PNG sigils in apps/frontend/public/icons/factions/<id>.png.
 const FACTIONS: FactionSeed[] = [
   // ORDER (7)
   { id: 'empire',           name: 'Empire',            race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#FFCC00', display_order: 1,  icon_url: '/icons/factions/empire.png' },
@@ -53,10 +50,10 @@ const FACTIONS: FactionSeed[] = [
   { id: 'beastmen',         name: 'Beastmen',          race: 'Beastman',    category: FactionCategory.DESTRUCTION, color_hex: '#5C4A1E', display_order: 13, icon_url: '/icons/factions/beastmen.png' },
 
   // CHAOS GODS / CHAOS-ALIGNED (7)
-  { id: 'khorne',           name: 'Khorne',            race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#8B0000', display_order: 14, icon_url: '/icons/factions/daemons_of_chaos.png' },
-  { id: 'nurgle',           name: 'Nurgle',            race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#4A6741', display_order: 15, icon_url: '/icons/factions/daemons_of_chaos.png' },
-  { id: 'tzeentch',         name: 'Tzeentch',          race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#1B6CA8', display_order: 16, icon_url: '/icons/factions/daemons_of_chaos.png' },
-  { id: 'slaanesh',         name: 'Slaanesh',          race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#D4689A', display_order: 17, icon_url: '/icons/factions/daemons_of_chaos.png' },
+  { id: 'khorne',           name: 'Khorne',            race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#8B0000', display_order: 14, icon_url: '/icons/factions/khorne.png' },
+  { id: 'nurgle',           name: 'Nurgle',            race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#4A6741', display_order: 15, icon_url: '/icons/factions/nurgle.png' },
+  { id: 'tzeentch',         name: 'Tzeentch',          race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#1B6CA8', display_order: 16, icon_url: '/icons/factions/tzeentch.png' },
+  { id: 'slaanesh',         name: 'Slaanesh',          race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#D4689A', display_order: 17, icon_url: '/icons/factions/slaanesh.png' },
   { id: 'daemons_of_chaos', name: 'Daemons of Chaos',  race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#7B2FBE', display_order: 18, icon_url: '/icons/factions/daemons_of_chaos.png' },
   { id: 'warriors_of_chaos',name: 'Warriors of Chaos', race: 'Human',       category: FactionCategory.CHAOS_GODS,  color_hex: '#3D3D3D', display_order: 19, icon_url: '/icons/factions/warriors_of_chaos.png' },
   { id: 'chaos_dwarfs',     name: 'Chaos Dwarfs',      race: 'Chaos Dwarf', category: FactionCategory.CHAOS_GODS,  color_hex: '#B03010', display_order: 20, icon_url: '/icons/factions/chaos_dwarfs.png' },
