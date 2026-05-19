@@ -13,6 +13,7 @@ declare module 'fastify' {
     requireRole: (
       ...roles: Role[]
     ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireSteamLink: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
   interface FastifyRequest {
     user: JwtPayload;
@@ -125,6 +126,32 @@ export default fp(
 
     fastify.decorate('clearAuthCookie', (reply) => {
       reply.clearCookie(cookieName, { path: '/', domain: cookieDomain });
+    });
+
+    // requireSteamLink: applied selectively to routes that need Steam linking.
+    // Must be used AFTER authenticate (needs request.user).
+    fastify.decorate('requireSteamLink', async (request, reply) => {
+      if (!request.user) {
+        return reply.code(401).send({
+          error: 'Unauthorized',
+          message: 'Not authenticated',
+          statusCode: 401,
+        });
+      }
+
+      const steamLink = await fastify.prisma.steamLink.findUnique({
+        where: { user_id: request.user.sub },
+        select: { user_id: true },
+      });
+
+      if (!steamLink) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          code: 'STEAM_REQUIRED',
+          message: 'Connect Steam to continue',
+          statusCode: 403,
+        });
+      }
     });
   },
   { name: 'auth', dependencies: [] },

@@ -326,6 +326,103 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // POST /api/tournaments/:slug/checkin/self
+  // Self-service check-in: open when start_date - 1h <= now < start_date.
+  // Uses audit-log to track when check-in window was first opened (no schema change needed).
+  fastify.post(
+    '/api/tournaments/:slug/checkin/self',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { slug, deleted_at: null },
+        select: { id: true, start_date: true, status: true },
+      });
+
+      if (!tournament) {
+        return reply.code(404).send({
+          error: 'NotFound',
+          message: `Tournament "${slug}" not found`,
+          statusCode: 404,
+        });
+      }
+
+      const now = new Date();
+      const oneHourBefore = new Date(tournament.start_date.getTime() - 60 * 60 * 1000);
+
+      // Check-in window: [start_date - 1h, start_date)
+      const checkinOpen = now >= oneHourBefore && now < tournament.start_date;
+
+      if (!checkinOpen) {
+        return reply.code(409).send({
+          error: 'Conflict',
+          code: 'CHECKIN_NOT_OPEN',
+          message: 'Check-in is not currently open for this tournament',
+          statusCode: 409,
+        });
+      }
+
+      const participant = await fastify.prisma.tournamentParticipant.findFirst({
+        where: {
+          tournament_id: tournament.id,
+          user_id: request.user.sub,
+          deleted_at: null,
+        },
+        select: { id: true, status: true },
+      });
+
+      if (!participant) {
+        return reply.code(404).send({
+          error: 'NotFound',
+          message: 'You are not registered for this tournament',
+          statusCode: 404,
+        });
+      }
+
+      if (participant.status === 'CHECKED_IN') {
+        return reply.code(409).send({
+          error: 'Conflict',
+          message: 'You are already checked in',
+          statusCode: 409,
+        });
+      }
+
+      if (participant.status !== 'REGISTERED') {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: `Cannot check in with participant status "${participant.status}"`,
+          statusCode: 422,
+        });
+      }
+
+      await fastify.prisma.tournamentParticipant.update({
+        where: { id: participant.id },
+        data: { status: 'CHECKED_IN' },
+      });
+
+      await fastify.prisma.auditLog.create({
+        data: {
+          entity_type: 'TournamentParticipant',
+          entity_id: participant.id,
+          action: 'self_checkin',
+          actor_id: request.user.sub,
+          old_value: { status: participant.status },
+          new_value: { status: 'CHECKED_IN' },
+        },
+      });
+
+      emitParticipantChange(fastify.io, {
+        tournamentId: tournament.id,
+        userId: request.user.sub,
+        action: 'checked_in',
+      });
+
+      request.log.info({ slug, userId: request.user.sub }, 'User self-checked-in');
+      return reply.code(200).send({ message: 'Check-in successful' });
+    },
+  );
+
   // GET /api/tournaments/:slug/participants
   fastify.get('/api/tournaments/:slug/participants', async (request, reply) => {
     const { slug } = request.params as { slug: string };

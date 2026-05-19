@@ -5,6 +5,7 @@ import { emitStatusChange } from '../lib/emit.js';
 import { finalizeTournament } from '../lib/finalize-tournament.js';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
 import type { TournamentStatusLiteral } from '@rizzotto/types';
+import { notifyTournamentAnnounce } from '../lib/discord-notify.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -18,7 +19,7 @@ const ListQuerySchema = z.object({
 const CreateTournamentSchema = z.object({
   name: z.string().min(3).max(120),
   format: z.enum(['SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN']),
-  mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'SFT']).optional(),
+  mode: z.enum(['OPEN', 'ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT']).optional(),
   start_date: z.string().datetime(),
   timezone: z.string().min(1).max(64),
   max_participants: z.number().int().min(2).max(512).optional(),
@@ -31,6 +32,14 @@ const CreateTournamentSchema = z.object({
   draft_enabled: z.boolean().default(false),
   draft_preset_id: z.string().uuid().nullable().optional(),
   description: z.string().max(2000).optional(),
+  // Welle 2 — Tournament mechanics
+  rounds_count: z.number().int().min(3).max(6).optional(),
+  playoff_format: z.enum(['NONE', 'TOP4', 'TOP8']).optional(),
+  swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
+  playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
+  finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
+  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN']).optional(),
+  map_pool: z.array(z.string().min(1)).min(3).max(36).optional(),
 });
 
 const PatchTournamentSchema = z.object({
@@ -46,6 +55,14 @@ const PatchTournamentSchema = z.object({
   status: z.enum(['DRAFT', 'OPEN_REGISTRATION', 'REGISTRATION_CLOSED', 'ONGOING', 'COMPLETED']).optional(),
   draft_enabled: z.boolean().optional(),
   draft_preset_id: z.string().uuid().nullable().optional(),
+  // Welle 2 — Tournament mechanics
+  rounds_count: z.number().int().min(3).max(6).optional(),
+  playoff_format: z.enum(['NONE', 'TOP4', 'TOP8']).optional(),
+  swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
+  playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
+  finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
+  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN']).optional(),
+  map_pool: z.array(z.string().min(1)).min(3).max(36).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
 
 // ---------------------------------------------------------------------------
@@ -175,6 +192,23 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       const baseSlug = generateSlug(data.name);
       const slug = await resolveSlug(fastify.prisma, baseSlug);
 
+      // Validate map_pool IDs exist in the master pool
+      if (data.map_pool && data.map_pool.length > 0) {
+        const existingMaps = await fastify.prisma.map.findMany({
+          where: { id: { in: data.map_pool }, deleted_at: null },
+          select: { id: true },
+        });
+        if (existingMaps.length !== data.map_pool.length) {
+          const foundIds = existingMaps.map((m) => m.id);
+          const missing = data.map_pool.filter((id) => !foundIds.includes(id));
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: `Map IDs not found in master pool: ${missing.join(', ')}`,
+            statusCode: 422,
+          });
+        }
+      }
+
       const tournament = await fastify.prisma.tournament.create({
         data: {
           slug,
@@ -197,6 +231,13 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           draft_preset_id: data.draft_preset_id ?? null,
           description: data.description,
           organizer_id: request.user.sub,
+          // Welle 2
+          rounds_count: data.rounds_count,
+          playoff_format: data.playoff_format,
+          swiss_match_format: data.swiss_match_format,
+          playoff_match_format: data.playoff_match_format,
+          finale_match_format: data.finale_match_format,
+          map_decision_mode: data.map_decision_mode,
         },
         select: {
           id: true,
@@ -207,9 +248,26 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           status: true,
           visibility: true,
           organizer_id: true,
+          rounds_count: true,
+          playoff_format: true,
+          swiss_match_format: true,
+          playoff_match_format: true,
+          finale_match_format: true,
+          map_decision_mode: true,
           created_at: true,
         },
       });
+
+      // Persist map pool snapshot
+      if (data.map_pool && data.map_pool.length > 0) {
+        await fastify.prisma.tournamentMapPool.createMany({
+          data: data.map_pool.map((mapId) => ({
+            tournament_id: tournament.id,
+            map_id: mapId,
+          })),
+          skipDuplicates: true,
+        });
+      }
 
       await fastify.prisma.auditLog.create({
         data: {
@@ -353,7 +411,34 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { status: newStatus, ...rest } = parsed.data;
+      const { status: newStatus, map_pool: newMapPool, ...rest } = parsed.data;
+
+      // Validate map_pool change: only allowed before tournament starts (DRAFT or ANNOUNCED)
+      if (newMapPool !== undefined) {
+        const allowedStatuses = ['DRAFT', 'OPEN_REGISTRATION', 'REGISTRATION_CLOSED'];
+        if (!allowedStatuses.includes(tournament.status)) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'Map pool can only be changed before the tournament starts',
+            statusCode: 422,
+          });
+        }
+
+        // Validate all map IDs exist
+        const existingMaps = await fastify.prisma.map.findMany({
+          where: { id: { in: newMapPool }, deleted_at: null },
+          select: { id: true },
+        });
+        if (existingMaps.length !== newMapPool.length) {
+          const foundIds = existingMaps.map((m) => m.id);
+          const missing = newMapPool.filter((id) => !foundIds.includes(id));
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: `Map IDs not found in master pool: ${missing.join(', ')}`,
+            statusCode: 422,
+          });
+        }
+      }
 
       // Semantic validation: draft_enabled requires draft_preset_id
       // Note: draft_preset_id can be undefined (not sent) or explicitly null (sent as null).
@@ -413,8 +498,11 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         ...(newStatus !== undefined ? { status: newStatus } : {}),
       };
 
+      // map_pool is a relation — exclude it from the scalar updateData loop
+      const RELATION_FIELDS = new Set(['map_pool']);
+
       for (const [key, value] of Object.entries(fieldMap)) {
-        if (value !== undefined) {
+        if (value !== undefined && !RELATION_FIELDS.has(key)) {
           const oldVal = tournament[key as keyof typeof tournament];
           changedOld[key] = oldVal;
           changedNew[key] = value;
@@ -452,6 +540,35 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       request.log.info({ slug, changed: Object.keys(changedNew) }, 'Tournament updated');
+
+      // Update map pool snapshot (replace all rows)
+      if (newMapPool !== undefined) {
+        await fastify.prisma.tournamentMapPool.deleteMany({
+          where: { tournament_id: tournament.id },
+        });
+        if (newMapPool.length > 0) {
+          await fastify.prisma.tournamentMapPool.createMany({
+            data: newMapPool.map((mapId) => ({
+              tournament_id: tournament.id,
+              map_id: mapId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      // Notify Discord when tournament is published (OPEN_REGISTRATION)
+      if (newStatus === 'OPEN_REGISTRATION') {
+        const fullTournament = await fastify.prisma.tournament.findUnique({
+          where: { id: tournament.id },
+          select: { id: true, name: true, slug: true, start_date: true },
+        });
+        if (fullTournament) {
+          notifyTournamentAnnounce(fullTournament).catch((err) => {
+            request.log.warn({ err }, 'Discord tournament announce failed (non-fatal)');
+          });
+        }
+      }
 
       // Auto-finalize on COMPLETED transition
       if (newStatus === 'COMPLETED') {

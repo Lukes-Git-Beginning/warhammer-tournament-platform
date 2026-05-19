@@ -96,6 +96,35 @@ export interface ServerToClientEvents {
     locked_at: string;
     affected_participants: number;
   }) => void;
+  // Welle 2 — Match-Decision flow
+  'match.decision.started': (payload: {
+    matchId: string;
+    mode: 'RANDOM' | 'PICK_BAN';
+    topPlayerId: string;
+    bottomPlayerId: string;
+    seed: string;
+    pickedMapId?: string | null; // set immediately for RANDOM mode
+  }) => void;
+  'match.decision.update': (payload: {
+    matchId: string;
+    bansTop: string[];
+    bansBottom: string[];
+    pickedMapId: string | null;
+    decidedAt: string | null;
+  }) => void;
+  'match.decision.complete': (payload: {
+    matchId: string;
+    pickedMapId: string;
+    decidedAt: string;
+  }) => void;
+  'match.blind-pick.update': (payload: {
+    matchId: string;
+    player1Locked: boolean;
+    player2Locked: boolean;
+    revealedAt: string | null;
+    player1FactionId: string | null; // null until reveal
+    player2FactionId: string | null;
+  }) => void;
 }
 
 export interface ClientToServerEvents {

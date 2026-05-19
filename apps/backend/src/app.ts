@@ -26,6 +26,9 @@ import adminRoutes from './routes/admin.js';
 import armyListsRoutes from './routes/army-lists.js';
 import tournamentLifecycleRoutes from './routes/tournament-lifecycle.js';
 import matchReportsRoutes from './routes/match-reports.js';
+import mapsRoutes from './routes/maps.js';
+import matchDecisionRoutes from './routes/match-decision.js';
+import tournamentArmyListsRoutes from './routes/tournament-army-lists.js';
 
 export interface BuildAppOptions {
   /** Skip socket plugin during unit tests (avoids redis adapter init). */
@@ -97,6 +100,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(armyListsRoutes);
   await app.register(tournamentLifecycleRoutes);
   await app.register(matchReportsRoutes);
+  await app.register(mapsRoutes);
+  await app.register(matchDecisionRoutes);
+  await app.register(tournamentArmyListsRoutes);
   if (withGraphql) await app.register(graphqlPlugin);
 
   app.get('/health', async () => ({

@@ -1,6 +1,13 @@
 import type { FastifyPluginAsync } from 'fastify';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Faction sigil uploads go to the frontend's public/icons/factions/ directory
+const FACTION_ICONS_DIR = path.resolve(__dirname, '..', '..', '..', 'frontend', 'public', 'icons', 'factions');
 
 const PaginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -10,6 +17,74 @@ const PaginationSchema = z.object({
 const AuditLogQuerySchema = PaginationSchema.extend({
   entity_type: z.string().optional(),
   actor_id: z.string().uuid().optional(),
+});
+
+// ---------------------------------------------------------------------------
+// Validation Schemas
+// ---------------------------------------------------------------------------
+
+const FactionWinRatesQuerySchema = z.object({
+  season: z.string().uuid().optional(),
+  format: z.enum(['SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN']).optional(),
+  mode: z.enum(['OPEN', 'ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT']).optional(),
+  period: z.enum(['last_30d', 'last_90d', 'season']).optional(),
+});
+
+const EloDistributionQuerySchema = z.object({
+  season: z.string().uuid().optional(),
+});
+
+const DropoffFunnelQuerySchema = z.object({
+  tournament_id: z.string().uuid().optional(),
+  season: z.string().uuid().optional(),
+});
+
+const PickBanStatsQuerySchema = z.object({
+  season: z.string().uuid().optional(),
+  entity: z.enum(['maps', 'factions']).default('factions'),
+});
+
+const MapCreateSchema = z.object({
+  name: z.string().min(1).max(200),
+  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
+  description: z.string().max(500).optional(),
+  image_url: z.string().url().optional(),
+});
+
+const MapUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(500).optional(),
+  image_url: z.string().url().optional(),
+});
+
+const FactionCreateSchema = z.object({
+  id: z.string().min(1).max(100).regex(/^[a-z0-9_]+$/),
+  name: z.string().min(1).max(200),
+  race: z.string().min(1).max(100),
+  category: z.enum(['ORDER', 'DESTRUCTION', 'CHAOS_GODS', 'UNDEAD', 'DEFAULT']),
+  color_hex: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  display_order: z.number().int().min(1),
+  icon_url: z.string().optional(),
+});
+
+const FactionUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  race: z.string().min(1).max(100).optional(),
+  category: z.enum(['ORDER', 'DESTRUCTION', 'CHAOS_GODS', 'UNDEAD', 'DEFAULT']).optional(),
+  color_hex: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  display_order: z.number().int().min(1).optional(),
+});
+
+const ConfigValueSchema = z.object({
+  // Accept any JSON-serializable value
+  value: z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.record(z.string(), z.unknown()),
+    z.array(z.unknown()),
+  ]),
 });
 
 const adminRoutes: FastifyPluginAsync = async (fastify) => {
@@ -174,6 +249,643 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     await invalidate(fastify.redis, cacheKey('admin:stats', {}));
 
     return { id: unbanned.id, username: unbanned.username };
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/admin/stats/faction-winrates
+  // -------------------------------------------------------------------------
+
+  fastify.get('/api/admin/stats/faction-winrates', async (request, reply) => {
+    const parsed = FactionWinRatesQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { season: seasonId, format, mode, period } = parsed.data;
+
+    // Resolve season
+    let resolvedSeasonId: string | null = null;
+    if (seasonId) {
+      const s = await fastify.prisma.season.findUnique({ where: { id: seasonId }, select: { id: true } });
+      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
+      resolvedSeasonId = s.id;
+    } else {
+      const s = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
+      resolvedSeasonId = s?.id ?? null;
+    }
+
+    return cached(
+      fastify.redis,
+      cacheKey('admin:faction-winrates', { seasonId: resolvedSeasonId, format: format ?? null, mode: mode ?? null, period: period ?? null }),
+      async () => {
+        // Date filter for period
+        let dateFilter: Date | undefined;
+        if (period === 'last_30d') {
+          dateFilter = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        } else if (period === 'last_90d') {
+          dateFilter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+        }
+
+        // Build tournament filter
+        const tournamentWhere: Record<string, unknown> = { deleted_at: null };
+        if (format) tournamentWhere.format = format;
+        if (mode) tournamentWhere.mode = mode;
+
+        const matchWhere: Record<string, unknown> = {
+          status: 'COMPLETED',
+          deleted_at: null,
+        };
+        if (dateFilter) matchWhere.updated_at = { gte: dateFilter };
+
+        // If season filter: restrict to tournaments in that season
+        if (resolvedSeasonId) {
+          // Tournaments count_for_leaderboard with active_season — join via TournamentResult
+          // Simpler approach: use FactionStats which is already per-season
+          const stats = await fastify.prisma.factionStats.findMany({
+            where: { season_id: resolvedSeasonId },
+            include: { faction: { select: { id: true, name: true } } },
+          });
+          return stats.map((s) => ({
+            faction_id: s.faction_id,
+            slug: s.faction_id,
+            name: s.faction.name,
+            wins: s.wins,
+            losses: s.losses,
+            win_rate: s.matches_played > 0 ? s.wins / s.matches_played : 0,
+            sample_size: s.matches_played,
+          }));
+        }
+
+        // No season: aggregate from Match records directly
+        const factions = await fastify.prisma.faction.findMany({
+          select: { id: true, name: true },
+        });
+
+        const results = await Promise.all(
+          factions.map(async (faction) => {
+            const [wins, losses] = await Promise.all([
+              fastify.prisma.match.count({
+                where: {
+                  ...matchWhere,
+                  winner_id: { not: null },
+                  OR: [
+                    { player1_faction_id: faction.id, winner_id: { not: null } },
+                    { player2_faction_id: faction.id, winner_id: { not: null } },
+                  ],
+                  AND: [
+                    {
+                      OR: [
+                        { player1_faction_id: faction.id },
+                        { player2_faction_id: faction.id },
+                      ],
+                    },
+                  ],
+                },
+              }),
+              fastify.prisma.match.count({
+                where: {
+                  ...matchWhere,
+                  OR: [
+                    { player1_faction_id: faction.id },
+                    { player2_faction_id: faction.id },
+                  ],
+                },
+              }),
+            ]);
+
+            const total = losses; // count is total matches where faction appeared
+            const actualWins = wins;
+            return {
+              faction_id: faction.id,
+              slug: faction.id,
+              name: faction.name,
+              wins: actualWins,
+              losses: Math.max(0, total - actualWins),
+              win_rate: total > 0 ? actualWins / total : 0,
+              sample_size: total,
+            };
+          }),
+        );
+
+        return results.sort((a, b) => b.win_rate - a.win_rate);
+      },
+      { ttlSeconds: 120 },
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/admin/stats/elo-distribution
+  // -------------------------------------------------------------------------
+
+  fastify.get('/api/admin/stats/elo-distribution', async (request, reply) => {
+    const parsed = EloDistributionQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { season: seasonId } = parsed.data;
+
+    let resolvedSeasonId: string | null = null;
+    if (seasonId) {
+      const s = await fastify.prisma.season.findUnique({ where: { id: seasonId }, select: { id: true } });
+      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
+      resolvedSeasonId = s.id;
+    } else {
+      const s = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
+      resolvedSeasonId = s?.id ?? null;
+    }
+
+    if (!resolvedSeasonId) {
+      return reply.code(404).send({ error: 'NotFound', message: 'No active season', statusCode: 404 });
+    }
+
+    return cached(
+      fastify.redis,
+      cacheKey('admin:elo-distribution', { seasonId: resolvedSeasonId }),
+      async () => {
+        const entries = await fastify.prisma.leaderboardEntry.findMany({
+          where: { season_id: resolvedSeasonId! },
+          select: { elo_rating: true },
+        });
+
+        if (entries.length === 0) {
+          return { buckets: [], median: null, p1: null, p99: null, total: 0 };
+        }
+
+        const ratings = entries.map((e) => e.elo_rating).sort((a, b) => a - b);
+        const total = ratings.length;
+
+        // Build 50-point buckets
+        const BUCKET_SIZE = 50;
+        const minRating = Math.floor(ratings[0]! / BUCKET_SIZE) * BUCKET_SIZE;
+        const maxRating = Math.ceil(ratings[ratings.length - 1]! / BUCKET_SIZE) * BUCKET_SIZE;
+
+        const bucketsMap = new Map<number, number>();
+        for (let start = minRating; start < maxRating; start += BUCKET_SIZE) {
+          bucketsMap.set(start, 0);
+        }
+        for (const r of ratings) {
+          const bucketStart = Math.floor(r / BUCKET_SIZE) * BUCKET_SIZE;
+          bucketsMap.set(bucketStart, (bucketsMap.get(bucketStart) ?? 0) + 1);
+        }
+
+        const buckets = Array.from(bucketsMap.entries())
+          .sort(([a], [b]) => a - b)
+          .map(([start, count]) => ({ start, end: start + BUCKET_SIZE, count }));
+
+        const median = ratings[Math.floor(total / 2)]!;
+        const p1 = ratings[Math.floor(total * 0.01)]!;
+        const p99 = ratings[Math.floor(total * 0.99)]!;
+
+        return { buckets, median, p1, p99, total };
+      },
+      { ttlSeconds: 300 },
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/admin/stats/dropoff-funnel
+  // -------------------------------------------------------------------------
+
+  fastify.get('/api/admin/stats/dropoff-funnel', async (request, reply) => {
+    const parsed = DropoffFunnelQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { tournament_id, season: seasonId } = parsed.data;
+
+    return cached(
+      fastify.redis,
+      cacheKey('admin:dropoff-funnel', { tournamentId: tournament_id ?? null, seasonId: seasonId ?? null }),
+      async () => {
+        // Build base filter
+        const tournamentFilter: Record<string, unknown> = { deleted_at: null };
+        if (tournament_id) {
+          tournamentFilter.id = tournament_id;
+        } else if (seasonId) {
+          // Tournaments whose results link to this season
+          const results = await fastify.prisma.tournamentResult.findMany({
+            where: { season_id: seasonId },
+            select: { tournament_id: true },
+            distinct: ['tournament_id'],
+          });
+          tournamentFilter.id = { in: results.map((r) => r.tournament_id) };
+        }
+
+        const tournaments = await fastify.prisma.tournament.findMany({
+          where: tournamentFilter,
+          select: { id: true },
+        });
+        const tournamentIds = tournaments.map((t) => t.id);
+
+        if (tournamentIds.length === 0) {
+          return { registered: 0, checked_in: 0, played_first_round: 0, played_final_round: 0, finished: 0 };
+        }
+
+        const [registered, checkedIn, finishedResults] = await Promise.all([
+          fastify.prisma.tournamentParticipant.count({
+            where: { tournament_id: { in: tournamentIds }, deleted_at: null },
+          }),
+          fastify.prisma.tournamentParticipant.count({
+            where: { tournament_id: { in: tournamentIds }, status: 'CHECKED_IN', deleted_at: null },
+          }),
+          fastify.prisma.tournamentResult.count({
+            where: { tournament_id: { in: tournamentIds } },
+          }),
+        ]);
+
+        // Played first round: matches in round 1 that are COMPLETED
+        const playedFirstRound = await fastify.prisma.match.count({
+          where: {
+            tournament_id: { in: tournamentIds },
+            round: 1,
+            status: 'COMPLETED',
+            deleted_at: null,
+          },
+        });
+
+        // Played final round: matches in the highest round that are COMPLETED
+        const lastRoundAgg = await fastify.prisma.match.aggregate({
+          where: { tournament_id: { in: tournamentIds }, status: 'COMPLETED', deleted_at: null },
+          _max: { round: true },
+        });
+        const lastRound = lastRoundAgg._max.round;
+        const playedFinalRound = lastRound != null
+          ? await fastify.prisma.match.count({
+              where: {
+                tournament_id: { in: tournamentIds },
+                round: lastRound,
+                status: 'COMPLETED',
+                deleted_at: null,
+              },
+            })
+          : 0;
+
+        return {
+          registered,
+          checked_in: checkedIn,
+          played_first_round: playedFirstRound,
+          played_final_round: playedFinalRound,
+          finished: finishedResults,
+        };
+      },
+      { ttlSeconds: 120 },
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/admin/stats/pickban-stats
+  // -------------------------------------------------------------------------
+
+  fastify.get('/api/admin/stats/pickban-stats', async (request, reply) => {
+    const parsed = PickBanStatsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { season: seasonId, entity } = parsed.data;
+
+    let resolvedSeasonId: string | null = null;
+    if (seasonId) {
+      const s = await fastify.prisma.season.findUnique({ where: { id: seasonId }, select: { id: true } });
+      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
+      resolvedSeasonId = s.id;
+    } else {
+      const s = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
+      resolvedSeasonId = s?.id ?? null;
+    }
+
+    return cached(
+      fastify.redis,
+      cacheKey('admin:pickban-stats', { seasonId: resolvedSeasonId, entity }),
+      async () => {
+        if (entity === 'factions') {
+          // From FactionStats
+          const stats = await fastify.prisma.factionStats.findMany({
+            where: resolvedSeasonId ? { season_id: resolvedSeasonId } : {},
+            include: { faction: { select: { id: true, name: true } } },
+          });
+
+          const totalMatches = stats.reduce((acc, s) => acc + s.matches_played, 0);
+          const totalBans = stats.reduce((acc, s) => acc + s.ban_count, 0);
+
+          return stats.map((s) => ({
+            entity_id: s.faction_id,
+            slug: s.faction_id,
+            name: s.faction.name,
+            picks: s.pick_count,
+            bans: s.ban_count,
+            pick_rate: totalMatches > 0 ? s.pick_count / totalMatches : 0,
+            ban_rate: totalBans > 0 ? s.ban_count / totalBans : 0,
+            win_when_picked: s.pick_count > 0 ? s.wins / s.pick_count : 0,
+          })).sort((a, b) => b.picks - a.picks);
+        }
+
+        // entity === 'maps'
+        const decisions = await fastify.prisma.matchMapDecision.findMany({
+          select: {
+            bans_top: true,
+            bans_bottom: true,
+            picked_map_id: true,
+            match: { select: { winner_id: true, status: true } },
+          },
+          where: { match: { status: 'COMPLETED', deleted_at: null } },
+        });
+
+        const maps = await fastify.prisma.map.findMany({
+          where: { deleted_at: null },
+          select: { id: true, slug: true, name: true },
+        });
+
+        const mapStats = new Map<string, { picks: number; bans: number; wins: number }>();
+        for (const m of maps) {
+          mapStats.set(m.id, { picks: 0, bans: 0, wins: 0 });
+        }
+
+        for (const d of decisions) {
+          for (const ban of [...d.bans_top, ...d.bans_bottom]) {
+            const s = mapStats.get(ban);
+            if (s) s.bans++;
+          }
+          if (d.picked_map_id) {
+            const s = mapStats.get(d.picked_map_id);
+            if (s) {
+              s.picks++;
+              if (d.match.winner_id) s.wins++;
+            }
+          }
+        }
+
+        const totalPicks = [...mapStats.values()].reduce((acc, s) => acc + s.picks, 0);
+        const totalBans = [...mapStats.values()].reduce((acc, s) => acc + s.bans, 0);
+
+        return maps.map((m) => {
+          const s = mapStats.get(m.id) ?? { picks: 0, bans: 0, wins: 0 };
+          return {
+            entity_id: m.id,
+            slug: m.slug,
+            name: m.name,
+            picks: s.picks,
+            bans: s.bans,
+            pick_rate: totalPicks > 0 ? s.picks / totalPicks : 0,
+            ban_rate: totalBans > 0 ? s.bans / totalBans : 0,
+            win_when_picked: s.picks > 0 ? s.wins / s.picks : 0,
+          };
+        }).sort((a, b) => b.picks - a.picks);
+      },
+      { ttlSeconds: 120 },
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // Map CRUD — /api/admin/maps
+  // -------------------------------------------------------------------------
+
+  fastify.get('/api/admin/maps', async (request, reply) => {
+    const parsed = z.object({
+      include_deleted: z.coerce.boolean().default(false),
+    }).safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    const maps = await fastify.prisma.map.findMany({
+      where: parsed.data.include_deleted ? {} : { deleted_at: null },
+      orderBy: { name: 'asc' },
+    });
+
+    return { maps };
+  });
+
+  fastify.post('/api/admin/maps', async (request, reply) => {
+    const parsed = MapCreateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { name, description, image_url } = parsed.data;
+
+    // Auto-generate slug if not provided
+    const slug = parsed.data.slug ?? name
+      .toLowerCase()
+      .replace(/['']/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    // Check slug uniqueness
+    const existing = await fastify.prisma.map.findUnique({ where: { slug } });
+    if (existing) {
+      return reply.code(409).send({ error: 'Conflict', message: `Map with slug "${slug}" already exists`, statusCode: 409 });
+    }
+
+    const map = await fastify.prisma.map.create({
+      data: { name, slug, description: description ?? null, image_url: image_url ?? null },
+    });
+
+    await fastify.prisma.auditLog.create({
+      data: { entity_type: 'Map', entity_id: map.id, action: 'create', actor_id: request.user.sub, new_value: { name, slug } },
+    });
+
+    if (fastify.redis) await invalidate(fastify.redis, 'maps:*');
+    return reply.code(201).send(map);
+  });
+
+  fastify.patch<{ Params: { id: string } }>('/api/admin/maps/:id', async (request, reply) => {
+    const { id } = request.params;
+    const parsed = MapUpdateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    const existing = await fastify.prisma.map.findUnique({ where: { id }, select: { id: true, deleted_at: true } });
+    if (!existing || existing.deleted_at) {
+      return reply.code(404).send({ error: 'NotFound', message: 'Map not found', statusCode: 404 });
+    }
+
+    const map = await fastify.prisma.map.update({
+      where: { id },
+      data: parsed.data,
+    });
+
+    await fastify.prisma.auditLog.create({
+      data: { entity_type: 'Map', entity_id: id, action: 'update', actor_id: request.user.sub, new_value: parsed.data },
+    });
+
+    if (fastify.redis) await invalidate(fastify.redis, 'maps:*');
+    return map;
+  });
+
+  fastify.delete<{ Params: { id: string } }>('/api/admin/maps/:id', async (request, reply) => {
+    const { id } = request.params;
+
+    const existing = await fastify.prisma.map.findUnique({ where: { id }, select: { id: true, deleted_at: true } });
+    if (!existing) {
+      return reply.code(404).send({ error: 'NotFound', message: 'Map not found', statusCode: 404 });
+    }
+    if (existing.deleted_at) {
+      return reply.code(409).send({ error: 'Conflict', message: 'Map already deleted', statusCode: 409 });
+    }
+
+    await fastify.prisma.map.update({ where: { id }, data: { deleted_at: new Date() } });
+
+    await fastify.prisma.auditLog.create({
+      data: { entity_type: 'Map', entity_id: id, action: 'delete', actor_id: request.user.sub },
+    });
+
+    if (fastify.redis) await invalidate(fastify.redis, 'maps:*');
+    return reply.code(204).send();
+  });
+
+  // -------------------------------------------------------------------------
+  // Faction CRUD — /api/admin/factions
+  // -------------------------------------------------------------------------
+
+  fastify.post('/api/admin/factions', async (request, reply) => {
+    const parsed = FactionCreateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    const existing = await fastify.prisma.faction.findUnique({ where: { id: parsed.data.id } });
+    if (existing) {
+      return reply.code(409).send({ error: 'Conflict', message: `Faction with id "${parsed.data.id}" already exists`, statusCode: 409 });
+    }
+
+    // Check display_order uniqueness
+    const orderConflict = await fastify.prisma.faction.findUnique({ where: { display_order: parsed.data.display_order } });
+    if (orderConflict) {
+      return reply.code(409).send({ error: 'Conflict', message: `display_order ${parsed.data.display_order} already taken by "${orderConflict.id}"`, statusCode: 409 });
+    }
+
+    const faction = await fastify.prisma.faction.create({ data: parsed.data });
+
+    await fastify.prisma.auditLog.create({
+      data: { entity_type: 'Faction', entity_id: faction.id, action: 'create', actor_id: request.user.sub, new_value: parsed.data },
+    });
+
+    if (fastify.redis) await invalidate(fastify.redis, 'factions:*');
+    return reply.code(201).send(faction);
+  });
+
+  fastify.patch<{ Params: { id: string } }>('/api/admin/factions/:id', async (request, reply) => {
+    const { id } = request.params;
+    const parsed = FactionUpdateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    const existing = await fastify.prisma.faction.findUnique({ where: { id } });
+    if (!existing) {
+      return reply.code(404).send({ error: 'NotFound', message: 'Faction not found', statusCode: 404 });
+    }
+
+    // Check display_order conflict when updating
+    if (parsed.data.display_order !== undefined) {
+      const orderConflict = await fastify.prisma.faction.findUnique({ where: { display_order: parsed.data.display_order } });
+      if (orderConflict && orderConflict.id !== id) {
+        return reply.code(409).send({ error: 'Conflict', message: `display_order ${parsed.data.display_order} already taken by "${orderConflict.id}"`, statusCode: 409 });
+      }
+    }
+
+    const faction = await fastify.prisma.faction.update({ where: { id }, data: parsed.data });
+
+    await fastify.prisma.auditLog.create({
+      data: { entity_type: 'Faction', entity_id: id, action: 'update', actor_id: request.user.sub, new_value: parsed.data },
+    });
+
+    if (fastify.redis) await invalidate(fastify.redis, 'factions:*');
+    return faction;
+  });
+
+  // POST /api/admin/factions/:id/sigil — multipart image upload
+  fastify.post<{ Params: { id: string } }>('/api/admin/factions/:id/sigil', async (request, reply) => {
+    const { id } = request.params;
+
+    const faction = await fastify.prisma.faction.findUnique({ where: { id }, select: { id: true } });
+    if (!faction) {
+      return reply.code(404).send({ error: 'NotFound', message: 'Faction not found', statusCode: 404 });
+    }
+
+    const data = await request.file();
+    if (!data) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'No file uploaded', statusCode: 400 });
+    }
+
+    const mime = data.mimetype;
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/avif'].includes(mime)) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'Only PNG, JPEG, WebP, AVIF allowed', statusCode: 400 });
+    }
+
+    const ext = mime === 'image/png' ? '.png' : mime === 'image/jpeg' ? '.jpg' : mime === 'image/webp' ? '.webp' : '.avif';
+    const filename = `${id}${ext}`;
+
+    // Ensure directory exists
+    await fs.mkdir(FACTION_ICONS_DIR, { recursive: true });
+    const destPath = path.join(FACTION_ICONS_DIR, filename);
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of data.file) {
+      chunks.push(chunk as Buffer);
+    }
+    await fs.writeFile(destPath, Buffer.concat(chunks));
+
+    const iconUrl = `/icons/factions/${filename}`;
+    await fastify.prisma.faction.update({ where: { id }, data: { icon_url: iconUrl } });
+
+    await fastify.prisma.auditLog.create({
+      data: { entity_type: 'Faction', entity_id: id, action: 'sigil_upload', actor_id: request.user.sub, new_value: { icon_url: iconUrl } },
+    });
+
+    if (fastify.redis) await invalidate(fastify.redis, 'factions:*');
+    return { id, icon_url: iconUrl };
+  });
+
+  // -------------------------------------------------------------------------
+  // AdminConfig CRUD — /api/admin/config
+  // -------------------------------------------------------------------------
+
+  fastify.get('/api/admin/config/all', async () => {
+    return cached(
+      fastify.redis,
+      cacheKey('admin:config:all', {}),
+      async () => {
+        const configs = await fastify.prisma.adminConfig.findMany({ orderBy: { key: 'asc' } });
+        return { configs };
+      },
+      { ttlSeconds: 60 },
+    );
+  });
+
+  fastify.get<{ Params: { key: string } }>('/api/admin/config/:key', async (request, reply) => {
+    const { key } = request.params;
+    const config = await fastify.prisma.adminConfig.findUnique({ where: { key } });
+    if (!config) {
+      return reply.code(404).send({ error: 'NotFound', message: `Config key "${key}" not found`, statusCode: 404 });
+    }
+    return config;
+  });
+
+  fastify.put<{ Params: { key: string } }>('/api/admin/config/:key', async (request, reply) => {
+    const { key } = request.params;
+    const parsed = ConfigValueSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    const config = await fastify.prisma.adminConfig.upsert({
+      where: { key },
+      create: { key, value: parsed.data.value as never, updated_by: request.user.sub },
+      update: { value: parsed.data.value as never, updated_by: request.user.sub },
+    });
+
+    await fastify.prisma.auditLog.create({
+      data: {
+        entity_type: 'AdminConfig',
+        entity_id: key,
+        action: 'config_update',
+        actor_id: request.user.sub,
+        new_value: { value: parsed.data.value as string },
+      },
+    });
+
+    if (fastify.redis) await invalidate(fastify.redis, 'admin:config:*');
+    return config;
   });
 };
 
