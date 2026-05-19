@@ -49,3 +49,5 @@ yarn-debug.log*
 # Uploads (army-lists, etc.)
 apps/backend/uploads/
 uploads/
+
+secrets/
