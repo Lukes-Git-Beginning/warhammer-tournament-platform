@@ -20,7 +20,22 @@ const meSelect = {
   onboarded_at: true,
   onboarding_stage: true,
   created_at: true,
+  steam_link: {
+    select: {
+      steam_id: true,
+      persona: true,
+      avatar_url: true,
+      verified_at: true,
+    },
+  },
 } as const;
+
+type SteamLinkRow = {
+  steam_id: string;
+  persona: string;
+  avatar_url: string | null;
+  verified_at: Date;
+};
 
 type MeRow = {
   id: string;
@@ -35,14 +50,24 @@ type MeRow = {
   onboarded_at: Date | null;
   onboarding_stage: number;
   created_at: Date;
+  steam_link: SteamLinkRow | null;
 };
 
 function serializeMe(user: MeRow) {
+  const { steam_link, ...rest } = user;
   return {
-    ...user,
+    ...rest,
     last_login: user.last_login?.toISOString() ?? null,
     onboarded_at: user.onboarded_at?.toISOString() ?? null,
     created_at: user.created_at.toISOString(),
+    steam_link: steam_link
+      ? {
+          steam_id: steam_link.steam_id,
+          steam_username: steam_link.persona,
+          steam_avatar_url: steam_link.avatar_url,
+          linked_at: steam_link.verified_at.toISOString(),
+        }
+      : null,
   };
 }
 

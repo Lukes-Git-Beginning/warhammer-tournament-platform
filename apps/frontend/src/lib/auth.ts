@@ -60,9 +60,11 @@ export function useRequireSteamLink(): ReturnType<typeof useAuthQuery> {
 
   if (!query.isLoading && query.data && !isExempt) {
     if (query.data.steam_link == null) {
+      // location.search is a parsed object in TanStack Router — use href to get the
+      // composed pathname+search+hash string instead of coercing the object.
       void router.navigate({
         to: '/connect-steam',
-        search: { return_to: location.pathname + location.search },
+        search: { return_to: location.href },
       });
     }
   }

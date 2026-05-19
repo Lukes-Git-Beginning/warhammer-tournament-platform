@@ -93,7 +93,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           avatar_url: avatarUrl,
           last_login: new Date(),
         },
-        select: { id: true, discord_id: true, username: true, role: true },
+        select: {
+          id: true,
+          discord_id: true,
+          username: true,
+          role: true,
+          steam_link: { select: { steam_id: true } },
+        },
       });
 
       const payload: JwtPayload = {
@@ -104,7 +110,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       };
       fastify.signAuthCookie(reply, payload);
 
-      return reply.redirect(frontendUrl);
+      // Hard-gate: send users without a Steam link directly to /connect-steam.
+      const redirectTarget = user.steam_link
+        ? frontendUrl
+        : `${frontendUrl}/connect-steam`;
+      return reply.redirect(redirectTarget);
     } catch (err) {
       request.log.error({ err }, 'discord callback failed');
       return reply.code(401).send({
