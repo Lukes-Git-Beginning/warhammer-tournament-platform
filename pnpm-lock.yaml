@@ -98,6 +98,9 @@ importers:
       tournament-pairings:
         specifier: ^2.0.1
         version: 2.0.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -114,9 +117,6 @@ importers:
       socket.io-client:
         specifier: ^4.8.1
         version: 4.8.3
-      tsx:
-        specifier: ^4.19.2
-        version: 4.21.0
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -5774,11 +5774,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@vitest/browser@2.1.9(@types/node@22.19.19)(playwright@1.60.0)(typescript@5.9.3)(vite@6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0))(vitest@2.1.9)':
+  '@vitest/browser@2.1.9(@types/node@22.19.19)(playwright@1.60.0)(typescript@5.9.3)(vite@5.4.21(@types/node@22.19.19)(lightningcss@1.32.0))(vitest@2.1.9)':
     dependencies:
       '@testing-library/dom': 10.4.1
       '@testing-library/user-event': 14.6.1(@testing-library/dom@10.4.1)
-      '@vitest/mocker': 2.1.9(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0))
+      '@vitest/mocker': 2.1.9(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@5.4.21(@types/node@22.19.19)(lightningcss@1.32.0))
       '@vitest/utils': 2.1.9
       magic-string: 0.30.21
       msw: 2.14.6(@types/node@22.19.19)(typescript@5.9.3)
@@ -5811,16 +5811,6 @@ snapshots:
     optionalDependencies:
       msw: 2.14.6(@types/node@22.19.19)(typescript@5.9.3)
       vite: 5.4.21(@types/node@22.19.19)(lightningcss@1.32.0)
-
-  '@vitest/mocker@2.1.9(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0))':
-    dependencies:
-      '@vitest/spy': 2.1.9
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      msw: 2.14.6(@types/node@22.19.19)(typescript@5.9.3)
-      vite: 6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)
-    optional: true
 
   '@vitest/pretty-format@2.1.9':
     dependencies:
@@ -8283,7 +8273,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 22.19.19
-      '@vitest/browser': 2.1.9(@types/node@22.19.19)(playwright@1.60.0)(typescript@5.9.3)(vite@6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0))(vitest@2.1.9)
+      '@vitest/browser': 2.1.9(@types/node@22.19.19)(playwright@1.60.0)(typescript@5.9.3)(vite@5.4.21(@types/node@22.19.19)(lightningcss@1.32.0))(vitest@2.1.9)
       happy-dom: 16.8.1
     transitivePeerDependencies:
       - less
