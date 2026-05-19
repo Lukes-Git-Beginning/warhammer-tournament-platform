@@ -2,9 +2,13 @@ import { Outlet, createRootRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Header } from '@/components/layout/Header';
 import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
+import { useRequireSteamLink } from '@/lib/auth';
 
 function RootLayout() {
   const { t } = useTranslation();
+  // Global Steam-Link hard-gate — redirects to /connect-steam for unauthenticated routes
+  // unless the current path is whitelisted in useRequireSteamLink.
+  useRequireSteamLink();
   return (
     <div className="relative min-h-screen bg-rizzotto-iron-950 text-rizzotto-stone-200 antialiased">
       {/* Atmospheric Layer 1: stone-wall texture, page-wide */}

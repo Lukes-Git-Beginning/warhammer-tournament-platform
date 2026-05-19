@@ -38,15 +38,6 @@ export function OnboardingStage4Action({ user, onAdvance }: OnboardingStage4Acti
           {t('onboarding.stage3.body')}
         </p>
 
-        <p
-          aria-hidden="true"
-          lang="la"
-          title="Forge of Eternity"
-          className="mt-5 font-display text-[10px] uppercase tracking-[0.4em] text-rizzotto-gold-500/70"
-        >
-          Forgia Aeternitatis
-        </p>
-
         <div className="mt-8 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:justify-center">
           <Button variant="etched" size="md" onClick={onAdvance}>
             {t('onboarding.stage3.later')}

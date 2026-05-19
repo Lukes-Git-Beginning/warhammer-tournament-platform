@@ -79,6 +79,7 @@ export function MatchupHeatmap({ cells, factions }: MatchupHeatmapProps) {
                     initials={col.initials}
                     name={col.name}
                     size="sm"
+                    iconUrl={col.icon_url}
                   />
                 </div>
               </th>
@@ -95,6 +96,7 @@ export function MatchupHeatmap({ cells, factions }: MatchupHeatmapProps) {
                   initials={row.initials}
                   name={row.name}
                   size="sm"
+                  iconUrl={row.icon_url}
                 />
               </td>
               {sorted.map((col) => {

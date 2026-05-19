@@ -19,6 +19,14 @@ export const UserPublicSchema = z.object({
 });
 export type UserPublic = z.infer<typeof UserPublicSchema>;
 
+export const SteamLinkSchema = z.object({
+  steam_id: z.string(),
+  steam_username: z.string().nullable(),
+  steam_avatar_url: z.string().nullable(),
+  linked_at: z.string().datetime(),
+});
+export type SteamLink = z.infer<typeof SteamLinkSchema>;
+
 export const UserMeSchema = UserPublicSchema.extend({
   discord_id: z.string(),
   email: z.string().email().nullable(),
@@ -28,6 +36,7 @@ export const UserMeSchema = UserPublicSchema.extend({
   onboarded_at: z.string().datetime().nullable(),
   onboarding_stage: z.number().int().min(0).max(4),
   created_at: z.string().datetime(),
+  steam_link: SteamLinkSchema.nullable().optional(),
 });
 export type UserMe = z.infer<typeof UserMeSchema>;
 

@@ -3,6 +3,12 @@ import { z } from 'zod';
 import { emitMatchResult, emitBracketUpdate, emitStatusChange } from '../lib/emit.js';
 import { invalidate } from '../lib/cache.js';
 import { InvalidActionError } from '../lib/draft-service.js';
+import {
+  computeWinPoints,
+  updateFactionMasteryAfterMatch,
+  updateFactionMatchupStat,
+  incrementAntiFarmCap,
+} from '../lib/mmr.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -232,11 +238,95 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         });
       });
 
+      // MMR updates (after transaction to avoid nested-transaction issues)
+      // Only when: both factions set, there's a winner (no draw), and an active season exists.
+      if (activeSeason && winnerId !== null && winnerFactionId && loserFactionId && loserId) {
+        try {
+          const isTournament = true; // TODO: add casual/arena mode detection when arena feature launches
+          // Determine if this tournament is a Major
+          const tournamentForMmr = await fastify.prisma.tournament.findUnique({
+            where: { id: match.tournament_id },
+            select: { is_major: true },
+          });
+          const isMajor = tournamentForMmr?.is_major ?? false;
+
+          // 1. Compute points for winner
+          const { points } = await computeWinPoints(fastify.prisma, {
+            winnerId,
+            loserId,
+            winnerFactionId,
+            loserFactionId,
+            isTournament,
+            isMajor,
+            seasonId: activeSeason.id,
+          });
+
+          // 2. Update winner's leaderboard season_points
+          if (points > 0) {
+            await fastify.prisma.leaderboardEntry.upsert({
+              where: { user_id_season_id: { user_id: winnerId, season_id: activeSeason.id } },
+              create: {
+                user_id: winnerId,
+                season_id: activeSeason.id,
+                season_points: points,
+                total_points: 0,
+                elo_rating: 1200,
+                matches_played: 1,
+                wins: 1,
+                losses: 0,
+              },
+              update: {
+                season_points: { increment: points },
+              },
+            });
+          }
+
+          // 3. Update faction mastery for both players
+          await updateFactionMasteryAfterMatch(
+            fastify.prisma,
+            winnerId,
+            winnerFactionId,
+            loserId,
+            loserFactionId,
+          );
+
+          // 4. Update FactionMatchupStat for the season
+          await updateFactionMatchupStat(
+            fastify.prisma,
+            activeSeason.id,
+            winnerFactionId,
+            loserFactionId,
+          );
+
+          // 5. Anti-Farm cap increment (casual only — tournaments ignore cap)
+          if (!isTournament && points > 0) {
+            await incrementAntiFarmCap(
+              fastify.prisma,
+              activeSeason.id,
+              winnerId,
+              loserId,
+              winnerFactionId,
+              loserFactionId,
+              points,
+            );
+          }
+
+          request.log.info(
+            { matchId, winnerId, points, seasonId: activeSeason.id },
+            'MMR updated after match result',
+          );
+        } catch (mmrErr) {
+          // MMR failures are non-fatal — log and continue
+          request.log.error({ err: mmrErr, matchId }, 'MMR update failed (non-fatal)');
+        }
+      }
+
       // Invalidate faction and meta caches after successful transaction
       if (fastify.redis) {
         await Promise.all([
           invalidate(fastify.redis, 'factions:*'),
           invalidate(fastify.redis, 'meta:*'),
+          invalidate(fastify.redis, 'leaderboard:*'),
         ]);
       }
 
@@ -410,6 +500,44 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       });
     },
   );
+
+  // -------------------------------------------------------------------------
+  // GET /api/matches/:id
+  // Optional auth — returns match details including tournament_slug.
+  // -------------------------------------------------------------------------
+  fastify.get('/api/matches/:id', async (request, reply) => {
+    const { id: matchId } = request.params as { id: string };
+
+    const match = await fastify.prisma.match.findFirst({
+      where: { id: matchId, deleted_at: null },
+      select: {
+        id: true,
+        round: true,
+        match_number: true,
+        player1_id: true,
+        player2_id: true,
+        winner_id: true,
+        status: true,
+        tournament: { select: { id: true, slug: true } },
+      },
+    });
+
+    if (!match) {
+      return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+    }
+
+    return reply.code(200).send({
+      id: match.id,
+      tournament_id: match.tournament.id,
+      tournament_slug: match.tournament.slug,
+      round: match.round,
+      match_number: match.match_number,
+      player1_id: match.player1_id,
+      player2_id: match.player2_id,
+      winner_id: match.winner_id,
+      status: match.status,
+    });
+  });
 
   // -------------------------------------------------------------------------
   // GET /api/matches/:id/draft

@@ -1,14 +1,22 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import { MatchStatus, TournamentFormat, TournamentStatus } from '@rizzotto/db';
 import type { BracketResponse, SwissStandingEntry } from '@rizzotto/types';
-import { generateSingleElim } from '../lib/bracket.js';
+import { generateSingleElim, generateDoubleElim } from '../lib/bracket.js';
 import { generateRoundRobin } from '../lib/round-robin.js';
 import {
   generateSwissRound,
   computeSwissStandings,
+  sortSwissStandings,
   recommendNumberOfRounds,
 } from '../lib/swiss.js';
+import {
+  generatePlayoffBracket,
+  type PlayoffMatch,
+  InsufficientPlayersError,
+} from '../lib/playoff-generator.js';
 import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
+import { notifyRoundPairings } from '../lib/discord-notify.js';
 
 const bracketRoutes: FastifyPluginAsync = async (fastify) => {
   /**
@@ -45,8 +53,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           player2_id: true,
           winner_id: true,
           score: true,
+          result: true,
+          player1_points: true,
+          player2_points: true,
           status: true,
           next_match_id: true,
+          loser_next_match_id: true,
+          bracket_side: true,
           player1_faction_id: true,
           player2_faction_id: true,
           draft: { select: { id: true, status: true } },
@@ -66,8 +79,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           player2Id: m.player2_id,
           winnerId: m.winner_id,
           score: m.score,
+          result: m.result,
+          player1Points: m.player1_points,
+          player2Points: m.player2_points,
           status: m.status as BracketResponse['matches'][number]['status'],
           nextMatchId: m.next_match_id,
+          loserNextMatchId: m.loser_next_match_id,
+          bracketSide: m.bracket_side,
           player1FactionId: m.player1_faction_id,
           player2FactionId: m.player2_faction_id,
           draft_id: m.draft?.id ?? null,
@@ -118,6 +136,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             draws: s.draws,
             byes: s.byes,
             buchholz: s.buchholz,
+            solkoff: s.solkoff,
           };
         });
 
@@ -187,14 +206,6 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      if (tournament.format === TournamentFormat.DOUBLE_ELIMINATION) {
-        return reply.code(501).send({
-          error: 'NotImplemented',
-          message: 'DOUBLE_ELIMINATION wird in M5 implementiert',
-          statusCode: 501,
-        });
-      }
-
       const participants = await fastify.prisma.tournamentParticipant.findMany({
         where: {
           tournament_id: tournament.id,
@@ -223,12 +234,19 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         player2_id: string | null;
         status: MatchStatus;
         next_match_id: string | null;
+        loser_next_match_id?: string | null;
+        bracket_side?: 'WINNERS' | 'LOSERS' | 'GRAND_FINAL' | null;
         winner_id: string | null;
       }>;
 
       switch (tournament.format) {
         case TournamentFormat.SINGLE_ELIMINATION: {
           bracketMatches = generateSingleElim(tournament.id, participantIds);
+          break;
+        }
+
+        case TournamentFormat.DOUBLE_ELIMINATION: {
+          bracketMatches = generateDoubleElim(tournament.id, participantIds);
           break;
         }
 
@@ -278,6 +296,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             player2_id: m.player2_id,
             status: m.status as MatchStatus,
             next_match_id: m.next_match_id,
+            loser_next_match_id: m.loser_next_match_id ?? null,
+            bracket_side: m.bracket_side ?? null,
             winner_id: m.winner_id,
           })),
         });
@@ -450,7 +470,11 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           status: m.status,
         }));
 
-      const standings = computeSwissStandings(participantIds, completedMatchRecords);
+      // Use full tiebreaker sort (score → buchholz → solkoff → H2H) for standings
+      const rawStandings = computeSwissStandings(participantIds, completedMatchRecords);
+      const standings = sortSwissStandings(rawStandings, completedMatchRecords);
+
+      const isLastSwissRound = targetRound === recommendedRounds;
 
       // Build avoid maps: each player avoids all previous opponents
       const avoidMap = new Map<string, string[]>();
@@ -481,6 +505,89 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const newMatches = generateSwissRound(tournament.id, swissPlayers, targetRound);
 
+      // If this is the last Swiss round, generate playoff matches (if configured)
+      let playoffMatchesCreated = 0;
+      let playoffFallbackApplied: string | undefined;
+
+      const fullTournament = isLastSwissRound
+        ? await fastify.prisma.tournament.findFirst({
+            where: { id: tournament.id },
+            select: {
+              playoff_format: true,
+              playoff_match_format: true,
+              finale_match_format: true,
+            },
+          })
+        : null;
+
+      let playoffMatches: Array<{
+        id: string;
+        tournament_id: string;
+        round: number;
+        match_number: number;
+        player1_id: string | null;
+        player2_id: string | null;
+        status: MatchStatus;
+        next_match_id: string | null;
+        phase: 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL' | null;
+      }> = [];
+
+      if (isLastSwissRound && fullTournament && fullTournament.playoff_format !== 'NONE') {
+        try {
+          // For playoff generation: all participants are "checked in" if they participated
+          const checkedInSet = new Set(participantIds);
+
+          const playoffResult = generatePlayoffBracket({
+            tournament: {
+              playoff_format: fullTournament.playoff_format,
+              playoff_match_format: fullTournament.playoff_match_format,
+              finale_match_format: fullTournament.finale_match_format,
+            },
+            finalStandings: standings,
+            checkedInPlayerIds: checkedInSet,
+          });
+
+          if (playoffResult.fallbackApplied) {
+            playoffFallbackApplied = playoffResult.fallbackApplied;
+            request.log.info(
+              { tournamentId: tournament.id, fallback: playoffResult.fallbackApplied },
+              'Playoff fallback applied',
+            );
+          }
+
+          // Map PlayoffMatch descriptors to DB rows
+          // Swiss rounds are numbered 1..N; playoff rounds start at N+1
+          const playoffRoundOffset = targetRound;
+          const phaseMap: Record<number, 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL'> =
+            playoffResult.format === 'TOP8'
+              ? { 1: 'PLAYOFF_QF', 2: 'PLAYOFF_SF', 3: 'PLAYOFF_FINAL' }
+              : { 1: 'PLAYOFF_SF', 2: 'PLAYOFF_FINAL' };
+
+          playoffMatches = playoffResult.matches.map((pm: PlayoffMatch) => ({
+            id: randomUUID(),
+            tournament_id: tournament.id,
+            round: playoffRoundOffset + pm.round,
+            match_number: pm.bracket_position,
+            player1_id: pm.player1_id || null,
+            player2_id: pm.player2_id || null,
+            status: (pm.player1_id && pm.player2_id ? 'PENDING' : 'PENDING') as MatchStatus,
+            next_match_id: null,
+            phase: phaseMap[pm.round] ?? null,
+          }));
+
+          playoffMatchesCreated = playoffMatches.length;
+        } catch (err) {
+          if (err instanceof InsufficientPlayersError) {
+            request.log.warn(
+              { tournamentId: tournament.id, err: err.message },
+              'Insufficient players for playoff — skipping playoff generation',
+            );
+          } else {
+            throw err;
+          }
+        }
+      }
+
       await fastify.prisma.$transaction(async (tx) => {
         await tx.match.createMany({
           data: newMatches.map((m) => ({
@@ -493,8 +600,26 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             status: m.status as MatchStatus,
             next_match_id: m.next_match_id,
             winner_id: m.winner_id,
+            phase: 'SWISS' as const,
           })),
         });
+
+        // Persist playoff matches
+        if (playoffMatches.length > 0) {
+          await tx.match.createMany({
+            data: playoffMatches.map((pm) => ({
+              id: pm.id,
+              tournament_id: pm.tournament_id,
+              round: pm.round,
+              match_number: pm.match_number,
+              player1_id: pm.player1_id,
+              player2_id: pm.player2_id,
+              status: pm.status,
+              next_match_id: pm.next_match_id,
+              phase: pm.phase,
+            })),
+          });
+        }
 
         await tx.auditLog.create({
           data: {
@@ -505,6 +630,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             new_value: {
               round: targetRound,
               matches_created: newMatches.length,
+              playoff_matches_created: playoffMatchesCreated,
+              playoff_fallback: playoffFallbackApplied ?? null,
             },
           },
         });
@@ -512,12 +639,153 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       emitBracketUpdate(fastify.io, tournament.id);
 
+      // Notify pairings via Discord (non-fatal, fire-and-forget)
+      try {
+        const tournamentForNotify = await fastify.prisma.tournament.findFirst({
+          where: { id: tournament.id },
+          select: { id: true, name: true, slug: true, start_date: true },
+        });
+
+        if (tournamentForNotify) {
+          const pairingData = await Promise.all(
+            newMatches
+              .filter((m) => m.player1_id && m.player2_id)
+              .map(async (m) => {
+                const [p1, p2] = await Promise.all([
+                  fastify.prisma.user.findUnique({
+                    where: { id: m.player1_id! },
+                    select: { discord_id: true, username: true },
+                  }),
+                  fastify.prisma.user.findUnique({
+                    where: { id: m.player2_id! },
+                    select: { discord_id: true, username: true },
+                  }),
+                ]);
+                if (!p1 || !p2) return null;
+                return {
+                  matchId: m.id,
+                  player1: { discord_id: p1.discord_id, username: p1.username },
+                  player2: { discord_id: p2.discord_id, username: p2.username },
+                  round: targetRound,
+                  map: null,
+                };
+              }),
+          );
+
+          const pairings = pairingData.filter((p): p is NonNullable<typeof p> => p !== null);
+
+          await notifyRoundPairings(tournamentForNotify, targetRound, pairings).catch((err) => {
+            request.log.warn({ err }, 'notifyRoundPairings failed (non-fatal)');
+          });
+        }
+      } catch (notifyErr) {
+        request.log.warn({ notifyErr }, 'Pairing notification error (non-fatal)');
+      }
+
       return reply.code(200).send({
         tournamentId: tournament.id,
         round: targetRound,
         matches_created: newMatches.length,
-        isLastRound: targetRound === recommendedRounds,
+        isLastRound: isLastSwissRound,
         recommendedRounds,
+        playoff_matches_created: playoffMatchesCreated,
+        playoff_fallback_applied: playoffFallbackApplied ?? null,
+      });
+    },
+  );
+
+  /**
+   * POST /api/tournaments/:id/playoff/propagate-winner
+   * Internal-use endpoint: after a playoff match completes, propagate the winner
+   * to the next bracket slot. Called by match-result route after COMPLETED.
+   *
+   * Also exposed as REST for testing and admin override.
+   */
+  fastify.post<{ Params: { id: string }; Body: { completedMatchId: string } }>(
+    '/api/tournaments/:id/playoff/propagate-winner',
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+      ],
+    },
+    async (request, reply) => {
+      const { id: tournamentId } = request.params;
+      const { completedMatchId } = request.body;
+
+      const completedMatch = await fastify.prisma.match.findFirst({
+        where: { id: completedMatchId, tournament_id: tournamentId, deleted_at: null },
+        select: {
+          id: true,
+          round: true,
+          match_number: true,
+          phase: true,
+          winner_id: true,
+          status: true,
+        },
+      });
+
+      if (!completedMatch) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      }
+
+      if (completedMatch.status !== 'COMPLETED') {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'Match is not yet COMPLETED',
+          statusCode: 422,
+        });
+      }
+
+      if (!completedMatch.winner_id) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'Match has no winner to propagate',
+          statusCode: 422,
+        });
+      }
+
+      const winnerId = completedMatch.winner_id;
+      const nextRound = completedMatch.round + 1;
+
+      // For TOP8: QF round 1 (QF1+QF2 → SF1, QF3+QF4 → SF2); SF round 2 → Final
+      // For TOP4: SF round 1 → Final
+      // Bracket position determines slot in next round.
+      // Odd-numbered positions feed into the floor(position/2)+1 slot of next round.
+      // bracket_position 1,2 → next round position 1; 3,4 → next round position 2.
+      const nextPosition = Math.ceil(completedMatch.match_number / 2);
+
+      const nextMatch = await fastify.prisma.match.findFirst({
+        where: {
+          tournament_id: tournamentId,
+          round: nextRound,
+          match_number: nextPosition,
+          deleted_at: null,
+          phase: { in: ['PLAYOFF_SF', 'PLAYOFF_FINAL'] },
+        },
+        select: { id: true, player1_id: true, player2_id: true },
+      });
+
+      if (!nextMatch) {
+        // No further match — this was the Final
+        return reply.code(200).send({ propagated: false, message: 'No further playoff match found (Final completed)' });
+      }
+
+      // Fill whichever slot is empty
+      const slotToFill = nextMatch.player1_id === null ? 'player1_id' : 'player2_id';
+
+      await fastify.prisma.match.update({
+        where: { id: nextMatch.id },
+        data: { [slotToFill]: winnerId },
+      });
+
+      emitBracketUpdate(fastify.io, tournamentId);
+
+      return reply.code(200).send({
+        propagated: true,
+        winnerId,
+        nextMatchId: nextMatch.id,
+        slotFilled: slotToFill,
       });
     },
   );

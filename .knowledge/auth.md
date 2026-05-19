@@ -4,6 +4,7 @@
 - Discord OAuth2 → JWT wird in einem HTTP-Only-Cookie gesetzt (Cookie-Name standardmäßig `auth_token`).
 - `fastify.authenticate` als `preHandler` verifiziert das JWT und schreibt `request.user: JwtPayload`.
 - `fastify.requireRole(...roles)` prüft die DB-Rolle via Redis-Cache (`user:role:<id>`, TTL 60s) mit DB-Fallback.
+- **Welle 2:** Steam-OpenID-2.0-Hard-Gate nach Discord-Login. `fastify.requireSteamLink` Dekorator + Frontend-Hook `useRequireSteamLink()` zwingen User auf `/connect-steam` falls `SteamLink == null`.
 
 ---
 
@@ -61,6 +62,7 @@ Alle registriert in `apps/backend/src/plugins/auth.ts` via `fastify.decorate(...
 |---|---|---|
 | `fastify.authenticate` | `(request, reply) => Promise<void>` | preHandler — verifiziert JWT via `request.jwtVerify()`, schreibt `request.user`. 401 bei ungültigem/fehlendem Token. |
 | `fastify.requireRole(...roles)` | `(...roles: Role[]) => (request, reply) => Promise<void>` | preHandler-Factory — prüft `request.user.sub` gegen Redis-Cache (`user:role:<id>`, TTL 60s), DB-Fallback. 403 bei falscher Rolle. |
+| `fastify.requireSteamLink` | `(request, reply) => Promise<void>` | **Welle 2** — preHandler — lädt `SteamLink` für `request.user.sub`, 403 `{ code: 'STEAM_REQUIRED' }` falls null. Whitelist: `/auth/*`, `/api/users/me`. Selektiv auf Tournament-/Match-Routes anzuwenden. |
 | `fastify.signAuthCookie` | `(reply, payload: JwtPayload) => void` | JWT signieren + Cookie setzen. |
 | `fastify.clearAuthCookie` | `(reply) => void` | Cookie löschen (Logout). |
 
@@ -134,3 +136,38 @@ await invalidate(fastify.redis, `user:role:${userId}`);
 ```
 
 Da der Key kein Wildcard enthält, ist hier auch `fastify.redis.del(`user:role:${userId}`)` direkt akzeptabel. Wichtig ist, dass es passiert — sonst sieht der User bis zu 60s lang seine alte Rolle.
+
+---
+
+## Steam-OpenID-2.0 Hard-Gate (Welle 2)
+
+Alex-Spec: jeder User muss nach Discord-Login zwingend einen Steam-Account verlinken (Anti-Ban-Evade + Vorbereitung für Arena-Queue-Skip-Verifikation).
+
+### Flow
+
+1. **Discord-Login** wie bisher → JWT-Cookie gesetzt, `/api/users/me` liefert `steam_link: SteamLink | null`.
+2. **Frontend** (`apps/frontend/src/routes/__root.tsx`) ruft `useRequireSteamLink()` global auf. Bei `steam_link == null` und non-whitelisted Pfad → Redirect auf `/connect-steam?return_to=<current>`.
+3. **`SteamConnectPage`** zeigt CTA "Connect Steam" → `window.location = '/auth/steam/login?return_to=…'`.
+4. **`GET /auth/steam/login`** (in `apps/backend/src/routes/auth.ts`) konstruiert OpenID-2.0-Redirect zu `https://steamcommunity.com/openid/login` mit `openid.mode=checkid_setup`.
+5. **Steam → `GET /auth/steam/return`** mit OpenID-Params. Backend ruft `check_authentication`-Mode gegen Steam-Endpoint zur Verify-Signature-Prüfung. Extract `steamId` aus `claimed_id` (Format `https://steamcommunity.com/openid/id/76561198XXXXXXXXX`).
+6. **Optional** Steam-Web-API für Persona-Daten: `api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=$STEAM_WEB_API_KEY&steamids=…`. Skipped wenn ENV-Var fehlt.
+7. **Upsert `SteamLink`** mit `(user_id, steam_id, persona, avatar_url, profile_url, verified_at)`. Redirect zurück auf `return_to` oder `/`.
+
+### Backend-Endpoints
+
+| Endpoint | Beschreibung |
+|---|---|
+| `GET /auth/steam/login?return_to=…` | OpenID-2.0-Init, redirect zu Steam |
+| `GET /auth/steam/return` | RP-Verify, persistiert `SteamLink`, redirect |
+
+### Frontend-Hook
+
+`useRequireSteamLink()` in `apps/frontend/src/lib/auth.ts`:
+- Whitelist: `/`, `/connect-steam`, `/auth/*`, `/login`
+- Bei `user.steam_link == null` + non-whitelisted Pfad → `navigate({ to: '/connect-steam', search: { return_to: currentPath } })`
+- Aktiviert global in `__root.tsx`
+
+### ENV-Vars
+
+- `STEAM_OPENID_RETURN_URL` — Absolute URL z.B. `http://localhost:3000/auth/steam/return`
+- `STEAM_WEB_API_KEY` — Optional, für Persona-Daten

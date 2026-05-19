@@ -58,7 +58,7 @@ describe('EmptyState', () => {
       <EmptyState variant="banner" title="T" body="B" />,
     );
     expect(withoutImg).not.toContain('<picture');
-    expect(withoutImg).toContain('<svg');
+    expect(withoutImg).toContain('/img/rizzotto-sigil.png');
   });
 
   it('setzt data-testid passend zur Variante', () => {

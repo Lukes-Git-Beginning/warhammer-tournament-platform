@@ -44,6 +44,15 @@ describe('MatchupHeatmap', () => {
     expect(html).toContain('Faction aa vs Faction bb');
   });
 
+  it('rendert <img>-Sigil im Header wenn icon_url gesetzt', () => {
+    const factions: FactionDto[] = [
+      { ...makeFaction('aa', 1), icon_url: '/icons/factions/empire.png' },
+      makeFaction('bb', 2),
+    ];
+    const html = renderToStaticMarkup(<MatchupHeatmap cells={[]} factions={factions} />);
+    expect(html).toContain('src="/icons/factions/empire.png"');
+  });
+
   it('rendert N×N Zellen für N Fraktionen', () => {
     const N = 4;
     const factions = Array.from({ length: N }, (_, i) =>

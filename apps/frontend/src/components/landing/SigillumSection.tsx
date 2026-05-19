@@ -57,20 +57,6 @@ export function SigillumSection() {
           {t('sigillum.heading')}
         </motion.h2>
 
-        <motion.p
-          aria-hidden="true"
-          lang="la"
-          title="Everlasting Realm"
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="mt-3 font-display italic text-rizzotto-gold-500/80"
-          style={{ fontSize: 'clamp(1rem, 2vw, 1.25rem)' }}
-        >
-          Karaz Ankor
-        </motion.p>
-
         <motion.div
           initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8 }}
           whileInView={{ opacity: 1, y: 0 }}

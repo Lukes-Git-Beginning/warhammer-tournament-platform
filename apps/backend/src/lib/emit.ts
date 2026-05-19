@@ -38,3 +38,10 @@ export function emitParticipantChange(
   if (!io) return;
   io.to(tournamentRoom(payload.tournamentId)).emit('participant_change', payload);
 }
+
+type ListsLockedPayload = Parameters<ServerToClientEvents['tournament:lists-locked']>[0];
+
+export function emitListsLocked(io: Io | undefined, payload: ListsLockedPayload): void {
+  if (!io) return;
+  io.to(tournamentRoom(payload.tournament_id)).emit('tournament:lists-locked', payload);
+}

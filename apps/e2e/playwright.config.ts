@@ -15,6 +15,7 @@ const frontendCmd = isCI
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: ['**/production-smoke.spec.ts'],
   timeout: 30_000,
   expect: {
     timeout: 5000,

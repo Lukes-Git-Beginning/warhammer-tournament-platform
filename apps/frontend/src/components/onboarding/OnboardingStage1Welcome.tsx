@@ -60,20 +60,6 @@ export function OnboardingStage1Welcome({ onAdvance }: OnboardingStage1WelcomePr
         {t('onboarding.stage1.body')}
       </motion.p>
 
-      <motion.p
-        aria-hidden="true"
-        lang="la"
-        title="Sealed in stone"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={
-          reduced ? { duration: 0.24 } : { duration: 0.6, delay: reduced ? 0 : 2.1 }
-        }
-        className="mt-3 font-display text-[11px] uppercase tracking-[0.4em] text-rizzotto-gold-500/70"
-      >
-        In Lapide Sigillata
-      </motion.p>
-
       <motion.div
         initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}

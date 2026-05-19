@@ -31,6 +31,7 @@ export interface SwissStanding {
   draws: number;
   byes: number;
   buchholz: number;
+  solkoff: number;  // buchholz minus the highest and lowest single opponent score
   opponentsBeaten: string[];
 }
 
@@ -155,13 +156,20 @@ export function computeSwissStandings(
     }
   }
 
-  // Compute Buchholz: sum of opponents' scores
+  // Compute Buchholz (sum of all opponent scores) and Solkoff (Buchholz minus
+  // the single highest and single lowest opponent score).
   const standings: SwissStanding[] = [];
   for (const [userId, rec] of recordMap) {
-    const buchholz = rec.opponents.reduce((sum, oppId) => {
-      const oppRec = recordMap.get(oppId);
-      return sum + (oppRec?.score ?? 0);
-    }, 0);
+    const oppScores = rec.opponents.map((oppId) => recordMap.get(oppId)?.score ?? 0);
+    const buchholz = oppScores.reduce((s, v) => s + v, 0);
+
+    let solkoff = buchholz;
+    if (oppScores.length >= 3) {
+      // Remove the single highest and the single lowest opponent score
+      const sorted = [...oppScores].sort((a, b) => a - b);
+      solkoff = buchholz - sorted[0]! - sorted[sorted.length - 1]!;
+    }
+    // With 0–2 opponents, solkoff === buchholz (not enough data to trim)
 
     standings.push({
       userId,
@@ -171,6 +179,7 @@ export function computeSwissStandings(
       draws: rec.draws,
       byes: rec.byes,
       buchholz,
+      solkoff,
       opponentsBeaten: rec.opponentsBeaten,
     });
   }
@@ -191,4 +200,52 @@ export function recommendNumberOfRounds(participantCount: number): number {
   if (participantCount < 2) return 3;
   const raw = Math.ceil(Math.log2(participantCount));
   return Math.min(7, Math.max(3, raw));
+}
+
+/**
+ * Multi-level tiebreaker sort for Swiss standings.
+ *
+ * Priority:
+ *   1. score desc
+ *   2. buchholz desc  (sum of all opponents' scores)
+ *   3. solkoff desc   (buchholz minus highest + lowest opponent score)
+ *   4. head-to-head   (direct match winner if exactly 2 players remain tied)
+ *
+ * @param standings  Pre-computed standings (output of computeSwissStandings).
+ * @param allMatches All completed matches for the tournament (used for H2H lookup).
+ * @returns A new array sorted with the full tiebreaker hierarchy.
+ */
+export function sortSwissStandings(
+  standings: SwissStanding[],
+  allMatches: CompletedMatchRecord[],
+): SwissStanding[] {
+  // Build a head-to-head winner lookup: "playerA|playerB" → winner userId
+  const h2hMap = new Map<string, string | null>();
+  for (const m of allMatches) {
+    if (m.status !== 'COMPLETED') continue;
+    if (!m.player1_id || !m.player2_id) continue;
+    const key = [m.player1_id, m.player2_id].sort().join('|');
+    // Last match result wins if they played more than once (shouldn't happen in Swiss)
+    h2hMap.set(key, m.winner_id);
+  }
+
+  const getH2HWinner = (a: string, b: string): string | null => {
+    const key = [a, b].sort().join('|');
+    return h2hMap.get(key) ?? null;
+  };
+
+  return [...standings].sort((a, b) => {
+    // 1. score
+    if (b.score !== a.score) return b.score - a.score;
+    // 2. buchholz
+    if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
+    // 3. solkoff
+    if (b.solkoff !== a.solkoff) return b.solkoff - a.solkoff;
+    // 4. head-to-head (only meaningful when exactly 2 players are compared here)
+    const winner = getH2HWinner(a.userId, b.userId);
+    if (winner === a.userId) return -1; // a wins → a ranks higher
+    if (winner === b.userId) return 1;  // b wins → b ranks higher
+    // Fully tied — preserve stable order (no swap)
+    return 0;
+  });
 }

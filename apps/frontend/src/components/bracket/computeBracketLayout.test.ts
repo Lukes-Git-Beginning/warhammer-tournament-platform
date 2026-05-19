@@ -20,8 +20,13 @@ function makeMatch(
     player2Id: null,
     winnerId: null,
     score: null,
+    result: null,
+    player1Points: null,
+    player2Points: null,
     status: 'PENDING',
     nextMatchId,
+    loserNextMatchId: null,
+    bracketSide: null,
     player1FactionId: null,
     player2FactionId: null,
   };

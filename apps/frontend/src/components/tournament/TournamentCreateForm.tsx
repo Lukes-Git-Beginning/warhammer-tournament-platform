@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { createTournament, listDraftPresets } from '@/lib/api';
+import { createTournament, listDraftPresets, getMaps } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,7 +14,7 @@ const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
   format: z.enum(['SINGLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN']),
-  mode: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).default('ONE_V_ONE'),
+  mode: z.enum(['OPEN', 'BPT', 'SFT', 'SLT']).default('OPEN'),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
   max_participants: z.coerce.number().int().positive().optional().or(z.literal('')),
@@ -23,6 +23,14 @@ const TournamentCreateSchema = z.object({
   discord_link: z.string().url().optional().or(z.literal('')),
   draft_enabled: z.boolean().default(false),
   draft_preset_id: z.string().uuid().nullable().optional(),
+  // Welle 2 fields
+  rounds_count: z.coerce.number().int().min(3).max(6).default(5),
+  playoff_format: z.enum(['NONE', 'TOP4', 'TOP8']).default('NONE'),
+  swiss_match_format: z.enum(['BO1', 'BO3']).default('BO1'),
+  playoff_match_format: z.enum(['BO3', 'BO5']).default('BO3'),
+  finale_match_format: z.enum(['BO3', 'BO5']).default('BO3'),
+  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN']).default('PICK_BAN'),
+  map_pool: z.array(z.string()).min(3).max(36).default([]),
 });
 
 type FormData = z.infer<typeof TournamentCreateSchema>;
@@ -34,16 +42,30 @@ export function TournamentCreateForm() {
 
   const [form, setForm] = useState<Partial<FormData>>({
     format: 'SINGLE_ELIMINATION',
-    mode: 'ONE_V_ONE',
+    mode: 'OPEN',
     timezone: defaultTimezone,
     draft_enabled: false,
+    rounds_count: 5,
+    playoff_format: 'NONE',
+    swiss_match_format: 'BO1',
+    playoff_match_format: 'BO3',
+    finale_match_format: 'BO3',
+    map_decision_mode: 'PICK_BAN',
+    map_pool: [],
   });
+  const [mapSearch, setMapSearch] = useState('');
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
   const { data: draftPresets } = useQuery({
     queryKey: ['draft-presets'],
     queryFn: listDraftPresets,
   });
+
+  const { data: mapsData } = useQuery({
+    queryKey: ['maps'],
+    queryFn: getMaps,
+  });
+  const allMaps = mapsData?.data ?? [];
 
   const mutation = useMutation({
     mutationFn: createTournament,
@@ -93,6 +115,7 @@ export function TournamentCreateForm() {
       rules,
       draft_enabled,
       draft_preset_id,
+      map_pool,
       ...rest
     } = result.data;
 
@@ -105,6 +128,7 @@ export function TournamentCreateForm() {
       ...(rules ? { rules } : {}),
       draft_enabled: draft_enabled ?? false,
       ...(draft_preset_id ? { draft_preset_id } : {}),
+      map_pool: map_pool ?? [],
     });
   }
 
@@ -164,12 +188,19 @@ export function TournamentCreateForm() {
           <Select
             id="tcf-mode"
             name="mode"
-            value="ONE_V_ONE"
-            disabled
-            className="cursor-not-allowed text-rizzotto-stone-500"
+            value={form.mode ?? 'OPEN'}
+            onChange={handleChange}
           >
-            <option value="ONE_V_ONE">{t('tournament.form.mode_1v1')}</option>
+            <option value="OPEN">Open (Casual)</option>
+            <option value="BPT">BPT — Blind Pick Tournament</option>
+            <option value="SFT">SFT — Single Faction Tournament</option>
+            <option value="SLT">SLT — Single List Tournament</option>
           </Select>
+          <FieldHint>
+            {form.mode === 'BPT' && 'Every match includes a blind faction pick phase.'}
+            {form.mode === 'SFT' && 'Players pre-select a faction at registration; revealed at tournament start.'}
+            {form.mode === 'SLT' && 'Players upload their army list at registration. Reveal after each completed match.'}
+          </FieldHint>
         </div>
       </div>
 
@@ -250,6 +281,190 @@ export function TournamentCreateForm() {
         <FieldError message={errors.discord_link} />
       </div>
 
+      {/* ─── Match Mechanics ───────────────────────────────────────────── */}
+      <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+        <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
+          Match Mechanics
+        </legend>
+
+        {/* Rounds count */}
+        <div>
+          <Label htmlFor="tcf-rounds">Swiss Rounds</Label>
+          <div className="flex items-center gap-3 mt-1">
+            <input
+              id="tcf-rounds"
+              type="range"
+              name="rounds_count"
+              min={3}
+              max={6}
+              step={1}
+              value={form.rounds_count ?? 5}
+              onChange={handleChange}
+              className="w-full accent-rizzotto-gold-400"
+            />
+            <span className="w-6 text-center font-semibold text-rizzotto-stone-200 tabular-nums">
+              {form.rounds_count ?? 5}
+            </span>
+          </div>
+          <FieldHint>Number of Swiss rounds (3–6). Default: 5.</FieldHint>
+        </div>
+
+        {/* Playoff format */}
+        <div>
+          <Label htmlFor="tcf-playoff">Playoff Format</Label>
+          <div className="flex gap-3 mt-1 flex-wrap">
+            {(['NONE', 'TOP4', 'TOP8'] as const).map((opt) => (
+              <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="playoff_format"
+                  value={opt}
+                  checked={(form.playoff_format ?? 'NONE') === opt}
+                  onChange={handleChange}
+                  className="accent-rizzotto-gold-400"
+                />
+                <span className="text-sm text-rizzotto-stone-300">{opt}</span>
+              </label>
+            ))}
+          </div>
+          {form.playoff_format === 'TOP8' && (
+            <FieldHint>TOP8 requires ≥16 participants at playoff start. Auto-falls back to TOP4 if below threshold.</FieldHint>
+          )}
+        </div>
+
+        {/* Match formats */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div>
+            <Label htmlFor="tcf-swiss-fmt">Swiss Format</Label>
+            <Select
+              id="tcf-swiss-fmt"
+              name="swiss_match_format"
+              value={form.swiss_match_format ?? 'BO1'}
+              onChange={handleChange}
+            >
+              <option value="BO1">Best of 1</option>
+              <option value="BO3">Best of 3</option>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="tcf-playoff-fmt">Playoffs Format</Label>
+            <Select
+              id="tcf-playoff-fmt"
+              name="playoff_match_format"
+              value={form.playoff_match_format ?? 'BO3'}
+              onChange={handleChange}
+            >
+              <option value="BO3">Best of 3</option>
+              <option value="BO5">Best of 5</option>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="tcf-finale-fmt">Finale Format</Label>
+            <Select
+              id="tcf-finale-fmt"
+              name="finale_match_format"
+              value={form.finale_match_format ?? 'BO3'}
+              onChange={handleChange}
+            >
+              <option value="BO3">Best of 3</option>
+              <option value="BO5">Best of 5</option>
+            </Select>
+          </div>
+        </div>
+      </fieldset>
+
+      {/* ─── Map Pool ──────────────────────────────────────────────────── */}
+      <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+        <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
+          Map Pool
+        </legend>
+
+        {/* Map decision mode */}
+        <div>
+          <Label>Map Decision Mode</Label>
+          <div className="flex gap-4 mt-1">
+            {(['PICK_BAN', 'RANDOM'] as const).map((opt) => (
+              <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="map_decision_mode"
+                  value={opt}
+                  checked={(form.map_decision_mode ?? 'PICK_BAN') === opt}
+                  onChange={handleChange}
+                  className="accent-rizzotto-gold-400"
+                />
+                <span className="text-sm text-rizzotto-stone-300">
+                  {opt === 'PICK_BAN' ? 'Pick & Ban' : 'Random Draw'}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Map search */}
+        <div>
+          <Label>
+            Map Selection{' '}
+            <span className="text-rizzotto-stone-500 font-normal text-xs">
+              ({(form.map_pool ?? []).length}/36 selected, min 3)
+            </span>
+          </Label>
+          <input
+            type="text"
+            placeholder="Search maps…"
+            value={mapSearch}
+            onChange={(e) => setMapSearch(e.target.value)}
+            className="mt-1.5 w-full rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-800 px-3 py-1.5 text-sm text-rizzotto-stone-200 placeholder-rizzotto-stone-500 focus:outline-none focus:ring-1 focus:ring-rizzotto-gold-400"
+          />
+        </div>
+
+        {/* Map grid */}
+        <div className="max-h-52 overflow-y-auto rounded-md border border-rizzotto-iron-700 p-2">
+          {allMaps.length === 0 ? (
+            <p className="text-xs text-rizzotto-stone-500 text-center py-4">Loading maps…</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+              {allMaps
+                .filter((m) =>
+                  m.name.toLowerCase().includes(mapSearch.toLowerCase()),
+                )
+                .map((map) => {
+                  const isSelected = (form.map_pool ?? []).includes(map.id);
+                  return (
+                    <label
+                      key={map.id}
+                      className={[
+                        'flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer transition-colors text-sm',
+                        isSelected
+                          ? 'bg-rizzotto-gold-500/15 text-rizzotto-gold-400'
+                          : 'hover:bg-rizzotto-iron-800 text-rizzotto-stone-300',
+                      ].join(' ')}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {
+                          const pool = form.map_pool ?? [];
+                          const updated = isSelected
+                            ? pool.filter((id) => id !== map.id)
+                            : [...pool, map.id];
+                          setForm((prev) => ({ ...prev, map_pool: updated }));
+                        }}
+                        className="accent-rizzotto-gold-400 shrink-0"
+                      />
+                      <span className="truncate">{map.name}</span>
+                    </label>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+        {(form.map_pool ?? []).length < 3 && (form.map_pool ?? []).length > 0 && (
+          <FieldError message={`Select at least 3 maps (${(form.map_pool ?? []).length} selected)`} />
+        )}
+      </fieldset>
+
+      {/* ─── Draft ─────────────────────────────────────────────────────── */}
       <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
         <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
           {t('tournament.form.draft_section')}
@@ -297,7 +512,11 @@ export function TournamentCreateForm() {
         type="submit"
         variant="forge"
         size="md"
-        disabled={mutation.isPending || !!(form.draft_enabled && !form.draft_preset_id)}
+        disabled={
+          mutation.isPending ||
+          !!(form.draft_enabled && !form.draft_preset_id) ||
+          ((form.map_pool?.length ?? 0) > 0 && (form.map_pool?.length ?? 0) < 3)
+        }
       >
         {mutation.isPending ? t('tournament.form.submitting') : t('tournament.form.submit')}
       </Button>

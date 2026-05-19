@@ -87,13 +87,13 @@ function makeFaction(id: string): FactionDto {
 // ---------------------------------------------------------------------------
 
 describe('DraftStatusBanner', () => {
-  it('zeigt "DEIN ZUG: PICK" wenn isMyTurn true', () => {
+  it('zeigt "YOUR TURN: PICK" wenn isMyTurn true', () => {
     const draft = makeDraftView({ status: 'ONGOING', viewer_role: 'host' });
     const currentTurn = makeTurn('host', 'pick');
     const html = renderToStaticMarkup(
       <DraftStatusBanner draft={draft} currentTurn={currentTurn} isMyTurn={true} />,
     );
-    expect(html).toContain('DEIN ZUG');
+    expect(html).toContain('YOUR TURN');
     expect(html).toContain('PICK');
   });
 
@@ -103,24 +103,24 @@ describe('DraftStatusBanner', () => {
     const html = renderToStaticMarkup(
       <DraftStatusBanner draft={draft} currentTurn={currentTurn} isMyTurn={false} />,
     );
-    expect(html).toContain('am Zug');
-    expect(html).not.toContain('DEIN ZUG');
+    expect(html).toContain("turn"); // "Host's turn:"
+    expect(html).not.toContain('YOUR TURN');
   });
 
-  it('zeigt "Draft abgeschlossen" bei COMPLETED', () => {
+  it('zeigt "Draft complete" bei COMPLETED', () => {
     const draft = makeDraftView({ status: 'COMPLETED' });
     const html = renderToStaticMarkup(
       <DraftStatusBanner draft={draft} currentTurn={null} isMyTurn={false} />,
     );
-    expect(html).toContain('abgeschlossen');
+    expect(html).toContain('Draft complete');
   });
 
-  it('zeigt "Draft abgebrochen" bei CANCELLED', () => {
+  it('zeigt "Draft cancelled" bei CANCELLED', () => {
     const draft = makeDraftView({ status: 'CANCELLED' });
     const html = renderToStaticMarkup(
       <DraftStatusBanner draft={draft} currentTurn={null} isMyTurn={false} />,
     );
-    expect(html).toContain('abgebrochen');
+    expect(html).toContain('Draft cancelled');
   });
 });
 
@@ -176,6 +176,20 @@ describe('FactionGrid', () => {
     );
     // disabled attribute should be present
     expect(html).toContain('disabled');
+  });
+
+  it('rendert <img>-Sigil wenn Faction icon_url hat', () => {
+    const factions = [{ ...makeFaction('zz'), icon_url: '/icons/factions/skaven.png' }];
+    const html = renderToStaticMarkup(
+      <FactionGrid
+        allFactions={factions}
+        state={emptyState()}
+        currentTurn={null}
+        viewerRole="spectator"
+        onPick={() => undefined}
+      />,
+    );
+    expect(html).toContain('src="/icons/factions/skaven.png"');
   });
 
   it('picked-host Faction erhält "Host" Badge', () => {

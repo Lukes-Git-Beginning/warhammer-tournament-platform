@@ -5,6 +5,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs/promises';
 import dotenv from 'dotenv';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, FactionCategory, Role } from '../generated/prisma/client.js';
@@ -25,44 +26,43 @@ interface FactionSeed {
   category: FactionCategory;
   color_hex: string;
   display_order: number;
-  icon_url: string;
+  icon_url: string | null;
 }
 
 // 24 factions validated against Steam Community Guide (id=3241235739) and Wargamer.com.
-// icon_url points to SVG placeholders in apps/frontend/public/icons/factions/<id>.svg
-// TODO: replace placeholder SVGs with actual faction artwork before production launch.
+// icon_url points to PNG sigils in apps/frontend/public/icons/factions/<id>.png.
 const FACTIONS: FactionSeed[] = [
   // ORDER (7)
-  { id: 'empire',           name: 'Empire',            race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#FFCC00', display_order: 1,  icon_url: '/icons/factions/empire.svg' },
-  { id: 'bretonnia',        name: 'Bretonnia',         race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#1A4FA0', display_order: 2,  icon_url: '/icons/factions/bretonnia.svg' },
-  { id: 'kislev',           name: 'Kislev',            race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#4AA8D8', display_order: 3,  icon_url: '/icons/factions/kislev.svg' },
-  { id: 'grand_cathay',     name: 'Grand Cathay',      race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#C8102E', display_order: 4,  icon_url: '/icons/factions/grand_cathay.svg' },
-  { id: 'dwarfs',           name: 'Dwarfs',            race: 'Dwarf',       category: FactionCategory.ORDER,       color_hex: '#B8860B', display_order: 5,  icon_url: '/icons/factions/dwarfs.svg' },
-  { id: 'high_elves',       name: 'High Elves',        race: 'High Elf',    category: FactionCategory.ORDER,       color_hex: '#4169E1', display_order: 6,  icon_url: '/icons/factions/high_elves.svg' },
-  { id: 'lizardmen',        name: 'Lizardmen',         race: 'Lizardman',   category: FactionCategory.ORDER,       color_hex: '#2E8B57', display_order: 7,  icon_url: '/icons/factions/lizardmen.svg' },
+  { id: 'empire',           name: 'Empire',            race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#FFCC00', display_order: 1,  icon_url: '/icons/factions/empire.png' },
+  { id: 'bretonnia',        name: 'Bretonnia',         race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#1A4FA0', display_order: 2,  icon_url: '/icons/factions/bretonnia.png' },
+  { id: 'kislev',           name: 'Kislev',            race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#4AA8D8', display_order: 3,  icon_url: '/icons/factions/kislev.png' },
+  { id: 'grand_cathay',     name: 'Grand Cathay',      race: 'Human',       category: FactionCategory.ORDER,       color_hex: '#C8102E', display_order: 4,  icon_url: '/icons/factions/grand_cathay.png' },
+  { id: 'dwarfs',           name: 'Dwarfs',            race: 'Dwarf',       category: FactionCategory.ORDER,       color_hex: '#B8860B', display_order: 5,  icon_url: '/icons/factions/dwarfs.png' },
+  { id: 'high_elves',       name: 'High Elves',        race: 'High Elf',    category: FactionCategory.ORDER,       color_hex: '#4169E1', display_order: 6,  icon_url: '/icons/factions/high_elves.png' },
+  { id: 'lizardmen',        name: 'Lizardmen',         race: 'Lizardman',   category: FactionCategory.ORDER,       color_hex: '#2E8B57', display_order: 7,  icon_url: '/icons/factions/lizardmen.png' },
 
   // DESTRUCTION (6)
-  { id: 'greenskins',       name: 'Greenskins',        race: 'Orc',         category: FactionCategory.DESTRUCTION, color_hex: '#4A7C2F', display_order: 8,  icon_url: '/icons/factions/greenskins.svg' },
-  { id: 'dark_elves',       name: 'Dark Elves',        race: 'Dark Elf',    category: FactionCategory.DESTRUCTION, color_hex: '#6A0DAD', display_order: 9,  icon_url: '/icons/factions/dark_elves.svg' },
-  { id: 'skaven',           name: 'Skaven',            race: 'Skaven',      category: FactionCategory.DESTRUCTION, color_hex: '#8B8000', display_order: 10, icon_url: '/icons/factions/skaven.svg' },
-  { id: 'norsca',           name: 'Norsca',            race: 'Norscan',     category: FactionCategory.DESTRUCTION, color_hex: '#5F7F9F', display_order: 11, icon_url: '/icons/factions/norsca.svg' },
-  { id: 'ogre_kingdoms',    name: 'Ogre Kingdoms',     race: 'Ogre',        category: FactionCategory.DESTRUCTION, color_hex: '#C2956C', display_order: 12, icon_url: '/icons/factions/ogre_kingdoms.svg' },
-  { id: 'beastmen',         name: 'Beastmen',          race: 'Beastman',    category: FactionCategory.DESTRUCTION, color_hex: '#5C4A1E', display_order: 13, icon_url: '/icons/factions/beastmen.svg' },
+  { id: 'greenskins',       name: 'Greenskins',        race: 'Orc',         category: FactionCategory.DESTRUCTION, color_hex: '#4A7C2F', display_order: 8,  icon_url: '/icons/factions/greenskins.png' },
+  { id: 'dark_elves',       name: 'Dark Elves',        race: 'Dark Elf',    category: FactionCategory.DESTRUCTION, color_hex: '#6A0DAD', display_order: 9,  icon_url: '/icons/factions/dark_elves.png' },
+  { id: 'skaven',           name: 'Skaven',            race: 'Skaven',      category: FactionCategory.DESTRUCTION, color_hex: '#8B8000', display_order: 10, icon_url: '/icons/factions/skaven.png' },
+  { id: 'norsca',           name: 'Norsca',            race: 'Norscan',     category: FactionCategory.DESTRUCTION, color_hex: '#5F7F9F', display_order: 11, icon_url: '/icons/factions/norsca.png' },
+  { id: 'ogre_kingdoms',    name: 'Ogre Kingdoms',     race: 'Ogre',        category: FactionCategory.DESTRUCTION, color_hex: '#C2956C', display_order: 12, icon_url: '/icons/factions/ogre_kingdoms.png' },
+  { id: 'beastmen',         name: 'Beastmen',          race: 'Beastman',    category: FactionCategory.DESTRUCTION, color_hex: '#5C4A1E', display_order: 13, icon_url: '/icons/factions/beastmen.png' },
 
   // CHAOS GODS / CHAOS-ALIGNED (7)
-  { id: 'khorne',           name: 'Khorne',            race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#8B0000', display_order: 14, icon_url: '/icons/factions/khorne.svg' },
-  { id: 'nurgle',           name: 'Nurgle',            race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#4A6741', display_order: 15, icon_url: '/icons/factions/nurgle.svg' },
-  { id: 'tzeentch',         name: 'Tzeentch',          race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#1B6CA8', display_order: 16, icon_url: '/icons/factions/tzeentch.svg' },
-  { id: 'slaanesh',         name: 'Slaanesh',          race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#D4689A', display_order: 17, icon_url: '/icons/factions/slaanesh.svg' },
-  { id: 'daemons_of_chaos', name: 'Daemons of Chaos',  race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#7B2FBE', display_order: 18, icon_url: '/icons/factions/daemons_of_chaos.svg' },
-  { id: 'warriors_of_chaos',name: 'Warriors of Chaos', race: 'Human',       category: FactionCategory.CHAOS_GODS,  color_hex: '#3D3D3D', display_order: 19, icon_url: '/icons/factions/warriors_of_chaos.svg' },
-  { id: 'chaos_dwarfs',     name: 'Chaos Dwarfs',      race: 'Chaos Dwarf', category: FactionCategory.CHAOS_GODS,  color_hex: '#B03010', display_order: 20, icon_url: '/icons/factions/chaos_dwarfs.svg' },
+  { id: 'khorne',           name: 'Khorne',            race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#8B0000', display_order: 14, icon_url: '/icons/factions/khorne.png' },
+  { id: 'nurgle',           name: 'Nurgle',            race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#4A6741', display_order: 15, icon_url: '/icons/factions/nurgle.png' },
+  { id: 'tzeentch',         name: 'Tzeentch',          race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#1B6CA8', display_order: 16, icon_url: '/icons/factions/tzeentch.png' },
+  { id: 'slaanesh',         name: 'Slaanesh',          race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#D4689A', display_order: 17, icon_url: '/icons/factions/slaanesh.png' },
+  { id: 'daemons_of_chaos', name: 'Daemons of Chaos',  race: 'Daemon',      category: FactionCategory.CHAOS_GODS,  color_hex: '#7B2FBE', display_order: 18, icon_url: '/icons/factions/daemons_of_chaos.png' },
+  { id: 'warriors_of_chaos',name: 'Warriors of Chaos', race: 'Human',       category: FactionCategory.CHAOS_GODS,  color_hex: '#3D3D3D', display_order: 19, icon_url: '/icons/factions/warriors_of_chaos.png' },
+  { id: 'chaos_dwarfs',     name: 'Chaos Dwarfs',      race: 'Chaos Dwarf', category: FactionCategory.CHAOS_GODS,  color_hex: '#B03010', display_order: 20, icon_url: '/icons/factions/chaos_dwarfs.png' },
 
   // UNDEAD / NEUTRAL (4)
-  { id: 'vampire_counts',   name: 'Vampire Counts',    race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#6B0F1A', display_order: 21, icon_url: '/icons/factions/vampire_counts.svg' },
-  { id: 'vampire_coast',    name: 'Vampire Coast',     race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#1A5276', display_order: 22, icon_url: '/icons/factions/vampire_coast.svg' },
-  { id: 'tomb_kings',       name: 'Tomb Kings',        race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#C8A800', display_order: 23, icon_url: '/icons/factions/tomb_kings.svg' },
-  { id: 'wood_elves',       name: 'Wood Elves',        race: 'Wood Elf',    category: FactionCategory.DEFAULT,     color_hex: '#228B22', display_order: 24, icon_url: '/icons/factions/wood_elves.svg' },
+  { id: 'vampire_counts',   name: 'Vampire Counts',    race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#6B0F1A', display_order: 21, icon_url: '/icons/factions/vampire_counts.png' },
+  { id: 'vampire_coast',    name: 'Vampire Coast',     race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#1A5276', display_order: 22, icon_url: '/icons/factions/vampire_coast.png' },
+  { id: 'tomb_kings',       name: 'Tomb Kings',        race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#C8A800', display_order: 23, icon_url: '/icons/factions/tomb_kings.png' },
+  { id: 'wood_elves',       name: 'Wood Elves',        race: 'Wood Elf',    category: FactionCategory.DEFAULT,     color_hex: '#228B22', display_order: 24, icon_url: '/icons/factions/wood_elves.png' },
 ];
 
 async function seedFactions(): Promise<void> {
@@ -70,7 +70,24 @@ async function seedFactions(): Promise<void> {
     data: FACTIONS,
     skipDuplicates: true,
   });
-  console.log(`  ✓ Factions: ${result.count} created (${FACTIONS.length - result.count} already existed)`);
+  // Refresh mutable fields on existing rows so the seed stays the source of truth
+  // for icon_url, color_hex, race, etc. as the metadata evolves.
+  let updated = 0;
+  for (const f of FACTIONS) {
+    await prisma.faction.update({
+      where: { id: f.id },
+      data: {
+        name: f.name,
+        race: f.race,
+        category: f.category,
+        color_hex: f.color_hex,
+        display_order: f.display_order,
+        icon_url: f.icon_url,
+      },
+    });
+    updated += 1;
+  }
+  console.log(`  ✓ Factions: ${result.count} created, ${updated} synced (icon_url, colors)`);
 }
 
 async function seedDefaultSeason(): Promise<void> {
@@ -191,12 +208,294 @@ async function seedDraftPresets(systemUserId: string): Promise<void> {
   console.log(`  ✓ DraftPresets: ${created} created, ${existed} already existed`);
 }
 
+// ---------------------------------------------------------------------------
+// Maps (Welle 2) — 36 maps from Alex. Slugs are kebab-case from name.
+// ---------------------------------------------------------------------------
+
+function toSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/['']/g, '')            // remove apostrophes
+    .replace(/[^a-z0-9]+/g, '-')    // non-alphanum → hyphen
+    .replace(/^-|-$/g, '');          // trim leading/trailing hyphens
+}
+
+const MAP_NAMES: string[] = [
+  'Jade Tomb',
+  'Rapturous Expanse',
+  'Chateau De Roquefort',
+  "Hashut's Oilfields",
+  'Norscan Rise',
+  'Bray Valley',
+  'Proving Grounds',
+  'Dustbowl',
+  'Whirling Maelstrom',
+  'Dunes of Khaine',
+  'Aracknarock Lair',
+  'Crystal Lake',
+  "The Changer's Madhouse",
+  'Rift at Worlds Edge',
+  'Imperial Road',
+  'Lost Temple of Sotek',
+  'Dried Floodplain',
+  'Bleakspire Labor Camp',
+  "Glinty Toof's Crag",
+  "Skjlanadir's Cave",
+  "Khsar's Cursed Oasis",
+  'Putrefying Carcass',
+  'Blazing Ramparts',
+  'Creeping Swamp',
+  'Imperial Ambush',
+  'Decrepit Moor',
+  'Haunted Vale',
+  'Bordeleaux Landing',
+  'Glades of the Everqueen',
+  'Eastern Isle Colony',
+  'Edge of the Darkwood',
+  'Altar of the Champion',
+  'Road to Talabheim',
+  'Itza',
+  'The Blood Grove',
+  'Celestial Lake',
+];
+
+async function seedMaps(): Promise<void> {
+  for (const name of MAP_NAMES) {
+    const slug = toSlug(name);
+    await prisma.map.upsert({
+      where: { slug },
+      update: { name }, // keep name in sync; image_url left null until admin uploads
+      create: {
+        slug,
+        name,
+        image_url: null,
+      },
+    });
+  }
+  const total = await prisma.map.count({ where: { deleted_at: null } });
+  console.log(`  ✓ Maps: ${total} active in DB (upserted ${MAP_NAMES.length})`);
+}
+
+// ---------------------------------------------------------------------------
+// AdminConfig (Welle 2 — Plan 3) — key-value defaults. Idempotent via upsert.
+// ---------------------------------------------------------------------------
+
+interface AdminConfigEntry {
+  key: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  value: any;
+}
+
+const ADMIN_CONFIG_DEFAULTS: AdminConfigEntry[] = [
+  { key: 'map_pool_default_size', value: 5 },
+  {
+    key: 'default_tournament_settings',
+    value: {
+      rounds_count: 5,
+      playoff_format: 'NONE',
+      swiss_match_format: 'BO1',
+      map_decision_mode: 'PICK_BAN',
+    },
+  },
+  {
+    key: 'feature_flags',
+    value: { arena: false, slt: true, bpt: true, sft: true },
+  },
+  { key: 'welcome_banner_text', value: '' },
+  { key: 'mmr_base_points_tournament', value: 100 },
+  { key: 'mmr_base_points_casual', value: 50 },
+  { key: 'mmr_max_cap_per_combo', value: 200 },
+  { key: 'mmr_mastery_threshold_games', value: 10 },
+];
+
+async function seedAdminConfig(): Promise<void> {
+  let upserted = 0;
+  for (const entry of ADMIN_CONFIG_DEFAULTS) {
+    await prisma.adminConfig.upsert({
+      where: { key: entry.key },
+      // Do not overwrite value on subsequent runs — admin may have changed it.
+      update: {},
+      create: {
+        key: entry.key,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        value: entry.value,
+        updated_by: 'system',
+      },
+    });
+    upserted += 1;
+  }
+  console.log(`  ✓ AdminConfig: ${upserted} keys ensured`);
+}
+
+// ---------------------------------------------------------------------------
+// TT-Snapshot Seed — FactionMatchupStat (Welle 2 — Plan 3)
+// Reads the TotalTavern faction stats snapshot and seeds FactionMatchupStat
+// for the active season with source=TT_SEED, confidence=0.5.
+// Idempotent: skips matchups that already exist with a later source (OWN_DATA).
+// ---------------------------------------------------------------------------
+
+/**
+ * TT-Snapshot JSON shape (see packages/db/prisma/seed-data/tt-faction-stats-snapshot-2026-05.json)
+ */
+interface TTGlobalEntry {
+  faction: string;
+  wins: number;
+  losses: number;
+  win_rate: number;
+}
+
+interface TTMatchupEntry {
+  vs_faction: string;
+  wins: number;
+  losses: number;
+  win_rate: number;
+}
+
+interface TTSnapshot {
+  scraped_at: string;
+  source_url: string;
+  global: TTGlobalEntry[];
+  matchups: Record<string, TTMatchupEntry[]>;
+}
+
+/**
+ * Maps TT faction display names to our internal slug-based faction IDs.
+ * If a TT name is not listed here, it is skipped with a warning.
+ */
+const TT_NAME_TO_SLUG: Record<string, string> = {
+  'Vampire Counts': 'vampire_counts',
+  'Norsca': 'norsca',
+  'Bretonnia': 'bretonnia',
+  'Chaos Dwarfs': 'chaos_dwarfs',
+  'Greenskins': 'greenskins',
+  'Dwarfs': 'dwarfs',
+  'Wood Elves': 'wood_elves',
+  'Vampire Coast': 'vampire_coast',
+  'Tomb Kings': 'tomb_kings',
+  'Kislev': 'kislev',
+  'Beastmen': 'beastmen',
+  'High Elves': 'high_elves',
+  'Skaven': 'skaven',
+  'Dark Elves': 'dark_elves',
+  'Tzeentch': 'tzeentch',
+  'Khorne': 'khorne',
+  'Slaanesh': 'slaanesh',
+  'Empire': 'empire',
+  'Lizardmen': 'lizardmen',
+  'Grand Cathay': 'grand_cathay',
+  'Chaos Demons': 'daemons_of_chaos', // TT uses "Chaos Demons" for our daemons_of_chaos
+  'Daemons of Chaos': 'daemons_of_chaos',
+  'Nurgle': 'nurgle',
+  'Warriors of Chaos': 'warriors_of_chaos',
+  'Ogre Kingdoms': 'ogre_kingdoms',
+};
+
+async function seedTTFactionMatchupStats(activeSeason: { id: string }): Promise<void> {
+  const snapshotPath = path.resolve(__dirname, 'seed-data', 'tt-faction-stats-snapshot-2026-05.json');
+
+  let snapshotRaw: string;
+  try {
+    snapshotRaw = await fs.readFile(snapshotPath, 'utf-8');
+  } catch {
+    console.log('  ⚠ TT snapshot not found at', snapshotPath, '— skipping FactionMatchupStat seed');
+    return;
+  }
+
+  const snapshot: TTSnapshot = JSON.parse(snapshotRaw) as TTSnapshot;
+  const seasonId = activeSeason.id;
+
+  let upserted = 0;
+  let skipped = 0;
+
+  for (const [ttFactionName, matchups] of Object.entries(snapshot.matchups)) {
+    const factionAId = TT_NAME_TO_SLUG[ttFactionName];
+    if (!factionAId) {
+      console.warn(`  ⚠ TT faction "${ttFactionName}" has no slug mapping — skipping`);
+      skipped++;
+      continue;
+    }
+
+    for (const matchup of matchups) {
+      const factionBId = TT_NAME_TO_SLUG[matchup.vs_faction];
+      if (!factionBId) {
+        console.warn(`  ⚠ TT vs_faction "${matchup.vs_faction}" has no slug mapping — skipping`);
+        skipped++;
+        continue;
+      }
+
+      // Skip mirror matchups (same faction vs itself)
+      if (factionAId === factionBId) continue;
+
+      // Check if a non-seed record already exists (OWN_DATA / HYBRID) — don't overwrite
+      const existing = await prisma.factionMatchupStat.findUnique({
+        where: {
+          season_id_faction_a_id_faction_b_id: {
+            season_id: seasonId,
+            faction_a_id: factionAId,
+            faction_b_id: factionBId,
+          },
+        },
+        select: { source: true },
+      });
+
+      if (existing && existing.source !== 'TT_SEED') {
+        // Existing OWN_DATA or HYBRID entry — preserve it
+        skipped++;
+        continue;
+      }
+
+      await prisma.factionMatchupStat.upsert({
+        where: {
+          season_id_faction_a_id_faction_b_id: {
+            season_id: seasonId,
+            faction_a_id: factionAId,
+            faction_b_id: factionBId,
+          },
+        },
+        create: {
+          season_id: seasonId,
+          faction_a_id: factionAId,
+          faction_b_id: factionBId,
+          wins: matchup.wins,
+          losses: matchup.losses,
+          win_rate: matchup.win_rate,
+          source: 'TT_SEED',
+          confidence: 0.5,
+        },
+        update: {
+          wins: matchup.wins,
+          losses: matchup.losses,
+          win_rate: matchup.win_rate,
+          source: 'TT_SEED',
+          confidence: 0.5,
+        },
+      });
+      upserted++;
+    }
+  }
+
+  console.log(
+    `  ✓ FactionMatchupStat (TT_SEED): ${upserted} upserted, ${skipped} skipped (season: ${seasonId})`,
+  );
+}
+
 async function main(): Promise<void> {
   console.log('Seeding database…');
   await seedFactions();
   await seedDefaultSeason();
   const systemUserId = await seedSystemUser();
   await seedDraftPresets(systemUserId);
+  await seedMaps();
+  await seedAdminConfig();
+
+  // TT Snapshot Seed — needs active season
+  const activeSeason = await prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
+  if (activeSeason) {
+    await seedTTFactionMatchupStats(activeSeason);
+  } else {
+    console.log('  ⚠ No active season found — skipping TT FactionMatchupStat seed');
+  }
+
   console.log('Done.');
 }
 

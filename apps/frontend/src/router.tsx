@@ -3,6 +3,7 @@ import { rootRoute } from './routes/__root';
 import { IndexPage } from './routes/IndexPage';
 import { LoginPage } from './routes/LoginPage';
 import { TournamentDetail } from './routes/TournamentDetail';
+import { TournamentsListing } from './routes/TournamentsListing';
 import { CreateTournamentPage } from './routes/CreateTournamentPage';
 import { LeaderboardPage } from './routes/LeaderboardPage';
 import { UserProfilePage } from './routes/UserProfilePage';
@@ -14,6 +15,9 @@ import { DraftSpectatorPage } from './routes/DraftSpectatorPage';
 import { PresetListPage } from './routes/PresetListPage';
 import { PresetEditorPage } from './routes/PresetEditorPage';
 import { AdminPage } from './routes/AdminPage';
+import { SteamConnectPage } from './routes/SteamConnectPage';
+import { MatchDecisionPage } from './routes/MatchDecisionPage';
+import { MatchDetailPage } from './routes/MatchDetailPage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -25,6 +29,16 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
   component: LoginPage,
+});
+
+export const tournamentsListingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/tournaments',
+  component: TournamentsListing,
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: (search.tab as 'upcoming' | 'live' | 'archive' | undefined) ?? 'upcoming',
+    page: typeof search.page === 'number' ? search.page : 1,
+  }),
 });
 
 const createTournamentRoute = createRoute({
@@ -105,9 +119,31 @@ const adminRoute = createRoute({
   component: AdminPage,
 });
 
+const steamConnectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/connect-steam',
+  component: SteamConnectPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    return_to: typeof search.return_to === 'string' ? search.return_to : '/',
+  }),
+});
+
+const matchDecisionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/matches/$matchId/decision',
+  component: MatchDecisionPage,
+});
+
+const matchDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/matches/$matchId',
+  component: MatchDetailPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
+  tournamentsListingRoute,
   createTournamentRoute,
   tournamentDetailRoute,
   leaderboardRoute,
@@ -121,6 +157,9 @@ const routeTree = rootRoute.addChildren([
   presetNewRoute,
   presetEditRoute,
   adminRoute,
+  steamConnectRoute,
+  matchDetailRoute,
+  matchDecisionRoute,
 ]);
 
 export const router = createRouter({ routeTree });

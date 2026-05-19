@@ -2,8 +2,11 @@
 
 ## TL;DR
 
-- **ELO**: Multi-Player Performance-Rating (A2, zero-sum bei gleichen Ratings), K=32 normal / K=48 Major — `computeEloDeltas()`.
+- **ELO**: Multi-Player Performance-Rating (A2, zero-sum bei gleichen Ratings), K=32 normal / K=48 Major — `computeEloDeltas()`. Pflegt `LeaderboardEntry.elo_rating` (Legacy, finalizes Tournament).
+- **MMR (Welle 2)**: 3-Faktor Win-Punkte-Formel — `computeWinPoints()` in `lib/mmr.ts`. No-Loss-Modus (Loss = 0). Faction-Mastery + Faction-Matchup-Win-Rate + Anti-Farm-Cap. Pflegt `LeaderboardEntry.season_points` zusätzlich + `FactionMastery` + `FactionMatchupStat` + `AntiFarmCap`.
 - **Pairings** via `tournament-pairings` v2 — `SingleElimination`, `Swiss`, `RoundRobin` — alle drei Formate in je einer `lib/`-Datei.
+- **Swiss-Tiebreaker** (Welle 2): Buchholz → Solkoff → Head-to-Head (kein ELO) — `sortSwissStandings()`.
+- **Playoff-Generator** (Welle 2): `generatePlayoffBracket()` in `lib/playoff-generator.ts` — NONE/TOP4/TOP8 mit Auto-Fallback TOP8→TOP4 bei <16 checked-in.
 - `finalizeTournament()` schreibt Placements → ELO-Deltas → Tournament-Points → upsert `LeaderboardEntry` + `TournamentResult` in einer Transaktion.
 
 ---
@@ -77,7 +80,7 @@ Nutzt `Swiss` aus `tournament-pairings`.
 
 **Score-Group-basiert:** Spieler werden nach `score` absteigend gepaart; bei ungerader Zahl erhält der Schlusslichte ein BYE (`winner_id = player1`, `player2 = null`).
 
-**Tiebreaker:** `computeSwissStandings()` sortiert nach `score desc, buchholz desc` — Buchholz = Summe der Gegner-Scores.
+**Tiebreaker:** `computeSwissStandings()` berechnet Score + Buchholz + Solkoff. Für Final-Sortierung (z.B. Playoff-Seed) `sortSwissStandings(standings, allMatches)` aufrufen — Hierarchie: `score desc, buchholz desc, solkoff desc, headToHeadWinner desc`. Solkoff = Buchholz minus höchstem und niedrigstem Opponent-Score (nur bei ≥3 Gegnern). H2H entscheidet nur bei genau 2 Spielern auf allen anderen Tiebreakern gleich.
 
 **Rundenempfehlung:** `recommendNumberOfRounds(n) = clamp(ceil(log2(n)), 3, 7)`.
 
@@ -91,8 +94,76 @@ export function generateSwissRound(
 export function computeSwissStandings(
   participantIds: string[],
   completedMatches: CompletedMatchRecord[],
-): SwissStanding[]          // { userId, score, wins, losses, draws, byes, buchholz, ... }
+): SwissStanding[]          // { userId, score, wins, losses, draws, byes, buchholz, solkoff, opponentsBeaten, ... }
+
+export function sortSwissStandings(   // Welle 2 — Multi-Level-Tiebreaker
+  standings: SwissStanding[],
+  allMatches: CompletedMatchRecord[],
+): SwissStanding[]
 ```
+
+---
+
+## Playoff-Generator (`lib/playoff-generator.ts`) — Welle 2
+
+Generiert Single-Elimination-Bracket nach Swiss-Last-Round.
+
+```typescript
+export function generatePlayoffBracket(args: {
+  tournament: Tournament;
+  finalStandings: SwissStanding[];   // sorted via sortSwissStandings
+  checkedInPlayerIds: Set<string>;
+}): {
+  format: 'NONE' | 'TOP4' | 'TOP8';
+  matches: PlayoffMatch[];           // mit phase=PLAYOFF_QF|SF|FINAL
+  fallbackApplied?: 'TOP8_TO_TOP4';
+};
+```
+
+- `playoff_format=NONE`: leeres Bracket, Swiss-Standings = Final
+- `playoff_format=TOP4`: SF1 = Seed1 vs Seed4, SF2 = Seed2 vs Seed3, Final
+- `playoff_format=TOP8`: nur wenn `checked_in >= 16` — sonst Auto-Fallback auf TOP4. Seed 1v8 / 4v5 / 3v6 / 2v7. Drop-out 1h vor Playoff = exclusion.
+- `game_count` aus `tournament.playoff_match_format` (Bo3/Bo5); Finale aus `finale_match_format`
+- TBD-Player-IDs für SF/Final werden via `propagatePlayoffWinner()` aus Match-Result-Hook aufgefüllt
+
+Hook in `routes/bracket.ts:next-round` — nach letzter Swiss-Runde aufrufen.
+
+---
+
+## MMR — 3-Faktor Win-Punkte-Formel (`lib/mmr.ts`) — Welle 2
+
+**Alex-Spec:** No-Loss (Loss = 0), Win-Quality-skaliert, Anti-Farming.
+
+**Formel:**
+```
+BASE = isTournament ? mmr_base_points_tournament (100) : mmr_base_points_casual (50)
+MAJOR_BONUS = isMajor ? 1.5 : 1.0
+
+matchup_winrate = FactionMatchupStat[season, winnerFaction, loserFaction].win_rate ?? 0.5
+opponent_mastery_factor = clamp(0.5, 1.5, loser_mastery_rating / 1500)
+my_mastery_dampener     = clamp(0.5, 1.0, 1.0 - (winner_mastery_rating - 1200) / 2000)
+win_quality = (1 - matchup_winrate) * opponent_mastery_factor * my_mastery_dampener
+
+anti_farm_modifier = isTournament ? 1.0
+  : max(0, (max_cap - points_earned) / max_cap)
+
+points = max(0, round(BASE * MAJOR_BONUS * win_quality * anti_farm_modifier))
+```
+
+**Faction-Mastery-Threshold:** Bei `games_played < 10` mit der Faction → mastery rating = 1200 (neutral). Anders: persistent Rating, Default 1200, +10 nach Win / −10 nach Loss, **Floor 800**.
+
+**Anti-Farming-Cap:** Pro `(season, ordered(player_a, player_b), ordered(faction_a, faction_b))` ein Points-Cap (Default 200). Tournaments ignorieren Cap. Casual-Matches incrementieren via `incrementAntiFarmCap()`.
+
+**Display:** Im Leaderboard nur `season_points` sichtbar (Tab `season_points` Default, plus Tabs `winrate` und `weighted_winrate`). FactionMastery intern für Matchmaking, nur im eigenen Profil sichtbar.
+
+**Match-Result-Hook** (in `routes/matches.ts`) ruft:
+1. `computeWinPoints(...)` → `points`
+2. `LeaderboardEntry.season_points += points` für Winner
+3. `updateFactionMasteryAfterMatch()` (winner + loser)
+4. `updateFactionMatchupStat()` (beide Richtungen)
+5. `incrementAntiFarmCap()` (nur casual)
+
+Hook ist non-fatal: bei Fehler → Log, kein Match-Result-Failure.
 
 ---
 

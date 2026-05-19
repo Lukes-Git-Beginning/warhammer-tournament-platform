@@ -115,6 +115,7 @@ export function FactionGrid({ allFactions, state, currentTurn, viewerRole, onPic
               initials={f.initials}
               name={f.name}
               size="md"
+              iconUrl={f.icon_url}
             />
             <div className="text-xs leading-tight text-stone-300 line-clamp-2">{f.name}</div>
 

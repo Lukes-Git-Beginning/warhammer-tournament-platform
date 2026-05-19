@@ -2,7 +2,7 @@
 
 **TL;DR:**
 - Prisma 7 (`^7.8.0`) mit driver-adapter `PrismaPg` aus `@prisma/adapter-pg` — kein nativer Prisma-Connection-String-Modus.
-- 20 Models in `packages/db/prisma/schema.prisma` (User, Faction, Tournament, TournamentFactionAllowlist, TournamentParticipant, Match, Team, TeamMember, Season, LeaderboardEntry, TournamentResult, ArmyList, FactionStats, FactionStatsSnapshot, MatchupStats, DraftPreset, Draft, DraftEvent, AuditLog, ImportLog).
+- 30 Models in `packages/db/prisma/schema.prisma` (nach Welle 2). Neue Models: Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, FactionMastery, FactionMatchupStat, AntiFarmCap, AdminConfig.
 - **Gotcha:** `datasource.url` steht NICHT in `schema.prisma`, sondern in `prisma.config.ts` — `schema.prisma` enthält nur `provider = "postgresql"`.
 
 ---
@@ -101,6 +101,16 @@ export default defineConfig({
 | `DraftEvent` | Einzelne Pick/Ban/Snipe/Steal-Aktion innerhalb eines Drafts |
 | `AuditLog` | Admin-Aktionsprotokoll (wer hat was wann an welcher Entity getan) |
 | `ImportLog` | Protokoll jedes Scraper-Laufs (totaltavern.com) für Observability |
+| `Map` | **Welle 2** — Master-Pool aller spielbaren Maps; slug @unique, Soft-Delete via `deleted_at` |
+| `TournamentMapPool` | **Welle 2** — Snapshot des Map-Pools beim Tournament-Create; composite-PK `[tournament_id, map_id]` |
+| `MatchMapDecision` | **Welle 2** — Pre-Match Map-Auswahl (Mode `RANDOM` oder `PICK_BAN`), Coin-Flip-Seed, `bans_top/bottom`-Arrays, `game_index` für Bo3/Bo5 |
+| `MatchBlindPick` | **Welle 2** — Blind Faction Pick pro Match (BPT/OPEN-Modus); beidseitiger Lock-Timestamp, Reveal nach beidseitigem Lock |
+| `TournamentArmyList` | **Welle 2** — SLT-Pre-Upload (Screenshot required, `.army_setup` optional), Reveal-Logic (nach Match an Gegner, nach Tournament-Complete public) |
+| `SteamLink` | **Welle 2** — Steam-OpenID-2.0-Verifikation pro User (user_id @unique, steam_id @unique); Hard-Gate-Voraussetzung |
+| `FactionMastery` | **Welle 2** — Faction-Mastery-Rating pro User pro Faction (composite-PK, persistent über Seasons), Default-Rating 1200 |
+| `FactionMatchupStat` | **Welle 2** — Faction-vs-Faction Win-Rates pro Season (composite-PK), Season-Reset, Seed via TT-Scraper (`StatsSource.TT_SEED`) |
+| `AntiFarmCap` | **Welle 2** — Pro (player_pair × faction_combo × season) Points-Cap, default 200; Tournaments ignorieren Cap |
+| `AdminConfig` | **Welle 2** — Live-Settings Key-Value-Store (Json `value`); pflegt Defaults, Feature-Flags, Welcome-Banner-Text etc. |
 
 ---
 
@@ -177,10 +187,33 @@ enum TournamentFormat {
 }
 
 enum TournamentMode {
-  ONE_V_ONE
+  OPEN           // Default (Welle 2) — keine Restriktion, Casual
+  ONE_V_ONE      // legacy 1v1
   THREE_V_THREE  // reserviert Phase 3
-  BLIND_PICK     // reserviert Phase 3
-  SFT            // Single Faction Tournament, reserviert Phase 3
+  BLIND_PICK     // legacy reserved
+  BPT            // Welle 2 — Blind Pick Tournament (per-match blind faction pick)
+  SFT            // Welle 2 — Single Faction Tournament (faction pre-pick at registration)
+  SLT            // Welle 2 — Single List Tournament (army-list pre-upload at registration)
+}
+
+enum PlayoffFormat {
+  NONE | TOP4 | TOP8         // Welle 2 — Host wählt im Setup. TOP8 nur bei ≥16 checked-in, Auto-Fallback TOP8→TOP4
+}
+
+enum MatchFormat {
+  BO1 | BO3 | BO5            // Welle 2 — per Phase (Swiss / Playoffs / Finale) konfigurierbar
+}
+
+enum MapDecisionMode {
+  RANDOM | PICK_BAN          // Welle 2 — Tournament-Setup; RANDOM = Server würfelt, PICK_BAN = 3-Map alternierend bannen
+}
+
+enum MatchPhase {
+  GROUP_STAGE | SWISS | PLAYOFF_QF | PLAYOFF_SF | PLAYOFF_FINAL  // Welle 2 — Discriminator für Match.phase
+}
+
+enum StatsSource {
+  TT_SEED | OWN_DATA | HYBRID  // Welle 2 — FactionMatchupStat-Herkunft
 }
 
 enum TournamentStatus {
@@ -243,6 +276,10 @@ Das Seed-Script liegt bei `packages/db/prisma/seed.ts` und wird via `tsx` ausgef
 | `20260513092053_m4_draft_event` | `DraftEvent`-Model hinzugefügt |
 | `20260513115214_add_import_log` | `ImportLog`-Model hinzugefügt |
 | `20260513140543_army_list_file_type_txt_pdf` | `TXT` und `PDF` Werte zu `ArmyListFileType` hinzugefügt |
+| `20260513150000_add_onboarding` | Onboarding-Felder an `User` + `TournamentParticipant.lists_locked_at` |
+| `20260519090818_beta_match_flow_plus_de` | Beta-Match-Flow (Q1/Q3/Q4/Q12), DE-Bracket-Felder, `MatchReport`, `BracketSide`, `MatchResultType` |
+| `20260519122538_welle2_tournament_mechanics_and_mmr` | **Welle 2 (Plan 2 + Plan 3)** — Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, FactionMastery, FactionMatchupStat, AntiFarmCap, AdminConfig; neue Enums PlayoffFormat, MatchFormat, MapDecisionMode, StatsSource; TournamentMode +OPEN/BPT/SLT; Tournament +6 Felder (rounds_count, playoff_format, swiss_match_format, playoff_match_format, finale_match_format, map_decision_mode) |
+| `20260519131859_welle2_d_integration_fields` | **Welle 2 (Plan D)** — `MatchPhase` enum + `Match.phase` nullable für Playoff-Discriminator; `LeaderboardEntry.season_points Int @default(0)` + compound DESC-Index für 3-Modi-Leaderboard |
 
 Migrations-Lock unter `packages/db/prisma/migrations/migration_lock.toml`.
 

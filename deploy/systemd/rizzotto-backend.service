@@ -1,0 +1,32 @@
+[Unit]
+Description=Rizzotto Backend (Fastify, tsx runtime)
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/home/deploy/rizzotto
+ExecStart=/home/deploy/rizzotto/node_modules/.bin/tsx /home/deploy/rizzotto/apps/backend/src/server.ts
+EnvironmentFile=/etc/rizzotto/env/backend.env
+Environment=NODE_ENV=production
+
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rizzotto-backend
+
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/rizzotto/uploads
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

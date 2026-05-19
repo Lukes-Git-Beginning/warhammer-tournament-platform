@@ -23,13 +23,8 @@ export function Footer() {
           <Link to="/" aria-label="Rizzotto — home" className="inline-flex items-center transition-opacity hover:opacity-90">
             <RizzottoWordmarkImage bronze className="h-12 w-auto" loading="lazy" />
           </Link>
-          <p
-            aria-hidden="true"
-            lang="la"
-            title="Everlasting Realm"
-            className="text-xs font-display italic tracking-wider text-rizzotto-bronze/80"
-          >
-            Karaz Ankor · "Where Lists Are Forged"
+          <p className="text-xs font-display italic tracking-wider text-rizzotto-bronze/80">
+            Where Lists Are Forged.
           </p>
         </div>
 

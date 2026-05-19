@@ -22,6 +22,7 @@ function FactionCard({ entry }: { entry: FactionWithStatsDto }) {
         initials={faction.initials}
         name={faction.name}
         size="md"
+        iconUrl={faction.icon_url}
       />
       <span className="text-sm font-medium text-rizzotto-stone-200 text-center group-hover:text-rizzotto-gold-500 transition-colors leading-tight">
         {faction.name}
