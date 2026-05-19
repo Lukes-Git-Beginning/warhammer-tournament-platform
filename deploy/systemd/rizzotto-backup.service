@@ -1,0 +1,14 @@
+[Unit]
+Description=Rizzotto PostgreSQL backup (pg_dump | gzip, 14-day rotation)
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=deploy
+ExecStart=/bin/bash -c '\
+set -euo pipefail; \
+mkdir -p /var/backups/rizzotto; \
+docker exec rizzotto-postgres pg_dump -U rizzotto rizzotto | gzip > /var/backups/rizzotto/db-$(date +%%F-%%H%%M).sql.gz; \
+find /var/backups/rizzotto -name "db-*.sql.gz" -mtime +14 -delete; \
+echo "Backup complete: $(ls -lh /var/backups/rizzotto/db-$(date +%%F)*.sql.gz | tail -1)"'

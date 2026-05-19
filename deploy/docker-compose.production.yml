@@ -1,0 +1,53 @@
+# Production stack for Rizzotto on Hetzner CX22.
+# Postgres + Redis only. Backend runs on the host via systemd (see deploy/systemd/).
+# Ports bind to 127.0.0.1 because the host-side backend connects via loopback.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rizzotto-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rizzotto
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+      POSTGRES_DB: rizzotto
+    secrets:
+      - pg_password
+    volumes:
+      - /var/lib/rizzotto/postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    command: >
+      postgres
+        -c shared_buffers=512MB
+        -c work_mem=16MB
+        -c effective_cache_size=1536MB
+        -c maintenance_work_mem=64MB
+        -c max_connections=50
+        -c log_min_duration_statement=500
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rizzotto -d rizzotto"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: rizzotto-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: >
+      redis-server
+        --maxmemory 256mb
+        --maxmemory-policy allkeys-lru
+        --appendonly no
+        --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+secrets:
+  pg_password:
+    file: /etc/rizzotto/secrets/pg_password.txt
