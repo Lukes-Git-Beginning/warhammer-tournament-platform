@@ -9,7 +9,7 @@ test('health endpoint returns ok', async ({ request }) => {
 
 test('frontend loads with Rizzotto branding', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText(/where lists are forged/i)).toBeVisible();
+  await expect(page.getByText(/where lists are forged/i).first()).toBeVisible();
 });
 
 // Pre-existing broken pre-M5 — Discord button locator strategy doesn't match
