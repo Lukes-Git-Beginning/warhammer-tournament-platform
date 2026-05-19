@@ -72,6 +72,30 @@ export interface ServerToClientEvents {
     matchId: string;
     finalFactions: { host: string[]; guest: string[] };
   }) => void;
+  // M5 Beta: match report flow (Q4/Q12)
+  match_reported: (payload: {
+    tournamentId: string;
+    matchId: string;
+    reporterId: string;
+    state: 'AWAITING_OPPONENT' | 'AGREED' | 'DISPUTED';
+  }) => void;
+  match_disputed: (payload: {
+    tournamentId: string;
+    matchId: string;
+  }) => void;
+  match_completed: (payload: {
+    tournamentId: string;
+    matchId: string;
+    result: string;
+    winnerId: string | null;
+    nextMatchId: string | null;
+  }) => void;
+  // Q3 — Army-list lock
+  'tournament:lists-locked': (payload: {
+    tournament_id: string;
+    locked_at: string;
+    affected_participants: number;
+  }) => void;
 }
 
 export interface ClientToServerEvents {

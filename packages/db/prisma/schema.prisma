@@ -1,5 +1,5 @@
 // =============================================================================
-// TWW3 Tournament Platform — Database Schema
+// Rizzotto — Database Schema
 // Phase 1+2 complete (M1+M2 use). Draft/Stats/Snapshot models are reserved here
 // to avoid late migrations during M3/M4. See ROADMAP.md and plan file.
 // =============================================================================
@@ -65,8 +65,22 @@ enum MatchStatus {
   PENDING
   ONGOING
   COMPLETED
-  BYE      // system-generated walkover (odd participant count)
-  FORFEIT  // organizer-triggered (no-show / DQ)
+  BYE       // system-generated walkover (odd participant count)
+  FORFEIT   // organizer-triggered (no-show / DQ)
+  DISPUTED  // Q4: dual-submit conflict, awaiting organizer/admin override
+}
+
+enum MatchResultType {
+  PLAYER1_WIN
+  PLAYER2_WIN
+  DRAW
+  DOUBLE_LOSS
+}
+
+enum BracketSide {
+  WINNERS
+  LOSERS
+  GRAND_FINAL
 }
 
 enum FactionCategory {
@@ -126,6 +140,7 @@ model User {
   captained_teams          Team[]                  @relation("TeamCaptain")
   team_memberships         TeamMember[]
   audit_logs               AuditLog[]              @relation("AuditActor")
+  match_reports            MatchReport[]           @relation("MatchReportReporter")
 
   @@index([role])
   @@index([deleted_at])
@@ -219,15 +234,16 @@ model TournamentFactionAllowlist {
 }
 
 model TournamentParticipant {
-  id            String            @id @default(uuid()) @db.Uuid
-  tournament_id String            @db.Uuid
-  user_id       String            @db.Uuid
-  team_id       String?           @db.Uuid // null for 1v1 (Phase 1+2)
-  faction_id    String? // pre-pick at registration (SFT mode) or post-draft
-  army_list_id  String?           @db.Uuid
-  status        ParticipantStatus @default(REGISTERED)
-  registered_at DateTime          @default(now())
-  deleted_at    DateTime?
+  id              String            @id @default(uuid()) @db.Uuid
+  tournament_id   String            @db.Uuid
+  user_id         String            @db.Uuid
+  team_id         String?           @db.Uuid // null for 1v1 (Phase 1+2)
+  faction_id      String? // pre-pick at registration (SFT mode) or post-draft
+  army_list_id    String?           @db.Uuid
+  status          ParticipantStatus @default(REGISTERED)
+  registered_at   DateTime          @default(now())
+  lists_locked_at DateTime? // Q3: after organizer locks lists, army_list_id becomes immutable
+  deleted_at      DateTime?
 
   tournament    Tournament   @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
   user          User         @relation(fields: [user_id], references: [id])
@@ -245,38 +261,66 @@ model TournamentParticipant {
 // -----------------------------------------------------------------------------
 
 model Match {
-  id                  String       @id @default(uuid()) @db.Uuid
-  tournament_id       String       @db.Uuid
+  id                  String           @id @default(uuid()) @db.Uuid
+  tournament_id       String           @db.Uuid
   round               Int
   match_number        Int
-  player1_id          String?      @db.Uuid
-  player2_id          String?      @db.Uuid
-  winner_id           String?      @db.Uuid
-  score               String?
-  status              MatchStatus  @default(PENDING)
+  player1_id          String?          @db.Uuid
+  player2_id          String?          @db.Uuid
+  winner_id           String?          @db.Uuid
+  score               String? // DEPRECATED in favour of `result` + points; kept for backwards-read of historical rows
+  result              MatchResultType? // Q12: structured outcome
+  player1_points      Float? // Q12: 1.0 / 0.5 / 0.0 for Swiss, 3 / 1 / 0 for round-based scoring
+  player2_points      Float?
+  status              MatchStatus      @default(PENDING)
   scheduled_time      DateTime?
-  next_match_id       String?      @db.Uuid
+  next_match_id       String?          @db.Uuid
+  loser_next_match_id String?          @db.Uuid // DE: where the losing player drops to in lower bracket (NULL for SE/Swiss)
+  bracket_side        BracketSide? // DE: WINNERS / LOSERS / GRAND_FINAL (NULL for SE/Swiss/RR)
   player1_faction_id  String?
   player2_faction_id  String?
-  created_at          DateTime     @default(now())
-  updated_at          DateTime     @updatedAt
+  created_at          DateTime         @default(now())
+  updated_at          DateTime         @updatedAt
   deleted_at          DateTime?
 
-  tournament       Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
-  player1          User?      @relation("MatchPlayer1", fields: [player1_id], references: [id])
-  player2          User?      @relation("MatchPlayer2", fields: [player2_id], references: [id])
-  winner           User?      @relation("MatchWinner", fields: [winner_id], references: [id])
-  next_match       Match?     @relation("BracketProgression", fields: [next_match_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  feeder_matches   Match[]    @relation("BracketProgression")
-  player1_faction  Faction?   @relation("MatchPlayer1Faction", fields: [player1_faction_id], references: [id])
-  player2_faction  Faction?   @relation("MatchPlayer2Faction", fields: [player2_faction_id], references: [id])
+  tournament       Tournament    @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  player1          User?         @relation("MatchPlayer1", fields: [player1_id], references: [id])
+  player2          User?         @relation("MatchPlayer2", fields: [player2_id], references: [id])
+  winner           User?         @relation("MatchWinner", fields: [winner_id], references: [id])
+  next_match       Match?        @relation("BracketProgression", fields: [next_match_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  feeder_matches   Match[]       @relation("BracketProgression")
+  loser_next_match Match?        @relation("LoserBracketProgression", fields: [loser_next_match_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  losers_feeder    Match[]       @relation("LoserBracketProgression")
+  player1_faction  Faction?      @relation("MatchPlayer1Faction", fields: [player1_faction_id], references: [id])
+  player2_faction  Faction?      @relation("MatchPlayer2Faction", fields: [player2_faction_id], references: [id])
   draft            Draft?
+  reports          MatchReport[]
 
   @@unique([tournament_id, round, match_number])
   @@index([tournament_id, status])
   @@index([player1_id])
   @@index([player2_id])
   @@index([deleted_at])
+}
+
+// Q4: Dual-submit match reports. Each player submits their own report; agreement
+// completes the match, disagreement flips status to DISPUTED for organizer review.
+model MatchReport {
+  id            String          @id @default(uuid()) @db.Uuid
+  match_id      String          @db.Uuid
+  reporter_id   String          @db.Uuid
+  result        MatchResultType
+  player1_score Int? // optional raw VP / battle points for organizer context
+  player2_score Int?
+  notes         String?
+  created_at    DateTime        @default(now())
+  updated_at    DateTime        @updatedAt
+
+  match    Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  reporter User  @relation("MatchReportReporter", fields: [reporter_id], references: [id])
+
+  @@unique([match_id, reporter_id])
+  @@index([match_id])
 }
 
 // -----------------------------------------------------------------------------
@@ -494,6 +538,7 @@ model Draft {
   timer_expires_at     DateTime?
   host_user_id         String?     @db.Uuid    // populated at startDraft (= match.player1_id)
   guest_user_id        String?     @db.Uuid    // populated at startDraft (= match.player2_id)
+  first_pick_user_id   String?     @db.Uuid    // Q1: coin-flip winner persisted at draft start
   completed_at         DateTime?
   final_host_factions  String[]    @default([])
   final_guest_factions String[]    @default([])

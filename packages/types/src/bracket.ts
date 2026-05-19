@@ -1,5 +1,7 @@
 // Bracket-node types shared between backend pairing engine and frontend SVG renderer.
 
+import type { MatchResultType } from './match.js';
+
 export interface BracketNode {
   matchId: string;
   round: number;
@@ -8,8 +10,13 @@ export interface BracketNode {
   player2Id: string | null;
   winnerId: string | null;
   score: string | null;
-  status: 'PENDING' | 'ONGOING' | 'COMPLETED' | 'BYE' | 'FORFEIT';
+  result: MatchResultType | null;
+  player1Points: number | null;
+  player2Points: number | null;
+  status: 'PENDING' | 'ONGOING' | 'COMPLETED' | 'BYE' | 'FORFEIT' | 'DISPUTED';
   nextMatchId: string | null;
+  loserNextMatchId: string | null;
+  bracketSide: 'WINNERS' | 'LOSERS' | 'GRAND_FINAL' | null;
   player1FactionId: string | null;
   player2FactionId: string | null;
   draft_id?: string | null;
