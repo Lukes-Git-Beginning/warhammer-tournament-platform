@@ -82,6 +82,33 @@ Definiert in `turbo.json`. Tasks mit `^build`-Dependency warten auf Build aller 
 
 Global-Dependencies: `.env`, `.env.local`, `tsconfig.base.json` — Änderung daran invalidiert alle Caches.
 
+## Production-Topologie (rizzotto.gg, live seit 2026-05-19)
+
+Single-Host-Setup auf Hetzner CX22 (`178.105.166.118`, Ubuntu 24.04):
+
+```
+Cloudflare (Proxy + SSL Strict)
+        │
+        ▼
+   Caddy 2.11 (host-native)
+   ┌─ /api,/auth,/graphql,/health,/socket.io → 127.0.0.1:3000
+   └─ /, /assets/*, /icons/* → /home/deploy/rizzotto/apps/frontend/dist (file_server)
+        │
+        ▼
+   rizzotto-backend.service (systemd)
+   ExecStart=apps/backend/node_modules/.bin/tsx apps/backend/src/server.ts
+   EnvironmentFile=/etc/rizzotto/env/backend.env
+        │
+        ▼
+   docker compose -f deploy/docker-compose.production.yml
+   Postgres 16-alpine + Redis 7-alpine, beide loopback only
+   (Daten: /var/lib/rizzotto/postgres-data, Backup: /var/backups/rizzotto)
+```
+
+Deploy-Artefakte im Repo: `deploy/{docker-compose.production.yml,Caddyfile,systemd/*}`, `scripts/{deploy.sh,preflight.sh}`, `deploy/.env.production.example`. Backup: täglich 02:30 UTC via `rizzotto-backup.timer`, 14-Tage-Rotation.
+
+Server-only Files (nie commited): `/etc/rizzotto/env/backend.env`, `/etc/rizzotto/secrets/{pg_password.txt,cf-origin.{pem,key}}`, `/home/deploy/rizzotto/.env` (Prisma liest hier nur `DATABASE_URL`).
+
 ## Gotchas
 
 ### 1. Prisma 7 driver-adapter: `datasource.url` in `prisma.config.ts`
@@ -124,3 +151,19 @@ import type { User } from '../types/user.js';
 // falsch — führt zu Runtime-Fehler
 import { cached } from './cache';
 ```
+
+### 4. `db:generate` script braucht `exec`-Subcommand
+
+pnpm 9 fällt nicht von einem unbekannten Script-Namen auf einen Bin-Lookup zurück. `pnpm --filter @rizzotto/db prisma generate` failt mit `None of the selected packages has a "prisma" script`. Das root-Script in `package.json` ist deshalb `pnpm --filter @rizzotto/db exec prisma generate` (mit `exec`). Gleiches gilt für `migrate deploy`.
+
+### 5. `@rizzotto/types` muss vor `@rizzotto/frontend` gebaut sein
+
+`packages/types/package.json` exportiert `./dist/index.js` — wenn `dist/` fehlt (frischer Checkout, `pnpm install` produziert keinen Build), kann Vite den Workspace-Import nicht auflösen und failt mit `Cannot find module '@rizzotto/types'`. `pnpm build` über Turbo löst die Reihenfolge automatisch; bei manuellen Frontend-Builds explizit `pnpm -F @rizzotto/types build` vorschalten. `scripts/deploy.sh` macht das.
+
+### 6. `tsx` liegt unter pnpm-Workspace-Layout nicht im Root-`node_modules/.bin`
+
+`tsx` ist Backend-Runtime-Dependency und wird von pnpm in `apps/backend/node_modules/.bin/tsx` abgelegt, nicht im repo-root `/node_modules/.bin/tsx`. Production-systemd-Unit ExecStart muss den absoluten Pfad zum App-Workspace nutzen (siehe `deploy/systemd/rizzotto-backend.service`).
+
+### 7. ENV-Werte mit Whitespace brauchen Quotes
+
+`/etc/rizzotto/env/backend.env` wird sowohl von systemd's `EnvironmentFile=` als auch via `set -a; source backend.env; set +a` (Deploy-Scripts) gelesen. systemd akzeptiert beide Formen, Bash bricht aber bei unquoted Whitespace: `DISCORD_SCOPES=identify email` → `bash: email: command not found`. Immer Quotes setzen: `DISCORD_SCOPES="identify email"`.

@@ -24,6 +24,17 @@ await app.listen({ port: PORT, host: HOST });
 - Registriert `SIGINT`/`SIGTERM`-Handler: ruft `app.close()` auf, dann `process.exit(0)`.
 - Bei Fehler beim Start: `process.exit(1)`.
 
+### Production-Runtime: tsx via systemd
+
+In Production läuft das Backend nicht als kompiliertes JS, sondern wird zur Laufzeit via `tsx` ausgeführt. Grund: `packages/db` exportiert TypeScript-Source direkt (`"main": "./src/index.ts"`, `noEmit: true`) und Prisma 7 generiert `.ts`-Files in `packages/db/generated/prisma/`. `tsx` löst beide Probleme ohne Build-Step.
+
+- systemd-Unit: `deploy/systemd/rizzotto-backend.service`
+- ExecStart: `/home/deploy/rizzotto/apps/backend/node_modules/.bin/tsx /home/deploy/rizzotto/apps/backend/src/server.ts`
+- EnvironmentFile: `/etc/rizzotto/env/backend.env` (0640 root:deploy)
+- HOST=127.0.0.1 (Caddy proxied — kein 0.0.0.0 nötig)
+
+Cleanup-Pfad: `packages/db` zu echtem JS-Build refactoren (`noEmit: false`, Prisma-Output unter `dist/`). Eliminiert tsx-Runtime-Overhead, erlaubt `node dist/server.js`. Geplant als Post-Launch-Issue.
+
 ---
 
 ## buildApp() Factory
@@ -177,7 +188,7 @@ Zusätzlich registriert `buildApp()` direkt: `GET /health` → `{ status: 'ok', 
 
 ## ENV-Variablen
 
-Eine `.env.example`-Datei existiert im Backend-Verzeichnis nicht. Pflichtfelder werden im Code mit expliziten `throw new Error()`-Guards gesichert. Folgende Variablen sind relevant:
+Zwei Quell-Files: `.env.example` im repo-root (Dev-Defaults) und `deploy/.env.production.example` (Production-Template, wird zu `/etc/rizzotto/env/backend.env` auf dem Server). Pflichtfelder werden im Code mit expliziten `throw new Error()`-Guards gesichert. Folgende Variablen sind relevant:
 
 | Variable | Beispielwert | Zweck | Pflicht |
 |----------|-------------|-------|---------|

@@ -75,6 +75,14 @@ export default defineConfig({
 
 `.env` liegt im Workspace-Root (zwei Ebenen über `packages/db/`). Sowohl `prisma.config.ts` als auch `src/index.ts` laden es explizit via `dotenv`.
 
+### Gotcha: PG-Password muss URL-safe sein
+
+`DATABASE_URL` ist ein RFC-3986-URI, daher dürfen `+`, `/`, `=` und `?` nicht unencoded im Password-Teil stehen. `openssl rand -base64 32` produziert genau solche Zeichen → URL-Parsing failt mit `P1013: invalid port number in database URL`. **Generieren via `openssl rand -hex 32`** (64-char hex, garantiert URL-safe).
+
+### Gotcha: Source-IP-Spoofing über Docker-Bridge
+
+Wenn Backend vom Host nach Postgres im Container über `127.0.0.1:5432` verbindet, sieht der Container die Source-IP als Docker-Bridge-IP (z.B. `172.18.0.1`), nicht als `127.0.0.1`. Postgres' default `pg_hba.conf` hat `host all all 127.0.0.1/32 trust` für loopback und `host all all all scram-sha-256` als catch-all — die Bridge-IP fällt auf catch-all, scram-sha-256 ist erzwungen. Wenn das Init-Password aus `POSTGRES_PASSWORD_FILE` nicht greift (z.B. Volume war beim Restart nicht leer): direkt `ALTER USER rizzotto WITH PASSWORD '<hex>'` im Container via `docker exec rizzotto-postgres psql -U rizzotto -d rizzotto` (peer-auth innerhalb Container ist `trust`).
+
 ---
 
 ## Models — Übersicht
