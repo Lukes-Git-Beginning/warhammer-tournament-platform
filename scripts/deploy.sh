@@ -22,7 +22,9 @@ pnpm db:generate
 echo "=== [4/7] Applying database migrations ==="
 pnpm --filter @rizzotto/db exec prisma migrate deploy
 
-echo "=== [5/7] Building frontend ==="
+echo "=== [5/7] Building shared packages and frontend ==="
+# @rizzotto/types must be built before frontend can resolve workspace imports.
+pnpm --filter @rizzotto/types build
 VITE_PUBLIC_URL=https://rizzotto.gg pnpm --filter @rizzotto/frontend build
 
 echo "=== [6/7] Type-checking backend (sanity) ==="

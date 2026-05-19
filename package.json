@@ -15,7 +15,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e --filter=@rizzotto/e2e",
-    "db:generate": "pnpm --filter @rizzotto/db prisma generate",
+    "db:generate": "pnpm --filter @rizzotto/db exec prisma generate",
     "db:migrate": "pnpm --filter @rizzotto/db prisma migrate dev",
     "db:migrate:deploy": "pnpm --filter @rizzotto/db prisma migrate deploy",
     "db:seed": "pnpm --filter @rizzotto/db run seed",

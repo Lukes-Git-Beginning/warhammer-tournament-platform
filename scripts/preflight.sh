@@ -26,8 +26,10 @@ set -a; source "$ENV_FILE"; set +a
 ok "env vars sane"
 
 echo "--- Checking TLS certs ---"
-[[ -r "$SECRETS_DIR/cf-origin.pem" ]] || fail "cf-origin.pem missing"
-[[ -r "$SECRETS_DIR/cf-origin.key" ]] || fail "cf-origin.key not readable (check perms)"
+[[ -e "$SECRETS_DIR/cf-origin.pem" ]] || fail "cf-origin.pem missing"
+[[ -e "$SECRETS_DIR/cf-origin.key" ]] || fail "cf-origin.key missing"
+# Note: deploy user can't read cf-origin.key (root:caddy 0640) — that's intentional.
+# Caddy reads it as the caddy user. We only verify the file exists here.
 ok "TLS material present"
 
 echo "--- Checking Docker services ---"

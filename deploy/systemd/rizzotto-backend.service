@@ -8,7 +8,7 @@ Type=simple
 User=deploy
 Group=deploy
 WorkingDirectory=/home/deploy/rizzotto
-ExecStart=/home/deploy/rizzotto/node_modules/.bin/tsx /home/deploy/rizzotto/apps/backend/src/server.ts
+ExecStart=/home/deploy/rizzotto/apps/backend/node_modules/.bin/tsx /home/deploy/rizzotto/apps/backend/src/server.ts
 EnvironmentFile=/etc/rizzotto/env/backend.env
 Environment=NODE_ENV=production
 
