@@ -4,12 +4,17 @@
 
 **Rizzotto**
 
-[RIZZOTTO-ETYMOLOGY — Luke ergänzt]
+*"Rizzotto" is a founder's handle, kept on the cornerstone on purpose — a
+tournament platform is itself an artifact, and the people who laid the
+stone deserve the mark.* The aubergine sigil seals it: glossy, deliberately
+unceremonious, the one note of warmth in a brand that otherwise treats
+itself with stone-cold gravity.
 
-The visual brand is **Rizzotto** (domain: rizzotto.gg). The Khazalid
-atmospheric layer — *Karaz Ankor*, *Roll of Honour*, *Conclave*, Latin
-mottos — is preserved in the UI as ceremonial decoration, not as brand
-identity. See [02-voice.md](./02-voice.md) for the full lexicon.
+The visual brand is **Rizzotto** (domain: rizzotto.gg). Following the
+Welle 2 brand cleanup (2026-05-19), the Khazalid and Latin atmospheric
+layer was removed in favor of modern, restrained English throughout the
+product UI — *Hall*, *Roll of Honour*, *Conclave*, and the Latin mottos
+no longer ship. See [02-voice.md](./02-voice.md) for the current voice.
 
 ## Mission
 
