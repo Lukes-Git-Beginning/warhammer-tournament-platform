@@ -53,6 +53,7 @@ Fehlschlag = `next(new Error(...))` → Verbindung wird vom Client abgelehnt. [s
 | `draft_<id>`                  | `join_draft`        | Host, Guest, Admin           | Ja (eigene Seite)   |
 | `draft_<id>:player_<userId>`  | auto via `join_draft` | Nur dieser Player           | Nur eigene          |
 | `draft_<id>:spec`             | `watch_draft` oder automatisch bei unbekannter Rolle | Zuschauer | Nein (alles maskiert) |
+| `match_<id>`                  | **Welle 2** — auto bei Match-Decision-API-Call | beide Player + Spectator | Blind-Pick maskiert bis Reveal |
 
 Room-Hilfsfunktionen in `apps/backend/src/lib/draft-emit.ts`: `draftRoom()`, `draftPlayerRoom()`, `draftSpectatorRoom()`.
 
@@ -88,6 +89,10 @@ Definiert in `packages/types/src/socket-events.ts` — Interface `ServerToClient
 | `action_committed`        | Player-Rooms (Hidden-Masking) + Spec-Room   | Aktion committed; `factionId: null` wenn versteckt |
 | `draft_state_sync`        | per Socket (on-connect) oder gezielt        | Vollständiger Snapshot des Draft-State |
 | `draft_complete`          | `draft_<id>` + `draft_<id>:spec`            | Draft beendet, `finalFactions`        |
+| `match.decision.started`  | `match_<id>`                                | **Welle 2** — Coin-Flip-Ergebnis (Top/Bottom), Mode (RANDOM/PICK_BAN), Map-Pool für dieses Match |
+| `match.decision.update`   | `match_<id>`                                | **Welle 2** — Ban-Action committed: aktualisiert `bans_top` / `bans_bottom` |
+| `match.decision.complete` | `match_<id>`                                | **Welle 2** — `picked_map_id` final, Match bereit für Blind-Pick-Phase |
+| `match.blind-pick.update` | `match_<id>`                                | **Welle 2** — Blind-Pick-Lock Event: bei beidseitigem Lock revealed Payload beide Factions |
 
 ---
 

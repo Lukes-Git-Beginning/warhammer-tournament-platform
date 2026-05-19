@@ -129,9 +129,19 @@ Alle Route-Files registrieren sich direkt mit absoluten Pfaden (kein `prefix`-Op
 | `routes/meta.ts` | `GET /api/meta/overview`, `GET /api/meta/matchups` | Public |
 | `routes/drafts.ts` | `GET /api/drafts/:id`, `GET /api/drafts/:id/events`, `POST /api/drafts/:id/...` | Optional-Auth (Spectator wenn anonym) |
 | `routes/draft-presets.ts` | `GET /api/draft-presets`, `GET /api/draft-presets/:id`, `POST /api/draft-presets`, `PUT /api/draft-presets/:id`, `DELETE /api/draft-presets/:id` | Schreibende Ops: `ORGANIZER`/`ADMIN` |
-| `routes/admin.ts` | `GET /api/admin/audit-log`, `GET /api/admin/stats`, `POST /api/admin/users/:id/ban`, `DELETE /api/admin/users/:id/ban` | Alle: `authenticate` + `ADMIN` |
+| `routes/admin.ts` | `GET /api/admin/audit-log`, `GET /api/admin/stats`, `POST /api/admin/users/:id/ban`, `DELETE /api/admin/users/:id/ban`, **+Welle 2:** `GET /api/admin/stats/{faction-winrates,elo-distribution,dropoff-funnel,pickban-stats}`, `CRUD /api/admin/maps[/:id]`, `POST/PATCH /api/admin/factions[/:id]`, `POST /api/admin/factions/:id/sigil` (multipart), `GET /api/admin/config/all`, `GET/PUT /api/admin/config/:key` | Alle: `authenticate` + `ADMIN` |
 | `routes/army-lists.ts` | `POST /api/army-lists` (multipart), `GET /api/army-lists` | `authenticate` (scope-Hook) |
 | `routes/seasons.ts` | `GET /api/seasons`, `GET /api/seasons/active`, `GET /api/seasons/:id`, `POST /api/seasons`, `PATCH /api/seasons/:id`, `DELETE /api/seasons/:id` | Schreibende Ops: `ADMIN` |
+| **`routes/maps.ts`** | `GET /api/maps` (cached 5min, public) | Public; Admin-CRUD läuft über `routes/admin.ts` |
+| **`routes/match-decision.ts`** | `POST /api/matches/:id/decision/{start,ban,random}`, `POST /api/matches/:id/decision/blind-pick/lock` | `authenticate` + Player-of-Match-Check |
+| **`routes/tournament-army-lists.ts`** | `POST /api/tournaments/:slug/army-list` (multipart), `GET /api/tournaments/:slug/army-lists/{me,all,:opponent_user_id}` | `authenticate` + SLT-Mode + Reveal-Logic |
+| `routes/auth.ts` (erweitert) | **+Welle 2:** `GET /auth/steam/login`, `GET /auth/steam/return` (OpenID 2.0) | Public (Steam-Flow), persistiert SteamLink |
+| `routes/tournaments.ts` (erweitert) | **+Welle 2:** `GET /api/tournaments/:slug/maps` (cached 5min), `GET /api/tournaments/:slug/participants/me` | Public (maps) / `authenticate` (me) |
+| `routes/users.ts` (erweitert) | **+Welle 2:** `GET /api/users?search=&page=&limit=` (Admin-Search-Bug-Fix), `GET /api/users/:id/stats?season=` (Personal-Stats mit TT-Seed-Fallback) | search: `ADMIN`; stats: `authenticate` |
+| `routes/leaderboard.ts` (erweitert) | **+Welle 2:** `?mode=season_points|winrate|weighted_winrate` Query-Param | Public |
+| `routes/matches.ts` (erweitert) | **+Welle 2:** `GET /api/matches/:id` (returns tournament_slug), Playoff-Winner-Propagation; Match-Result-Hook ruft `computeWinPoints()` + MMR-Updates | `authenticate` |
+| `routes/bracket.ts` (erweitert) | **+Welle 2:** Auto-Playoff-Generation nach letzter Swiss-Runde via `generatePlayoffBracket()`; nutzt `sortSwissStandings()` für Seed-Ermittlung; emittiert `notifyRoundPairings` | `authenticate` + `ORGANIZER`/`ADMIN` |
+| `routes/participants.ts` (erweitert) | **+Welle 2:** `POST /api/tournaments/:slug/checkin/self` (Player-driven, T-60min Window) | `authenticate` |
 | `plugins/graphql.ts` | `GET|POST /graphql` (Mercurius), `GET /graphiql` (nur non-prod) | Optional-Auth im Context |
 
 Zusätzlich registriert `buildApp()` direkt: `GET /health` → `{ status: 'ok', timestamp }`.
@@ -157,6 +167,11 @@ Zusätzlich registriert `buildApp()` direkt: `GET /health` → `{ status: 'ok', 
 | `lib/draft-state.ts` | Pure State-Machine für Draft-Züge (keine IO-Abhängigkeiten) |
 | `lib/draft-emit.ts` | Draft-spezifische Socket-Emit-Helpers (`draft_state_sync`, `draft_pick`, etc.) |
 | `lib/army-parser.ts` | `parseTxtArmyList()`, `isPdf()`, `isTxt()` — TXT-Army-List-Parser (PDF-Support vorbereitet) |
+| **`lib/army-setup-parser.ts`** | **Welle 2** — `parseArmySetup(buffer)` / `parseArmySetupSafe()` für TWW3 `.army_setup` binary Format (ASCII Strings mit uint16 LE Length-Prefix, Faction-Slug + Unit-Keys) |
+| **`lib/playoff-generator.ts`** | **Welle 2** — `generatePlayoffBracket()` für NONE/TOP4/TOP8 mit Auto-Fallback TOP8→TOP4 bei <16 checked-in |
+| **`lib/mmr.ts`** | **Welle 2** — `computeWinPoints()` 3-Faktor-Formel, `updateFactionMasteryAfterMatch()`, `updateFactionMatchupStat()`, `incrementAntiFarmCap()` |
+| **`lib/discord-notify.ts`** | **Welle 2** — 4 Notification-Trigger: `notifyTournamentAnnounce()`, `notifyCheckInReminder()`, `notifyRoundPairings()`, `notifyDispute()`. Silent no-op wenn `DISCORD_BOT_TOKEN` fehlt |
+| **`lib/tt-scraper.ts`** | **Welle 2** — `scrapeTotalTavernFactionStats()` Playwright-Headless-Crawler für TT-Faction-Stats-Seed (24 Factions × 576 Matchups) |
 
 ---
 
@@ -183,6 +198,10 @@ Eine `.env.example`-Datei existiert im Backend-Verzeichnis nicht. Pflichtfelder 
 | `NODE_ENV` | `production` | Aktiviert Proxy-Trust, pino-pretty off, test-login guard | Nein |
 | `LOG_LEVEL` | `info` | Pino-Log-Level; default `info` | Nein |
 | `UPLOAD_DIR` | `/app/uploads/army-lists` | Upload-Verzeichnis für Army-Lists | Nein |
+| `ARMY_LIST_UPLOAD_DIR` | `apps/backend/uploads/army-lists` | **Welle 2** — Upload-Verzeichnis für SLT `.army_setup`-Files + Screenshots | Nein |
+| `STEAM_OPENID_RETURN_URL` | `http://localhost:3000/auth/steam/return` | **Welle 2** — Steam-OpenID-Callback (Pflicht für Steam-Hard-Gate) | Ja (Production) |
+| `STEAM_WEB_API_KEY` | `AAAAA1234...` | **Welle 2** — Optional, für Persona/Avatar-Daten aus Steam Web API | Nein |
+| `DISCORD_BOT_TOKEN` | `MTAxNDY...` | **Welle 2** — Discord-Bot-Token für Notifications (Channel-Embed + DM); fehlt → no-op | Nein (Dev) / Ja (Production) |
 
 ---
 
