@@ -182,13 +182,16 @@ export function getErrorI18nKey(message: string): string | undefined {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  // Only declare a JSON content-type when we actually send a body. A POST with
+  // application/json and no body causes Fastify to reject with FST_ERR_CTP_EMPTY_JSON_BODY.
+  const headers: HeadersInit = { ...(init?.headers ?? {}) };
+  if (init?.body != null && !(headers as Record<string, string>)['Content-Type']) {
+    (headers as Record<string, string>)['Content-Type'] = 'application/json';
+  }
   const res = await fetch(path, {
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
     ...init,
+    headers,
   });
 
   if (!res.ok) {
