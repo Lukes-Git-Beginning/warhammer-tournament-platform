@@ -116,14 +116,26 @@ export function TournamentCreateForm() {
       draft_enabled,
       draft_preset_id,
       map_pool,
+      start_date,
       ...rest
     } = result.data;
 
+    // <input type="datetime-local"> emits "YYYY-MM-DDTHH:mm" without timezone.
+    // Backend Zod schema requires a full ISO-8601 string — interpret the local
+    // value in the browser's timezone and convert to UTC ISO.
+    const toIsoOrInvalid = (local: string) => {
+      const d = new Date(local);
+      return Number.isNaN(d.getTime()) ? local : d.toISOString();
+    };
+
     mutation.mutate({
       ...rest,
+      start_date: toIsoOrInvalid(start_date),
       ...(max_participants ? { max_participants: Number(max_participants) } : {}),
       ...(discord_link ? { discord_link } : {}),
-      ...(registration_deadline ? { registration_deadline } : {}),
+      ...(registration_deadline
+        ? { registration_deadline: toIsoOrInvalid(registration_deadline) }
+        : {}),
       ...(description ? { description } : {}),
       ...(rules ? { rules } : {}),
       draft_enabled: draft_enabled ?? false,
