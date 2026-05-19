@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { MatchStatus, TournamentFormat, TournamentStatus } from '@rizzotto/db';
 import type { BracketResponse, SwissStandingEntry } from '@rizzotto/types';
-import { generateSingleElim } from '../lib/bracket.js';
+import { generateSingleElim, generateDoubleElim } from '../lib/bracket.js';
 import { generateRoundRobin } from '../lib/round-robin.js';
 import {
   generateSwissRound,
@@ -45,8 +45,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           player2_id: true,
           winner_id: true,
           score: true,
+          result: true,
+          player1_points: true,
+          player2_points: true,
           status: true,
           next_match_id: true,
+          loser_next_match_id: true,
+          bracket_side: true,
           player1_faction_id: true,
           player2_faction_id: true,
           draft: { select: { id: true, status: true } },
@@ -66,8 +71,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           player2Id: m.player2_id,
           winnerId: m.winner_id,
           score: m.score,
+          result: m.result,
+          player1Points: m.player1_points,
+          player2Points: m.player2_points,
           status: m.status as BracketResponse['matches'][number]['status'],
           nextMatchId: m.next_match_id,
+          loserNextMatchId: m.loser_next_match_id,
+          bracketSide: m.bracket_side,
           player1FactionId: m.player1_faction_id,
           player2FactionId: m.player2_faction_id,
           draft_id: m.draft?.id ?? null,
@@ -187,14 +197,6 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      if (tournament.format === TournamentFormat.DOUBLE_ELIMINATION) {
-        return reply.code(501).send({
-          error: 'NotImplemented',
-          message: 'DOUBLE_ELIMINATION wird in M5 implementiert',
-          statusCode: 501,
-        });
-      }
-
       const participants = await fastify.prisma.tournamentParticipant.findMany({
         where: {
           tournament_id: tournament.id,
@@ -223,12 +225,19 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         player2_id: string | null;
         status: MatchStatus;
         next_match_id: string | null;
+        loser_next_match_id?: string | null;
+        bracket_side?: 'WINNERS' | 'LOSERS' | 'GRAND_FINAL' | null;
         winner_id: string | null;
       }>;
 
       switch (tournament.format) {
         case TournamentFormat.SINGLE_ELIMINATION: {
           bracketMatches = generateSingleElim(tournament.id, participantIds);
+          break;
+        }
+
+        case TournamentFormat.DOUBLE_ELIMINATION: {
+          bracketMatches = generateDoubleElim(tournament.id, participantIds);
           break;
         }
 
@@ -278,6 +287,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             player2_id: m.player2_id,
             status: m.status as MatchStatus,
             next_match_id: m.next_match_id,
+            loser_next_match_id: m.loser_next_match_id ?? null,
+            bracket_side: m.bracket_side ?? null,
             winner_id: m.winner_id,
           })),
         });

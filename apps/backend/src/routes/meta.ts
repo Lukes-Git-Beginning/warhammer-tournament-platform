@@ -107,7 +107,8 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // GET /api/meta/matchups?seasonId=<uuid>
-  // Stub for M3.5 — returns empty cells with faction lookup list
+  // Returns 24x24 matchup matrix (faction-A vs faction-B) for the requested
+  // season — aggregated from `MatchupStats` via `getMatchupMatrix()`.
   // -------------------------------------------------------------------------
   fastify.get('/api/meta/matchups', async (request, reply) => {
     const parsed = SeasonQuerySchema.safeParse(request.query);

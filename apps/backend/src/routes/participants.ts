@@ -349,6 +349,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         id: true,
         status: true,
         registered_at: true,
+        lists_locked_at: true,
         user: { select: { id: true, username: true, avatar_url: true } },
         faction: { select: { id: true, name: true, color_hex: true } },
       },

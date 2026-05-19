@@ -79,6 +79,71 @@ const armyListsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const fileUrl = `/uploads/army-lists/${userId}/${filename}`;
 
+    // Lock-guard: if a tournament_id is provided, check whether the participant's
+    // lists_locked_at is set, OR (for non-participants) whether the tournament
+    // has any locked participant. ADMIN/MODERATOR may override (with audit log).
+    if (tournamentId) {
+      const participant = await fastify.prisma.tournamentParticipant.findFirst({
+        where: {
+          tournament_id: tournamentId,
+          user_id: userId,
+          deleted_at: null,
+        },
+        select: { id: true, lists_locked_at: true },
+      });
+
+      const ownLocked =
+        participant?.lists_locked_at !== null && participant?.lists_locked_at !== undefined;
+      let lockedParticipantId: string | null = ownLocked ? (participant?.id ?? null) : null;
+      let tournamentLocked = ownLocked;
+
+      if (!ownLocked) {
+        // Non-participant uploader OR participant not yet locked — fall back to
+        // checking whether ANY participant is locked (tournament-level lock signal).
+        const anyLocked = await fastify.prisma.tournamentParticipant.findFirst({
+          where: {
+            tournament_id: tournamentId,
+            lists_locked_at: { not: null },
+            deleted_at: null,
+          },
+          select: { id: true },
+        });
+        if (anyLocked) {
+          tournamentLocked = true;
+          lockedParticipantId = anyLocked.id;
+        }
+      }
+
+      if (tournamentLocked) {
+        const isPrivileged =
+          request.user.role === 'ADMIN' || request.user.role === 'MODERATOR';
+
+        if (!isPrivileged) {
+          return reply.code(403).send({
+            error: 'ListsLocked',
+            message: 'Army lists are locked for this tournament. Contact the organizer.',
+            statusCode: 403,
+          });
+        }
+
+        // Privileged override — write audit log
+        if (lockedParticipantId) {
+          await fastify.prisma.auditLog.create({
+            data: {
+              entity_type: 'TournamentParticipant',
+              entity_id: lockedParticipantId,
+              action: 'army_list_override_after_lock',
+              actor_id: userId,
+              new_value: {
+                tournament_id: tournamentId,
+                override_reason: 'ADMIN/MODERATOR override after lists_locked_at',
+              },
+            },
+          });
+        }
+      }
+    }
+
     const armyList = await fastify.prisma.armyList.create({
       data: {
         user_id: userId,
