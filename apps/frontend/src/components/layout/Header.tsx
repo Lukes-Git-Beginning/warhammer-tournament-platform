@@ -88,20 +88,27 @@ export function Header() {
           <LanguageToggle className="hidden sm:inline-flex" />
           {user ? (
             <>
-              {user.avatar_url && (
-                <img
-                  src={user.avatar_url}
-                  alt=""
-                  data-onboarding-target="avatar"
-                  className="h-8 w-8 rounded-full ring-2 ring-rizzotto-gold-500/40 ring-offset-1 ring-offset-rizzotto-iron-950"
-                />
-              )}
-              <span
-                className="hidden text-sm text-rizzotto-stone-300 xl:inline"
-                data-onboarding-target={user.avatar_url ? undefined : 'avatar'}
+              <Link
+                to="/users/$id"
+                params={{ id: user.id }}
+                aria-label={t('header.view_profile', { defaultValue: 'View profile' })}
+                className="inline-flex items-center gap-2 rounded-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rizzotto-gold-500 focus-visible:ring-offset-2 focus-visible:ring-offset-rizzotto-iron-950"
               >
-                {user.username}
-              </span>
+                {user.avatar_url && (
+                  <img
+                    src={user.avatar_url}
+                    alt=""
+                    data-onboarding-target="avatar"
+                    className="h-8 w-8 rounded-full ring-2 ring-rizzotto-gold-500/40 ring-offset-1 ring-offset-rizzotto-iron-950"
+                  />
+                )}
+                <span
+                  className="hidden text-sm text-rizzotto-stone-300 xl:inline"
+                  data-onboarding-target={user.avatar_url ? undefined : 'avatar'}
+                >
+                  {user.username}
+                </span>
+              </Link>
               <Button
                 variant="etched"
                 size="sm"
