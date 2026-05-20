@@ -94,11 +94,9 @@ jobs:
         run: pnpm --filter @rizzotto/e2e exec playwright install --with-deps chromium
 
       - name: E2E (Playwright)
-        # Temporarily non-blocking: a handful of specs still expect German
-        # strings or have win32-only visual snapshots after the Rizzotto
-        # rebrand. Tracked as follow-up; backend/frontend unit tests
-        # (411/68) cover the Welle-2 functionality.
-        continue-on-error: true
+        # BASELINE PROBE — continue-on-error is intentionally OFF on this
+        # branch to surface real Playwright failures in the report artifact.
+        # Do NOT merge to main without restoring or fixing the failure set.
         run: pnpm --filter @rizzotto/e2e test:e2e
         env:
           NODE_ENV: test
