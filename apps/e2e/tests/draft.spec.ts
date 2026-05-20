@@ -66,9 +66,13 @@ test('GET /api/drafts/:id for unknown id returns 404', async ({ request }) => {
 // Frontend routing smoke — pages render without crashing
 // ---------------------------------------------------------------------------
 
-test('/presets page loads with Draft-Presets heading', async ({ page }) => {
+test('/presets page loads with Preset Library heading', async ({ page }) => {
   await page.goto('/presets');
-  await expect(page.getByRole('heading', { name: /draft-presets/i })).toBeVisible();
+  // i18n: EN renders "Preset Library", DE renders "Preset-Bibliothek".
+  // Frontend defaults to EN in CI (no localStorage, fallbackLng=en).
+  await expect(
+    page.getByRole('heading', { name: /preset[\s-](library|bibliothek)/i }),
+  ).toBeVisible();
 });
 
 test('/presets page shows seed presets (Standard 1v1 or Captains)', async ({ page }) => {

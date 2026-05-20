@@ -41,14 +41,19 @@ const DEFAULT_BACKEND_URL = 'http://localhost:3000';
 
 /**
  * Creates N users via direct Prisma insert.
- * Role defaults to USER.
+ *
+ * By default every user is created **with a SteamLink** so the global
+ * Steam-Hard-Gate (`useRequireSteamLink`) does not redirect tests away
+ * from authenticated routes. Tests that exercise the gate itself must
+ * opt out via `withSteamLink: false`.
  */
 export async function createTestUsers(
   count: number,
-  opts?: { role?: TestRole; usernamePrefix?: string },
+  opts?: { role?: TestRole; usernamePrefix?: string; withSteamLink?: boolean },
 ): Promise<TestUser[]> {
   const role = opts?.role ?? 'USER';
   const prefix = opts?.usernamePrefix ?? 'test-user';
+  const withSteamLink = opts?.withSteamLink ?? true;
   const prismaRole = toPrismaRole(role);
 
   const users: TestUser[] = [];
@@ -56,12 +61,26 @@ export async function createTestUsers(
   for (let i = 0; i < count; i++) {
     const discord_id = `test-${randomUUID()}`;
     const username = `${prefix}-${i}-${randomUUID().slice(0, 6)}`;
+    const uuidTail = randomUUID().replace(/-/g, '').slice(0, 12);
 
     const created = await prisma.user.create({
       data: {
         discord_id,
         username,
         role: prismaRole,
+        ...(withSteamLink
+          ? {
+              steam_link: {
+                create: {
+                  steam_id: `7656119${uuidTail}`,
+                  persona: username,
+                  avatar_url: null,
+                  profile_url: null,
+                  verified_at: new Date(),
+                },
+              },
+            }
+          : {}),
       },
       select: { id: true, username: true, discord_id: true, role: true },
     });
@@ -388,6 +407,11 @@ export async function cleanupTestData(userIds: string[]): Promise<void> {
   // 5. AuditLog (actor)
   await prisma.auditLog.deleteMany({
     where: { actor_id: { in: userIds } },
+  });
+
+  // 5b. SteamLink (1:1 with User; cleanup before user delete)
+  await prisma.steamLink.deleteMany({
+    where: { user_id: { in: userIds } },
   });
 
   // 6. Tournaments organized by test users

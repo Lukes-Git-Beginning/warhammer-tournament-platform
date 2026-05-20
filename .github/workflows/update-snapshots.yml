@@ -1,19 +1,27 @@
-name: CI
+name: Update E2E Snapshots
+
+# Manual-only workflow that runs the Playwright E2E suite with
+# `--update-snapshots` and uploads the regenerated baseline PNGs as a
+# downloadable artifact. After download, place them under
+# `apps/e2e/tests/visual/.../<spec>-snapshots/` and commit.
+#
+# Usage:
+#   gh workflow run update-snapshots.yml --ref <branch>
+#   gh run download <run-id> -n e2e-snapshots -D ./e2e-snapshots
+#
+# Why a separate workflow:
+#   - CI runs are read-only against snapshots (compare-only).
+#   - Bootstrapping a fresh OS baseline (e.g. Linux runner vs. local Win)
+#     is rare and should not be coupled to every CI run.
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  ci:
+  update:
     runs-on: ubuntu-latest
 
     services:
@@ -78,35 +86,22 @@ jobs:
       - name: Seed factions and default season
         run: pnpm db:seed
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Test
-        run: pnpm test
-
       - name: Build
         run: pnpm build
 
       - name: Install Playwright Chromium
         run: pnpm --filter @rizzotto/e2e exec playwright install --with-deps chromium
 
-      - name: E2E (Playwright)
-        # Blocking pre-deploy gate. Visual-snapshot tests are temporarily
-        # skipped until Linux baseline PNGs are committed (see
-        # update-snapshots.yml workflow and the skip-marker comments in
-        # tests/visual/landing-overhaul.spec.ts).
-        run: pnpm --filter @rizzotto/e2e test:e2e
+      - name: Run E2E with --update-snapshots
+        run: pnpm --filter @rizzotto/e2e test:e2e -- --update-snapshots
         env:
           NODE_ENV: test
           CI: "true"
 
-      - name: Upload Playwright report on failure
-        if: failure()
+      - name: Upload regenerated snapshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
-          path: apps/e2e/playwright-report/
-          retention-days: 7
+          name: e2e-snapshots
+          path: apps/e2e/tests/**/*-snapshots/**/*.png
+          retention-days: 14
