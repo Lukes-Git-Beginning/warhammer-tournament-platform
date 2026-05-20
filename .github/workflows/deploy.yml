@@ -1,0 +1,58 @@
+name: Deploy
+
+# Triggered after a successful CI run on main. Skips on any other branch
+# or any non-success conclusion. `workflow_dispatch` is the manual escape
+# hatch (Actions tab → Run workflow) for re-deploys without a new commit.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    environment:
+      name: production
+      url: https://rizzotto.gg
+
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Pinned host key from ssh-keyscan 2026-05-20. Update if the host's
+          # SSH key ever rotates (very rare for a long-lived VM).
+          cat <<'HOSTKEYS' >> ~/.ssh/known_hosts
+          ${{ secrets.DEPLOY_HOST }} ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHW6BB91rA//kZOygO+AiG5INXy4W7GkIc84nqlcZMz5
+          HOSTKEYS
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Run deploy.sh on production host
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=15 \
+              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+              'cd /home/deploy/rizzotto && bash scripts/deploy.sh'
+
+      - name: Smoke-test production
+        run: |
+          status=$(curl -sS -o /dev/null -w '%{http_code}' https://rizzotto.gg)
+          if [ "$status" != "200" ]; then
+            echo "::error::Post-deploy smoke failed: rizzotto.gg returned $status"
+            exit 1
+          fi
+          echo "rizzotto.gg → $status"
