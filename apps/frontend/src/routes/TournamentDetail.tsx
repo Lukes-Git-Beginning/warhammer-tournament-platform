@@ -1,9 +1,15 @@
-import { useQuery } from '@tanstack/react-query';
-import { useParams, Link } from '@tanstack/react-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
-import { getTournament, getBracket, getParticipantMe } from '@/lib/api';
+import {
+  deleteTournament,
+  getBracket,
+  getParticipantMe,
+  getTournament,
+  patchTournament,
+} from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { BracketView } from '@/components/bracket/BracketView';
@@ -55,11 +61,29 @@ export function TournamentDetail() {
   const { t } = useTranslation();
   const { slug } = useParams({ from: '/tournaments/$slug' });
   const { data: user } = useAuthQuery();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const { data: tournament, isLoading, error } = useQuery({
     queryKey: ['tournament', slug],
     queryFn: () => getTournament(slug),
     retry: false,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTournament(slug),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      void navigate({ to: '/tournaments', search: { tab: 'upcoming', page: 1 } });
+    },
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: () => patchTournament(slug, { status: 'OPEN_REGISTRATION' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+    },
   });
 
   const { data: bracket } = useQuery({
@@ -143,21 +167,42 @@ export function TournamentDetail() {
       </div>
 
       {canManage && (
-        <div className="flex gap-3 mb-6">
+        <div className="flex flex-wrap gap-3 mb-6">
           <button
             type="button"
             className="rounded border border-stone-700 px-4 py-1.5 text-sm text-stone-300 hover:border-warhammer-gold hover:text-warhammer-gold transition-colors"
-            onClick={() => {
-              // Stub: Edit — M2+
-            }}
+            onClick={() => navigate({ to: '/tournaments/$slug/edit', params: { slug } })}
           >
             {t('tournament.detail.edit')}
           </button>
+          {tournament.status === 'DRAFT' && (
+            <button
+              type="button"
+              disabled={publishMutation.isPending}
+              className="rounded border border-warhammer-gold px-4 py-1.5 text-sm text-warhammer-gold hover:bg-warhammer-gold/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => {
+                if (
+                  confirm(
+                    t('tournament.detail.publish_confirm', { name: tournament.name }),
+                  )
+                ) {
+                  publishMutation.mutate();
+                }
+              }}
+            >
+              {t('tournament.detail.publish')}
+            </button>
+          )}
           <button
             type="button"
-            className="rounded border border-red-900 px-4 py-1.5 text-sm text-red-400 hover:border-red-600 hover:text-red-300 transition-colors"
+            disabled={deleteMutation.isPending}
+            className="rounded border border-red-900 px-4 py-1.5 text-sm text-red-400 hover:border-red-600 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => {
-              // Stub: Delete — M2+
+              if (
+                confirm(t('tournament.detail.delete_confirm', { name: tournament.name }))
+              ) {
+                deleteMutation.mutate();
+              }
             }}
           >
             {t('tournament.detail.delete')}

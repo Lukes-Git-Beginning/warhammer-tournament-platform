@@ -142,6 +142,39 @@ export interface TournamentCreate {
   map_pool?: string[];
 }
 
+// Mirror of backend PatchTournamentSchema (apps/backend/src/routes/tournaments.ts).
+// All fields optional; `format` and `mode` are immutable post-create.
+export interface TournamentPatchInput {
+  name?: string;
+  description?: string | null;
+  rules?: string | null;
+  discord_link?: string | null;
+  start_date?: string;
+  timezone?: string;
+  registration_deadline?: string | null;
+  max_participants?: number | null;
+  visibility?: 'PUBLIC' | 'PRIVATE';
+  status?: Tournament['status'];
+  draft_enabled?: boolean;
+  draft_preset_id?: string | null;
+  rounds_count?: number;
+  playoff_format?: 'NONE' | 'TOP4' | 'TOP8';
+  swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
+  playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
+  finale_match_format?: 'BO1' | 'BO3' | 'BO5';
+  map_decision_mode?: 'RANDOM' | 'PICK_BAN';
+  map_pool?: string[];
+}
+
+export interface TournamentPatchResponse {
+  id: string;
+  slug: string;
+  name: string;
+  status: Tournament['status'];
+  visibility: 'PUBLIC' | 'PRIVATE';
+  updated_at: string;
+}
+
 export interface ApiError extends Error {
   status: number;
   /** i18n key if the error message was matched to a known backend string */
@@ -236,6 +269,20 @@ export function createTournament(body: TournamentCreate): Promise<Tournament> {
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+export function patchTournament(
+  slug: string,
+  body: TournamentPatchInput,
+): Promise<TournamentPatchResponse> {
+  return apiFetch<TournamentPatchResponse>(`/api/tournaments/${slug}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteTournament(slug: string): Promise<void> {
+  return apiFetch<void>(`/api/tournaments/${slug}`, { method: 'DELETE' });
 }
 
 export async function logout(): Promise<void> {
