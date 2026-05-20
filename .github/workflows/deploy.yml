@@ -56,3 +56,37 @@ jobs:
             exit 1
           fi
           echo "rizzotto.gg → $status"
+
+      # Fires if any prior step failed (SSH OR smoke-test). Silent skip when
+      # the webhook secret is not set, so forks and bootstrap runs don't error.
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          WEBHOOK_URL: ${{ secrets.DEPLOY_DISCORD_WEBHOOK }}
+          BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "DEPLOY_DISCORD_WEBHOOK not set — skipping notify"
+            exit 0
+          fi
+          SHORT_SHA="${SHA:0:7}"
+          payload=$(jq -nc \
+            --arg branch "$BRANCH" \
+            --arg sha "$SHORT_SHA" \
+            --arg run "$RUN_URL" \
+            '{
+              embeds: [{
+                title: "Deploy FAILED — rizzotto.gg",
+                color: 15158332,
+                fields: [
+                  { name: "Branch", value: $branch, inline: true },
+                  { name: "Commit", value: "`\($sha)`", inline: true },
+                  { name: "Run", value: "[Open in Actions](\($run))", inline: false }
+                ]
+              }]
+            }')
+          curl -sS -X POST "$WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "$payload"
