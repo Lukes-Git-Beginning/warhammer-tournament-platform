@@ -60,25 +60,11 @@ async function gotoAndWait(page: Page, path: string) {
 
 // ---------------------------------------------------------------------------
 // Public route tests — no auth required
-//
-// Skipped in normal CI until Linux baseline PNGs are committed. Existing
-// snapshots are all -chromium-win32.png; CI runs on ubuntu-latest and
-// looks for -chromium-linux.png. The `update-snapshots.yml` workflow sets
-// `UPDATE_SNAPSHOTS=1` to opt back in so the baselines can be generated.
-// Inner `test.skip(condition, reason)` form is required because Playwright
-// cannot --update-snapshots on tests skipped at declaration time.
 // ---------------------------------------------------------------------------
-
-const UPDATE_SNAPSHOTS = !!process.env['UPDATE_SNAPSHOTS'];
 
 for (const viewport of VIEWPORTS) {
   for (const route of PUBLIC_ROUTES) {
     test(`[${viewport.name}] ${route.path} — no overflow + screenshot`, async ({ page }) => {
-      test.skip(
-        !UPDATE_SNAPSHOTS,
-        'Linux baseline not committed yet — bootstrap via update-snapshots.yml',
-      );
-
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await gotoAndWait(page, route.path);
 

@@ -59,7 +59,7 @@ Bundled in `f4e3705` und deployed 2026-05-20: Delete-Button, Status-Transition (
 | 1 | Server-Config (Caddy + systemd) divergiert vom Repo-Stand | `deploy/Caddyfile` vs. `/etc/caddy/Caddyfile` | Niedrig — beide funktionieren, aber Drift sollte aufgelöst werden |
 | 2 | Keine `AuditLog`-Einträge für direkte DB-Eingriffe (Admin-Promotion 2026-05-19) | — | Niedrig — manuelle Eingriffe sollten dokumentiert sein |
 | 3 | `BracketView` und einige Tournament-Sub-Komponenten nutzen noch `warhammer-*`-Tokens | `apps/frontend/src/components/bracket/*`, `TournamentDetail.tsx` | Niedrig — kosmetisch |
-| 4 | **Linux-Snapshots bootstrappen** für `visual/landing-overhaul.spec.ts` — 9 win32-PNGs nicht CI-kompatibel, deshalb 9 Tests aktuell `test.skip`. Bootstrap via `gh workflow run update-snapshots.yml` → Artifact `e2e-snapshots` → committen → win32 löschen → `test.skip` raus | `apps/e2e/tests/visual/landing-overhaul.spec.ts-snapshots/` | Mittel — Visual-Regressions sind aktuell nicht abgedeckt |
+| 4 | ~~Linux-Snapshots bootstrappen für `visual/landing-overhaul.spec.ts`~~ | — | ✅ done 2026-05-20: 9 Linux-Baselines committed, win32-PNGs raus, conditional skip raus |
 | 5 | **Welle-D Test 3 (`decision/start`)** ist `test.skip` — Fixture konfiguriert keinen `map_pool`, Backend wirft 422 | `apps/e2e/tests/match-decision-flow.spec.ts:229`, Helper `createTournament` | Niedrig — Unit-Tests decken den Match-Decision-Pfad |
 | 6 | **Welle-D Test 4 (`Auto-Playoff TOP4`)** ist `test.skip` — sendet `rounds_count: 2`, Schema-Min ist 3 | `apps/e2e/tests/match-decision-flow.spec.ts:308` | Niedrig — Unit-Tests decken den Playoff-Generator |
 
