@@ -5,7 +5,7 @@
  *
  * Coverage:
  *   - 3 viewports × 3 public routes = 9 no-overflow + screenshot pairs
- *   - 1 authenticated route (/tournaments/new) on desktop: all inputs visible
+ *   - 1 authenticated route (/tournaments/create) on desktop: all inputs visible
  *   - 1 i18n toggle smoke: DE→EN switch + reload persistence
  *
  * First run: execute with --update-snapshots to create baseline screenshots.
@@ -110,10 +110,10 @@ for (const viewport of OVERFLOW_VIEWPORTS) {
 }
 
 // ---------------------------------------------------------------------------
-// Authenticated test: /tournaments/new — all inputs visible on desktop
+// Authenticated test: /tournaments/create — all inputs visible on desktop
 // ---------------------------------------------------------------------------
 
-test.describe('/tournaments/new — organizer on desktop', () => {
+test.describe('/tournaments/create — organizer on desktop', () => {
   let organizerIds: string[] = [];
 
   test.beforeAll(async () => {
@@ -134,7 +134,7 @@ test.describe('/tournaments/new — organizer on desktop', () => {
     await signInBrowser(ctx, orgUser.id);
     const page = await ctx.newPage();
 
-    await gotoAndWait(page, '/tournaments/new');
+    await gotoAndWait(page, '/tournaments/create');
 
     // Key form inputs that previously overflowed on narrow viewports
     const inputSelectors = [
