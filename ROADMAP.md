@@ -33,37 +33,35 @@
 | **Production Deploy** | ✅ live seit 2026-05-19 | Hetzner CX22, Postgres + Redis (docker-compose), Caddy 2.11, Backup-Timer |
 | 24 Faction-Sigils | ✅ done | Default-Sigils im Repo, FactionBadge rendert sie mit Initials-Fallback |
 | Steam-Hard-Gate live | ✅ done (2026-05-19) | Frontend-Guard + Discord-Callback-Redirect + meSelect-Field; verifiziert auf rizzotto.gg |
+| **Welle-1 Pipeline-Ausbau** | ✅ done (2026-05-20) | E2E ist Pre-Deploy-Gate (continue-on-error raus), Discord-Webhook bei Failure (#4 + #5), `STEAM_WEB_API_KEY` in Prod gesetzt → echte Personas |
 
 ---
 
 ## 2. Nächste Session — sofortiges Backlog
 
-### 2.1 Tournament-Lifecycle-UI (heute beim Eigentest entdeckt)
+### 2.1 ~~Tournament-Lifecycle-UI~~ ✅ done
 
-| # | Item | Pfad | Aufwand |
-|---|---|---|---|
-| 1 | **Delete-Button verdrahten** — Confirm-Dialog → `DELETE /api/tournaments/:slug` → Navigate zurück zur Listing. Backend-Route existiert (`tournaments.ts:613`) | `apps/frontend/src/routes/TournamentDetail.tsx:159` (Stub) | ~10 min |
-| 2 | **Status-Transition-Button** — `DRAFT → OPEN_REGISTRATION` via `PATCH /api/tournaments/:slug`. Backend-Route existiert (`tournaments.ts:360`) | `TournamentDetail.tsx` (neuer Block) | ~20 min |
-| 3 | **Edit-Modal/Page** — komplettes Bearbeitungs-Formular, dupliziert die meisten Felder aus CreateForm. Backend nimmt schon alles | `TournamentDetail.tsx:147` (Stub), neue `EditTournamentPage` | ~1–2 h |
-
-Track als Bundle in *einem* PR (alle drei Buttons werden zusammen sichtbar im UI).
+Bundled in `f4e3705` und deployed 2026-05-20: Delete-Button, Status-Transition (Publish), Edit-Page — alle drei live in `TournamentDetail.tsx`.
 
 ### 2.2 Externe Integrationen freischalten
 
 | # | Item | Wo | Notiz |
 |---|---|---|---|
-| 1 | **`STEAM_WEB_API_KEY`** in `/etc/rizzotto/env/backend.env` setzen | Server | Steam-Profil-Persona/Avatar wird sonst nur als "Steam User <id>" gespeichert. Silent no-op heute |
+| 1 | ~~`STEAM_WEB_API_KEY` in `/etc/rizzotto/env/backend.env` setzen~~ | Server | ✅ done 2026-05-20 |
 | 2 | **`DISCORD_BOT_TOKEN`** in env setzen + Discord-Bot starten | Server + Discord-Application | Vorbereitung für M8 Discord-Bot-Integration |
 | 3 | **Hetzner-VM-Backup aktivieren** | Hetzner Cloud-Console | ~1.68 €/mo, User-Task |
-| 4 | **`.env.example`** ergänzen um `STEAM_OPENID_RETURN_URL`, `STEAM_WEB_API_KEY` | `apps/backend/.env.example` | Doku-Lücke |
+| 4 | ~~`.env.example` ergänzen um `STEAM_OPENID_RETURN_URL`, `STEAM_WEB_API_KEY`~~ | root `.env.example` | ✅ war faktisch schon geschlossen (Zeile 45, 48); §2.2 #4 war Phantom |
 
-### 2.3 Tech-Debt aus Eigentest 2026-05-19
+### 2.3 Tech-Debt aus Eigentest 2026-05-19 + Welle-1-Follow-ups
 
 | # | Item | Pfad | Severity |
 |---|---|---|---|
 | 1 | Server-Config (Caddy + systemd) divergiert vom Repo-Stand | `deploy/Caddyfile` vs. `/etc/caddy/Caddyfile` | Niedrig — beide funktionieren, aber Drift sollte aufgelöst werden |
 | 2 | Keine `AuditLog`-Einträge für direkte DB-Eingriffe (Admin-Promotion 2026-05-19) | — | Niedrig — manuelle Eingriffe sollten dokumentiert sein |
 | 3 | `BracketView` und einige Tournament-Sub-Komponenten nutzen noch `warhammer-*`-Tokens | `apps/frontend/src/components/bracket/*`, `TournamentDetail.tsx` | Niedrig — kosmetisch |
+| 4 | **Linux-Snapshots bootstrappen** für `visual/landing-overhaul.spec.ts` — 9 win32-PNGs nicht CI-kompatibel, deshalb 9 Tests aktuell `test.skip`. Bootstrap via `gh workflow run update-snapshots.yml` → Artifact `e2e-snapshots` → committen → win32 löschen → `test.skip` raus | `apps/e2e/tests/visual/landing-overhaul.spec.ts-snapshots/` | Mittel — Visual-Regressions sind aktuell nicht abgedeckt |
+| 5 | **Welle-D Test 3 (`decision/start`)** ist `test.skip` — Fixture konfiguriert keinen `map_pool`, Backend wirft 422 | `apps/e2e/tests/match-decision-flow.spec.ts:229`, Helper `createTournament` | Niedrig — Unit-Tests decken den Match-Decision-Pfad |
+| 6 | **Welle-D Test 4 (`Auto-Playoff TOP4`)** ist `test.skip` — sendet `rounds_count: 2`, Schema-Min ist 3 | `apps/e2e/tests/match-decision-flow.spec.ts:308` | Niedrig — Unit-Tests decken den Playoff-Generator |
 
 ---
 
