@@ -93,10 +93,15 @@ jobs:
         run: pnpm --filter @rizzotto/e2e exec playwright install --with-deps chromium
 
       - name: Run E2E with --update-snapshots
-        run: pnpm --filter @rizzotto/e2e test:e2e -- --update-snapshots
+        # Call playwright directly: `pnpm --filter X test:e2e -- --foo`
+        # passes "--" through to playwright as a literal positional filter
+        # ("No tests found"). UPDATE_SNAPSHOTS unblocks the conditional
+        # skip in tests/visual/landing-overhaul.spec.ts.
+        run: pnpm --filter @rizzotto/e2e exec playwright test --update-snapshots
         env:
           NODE_ENV: test
           CI: "true"
+          UPDATE_SNAPSHOTS: "1"
 
       - name: Upload regenerated snapshots
         if: always()
