@@ -1,0 +1,107 @@
+name: Update E2E Snapshots
+
+# Manual-only workflow that runs the Playwright E2E suite with
+# `--update-snapshots` and uploads the regenerated baseline PNGs as a
+# downloadable artifact. After download, place them under
+# `apps/e2e/tests/visual/.../<spec>-snapshots/` and commit.
+#
+# Usage:
+#   gh workflow run update-snapshots.yml --ref <branch>
+#   gh run download <run-id> -n e2e-snapshots -D ./e2e-snapshots
+#
+# Why a separate workflow:
+#   - CI runs are read-only against snapshots (compare-only).
+#   - Bootstrapping a fresh OS baseline (e.g. Linux runner vs. local Win)
+#     is rare and should not be coupled to every CI run.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tww3
+          POSTGRES_PASSWORD: tww3
+          POSTGRES_DB: tww3
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tww3"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://tww3:tww3@localhost:5432/tww3?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-secret-replace-me-with-at-least-32-chars-long-string
+      JWT_COOKIE_NAME: auth_token
+      JWT_COOKIE_DOMAIN: localhost
+      JWT_EXPIRES_IN: "604800"
+      DISCORD_CLIENT_ID: mock
+      DISCORD_CLIENT_SECRET: mock
+      DISCORD_REDIRECT_URI: http://localhost:3000/auth/discord/callback
+      DISCORD_SCOPES: "identify email"
+      FRONTEND_URL: http://localhost:5173
+      NODE_ENV: test
+      LOG_LEVEL: error
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma migrate deploy
+        run: pnpm --filter @rizzotto/db exec prisma migrate deploy
+
+      - name: Prisma generate
+        run: pnpm --filter @rizzotto/db exec prisma generate
+
+      - name: Seed factions and default season
+        run: pnpm db:seed
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @rizzotto/e2e exec playwright install --with-deps chromium
+
+      - name: Run E2E with --update-snapshots
+        run: pnpm --filter @rizzotto/e2e test:e2e -- --update-snapshots
+        env:
+          NODE_ENV: test
+          CI: "true"
+
+      - name: Upload regenerated snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-snapshots
+          path: apps/e2e/tests/**/*-snapshots/**/*.png
+          retention-days: 14
