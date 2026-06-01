@@ -18,6 +18,7 @@ import matchRoutes from './routes/matches.js';
 import seasonRoutes from './routes/seasons.js';
 import bracketRoutes from './routes/bracket.js';
 import leaderboardRoutes from './routes/leaderboard.js';
+import ratingRoutes from './routes/rating.js';
 import factionsRoutes from './routes/factions.js';
 import metaRoutes from './routes/meta.js';
 import draftPresetRoutes from './routes/draft-presets.js';
@@ -92,6 +93,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(seasonRoutes);
   await app.register(bracketRoutes);
   await app.register(leaderboardRoutes);
+  await app.register(ratingRoutes);
   await app.register(factionsRoutes);
   await app.register(metaRoutes);
   await app.register(draftPresetRoutes);

@@ -79,7 +79,12 @@ describe('GET /api/leaderboard', () => {
   it('returns entries in correct rank order when queried by explicit seasonId', async () => {
     await seedBase();
 
-    const res = await app.inject({ method: 'GET', url: `/api/leaderboard?seasonId=${testSeason!.id}` });
+    // mode=season_points: legacy mode backed by seeded LeaderboardEntry rows.
+    // (The default mode is now the derive-on-read 'rating_model'.)
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/leaderboard?seasonId=${testSeason!.id}&mode=season_points`,
+    });
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{
@@ -119,7 +124,7 @@ describe('GET /api/leaderboard', () => {
     await seedBase();
     const res = await app.inject({
       method: 'GET',
-      url: `/api/leaderboard?seasonId=${testSeason!.id}&page=2&pageSize=2`,
+      url: `/api/leaderboard?seasonId=${testSeason!.id}&page=2&pageSize=2&mode=season_points`,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json<{ entries: unknown[]; total: number; page: number }>();

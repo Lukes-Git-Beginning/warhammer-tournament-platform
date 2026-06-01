@@ -333,11 +333,18 @@ model Match {
   phase               MatchPhase?  // Welle 2: discriminator between Swiss/Playoff phases (NULL = legacy/SE/RR)
   player1_faction_id  String?
   player2_faction_id  String?
+  // Dynamic weighted leaderboard (derive-on-read): authoritative season tag +
+  // play time, stamped when the match is completed. season_id is nullable so it
+  // is only set for finished matches (backfilled for historical rows).
+  season_id           String?          @db.Uuid
+  played_at           DateTime? // set when status flips to COMPLETED
+  ruleset             String? // optional patch / ruleset identifier
   created_at          DateTime         @default(now())
   updated_at          DateTime         @updatedAt
   deleted_at          DateTime?
 
   tournament       Tournament    @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  season           Season?       @relation(fields: [season_id], references: [id])
   player1          User?         @relation("MatchPlayer1", fields: [player1_id], references: [id])
   player2          User?         @relation("MatchPlayer2", fields: [player2_id], references: [id])
   winner           User?         @relation("MatchWinner", fields: [winner_id], references: [id])
@@ -354,6 +361,7 @@ model Match {
 
   @@unique([tournament_id, round, match_number])
   @@index([tournament_id, status])
+  @@index([season_id, status])
   @@index([player1_id])
   @@index([player2_id])
   @@index([deleted_at])
@@ -458,6 +466,7 @@ model Season {
   created_at           DateTime @default(now())
 
   major_tournament      Tournament?            @relation("SeasonMajor", fields: [major_tournament_id], references: [id])
+  matches               Match[]
   leaderboard           LeaderboardEntry[]
   results               TournamentResult[]
   faction_stats         FactionStats[]
@@ -476,7 +485,7 @@ model LeaderboardEntry {
   user_id        String   @db.Uuid
   season_id      String   @db.Uuid
   total_points   Float    @default(0)
-  season_points  Int      @default(0) // MMR-earned season points (replaces total_points as primary sort key for Welle 2)
+  season_points  Int      @default(0) // DEPRECATED (Welle-2 MMR). Superseded by the derive-on-read dynamic leaderboard (see rating-model.ts / leaderboard-service.ts). No longer written on new matches; column kept for historical reads until cleanup.
   elo_rating     Int      @default(1200)
   matches_played Int      @default(0)
   wins           Int      @default(0)
@@ -776,6 +785,9 @@ model ImportLog {
 // MMR / Mastery (Welle 2 — Plan 3)
 // -----------------------------------------------------------------------------
 
+// DEPRECATED (Welle-2 MMR): +10/-10 heuristic per-player per-faction rating.
+// Superseded by the fitted PlayerFactionSkill in rating-model.ts. No longer
+// written on new matches; kept for historical reads until cleanup.
 // Per-player per-faction ELO-like rating. Persists across seasons.
 model FactionMastery {
   user_id        String    @db.Uuid
@@ -794,6 +806,10 @@ model FactionMastery {
   @@index([faction_id])
 }
 
+// DEPRECATED as a scoring input (Welle-2 MMR): empirical win_rate fed
+// computeWinPoints(). Superseded by the fitted, antisymmetric MatchupEffect in
+// rating-model.ts. No longer written on new matches; kept for historical reads
+// and the legacy weighted_winrate leaderboard mode until cleanup.
 // Per-season faction-vs-faction win-rate stats (resets per season; meta changes).
 model FactionMatchupStat {
   season_id    String      @db.Uuid
@@ -815,6 +831,11 @@ model FactionMatchupStat {
   @@index([faction_a_id, faction_b_id])
 }
 
+// DEPRECATED (Welle-2 MMR): stored per (player-pair × faction-combo × season)
+// cap. The dynamic leaderboard replaces this with a derive-on-read,
+// player-specific OpponentShare modifier (see scoring-service.ts) that keys on
+// the player/opponent pair only — never on faction-combo — and recovers
+// dynamically. No longer written on new matches; kept until cleanup.
 // Anti-farming cap: limits points per (player-pair × faction-combo × season) in casual.
 // Tournaments always ignore this cap.
 model AntiFarmCap {
