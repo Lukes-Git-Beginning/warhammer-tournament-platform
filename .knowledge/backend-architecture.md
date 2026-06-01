@@ -136,6 +136,7 @@ Alle Route-Files registrieren sich direkt mit absoluten Pfaden (kein `prefix`-Op
 | `routes/matches.ts` | `POST /api/matches/:id/result`, `PATCH /api/matches/:id`, `GET /api/matches/:id/draft` | `authenticate` |
 | `routes/bracket.ts` | `GET /api/tournaments/:slug/bracket`, `POST /api/tournaments/:slug/bracket/advance` | Advance: `authenticate` + `ORGANIZER`/`ADMIN` |
 | `routes/leaderboard.ts` | `GET /api/leaderboard`, `GET /api/leaderboard/all-time` | Public |
+| **`routes/rating.ts`** | **Dynamic Leaderboard (Alex-Spec):** `GET /api/matches/:id/scoring-breakdown`, `GET /api/leaderboard/anti-farming`, `GET /api/factions/matchup-matrix`, `GET /api/players/:id/faction-proficiency` | Public |
 | `routes/factions.ts` | `GET /api/factions`, `GET /api/factions/:id` | Public |
 | `routes/meta.ts` | `GET /api/meta/overview`, `GET /api/meta/matchups` | Public |
 | `routes/drafts.ts` | `GET /api/drafts/:id`, `GET /api/drafts/:id/events`, `POST /api/drafts/:id/...` | Optional-Auth (Spectator wenn anonym) |
@@ -149,8 +150,8 @@ Alle Route-Files registrieren sich direkt mit absoluten Pfaden (kein `prefix`-Op
 | `routes/auth.ts` (erweitert) | **+Welle 2:** `GET /auth/steam/login`, `GET /auth/steam/return` (OpenID 2.0) | Public (Steam-Flow), persistiert SteamLink |
 | `routes/tournaments.ts` (erweitert) | **+Welle 2:** `GET /api/tournaments/:slug/maps` (cached 5min), `GET /api/tournaments/:slug/participants/me` | Public (maps) / `authenticate` (me) |
 | `routes/users.ts` (erweitert) | **+Welle 2:** `GET /api/users?search=&page=&limit=` (Admin-Search-Bug-Fix), `GET /api/users/:id/stats?season=` (Personal-Stats mit TT-Seed-Fallback) | search: `ADMIN`; stats: `authenticate` |
-| `routes/leaderboard.ts` (erweitert) | **+Welle 2:** `?mode=season_points|winrate|weighted_winrate` Query-Param | Public |
-| `routes/matches.ts` (erweitert) | **+Welle 2:** `GET /api/matches/:id` (returns tournament_slug), Playoff-Winner-Propagation; Match-Result-Hook ruft `computeWinPoints()` + MMR-Updates | `authenticate` |
+| `routes/leaderboard.ts` (erweitert) | **+Welle 2:** `?mode=…`; **+2026-06:** neuer **Default-Mode `rating_model`** (derive-on-read via `leaderboard-service.ts`), Legacy-Modi `season_points\|winrate\|weighted_winrate` bleiben opt-in | Public |
+| `routes/matches.ts` (erweitert) | **+Welle 2:** `GET /api/matches/:id`, Playoff-Winner-Propagation; **+2026-06:** inkrementeller MMR-Hook (`computeWinPoints` etc.) **entfernt** (Leaderboard ist jetzt derive-on-read); stempelt `season_id`/`played_at`; invalidiert zusätzlich `rating-model:*`. FactionStats/MatchupStats-Writes bleiben | `authenticate` |
 | `routes/bracket.ts` (erweitert) | **+Welle 2:** Auto-Playoff-Generation nach letzter Swiss-Runde via `generatePlayoffBracket()`; nutzt `sortSwissStandings()` für Seed-Ermittlung; emittiert `notifyRoundPairings` | `authenticate` + `ORGANIZER`/`ADMIN` |
 | `routes/participants.ts` (erweitert) | **+Welle 2:** `POST /api/tournaments/:slug/checkin/self` (Player-driven, T-60min Window) | `authenticate` |
 | `plugins/graphql.ts` | `GET|POST /graphql` (Mercurius), `GET /graphiql` (nur non-prod) | Optional-Auth im Context |
@@ -180,7 +181,12 @@ Zusätzlich registriert `buildApp()` direkt: `GET /health` → `{ status: 'ok', 
 | `lib/army-parser.ts` | `parseTxtArmyList()`, `isPdf()`, `isTxt()` — TXT-Army-List-Parser (PDF-Support vorbereitet) |
 | **`lib/army-setup-parser.ts`** | **Welle 2** — `parseArmySetup(buffer)` / `parseArmySetupSafe()` für TWW3 `.army_setup` binary Format (ASCII Strings mit uint16 LE Length-Prefix, Faction-Slug + Unit-Keys) |
 | **`lib/playoff-generator.ts`** | **Welle 2** — `generatePlayoffBracket()` für NONE/TOP4/TOP8 mit Auto-Fallback TOP8→TOP4 bei <16 checked-in |
-| **`lib/mmr.ts`** | **Welle 2** — `computeWinPoints()` 3-Faktor-Formel, `updateFactionMasteryAfterMatch()`, `updateFactionMatchupStat()`, `incrementAntiFarmCap()` |
+| **`lib/mmr.ts`** | **Welle 2, DEPRECATED** — `computeWinPoints()` 3-Faktor-Formel etc.; seit 2026-06 nicht mehr im Match-Pfad aufgerufen (durch das Rating-Modell abgelöst, Funktionen bleiben importierbar) |
+| **`lib/rating-model.ts`** | **Dynamic Leaderboard** — pure L2-Logistic-Regression (`fitRatingModel`, Adam, deterministisch); `PlayerFactionSkill` + antisymmetrischer `MatchupEffect`; `createRatingModel`/`logistic` |
+| **`lib/rating-model-service.ts`** | async Wrapper — lädt Season-Matches, fittet, cacht (`rating-model:*`); `getRatingModel`/`invalidateRatingModelCache`/`confirmedMatchWhere`/`loadRatingModelConfig` |
+| **`lib/scoring-service.ts`** | pure Punktelogik — `rawPoints`/`opponentShare`/`opponentModifier`/`finalPoints` (Alex-Spec) |
+| **`lib/leaderboard-service.ts`** | `computeSeasonLeaderboard()` — Zwei-Pass-Aggregation der FinalPoints pro Spieler |
+| **`lib/breakdown-service.ts`** | Explainability — `matchBreakdown`/`playerOpponentBreakdown`/`factionMatchupMatrix`/`playerFactionProficiency` |
 | **`lib/discord-notify.ts`** | **Welle 2** — 4 Notification-Trigger: `notifyTournamentAnnounce()`, `notifyCheckInReminder()`, `notifyRoundPairings()`, `notifyDispute()`. Silent no-op wenn `DISCORD_BOT_TOKEN` fehlt |
 | **`lib/tt-scraper.ts`** | **Welle 2** — `scrapeTotalTavernFactionStats()` Playwright-Headless-Crawler für TT-Faction-Stats-Seed (24 Factions × 576 Matchups) |
 

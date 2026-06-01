@@ -65,6 +65,16 @@ Bundled in `f4e3705` und deployed 2026-05-20: Delete-Button, Status-Transition (
 
 ---
 
+### 2.4 Dynamic Weighted Leaderboard (Alex-Spec) — Branch `feat/dynamic-leaderboard`
+
+Backend vollständig gebaut + gepusht (2026-06-02, 436 Tests grün, Migration angewendet). **Derive-on-read**: speichert nur Match-Fakten, leitet PlayerFactionSkill, MatchupEffect, Win-Chance, RawPoints, Anti-Farm-Modifier und Totals live aus dem Season-Datensatz ab (L2-Logistic-Regression in `lib/rating-model.ts`). Löst das Welle-2-MMR ab. **Noch offen (nicht gemergt):**
+
+| # | Item | Pfad | Severity |
+|---|---|---|---|
+| 1 | **Frontend-Leaderboard bricht** — Default-Mode von `GET /api/leaderboard` ist jetzt `rating_model` (neue Shape: `playerId/displayName/totalFinalPoints` statt `user/total_points`). Frontend-Page + ggf. neue Breakdown-/Matrix-/Proficiency-Views anpassen | `apps/frontend` Leaderboard + `routes/rating.ts` | **Mittel — blockt Merge** |
+| 2 | **Deprecation-Cleanup** — `season_points`/`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` nur als `// DEPRECATED` markiert, Spalten nicht gedroppt. Drop-Migration nach Validierung an echten Daten | `schema.prisma`, `lib/mmr.ts` | Niedrig |
+| 3 | Cold-Fit-Kosten validieren (großer Season-Datensatz) — ggf. Fit in deferred Job/Cron auslagern statt im Request | `lib/rating-model-service.ts` | Niedrig |
+
 ## 3. Bekannte Stubs / 501s
 
 | # | Issue | Pfad | Severity | Plan |
@@ -172,7 +182,7 @@ Werden in M6+ nicht angerührt:
 - **Socket.IO mit `@socket.io/redis-adapter`** — Multi-Instance-fähig ab Tag 1
 - **Draft-Timer-State in Redis** (`draft:{id}:state`) — Backend rehydriert aus `timerExpiresAt`
 - **Auth: JWT in HTTP-Only-Cookie** — kein Server-Session-Storage, WebSocket-Auth via Cookie-Handshake
-- **Stats: Inkrementelle Counter** — keine Live-Aggregation aus Match-Rohdaten
+- **Stats: Inkrementelle Counter** — Faction-/Meta-Stats (`FactionStats`, `MatchupStats`) bleiben inkrementell. **Ausnahme seit 2026-06 (Alex-Spec, `feat/dynamic-leaderboard`):** das Leaderboard ist jetzt **derive-on-read** (dynamisches Rating-Modell, `lib/rating-model.ts`) und löst die inkrementellen MMR-Counter (`season_points`/`FactionMastery`/`AntiFarmCap`) ab
 - **Pairing: `tournament-pairings`-Library** — Korrektheit nicht selbst verantworten
 - **Prisma 7 driver-adapter** — `datasource.url` in `prisma.config.ts`, nicht in `schema.prisma`
 - **Steam-Hard-Gate** — nach Discord-Login zwingend Steam-Link, kein Bypass (Ban-Evade-Schutz)
