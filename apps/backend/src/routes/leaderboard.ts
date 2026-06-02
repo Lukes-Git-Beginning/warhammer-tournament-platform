@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { cached, cacheKey } from '../lib/cache.js';
+import { computeSeasonLeaderboard } from '../lib/leaderboard-service.js';
 
 const PaginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -9,7 +10,11 @@ const PaginationSchema = z.object({
 
 const SeasonLeaderboardQuerySchema = PaginationSchema.extend({
   seasonId: z.string().uuid().optional(),
-  mode: z.enum(['season_points', 'winrate', 'weighted_winrate']).default('season_points'),
+  // 'rating_model' is the primary dynamic leaderboard (Alex-Spec). The Welle-2
+  // 'season_points' / 'weighted_winrate' modes are kept as legacy.
+  mode: z
+    .enum(['rating_model', 'season_points', 'winrate', 'weighted_winrate'])
+    .default('rating_model'),
 });
 
 const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
@@ -43,6 +48,40 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('leaderboard:season', { seasonId: resolvedSeasonId, page, pageSize, mode }),
       async () => {
+        // ---------------------------------------------------------------
+        // mode = 'rating_model' (default) — dynamic weighted leaderboard.
+        // Derived live from confirmed match facts + the current rating model.
+        // ---------------------------------------------------------------
+        if (mode === 'rating_model') {
+          const all = await computeSeasonLeaderboard(fastify.prisma, fastify.redis, resolvedSeasonId);
+          const pageSlice = all.slice((page - 1) * pageSize, page * pageSize);
+
+          return {
+            mode,
+            season: {
+              id: season!.id,
+              name: season!.name,
+              start_date: season!.start_date.toISOString(),
+              end_date: season!.end_date.toISOString(),
+              is_active: season!.is_active,
+            },
+            entries: pageSlice.map((e, idx) => ({
+              rank: (page - 1) * pageSize + idx + 1,
+              playerId: e.playerId,
+              displayName: e.displayName,
+              avatarUrl: e.avatarUrl,
+              totalFinalPoints: e.totalFinalPoints,
+              totalRawPoints: e.totalRawPoints,
+              totalMatches: e.totalMatches,
+              wins: e.wins,
+              losses: e.losses,
+            })),
+            total: all.length,
+            page,
+            pageSize,
+          };
+        }
+
         type LeaderboardRow = {
           id: string;
           user_id: string;

@@ -3,11 +3,38 @@
 ## TL;DR
 
 - **ELO**: Multi-Player Performance-Rating (A2, zero-sum bei gleichen Ratings), K=32 normal / K=48 Major — `computeEloDeltas()`. Pflegt `LeaderboardEntry.elo_rating` (Legacy, finalizes Tournament).
-- **MMR (Welle 2)**: 3-Faktor Win-Punkte-Formel — `computeWinPoints()` in `lib/mmr.ts`. No-Loss-Modus (Loss = 0). Faction-Mastery + Faction-Matchup-Win-Rate + Anti-Farm-Cap. Pflegt `LeaderboardEntry.season_points` zusätzlich + `FactionMastery` + `FactionMatchupStat` + `AntiFarmCap`.
+- **MMR (Welle 2) — DEPRECATED**: 3-Faktor Win-Punkte-Formel `computeWinPoints()` in `lib/mmr.ts`. Seit `feat/dynamic-leaderboard` (2026-06) **nicht mehr im Match-Pfad aufgerufen** — abgelöst vom dynamischen Rating-Modell (unten). `season_points`/`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` sind deprecated (Spalten erhalten, Writes entfernt).
+- **Dynamic Weighted Leaderboard (Alex-Spec, 2026-06)**: derive-on-read. L2-regularisierte Logistic Regression `fitRatingModel()` in `lib/rating-model.ts` fittet `PlayerFactionSkill(player,faction)` + antisymmetrischen `MatchupEffect(X,Y)`. Punkte rein abgeleitet via `lib/scoring-service.ts` + aggregiert in `lib/leaderboard-service.ts`. Nichts gespeichert, jeder Punkt rekonstruierbar (`lib/breakdown-service.ts`).
 - **Pairings** via `tournament-pairings` v2 — `SingleElimination`, `Swiss`, `RoundRobin` — alle drei Formate in je einer `lib/`-Datei.
 - **Swiss-Tiebreaker** (Welle 2): Buchholz → Solkoff → Head-to-Head (kein ELO) — `sortSwissStandings()`.
 - **Playoff-Generator** (Welle 2): `generatePlayoffBracket()` in `lib/playoff-generator.ts` — NONE/TOP4/TOP8 mit Auto-Fallback TOP8→TOP4 bei <16 checked-in.
 - `finalizeTournament()` schreibt Placements → ELO-Deltas → Tournament-Points → upsert `LeaderboardEntry` + `TournamentResult` in einer Transaktion.
+
+---
+
+## Dynamic Weighted Leaderboard (`lib/rating-model.ts`, `scoring-service.ts`)
+
+Derive-on-read; löst das Welle-2-MMR ab. Pures Modell + Punktelogik, gecacht über `rating-model-service.ts`.
+
+**Modell** (A auf Faktion X vs B auf Faktion Y, A-Perspektive), natural log-odds:
+```
+ExpectedAdvantage(A) = PFS(A,X) − PFS(B,Y) + MatchupEffect(X,Y)
+ExpectedChanceToWin  = logistic(adv) = 1 / (1 + exp(−adv))
+RawPoints(Sieger)    = 100 · (1 − ExpectedChanceToWin)         // kein Cap/Floor
+```
+- `MatchupEffect(X,X)=0`, `MatchupEffect(X,Y)=−MatchupEffect(Y,X)` — **strukturell** erzwungen (nur obere Dreiecksmatrix X<Y als freie Parameter, untere per Negation).
+- Kein allgemeiner Spieler-Skill — nur per-Faktion.
+- Fit: **Batch-Gradient-Descent mit Adam**, deterministisch (Null-Init, feste Iterationen, kein Random → cachebar). Loss = binary log loss + L2 (`lambdaPlayerFaction` 0.1, `lambdaMatchup` 0.5; via `AdminConfig`-Keys `rating_model_*` überschreibbar). L2-Shrinkage macht das Modell identifizierbar (Gauge-Freiheit der PFS-Differenzen) und verhindert Extremwerte bei wenig Daten.
+
+**Anti-Farming** (`scoring-service.ts`) — player-spezifisch, asymmetrisch, **nicht** auf Faktion/Matchup/Combo:
+```
+OpponentShare    = matchesVsOpponent / playerTotalMatches
+OpponentModifier = total<20 → 1 ; share≤0.05 → 1 ; share≥0.10 → 0 ; sonst (0.10−share)/0.05
+FinalPoints      = RawPoints · OpponentModifier ;  LeaderboardScore = Σ FinalPoints über Siege
+```
+Dynamische Erholung: viele andere Gegner spielen senkt die Share → frühere Punkte kommen zurück.
+
+Tests: `test/{scoring-service,rating-model,leaderboard-service}.test.ts` (alle 8 Spec-Cases + Optimizer + DB-Integration inkl. Explainability-Invariante).
 
 ---
 

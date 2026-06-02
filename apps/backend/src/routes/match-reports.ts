@@ -17,6 +17,18 @@ import {
 import { resolveMatchResult, disputeMatch } from '../lib/match-result-service.js';
 import { tournamentRoom } from '../lib/emit.js';
 import { notifyDispute } from '../lib/discord-notify.js';
+import { invalidate } from '../lib/cache.js';
+
+/** Invalidate leaderboard/faction/meta/rating-model caches after a match completes. */
+async function invalidateScoringCaches(redis: import('ioredis').Redis | undefined): Promise<void> {
+  if (!redis) return;
+  await Promise.all([
+    invalidate(redis, 'leaderboard:*'),
+    invalidate(redis, 'factions:*'),
+    invalidate(redis, 'meta:*'),
+    invalidate(redis, 'rating-model:*'),
+  ]);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -190,6 +202,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
             },
             fastify.io,
           );
+          await invalidateScoringCaches(fastify.redis);
           finalMatchStatus = 'COMPLETED';
         } else {
           // Disagreement → DISPUTED
@@ -337,6 +350,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         },
         fastify.io,
       );
+      await invalidateScoringCaches(fastify.redis);
 
       // Reload reports to build response
       const allReports = await fastify.prisma.matchReport.findMany({

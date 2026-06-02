@@ -137,10 +137,11 @@ Wenn Backend vom Host nach Postgres im Container über `127.0.0.1:5432` verbinde
 - Relationen: `participants TournamentParticipant[]`, `matches Match[]`, `results TournamentResult[]`.
 
 ### Match
-- `status MatchStatus` — `PENDING | ONGOING | COMPLETED | BYE | FORFEIT`.
+- `status MatchStatus` — `PENDING | ONGOING | COMPLETED | BYE | FORFEIT | DISPUTED`.
 - `next_match_id String?` — Selbstreferenz (`BracketProgression`) für Bracket-Traversal.
 - `deleted_at DateTime?` — Soft-Delete.
-- Relationen: `player1/player2 User?`, `winner User?`, `draft Draft?`, `feeder_matches Match[]`.
+- **Dynamic-Leaderboard (2026-06):** `season_id String? @db.Uuid` (+ `season Season?` Relation, Index `[season_id, status]`), `played_at DateTime?`, `ruleset String?` — beim Statuswechsel auf COMPLETED gestempelt (beide Completion-Pfade: `match-result-service.ts` + Legacy `routes/matches.ts`). Authoritative Season-Zuordnung für die derive-on-read-Aggregation.
+- Relationen: `player1/player2 User?`, `winner User?`, `draft Draft?`, `feeder_matches Match[]`, `season Season?`.
 
 ### TournamentParticipant
 - `status ParticipantStatus` — `REGISTERED | CHECKED_IN | DISQUALIFIED | WITHDREW`.
@@ -156,7 +157,11 @@ Wenn Backend vom Host nach Postgres im Container über `127.0.0.1:5432` verbinde
 ### LeaderboardEntry
 - `elo_rating Int @default(1200)` — Standard-ELO-Startwert.
 - `total_points Float` — für Ranglisten-Sortierung; Index `[season_id, total_points(sort: Desc)]`.
+- `season_points Int` — **DEPRECATED** (Welle-2 MMR): seit `feat/dynamic-leaderboard` nicht mehr geschrieben, durch das derive-on-read Leaderboard abgelöst. Spalte erhalten für Legacy-Modus/Historie.
 - Unique-Constraint: `[user_id, season_id]`.
+
+### DEPRECATED Welle-2-MMR-Models
+`FactionMastery`, `FactionMatchupStat`, `AntiFarmCap` sind seit `feat/dynamic-leaderboard` als `// DEPRECATED` markiert — Writes aus dem Match-Pfad entfernt, **Spalten nicht gedroppt** (Drop-Migration nach Validierung). Ersetzt durch die gefitteten Parameter in `lib/rating-model.ts` bzw. den player-spezifischen OpponentShare-Modifier in `lib/scoring-service.ts`.
 
 ### Draft
 - `status DraftStatus` — `PENDING | ONGOING | COMPLETED | CANCELLED`.
@@ -288,6 +293,7 @@ Das Seed-Script liegt bei `packages/db/prisma/seed.ts` und wird via `tsx` ausgef
 | `20260519090818_beta_match_flow_plus_de` | Beta-Match-Flow (Q1/Q3/Q4/Q12), DE-Bracket-Felder, `MatchReport`, `BracketSide`, `MatchResultType` |
 | `20260519122538_welle2_tournament_mechanics_and_mmr` | **Welle 2 (Plan 2 + Plan 3)** — Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, FactionMastery, FactionMatchupStat, AntiFarmCap, AdminConfig; neue Enums PlayoffFormat, MatchFormat, MapDecisionMode, StatsSource; TournamentMode +OPEN/BPT/SLT; Tournament +6 Felder (rounds_count, playoff_format, swiss_match_format, playoff_match_format, finale_match_format, map_decision_mode) |
 | `20260519131859_welle2_d_integration_fields` | **Welle 2 (Plan D)** — `MatchPhase` enum + `Match.phase` nullable für Playoff-Discriminator; `LeaderboardEntry.season_points Int @default(0)` + compound DESC-Index für 3-Modi-Leaderboard |
+| `20260601220129_dynamic_leaderboard_match_fields` | **Dynamic Leaderboard (Alex-Spec)** — `Match.season_id` (FK Season, ON DELETE SET NULL) + `played_at` + `ruleset`, Index `[season_id, status]`; **Backfill** bestehender COMPLETED-Matches (`played_at`←`updated_at`, `season_id`←Season-Datumsbereich) |
 
 Migrations-Lock unter `packages/db/prisma/migrations/migration_lock.toml`.
 

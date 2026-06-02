@@ -118,6 +118,103 @@ export const AllTimeLeaderboardEntryDtoSchema = LeaderboardEntryDtoSchema.extend
 export type AllTimeLeaderboardEntryDto = z.infer<typeof AllTimeLeaderboardEntryDtoSchema>;
 
 // ---------------------------------------------------------------------------
+// Dynamic Weighted Leaderboard (Alex-Spec) — derive-on-read scoring
+//
+// Nothing is stored: every value is reconstructable from current model values,
+// the current opponent-share modifier, and confirmed match facts.
+// ---------------------------------------------------------------------------
+
+// #1 — Main leaderboard
+export const DynamicLeaderboardEntryDtoSchema = z.object({
+  rank: z.number().int(),
+  playerId: z.string().uuid(),
+  displayName: z.string(),
+  avatarUrl: z.string().url().nullable(),
+  totalFinalPoints: z.number(),
+  totalRawPoints: z.number(),
+  totalMatches: z.number().int(),
+  wins: z.number().int(),
+  losses: z.number().int(),
+});
+export type DynamicLeaderboardEntryDto = z.infer<typeof DynamicLeaderboardEntryDtoSchema>;
+
+export const DynamicLeaderboardResponseSchema = z.object({
+  season: SeasonSummarySchema.optional(),
+  entries: z.array(DynamicLeaderboardEntryDtoSchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+});
+export type DynamicLeaderboardResponse = z.infer<typeof DynamicLeaderboardResponseSchema>;
+
+// #2 — Match scoring breakdown
+export const MatchScoringBreakdownDtoSchema = z.object({
+  matchId: z.string().uuid(),
+  winner: z.object({ id: z.string().uuid(), username: z.string() }),
+  loser: z.object({ id: z.string().uuid(), username: z.string() }),
+  winnerFaction: z.string(),
+  loserFaction: z.string(),
+  winnerPlayerFactionSkill: z.number(),
+  loserPlayerFactionSkill: z.number(),
+  matchupEffect: z.number(),
+  expectedChanceToWin: z.number(),
+  rawPoints: z.number(),
+  opponentShare: z.number(),
+  opponentModifier: z.number(),
+  finalPoints: z.number(),
+});
+export type MatchScoringBreakdownDto = z.infer<typeof MatchScoringBreakdownDtoSchema>;
+
+// #3 — Player/opponent anti-farming breakdown
+export const PlayerOpponentBreakdownDtoSchema = z.object({
+  playerId: z.string().uuid(),
+  opponentId: z.string().uuid(),
+  matchesVsOpponent: z.number().int(),
+  playerTotalMatches: z.number().int(),
+  opponentShare: z.number(),
+  opponentModifier: z.number(),
+  rawPointsFromWinsVsOpponent: z.number(),
+  finalPointsFromWinsVsOpponent: z.number(),
+});
+export type PlayerOpponentBreakdownDto = z.infer<typeof PlayerOpponentBreakdownDtoSchema>;
+
+// #4 — Faction matchup matrix
+export const FactionMatchupMatrixEntryDtoSchema = z.object({
+  factionA: z.string(),
+  factionB: z.string(),
+  matchupEffect: z.number(),
+  neutralEqualProficiencyWinChance: z.number(),
+  sampleSize: z.number().int(),
+  lowSampleWarning: z.boolean(),
+});
+export type FactionMatchupMatrixEntryDto = z.infer<typeof FactionMatchupMatrixEntryDtoSchema>;
+
+export const FactionMatchupMatrixResponseSchema = z.object({
+  seasonId: z.string().uuid(),
+  entries: z.array(FactionMatchupMatrixEntryDtoSchema),
+});
+export type FactionMatchupMatrixResponse = z.infer<typeof FactionMatchupMatrixResponseSchema>;
+
+// #5 — Player faction proficiency table
+export const PlayerFactionProficiencyDtoSchema = z.object({
+  playerId: z.string().uuid(),
+  factionId: z.string(),
+  playerFactionSkill: z.number(),
+  games: z.number().int(),
+  wins: z.number().int(),
+  losses: z.number().int(),
+  lowSampleWarning: z.boolean(),
+});
+export type PlayerFactionProficiencyDto = z.infer<typeof PlayerFactionProficiencyDtoSchema>;
+
+export const PlayerFactionProficiencyResponseSchema = z.object({
+  playerId: z.string().uuid(),
+  seasonId: z.string().uuid(),
+  entries: z.array(PlayerFactionProficiencyDtoSchema),
+});
+export type PlayerFactionProficiencyResponse = z.infer<typeof PlayerFactionProficiencyResponseSchema>;
+
+// ---------------------------------------------------------------------------
 // User Profile
 // ---------------------------------------------------------------------------
 

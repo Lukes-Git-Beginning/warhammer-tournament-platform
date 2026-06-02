@@ -3,12 +3,6 @@ import { z } from 'zod';
 import { emitMatchResult, emitBracketUpdate, emitStatusChange } from '../lib/emit.js';
 import { invalidate } from '../lib/cache.js';
 import { InvalidActionError } from '../lib/draft-service.js';
-import {
-  computeWinPoints,
-  updateFactionMasteryAfterMatch,
-  updateFactionMatchupStat,
-  incrementAntiFarmCap,
-} from '../lib/mmr.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -130,6 +124,9 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
             winner_id: winnerId,
             score: score ?? null,
             status: 'COMPLETED',
+            // Dynamic leaderboard: stamp the season + play time at completion.
+            season_id: activeSeason?.id ?? null,
+            played_at: new Date(),
             ...(player1FactionId ? { player1_faction_id: player1FactionId } : {}),
             ...(player2FactionId ? { player2_faction_id: player2FactionId } : {}),
           },
@@ -238,95 +235,19 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         });
       });
 
-      // MMR updates (after transaction to avoid nested-transaction issues)
-      // Only when: both factions set, there's a winner (no draw), and an active season exists.
-      if (activeSeason && winnerId !== null && winnerFactionId && loserFactionId && loserId) {
-        try {
-          const isTournament = true; // TODO: add casual/arena mode detection when arena feature launches
-          // Determine if this tournament is a Major
-          const tournamentForMmr = await fastify.prisma.tournament.findUnique({
-            where: { id: match.tournament_id },
-            select: { is_major: true },
-          });
-          const isMajor = tournamentForMmr?.is_major ?? false;
+      // NOTE: The Welle-2 incremental MMR hook (season_points / FactionMastery /
+      // FactionMatchupStat / AntiFarmCap) was removed here. The leaderboard is
+      // now derived on read from confirmed match facts by the dynamic rating
+      // model (lib/rating-model.ts, lib/leaderboard-service.ts). FactionStats +
+      // MatchupStats above stay (they power faction analytics, not scoring).
 
-          // 1. Compute points for winner
-          const { points } = await computeWinPoints(fastify.prisma, {
-            winnerId,
-            loserId,
-            winnerFactionId,
-            loserFactionId,
-            isTournament,
-            isMajor,
-            seasonId: activeSeason.id,
-          });
-
-          // 2. Update winner's leaderboard season_points
-          if (points > 0) {
-            await fastify.prisma.leaderboardEntry.upsert({
-              where: { user_id_season_id: { user_id: winnerId, season_id: activeSeason.id } },
-              create: {
-                user_id: winnerId,
-                season_id: activeSeason.id,
-                season_points: points,
-                total_points: 0,
-                elo_rating: 1200,
-                matches_played: 1,
-                wins: 1,
-                losses: 0,
-              },
-              update: {
-                season_points: { increment: points },
-              },
-            });
-          }
-
-          // 3. Update faction mastery for both players
-          await updateFactionMasteryAfterMatch(
-            fastify.prisma,
-            winnerId,
-            winnerFactionId,
-            loserId,
-            loserFactionId,
-          );
-
-          // 4. Update FactionMatchupStat for the season
-          await updateFactionMatchupStat(
-            fastify.prisma,
-            activeSeason.id,
-            winnerFactionId,
-            loserFactionId,
-          );
-
-          // 5. Anti-Farm cap increment (casual only — tournaments ignore cap)
-          if (!isTournament && points > 0) {
-            await incrementAntiFarmCap(
-              fastify.prisma,
-              activeSeason.id,
-              winnerId,
-              loserId,
-              winnerFactionId,
-              loserFactionId,
-              points,
-            );
-          }
-
-          request.log.info(
-            { matchId, winnerId, points, seasonId: activeSeason.id },
-            'MMR updated after match result',
-          );
-        } catch (mmrErr) {
-          // MMR failures are non-fatal — log and continue
-          request.log.error({ err: mmrErr, matchId }, 'MMR update failed (non-fatal)');
-        }
-      }
-
-      // Invalidate faction and meta caches after successful transaction
+      // Invalidate faction, meta, leaderboard + rating-model caches after commit
       if (fastify.redis) {
         await Promise.all([
           invalidate(fastify.redis, 'factions:*'),
           invalidate(fastify.redis, 'meta:*'),
           invalidate(fastify.redis, 'leaderboard:*'),
+          invalidate(fastify.redis, 'rating-model:*'),
         ]);
       }
 

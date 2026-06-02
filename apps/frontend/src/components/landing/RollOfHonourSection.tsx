@@ -15,8 +15,8 @@ const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
 /**
  * Section 4 — Roll of Honour.
- * Top-10 marshals by ELO standing. Uses getLeaderboard() and degrades to
- * empty / loading states gracefully.
+ * Top-10 marshals by dynamic weighted season standing (final points, Alex-Spec).
+ * Uses getLeaderboard() and degrades to empty / loading states gracefully.
  */
 export function RollOfHonourSection() {
   const { t } = useTranslation();
@@ -87,7 +87,7 @@ export function RollOfHonourSection() {
               >
                 {entries.slice(0, 10).map((entry, idx) => (
                   <motion.li
-                    key={entry.user.id}
+                    key={entry.playerId}
                     variants={{
                       hidden: reduced ? { opacity: 0 } : { opacity: 0, y: 10 },
                       visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: [0.4, 0, 0.2, 1] } },
@@ -101,14 +101,14 @@ export function RollOfHonourSection() {
                       {ROMAN[idx] ?? idx + 1}
                     </span>
                     <Avatar goldRim={idx < 3} className="size-10">
-                      {entry.user.avatar_url && <AvatarImage src={entry.user.avatar_url} alt="" />}
-                      <AvatarFallback>{entry.user.username[0]?.toUpperCase()}</AvatarFallback>
+                      {entry.avatarUrl && <AvatarImage src={entry.avatarUrl} alt="" />}
+                      <AvatarFallback>{entry.displayName[0]?.toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <span className="truncate font-medium text-rizzotto-stone-100 group-hover:text-rizzotto-gold-300">
-                      {entry.user.username}
+                      {entry.displayName}
                     </span>
                     <span className="font-mono tabular-nums text-rizzotto-gold-400">
-                      {Math.round(entry.elo_rating ?? 0)}
+                      {Math.round(entry.totalFinalPoints)}
                     </span>
                   </motion.li>
                 ))}

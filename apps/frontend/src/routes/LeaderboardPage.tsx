@@ -11,7 +11,7 @@ import {
   type LeaderboardMode,
   type ExtendedLeaderboardEntry,
 } from '@/lib/api.js';
-import type { LeaderboardEntryDto } from '@rizzotto/types';
+import type { LeaderboardEntryDto, DynamicLeaderboardEntryDto } from '@rizzotto/types';
 import { EloRatingDisplay } from '../components/meta/EloRatingDisplay.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
@@ -96,15 +96,150 @@ function SeasonTab() {
         </select>
       </div>
 
-      <LeaderboardTable
+      <DynamicLeaderboardTable
         entries={data?.entries ?? []}
         isLoading={isLoading}
         error={error}
-        extraColumn={null}
         page={page}
         totalPages={totalPages}
         onPageChange={setPage}
       />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic Leaderboard table (rating_model — derive-on-read, Alex-Spec)
+// Shape: rank/playerId/displayName/avatarUrl/totalFinalPoints/totalRawPoints/...
+// ---------------------------------------------------------------------------
+
+interface DynamicLeaderboardTableProps {
+  entries: DynamicLeaderboardEntryDto[];
+  isLoading: boolean;
+  error: Error | null;
+  page: number;
+  totalPages: number;
+  onPageChange: (p: number) => void;
+}
+
+function DynamicLeaderboardTable({
+  entries,
+  isLoading,
+  error,
+  page,
+  totalPages,
+  onPageChange,
+}: DynamicLeaderboardTableProps) {
+  const { t } = useTranslation();
+
+  if (isLoading) {
+    return <div className="py-8 text-center text-stone-400 text-sm">{t('common.loading')}</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
+        {t('leaderboard.load_error')}
+      </div>
+    );
+  }
+
+  if (entries.length === 0) {
+    return (
+      <EmptyState
+        variant="sigil"
+        title={t('leaderboard.empty_title')}
+        body={t('leaderboard.empty_body')}
+        motto={t('leaderboard.empty_motto')}
+        mottoTitle={t('leaderboard.empty_motto_title')}
+      />
+    );
+  }
+
+  return (
+    <div>
+      <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-parchment-aged-texture bg-[length:512px_512px] bg-blend-overlay backdrop-blur-sm">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
+              <th className="px-4 py-3 text-left font-medium text-stone-400">{t('leaderboard.columns.rank')}</th>
+              <th className="px-4 py-3 text-left font-medium text-stone-400">{t('leaderboard.columns.player')}</th>
+              <th className="px-4 py-3 text-right font-medium text-stone-400">{t('leaderboard.columns.points')}</th>
+              <th
+                className="px-4 py-3 text-right font-medium text-stone-400"
+                title="Raw points before the anti-farm opponent modifier"
+              >
+                Raw
+              </th>
+              <th className="px-4 py-3 text-center font-medium text-stone-400">{t('leaderboard.columns.wl')}</th>
+              <th className="px-4 py-3 text-right font-medium text-stone-400">{t('leaderboard.columns.games')}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-800/60">
+            {entries.map((entry) => {
+              const isFirst = entry.rank === 1;
+              const rowClass = isFirst
+                ? 'bg-warhammer-gold/5 hover:bg-warhammer-gold/10'
+                : 'hover:bg-stone-800/30';
+              return (
+                <tr key={entry.playerId} className={`transition-colors ${rowClass}`}>
+                  <td className="px-4 py-3">
+                    <RankCell rank={entry.rank} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link
+                      to="/users/$id"
+                      params={{ id: entry.playerId }}
+                      className="flex items-center gap-2 hover:text-warhammer-gold transition-colors"
+                    >
+                      <Avatar url={entry.avatarUrl} username={entry.displayName} />
+                      <span className={isFirst ? 'font-semibold text-warhammer-gold' : 'text-stone-200'}>
+                        {entry.displayName}
+                      </span>
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400">
+                    {entry.totalFinalPoints.toFixed(1)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-stone-500">
+                    {entry.totalRawPoints.toFixed(1)}
+                  </td>
+                  <td className="px-4 py-3 text-center text-stone-300">
+                    <span className="text-emerald-400">{entry.wins}</span>
+                    <span className="text-stone-600"> / </span>
+                    <span className="text-red-400">{entry.losses}</span>
+                  </td>
+                  <td className="px-4 py-3 text-right text-stone-400">{entry.totalMatches}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between text-sm">
+          <button
+            type="button"
+            onClick={() => onPageChange(page - 1)}
+            disabled={page <= 1}
+            className="rounded border border-stone-700 px-3 py-1.5 text-stone-300 hover:border-stone-500 hover:text-stone-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            ← {t('common.back')}
+          </button>
+          <span className="text-stone-500">
+            {t('common.page_of', { page, total: totalPages })}
+          </span>
+          <button
+            type="button"
+            onClick={() => onPageChange(page + 1)}
+            disabled={page >= totalPages}
+            className="rounded border border-stone-700 px-3 py-1.5 text-stone-300 hover:border-stone-500 hover:text-stone-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {t('common.next')} →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -470,7 +605,7 @@ function LeaderboardTable({
 // ---------------------------------------------------------------------------
 
 const TABS_CONFIG: { id: Tab; label: string }[] = [
-  { id: 'season', label: 'Season Points' },
+  { id: 'season', label: 'Season' },
   { id: 'winrate', label: 'Win Rate' },
   { id: 'weighted_winrate', label: 'Weighted Win Rate' },
   { id: 'all-time', label: 'All Time' },

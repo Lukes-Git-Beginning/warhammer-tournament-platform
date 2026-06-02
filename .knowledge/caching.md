@@ -77,6 +77,11 @@ return cached(
 | `leaderboard:all-time:page=<n>&pageSize=<n>` | 120s | `routes/leaderboard.ts` |
 | `factions:list:seasonId=<uuid>` | 60s | `routes/factions.ts` |
 | `factions:detail:id=<id>&seasonId=<uuid>` | (Route-TTL) | `routes/factions.ts` |
+| `rating-model:iter=<n>&low=<n>&lpfs=<f>&lme=<f>&seasonId=<uuid>` | 3600s | `lib/rating-model-service.ts` — gecachter Logistic-Regression-Fit (teuer, Key inkl. Lambdas) |
+| `leaderboard:breakdown:match:id=<uuid>` | 60s | `routes/rating.ts` (#2) |
+| `leaderboard:anti-farming:opponentId=…&playerId=…&seasonId=…` | 60s | `routes/rating.ts` (#3) |
+| `factions:matchup-matrix:seasonId=<uuid>` | 60s | `routes/rating.ts` (#4) |
+| `leaderboard:proficiency:playerId=…&seasonId=…` | 60s | `routes/rating.ts` (#5) |
 
 ---
 
@@ -125,11 +130,15 @@ if (!redis) {
 Bei einer Mutation (z.B. Punktestand-Update, Rollen-Änderung) immer das **breiteste sinnvolle Pattern** invalidieren:
 
 ```typescript
-// Nach einem Match-Ergebnis-Update:
-await invalidate(fastify.redis, 'leaderboard:*');
+// Nach einem Match-Ergebnis-Update (beide Completion-Pfade):
+await invalidate(fastify.redis, 'leaderboard:*');   // deckt breakdown/anti-farming/proficiency mit ab
+await invalidate(fastify.redis, 'factions:*');      // deckt matchup-matrix mit ab
+await invalidate(fastify.redis, 'rating-model:*');  // gecachten Fit verwerfen → neu ableiten
 
 // Nach Rollen-Änderung eines Users:
 await invalidate(fastify.redis, `user:role:${userId}`);
 ```
+
+**Wichtig:** Der gecachte `rating-model:*`-Fit muss nach jedem bestätigten Match invalidiert werden (sonst bleibt das Leaderboard stale). Der Dual-Submit-Pfad (`match-reports.ts`) tat das früher gar nicht — seit `feat/dynamic-leaderboard` invalidiert er via `invalidateScoringCaches()`.
 
 Einzelne Keys per `DEL` zu löschen ist fehleranfällig, wenn `cacheKey()` mehrere Paramter-Kombinationen gecacht hat. Pattern-Invalidierung ist sicherer.

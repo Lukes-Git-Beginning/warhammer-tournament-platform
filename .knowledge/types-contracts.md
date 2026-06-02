@@ -25,7 +25,7 @@ import { JwtPayloadSchema, BracketNode, ServerToClientEvents } from '@rizzotto/t
 
 | Datei | Inhalt |
 |---|---|
-| `api-schemas.ts` | Zod-Schemas + abgeleitete Typen für REST-API (Auth, User, Leaderboard, Factions, Meta) |
+| `api-schemas.ts` | Zod-Schemas + abgeleitete Typen für REST-API (Auth, User, Leaderboard, Factions, Meta). **+2026-06 Dynamic Leaderboard:** `DynamicLeaderboardEntryDto`/`DynamicLeaderboardResponse`, `MatchScoringBreakdownDto`, `PlayerOpponentBreakdownDto`, `FactionMatchupMatrixEntryDto`/`…Response`, `PlayerFactionProficiencyDto`/`…Response` |
 | `bracket.ts` | Bracket-Layout-Typen: `BracketNode`, `BracketResponse`, Swiss-Standings |
 | `draft.ts` | Draft-State-Machine-Typen, Preset-CRUD-DTOs, Event-DTOs |
 | `socket-events.ts` | `ServerToClientEvents`, `ClientToServerEvents`, `InterServerEvents`, `SocketData` |

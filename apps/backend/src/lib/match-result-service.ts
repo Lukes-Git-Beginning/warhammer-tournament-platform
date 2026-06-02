@@ -106,6 +106,13 @@ export async function resolveMatchResult(
   const p2Points = opts.player2_points ?? defaultPts.player2;
 
   await prisma.$transaction(async (tx) => {
+    // Active season — tags the match (for the dynamic leaderboard) and gates
+    // the legacy LeaderboardEntry update below.
+    const activeSeason = await tx.season.findFirst({
+      where: { is_active: true },
+      select: { id: true },
+    });
+
     // 1. Update match
     await tx.match.update({
       where: { id: matchId },
@@ -115,6 +122,9 @@ export async function resolveMatchResult(
         winner_id: winnerId,
         player1_points: p1Points,
         player2_points: p2Points,
+        // Dynamic leaderboard: stamp the season + play time at completion.
+        season_id: activeSeason?.id ?? null,
+        played_at: new Date(),
       },
     });
 
@@ -202,11 +212,6 @@ export async function resolveMatchResult(
 
     // 3. LeaderboardEntry updates (only when tournament counts for leaderboard)
     if (match.tournament.counts_for_leaderboard) {
-      const activeSeason = await tx.season.findFirst({
-        where: { is_active: true },
-        select: { id: true },
-      });
-
       if (activeSeason) {
         const seasonId = activeSeason.id;
         const players: Array<{ userId: string; isWinner: boolean; isDraw: boolean; points: number }> = [];
