@@ -1,6 +1,7 @@
 > Read-when: neue Route hinzufügen, API-Hook erstellen, Component-Pfad finden, Vite-Proxy-Config-Check.
 
 **TL;DR:**
+
 - Vite 6 + React 19 + TanStack Router (code-based) + TanStack Query 5 + Tailwind 4 CSS-first.
 - Alle API-Calls laufen über `apiFetch<T>()` aus `src/lib/api.ts` — kein direktes `fetch()` in Komponenten.
 - Routes werden manuell in `src/router.tsx` registriert; kein File-based Routing.
@@ -19,10 +20,10 @@ server.port: 5173
 
 **Proxy-Regeln** (alle mit `changeOrigin: true` → `http://localhost:3000`):
 
-| Pfad | WebSocket |
-|------|-----------|
-| `/api` | nein |
-| `/auth` | nein |
+| Pfad         | WebSocket       |
+| ------------ | --------------- |
+| `/api`       | nein            |
+| `/auth`      | nein            |
 | `/socket.io` | ja (`ws: true`) |
 
 ---
@@ -33,7 +34,9 @@ Datei: `apps/frontend/src/main.tsx`
 
 ```tsx
 <StrictMode>
-  <QueryClientProvider client={queryClient}>   // retry: false als default
+  <QueryClientProvider client={queryClient}>
+    {' '}
+    // retry: false als default
     <RouterProvider router={router} />
   </QueryClientProvider>
 </StrictMode>
@@ -61,26 +64,26 @@ export const router = createRouter({ routeTree });
 
 **Alle registrierten Routes:**
 
-| Pfad | Component | Datei |
-|------|-----------|-------|
-| `/` | `IndexPage` | `routes/IndexPage.tsx` |
-| `/login` | `LoginPage` | `routes/LoginPage.tsx` |
-| `/tournaments/create` | `CreateTournamentPage` | `routes/CreateTournamentPage.tsx` |
-| `/tournaments/$slug` | `TournamentDetail` | `routes/TournamentDetail.tsx` |
-| `/leaderboard` | `LeaderboardPage` | `routes/LeaderboardPage.tsx` |
-| `/users/$id` | `UserProfilePage` | `routes/UserProfilePage.tsx` |
-| `/meta` | `MetaDashboard` | `routes/MetaDashboard.tsx` |
-| `/factions` | `FactionListPage` | `routes/FactionListPage.tsx` |
-| `/factions/$id` | `FactionDetailPage` | `routes/FactionDetailPage.tsx` |
-| `/drafts/$id` | `DraftLobbyPage` | `routes/DraftLobbyPage.tsx` |
-| `/drafts/$id/spectate` | `DraftSpectatorPage` | `routes/DraftSpectatorPage.tsx` |
-| `/presets` | `PresetListPage` | `routes/PresetListPage.tsx` |
-| `/presets/new` | `PresetEditorPage` | `routes/PresetEditorPage.tsx` |
-| `/presets/$id/edit` | `PresetEditorPage` | `routes/PresetEditorPage.tsx` |
-| `/admin` | `AdminPage` | `routes/AdminPage.tsx` |
-| `/connect-steam` | `SteamConnectPage` | `routes/SteamConnectPage.tsx` |
-| `/matches/$matchId` | `MatchDetailPage` | `routes/MatchDetailPage.tsx` |
-| `/matches/$matchId/decision` | `MatchDecisionPage` | `routes/MatchDecisionPage.tsx` |
+| Pfad                         | Component              | Datei                             |
+| ---------------------------- | ---------------------- | --------------------------------- |
+| `/`                          | `IndexPage`            | `routes/IndexPage.tsx`            |
+| `/login`                     | `LoginPage`            | `routes/LoginPage.tsx`            |
+| `/tournaments/create`        | `CreateTournamentPage` | `routes/CreateTournamentPage.tsx` |
+| `/tournaments/$slug`         | `TournamentDetail`     | `routes/TournamentDetail.tsx`     |
+| `/leaderboard`               | `LeaderboardPage`      | `routes/LeaderboardPage.tsx`      |
+| `/users/$id`                 | `UserProfilePage`      | `routes/UserProfilePage.tsx`      |
+| `/meta`                      | `MetaDashboard`        | `routes/MetaDashboard.tsx`        |
+| `/factions`                  | `FactionListPage`      | `routes/FactionListPage.tsx`      |
+| `/factions/$id`              | `FactionDetailPage`    | `routes/FactionDetailPage.tsx`    |
+| `/drafts/$id`                | `DraftLobbyPage`       | `routes/DraftLobbyPage.tsx`       |
+| `/drafts/$id/spectate`       | `DraftSpectatorPage`   | `routes/DraftSpectatorPage.tsx`   |
+| `/presets`                   | `PresetListPage`       | `routes/PresetListPage.tsx`       |
+| `/presets/new`               | `PresetEditorPage`     | `routes/PresetEditorPage.tsx`     |
+| `/presets/$id/edit`          | `PresetEditorPage`     | `routes/PresetEditorPage.tsx`     |
+| `/admin`                     | `AdminPage`            | `routes/AdminPage.tsx`            |
+| `/connect-steam`             | `SteamConnectPage`     | `routes/SteamConnectPage.tsx`     |
+| `/matches/$matchId`          | `MatchDetailPage`      | `routes/MatchDetailPage.tsx`      |
+| `/matches/$matchId/decision` | `MatchDecisionPage`    | `routes/MatchDecisionPage.tsx`    |
 
 ---
 
@@ -97,7 +100,9 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     (headers as Record<string, string>)['Content-Type'] = 'application/json';
   }
   const res = await fetch(path, { credentials: 'include', ...init, headers });
-  if (!res.ok) { /* wirft ApiError mit .status */ }
+  if (!res.ok) {
+    /* wirft ApiError mit .status */
+  }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
@@ -113,8 +118,9 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 ```typescript
 useQuery({
   queryKey: ['leaderboard', seasonId, page],
-  queryFn: () => apiFetch<LeaderboardResponse>(`/api/leaderboard?seasonId=${seasonId}&page=${page}`),
-})
+  queryFn: () =>
+    apiFetch<LeaderboardResponse>(`/api/leaderboard?seasonId=${seasonId}&page=${page}`),
+});
 ```
 
 Typen kommen aus `@rizzotto/types` [siehe `.knowledge/types-contracts.md`].
@@ -146,31 +152,31 @@ mutation.mutate({
 
 Verifiziert gegen `src/routes/*.tsx` und `src/hooks/*.ts`:
 
-| Query-Key | Daten |
-|-----------|-------|
-| `['me']` | current user (`UserMe`) — Auth-Hook |
-| `['tournaments', page, pageSize]` | paginierte Tournament-Liste |
-| `['tournament', slug]` | einzelnes Tournament |
-| `['bracket', slug]` | Bracket-Daten (invalidiert per Socket) |
-| `['leaderboard', seasonId, page]` | saisonale Leaderboard-Seite |
-| `['leaderboard-all-time', page]` | saisonübergreifend |
-| `['seasons']` | alle Seasons |
-| `['factions']` | Fraktionsliste |
-| `['faction', id]` | einzelne Fraktion |
-| `['meta-overview']` | Meta-Übersicht |
-| `['meta-matchups']` | Matchup-Heatmap |
-| `['draft', draftId]` | Draft-State (`DraftView`) |
-| `['draft', draftId, 'events']` | Draft-Eventlog |
-| `['draft', draftId, 'available']` | verfügbare Fraktionen im laufenden Turn |
-| `['draft-presets']` | Preset-Liste |
-| `['draft-preset', id]` | einzelnes Preset |
-| `['user-profile', id]` | User-Profil-Seite |
-| `['maps']` | alle Maps (`MapDto[]`) |
-| `['match-decision', matchId]` | Match-Decision-State |
-| `['army-list-me', slug]` | eigene Army-Liste im Tournament |
-| `['army-list', slug, userId]` | Gegner-Army-Liste |
-| `['army-lists-all', slug]` | alle Listen (nach Tournament complete) |
-| `['tournament-participants', slug]` | Teilnehmer-Liste inkl. Status |
+| Query-Key                           | Daten                                   |
+| ----------------------------------- | --------------------------------------- |
+| `['me']`                            | current user (`UserMe`) — Auth-Hook     |
+| `['tournaments', page, pageSize]`   | paginierte Tournament-Liste             |
+| `['tournament', slug]`              | einzelnes Tournament                    |
+| `['bracket', slug]`                 | Bracket-Daten (invalidiert per Socket)  |
+| `['leaderboard', seasonId, page]`   | saisonale Leaderboard-Seite             |
+| `['leaderboard-all-time', page]`    | saisonübergreifend                      |
+| `['seasons']`                       | alle Seasons                            |
+| `['factions']`                      | Fraktionsliste                          |
+| `['faction', id]`                   | einzelne Fraktion                       |
+| `['meta-overview']`                 | Meta-Übersicht                          |
+| `['meta-matchups']`                 | Matchup-Heatmap                         |
+| `['draft', draftId]`                | Draft-State (`DraftView`)               |
+| `['draft', draftId, 'events']`      | Draft-Eventlog                          |
+| `['draft', draftId, 'available']`   | verfügbare Fraktionen im laufenden Turn |
+| `['draft-presets']`                 | Preset-Liste                            |
+| `['draft-preset', id]`              | einzelnes Preset                        |
+| `['user-profile', id]`              | User-Profil-Seite                       |
+| `['maps']`                          | alle Maps (`MapDto[]`)                  |
+| `['match-decision', matchId]`       | Match-Decision-State                    |
+| `['army-list-me', slug]`            | eigene Army-Liste im Tournament         |
+| `['army-list', slug, userId]`       | Gegner-Army-Liste                       |
+| `['army-lists-all', slug]`          | alle Listen (nach Tournament complete)  |
+| `['tournament-participants', slug]` | Teilnehmer-Liste inkl. Status           |
 
 ---
 
@@ -179,12 +185,14 @@ Verifiziert gegen `src/routes/*.tsx` und `src/hooks/*.ts`:
 Verzeichnis: `apps/frontend/src/components/`
 
 **`admin/`**
+
 - `AuditLogTable.tsx` — paginierte Audit-Log-Tabelle
 - `StatsDashboard.tsx` — Admin-Statistiken
 - `UserBanModal.tsx` / `UserBanTab.tsx` — Ban/Unban-Workflow
 - `PresetLibraryAdmin.tsx` — Preset-Verwaltung (promote, delete)
 
 **`bracket/`**
+
 - `BracketView.tsx` — Container mit Zoom via `react-zoom-pan-pinch`
 - `SVGBracket.tsx` — SVG-Bracket-Rendering
 - `MatchNode.tsx` — einzelner Match im Bracket
@@ -193,6 +201,7 @@ Verzeichnis: `apps/frontend/src/components/`
 - `computeBracketLayout.ts` — pure Layout-Berechnung (kein React)
 
 **`draft/`**
+
 - `DraftLobby.tsx` — Haupt-Draft-UI
 - `DraftTimer.tsx` — Countdown-Anzeige
 - `DraftStatusBanner.tsx` — Status-/Phasen-Banner
@@ -204,11 +213,13 @@ Verzeichnis: `apps/frontend/src/components/`
 - `CategoryLimitsEditor.tsx` — Kategorie-Limits-Formular
 
 **`meta/`**
+
 - `EloRatingDisplay.tsx` — Elo-Wert mit Trend
 - `FactionBadge.tsx` — Fraktions-Icon + Name
 - `MatchupHeatmap.tsx` — Win-Rate-Heatmap
 
 **`tournament/`**
+
 - `TournamentCard.tsx` — Karten-Darstellung in Listen
 - `TournamentCreateForm.tsx` — Erstellungsformular (Welle 2: Mode, Rounds, Playoff, MapPool, MatchFormat)
 - `ArmyListUpload.tsx` — TXT-Upload-Component (Legacy)
@@ -217,9 +228,11 @@ Verzeichnis: `apps/frontend/src/components/`
 - `CheckInButton.tsx` — Self-Service Check-in mit Live-Countdown (Welle 2)
 
 **`layout/`**
+
 - `Header.tsx` — globale Navigation
 
 **`auth/`**
+
 - `DiscordLoginButton.tsx` — Discord-OAuth-Button
 
 ---
@@ -247,6 +260,17 @@ useLiveBracket(tournamentId: string): void
 Joined `join_tournament`-Room, invalidiert `['bracket']` bei `match_result`-
 und `bracket_update`-Events. Beim Unmount: `leave_tournament`.
 
+### `useLiveMatch(matchId, tournamentId?)`
+
+```typescript
+useLiveMatch(matchId: string, tournamentId?: string): void
+```
+
+Joined `join_tournament`-Room (sobald `tournamentId` bekannt), invalidiert
+`['match', matchId]` bei `match_result`/`bracket_update` und zusätzlich
+`['match-scoring-breakdown', matchId]` wenn das Event dieses Match betrifft.
+Beim Unmount: `leave_tournament`. Genutzt von der `MatchDetailPage` (P1a, 2026-06).
+
 ---
 
 ## Auth-State
@@ -271,6 +295,7 @@ und `bracket_update`-Events. Beim Unmount: `leave_tournament`.
 
 1. Component-Datei anlegen: `apps/frontend/src/routes/FooPage.tsx`
 2. In `apps/frontend/src/router.tsx` registrieren:
+
    ```typescript
    import { FooPage } from './routes/FooPage';
 
@@ -280,6 +305,7 @@ und `bracket_update`-Events. Beim Unmount: `leave_tournament`.
      component: FooPage,
    });
    ```
+
 3. Route dem `routeTree` hinzufügen:
    ```typescript
    const routeTree = rootRoute.addChildren([

@@ -1,6 +1,7 @@
 > Read-when: Tests schreiben (Unit, Integration, E2E), Fixture-Helper finden, Vitest/Playwright-Config.
 
 **TL;DR**
+
 - Backend-Unit-Tests laufen mit Vitest (`pool: 'forks'`, `singleFork: true`) in `apps/backend/test/` — 25 Test-Files, kein Parallel-State-Conflict.
 - E2E-Tests laufen mit Playwright (Chromium-only, `baseURL: http://localhost:5173`) in `apps/e2e/tests/` — 9 Spec-Files.
 - Hermetic-Cleanup via `db-fixtures.ts` (Backend) bzw. `tournament-fixture.ts` (E2E): randomUUID-basierte Entities, gezieltes Delete — nie globales `deleteMany`. Siehe auch `.knowledge/database.md`.
@@ -26,14 +27,14 @@
 
 `singleFork: true` verhindert parallele DB-State-Konflikte — alle Tests laufen sequenziell in einem Worker-Prozess. Aktuell 25 Test-Files:
 
-| Bereich | Files |
-|---|---|
-| Bracket/Format | `bracket.test.ts`, `swiss.test.ts`, `round-robin.test.ts` |
-| Draft | `draft-state.test.ts`, `draft-service.test.ts`, `draft-socket.test.ts`, `draft-reconnect.test.ts`, `drafts-routes.test.ts`, `tournament-with-draft.test.ts`, `draft-presets.test.ts` |
-| Match | `match-start.test.ts`, `finalize-tournament.test.ts` |
-| Stats/Leaderboard | `elo.test.ts`, `leaderboard.test.ts`, `matchup-stats.test.ts`, `faction-snapshot.test.ts`, `factions.test.ts`, `heatmap.test.ts` |
-| Infra | `cache.test.ts`, `role-cache.test.ts`, `auth.test.ts`, `graphql.test.ts` |
-| Admin/Army | `admin-routes.test.ts`, `army-parser.test.ts`, `army-lists.test.ts` |
+| Bereich           | Files                                                                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Bracket/Format    | `bracket.test.ts`, `swiss.test.ts`, `round-robin.test.ts`                                                                                                                            |
+| Draft             | `draft-state.test.ts`, `draft-service.test.ts`, `draft-socket.test.ts`, `draft-reconnect.test.ts`, `drafts-routes.test.ts`, `tournament-with-draft.test.ts`, `draft-presets.test.ts` |
+| Match             | `match-start.test.ts`, `finalize-tournament.test.ts`                                                                                                                                 |
+| Stats/Leaderboard | `elo.test.ts`, `leaderboard.test.ts`, `matchup-stats.test.ts`, `faction-snapshot.test.ts`, `factions.test.ts`, `heatmap.test.ts`                                                     |
+| Infra             | `cache.test.ts`, `role-cache.test.ts`, `auth.test.ts`, `graphql.test.ts`                                                                                                             |
+| Admin/Army        | `admin-routes.test.ts`, `army-parser.test.ts`, `army-lists.test.ts`                                                                                                                  |
 
 ---
 
@@ -110,26 +111,26 @@ Command: `pnpm -F @rizzotto/frontend test`
 
 **webServer-Strategie:**
 
-| Umgebung | Backend | Frontend |
-|---|---|---|
-| Lokal | `pnpm --filter @rizzotto/backend dev` | `pnpm --filter @rizzotto/frontend dev` |
-| CI | `pnpm --filter @rizzotto/backend start` (pre-built) | `pnpm --filter @rizzotto/frontend preview` |
+| Umgebung | Backend                                             | Frontend                                   |
+| -------- | --------------------------------------------------- | ------------------------------------------ |
+| Lokal    | `pnpm --filter @rizzotto/backend dev`               | `pnpm --filter @rizzotto/frontend dev`     |
+| CI       | `pnpm --filter @rizzotto/backend start` (pre-built) | `pnpm --filter @rizzotto/frontend preview` |
 
 `NODE_ENV=test` wird automatisch an den Backend-Prozess übergeben — aktiviert den Test-Login-Bypass.
 
 **Spec-Files:**
 
-| File | Zweck |
-|---|---|
-| `tournament-happy-path.spec.ts` | 16-Player Single-Elim, vollständiger Turnier-Lifecycle |
-| `live-draft.spec.ts` | 2 Browser-Tabs, echte WebSocket-Draft-Session (~38 s) |
-| `swiss-rematch-avoidance.spec.ts` | 8 Spieler / 3 Runden Swiss, kein Rematch-Pairing |
+| File                              | Zweck                                                                         |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `tournament-happy-path.spec.ts`   | 16-Player Single-Elim, vollständiger Turnier-Lifecycle                        |
+| `live-draft.spec.ts`              | 2 Browser-Tabs, echte WebSocket-Draft-Session (~38 s)                         |
+| `swiss-rematch-avoidance.spec.ts` | 8 Spieler / 3 Runden Swiss, kein Rematch-Pairing                              |
 | `leaderboard-correctness.spec.ts` | 3 Turniere, dynamic-FinalPoints-Ranking + Sortier-Korrektheit (faction-aware) |
-| `reconnect-recovery.spec.ts` | Socket-Disconnect + Redis-Rehydrate |
-| `smoke.spec.ts` | Basis-Smoke (Navigation, Health) |
-| `draft.spec.ts` | Draft-Smoke (kleinerer Umfang als `live-draft`) |
-| `meta.spec.ts` | Meta-Seiten-Smoke (Faction-Stats, Heatmap) |
-| `production-smoke.spec.ts` | Separat — läuft gegen `PLAYWRIGHT_BASE_URL`, kein Auth |
+| `reconnect-recovery.spec.ts`      | Socket-Disconnect + Redis-Rehydrate                                           |
+| `smoke.spec.ts`                   | Basis-Smoke (Navigation, Health)                                              |
+| `draft.spec.ts`                   | Draft-Smoke (kleinerer Umfang als `live-draft`)                               |
+| `meta.spec.ts`                    | Meta-Seiten-Smoke (Faction-Stats, Heatmap)                                    |
+| `production-smoke.spec.ts`        | Separat — läuft gegen `PLAYWRIGHT_BASE_URL`, kein Auth                        |
 
 ---
 
@@ -189,6 +190,22 @@ Drei nicht-offensichtliche Stolpersteine, die beim Dynamic-Weighted-Leaderboard-
 
 ---
 
+## E2E lokal fahren — Gotchas (Phase-1-Session 2026-06-02)
+
+- **Redis vor lokalem E2E flushen.** Der Redis-Container-Volume persistiert über Sessions; ein **veralteter Cache** (z.B. leerer `factions:list` aus einem alten Lauf) lässt Specs spurious failen — `meta.spec.ts` „GET /api/factions" bekam `data.length === 0`, der Decision-Flow keine Maps. Fix: `docker exec tww3-redis redis-cli FLUSHALL` vor `pnpm test:e2e`. (Lokale DB-Credentials: User/DB/PW = `tww3`, nicht `postgres`.)
+- **Prisma `notIn` schließt NULL-Rows aus (SQL-3-Wert-Logik).** Swiss-**Runde-1**-Matches (bei `/start` generiert) haben `phase = NULL`; erst `next-round` taggt `phase='SWISS'` (`bracket.ts:603`). Ein Filter `where: { phase: { notIn: ['PLAYOFF_*'] } }` überspringt damit NULL-Phase-Matches → Runde gilt fälschlich als „nicht gespielt". Playoff-Phasen **in JS** ausfiltern, nicht via Prisma `notIn`.
+- **`decision/start` liefert `201 Created`** (nicht 200) — `routes/match-decision.ts:172`.
+
+## Visual-Snapshots — Bootstrap + CI-Validierung
+
+Die 9 Visual-Specs (`visual/landing-overhaul.spec.ts`, landing/login/leaderboard × 3 Viewports) sind seit 2026-06-02 **aktiv in CI** (Linux-Baselines committed, `UPDATE_SNAPSHOTS`-Guard entfernt).
+
+- **Datengetriebene Regionen container-maskieren.** `leaderboard-mobile` driftete ~41% durch randomisierte Cross-Spec-Usernames. Fix: `data-testid="leaderboard-data-table"` + `data-testid="roll-of-honour-list"` + `mask: [...]` + `maskColor` im `toHaveScreenshot`. **Container-Level** (nicht Zeilen-Level), weil die Zeilenzahl zwischen Läufen variiert.
+- **Baselines neu erzeugen:** `gh workflow run update-snapshots.yml --ref <branch>` → `playwright --update-snapshots` auf ubuntu-latest → Artifact `e2e-snapshots` → `gh run download <id> -n e2e-snapshots` → die `*-chromium-linux.png` ins Snapshot-Verzeichnis committen.
+- **Vor `main` per PR validieren.** CI läuft auf `push:[main]` **und** `pull_request`; **Deploy** nur bei CI-Success auf `main`. Lokal (win32) lassen sich Linux-Baselines NICHT prüfen. Also: Baseline-Änderungen auf einem Branch + **PR** pushen → PR-CI validiert die Visual-Specs gegen die Baselines, **ohne** das Prod-Deploy-Gate zu riskieren; erst nach grüner PR-CI mergen.
+
+---
+
 ## Test-Bypass-Login
 
 `POST /auth/test-login` ist nur aktiv wenn `NODE_ENV === 'test'`. Playwright übergibt `NODE_ENV=test` via `playwright.config.ts` an den Backend-webServer — kein manuelles Setup nötig.
@@ -221,6 +238,7 @@ pnpm -F @rizzotto/e2e test -- --debug                  # Playwright Inspector
 **Wichtig:** Kein globales `prisma.*.deleteMany()` ohne Where-Scope in Tests. Das würde Seed-User löschen und andere parallele Test-Runs zerstören.
 
 Korrekte Konvention:
+
 1. Entities mit `randomUUID()`-basierten IDs/Namen erstellen (Factories erledigen das automatisch)
 2. IDs im `afterEach`/`afterAll` sammeln
 3. Scoped Cleanup via `cleanupUsers(ids)` / `cleanupTournament(id)` / `cleanupTestData(userIds)`
