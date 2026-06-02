@@ -157,7 +157,7 @@ function DynamicLeaderboardTable({
   }
 
   return (
-    <div>
+    <div data-testid="leaderboard-data-table">
       <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-parchment-aged-texture bg-[length:512px_512px] bg-blend-overlay backdrop-blur-sm">
         <table className="min-w-full text-sm">
           <thead>
