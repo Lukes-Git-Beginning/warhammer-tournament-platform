@@ -3,6 +3,7 @@ import type {
   BracketResponse,
   LeaderboardResponse,
   LeaderboardEntryDto,
+  DynamicLeaderboardResponse,
   UserProfileResponse,
   FactionListResponse,
   FactionDetailResponse,
@@ -18,6 +19,7 @@ import type {
 export type {
   BracketResponse,
   LeaderboardResponse,
+  DynamicLeaderboardResponse,
   UserProfileResponse,
   FactionListResponse,
   FactionDetailResponse,
@@ -293,17 +295,20 @@ export function getBracket(slug: string): Promise<BracketResponse> {
   return apiFetch<BracketResponse>(`/api/tournaments/${slug}/bracket`);
 }
 
+// Default mode is the dynamic weighted leaderboard ('rating_model', Alex-Spec) —
+// derive-on-read shape (playerId/displayName/totalFinalPoints). Legacy modes
+// (season_points/winrate/weighted_winrate) keep the old shape via getLeaderboardByMode.
 export function getLeaderboard(opts?: {
   seasonId?: string;
   page?: number;
   pageSize?: number;
-}): Promise<LeaderboardResponse> {
+}): Promise<DynamicLeaderboardResponse> {
   const params = new URLSearchParams();
   if (opts?.seasonId) params.set('seasonId', opts.seasonId);
   if (opts?.page) params.set('page', String(opts.page));
   if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
   const qs = params.toString();
-  return apiFetch<LeaderboardResponse>(`/api/leaderboard${qs ? `?${qs}` : ''}`);
+  return apiFetch<DynamicLeaderboardResponse>(`/api/leaderboard${qs ? `?${qs}` : ''}`);
 }
 
 export function getAllTimeLeaderboard(opts?: {
