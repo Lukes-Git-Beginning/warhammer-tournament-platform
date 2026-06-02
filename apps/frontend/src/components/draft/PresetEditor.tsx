@@ -17,7 +17,12 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { CreateDraftPresetSchema } from '@rizzotto/types';
-import type { DraftPreset, DraftTurn, CategoryLimit, CreateDraftPresetRequest } from '@rizzotto/types';
+import type {
+  DraftPreset,
+  DraftTurn,
+  CategoryLimit,
+  CreateDraftPresetRequest,
+} from '@rizzotto/types';
 import { TurnEditor } from './TurnEditor';
 import { CategoryLimitsEditor } from './CategoryLimitsEditor';
 import { DraftSequenceTimeline } from './DraftSequenceTimeline';
@@ -49,7 +54,14 @@ interface SortableTurnProps {
   onDelete: () => void;
 }
 
-function SortableTurnItem({ id, turn, index, categoryNames, onChange, onDelete }: SortableTurnProps) {
+function SortableTurnItem({
+  id,
+  turn,
+  index,
+  categoryNames,
+  onChange,
+  onDelete,
+}: SortableTurnProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
   });
@@ -177,7 +189,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
               maxLength={120}
               required
               placeholder="z.B. Standard 5-Ban 3-Pick"
-              className="rounded border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-warhammer-gold focus:outline-none"
+              className="rounded border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
             />
           </div>
 
@@ -190,7 +202,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
               onChange={(e) => setTurnSeconds(Number(e.target.value))}
               min={5}
               max={600}
-              className="rounded border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100 focus:border-warhammer-gold focus:outline-none"
+              className="rounded border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
             />
           </div>
         </div>
@@ -204,7 +216,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
             maxLength={2000}
             rows={3}
             placeholder="Optional — Kurzbeschreibung des Preset-Formats"
-            className="rounded border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-warhammer-gold focus:outline-none resize-none"
+            className="rounded border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-rizzotto-gold-500 focus:outline-none resize-none"
           />
         </div>
 
@@ -214,7 +226,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
             type="checkbox"
             checked={isPublic}
             onChange={(e) => setIsPublic(e.target.checked)}
-            className="rounded border-stone-600 bg-stone-800 accent-warhammer-gold"
+            className="rounded border-stone-600 bg-stone-800 accent-rizzotto-gold-500"
           />
           <span className="text-sm text-stone-300">Öffentlich sichtbar</span>
         </label>
@@ -236,9 +248,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
       {/* Turn list with DnD */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-stone-200">
-            Züge ({turns.length})
-          </h2>
+          <h2 className="text-lg font-semibold text-stone-200">Züge ({turns.length})</h2>
           <div className="flex gap-2">
             <button
               type="button"
@@ -270,11 +280,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
           </div>
         )}
 
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
             <div className="space-y-2">
               {turns.map((turn, i) => (
@@ -305,7 +311,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
         <button
           type="submit"
           disabled={saving}
-          className="rounded border border-warhammer-gold/60 bg-warhammer-gold/10 px-6 py-2 text-sm font-medium text-warhammer-gold hover:bg-warhammer-gold/20 disabled:opacity-50 transition-colors"
+          className="rounded border border-rizzotto-gold-500/60 bg-rizzotto-gold-500/10 px-6 py-2 text-sm font-medium text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/20 disabled:opacity-50 transition-colors"
         >
           {saving ? 'Speichern…' : 'Preset speichern'}
         </button>

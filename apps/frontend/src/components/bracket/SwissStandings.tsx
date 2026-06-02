@@ -24,11 +24,15 @@ function Avatar({ url, username }: { url: string | null; username: string }) {
   );
 }
 
-export function SwissStandings({ standings, currentRound, recommendedRounds }: SwissStandingsProps) {
+export function SwissStandings({
+  standings,
+  currentRound,
+  recommendedRounds,
+}: SwissStandingsProps) {
   return (
     <div className="mb-6 rounded-md border border-stone-800 bg-stone-900/40 overflow-hidden">
       <div className="px-4 py-3 border-b border-stone-800 bg-stone-900/60">
-        <h3 className="font-display text-base font-semibold text-warhammer-gold">
+        <h3 className="font-display text-base font-semibold text-rizzotto-gold-500">
           Standings (Runde {currentRound}/{recommendedRounds})
         </h3>
       </div>
@@ -52,13 +56,15 @@ export function SwissStandings({ standings, currentRound, recommendedRounds }: S
                     <Link
                       to="/users/$id"
                       params={{ id: entry.userId }}
-                      className="flex items-center gap-2 hover:text-warhammer-gold transition-colors"
+                      className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
                     >
                       <Avatar url={entry.avatarUrl} username={displayName} />
                       <span className="text-stone-200">{displayName}</span>
                     </Link>
                   </td>
-                  <td className="px-4 py-2 text-right font-semibold text-stone-100">{entry.score}</td>
+                  <td className="px-4 py-2 text-right font-semibold text-stone-100">
+                    {entry.score}
+                  </td>
                   <td className="px-4 py-2 text-center text-stone-300">
                     <span className="text-emerald-400">{entry.wins}</span>
                     <span className="text-stone-600"> / </span>

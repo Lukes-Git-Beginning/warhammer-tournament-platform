@@ -26,7 +26,13 @@ function actionLabel(action: string): string {
 
 function EventRow({ ev }: { ev: DraftEventDto }) {
   const actorLabel =
-    ev.actor === 'host' ? 'Host' : ev.actor === 'guest' ? 'Gast' : ev.actor === 'admin' ? 'Admin' : 'System';
+    ev.actor === 'host'
+      ? 'Host'
+      : ev.actor === 'guest'
+        ? 'Gast'
+        : ev.actor === 'admin'
+          ? 'Admin'
+          : 'System';
 
   return (
     <div className="flex items-baseline gap-1.5 py-0.5 text-sm">
@@ -38,8 +44,8 @@ function EventRow({ ev }: { ev: DraftEventDto }) {
           ev.actor === 'host'
             ? 'text-blue-400'
             : ev.actor === 'guest'
-            ? 'text-red-400'
-            : 'text-stone-400'
+              ? 'text-red-400'
+              : 'text-stone-400'
         }`}
       >
         {actorLabel}
@@ -50,9 +56,7 @@ function EventRow({ ev }: { ev: DraftEventDto }) {
       ) : ev.action === 'pick' ? (
         <span className="text-stone-600">(versteckt)</span>
       ) : null}
-      {ev.is_auto_selected && (
-        <span className="text-amber-500 text-xs shrink-0">auto</span>
-      )}
+      {ev.is_auto_selected && <span className="text-amber-500 text-xs shrink-0">auto</span>}
     </div>
   );
 }
@@ -66,12 +70,10 @@ export function DraftHistory({ draftId }: DraftHistoryProps) {
 
   return (
     <div className="rounded-md border border-stone-800 bg-stone-900/40 p-3">
-      <h3 className="mb-3 font-display text-sm font-bold text-warhammer-gold uppercase tracking-wide">
+      <h3 className="mb-3 font-display text-sm font-bold text-rizzotto-gold-500 uppercase tracking-wide">
         Verlauf
       </h3>
-      {isLoading && (
-        <div className="text-xs text-stone-500">Lade…</div>
-      )}
+      {isLoading && <div className="text-xs text-stone-500">Lade…</div>}
       {!isLoading && (!data?.events || data.events.length === 0) && (
         <div className="text-xs text-stone-600 italic">Noch keine Aktionen</div>
       )}

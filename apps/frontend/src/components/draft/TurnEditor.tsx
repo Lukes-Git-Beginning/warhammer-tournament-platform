@@ -34,7 +34,14 @@ const VARIANT_OPTIONS = [
 
 const VARIANT_ACTIONS = new Set(['pick', 'ban']);
 
-export function TurnEditor({ turn, index, categoryNames, onChange, onDelete, dragHandleProps }: TurnEditorProps) {
+export function TurnEditor({
+  turn,
+  index,
+  categoryNames,
+  onChange,
+  onDelete,
+  dragHandleProps,
+}: TurnEditorProps) {
   const showVariant = VARIANT_ACTIONS.has(turn.action);
 
   function update(patch: Partial<DraftTurn>) {
@@ -75,10 +82,12 @@ export function TurnEditor({ turn, index, categoryNames, onChange, onDelete, dra
           <select
             value={turn.actor}
             onChange={(e) => update({ actor: e.target.value as DraftTurn['actor'] })}
-            className="rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:border-warhammer-gold focus:outline-none"
+            className="rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
           >
             {ACTOR_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
         </div>
@@ -93,10 +102,12 @@ export function TurnEditor({ turn, index, categoryNames, onChange, onDelete, dra
               const variant = VARIANT_ACTIONS.has(action) ? (turn.variant ?? 'global') : null;
               update({ action, variant });
             }}
-            className="rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:border-warhammer-gold focus:outline-none"
+            className="rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
           >
             {ACTION_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
         </div>
@@ -108,10 +119,12 @@ export function TurnEditor({ turn, index, categoryNames, onChange, onDelete, dra
             <select
               value={turn.variant ?? 'global'}
               onChange={(e) => update({ variant: e.target.value as DraftTurn['variant'] })}
-              className="rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:border-warhammer-gold focus:outline-none"
+              className="rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
             >
               {VARIANT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
               ))}
             </select>
           </div>
@@ -123,10 +136,12 @@ export function TurnEditor({ turn, index, categoryNames, onChange, onDelete, dra
           <select
             value={turn.category}
             onChange={(e) => update({ category: e.target.value })}
-            className="rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:border-warhammer-gold focus:outline-none"
+            className="rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
           >
             {categoryNames.map((name) => (
-              <option key={name} value={name}>{name}</option>
+              <option key={name} value={name}>
+                {name}
+              </option>
             ))}
           </select>
         </div>
@@ -139,7 +154,7 @@ export function TurnEditor({ turn, index, categoryNames, onChange, onDelete, dra
             type="checkbox"
             checked={turn.is_hidden}
             onChange={(e) => update({ is_hidden: e.target.checked })}
-            className="rounded border-stone-600 bg-stone-800 accent-warhammer-gold"
+            className="rounded border-stone-600 bg-stone-800 accent-rizzotto-gold-500"
           />
           Versteckt
         </label>
@@ -148,7 +163,7 @@ export function TurnEditor({ turn, index, categoryNames, onChange, onDelete, dra
             type="checkbox"
             checked={turn.is_parallel}
             onChange={(e) => update({ is_parallel: e.target.checked })}
-            className="rounded border-stone-600 bg-stone-800 accent-warhammer-gold"
+            className="rounded border-stone-600 bg-stone-800 accent-rizzotto-gold-500"
           />
           Parallel
         </label>
@@ -157,7 +172,7 @@ export function TurnEditor({ turn, index, categoryNames, onChange, onDelete, dra
             type="checkbox"
             checked={turn.as_opponent}
             onChange={(e) => update({ as_opponent: e.target.checked })}
-            className="rounded border-stone-600 bg-stone-800 accent-warhammer-gold"
+            className="rounded border-stone-600 bg-stone-800 accent-rizzotto-gold-500"
           />
           Als Gegner
         </label>

@@ -34,7 +34,7 @@ export function MatchNode({ match, player1Name, player2Name, onClick }: MatchNod
   return (
     <div
       className={`w-full h-full ${borderStyle} ${statusCls} rounded flex flex-col overflow-hidden ${
-        onClick ? 'cursor-pointer hover:border-warhammer-gold transition-colors' : ''
+        onClick ? 'cursor-pointer hover:border-rizzotto-gold-500 transition-colors' : ''
       } relative`}
       onClick={onClick}
     >
@@ -42,13 +42,15 @@ export function MatchNode({ match, player1Name, player2Name, onClick }: MatchNod
       <div className="flex-1 flex items-center px-2 border-b border-stone-800">
         <span
           className={`flex-1 text-xs truncate ${
-            p1Winner ? 'text-warhammer-gold font-semibold' : 'text-stone-300'
+            p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'
           }`}
         >
           {isBye ? 'BYE' : (player1Name ?? match.player1Id ?? '—')}
         </span>
         {score1 && (
-          <span className={`text-xs ml-1 tabular-nums ${p1Winner ? 'text-warhammer-gold font-semibold' : 'text-stone-400'}`}>
+          <span
+            className={`text-xs ml-1 tabular-nums ${p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
+          >
             {score1}
           </span>
         )}
@@ -58,13 +60,15 @@ export function MatchNode({ match, player1Name, player2Name, onClick }: MatchNod
       <div className="flex-1 flex items-center px-2">
         <span
           className={`flex-1 text-xs truncate ${
-            p2Winner ? 'text-warhammer-gold font-semibold' : 'text-stone-300'
+            p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'
           }`}
         >
           {isBye ? 'BYE' : (player2Name ?? match.player2Id ?? '—')}
         </span>
         {score2 && (
-          <span className={`text-xs ml-1 tabular-nums ${p2Winner ? 'text-warhammer-gold font-semibold' : 'text-stone-400'}`}>
+          <span
+            className={`text-xs ml-1 tabular-nums ${p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
+          >
             {score2}
           </span>
         )}

@@ -29,17 +29,15 @@ export function UserBanModal({ user, onClose }: UserBanModalProps) {
       aria-labelledby="ban-modal-title"
     >
       <div className="w-full max-w-md rounded-lg border border-stone-700 bg-stone-950 p-6 shadow-xl">
-        <h2
-          id="ban-modal-title"
-          className="mb-4 text-lg font-bold text-warhammer-gold"
-        >
+        <h2 id="ban-modal-title" className="mb-4 text-lg font-bold text-rizzotto-gold-500">
           {isBanned ? 'Ban aufheben' : 'User bannen'}
         </h2>
 
         <p className="mb-4 text-stone-300 text-sm">
           {isBanned ? (
             <>
-              Ban für <span className="font-semibold text-stone-100">{user.username}</span> aufheben?
+              Ban für <span className="font-semibold text-stone-100">{user.username}</span>{' '}
+              aufheben?
             </>
           ) : (
             <>
@@ -59,15 +57,13 @@ export function UserBanModal({ user, onClose }: UserBanModalProps) {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Regelverstoß, Betrug…"
-              className="w-full rounded border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-200 placeholder:text-stone-600 focus:border-warhammer-gold focus:outline-none"
+              className="w-full rounded border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-200 placeholder:text-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
             />
           </div>
         )}
 
         {mutation.error && (
-          <p className="mb-3 text-sm text-red-400">
-            Fehler: {(mutation.error as Error).message}
-          </p>
+          <p className="mb-3 text-sm text-red-400">Fehler: {(mutation.error as Error).message}</p>
         )}
 
         <div className="flex justify-end gap-3">
@@ -89,11 +85,7 @@ export function UserBanModal({ user, onClose }: UserBanModalProps) {
                 : 'bg-red-700 text-white hover:bg-red-600'
             }`}
           >
-            {mutation.isPending
-              ? 'Bitte warten…'
-              : isBanned
-              ? 'Ban aufheben'
-              : 'Jetzt bannen'}
+            {mutation.isPending ? 'Bitte warten…' : isBanned ? 'Ban aufheben' : 'Jetzt bannen'}
           </button>
         </div>
       </div>
