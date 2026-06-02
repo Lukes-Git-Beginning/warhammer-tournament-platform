@@ -124,7 +124,7 @@ Command: `pnpm -F @rizzotto/frontend test`
 | `tournament-happy-path.spec.ts` | 16-Player Single-Elim, vollständiger Turnier-Lifecycle |
 | `live-draft.spec.ts` | 2 Browser-Tabs, echte WebSocket-Draft-Session (~38 s) |
 | `swiss-rematch-avoidance.spec.ts` | 8 Spieler / 3 Runden Swiss, kein Rematch-Pairing |
-| `leaderboard-correctness.spec.ts` | 3 Turniere, ELO + Points-Verifizierung |
+| `leaderboard-correctness.spec.ts` | 3 Turniere, dynamic-FinalPoints-Ranking + Sortier-Korrektheit (faction-aware) |
 | `reconnect-recovery.spec.ts` | Socket-Disconnect + Redis-Rehydrate |
 | `smoke.spec.ts` | Basis-Smoke (Navigation, Health) |
 | `draft.spec.ts` | Draft-Smoke (kleinerer Umfang als `live-draft`) |
@@ -174,6 +174,18 @@ reportMatchResult(request, matchId, opts: { winner_id, p1_score?, p2_score?, p1_
 cleanupTestData(userIds: string[]): Promise<void>
 // Löscht cascade-geordnet alle Daten der Test-User inkl. deren Tournaments
 ```
+
+---
+
+## E2E-Gotchas — Dynamic Leaderboard + Rate-Limit
+
+Drei nicht-offensichtliche Stolpersteine, die beim Dynamic-Weighted-Leaderboard-Merge (2026-06-02) das **Pre-Deploy-E2E-Gate** brachen (die 436 Unit-Tests fingen sie NICHT — E2E ist nicht in der Unit-Suite):
+
+1. **Leaderboard zählt nur Faction-Matches.** Das derive-on-read-Leaderboard (`mode=rating_model`, Default) aggregiert via `confirmedMatchWhere` (`apps/backend/src/lib/rating-model-service.ts`): ein Match zählt nur mit `status=COMPLETED`, `winner_id`, **beiden** `player{1,2}_faction_id != null`, gesetztem `season_id` **und** `tournament.counts_for_leaderboard=true` (Default true; `season_id` + Fraktionen werden beim Result-Report gestempelt). E2E, das Leaderboard-Einträge erwartet, MUSS `reportMatchResult(..., { p1_faction_id, p2_faction_id })` mit zwei geseedeten Faction-IDs (`prisma.faction.findMany({ take: 2 })`) aufrufen — sonst kommt das Leaderboard leer zurück.
+2. **Modell-agnostisch asserten, nicht ELO-Intuition.** Das gewichtete Modell kann „weniger, aber härtere" Siege (starker Gegner, niedriger Anti-Farm-Share) über „mehr, aber repetitive" Siege ranken. NICHT „mehr Siege = höherer Rang" asserten. Stattdessen: deterministische Win-Counts, positive `totalFinalPoints`, korrekte Sortierung (`totalFinalPoints` desc) + dichte Ränge (1..n). Response-Shape: `{ rank, playerId, displayName, avatarUrl, totalFinalPoints, totalRawPoints, totalMatches, wins, losses }` — **kein** `user`/`elo_rating`/`total_points` mehr.
+3. **Rate-Limit ist in Tests angehoben.** Globales `@fastify/rate-limit` ist `max: 300 / 1 min` pro IP (`apps/backend/src/app.ts`). In CI kommen alle Specs von **einer** IP; dauer-pollende Tests (`live-draft` via `pollUntil`, 400 ms-Intervall) reißen das Limit → `429`. Unter `NODE_ENV=test` ist `max` auf `100_000` angehoben — Prod/Dev bleiben bei 300. Neue heavy-polling-Tests brauchen daher kein eigenes Throttling.
+
+**Meta-Lehre:** Bei Feature-Contract-Wechseln (Response-Shape, „was zählt"-Regeln) **immer E2E lokal/auf Branch fahren, bevor nach `main` gemergt wird** — Unit-Grün allein ist kein ausreichendes Merge-Signal.
 
 ---
 
