@@ -306,7 +306,8 @@ test.describe('Welle-D: Match-Decision-Flow', () => {
       try {
         await signInRequest(p1Ctx, match!.player1_id!, BACKEND);
         const startRes = await p1Ctx.post(`${BACKEND}/api/matches/${match!.id}/decision/start`);
-        expect(startRes.status()).toBe(200);
+        // decision/start creates the decision record → 201 Created
+        expect(startRes.status()).toBe(201);
 
         const decision = (await startRes.json()) as {
           matchId: string;
@@ -392,17 +393,17 @@ test.describe('Welle-D: Auto-Playoff Generation after Swiss', () => {
 
       // Helper: play all pending Swiss matches in a given round.
       // Excludes playoff phases (PLAYOFF_SF, PLAYOFF_FINAL etc.) which may
-      // share the same round number as a late Swiss round.
+      // share the same round number as a late Swiss round. Filter in JS rather
+      // than via Prisma `notIn` — the initial round (generated at /start) leaves
+      // phase NULL, and SQL `NOT IN` excludes NULL rows, which would skip them.
       async function playRound(round: number): Promise<void> {
         const matches = await prisma.match.findMany({
-          where: {
-            tournament_id: tournament.id,
-            round,
-            phase: { notIn: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL'] },
-          },
-          select: { id: true, player1_id: true, player2_id: true, status: true },
+          where: { tournament_id: tournament.id, round },
+          select: { id: true, player1_id: true, player2_id: true, status: true, phase: true },
         });
+        const PLAYOFF_PHASES = ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL'];
         for (const match of matches) {
+          if (match.phase && PLAYOFF_PHASES.includes(match.phase)) continue;
           if (match.status === 'BYE') continue;
           if (!match.player1_id) continue;
           await reportMatchResult(orgCtx, match.id, { winner_id: match.player1_id }, BACKEND);
