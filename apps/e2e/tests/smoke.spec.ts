@@ -12,20 +12,14 @@ test('frontend loads with Rizzotto branding', async ({ page }) => {
   await expect(page.getByText(/where lists are forged/i).first()).toBeVisible();
 });
 
-// Pre-existing broken pre-M5 — Discord button locator strategy doesn't match
-// current login layout. Tracked in DEPLOYMENT.md post-launch TODOs.
-test.skip('login page shows Discord button', async ({ page }) => {
+test('login page shows Discord button', async ({ page }) => {
   await page.goto('/login');
-  const discordButton = page
-    .getByRole('button', { name: /discord/i })
-    .or(page.locator('[data-testid*="discord"]'))
-    .or(page.getByText(/discord/i));
+  // DiscordLoginButton renders a <button type="button"> with text "Mit Discord anmelden".
+  // The button navigates via window.location.href (onClick), not an href attribute.
+  // We verify the button is visible; the OAuth redirect itself is not testable in E2E
+  // without a real Discord session.
+  const discordButton = page.getByRole('button', { name: /discord/i });
   await expect(discordButton.first()).toBeVisible();
-
-  const href =
-    (await discordButton.first().getAttribute('href')) ??
-    (await page.locator('a', { hasText: /discord/i }).first().getAttribute('href'));
-  expect(href).toMatch(/\/auth\/discord/);
 });
 
 test('auth guard redirects unauthenticated user away from /tournaments/create', async ({
@@ -45,8 +39,24 @@ test('auth guard redirects unauthenticated user away from /tournaments/create', 
   }
 });
 
-// M2 — needs seeded fixtures and authenticated session
+// PARKED — bracket smoke test
+// Reason: Verifying an actual bracket requires a full tournament lifecycle
+// (create → register N players → generate bracket) with an authenticated
+// organizer session. That exact flow is already covered end-to-end by
+// tournament-happy-path.spec.ts and swiss-rematch-avoidance.spec.ts.
+// A thin duplicate here adds no signal; re-evaluate if a lightweight
+// "bracket API shape" assertion (e.g. GET /api/tournaments/:slug/matches)
+// is wanted without the full browser flow.
+// Tracking: consolidate with tournament-happy-path.spec.ts if a targeted
+// matches-endpoint shape check is added (no ROADMAP item currently).
 test.skip('bracket smoke test', async () => {});
 
-// M2 — needs seeded fixtures and authenticated session
+// PARKED — live update smoke test
+// Reason: Live-update (Socket.IO bracket push on match result) requires two
+// authenticated browser contexts plus a running Socket.IO server. This is
+// already covered in live-draft.spec.ts and reconnect-recovery.spec.ts.
+// A stand-alone "smoke" variant here is superseded by those dedicated specs.
+// Re-enable only if a minimal single-context "bracket update arrives" check
+// is needed separately from the draft/reconnect suites.
+// Tracking: no ROADMAP item; revisit alongside any Socket.IO health-check work.
 test.skip('live update smoke test', async () => {});

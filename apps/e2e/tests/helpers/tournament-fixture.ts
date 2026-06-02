@@ -114,9 +114,7 @@ export async function signInRequest(
   });
   if (!res.ok()) {
     const body = await res.text();
-    throw new Error(
-      `signInRequest failed for userId=${userId}: ${res.status()} ${body}`,
-    );
+    throw new Error(`signInRequest failed for userId=${userId}: ${res.status()} ${body}`);
   }
 }
 
@@ -134,9 +132,7 @@ export async function signInBrowser(
   });
   if (!res.ok()) {
     const body = await res.text();
-    throw new Error(
-      `signInBrowser failed for userId=${userId}: ${res.status()} ${body}`,
-    );
+    throw new Error(`signInBrowser failed for userId=${userId}: ${res.status()} ${body}`);
   }
 }
 
@@ -183,10 +179,25 @@ export async function createTournament(
     format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN';
     draft_enabled?: boolean;
     draft_preset_id?: string;
+    /**
+     * @deprecated Use `rounds_count` instead. Kept for backwards compat —
+     *             maps to `rounds_count` in the POST body.
+     */
     rounds?: number;
+    /** Swiss round count (backend: rounds_count, min 3, max 6). */
+    rounds_count?: number;
+    /**
+     * Array of map IDs (backend-validated cuid strings).
+     * Must match existing Map records in the DB (min 3, max 36).
+     * Required for tournaments that use /decision/start (map-pick flow).
+     */
+    map_pool?: string[];
   },
   backendURL = DEFAULT_BACKEND_URL,
 ): Promise<{ id: string; slug: string }> {
+  // Resolve rounds_count: explicit rounds_count wins; fall back to legacy `rounds`.
+  const resolvedRoundsCount = opts.rounds_count ?? opts.rounds;
+
   // Create tournament (DRAFT status)
   const createRes = await request.post(`${backendURL}/api/tournaments`, {
     data: {
@@ -196,28 +207,25 @@ export async function createTournament(
       timezone: 'UTC',
       draft_enabled: opts.draft_enabled ?? false,
       ...(opts.draft_preset_id ? { draft_preset_id: opts.draft_preset_id } : {}),
+      ...(resolvedRoundsCount !== undefined ? { rounds_count: resolvedRoundsCount } : {}),
+      ...(opts.map_pool !== undefined ? { map_pool: opts.map_pool } : {}),
     },
   });
 
   if (!createRes.ok()) {
     const body = await createRes.text();
-    throw new Error(
-      `createTournament failed: ${createRes.status()} ${body}`,
-    );
+    throw new Error(`createTournament failed: ${createRes.status()} ${body}`);
   }
 
   const tournament = (await createRes.json()) as { id: string; slug: string };
 
   // Transition DRAFT → OPEN_REGISTRATION
-  const openRes = await request.patch(
-    `${backendURL}/api/tournaments/${tournament.slug}`,
-    { data: { status: 'OPEN_REGISTRATION' } },
-  );
+  const openRes = await request.patch(`${backendURL}/api/tournaments/${tournament.slug}`, {
+    data: { status: 'OPEN_REGISTRATION' },
+  });
   if (!openRes.ok()) {
     const body = await openRes.text();
-    throw new Error(
-      `Transition to OPEN_REGISTRATION failed: ${openRes.status()} ${body}`,
-    );
+    throw new Error(`Transition to OPEN_REGISTRATION failed: ${openRes.status()} ${body}`);
   }
 
   return { id: tournament.id, slug: tournament.slug };
@@ -239,15 +247,10 @@ export async function registerUsers(
     const ctx = await playwrightRequest.newContext();
     try {
       await signInRequest(ctx, user.id, backendURL);
-      const regRes = await ctx.post(
-        `${backendURL}/api/tournaments/${slug}/register`,
-        { data: {} },
-      );
+      const regRes = await ctx.post(`${backendURL}/api/tournaments/${slug}/register`, { data: {} });
       if (!regRes.ok()) {
         const body = await regRes.text();
-        throw new Error(
-          `registerUsers: user ${user.id} failed: ${regRes.status()} ${body}`,
-        );
+        throw new Error(`registerUsers: user ${user.id} failed: ${regRes.status()} ${body}`);
       }
     } finally {
       await ctx.dispose();
@@ -266,15 +269,12 @@ export async function generateBracket(
   backendURL = DEFAULT_BACKEND_URL,
 ): Promise<void> {
   // Transition to REGISTRATION_CLOSED
-  const closeRes = await request.patch(
-    `${backendURL}/api/tournaments/${slug}`,
-    { data: { status: 'REGISTRATION_CLOSED' } },
-  );
+  const closeRes = await request.patch(`${backendURL}/api/tournaments/${slug}`, {
+    data: { status: 'REGISTRATION_CLOSED' },
+  });
   if (!closeRes.ok()) {
     const body = await closeRes.text();
-    throw new Error(
-      `Transition to REGISTRATION_CLOSED failed: ${closeRes.status()} ${body}`,
-    );
+    throw new Error(`Transition to REGISTRATION_CLOSED failed: ${closeRes.status()} ${body}`);
   }
 
   // Resolve tournament id for /start endpoint (uses :id not :slug)
@@ -287,14 +287,10 @@ export async function generateBracket(
   }
 
   // Generate bracket (POST /api/tournaments/:id/start)
-  const startRes = await request.post(
-    `${backendURL}/api/tournaments/${tournament.id}/start`,
-  );
+  const startRes = await request.post(`${backendURL}/api/tournaments/${tournament.id}/start`);
   if (!startRes.ok()) {
     const body = await startRes.text();
-    throw new Error(
-      `generateBracket: /start failed: ${startRes.status()} ${body}`,
-    );
+    throw new Error(`generateBracket: /start failed: ${startRes.status()} ${body}`);
   }
 }
 
@@ -328,9 +324,7 @@ export async function reportMatchResult(
   });
   if (!res.ok()) {
     const text = await res.text();
-    throw new Error(
-      `reportMatchResult for match ${matchId} failed: ${res.status()} ${text}`,
-    );
+    throw new Error(`reportMatchResult for match ${matchId} failed: ${res.status()} ${text}`);
   }
 }
 
@@ -346,9 +340,7 @@ export async function startMatch(
   const res = await request.patch(`${backendURL}/api/matches/${matchId}/start`);
   if (!res.ok()) {
     const text = await res.text();
-    throw new Error(
-      `startMatch for match ${matchId} failed: ${res.status()} ${text}`,
-    );
+    throw new Error(`startMatch for match ${matchId} failed: ${res.status()} ${text}`);
   }
   const json = (await res.json()) as { draft_id?: string | null };
   return { draftId: json.draft_id ?? undefined };
@@ -387,9 +379,7 @@ export async function cleanupTestData(userIds: string[]): Promise<void> {
     where: {
       OR: [
         { user_id: { in: userIds } },
-        ...(tournamentIds.length > 0
-          ? [{ tournament_id: { in: tournamentIds } }]
-          : []),
+        ...(tournamentIds.length > 0 ? [{ tournament_id: { in: tournamentIds } }] : []),
       ],
     },
   });
