@@ -78,6 +78,10 @@ afterEach(async () => {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Monotonic match_number so every match in the shared testTournament stays unique
+// on (tournament_id, round, match_number) — multiple matches per test otherwise collide.
+let matchNumberSeq = 0;
+
 async function createMatch(opts: {
   p1Id: string;
   p2Id: string;
@@ -93,7 +97,7 @@ async function createMatch(opts: {
       id: matchId,
       tournament_id: testTournament!.id,
       round: 1,
-      match_number: 1,
+      match_number: (matchNumberSeq += 1),
       player1_id: p1Id,
       player2_id: p2Id,
       status,
