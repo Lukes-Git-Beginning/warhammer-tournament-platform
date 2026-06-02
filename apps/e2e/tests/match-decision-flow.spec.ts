@@ -44,7 +44,10 @@ test.describe('Welle-D: Tournament Create — BPT with Map Pool', () => {
   });
 
   test('creates tournament with BPT mode, 4 rounds, TOP4 playoff, and 5-map pool', async () => {
-    const [organizer] = await createTestUsers(1, { role: 'ORGANIZER', usernamePrefix: 'welle-d-org1' });
+    const [organizer] = await createTestUsers(1, {
+      role: 'ORGANIZER',
+      usernamePrefix: 'welle-d-org1',
+    });
     if (!organizer) throw new Error('No organizer created');
     userIds.push(organizer.id);
 
@@ -56,12 +59,17 @@ test.describe('Welle-D: Tournament Create — BPT with Map Pool', () => {
       // Fetch available maps for the pool
       const mapsRes = await orgCtx.get(`${BACKEND}/api/maps`);
       expect(mapsRes.ok()).toBe(true);
-      const mapsBody = await mapsRes.json() as { data: Array<{ id: string; name: string }> };
+      const mapsBody = (await mapsRes.json()) as { data: Array<{ id: string; name: string }> };
       const mapIds = mapsBody.data.slice(0, 5).map((m) => m.id);
 
       // Skip map pool assertion if no maps seeded
       if (mapIds.length === 0) {
-        test.info().annotations.push({ type: 'skip', description: 'No maps seeded — run pnpm db:seed first' });
+        test
+          .info()
+          .annotations.push({
+            type: 'skip',
+            description: 'No maps seeded — run pnpm db:seed first',
+          });
         return;
       }
 
@@ -84,7 +92,13 @@ test.describe('Welle-D: Tournament Create — BPT with Map Pool', () => {
       });
 
       expect(createRes.status()).toBe(201);
-      const tournament = await createRes.json() as { id: string; slug: string; mode: string; rounds_count: number; playoff_format: string };
+      const tournament = (await createRes.json()) as {
+        id: string;
+        slug: string;
+        mode: string;
+        rounds_count: number;
+        playoff_format: string;
+      };
 
       expect(tournament.mode).toBe('BPT');
       expect(tournament.rounds_count).toBe(4);
@@ -99,7 +113,7 @@ test.describe('Welle-D: Tournament Create — BPT with Map Pool', () => {
       // Verify tournament maps endpoint
       const mapsPoolRes = await orgCtx.get(`${BACKEND}/api/tournaments/${tournament.slug}/maps`);
       expect(mapsPoolRes.ok()).toBe(true);
-      const mapsPoolBody = await mapsPoolRes.json() as { data: Array<{ id: string }> };
+      const mapsPoolBody = (await mapsPoolRes.json()) as { data: Array<{ id: string }> };
       expect(mapsPoolBody.data).toHaveLength(5);
     } finally {
       await orgCtx.dispose();
@@ -123,7 +137,10 @@ test.describe('Welle-D: Self-Check-in flow', () => {
   });
 
   test('self-checkin returns 409 outside window, succeeds within T-60min window', async () => {
-    const [organizer] = await createTestUsers(1, { role: 'ORGANIZER', usernamePrefix: 'welle-d-org2' });
+    const [organizer] = await createTestUsers(1, {
+      role: 'ORGANIZER',
+      usernamePrefix: 'welle-d-org2',
+    });
     const players = await createTestUsers(2, { role: 'PLAYER', usernamePrefix: 'welle-d-player' });
     if (!organizer) throw new Error('No organizer');
     userIds.push(organizer.id, ...players.map((p) => p.id));
@@ -143,7 +160,7 @@ test.describe('Welle-D: Self-Check-in flow', () => {
         },
       });
       expect(createRes.status()).toBe(201);
-      const tournament = await createRes.json() as { id: string; slug: string };
+      const tournament = (await createRes.json()) as { id: string; slug: string };
 
       // Transition to OPEN_REGISTRATION
       await orgCtx.patch(`${BACKEND}/api/tournaments/${tournament.slug}`, {
@@ -161,7 +178,7 @@ test.describe('Welle-D: Self-Check-in flow', () => {
           `${BACKEND}/api/tournaments/${tournament.slug}/checkin/self`,
         );
         expect(checkinRes.status()).toBe(409);
-        const body = await checkinRes.json() as { code: string };
+        const body = (await checkinRes.json()) as { code: string };
         expect(body.code).toBe('CHECKIN_NOT_OPEN');
       } finally {
         await p1Ctx.dispose();
@@ -200,7 +217,7 @@ test.describe('Welle-D: Self-Check-in flow', () => {
           `${BACKEND}/api/tournaments/${tournament.slug}/participants/me`,
         );
         expect(meRes.ok()).toBe(true);
-        const meBody = await meRes.json() as { status: string };
+        const meBody = (await meRes.json()) as { status: string };
         expect(meBody.status).toBe('REGISTERED');
       } finally {
         await meCtx.dispose();
@@ -226,12 +243,11 @@ test.describe('Welle-D: Match-Decision-Flow', () => {
     await cleanupTestData(userIds);
   });
 
-  // TODO: tournament-fixture does not yet configure a map_pool for the
-  // tournament, so /decision/start returns 422 ("Tournament has no map
-  // pool configured"). Re-enable once createTournament accepts/inserts a
-  // map_pool (ROADMAP §2.3 follow-up).
-  test.skip('decision/start initializes coin-flip and returns TopPlayerId/BottomPlayerId', async () => {
-    const [organizer] = await createTestUsers(1, { role: 'ORGANIZER', usernamePrefix: 'welle-d-org3' });
+  test('decision/start initializes coin-flip and returns TopPlayerId/BottomPlayerId', async () => {
+    const [organizer] = await createTestUsers(1, {
+      role: 'ORGANIZER',
+      usernamePrefix: 'welle-d-org3',
+    });
     const players = await createTestUsers(2, { role: 'PLAYER', usernamePrefix: 'welle-d-dec' });
     if (!organizer) throw new Error('No organizer');
     userIds.push(organizer.id, ...players.map((p) => p.id));
@@ -241,9 +257,27 @@ test.describe('Welle-D: Match-Decision-Flow', () => {
     try {
       await signInRequest(orgCtx, organizer.id, BACKEND);
 
+      // Fetch map pool from the master list (seeded via pnpm db:seed, 36 maps).
+      // /decision/start requires at least 3 maps in the tournament pool.
+      const mapsRes = await orgCtx.get(`${BACKEND}/api/maps`);
+      expect(mapsRes.ok()).toBe(true);
+      const mapsBody = (await mapsRes.json()) as { data: Array<{ id: string }> };
+      const mapIds = mapsBody.data.slice(0, 5).map((m) => m.id);
+      if (mapIds.length < 3) {
+        test.info().annotations.push({
+          type: 'skip',
+          description: 'Fewer than 3 maps seeded — run pnpm db:seed first',
+        });
+        return;
+      }
+
       const { slug } = await createTournament(
         orgCtx,
-        { name: 'Welle-D Decision Test', format: 'SWISS' },
+        {
+          name: 'Welle-D Decision Test',
+          format: 'SWISS',
+          map_pool: mapIds,
+        },
         BACKEND,
       );
 
@@ -251,7 +285,10 @@ test.describe('Welle-D: Match-Decision-Flow', () => {
       await generateBracket(orgCtx, slug, BACKEND);
 
       // Get first match
-      const tournament = await prisma.tournament.findFirst({ where: { slug }, select: { id: true } });
+      const tournament = await prisma.tournament.findFirst({
+        where: { slug },
+        select: { id: true },
+      });
       expect(tournament).toBeTruthy();
       const match = await prisma.match.findFirst({
         where: { tournament_id: tournament!.id },
@@ -269,9 +306,10 @@ test.describe('Welle-D: Match-Decision-Flow', () => {
       try {
         await signInRequest(p1Ctx, match!.player1_id!, BACKEND);
         const startRes = await p1Ctx.post(`${BACKEND}/api/matches/${match!.id}/decision/start`);
-        expect(startRes.status()).toBe(200);
+        // decision/start creates the decision record → 201 Created
+        expect(startRes.status()).toBe(201);
 
-        const decision = await startRes.json() as {
+        const decision = (await startRes.json()) as {
           matchId: string;
           topPlayerId: string;
           bottomPlayerId: string;
@@ -309,12 +347,11 @@ test.describe('Welle-D: Auto-Playoff Generation after Swiss', () => {
     await cleanupTestData(userIds);
   });
 
-  // TODO: this test sends `rounds_count: 2` which is below the backend
-  // schema's `min(3)` (Welle 2 hardened the validation). Re-enable after
-  // updating the test to use 3 Swiss rounds + adjusting the playoff
-  // generation expectations (ROADMAP §2.3 follow-up).
-  test.skip('generates TOP4 playoff matches after last Swiss round with 4 players', async () => {
-    const [organizer] = await createTestUsers(1, { role: 'ORGANIZER', usernamePrefix: 'welle-d-org4' });
+  test('generates TOP4 playoff matches after last Swiss round with 4 players', async () => {
+    const [organizer] = await createTestUsers(1, {
+      role: 'ORGANIZER',
+      usernamePrefix: 'welle-d-org4',
+    });
     const players = await createTestUsers(4, { role: 'PLAYER', usernamePrefix: 'welle-d-playoff' });
     if (!organizer) throw new Error('No organizer');
     userIds.push(organizer.id, ...players.map((p) => p.id));
@@ -324,14 +361,16 @@ test.describe('Welle-D: Auto-Playoff Generation after Swiss', () => {
     try {
       await signInRequest(orgCtx, organizer.id, BACKEND);
 
-      // Create Swiss tournament with rounds=2, playoff=TOP4
+      // rounds_count minimum is 3 (backend schema).
+      // recommendNumberOfRounds(4) = ceil(log2(4)) = 2, clamped to max(3,2) = 3.
+      // So with 4 players and rounds_count=3, the last Swiss round is round 3.
       const createRes = await orgCtx.post(`${BACKEND}/api/tournaments`, {
         data: {
           name: 'Welle-D Playoff Gen Test',
           format: 'SWISS',
           start_date: new Date(Date.now() + 86400_000).toISOString(),
           timezone: 'UTC',
-          rounds_count: 2,
+          rounds_count: 3,
           playoff_format: 'TOP4',
           swiss_match_format: 'BO1',
           playoff_match_format: 'BO3',
@@ -339,7 +378,7 @@ test.describe('Welle-D: Auto-Playoff Generation after Swiss', () => {
         },
       });
       expect(createRes.status()).toBe(201);
-      const tournament = await createRes.json() as { id: string; slug: string };
+      const tournament = (await createRes.json()) as { id: string; slug: string };
 
       // Open + register + close + start
       await orgCtx.patch(`${BACKEND}/api/tournaments/${tournament.slug}`, {
@@ -352,40 +391,47 @@ test.describe('Welle-D: Auto-Playoff Generation after Swiss', () => {
       const startRes = await orgCtx.post(`${BACKEND}/api/tournaments/${tournament.id}/start`);
       expect(startRes.ok()).toBe(true);
 
-      // Play round 1: all matches
-      const round1Matches = await prisma.match.findMany({
-        where: { tournament_id: tournament.id, round: 1 },
-        select: { id: true, player1_id: true, player2_id: true, status: true },
-      });
-
-      for (const match of round1Matches) {
-        if (match.status === 'BYE') continue;
-        if (!match.player1_id) continue;
-        await reportMatchResult(orgCtx, match.id, { winner_id: match.player1_id }, BACKEND);
+      // Helper: play all pending Swiss matches in a given round.
+      // Excludes playoff phases (PLAYOFF_SF, PLAYOFF_FINAL etc.) which may
+      // share the same round number as a late Swiss round. Filter in JS rather
+      // than via Prisma `notIn` — the initial round (generated at /start) leaves
+      // phase NULL, and SQL `NOT IN` excludes NULL rows, which would skip them.
+      async function playRound(round: number): Promise<void> {
+        const matches = await prisma.match.findMany({
+          where: { tournament_id: tournament.id, round },
+          select: { id: true, player1_id: true, player2_id: true, status: true, phase: true },
+        });
+        const PLAYOFF_PHASES = ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL'];
+        for (const match of matches) {
+          if (match.phase && PLAYOFF_PHASES.includes(match.phase)) continue;
+          if (match.status === 'BYE') continue;
+          if (!match.player1_id) continue;
+          await reportMatchResult(orgCtx, match.id, { winner_id: match.player1_id }, BACKEND);
+        }
       }
 
-      // Advance to round 2 (last Swiss round = recommendedRounds for 4 players = 2)
-      const nextRoundRes = await orgCtx.post(`${BACKEND}/api/tournaments/${tournament.id}/next-round`);
-      expect(nextRoundRes.ok()).toBe(true);
-      const nextRoundBody = await nextRoundRes.json() as {
+      // Round 1 — not yet the last round (round 2 follows)
+      await playRound(1);
+
+      const r1NextRes = await orgCtx.post(`${BACKEND}/api/tournaments/${tournament.id}/next-round`);
+      expect(r1NextRes.ok()).toBe(true);
+      const r1Body = (await r1NextRes.json()) as { isLastRound: boolean };
+      expect(r1Body.isLastRound).toBe(false);
+
+      // Round 2 — still not the last round (round 3 follows)
+      await playRound(2);
+
+      const r2NextRes = await orgCtx.post(`${BACKEND}/api/tournaments/${tournament.id}/next-round`);
+      expect(r2NextRes.ok()).toBe(true);
+      const r2Body = (await r2NextRes.json()) as {
         isLastRound: boolean;
         playoff_matches_created: number;
       };
-      // Round 1 → Round 2 is the last round
-      // Round 2 playoff matches should be generated
-      expect(nextRoundBody.isLastRound).toBe(true);
+      // Round 3 is the last Swiss round → playoff matches are generated together with it
+      expect(r2Body.isLastRound).toBe(true);
 
-      // Play round 2
-      const round2Matches = await prisma.match.findMany({
-        where: { tournament_id: tournament.id, round: 2, phase: 'SWISS' },
-        select: { id: true, player1_id: true, player2_id: true, status: true },
-      });
-
-      for (const match of round2Matches) {
-        if (match.status === 'BYE') continue;
-        if (!match.player1_id) continue;
-        await reportMatchResult(orgCtx, match.id, { winner_id: match.player1_id }, BACKEND);
-      }
+      // Play round 3 (last Swiss round)
+      await playRound(3);
 
       // Verify playoff matches were created
       const playoffMatches = await prisma.match.findMany({

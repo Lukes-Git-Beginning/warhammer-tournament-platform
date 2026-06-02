@@ -8,24 +8,18 @@ interface KpiCardProps {
 
 function KpiCard({ label, value }: KpiCardProps) {
   return (
-    <div
-      data-testid="kpi-card"
-      className="rounded-md border border-stone-800 bg-stone-900/60 p-5"
-    >
+    <div data-testid="kpi-card" className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
       <p className="text-xs font-medium uppercase tracking-wider text-stone-500">{label}</p>
-      <p className="mt-2 text-3xl font-bold text-warhammer-gold">{value}</p>
+      <p className="mt-2 text-3xl font-bold text-rizzotto-gold-500">{value}</p>
     </div>
   );
 }
 
 function TournamentCard({ data }: { data: AdminStats['tournaments'] }) {
   return (
-    <div
-      data-testid="kpi-card"
-      className="rounded-md border border-stone-800 bg-stone-900/60 p-5"
-    >
+    <div data-testid="kpi-card" className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
       <p className="text-xs font-medium uppercase tracking-wider text-stone-500">Turniere</p>
-      <p className="mt-2 text-3xl font-bold text-warhammer-gold">{data.total}</p>
+      <p className="mt-2 text-3xl font-bold text-rizzotto-gold-500">{data.total}</p>
       <div className="mt-2 flex gap-4 text-xs text-stone-400">
         <span className="text-emerald-400">{data.active} aktiv</span>
         <span>{data.completed} abgeschlossen</span>
@@ -86,7 +80,7 @@ export function StatsDashboard() {
                 <tr key={f.faction_id} className="hover:bg-stone-800/30 transition-colors">
                   <td className="px-4 py-3 text-stone-400">#{i + 1}</td>
                   <td className="px-4 py-3 text-stone-200">{f.faction_name}</td>
-                  <td className="px-4 py-3 text-right text-warhammer-gold">{f.pick_count}</td>
+                  <td className="px-4 py-3 text-right text-rizzotto-gold-500">{f.pick_count}</td>
                 </tr>
               ))}
             </tbody>

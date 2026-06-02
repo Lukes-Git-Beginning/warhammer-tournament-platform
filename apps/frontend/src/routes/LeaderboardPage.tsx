@@ -39,7 +39,7 @@ function Avatar({ url, username }: { url: string | null; username: string }) {
 
 function RankCell({ rank }: { rank: number }) {
   if (rank === 1) {
-    return <span className="font-bold text-warhammer-gold">#1</span>;
+    return <span className="font-bold text-rizzotto-gold-500">#1</span>;
   }
   return <span className="text-stone-400">#{rank}</span>;
 }
@@ -77,7 +77,7 @@ function SeasonTab() {
         </label>
         <select
           id="season-select"
-          className="rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 focus:border-warhammer-gold focus:outline-none"
+          className="rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
           value={effectiveSeasonId ?? ''}
           onChange={(e) => {
             setPage(1);
@@ -157,29 +157,39 @@ function DynamicLeaderboardTable({
   }
 
   return (
-    <div>
+    <div data-testid="leaderboard-data-table">
       <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-parchment-aged-texture bg-[length:512px_512px] bg-blend-overlay backdrop-blur-sm">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
-              <th className="px-4 py-3 text-left font-medium text-stone-400">{t('leaderboard.columns.rank')}</th>
-              <th className="px-4 py-3 text-left font-medium text-stone-400">{t('leaderboard.columns.player')}</th>
-              <th className="px-4 py-3 text-right font-medium text-stone-400">{t('leaderboard.columns.points')}</th>
+              <th className="px-4 py-3 text-left font-medium text-stone-400">
+                {t('leaderboard.columns.rank')}
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-stone-400">
+                {t('leaderboard.columns.player')}
+              </th>
+              <th className="px-4 py-3 text-right font-medium text-stone-400">
+                {t('leaderboard.columns.points')}
+              </th>
               <th
                 className="px-4 py-3 text-right font-medium text-stone-400"
                 title="Raw points before the anti-farm opponent modifier"
               >
                 Raw
               </th>
-              <th className="px-4 py-3 text-center font-medium text-stone-400">{t('leaderboard.columns.wl')}</th>
-              <th className="px-4 py-3 text-right font-medium text-stone-400">{t('leaderboard.columns.games')}</th>
+              <th className="px-4 py-3 text-center font-medium text-stone-400">
+                {t('leaderboard.columns.wl')}
+              </th>
+              <th className="px-4 py-3 text-right font-medium text-stone-400">
+                {t('leaderboard.columns.games')}
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-800/60">
             {entries.map((entry) => {
               const isFirst = entry.rank === 1;
               const rowClass = isFirst
-                ? 'bg-warhammer-gold/5 hover:bg-warhammer-gold/10'
+                ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10'
                 : 'hover:bg-stone-800/30';
               return (
                 <tr key={entry.playerId} className={`transition-colors ${rowClass}`}>
@@ -190,10 +200,14 @@ function DynamicLeaderboardTable({
                     <Link
                       to="/users/$id"
                       params={{ id: entry.playerId }}
-                      className="flex items-center gap-2 hover:text-warhammer-gold transition-colors"
+                      className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
                     >
                       <Avatar url={entry.avatarUrl} username={entry.displayName} />
-                      <span className={isFirst ? 'font-semibold text-warhammer-gold' : 'text-stone-200'}>
+                      <span
+                        className={
+                          isFirst ? 'font-semibold text-rizzotto-gold-500' : 'text-stone-200'
+                        }
+                      >
                         {entry.displayName}
                       </span>
                     </Link>
@@ -227,9 +241,7 @@ function DynamicLeaderboardTable({
           >
             ← {t('common.back')}
           </button>
-          <span className="text-stone-500">
-            {t('common.page_of', { page, total: totalPages })}
-          </span>
+          <span className="text-stone-500">{t('common.page_of', { page, total: totalPages })}</span>
           <button
             type="button"
             onClick={() => onPageChange(page + 1)}
@@ -312,7 +324,7 @@ function ModeTab({ mode }: ModeTabProps) {
         <div className="flex items-center gap-2">
           <label className="text-sm text-stone-400">Season</label>
           <select
-            className="rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 focus:border-warhammer-gold focus:outline-none"
+            className="rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
             value={effectiveSeasonId ?? ''}
             onChange={(e) => {
               setPage(1);
@@ -336,9 +348,7 @@ function ModeTab({ mode }: ModeTabProps) {
         )}
       </div>
 
-      {isLoading && (
-        <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>
-      )}
+      {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>}
 
       {error && (
         <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
@@ -381,7 +391,7 @@ function ModeTab({ mode }: ModeTabProps) {
                 {entries.map((entry) => {
                   const isFirst = entry.rank === 1;
                   const rowClass = isFirst
-                    ? 'bg-warhammer-gold/5 hover:bg-warhammer-gold/10'
+                    ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10'
                     : 'hover:bg-stone-800/30';
                   const rateVal = entry[rateKey] as number | undefined;
                   return (
@@ -393,12 +403,12 @@ function ModeTab({ mode }: ModeTabProps) {
                         <Link
                           to="/users/$id"
                           params={{ id: entry.user.id }}
-                          className="flex items-center gap-2 hover:text-warhammer-gold transition-colors"
+                          className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
                         >
                           <Avatar url={entry.user.avatar_url} username={entry.user.username} />
                           <span
                             className={
-                              isFirst ? 'font-semibold text-warhammer-gold' : 'text-stone-200'
+                              isFirst ? 'font-semibold text-rizzotto-gold-500' : 'text-stone-200'
                             }
                           >
                             {entry.user.username}
@@ -517,14 +527,28 @@ function LeaderboardTable({
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
-              <th className="px-4 py-3 text-left font-medium text-stone-400">{t('leaderboard.columns.rank')}</th>
-              <th className="px-4 py-3 text-left font-medium text-stone-400">{t('leaderboard.columns.player')}</th>
-              <th className="px-4 py-3 text-right font-medium text-stone-400">{t('leaderboard.columns.points')}</th>
-              <th className="px-4 py-3 text-right font-medium text-stone-400">{t('leaderboard.columns.elo')}</th>
-              <th className="px-4 py-3 text-center font-medium text-stone-400">{t('leaderboard.columns.wl')}</th>
-              <th className="px-4 py-3 text-right font-medium text-stone-400">{t('leaderboard.columns.games')}</th>
+              <th className="px-4 py-3 text-left font-medium text-stone-400">
+                {t('leaderboard.columns.rank')}
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-stone-400">
+                {t('leaderboard.columns.player')}
+              </th>
+              <th className="px-4 py-3 text-right font-medium text-stone-400">
+                {t('leaderboard.columns.points')}
+              </th>
+              <th className="px-4 py-3 text-right font-medium text-stone-400">
+                {t('leaderboard.columns.elo')}
+              </th>
+              <th className="px-4 py-3 text-center font-medium text-stone-400">
+                {t('leaderboard.columns.wl')}
+              </th>
+              <th className="px-4 py-3 text-right font-medium text-stone-400">
+                {t('leaderboard.columns.games')}
+              </th>
               {extraColumn === 'seasons_participated' && (
-                <th className="px-4 py-3 text-right font-medium text-stone-400">{t('leaderboard.columns.seasons')}</th>
+                <th className="px-4 py-3 text-right font-medium text-stone-400">
+                  {t('leaderboard.columns.seasons')}
+                </th>
               )}
             </tr>
           </thead>
@@ -532,7 +556,7 @@ function LeaderboardTable({
             {entries.map((entry) => {
               const isFirst = entry.rank === 1;
               const rowClass = isFirst
-                ? 'bg-warhammer-gold/5 hover:bg-warhammer-gold/10'
+                ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10'
                 : 'hover:bg-stone-800/30';
               return (
                 <tr key={entry.user.id} className={`transition-colors ${rowClass}`}>
@@ -543,10 +567,14 @@ function LeaderboardTable({
                     <Link
                       to="/users/$id"
                       params={{ id: entry.user.id }}
-                      className="flex items-center gap-2 hover:text-warhammer-gold transition-colors"
+                      className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
                     >
                       <Avatar url={entry.user.avatar_url} username={entry.user.username} />
-                      <span className={isFirst ? 'font-semibold text-warhammer-gold' : 'text-stone-200'}>
+                      <span
+                        className={
+                          isFirst ? 'font-semibold text-rizzotto-gold-500' : 'text-stone-200'
+                        }
+                      >
                         {entry.user.username}
                       </span>
                     </Link>
@@ -583,9 +611,7 @@ function LeaderboardTable({
           >
             ← {t('common.back')}
           </button>
-          <span className="text-stone-500">
-            {t('common.page_of', { page, total: totalPages })}
-          </span>
+          <span className="text-stone-500">{t('common.page_of', { page, total: totalPages })}</span>
           <button
             type="button"
             onClick={() => onPageChange(page + 1)}
@@ -658,9 +684,7 @@ export function LeaderboardPage() {
       {activeTab === 'all-time' && <AllTimeTab />}
       {(activeTab === 'season_points' ||
         activeTab === 'winrate' ||
-        activeTab === 'weighted_winrate') && (
-        <ModeTab mode={activeTab} />
-      )}
+        activeTab === 'weighted_winrate') && <ModeTab mode={activeTab} />}
     </PageShell>
   );
 }

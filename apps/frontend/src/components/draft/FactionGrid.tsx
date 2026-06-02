@@ -22,7 +22,8 @@ const STATUS_CLASSES: Record<FactionStatus, string> = {
   'picked-guest': 'border-red-700 bg-red-950/60 opacity-80',
   banned: 'border-stone-700 bg-stone-900/40 opacity-40',
   'banned-for-you': 'border-orange-800 bg-orange-950/40 opacity-50',
-  available: 'border-stone-600 bg-stone-800/60 hover:border-warhammer-gold hover:bg-stone-700/60 cursor-pointer',
+  available:
+    'border-stone-600 bg-stone-800/60 hover:border-rizzotto-gold-500 hover:bg-stone-700/60 cursor-pointer',
   unavailable: 'border-stone-800 bg-stone-900/30 opacity-30 cursor-not-allowed',
 };
 
@@ -36,7 +37,13 @@ const PICK_BADGE_CLASS: Record<string, string> = {
   'picked-guest': 'bg-red-800 text-red-100',
 };
 
-export function FactionGrid({ allFactions, state, currentTurn, viewerRole, onPick }: FactionGridProps) {
+export function FactionGrid({
+  allFactions,
+  state,
+  currentTurn,
+  viewerRole,
+  onPick,
+}: FactionGridProps) {
   function getFactionStatus(factionId: string): FactionStatus {
     if (state.picks.host.includes(factionId)) return 'picked-host';
     if (state.picks.guest.includes(factionId)) return 'picked-guest';
@@ -46,8 +53,8 @@ export function FactionGrid({ allFactions, state, currentTurn, viewerRole, onPic
       viewerRole === 'host'
         ? state.exclusive_bans.host
         : viewerRole === 'guest'
-        ? state.exclusive_bans.guest
-        : [];
+          ? state.exclusive_bans.guest
+          : [];
     if (sideBans.includes(factionId)) return 'banned-for-you';
 
     // Also treat opponent's exclusive bans as globally banned for spectator/admin
@@ -58,10 +65,7 @@ export function FactionGrid({ allFactions, state, currentTurn, viewerRole, onPic
 
     // Already hidden-picked/hidden-banned factions are still selectable from UI POV
     // (server validates); we mark them unavailable only if no active pick/ban turn
-    if (
-      currentTurn &&
-      ['pick', 'ban', 'snipe', 'steal'].includes(currentTurn.action)
-    ) {
+    if (currentTurn && ['pick', 'ban', 'snipe', 'steal'].includes(currentTurn.action)) {
       return 'available';
     }
 
@@ -69,8 +73,7 @@ export function FactionGrid({ allFactions, state, currentTurn, viewerRole, onPic
   }
 
   const isActionTurn =
-    currentTurn !== null &&
-    ['pick', 'ban', 'snipe', 'steal'].includes(currentTurn.action);
+    currentTurn !== null && ['pick', 'ban', 'snipe', 'steal'].includes(currentTurn.action);
 
   return (
     <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">

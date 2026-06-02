@@ -58,11 +58,14 @@ export function RollOfHonourSection() {
         )}
 
         {(isLoading || hasEntries) && (
-          <Card variant="banner" className="overflow-hidden">
+          <Card variant="banner" className="overflow-hidden" data-testid="roll-of-honour-list">
             {isLoading && (
               <ul className="divide-y divide-rizzotto-iron-700">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <li key={i} className="grid grid-cols-[2.5rem_2.5rem_1fr_auto] items-center gap-4 px-5 py-3">
+                  <li
+                    key={i}
+                    className="grid grid-cols-[2.5rem_2.5rem_1fr_auto] items-center gap-4 px-5 py-3"
+                  >
                     <Skeleton className="h-6 w-6" />
                     <Skeleton className="h-10 w-10 rounded-full" />
                     <Skeleton className="h-4 w-40" />
@@ -90,7 +93,11 @@ export function RollOfHonourSection() {
                     key={entry.playerId}
                     variants={{
                       hidden: reduced ? { opacity: 0 } : { opacity: 0, y: 10 },
-                      visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: [0.4, 0, 0.2, 1] } },
+                      visible: {
+                        opacity: 1,
+                        y: 0,
+                        transition: { duration: 0.32, ease: [0.4, 0, 0.2, 1] },
+                      },
                     }}
                     className="group grid grid-cols-[2.5rem_2.5rem_1fr_auto] items-center gap-4 px-5 py-3 transition-colors hover:bg-rizzotto-iron-800/70"
                   >

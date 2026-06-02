@@ -22,7 +22,7 @@ const FORMAT_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-stone-700 text-stone-300',
   REGISTRATION: 'bg-emerald-800 text-emerald-200',
-  ACTIVE: 'bg-warhammer-blood text-white',
+  ACTIVE: 'bg-rizzotto-blood-500 text-white',
   COMPLETED: 'bg-stone-600 text-stone-300',
   CANCELLED: 'bg-red-950 text-red-300',
 };
@@ -37,9 +37,11 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
     <Link
       to="/tournaments/$slug"
       params={{ slug: tournament.slug }}
-      className="block rounded-lg border border-stone-800 bg-stone-900 p-5 transition-colors hover:border-warhammer-gold hover:bg-stone-800"
+      className="block rounded-lg border border-stone-800 bg-stone-900 p-5 transition-colors hover:border-rizzotto-gold-500 hover:bg-stone-800"
     >
-      <h3 className="font-display text-lg font-semibold text-warhammer-gold">{tournament.name}</h3>
+      <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">
+        {tournament.name}
+      </h3>
       <div className="mt-2 flex flex-wrap gap-2">
         <span className="rounded px-2 py-0.5 text-xs font-medium bg-stone-700 text-stone-200">
           {formatLabel}

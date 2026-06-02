@@ -70,13 +70,11 @@ export function AuditLogTable() {
             setEntityTypeFilter(e.target.value);
           }}
           placeholder="z.B. DraftPreset, User…"
-          className="rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 placeholder:text-stone-600 focus:border-warhammer-gold focus:outline-none"
+          className="rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 placeholder:text-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
         />
       </div>
 
-      {isLoading && (
-        <div className="py-8 text-center text-stone-400 text-sm">Wird geladen…</div>
-      )}
+      {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Wird geladen…</div>}
 
       {error && (
         <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
@@ -115,7 +113,7 @@ export function AuditLogTable() {
                       {truncate(entry.entity_id)}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="rounded bg-stone-800 px-2 py-0.5 text-xs font-medium text-warhammer-gold">
+                      <span className="rounded bg-stone-800 px-2 py-0.5 text-xs font-medium text-rizzotto-gold-500">
                         {entry.action}
                       </span>
                     </td>

@@ -79,7 +79,7 @@ export function ArmyListUpload({ factionId, tournamentId, onUploadComplete }: Ar
           type="button"
           onClick={handleUpload}
           disabled={upload.isPending}
-          className="mt-3 rounded bg-warhammer-gold/90 px-4 py-1.5 text-sm font-medium text-stone-950 hover:bg-warhammer-gold disabled:opacity-50"
+          className="mt-3 rounded bg-rizzotto-gold-500/90 px-4 py-1.5 text-sm font-medium text-stone-950 hover:bg-rizzotto-gold-500 disabled:opacity-50"
         >
           {upload.isPending ? 'Lädt hoch…' : 'Hochladen'}
         </button>

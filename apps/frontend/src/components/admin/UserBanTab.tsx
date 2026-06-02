@@ -27,7 +27,7 @@ export function UserBanTab() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Username oder Discord-ID (min. 2 Zeichen)"
-          className="w-full max-w-sm rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 placeholder:text-stone-600 focus:border-warhammer-gold focus:outline-none"
+          className="w-full max-w-sm rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 placeholder:text-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
         />
       </div>
 
@@ -35,9 +35,7 @@ export function UserBanTab() {
         <p className="text-xs text-stone-500">Mindestens 2 Zeichen eingeben.</p>
       )}
 
-      {isLoading && (
-        <div className="py-4 text-center text-stone-400 text-sm">Wird geladen…</div>
-      )}
+      {isLoading && <div className="py-4 text-center text-stone-400 text-sm">Wird geladen…</div>}
 
       {error && (
         <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
@@ -111,12 +109,7 @@ export function UserBanTab() {
         <p className="py-4 text-center text-stone-500 text-sm">Keine User gefunden.</p>
       )}
 
-      {selectedUser && (
-        <UserBanModal
-          user={selectedUser}
-          onClose={() => setSelectedUser(null)}
-        />
-      )}
+      {selectedUser && <UserBanModal user={selectedUser} onClose={() => setSelectedUser(null)} />}
     </div>
   );
 }

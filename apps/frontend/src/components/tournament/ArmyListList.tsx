@@ -39,7 +39,7 @@ export function ArmyListList() {
             </div>
             <a
               href={`/api/army-lists/${l.id}/download`}
-              className="text-xs text-warhammer-gold hover:underline"
+              className="text-xs text-rizzotto-gold-500 hover:underline"
             >
               Download
             </a>

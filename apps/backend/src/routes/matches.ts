@@ -102,12 +102,18 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const effectiveP2FactionId = player2FactionId ?? match.player2_faction_id ?? null;
 
       // Winner/loser faction IDs for stats (null for draw)
-      const winnerFactionId = winnerId === null
-        ? null
-        : winnerId === match.player1_id ? effectiveP1FactionId : effectiveP2FactionId;
-      const loserFactionId = winnerId === null
-        ? null
-        : loserId === match.player1_id ? effectiveP1FactionId : effectiveP2FactionId;
+      const winnerFactionId =
+        winnerId === null
+          ? null
+          : winnerId === match.player1_id
+            ? effectiveP1FactionId
+            : effectiveP2FactionId;
+      const loserFactionId =
+        winnerId === null
+          ? null
+          : loserId === match.player1_id
+            ? effectiveP1FactionId
+            : effectiveP2FactionId;
 
       // Find active season (optional — FactionStats update only when season exists)
       const activeSeason = await fastify.prisma.season.findFirst({
@@ -424,7 +430,9 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // GET /api/matches/:id
-  // Optional auth — returns match details including tournament_slug.
+  // Optional auth — returns enriched match details including player/faction
+  // relations, scoring fields, and timing. Raw ID fields are preserved for
+  // backwards compatibility with existing callers.
   // -------------------------------------------------------------------------
   fastify.get('/api/matches/:id', async (request, reply) => {
     const { id: matchId } = request.params as { id: string };
@@ -438,13 +446,30 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         player1_id: true,
         player2_id: true,
         winner_id: true,
+        player1_faction_id: true,
+        player2_faction_id: true,
         status: true,
+        result: true,
+        phase: true,
+        bracket_side: true,
+        scheduled_time: true,
+        played_at: true,
+        score: true,
+        player1_points: true,
+        player2_points: true,
         tournament: { select: { id: true, slug: true } },
+        player1: { select: { id: true, username: true, avatar_url: true } },
+        player2: { select: { id: true, username: true, avatar_url: true } },
+        winner: { select: { id: true, username: true, avatar_url: true } },
+        player1_faction: { select: { id: true, name: true, icon_url: true } },
+        player2_faction: { select: { id: true, name: true, icon_url: true } },
       },
     });
 
     if (!match) {
-      return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      return reply
+        .code(404)
+        .send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
     }
 
     return reply.code(200).send({
@@ -453,10 +478,57 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       tournament_slug: match.tournament.slug,
       round: match.round,
       match_number: match.match_number,
+      status: match.status,
+      result: match.result ?? null,
+      phase: match.phase ?? null,
+      bracket_side: match.bracket_side ?? null,
+      scheduled_time: match.scheduled_time?.toISOString() ?? null,
+      played_at: match.played_at?.toISOString() ?? null,
+      score: match.score ?? null,
+      player1_points: match.player1_points ?? null,
+      player2_points: match.player2_points ?? null,
+      // Raw ID fields — backwards compatible
       player1_id: match.player1_id,
       player2_id: match.player2_id,
       winner_id: match.winner_id,
-      status: match.status,
+      player1_faction_id: match.player1_faction_id,
+      player2_faction_id: match.player2_faction_id,
+      // Enriched relations
+      player1: match.player1
+        ? {
+            id: match.player1.id,
+            username: match.player1.username,
+            avatar_url: match.player1.avatar_url ?? null,
+          }
+        : null,
+      player2: match.player2
+        ? {
+            id: match.player2.id,
+            username: match.player2.username,
+            avatar_url: match.player2.avatar_url ?? null,
+          }
+        : null,
+      winner: match.winner
+        ? {
+            id: match.winner.id,
+            username: match.winner.username,
+            avatar_url: match.winner.avatar_url ?? null,
+          }
+        : null,
+      player1_faction: match.player1_faction
+        ? {
+            id: match.player1_faction.id,
+            name: match.player1_faction.name,
+            icon_url: match.player1_faction.icon_url ?? null,
+          }
+        : null,
+      player2_faction: match.player2_faction
+        ? {
+            id: match.player2_faction.id,
+            name: match.player2_faction.name,
+            icon_url: match.player2_faction.icon_url ?? null,
+          }
+        : null,
     });
   });
 

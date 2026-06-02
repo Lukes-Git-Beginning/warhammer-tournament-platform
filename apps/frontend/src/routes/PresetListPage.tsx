@@ -72,7 +72,11 @@ export function PresetListPage() {
   const queryClient = useQueryClient();
   const { data: user } = useAuthQuery();
 
-  const { data: presets, isLoading, error } = useQuery({
+  const {
+    data: presets,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['draft-presets'],
     queryFn: listDraftPresets,
   });
@@ -96,7 +100,7 @@ export function PresetListPage() {
     <main className="mx-auto max-w-5xl px-4 py-10">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-display text-3xl font-bold text-warhammer-gold">
+          <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
             {t('preset.list_title')}
           </h1>
         </div>
@@ -126,7 +130,11 @@ export function PresetListPage() {
           mottoTitle={t('preset.empty_motto_title')}
           cta={
             canCreate ? (
-              <Button variant="forge" size="md" onClick={() => void navigate({ to: '/presets/new' })}>
+              <Button
+                variant="forge"
+                size="md"
+                onClick={() => void navigate({ to: '/presets/new' })}
+              >
                 {t('preset.empty_cta_first')}
               </Button>
             ) : undefined

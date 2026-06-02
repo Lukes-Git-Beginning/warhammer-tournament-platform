@@ -3,12 +3,7 @@
 
 import { z } from 'zod';
 
-export const MatchResultTypeSchema = z.enum([
-  'PLAYER1_WIN',
-  'PLAYER2_WIN',
-  'DRAW',
-  'DOUBLE_LOSS',
-]);
+export const MatchResultTypeSchema = z.enum(['PLAYER1_WIN', 'PLAYER2_WIN', 'DRAW', 'DOUBLE_LOSS']);
 export type MatchResultType = z.infer<typeof MatchResultTypeSchema>;
 
 export const MatchStatusSchema = z.enum([
@@ -80,3 +75,61 @@ export const LockListsResponseSchema = z.object({
   affected_participants: z.number().int(),
 });
 export type LockListsResponse = z.infer<typeof LockListsResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Match Detail DTO — enriched response for GET /api/matches/:id
+// Includes player refs, faction refs, scoring fields, and timing.
+// ---------------------------------------------------------------------------
+
+export const MatchPlayerRefSchema = z.object({
+  id: z.string().uuid(),
+  username: z.string(),
+  avatar_url: z.string().url().nullable(),
+});
+export type MatchPlayerRef = z.infer<typeof MatchPlayerRefSchema>;
+
+export const MatchFactionRefSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  icon_url: z.string().url().nullable(),
+});
+export type MatchFactionRef = z.infer<typeof MatchFactionRefSchema>;
+
+export const MatchPhaseSchema = z.enum([
+  'GROUP_STAGE',
+  'SWISS',
+  'PLAYOFF_QF',
+  'PLAYOFF_SF',
+  'PLAYOFF_FINAL',
+]);
+export type MatchPhase = z.infer<typeof MatchPhaseSchema>;
+
+export const MatchDetailDtoSchema = z.object({
+  id: z.string().uuid(),
+  tournament_id: z.string().uuid(),
+  tournament_slug: z.string(),
+  round: z.number().int(),
+  match_number: z.number().int(),
+  status: MatchStatusSchema,
+  result: MatchResultTypeSchema.nullable(),
+  phase: MatchPhaseSchema.nullable(),
+  bracket_side: BracketSideSchema.nullable(),
+  scheduled_time: z.string().datetime().nullable(),
+  played_at: z.string().datetime().nullable(),
+  score: z.string().nullable(),
+  player1_points: z.number().nullable(),
+  player2_points: z.number().nullable(),
+  // Raw ID fields — preserved for backwards compatibility
+  player1_id: z.string().uuid().nullable(),
+  player2_id: z.string().uuid().nullable(),
+  winner_id: z.string().uuid().nullable(),
+  player1_faction_id: z.string().nullable(),
+  player2_faction_id: z.string().nullable(),
+  // Enriched relations
+  player1: MatchPlayerRefSchema.nullable(),
+  player2: MatchPlayerRefSchema.nullable(),
+  winner: MatchPlayerRefSchema.nullable(),
+  player1_faction: MatchFactionRefSchema.nullable(),
+  player2_faction: MatchFactionRefSchema.nullable(),
+});
+export type MatchDetailDto = z.infer<typeof MatchDetailDtoSchema>;

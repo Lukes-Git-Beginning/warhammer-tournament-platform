@@ -46,7 +46,7 @@ export function MatchScoreModal({
       onClick={handleBackdropClick}
     >
       <div className="bg-stone-900 border border-stone-700 rounded-lg p-6 w-full max-w-sm shadow-xl">
-        <h2 className="font-display text-lg font-semibold text-warhammer-gold mb-4">
+        <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-4">
           Ergebnis eintragen
         </h2>
 
@@ -61,7 +61,7 @@ export function MatchScoreModal({
                   value={player1Id}
                   checked={winnerId === player1Id}
                   onChange={() => setWinnerId(player1Id)}
-                  className="accent-warhammer-gold"
+                  className="accent-rizzotto-gold-500"
                 />
                 {player1Name ?? player1Id}
               </label>
@@ -74,7 +74,7 @@ export function MatchScoreModal({
                   value={player2Id}
                   checked={winnerId === player2Id}
                   onChange={() => setWinnerId(player2Id)}
-                  className="accent-warhammer-gold"
+                  className="accent-rizzotto-gold-500"
                 />
                 {player2Name ?? player2Id}
               </label>
@@ -92,7 +92,7 @@ export function MatchScoreModal({
             value={score}
             onChange={(e) => setScore(e.target.value)}
             placeholder="2-1"
-            className="w-full rounded border border-stone-700 bg-stone-800 px-3 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-warhammer-gold"
+            className="w-full rounded border border-stone-700 bg-stone-800 px-3 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
           />
         </div>
 
@@ -114,7 +114,7 @@ export function MatchScoreModal({
             type="button"
             disabled={!winnerId || mutation.isPending}
             onClick={() => mutation.mutate()}
-            className="px-4 py-1.5 text-sm rounded bg-warhammer-blood text-white font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
+            className="px-4 py-1.5 text-sm rounded bg-rizzotto-blood-500 text-white font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
           >
             {mutation.isPending ? 'Wird gespeichert…' : 'Speichern'}
           </button>

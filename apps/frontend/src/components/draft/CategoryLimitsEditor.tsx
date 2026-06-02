@@ -18,10 +18,7 @@ export function CategoryLimitsEditor({ limits, onChange }: CategoryLimitsEditorP
   const allFactions = factionData?.data ?? [];
 
   function addLimit() {
-    onChange([
-      ...limits,
-      { category_name: '', factions: [], max_picks: null, max_bans: null },
-    ]);
+    onChange([...limits, { category_name: '', factions: [], max_picks: null, max_bans: null }]);
   }
 
   function updateLimit(index: number, patch: Partial<CategoryLimit>) {
@@ -71,7 +68,7 @@ export function CategoryLimitsEditor({ limits, onChange }: CategoryLimitsEditorP
                 placeholder="Kategorie-Name"
                 value={limit.category_name}
                 onChange={(e) => updateLimit(i, { category_name: e.target.value })}
-                className="flex-1 rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 placeholder-stone-500 focus:border-warhammer-gold focus:outline-none"
+                className="flex-1 rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 placeholder-stone-500 focus:border-rizzotto-gold-500 focus:outline-none"
               />
               {/* max_picks */}
               <div className="flex flex-col gap-0.5">
@@ -86,7 +83,7 @@ export function CategoryLimitsEditor({ limits, onChange }: CategoryLimitsEditorP
                       max_picks: e.target.value === '' ? null : Number(e.target.value),
                     })
                   }
-                  className="w-20 rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:border-warhammer-gold focus:outline-none"
+                  className="w-20 rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
                 />
               </div>
               {/* max_bans */}
@@ -102,7 +99,7 @@ export function CategoryLimitsEditor({ limits, onChange }: CategoryLimitsEditorP
                       max_bans: e.target.value === '' ? null : Number(e.target.value),
                     })
                   }
-                  className="w-20 rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:border-warhammer-gold focus:outline-none"
+                  className="w-20 rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
                 />
               </div>
             </div>
@@ -134,7 +131,7 @@ export function CategoryLimitsEditor({ limits, onChange }: CategoryLimitsEditorP
                       title={faction.name}
                       className={`rounded-full transition-all ${
                         selected
-                          ? 'ring-2 ring-warhammer-gold ring-offset-1 ring-offset-stone-900'
+                          ? 'ring-2 ring-rizzotto-gold-500 ring-offset-1 ring-offset-stone-900'
                           : 'opacity-40 hover:opacity-70'
                       }`}
                     >

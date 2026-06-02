@@ -5,7 +5,11 @@ import type { DraftPreset } from '@rizzotto/types';
 export function PresetLibraryAdmin() {
   const queryClient = useQueryClient();
 
-  const { data: presets = [], isLoading, error } = useQuery<DraftPreset[]>({
+  const {
+    data: presets = [],
+    isLoading,
+    error,
+  } = useQuery<DraftPreset[]>({
     queryKey: ['draft-presets'],
     queryFn: listDraftPresets,
   });
@@ -71,8 +75,10 @@ export function PresetLibraryAdmin() {
                     <button
                       type="button"
                       onClick={() => promoteMutation.mutate(preset.id)}
-                      disabled={promoteMutation.isPending && promoteMutation.variables === preset.id}
-                      className="rounded border border-warhammer-gold/60 px-3 py-1 text-xs font-semibold text-warhammer-gold hover:bg-warhammer-gold/10 disabled:opacity-40 transition-colors"
+                      disabled={
+                        promoteMutation.isPending && promoteMutation.variables === preset.id
+                      }
+                      className="rounded border border-rizzotto-gold-500/60 px-3 py-1 text-xs font-semibold text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 disabled:opacity-40 transition-colors"
                     >
                       Promote
                     </button>

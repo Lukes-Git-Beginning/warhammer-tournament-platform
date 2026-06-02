@@ -14,6 +14,8 @@ import type {
   UpdateDraftPresetRequest,
   DraftView,
   DraftEventsResponse,
+  MatchDetailDto as MatchDetailDtoFromTypes,
+  MatchScoringBreakdownDto,
 } from '@rizzotto/types';
 
 export type {
@@ -25,6 +27,7 @@ export type {
   FactionDetailResponse,
   MetaOverviewResponse,
   MatchupHeatmapResponse,
+  MatchScoringBreakdownDto,
 };
 
 export type AllTimeEntry = LeaderboardEntryDto & { seasons_participated: number };
@@ -51,12 +54,7 @@ export interface Tournament {
   description: string | null;
   format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION';
   mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'OPEN' | 'BPT' | 'SFT' | 'SLT';
-  status:
-    | 'DRAFT'
-    | 'OPEN_REGISTRATION'
-    | 'REGISTRATION_CLOSED'
-    | 'ONGOING'
-    | 'COMPLETED';
+  status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
   start_date: string;
   timezone: string;
   max_participants: number | null;
@@ -428,7 +426,9 @@ export function cancelDraft(id: string): Promise<void> {
   return apiFetch<void>(`/api/drafts/${id}/cancel`, { method: 'POST' });
 }
 
-export function promotePreset(id: string): Promise<{ id: string; name: string; is_public: boolean }> {
+export function promotePreset(
+  id: string,
+): Promise<{ id: string; name: string; is_public: boolean }> {
   return apiFetch(`/api/draft-presets/${id}/promote`, { method: 'PATCH' });
 }
 
@@ -648,7 +648,9 @@ export async function uploadAdminMapImage(id: string, file: File): Promise<MapDt
     try {
       const body = (await res.json()) as { error?: string; message?: string };
       message = body.message ?? body.error ?? message;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     throw makeApiError(message, res.status);
   }
   return res.json() as Promise<MapDto>;
@@ -716,7 +718,9 @@ export async function uploadAdminFactionSigil(id: string, file: File): Promise<A
     try {
       const body = (await res.json()) as { error?: string; message?: string };
       message = body.message ?? body.error ?? message;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     throw makeApiError(message, res.status);
   }
   return res.json() as Promise<AdminFactionDto>;
@@ -841,23 +845,18 @@ export function getMaps(): Promise<{ data: MapDto[] }> {
 }
 
 // ---------------------------------------------------------------------------
-// Match detail (lightweight — for retrieving tournament_slug from a match)
+// Match detail — enriched DTO from GET /api/matches/:id
 // ---------------------------------------------------------------------------
 
-export interface MatchDetailDto {
-  id: string;
-  tournament_id: string;
-  tournament_slug: string;
-  round: number;
-  match_number: number;
-  player1_id: string | null;
-  player2_id: string | null;
-  winner_id: string | null;
-  status: string;
+// Re-export the shared type so callers can import from here directly.
+export type { MatchDetailDtoFromTypes as MatchDetailDto };
+
+export function getMatchDetail(matchId: string): Promise<MatchDetailDtoFromTypes> {
+  return apiFetch<MatchDetailDtoFromTypes>(`/api/matches/${matchId}`);
 }
 
-export function getMatchDetail(matchId: string): Promise<MatchDetailDto> {
-  return apiFetch<MatchDetailDto>(`/api/matches/${matchId}`);
+export function getScoringBreakdown(matchId: string): Promise<MatchScoringBreakdownDto> {
+  return apiFetch<MatchScoringBreakdownDto>(`/api/matches/${matchId}/scoring-breakdown`);
 }
 
 // ---------------------------------------------------------------------------
@@ -945,9 +944,7 @@ export function getOpponentArmyList(
   slug: string,
   opponentUserId: string,
 ): Promise<TournamentArmyList> {
-  return apiFetch<TournamentArmyList>(
-    `/api/tournaments/${slug}/army-list/${opponentUserId}`,
-  );
+  return apiFetch<TournamentArmyList>(`/api/tournaments/${slug}/army-list/${opponentUserId}`);
 }
 
 export function getAllArmyLists(slug: string): Promise<{ data: TournamentArmyList[] }> {

@@ -14,6 +14,7 @@
 import type { PrismaClient } from '@rizzotto/db';
 import type { MatchResultType } from '@rizzotto/types';
 import type { Server } from 'socket.io';
+import type { Redis } from 'ioredis';
 import type {
   ClientToServerEvents,
   InterServerEvents,
@@ -21,8 +22,11 @@ import type {
   SocketData,
 } from '@rizzotto/types';
 import { tournamentRoom } from './emit.js';
+import { invalidate } from './cache.js';
 
-type Io = Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData> | undefined;
+type Io =
+  | Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>
+  | undefined;
 
 // Default 3/1/0 scoring: PLAYER1_WIN → p1 gets 3, DRAW → both 1, DOUBLE_LOSS → both 0, PLAYER2_WIN → p2 gets 3
 const DEFAULT_POINTS: Record<MatchResultType, { player1: number; player2: number }> = {
@@ -63,6 +67,12 @@ export async function resolveMatchResult(
   result: MatchResultType,
   opts: ResolveMatchResultOpts = {},
   io?: Io,
+  // Cache invalidation: callers that hold a redis handle (e.g. match-reports.ts via
+  // invalidateScoringCaches) may pass it here so FactionStats/MatchupStats cache keys
+  // are busted atomically after the transaction. Omitting redis is safe — the caller
+  // is responsible for invalidation in that case (match-reports.ts already does so
+  // immediately after resolveMatchResult). No existing callers are broken by this default.
+  redis?: Redis,
 ): Promise<void> {
   const { override = false, actorId, reason } = opts;
 
@@ -74,6 +84,8 @@ export async function resolveMatchResult(
       tournament_id: true,
       player1_id: true,
       player2_id: true,
+      player1_faction_id: true,
+      player2_faction_id: true,
       next_match_id: true,
       loser_next_match_id: true,
       bracket_side: true,
@@ -152,9 +164,11 @@ export async function resolveMatchResult(
     // 2b. DE loser progression — drop loser into losers bracket
     if (match.loser_next_match_id) {
       const loserId =
-        winnerId === match.player1_id ? match.player2_id :
-        winnerId === match.player2_id ? match.player1_id :
-        null;
+        winnerId === match.player1_id
+          ? match.player2_id
+          : winnerId === match.player2_id
+            ? match.player1_id
+            : null;
 
       if (loserId) {
         const lbMatch = await tx.match.findUnique({
@@ -214,7 +228,12 @@ export async function resolveMatchResult(
     if (match.tournament.counts_for_leaderboard) {
       if (activeSeason) {
         const seasonId = activeSeason.id;
-        const players: Array<{ userId: string; isWinner: boolean; isDraw: boolean; points: number }> = [];
+        const players: Array<{
+          userId: string;
+          isWinner: boolean;
+          isDraw: boolean;
+          points: number;
+        }> = [];
 
         if (match.player1_id) {
           players.push({
@@ -261,7 +280,91 @@ export async function resolveMatchResult(
       }
     }
 
-    // 4. AuditLog
+    // 4. FactionStats + MatchupStats — mirrors the logic in routes/matches.ts.
+    //    Only written when an active season exists and faction IDs are set on the match.
+    //    These feed the 24×24 faction heatmap and per-faction analytics.
+    const effectiveP1FactionId = match.player1_faction_id ?? null;
+    const effectiveP2FactionId = match.player2_faction_id ?? null;
+
+    const isDraw = result === 'DRAW' || result === 'DOUBLE_LOSS';
+
+    // Winner/loser faction IDs (null for draw/double-loss)
+    const winnerFactionId: string | null = isDraw
+      ? null
+      : result === 'PLAYER1_WIN'
+        ? effectiveP1FactionId
+        : effectiveP2FactionId;
+    const loserFactionId: string | null = isDraw
+      ? null
+      : result === 'PLAYER1_WIN'
+        ? effectiveP2FactionId
+        : effectiveP1FactionId;
+
+    if (activeSeason) {
+      const seasonId = activeSeason.id;
+
+      // 4a. FactionStats — increment per-faction wins/losses/draws/matches_played
+      const factionIdsToUpdate = [winnerFactionId, loserFactionId].filter(
+        (f): f is string => f !== null,
+      );
+
+      for (const factionId of factionIdsToUpdate) {
+        const isWinner = factionId === winnerFactionId;
+        await tx.factionStats.upsert({
+          where: { faction_id_season_id: { faction_id: factionId, season_id: seasonId } },
+          create: {
+            faction_id: factionId,
+            season_id: seasonId,
+            matches_played: 1,
+            wins: isWinner ? 1 : 0,
+            losses: isWinner ? 0 : 1,
+            draws: 0,
+            pick_count: 1,
+            ban_count: 0,
+          },
+          update: {
+            matches_played: { increment: 1 },
+            pick_count: { increment: 1 },
+            ...(isWinner ? { wins: { increment: 1 } } : { losses: { increment: 1 } }),
+          },
+        });
+      }
+
+      // 4b. MatchupStats — alphabetical symmetry: faction_a_id < faction_b_id by string sort.
+      //    Mirrored exactly from routes/matches.ts to ensure heatmap parity across both
+      //    completion paths (legacy POST /:id/result and Welle-D dual-submit).
+      if (effectiveP1FactionId && effectiveP2FactionId) {
+        const sorted = [effectiveP1FactionId, effectiveP2FactionId].sort();
+        const aId = sorted[0]!;
+        const bId = sorted[1]!;
+        const winnerIsA = winnerFactionId === aId;
+
+        await tx.matchupStats.upsert({
+          where: {
+            faction_a_id_faction_b_id_season_id: {
+              faction_a_id: aId,
+              faction_b_id: bId,
+              season_id: seasonId,
+            },
+          },
+          create: {
+            faction_a_id: aId,
+            faction_b_id: bId,
+            season_id: seasonId,
+            faction_a_wins: !isDraw && winnerIsA ? 1 : 0,
+            faction_b_wins: !isDraw && !winnerIsA ? 1 : 0,
+            draws: isDraw ? 1 : 0,
+          },
+          update: isDraw
+            ? { draws: { increment: 1 } }
+            : winnerIsA
+              ? { faction_a_wins: { increment: 1 } }
+              : { faction_b_wins: { increment: 1 } },
+        });
+      }
+    }
+
+    // 5. AuditLog
     await tx.auditLog.create({
       data: {
         entity_type: 'Match',
@@ -278,6 +381,14 @@ export async function resolveMatchResult(
       },
     });
   });
+
+  // Cache invalidation for FactionStats/MatchupStats keys — only when a redis
+  // handle is provided. match-reports.ts already calls invalidateScoringCaches()
+  // after resolveMatchResult() which covers these keys; passing redis here is
+  // therefore optional and mainly useful for callers that skip the outer helper.
+  if (redis) {
+    await Promise.all([invalidate(redis, 'factions:*'), invalidate(redis, 'meta:*')]);
+  }
 
   // 5. Socket events (after transaction committed)
   if (io) {

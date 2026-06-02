@@ -43,41 +43,45 @@ export function DraftSequenceTimeline({ turns, current }: DraftSequenceTimelineP
           const isCurrent = current !== undefined && i === current;
           const isPast = current !== undefined && i < current;
           return (
-          <div key={i} className="flex items-center gap-1">
-            <div
-              className={`flex flex-col items-center gap-1 rounded-md border p-2 min-w-[72px] transition-colors ${
-                isCurrent
-                  ? 'border-warhammer-gold bg-warhammer-gold/10 ring-2 ring-warhammer-gold/40'
-                  : isPast
-                  ? 'border-stone-800 bg-stone-950 opacity-50'
-                  : 'border-stone-700 bg-stone-900'
-              }`}
-            >
-              <div className="text-xs text-stone-500">#{i + 1}</div>
+            <div key={i} className="flex items-center gap-1">
               <div
-                className={`text-xs font-bold px-1.5 py-0.5 rounded ${ACTOR_COLOR[turn.actor] ?? 'bg-stone-600 text-stone-200'}`}
+                className={`flex flex-col items-center gap-1 rounded-md border p-2 min-w-[72px] transition-colors ${
+                  isCurrent
+                    ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/10 ring-2 ring-rizzotto-gold-500/40'
+                    : isPast
+                      ? 'border-stone-800 bg-stone-950 opacity-50'
+                      : 'border-stone-700 bg-stone-900'
+                }`}
               >
-                {ACTOR_LABEL[turn.actor] ?? turn.actor}
+                <div className="text-xs text-stone-500">#{i + 1}</div>
+                <div
+                  className={`text-xs font-bold px-1.5 py-0.5 rounded ${ACTOR_COLOR[turn.actor] ?? 'bg-stone-600 text-stone-200'}`}
+                >
+                  {ACTOR_LABEL[turn.actor] ?? turn.actor}
+                </div>
+                <div className="text-xs text-stone-300 font-medium">
+                  {ACTION_LABEL[turn.action] ?? turn.action}
+                </div>
+                <div className="flex flex-wrap gap-0.5 justify-center">
+                  {turn.is_hidden && (
+                    <span className="text-[10px] bg-stone-700 text-stone-300 px-1 rounded">
+                      Hidden
+                    </span>
+                  )}
+                  {turn.is_parallel && (
+                    <span className="text-[10px] bg-stone-700 text-stone-300 px-1 rounded">
+                      Parallel
+                    </span>
+                  )}
+                  {turn.as_opponent && (
+                    <span className="text-[10px] bg-stone-700 text-stone-300 px-1 rounded">
+                      AsOpp
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="text-xs text-stone-300 font-medium">
-                {ACTION_LABEL[turn.action] ?? turn.action}
-              </div>
-              <div className="flex flex-wrap gap-0.5 justify-center">
-                {turn.is_hidden && (
-                  <span className="text-[10px] bg-stone-700 text-stone-300 px-1 rounded">Hidden</span>
-                )}
-                {turn.is_parallel && (
-                  <span className="text-[10px] bg-stone-700 text-stone-300 px-1 rounded">Parallel</span>
-                )}
-                {turn.as_opponent && (
-                  <span className="text-[10px] bg-stone-700 text-stone-300 px-1 rounded">AsOpp</span>
-                )}
-              </div>
+              {i < turns.length - 1 && <span className="text-stone-600 text-sm">›</span>}
             </div>
-            {i < turns.length - 1 && (
-              <span className="text-stone-600 text-sm">›</span>
-            )}
-          </div>
           );
         })}
       </div>

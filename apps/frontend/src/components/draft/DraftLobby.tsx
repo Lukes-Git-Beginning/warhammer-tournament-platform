@@ -38,13 +38,9 @@ export function DraftLobby({ draft, viewer }: DraftLobbyProps) {
       <header className="border-b border-stone-800 bg-stone-900/50 px-4 py-3">
         <div className="mx-auto max-w-7xl">
           <div className="mb-2 flex items-center gap-3">
-            <h1 className="font-display text-lg font-bold text-warhammer-gold">
-              Draft
-            </h1>
+            <h1 className="font-display text-lg font-bold text-rizzotto-gold-500">Draft</h1>
             <span className="text-xs text-stone-500 font-mono">{draft.id.slice(0, 8)}</span>
-            <span className="ml-auto text-xs text-stone-500">
-              Preset: {draft.preset.name}
-            </span>
+            <span className="ml-auto text-xs text-stone-500">Preset: {draft.preset.name}</span>
           </div>
           <DraftSequenceTimeline
             turns={draft.preset.turns}
@@ -63,11 +59,7 @@ export function DraftLobby({ draft, viewer }: DraftLobbyProps) {
           )}
 
           {/* Status banner */}
-          <DraftStatusBanner
-            draft={draft}
-            currentTurn={currentTurn}
-            isMyTurn={isMyTurn}
-          />
+          <DraftStatusBanner draft={draft} currentTurn={currentTurn} isMyTurn={isMyTurn} />
 
           {/* Final factions when completed */}
           {draft.status === 'COMPLETED' && (

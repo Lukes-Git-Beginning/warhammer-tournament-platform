@@ -13,11 +13,7 @@ export function DraftSpectatorPage() {
   });
 
   if (isLoading) {
-    return (
-      <main className="mx-auto max-w-7xl px-4 py-10 text-stone-400">
-        Lade Draft…
-      </main>
-    );
+    return <main className="mx-auto max-w-7xl px-4 py-10 text-stone-400">Lade Draft…</main>;
   }
 
   if (error || !data) {
@@ -33,7 +29,7 @@ export function DraftSpectatorPage() {
   return (
     <main className="mx-auto max-w-7xl px-4 py-6">
       <div className="mb-4">
-        <h1 className="font-display text-2xl font-bold text-warhammer-gold">
+        <h1 className="font-display text-2xl font-bold text-rizzotto-gold-500">
           Live-Draft — Zuschauer
         </h1>
         <p className="mt-1 text-sm text-stone-400">

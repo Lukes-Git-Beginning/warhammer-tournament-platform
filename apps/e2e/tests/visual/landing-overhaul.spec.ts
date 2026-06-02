@@ -14,11 +14,7 @@
  * Subsequent runs compare against the stored baseline (5 % pixel tolerance).
  */
 import { test, expect, type Page } from '@playwright/test';
-import {
-  createTestUsers,
-  signInBrowser,
-  cleanupTestData,
-} from '../helpers/tournament-fixture.js';
+import { createTestUsers, signInBrowser, cleanupTestData } from '../helpers/tournament-fixture.js';
 
 // ---------------------------------------------------------------------------
 // Viewports
@@ -71,6 +67,27 @@ async function gotoAndWait(page: Page, path: string) {
 
 const UPDATE_SNAPSHOTS = !!process.env['UPDATE_SNAPSHOTS'];
 
+// ---------------------------------------------------------------------------
+// Volatile-element masks for data-driven content
+// ---------------------------------------------------------------------------
+
+// Masks for /leaderboard: the entire table container incl. tbody rows, avatars,
+// names and numeric values. The surrounding page chrome (header, tabs, title)
+// remains visible. Using the container-level testid because row count varies
+// between test runs depending on which other specs left data in the DB.
+const LEADERBOARD_MASKS = (page: Page) => [page.locator('[data-testid="leaderboard-data-table"]')];
+
+// Masks for / (landing): Roll-of-Honour Card shows top-10 displayNames,
+// avatarUrls and totalFinalPoints — all volatile across runs.
+const LANDING_MASKS = (page: Page) => [page.locator('[data-testid="roll-of-honour-list"]')];
+
+// Route → mask factory mapping (undefined = no mask needed)
+const ROUTE_MASKS: Record<string, ((page: Page) => ReturnType<Page['locator']>[]) | undefined> = {
+  '/leaderboard': LEADERBOARD_MASKS,
+  '/': LANDING_MASKS,
+  '/login': undefined,
+};
+
 for (const viewport of VIEWPORTS) {
   for (const route of PUBLIC_ROUTES) {
     test(`[${viewport.name}] ${route.path} — no overflow + screenshot`, async ({ page }) => {
@@ -84,13 +101,14 @@ for (const viewport of VIEWPORTS) {
 
       await assertNoHorizontalOverflow(page);
 
-      await expect(page).toHaveScreenshot(
-        `${route.name}-${viewport.name}.png`,
-        {
-          maxDiffPixelRatio: 0.05,
-          animations: 'disabled',
-        },
-      );
+      const maskFactory = ROUTE_MASKS[route.path];
+      const mask = maskFactory ? maskFactory(page) : [];
+
+      await expect(page).toHaveScreenshot(`${route.name}-${viewport.name}.png`, {
+        maxDiffPixelRatio: 0.05,
+        animations: 'disabled',
+        ...(mask.length > 0 && { mask, maskColor: '#1c1917' }),
+      });
     });
   }
 }
