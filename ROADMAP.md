@@ -34,6 +34,7 @@
 | 24 Faction-Sigils | ✅ done | Default-Sigils im Repo, FactionBadge rendert sie mit Initials-Fallback |
 | Steam-Hard-Gate live | ✅ done (2026-05-19) | Frontend-Guard + Discord-Callback-Redirect + meSelect-Field; verifiziert auf rizzotto.gg |
 | **Welle-1 Pipeline-Ausbau** | ✅ done (2026-05-20) | E2E ist Pre-Deploy-Gate (continue-on-error raus), Discord-Webhook bei Failure (#4 + #5), `STEAM_WEB_API_KEY` in Prod gesetzt → echte Personas |
+| **Dynamic Weighted Leaderboard** | ✅ live (2026-06-02) | Derive-on-read (L2-Logistic-Regression, `lib/rating-model.ts`); `mode=rating_model` ist Live-Default (Prod-Endpoint verifiziert). Frontend (`DynamicLeaderboardTable` + RollOfHonour) + E2E-Contract nachgezogen. Löst Welle-2-MMR ab — Deprecation-Cleanup noch offen (§2.4) |
 
 ---
 
@@ -65,15 +66,16 @@ Bundled in `f4e3705` und deployed 2026-05-20: Delete-Button, Status-Transition (
 
 ---
 
-### 2.4 Dynamic Weighted Leaderboard (Alex-Spec) — Branch `feat/dynamic-leaderboard`
+### 2.4 Dynamic Weighted Leaderboard (Alex-Spec) — ✅ gemergt + deployed (2026-06-02)
 
-Backend vollständig gebaut + gepusht (2026-06-02, 436 Tests grün, Migration angewendet). **Derive-on-read**: speichert nur Match-Fakten, leitet PlayerFactionSkill, MatchupEffect, Win-Chance, RawPoints, Anti-Farm-Modifier und Totals live aus dem Season-Datensatz ab (L2-Logistic-Regression in `lib/rating-model.ts`). Löst das Welle-2-MMR ab. **Noch offen (nicht gemergt):**
+Komplett auf `main` gelandet (Merge `30d759e`) und live auf rizzotto.gg — `mode=rating_model` ist Default, Prod-Endpoint gibt die neue Shape mit `HTTP 200`. **Derive-on-read**: speichert nur Match-Fakten, leitet PlayerFactionSkill, MatchupEffect, Win-Chance, RawPoints, Anti-Farm-Modifier und Totals live aus dem Season-Datensatz ab (L2-Logistic-Regression in `lib/rating-model.ts`). Löst das Welle-2-MMR ab. **Restliche offene Punkte:**
 
 | # | Item | Pfad | Severity |
 |---|---|---|---|
-| 1 | **Frontend-Leaderboard bricht** — Default-Mode von `GET /api/leaderboard` ist jetzt `rating_model` (neue Shape: `playerId/displayName/totalFinalPoints` statt `user/total_points`). Frontend-Page + ggf. neue Breakdown-/Matrix-/Proficiency-Views anpassen | `apps/frontend` Leaderboard + `routes/rating.ts` | **Mittel — blockt Merge** |
-| 2 | **Deprecation-Cleanup** — `season_points`/`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` nur als `// DEPRECATED` markiert, Spalten nicht gedroppt. Drop-Migration nach Validierung an echten Daten | `schema.prisma`, `lib/mmr.ts` | Niedrig |
+| 1 | ~~Frontend-Leaderboard bricht~~ ✅ done (2026-06-02) — `SeasonTab` → neue `DynamicLeaderboardTable`, `RollOfHonourSection` (Landing-Top-10) + `api.ts` auf `DynamicLeaderboardResponse` umgestellt. **Lehre:** Der Merge-Blocker war größer als „Frontend bricht" — der Feature-Contract-Wechsel hatte auch zwei E2E-Specs (`leaderboard-correctness`, `tournament-happy-path`) faction-/shape-blind gelassen; sie brachen erst am Pre-Deploy-E2E-Gate. Fix: faction-aware Fixtures + modell-agnostische Assertions; zusätzlich Rate-Limit unter `NODE_ENV=test` angehoben (live-draft 429 aus single-IP-Polling). | `apps/frontend`, `apps/e2e/tests/{leaderboard-correctness,tournament-happy-path}.spec.ts`, `apps/backend/src/app.ts` | — done |
+| 2 | **Deprecation-Cleanup** — `season_points`/`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` nur als `// DEPRECATED` markiert, Spalten nicht gedroppt. Drop-Migration nach Validierung an echten Daten (Go/No-Go vor irreversiblem Drop) | `schema.prisma`, `lib/mmr.ts` | Niedrig |
 | 3 | Cold-Fit-Kosten validieren (großer Season-Datensatz) — ggf. Fit in deferred Job/Cron auslagern statt im Request | `lib/rating-model-service.ts` | Niedrig |
+| 4 | **Breakdown-/Matrix-/Proficiency-Views** (`routes/rating.ts` existiert backend-seitig) noch nicht im Frontend angebunden — Explainability-Iteration, kein Blocker | `apps/frontend`, `routes/rating.ts` | Niedrig |
 
 ## 3. Bekannte Stubs / 501s
 
