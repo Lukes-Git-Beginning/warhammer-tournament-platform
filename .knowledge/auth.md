@@ -1,6 +1,7 @@
 > Read-when: Auth-Setup, neuer Route-Handler braucht Login/Rolle, Discord-OAuth, Frontend-Auth-State.
 
 **TL;DR**
+
 - Discord OAuth2 → JWT wird in einem HTTP-Only-Cookie gesetzt (Cookie-Name standardmäßig `auth_token`).
 - `fastify.authenticate` als `preHandler` verifiziert das JWT und schreibt `request.user: JwtPayload`.
 - `fastify.requireRole(...roles)` prüft die DB-Rolle via Redis-Cache (`user:role:<id>`, TTL 60s) mit DB-Fallback.
@@ -25,10 +26,10 @@ Typ `JwtPayload` aus `@rizzotto/types`, befüllt in `routes/auth.ts`:
 
 ```typescript
 const payload: JwtPayload = {
-  sub:        user.id,          // UUID des DB-Users
-  discord_id: user.discord_id,  // Discord Snowflake (string)
-  username:   user.username,    // global_name ?? username von Discord
-  role:       user.role as Role,
+  sub: user.id, // UUID des DB-Users
+  discord_id: user.discord_id, // Discord Snowflake (string)
+  username: user.username, // global_name ?? username von Discord
+  role: user.role as Role,
 };
 ```
 
@@ -40,15 +41,15 @@ const payload: JwtPayload = {
 
 Gesetzt in `plugins/auth.ts` → `signAuthCookie`:
 
-| Feld | Wert |
-|---|---|
-| Name | `process.env.JWT_COOKIE_NAME ?? 'auth_token'` |
-| `httpOnly` | `true` |
-| `sameSite` | `'lax'` |
-| `secure` | `true` in Production, `false` sonst |
-| `domain` | `process.env.JWT_COOKIE_DOMAIN ?? 'localhost'` |
-| `maxAge` | `process.env.JWT_EXPIRES_IN ?? 604800` (Sekunden, default 7 Tage) |
-| `path` | `'/'` |
+| Feld       | Wert                                                              |
+| ---------- | ----------------------------------------------------------------- |
+| Name       | `process.env.JWT_COOKIE_NAME ?? 'auth_token'`                     |
+| `httpOnly` | `true`                                                            |
+| `sameSite` | `'lax'`                                                           |
+| `secure`   | `true` in Production, `false` sonst                               |
+| `domain`   | `process.env.JWT_COOKIE_DOMAIN ?? 'localhost'`                    |
+| `maxAge`   | `process.env.JWT_EXPIRES_IN ?? 604800` (Sekunden, default 7 Tage) |
+| `path`     | `'/'`                                                             |
 
 `clearAuthCookie` löscht den Cookie mit gleichem `path` und `domain`.
 
@@ -58,13 +59,13 @@ Gesetzt in `plugins/auth.ts` → `signAuthCookie`:
 
 Alle registriert in `apps/backend/src/plugins/auth.ts` via `fastify.decorate(...)`:
 
-| Dekorator | Signatur | Zweck |
-|---|---|---|
-| `fastify.authenticate` | `(request, reply) => Promise<void>` | preHandler — verifiziert JWT via `request.jwtVerify()`, schreibt `request.user`. 401 bei ungültigem/fehlendem Token. |
-| `fastify.requireRole(...roles)` | `(...roles: Role[]) => (request, reply) => Promise<void>` | preHandler-Factory — prüft `request.user.sub` gegen Redis-Cache (`user:role:<id>`, TTL 60s), DB-Fallback. 403 bei falscher Rolle. |
-| `fastify.requireSteamLink` | `(request, reply) => Promise<void>` | **Welle 2** — preHandler — lädt `SteamLink` für `request.user.sub`, 403 `{ code: 'STEAM_REQUIRED' }` falls null. Whitelist: `/auth/*`, `/api/users/me`. Selektiv auf Tournament-/Match-Routes anzuwenden. |
-| `fastify.signAuthCookie` | `(reply, payload: JwtPayload) => void` | JWT signieren + Cookie setzen. |
-| `fastify.clearAuthCookie` | `(reply) => void` | Cookie löschen (Logout). |
+| Dekorator                       | Signatur                                                  | Zweck                                                                                                                                                                                                     |
+| ------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fastify.authenticate`          | `(request, reply) => Promise<void>`                       | preHandler — verifiziert JWT via `request.jwtVerify()`, schreibt `request.user`. 401 bei ungültigem/fehlendem Token.                                                                                      |
+| `fastify.requireRole(...roles)` | `(...roles: Role[]) => (request, reply) => Promise<void>` | preHandler-Factory — prüft `request.user.sub` gegen Redis-Cache (`user:role:<id>`, TTL 60s), DB-Fallback. 403 bei falscher Rolle.                                                                         |
+| `fastify.requireSteamLink`      | `(request, reply) => Promise<void>`                       | **Welle 2** — preHandler — lädt `SteamLink` für `request.user.sub`, 403 `{ code: 'STEAM_REQUIRED' }` falls null. Whitelist: `/auth/*`, `/api/users/me`. Selektiv auf Tournament-/Match-Routes anzuwenden. |
+| `fastify.signAuthCookie`        | `(reply, payload: JwtPayload) => void`                    | JWT signieren + Cookie setzen.                                                                                                                                                                            |
+| `fastify.clearAuthCookie`       | `(reply) => void`                                         | Cookie löschen (Logout).                                                                                                                                                                                  |
 
 ---
 
@@ -83,9 +84,13 @@ Reihenfolge ist kritisch: `authenticate` muss zuerst laufen, damit `request.user
 Alternativ auf einzelne Routen:
 
 ```typescript
-fastify.get('/admin/stats', {
-  preHandler: [fastify.authenticate, fastify.requireRole('ADMIN', 'MODERATOR')],
-}, handler);
+fastify.get(
+  '/admin/stats',
+  {
+    preHandler: [fastify.authenticate, fastify.requireRole('ADMIN', 'MODERATOR')],
+  },
+  handler,
+);
 ```
 
 ---
@@ -104,11 +109,11 @@ Genutzt von E2E-Test-Helpers (`signInRequest` / `signInBrowser`) im E2E-Paket.
 
 Quelle: `apps/frontend/src/lib/auth.ts`
 
-| Hook | Verhalten |
-|---|---|
-| `useAuthQuery()` | `useQuery({ queryKey: ['me'], queryFn: getMe, retry: false, staleTime: 5 * 60 * 1000 })` — 5 Minuten stale, kein Retry bei Fehler. |
-| `useLogout()` | Mutation → `logout()` → `queryClient.setQueryData(['me'], null)` → Navigate zu `/login`. |
-| `useRequireAuth()` | Ruft `useAuthQuery()` auf, navigiert bei `error.status === 401` zu `/login`. Gibt die Query zurück. |
+| Hook               | Verhalten                                                                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `useAuthQuery()`   | `useQuery({ queryKey: ['me'], queryFn: getMe, retry: false, staleTime: 5 * 60 * 1000 })` — 5 Minuten stale, kein Retry bei Fehler. |
+| `useLogout()`      | Mutation → `logout()` → `queryClient.setQueryData(['me'], null)` → Navigate zu `/login`.                                           |
+| `useRequireAuth()` | Ruft `useAuthQuery()` auf, navigiert bei `error.status === 401` zu `/login`. Gibt die Query zurück.                                |
 
 `getMe` ruft `GET /api/users/me`, `logout` ruft `POST /auth/logout`. Beide laufen über `apiFetch` — dieser setzt seit 2026-05-19 den `Content-Type: application/json`-Header **nur, wenn ein Body mitgeschickt wird**, sonst wirft Fastify auf bodyless POSTs `FST_ERR_CTP_EMPTY_JSON_BODY`.
 
@@ -141,6 +146,40 @@ Da der Key kein Wildcard enthält, ist hier auch `fastify.redis.del(`user:role:$
 
 ---
 
+## Admin-Promotion (Operations, kein UI)
+
+Es gibt **keine** Frontend-UI zum Setzen von Rollen und **kein** CLI-Script im Repo. `PATCH /api/users/:id/role` ist Admin-only, eignet sich also nicht für den Bootstrap des ersten Admins.
+
+**Workflow auf Production** (Hetzner-Host via SSH, Postgres + Redis als Docker-Container):
+
+```bash
+# 1. Lookup — User-UUID + aktuelle Role finden
+ssh deploy@<DEPLOY_HOST> "docker exec -i rizzotto-postgres psql -U rizzotto -d rizzotto -P pager=off <<'SQL'
+SELECT id, discord_id, username, role FROM \"User\"
+WHERE username ILIKE '%<suchbegriff>%' AND deleted_at IS NULL;
+SQL"
+
+# 2. UPDATE + AuditLog + Redis-DEL (atomisch in einer SSH-Session)
+ssh deploy@<DEPLOY_HOST> "docker exec -i rizzotto-postgres psql -U rizzotto -d rizzotto -P pager=off <<'SQL'
+BEGIN;
+UPDATE \"User\" SET role = 'ADMIN' WHERE id = '<user-uuid>' AND role = 'USER';
+INSERT INTO \"AuditLog\" (id, entity_type, entity_id, action, actor_id, new_value)
+VALUES (gen_random_uuid(), 'User', '<user-uuid>', 'role_update',
+        '<actor-uuid-or-NULL>', '{\"role\":\"ADMIN\"}'::jsonb);
+COMMIT;
+SQL
+docker exec rizzotto-redis redis-cli DEL 'user:role:<user-uuid>'"
+```
+
+Notes:
+
+- `username` in der DB ist `profile.global_name ?? profile.username` (auth.ts) — Discord-Handle und gespeicherter Name können abweichen, also breit per `ILIKE` suchen, nicht exakt.
+- `WHERE role = 'USER'` in Schritt 1 ist eine Schutz-Bremse — bei unerwartetem Ausgangszustand kommt `UPDATE 0` zurück, statt blind zu überschreiben.
+- `actor_id` kann `NULL` sein (Schema erlaubt das für System-Aktionen), schöner ist aber die UUID des promotenden Admins.
+- Redis-DEL gibt `0` zurück wenn der Key gar nicht existiert (User hat keine aktive Session) — kein Fehler.
+
+---
+
 ## Steam-OpenID-2.0 Hard-Gate (Welle 2)
 
 Alex-Spec: jeder User muss nach Discord-Login zwingend einen Steam-Account verlinken (Anti-Ban-Evade + Vorbereitung für Arena-Queue-Skip-Verifikation).
@@ -157,14 +196,15 @@ Alex-Spec: jeder User muss nach Discord-Login zwingend einen Steam-Account verli
 
 ### Backend-Endpoints
 
-| Endpoint | Beschreibung |
-|---|---|
-| `GET /auth/steam/login?return_to=…` | OpenID-2.0-Init, redirect zu Steam |
-| `GET /auth/steam/return` | RP-Verify, persistiert `SteamLink`, redirect |
+| Endpoint                            | Beschreibung                                 |
+| ----------------------------------- | -------------------------------------------- |
+| `GET /auth/steam/login?return_to=…` | OpenID-2.0-Init, redirect zu Steam           |
+| `GET /auth/steam/return`            | RP-Verify, persistiert `SteamLink`, redirect |
 
 ### Frontend-Hook
 
 `useRequireSteamLink()` in `apps/frontend/src/lib/auth.ts`:
+
 - Whitelist: `/`, `/connect-steam`, `/auth/*`, `/login`
 - Bei `user.steam_link == null` + non-whitelisted Pfad → `navigate({ to: '/connect-steam', search: { return_to: location.href } })`
 - **Wichtig:** `location.href` (string, pathname+search+hash). Niemals `location.search` direkt konkatenieren — das ist in TanStack Router ein parsed Object und triggert `TypeError: Cannot convert object to primitive value`.
