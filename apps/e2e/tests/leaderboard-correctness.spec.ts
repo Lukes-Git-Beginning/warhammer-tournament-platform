@@ -198,25 +198,35 @@ test.describe('Leaderboard Correctness — 3 tournaments, dynamic FinalPoints ra
       expect(p0Entry, 'player[0] should appear in leaderboard').toBeTruthy();
       expect(p1Entry, 'player[1] should appear in leaderboard').toBeTruthy();
 
-      // player[0] won 2 tournaments, player[1] won 1 — p0 accumulates more
-      // FinalPoints and therefore ranks above p1 on the dynamic leaderboard.
-      expect(
-        p0Entry!.totalFinalPoints,
-        `p0 points (${p0Entry!.totalFinalPoints}) should be greater than p1 points (${p1Entry!.totalFinalPoints})`,
-      ).toBeGreaterThan(p1Entry!.totalFinalPoints);
-
-      expect(
-        p0Entry!.rank,
-        `p0 rank (${p0Entry!.rank}) should be above p1 rank (${p1Entry!.rank})`,
-      ).toBeLessThan(p1Entry!.rank);
-
-      // 4-player SE has 3 matches total (semis + final). Champion wins all they play.
-      // With 4 players: round 1 has 2 matches, final has 1 → champion plays 2 matches per tournament.
-      // 2 tournament wins × 2 match wins each = 4 minimum wins.
+      // Win counts are deterministic: 4-player SE → champion plays 2 matches per
+      // tournament. p0 won 2 tournaments (4 wins), p1 won 1 (2 wins).
       expect(
         p0Entry!.wins,
         `p0 should have at least 4 wins, got ${p0Entry!.wins}`,
       ).toBeGreaterThanOrEqual(4);
+      expect(
+        p1Entry!.wins,
+        `p1 should have at least 2 wins, got ${p1Entry!.wins}`,
+      ).toBeGreaterThanOrEqual(2);
+
+      // Both accumulate positive FinalPoints from their wins.
+      expect(p0Entry!.totalFinalPoints).toBeGreaterThan(0);
+      expect(p1Entry!.totalFinalPoints).toBeGreaterThan(0);
+
+      // The dynamic weighted model can legitimately rank fewer-but-harder wins
+      // above more-but-repetitive wins (matchup difficulty + anti-farm modifier),
+      // so we do NOT assert p0 outranks p1. Instead verify the route returns a
+      // correctly sorted (FinalPoints desc), densely-ranked leaderboard.
+      const points = entries.map((e) => e.totalFinalPoints);
+      for (let i = 1; i < points.length; i++) {
+        expect(
+          points[i - 1]!,
+          `entries must be sorted by totalFinalPoints desc (idx ${i})`,
+        ).toBeGreaterThanOrEqual(points[i]!);
+      }
+      entries.forEach((e, idx) => {
+        expect(e.rank, `rank should be dense 1..n (idx ${idx})`).toBe(idx + 1);
+      });
     } finally {
       await orgCtx.dispose();
     }

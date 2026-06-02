@@ -53,6 +53,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     withDraft = true,
   } = opts;
   const isProd = process.env.NODE_ENV === 'production';
+  const isTest = process.env.NODE_ENV === 'test';
 
   const app = Fastify({
     logger: {
@@ -74,7 +75,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     credentials: true,
   });
   await app.register(fastifyRateLimit, {
-    max: 300,
+    // The E2E suite runs from a single CI IP and live-draft polls heavily, so
+    // the production limit would 429 concurrent tests. Effectively lift it under
+    // NODE_ENV=test; production (and dev) keep the real 300/min ceiling.
+    max: isTest ? 100_000 : 300,
     timeWindow: '1 minute',
   });
 
