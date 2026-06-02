@@ -52,6 +52,15 @@ test.describe('Tournament Happy Path — 16-Player Single Elimination', () => {
 
     userIds.push(organizer.id, ...players.map((p) => p.id));
 
+    // Dynamic leaderboard only counts matches where both factions are known —
+    // stamp two seeded factions on every reported result.
+    const factionRows = await prisma.faction.findMany({ take: 2, select: { id: true } });
+    if (factionRows.length < 2) {
+      throw new Error('Happy path needs >=2 seeded factions — run pnpm db:seed');
+    }
+    const factionA = factionRows[0]!.id;
+    const factionB = factionRows[1]!.id;
+
     // -----------------------------------------------------------------------
     // 2. Organizer creates tournament
     // -----------------------------------------------------------------------
@@ -125,6 +134,8 @@ test.describe('Tournament Happy Path — 16-Player Single Elimination', () => {
               winner_id: m.player1_id,
               p1_score: 2,
               p2_score: 0,
+              p1_faction_id: factionA,
+              p2_faction_id: factionB,
             },
             BACKEND,
           );
@@ -169,11 +180,11 @@ test.describe('Tournament Happy Path — 16-Player Single Elimination', () => {
 
         // Champion (won all rounds) should appear in leaderboard with wins > 0
         const top = lb.entries[0] as {
-          matches_played: number;
+          totalMatches: number;
           wins: number;
           rank: number;
         };
-        expect(top.matches_played).toBeGreaterThanOrEqual(1);
+        expect(top.totalMatches).toBeGreaterThanOrEqual(1);
         expect(top.wins).toBeGreaterThanOrEqual(1);
         expect(top.rank).toBe(1);
       }

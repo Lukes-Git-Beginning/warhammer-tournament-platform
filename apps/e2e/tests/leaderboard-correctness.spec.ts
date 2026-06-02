@@ -3,19 +3,21 @@
  *
  * Runs three SINGLE_ELIMINATION tournaments with 4 players each.
  * Player[0] wins tournaments 1+2; player[1] wins tournament 3.
- * Verifies that after finalization:
- *   - player[0].elo_rating > player[1].elo_rating
- *   - player[0].total_points > player[1].total_points
+ * Verifies that on the dynamic weighted leaderboard (derive-on-read):
+ *   - player[0].totalFinalPoints > player[1].totalFinalPoints
+ *   - player[0].rank < player[1].rank  (p0 ranks above p1)
  *   - player[0].wins >= 4  (2 tournaments × ~2 match wins each in 4-player SE)
+ *
+ * The dynamic leaderboard only counts matches where BOTH factions are known,
+ * so every match result is reported with faction IDs.
  *
  * API notes (verified against apps/backend/src/routes/):
  * - Bracket listing:  GET  /api/tournaments/:slug/bracket  → camelCase fields
  *   (matchId, player1Id, player2Id, status)
- * - Match result:     POST /api/matches/:id/result  { winnerId }
+ * - Match result:     POST /api/matches/:id/result  { winnerId, player1FactionId, player2FactionId }
  * - Leaderboard:      GET  /api/leaderboard          → { entries: LBEntry[] }
- *   LBEntry: { rank, user: { id, username }, total_points, elo_rating, wins, ... }
+ *   LBEntry: { rank, playerId, displayName, totalFinalPoints, totalRawPoints, totalMatches, wins, losses }
  * - Finalization:     PATCH /api/tournaments/:slug { status: 'COMPLETED' }
- *   triggers finalizeTournament() which updates LeaderboardEntry rows.
  * - Registration closes + bracket: handled by generateBracket() helper.
  *
  * PLAYER role does not exist in the DB enum (Role: USER|ORGANIZER|MODERATOR|ADMIN).
@@ -24,6 +26,7 @@
 
 import { test, expect } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
+import { prisma } from '@rizzotto/db';
 import {
   createTestUsers,
   signInRequest,
@@ -45,6 +48,8 @@ async function runTournament(
   organizerId: string,
   players: TestUser[],
   champion: TestUser,
+  factionAId: string,
+  factionBId: string,
 ): Promise<void> {
   const ctx = await playwright.request.newContext();
   try {
@@ -90,6 +95,8 @@ async function runTournament(
           winner_id: winnerId,
           p1_score: winnerId === m.player1Id ? 2 : 0,
           p2_score: winnerId === m.player2Id ? 2 : 0,
+          p1_faction_id: factionAId,
+          p2_faction_id: factionBId,
         });
       }
     }
@@ -112,7 +119,7 @@ async function runTournament(
 // Spec
 // ---------------------------------------------------------------------------
 
-test.describe('Leaderboard Correctness — 3 tournaments, ELO delta verification', () => {
+test.describe('Leaderboard Correctness — 3 tournaments, dynamic FinalPoints ranking', () => {
   const userIds: string[] = [];
 
   test.beforeAll(async () => {
@@ -125,7 +132,7 @@ test.describe('Leaderboard Correctness — 3 tournaments, ELO delta verification
     await cleanupTestData(userIds);
   });
 
-  test('three tournaments produce expected leaderboard ranking and ELO movement', async ({
+  test('three tournaments produce expected dynamic leaderboard ranking', async ({
     playwright,
   }) => {
     // -----------------------------------------------------------------------
@@ -142,15 +149,24 @@ test.describe('Leaderboard Correctness — 3 tournaments, ELO delta verification
     });
     userIds.push(organizer.id, ...players.map((p: TestUser) => p.id));
 
+    // Dynamic leaderboard only counts matches where both factions are known.
+    // Grab two seeded factions to stamp on every reported match.
+    const factions = await prisma.faction.findMany({ take: 2, select: { id: true } });
+    if (factions.length < 2) {
+      throw new Error('Leaderboard correctness needs >=2 seeded factions — run pnpm db:seed');
+    }
+    const factionA = factions[0]!.id;
+    const factionB = factions[1]!.id;
+
     // -----------------------------------------------------------------------
     // 2. Run three tournaments
     // -----------------------------------------------------------------------
     // Tournament 1: player[0] wins
-    await runTournament(playwright, organizer.id, players, players[0]!);
+    await runTournament(playwright, organizer.id, players, players[0]!, factionA, factionB);
     // Tournament 2: player[0] wins again
-    await runTournament(playwright, organizer.id, players, players[0]!);
+    await runTournament(playwright, organizer.id, players, players[0]!, factionA, factionB);
     // Tournament 3: player[1] wins
-    await runTournament(playwright, organizer.id, players, players[1]!);
+    await runTournament(playwright, organizer.id, players, players[1]!, factionA, factionB);
 
     // -----------------------------------------------------------------------
     // 3. Read leaderboard
@@ -167,30 +183,32 @@ test.describe('Leaderboard Correctness — 3 tournaments, ELO delta verification
       // -----------------------------------------------------------------------
       const entries: Array<{
         rank: number;
-        user: { id: string; username: string };
-        total_points: number;
-        elo_rating: number;
+        playerId: string;
+        displayName: string;
+        totalFinalPoints: number;
+        totalRawPoints: number;
+        totalMatches: number;
         wins: number;
         losses: number;
-        matches_played: number;
       }> = lb.entries ?? [];
 
-      const p0Entry = entries.find((e) => e.user.id === players[0]!.id);
-      const p1Entry = entries.find((e) => e.user.id === players[1]!.id);
+      const p0Entry = entries.find((e) => e.playerId === players[0]!.id);
+      const p1Entry = entries.find((e) => e.playerId === players[1]!.id);
 
       expect(p0Entry, 'player[0] should appear in leaderboard').toBeTruthy();
       expect(p1Entry, 'player[1] should appear in leaderboard').toBeTruthy();
 
-      // player[0] won 2 tournaments, player[1] won 1 — p0 should rank higher
+      // player[0] won 2 tournaments, player[1] won 1 — p0 accumulates more
+      // FinalPoints and therefore ranks above p1 on the dynamic leaderboard.
       expect(
-        p0Entry!.elo_rating,
-        `p0 elo (${p0Entry!.elo_rating}) should be greater than p1 elo (${p1Entry!.elo_rating})`,
-      ).toBeGreaterThan(p1Entry!.elo_rating);
+        p0Entry!.totalFinalPoints,
+        `p0 points (${p0Entry!.totalFinalPoints}) should be greater than p1 points (${p1Entry!.totalFinalPoints})`,
+      ).toBeGreaterThan(p1Entry!.totalFinalPoints);
 
       expect(
-        p0Entry!.total_points,
-        `p0 points (${p0Entry!.total_points}) should be greater than p1 points (${p1Entry!.total_points})`,
-      ).toBeGreaterThan(p1Entry!.total_points);
+        p0Entry!.rank,
+        `p0 rank (${p0Entry!.rank}) should be above p1 rank (${p1Entry!.rank})`,
+      ).toBeLessThan(p1Entry!.rank);
 
       // 4-player SE has 3 matches total (semis + final). Champion wins all they play.
       // With 4 players: round 1 has 2 matches, final has 1 → champion plays 2 matches per tournament.
