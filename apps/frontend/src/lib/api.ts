@@ -128,7 +128,7 @@ export interface MatchDecisionState {
 
 export interface TournamentCreate {
   name: string;
-  format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN';
+  format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN';
   mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'OPEN' | 'BPT' | 'SFT' | 'SLT';
   start_date: string;
   timezone: string;

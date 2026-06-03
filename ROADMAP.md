@@ -11,7 +11,7 @@
 - **rizzotto.gg ist live seit 2026-05-19** auf Hetzner CX22, Caddy + Cloudflare-Origin-Cert.
 - **M1–M5 + Welle 2 (Steam-Hard-Gate, BPT/SFT/SLT, MMR, Match-Flow, 24 Faction-Sigils) sind durch.**
 - **Heute (2026-05-19) gefixt:** Steam-Hard-Gate end-to-end verdrahtet, Top-Bar-Navigation-Crash, Wordmark-AVIF, Logout (Content-Type), datetime-Submit, Header-Avatar-Profil-Link.
-- **Zuletzt gelandet (2026-06-03):** Phase-2-Konsolidierung (PR #10, MMR-Tabellen auf Prod gedroppt, kein CSV-Export) + **M6 Hub-Foundation** (PR #11) komplett live. Offenes Backlog: `DISCORD_BOT_TOKEN` + Hetzner-VM-Backup (User-Tasks), DOUBLE_ELIMINATION (§6), Cold-Fit-Job + Anti-Farming-UI (§2.4), Community-Links (echte URLs ausstehend).
+- **Zuletzt gelandet (2026-06-03):** Phase-2-Konsolidierung (PR #10, MMR-Tabellen auf Prod gedroppt, kein CSV-Export) + **M6 Hub-Foundation** (PR #11) komplett live + **DOUBLE_ELIMINATION** (§6, alle Feldgrößen, migrationsfrei). Offenes Backlog: `DISCORD_BOT_TOKEN` + Hetzner-VM-Backup (User-Tasks), Cold-Fit-Job + Anti-Farming-UI (§2.4), Community-Links (echte URLs ausstehend).
 - **Mid-term:** ~~M6 Hub-Foundation~~ ✅ live (2026-06-03). Als nächstes: M7 Datentiefe (Army-List-Browser, Scraper-Write-Path). M8 UGC (Battle-Reports, Comments). M9 Team-Play (3v3, SfT, Blind-Pick).
 - **Bewusst geparkt:** In-App-Listenbauer, Live-Stream-Embed, Achievements, Coaching, Multi-Tenant, Native-App.
 
@@ -84,7 +84,7 @@ Komplett auf `main` gelandet (Merge `30d759e`) und live auf rizzotto.gg — `mod
 
 | #   | Issue                                                                                                        | Pfad                                                          | Severity                             | Plan                               |
 | --- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------ | ---------------------------------- |
-| 1   | **DOUBLE_ELIMINATION wirft 501**                                                                             | `apps/backend/src/routes/bracket.ts:275`                      | Mittel — UI bietet das Format an     | Eigenständiger Feature-Block s. §6 |
+| 1   | ~~**DOUBLE_ELIMINATION wirft 501**~~ ✅ **gelöst (2026-06-03)** — Format end-to-end implementiert     | `apps/backend/src/routes/bracket.ts`                          | —                                    | s. §6                              |
 | 2   | **Tournament-Edit/Delete-Buttons sind Stubs**                                                                | `TournamentDetail.tsx:151,160`                                | Mittel — Admin-Flow blockiert        | §2.1                               |
 | 3   | **Scraper-Write-Path** wirft "not implemented"                                                               | `scraper/src/cli.ts:148,155`                                  | Mittel — Datenhebel ungenutzt        | M7                                 |
 | 4   | `Tournament.poster_url` Upload-Flow fehlt                                                                    | `packages/db/prisma/schema.prisma:172`                        | Niedrig                              | M6 optional                        |
@@ -125,18 +125,18 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 
 ---
 
-## 6. DOUBLE_ELIMINATION — eigenständiger Feature-Block
+## 6. DOUBLE_ELIMINATION — ✅ done (2026-06-03)
 
-**Nicht trivial.** Match-Schema hat aktuell nur `next_match_id` (Single-Link, `schema.prisma:258`). Für DoubleElim braucht's:
+End-to-end implementiert, **migrationsfrei** (Schema hatte `loser_next_match_id`, `bracket_side`, Enum `BracketSide` bereits; Generator `generateDoubleElim` existierte). Die eigentliche Arbeit war Verdrahtung + Robustheit:
 
-1. **Prisma-Migration:** `loser_next_match_id String? @db.Uuid` mit Self-Relation, Enum `BracketSide { WINNERS, LOSERS, GRAND_FINAL }` + Feld `Match.bracket BracketSide @default(WINNERS)`. Optional: `Match.grand_final_reset Boolean`
-2. **Lib-Funktion** `generateDoubleElim()` in `apps/backend/src/lib/bracket.ts`
-3. **Loser-Drop-Progression** in `apps/backend/src/routes/matches.ts`
-4. **`BracketResponse`-DTO erweitern** — separate Listen für Winners/Losers/Grand-Final
-5. **Frontend-Rendering** — zwei Bracket-Trees + Grand-Final
-6. **Tests** — Unit + Integration + Visual
+1. **Progression** (`routes/matches.ts`): Loser-Drop via `loser_next_match_id`, Grand-Final-**Bracket-Reset** (WB-Champ gewinnt GF → Reset = FORFEIT; LB-Champ → Reset wird gespielt), feeder-aware `checkAndPromoteBye`.
+2. **Order-unabhängige Slot-Zuweisung** (`lib/bracket.ts` `slotForFeeder`): leitet den Slot aus der statischen Feeder-Struktur ab statt aus Parität/first-free — behob einen reihenfolgeabhängigen Slot-Collision-Bug (Loser-Drop überschrieb den vorgereichten LB-Sieger, auch bei Zweierpotenz-Feldern).
+3. **Non-pow2-Felder** (`lib/bracket.ts`): `seedSlotOrder` (verteilte BYEs) + topologischer BYE/Phantom-Auflösungs-Pass → 5/6/7… Spieler laufen sauber durch (vorher: leeres Match blockierte das Bracket).
+4. **Finalisierung** (`lib/finalize-tournament.ts`): `computeDoubleElimPlacements` (rundenformel-frei), manuelles Finalize (wie SE).
+5. **Frontend**: DE im Create-Dropdown; `computeBracketLayout` WB/LB/GF-Split; `SVGBracket` Loser-Drop-Connectors; DE-Abschluss-Banner.
+6. **Tests**: 24 DE-Unit/DB-Integration (inkl. 5/6/7-Spieler-Lifecycle + Order-Independence), E2E 8-Spieler-Lifecycle + Browser-Render.
 
-**Aufwand:** 1–2 Tage solide Arbeit. Eigener PR, eigener Plan-File. Direkt nach M6.
+Details: `.knowledge/algorithms.md` (Abschnitt „Bracket — Double-Elimination").
 
 ---
 

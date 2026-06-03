@@ -29,6 +29,7 @@ type MatchLike = {
   player1_id: string | null;
   player2_id: string | null;
   status: string;
+  bracket_side: string | null;
 };
 
 export function computeSingleElimPlacements(matches: MatchLike[]): Map<string, number> {
@@ -67,6 +68,66 @@ export function computeSingleElimPlacements(matches: MatchLike[]): Map<string, n
       if (loser && !placements.has(loser)) {
         placements.set(loser, placementForRound(round, totalRounds));
       }
+    }
+  }
+
+  return placements;
+}
+
+// ---------------------------------------------------------------------------
+// Double-elimination placement computation
+// ---------------------------------------------------------------------------
+
+/**
+ * Computes placements for a double-elimination bracket.
+ *
+ * Champion determination:
+ *   - The GRAND_FINAL match with the highest round that has status='COMPLETED'
+ *     is the decisive final. Its winner gets placement 1, its loser placement 2.
+ *
+ * Remaining placements (3, 4, …):
+ *   - All other COMPLETED matches are sorted descending by round.
+ *   - For each match, the loser (if not yet placed) receives the next
+ *     sequential placement starting at 3.
+ *   - BYE and FORFEIT matches are skipped (no real loser to place).
+ *
+ * @param matches - All matches for the tournament, including bracket_side.
+ */
+export function computeDoubleElimPlacements(matches: MatchLike[]): Map<string, number> {
+  const placements = new Map<string, number>();
+
+  const completedMatches = matches.filter((m) => m.status === 'COMPLETED');
+  if (completedMatches.length === 0) return placements;
+
+  // Identify the decisive Grand Final: COMPLETED GRAND_FINAL match with highest round
+  const grandFinals = completedMatches
+    .filter((m) => m.bracket_side === 'GRAND_FINAL')
+    .sort((a, b) => b.round - a.round);
+
+  const championMatch = grandFinals[0];
+  if (!championMatch || !championMatch.winner_id) return placements;
+
+  const { winner_id: champion, player1_id: gfP1, player2_id: gfP2 } = championMatch;
+  const runnerUp = gfP1 === champion ? gfP2 : gfP1;
+
+  placements.set(champion, 1);
+  if (runnerUp) placements.set(runnerUp, 2);
+
+  // Sort remaining COMPLETED matches by round descending, skip the champion match
+  const remainingMatches = completedMatches
+    .filter((m) => m !== championMatch)
+    .sort((a, b) => b.round - a.round);
+
+  let nextPlacement = 3;
+  for (const match of remainingMatches) {
+    if (!match.winner_id) continue;
+
+    const { winner_id, player1_id, player2_id } = match;
+    const loser = player1_id === winner_id ? player2_id : player1_id;
+
+    if (loser && !placements.has(loser)) {
+      placements.set(loser, nextPlacement);
+      nextPlacement++;
     }
   }
 
@@ -171,6 +232,7 @@ export async function finalizeTournament(
         player1_id: true,
         player2_id: true,
         status: true,
+        bracket_side: true,
       },
     }),
     prisma.tournamentParticipant.findMany({
@@ -190,6 +252,8 @@ export async function finalizeTournament(
   let placements: Map<string, number>;
   if (RANKED_FORMATS.has(tournament.format)) {
     placements = computeRankedPlacements(participantIds, matches as MatchLike[]);
+  } else if (tournament.format === 'DOUBLE_ELIMINATION') {
+    placements = computeDoubleElimPlacements(matches as MatchLike[]);
   } else {
     placements = computeSingleElimPlacements(matches as MatchLike[]);
   }

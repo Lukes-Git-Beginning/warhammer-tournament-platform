@@ -61,8 +61,20 @@ export function BracketView({ slug, tournamentId, canManage = false }: BracketVi
   const showNextRoundButton =
     canManage && swiss !== undefined && swiss.currentRound < swiss.recommendedRounds;
 
+  const isDE = data.matches.some((m) => m.bracketSide !== null);
+  const allDone = data.matches.every(
+    (m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT',
+  );
+
   return (
     <div>
+      {/* DE completion banner — shown when all matches are done */}
+      {isDE && allDone && (
+        <div className="mb-4 rounded border border-rizzotto-gold-500/60 bg-rizzotto-gold-500/10 px-4 py-3 text-sm font-medium text-rizzotto-gold-400">
+          Grand Final abgeschlossen — Turnier entschieden
+        </div>
+      )}
+
       {/* Swiss Standings — shown above bracket when swiss data is present */}
       {swiss && (
         <SwissStandings

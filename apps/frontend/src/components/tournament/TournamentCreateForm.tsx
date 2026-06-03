@@ -13,7 +13,7 @@ import { Label, FieldError, FieldHint } from '@/components/ui/label';
 const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
-  format: z.enum(['SINGLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN']),
+  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN']),
   mode: z.enum(['OPEN', 'BPT', 'SFT', 'SLT']).default('OPEN'),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
@@ -190,6 +190,7 @@ export function TournamentCreateForm() {
             onChange={handleChange}
           >
             <option value="SINGLE_ELIMINATION">{t('tournament.format.single_elim')}</option>
+            <option value="DOUBLE_ELIMINATION">{t('tournament.format.double_elim')}</option>
             <option value="SWISS">{t('tournament.format.swiss')}</option>
             <option value="ROUND_ROBIN">{t('tournament.format.round_robin')}</option>
           </Select>

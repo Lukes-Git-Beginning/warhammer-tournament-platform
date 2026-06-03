@@ -176,7 +176,7 @@ export async function createTournament(
   request: APIRequestContext,
   opts: {
     name: string;
-    format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN';
+    format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION';
     draft_enabled?: boolean;
     draft_preset_id?: string;
     /**

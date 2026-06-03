@@ -99,6 +99,92 @@ export function generateSingleElim(
 
 ---
 
+## Bracket — Double-Elimination (`lib/bracket.ts`, `routes/matches.ts`, `lib/finalize-tournament.ts`)
+
+### 1. Bracket-Aufbau
+
+Funktion: `generateDoubleElim(tournamentId, participantIds)` → `DEBracketMatchInput[]` (erweitert `BracketMatchInput` um `loser_next_match_id` + `bracket_side`).
+
+**Rundenplan** (disjunkt, erfüllt `@@unique([tournament_id, round, match_number])`):
+
+| Segment | Runden | Match-Anzahl pro Runde |
+|---------|--------|------------------------|
+| Winners Bracket (WB) | 1 … R_W | S/2, S/4, …, 1 — wobei R_W = log₂(S), S = nextPow2(N) |
+| Losers Bracket (LB) | R_W+1 … R_W+R_L | alternierend "drop" + "consol", wobei R_L = 2·R_W − 1 |
+| Grand Final (GF) | R_W + R_L + 1 | 1 Match, `bracket_side = GRAND_FINAL` |
+| Reset Match | R_W + R_L + 2 | 1 Match, `bracket_side = GRAND_FINAL` |
+
+**LB-Struktur** (True-DE — WB-Final-Verlierer fällt in die letzte LB-Runde, nicht direkt ins GF):
+
+```
+LB drop-Runde  (0-indexed r gerade)  ← WB-Runden-Verlierer
+LB consol-Runde (0-indexed r ungerade) ← LB interne Konsolidierung
+Match-Anzahl: S >> (floor(r/2) + 2), mind. 1  [bracket.ts:261]
+```
+
+WB-Runde-r-Verlierer (0-indexed) → LB-Drop-Runde-Index 2r. WB-Final-Verlierer (r = R_W−1) → letzte LB-Runde `lbIds[R_L−1][0]` (lbDropRoundIdx ≥ R_L, Sonderfall `bracket.ts:300–302`).
+
+**Drop→Consol:** 1:1-Mapping (gleiche Match-Anzahl, `next_match_id = lbIds[r+1][i]`).
+**Consol→Drop:** halbierende Fanout (`next_match_id = lbIds[r+1][floor(i/2)]`) — `bracket.ts:355–360`.
+
+GF `player1` = WB-Champion (via WB-Final-Winner-Progression), `player2` = LB-Champion. GF `next_match_id = resetMatchId`. Reset `next_match_id = null`.
+
+### 2. Seeding & BYEs
+
+**`seedSlotOrder(size)`** (`bracket.ts:180–192`): erzeugt die Standard-Bracket-Seed-Order (z. B. size=4 → [1,4,2,3]; size=8 → [1,8,4,5,2,7,3,6]). BYE-Slots (seed > N) werden so auf die stärksten Seeds verteilt, dass jede WB-R1-Partie mindestens einen echten Spieler hat — kein leeres Match möglich.
+
+**Topologischer BYE/Phantom-Pass** (Schritt 3, `bracket.ts:421–500`): Traversiert alle Matches in (round, match_number)-Reihenfolge — jeder Feeder ist vor seinem Ziel verarbeitet. Klassifiziert jedes Match als:
+
+| Klasse | Bedingung | Effekt |
+|--------|-----------|--------|
+| `REAL` | ≥ 2 Spieler (konkret + undetermined) | bleibt PENDING |
+| `BYE` | genau 1 Spieler determinierbar | `status=BYE`, `winner_id` gesetzt, Sieger wird via `placeForward` in Ziel-Match vorgeschoben |
+| `PHANTOM` | 0 Spieler kommen je an | `status=BYE`, `winner_id=null` — terminiert, blockiert nie die Progression |
+
+"Pass-through BYE" (Sieger wird erst zur Laufzeit bekannt): bleibt BYE-klassifiziert, aber noch kein `winner_id` — das Runtime-`checkAndPromoteBye` ergänzt den Rest.
+
+GRAND_FINAL-Matches überspringen den Pass (bleiben `REAL`).
+
+### 3. Progression (Runtime)
+
+Alle Übergänge laufen in der `$transaction` von `POST /api/matches/:id/result` (`routes/matches.ts:274`).
+
+**Winner-Advance:** `advanceToSlot(tx, next_match_id, winnerId, src, 'winner')` — für alle Matches mit `!isGFSource` (`routes/matches.ts:302–304`).
+
+**Loser-Drop:** `advanceToSlot(tx, loser_next_match_id, loserId, src, 'loser')` — nur DE, nur wenn `winnerId !== null` (kein Draw-Drop) (`routes/matches.ts:308–311`).
+
+**Slot-Zuweisung via `slotForFeeder`** (`bracket.ts:146–159`): Für DE wird die Ziel-Slot-Entscheidung nie per "first-free"-Heuristik getroffen. Stattdessen lädt `advanceToSlot` alle Feeder-Rows des Ziel-Matches aus der DB (alle `next_match_id = targetId` ODER `loser_next_match_id = targetId`) und sortiert sie nach `(round, matchNumber, role)` — `winner` vor `loser` bei Gleichstand. Index 0 → `player1_id`, Index 1 → `player2_id`. Dadurch landen Loser-Drop und Winner-Advance stets in verschiedenen Slots, unabhängig von der Reihenfolge der Ergebnismeldung.
+
+**`checkAndPromoteBye(tx, matchId)`** (`routes/matches.ts:86–133`): Feeder-aware LB-BYE-Promotion. Wird nach jedem Advance aufgerufen. Logik:
+1. Match muss PENDING sein und genau einen gesetzten Slot haben.
+2. Zählt nicht-terminale Feeder (Status nicht COMPLETED/BYE/FORFEIT) via `count`-Query.
+3. Wenn 0 offene Feeder → kein weiterer Spieler kann kommen → `status=BYE`, rekursiv `advanceToSlot` + `checkAndPromoteBye` auf `next_match_id`.
+4. GRAND_FINAL-Matches werden nie automatisch zur BYE befördert (`bracket_side === 'GRAND_FINAL'` Guard).
+
+### 4. Grand-Final- & Bracket-Reset-Semantik
+
+`handleGrandFinalProgression(tx, gf, winnerId, loserId)` (`routes/matches.ts:135–162`):
+
+- `gf.next_match_id === null` → Match ist bereits das Reset-Match; kein weiterer Schritt.
+- `winnerId === gf.player1_id` (WB-Champion gewinnt GF): Reset-Match wird `FORFEIT`, bekommt aber `player1_id`, `player2_id` und `winner_id` gesetzt — kein zweites Spiel.
+- `winnerId !== gf.player1_id` (LB-Champion gewinnt GF): Reset-Match wird mit `player1_id = gf.player1_id` (WB-Champ) und `player2_id = winnerId` (LB-Champ) bestückt — Reset ist zu spielen; erst Reset-Sieger erhält Placement 1.
+
+`isGFSource`-Guard verhindert, dass `winner-advance` + `checkAndPromoteBye` das Reset-Match vorzeitig als BYE markiert, bevor beide Slots gefüllt sind (`routes/matches.ts:292, 301`).
+
+### 5. Finalisierung
+
+`computeDoubleElimPlacements(matches)` (`lib/finalize-tournament.ts:96–135`): **Rundenformel-frei** — keine `placementForRound`-Logik.
+
+1. **Champion**: GRAND_FINAL-Match mit höchster Runde und `status = 'COMPLETED'` → `winner_id` = Platz 1, Verlierer = Platz 2.
+2. **Restplatzierungen**: alle übrigen COMPLETED-Matches, absteigend nach Runde sortiert — jeder noch nicht platzierte Verlierer erhält die nächste Platznummer ab 3.
+3. BYE- und FORFEIT-Matches werden übersprungen (kein realer Verlierer).
+
+Trigger: identisch zu Single-Elim — letztes Match wechselt auf `COMPLETED` → `finalizeTournament()` in `routes/matches.ts`. **Kein Auto-Finalize** — der Organizer muss manuell finalisieren.
+
+Einbindung in `finalizeTournament()`: `format === 'DOUBLE_ELIMINATION'` → `computeDoubleElimPlacements` (`finalize-tournament.ts:255–258`). Danach ELO + Tournament-Points-Berechnung + Transaktion identisch zum Single-Elim-Pfad.
+
+---
+
 ## Swiss-System (`lib/swiss.ts`)
 
 Nutzt `Swiss` aus `tournament-pairings`.
