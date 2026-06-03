@@ -498,6 +498,9 @@ describe('DE match progression (integration)', () => {
     await prisma.match.deleteMany({ where: { tournament_id: DE_TOURN_ID } });
     await prisma.tournamentParticipant.deleteMany({ where: { tournament_id: DE_TOURN_ID } });
     await prisma.tournament.deleteMany({ where: { id: DE_TOURN_ID } });
+    await prisma.leaderboardEntry.deleteMany({
+      where: { user_id: { in: [DE_ORG_ID, DE_P1_ID, DE_P2_ID, DE_P3_ID] } },
+    });
     await prisma.user.deleteMany({
       where: { id: { in: [DE_ORG_ID, DE_P1_ID, DE_P2_ID, DE_P3_ID] } },
     });
@@ -892,6 +895,9 @@ async function cleanupLC(tournamentId: string, playerIds: string[]) {
   await prisma.match.deleteMany({ where: { tournament_id: tournamentId } });
   await prisma.tournamentParticipant.deleteMany({ where: { tournament_id: tournamentId } });
   await prisma.tournament.deleteMany({ where: { id: tournamentId } });
+  await prisma.leaderboardEntry.deleteMany({
+    where: { user_id: { in: [LC_ORG_ID, ...playerIds] } },
+  });
   await prisma.user.deleteMany({
     where: { id: { in: [LC_ORG_ID, ...playerIds] } },
   });
