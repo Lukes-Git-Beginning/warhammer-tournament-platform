@@ -116,6 +116,40 @@ export function generateSingleElim(
 }
 
 // ---------------------------------------------------------------------------
+// Double-Elimination progression slot decision
+// ---------------------------------------------------------------------------
+
+/**
+ * Determines which slot (player1_id or player2_id) a progressing player should
+ * occupy in the target match, based on bracket context and role (winner/loser).
+ *
+ * Rules (in priority order):
+ *  1. Non-DE formats → first free slot heuristic.
+ *  2. Target is GRAND_FINAL → WB source → player1, LB source → player2.
+ *  3. Loser dropping from WB → odd srcMatchNumber → player1, even → player2.
+ *  4. Fallback: first free slot.
+ */
+export function decideProgressionSlot(opts: {
+  format: string;
+  targetBracketSide: BracketSide | null;
+  targetP1IsNull: boolean;
+  srcBracketSide: BracketSide | null;
+  srcMatchNumber: number;
+  role: 'winner' | 'loser';
+}): 'player1_id' | 'player2_id' {
+  if (opts.format !== 'DOUBLE_ELIMINATION') {
+    return opts.targetP1IsNull ? 'player1_id' : 'player2_id';
+  }
+  if (opts.targetBracketSide === 'GRAND_FINAL') {
+    return opts.srcBracketSide === 'WINNERS' ? 'player1_id' : 'player2_id';
+  }
+  if (opts.role === 'loser' && opts.srcBracketSide === 'WINNERS') {
+    return opts.srcMatchNumber % 2 === 1 ? 'player1_id' : 'player2_id';
+  }
+  return opts.targetP1IsNull ? 'player1_id' : 'player2_id';
+}
+
+// ---------------------------------------------------------------------------
 // Double-Elimination bracket generator
 // ---------------------------------------------------------------------------
 

@@ -6,6 +6,7 @@ import {
   placementForRound,
   computeSingleElimPlacements,
   computeRankedPlacements,
+  computeDoubleElimPlacements,
   finalizeTournament,
 } from '../src/lib/finalize-tournament.js';
 import {
@@ -160,6 +161,120 @@ describe('computeRankedPlacements', () => {
     expect(result.get('P3')).toBe(2);
     // P4: 0W 2L → placement 4 (after two-way tie at 2)
     expect(result.get('P4')).toBe(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeDoubleElimPlacements — pure-function tests
+// ---------------------------------------------------------------------------
+//
+// 4-player DE round layout (as produced by the bracket generator):
+//   WB R1:  rounds 1+2 (2 matches at round=1, 1 WB-final at round=2)
+//   LB:     rounds 3–5 (LB-R1 at 3, LB-R2 at 4, LB-final at 5)
+//   GF:     round 6  (bracket_side='GRAND_FINAL')
+//   Reset:  round 7  (bracket_side='GRAND_FINAL', next_match_id=null)
+
+describe('computeDoubleElimPlacements — edge: empty array', () => {
+  it('returns empty Map for empty match array', () => {
+    const result = computeDoubleElimPlacements([]);
+    expect(result.size).toBe(0);
+  });
+});
+
+describe('computeDoubleElimPlacements — Szenario A: WB-Champ wins GF, Reset=FORFEIT', () => {
+  // 4-player DE model (rounds 1–7):
+  //   WBC = WB-Champion; LBC = LB-Champion (GF runner-up); P3, P4 = eliminated earlier.
+  //   WB R1 (round 1): WBC beats P4, LBC beats P3 → both P3+P4 drop to LB.
+  //   WB Final (round 2): WBC beats LBC → LBC drops to LB.
+  //   LB R1 (round 3): P4 beats P3 → P3 eliminated (placement 4).
+  //   LB Semi (round 4): LBC beats P4 → P4 eliminated (placement 3).
+  //   GF (round 6): WBC beats LBC → Reset triggered.
+  //   Reset (round 7): FORFEIT (LBC concedes) → winner_id=null, status='FORFEIT'.
+  //   championMatch = GF (round 6) because FORFEIT is excluded from COMPLETED filter.
+  const matchesScenarioA = [
+    { round: 1, player1_id: 'WBC', player2_id: 'P4',  winner_id: 'WBC', status: 'COMPLETED', bracket_side: 'WINNERS' },
+    { round: 1, player1_id: 'LBC', player2_id: 'P3',  winner_id: 'LBC', status: 'COMPLETED', bracket_side: 'WINNERS' },
+    { round: 2, player1_id: 'WBC', player2_id: 'LBC', winner_id: 'WBC', status: 'COMPLETED', bracket_side: 'WINNERS' },
+    { round: 3, player1_id: 'P4',  player2_id: 'P3',  winner_id: 'P4',  status: 'COMPLETED', bracket_side: 'LOSERS'  },
+    { round: 4, player1_id: 'LBC', player2_id: 'P4',  winner_id: 'LBC', status: 'COMPLETED', bracket_side: 'LOSERS'  },
+    { round: 6, player1_id: 'WBC', player2_id: 'LBC', winner_id: 'WBC', status: 'COMPLETED', bracket_side: 'GRAND_FINAL' },
+    { round: 7, player1_id: 'LBC', player2_id: 'WBC', winner_id: null,  status: 'FORFEIT',   bracket_side: 'GRAND_FINAL' },
+  ];
+
+  it('FORFEIT Reset is excluded → championMatch is GF (round 6)', () => {
+    const result = computeDoubleElimPlacements(matchesScenarioA);
+    // WBC is GF winner → placement 1
+    expect(result.get('WBC')).toBe(1);
+  });
+
+  it('GF loser (LBC) → placement 2', () => {
+    const result = computeDoubleElimPlacements(matchesScenarioA);
+    expect(result.get('LBC')).toBe(2);
+  });
+
+  it('LB Semi loser (P4, round 4) → placement 3', () => {
+    const result = computeDoubleElimPlacements(matchesScenarioA);
+    // After champion match: remaining sorted desc: r4 (P4 loses), r3 (P3 loses), r2, r1
+    // r4 loser = P4 → 3rd
+    expect(result.get('P4')).toBe(3);
+  });
+
+  it('LB R1 loser (P3, round 3) → placement 4', () => {
+    const result = computeDoubleElimPlacements(matchesScenarioA);
+    // r3 loser = P3 → 4th
+    expect(result.get('P3')).toBe(4);
+  });
+
+  it('exactly 4 placements assigned', () => {
+    const result = computeDoubleElimPlacements(matchesScenarioA);
+    expect(result.size).toBe(4);
+  });
+});
+
+describe('computeDoubleElimPlacements — Szenario B: LB-Champ wins Reset (status=COMPLETED)', () => {
+  // LBC beat WBC in GF (round 6) → Reset (round 7) is played.
+  // LBC wins the Reset (round 7, status='COMPLETED').
+  // championMatch = Reset (round 7, highest COMPLETED GRAND_FINAL).
+  // Reset winner LBC → placement 1; Reset loser WBC → placement 2.
+  const matchesScenarioB = [
+    // WB R1 round=1
+    { round: 1, player1_id: 'WBC', player2_id: 'P4',  winner_id: 'WBC', status: 'COMPLETED', bracket_side: 'WINNERS' },
+    { round: 1, player1_id: 'LBC', player2_id: 'P3',  winner_id: 'LBC', status: 'COMPLETED', bracket_side: 'WINNERS' },
+    // WB Final round=2
+    { round: 2, player1_id: 'WBC', player2_id: 'LBC', winner_id: 'WBC', status: 'COMPLETED', bracket_side: 'WINNERS' },
+    // LB R1 round=3
+    { round: 3, player1_id: 'P4',  player2_id: 'P3',  winner_id: 'P4',  status: 'COMPLETED', bracket_side: 'LOSERS' },
+    // LB Semi round=4
+    { round: 4, player1_id: 'LBC', player2_id: 'P4',  winner_id: 'LBC', status: 'COMPLETED', bracket_side: 'LOSERS' },
+    // Grand Final round=6 — LBC beats WBC (forces Reset)
+    { round: 6, player1_id: 'WBC', player2_id: 'LBC', winner_id: 'LBC', status: 'COMPLETED', bracket_side: 'GRAND_FINAL' },
+    // Reset round=7 — LBC beats WBC (LBC is champion)
+    { round: 7, player1_id: 'LBC', player2_id: 'WBC', winner_id: 'LBC', status: 'COMPLETED', bracket_side: 'GRAND_FINAL' },
+  ];
+
+  it('Reset (round 7) is COMPLETED → championMatch is Reset, LBC → placement 1', () => {
+    const result = computeDoubleElimPlacements(matchesScenarioB);
+    expect(result.get('LBC')).toBe(1);
+  });
+
+  it('Reset loser WBC → placement 2', () => {
+    const result = computeDoubleElimPlacements(matchesScenarioB);
+    expect(result.get('WBC')).toBe(2);
+  });
+
+  it('LB Semi loser (P4, round 4) → placement 3', () => {
+    const result = computeDoubleElimPlacements(matchesScenarioB);
+    expect(result.get('P4')).toBe(3);
+  });
+
+  it('LB R1 loser (P3, round 3) → placement 4', () => {
+    const result = computeDoubleElimPlacements(matchesScenarioB);
+    expect(result.get('P3')).toBe(4);
+  });
+
+  it('exactly 4 placements assigned', () => {
+    const result = computeDoubleElimPlacements(matchesScenarioB);
+    expect(result.size).toBe(4);
   });
 });
 

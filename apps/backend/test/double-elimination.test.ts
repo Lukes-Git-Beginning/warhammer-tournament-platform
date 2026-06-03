@@ -342,3 +342,389 @@ async function getAuthCookie(
   const cookieStr = Array.isArray(setCookie) ? setCookie[0] : setCookie;
   return cookieStr!.split(';')[0]!;
 }
+
+// ---------------------------------------------------------------------------
+// DE match progression (integration)
+// ---------------------------------------------------------------------------
+
+// Distinct IDs to avoid collisions with the bracket-start suite above.
+const DE_ORG_ID   = '2d000000-0000-0000-0000-000000000001';
+const DE_P1_ID    = '2d000000-0000-0000-0000-000000000002';
+const DE_P2_ID    = '2d000000-0000-0000-0000-000000000003';
+const DE_P3_ID    = '2d000000-0000-0000-0000-000000000004';
+
+const DE_TOURN_ID = '2d000000-0000-0000-0001-000000000001';
+
+// Report a match result via HTTP and assert status 200.
+async function reportResult(
+  appInst: FastifyInstance,
+  cookie: string,
+  matchId: string,
+  winnerId: string,
+): Promise<void> {
+  const res = await appInst.inject({
+    method: 'POST',
+    url: `/api/matches/${matchId}/result`,
+    headers: { cookie },
+    payload: { winnerId },
+  });
+  if (res.statusCode !== 200) {
+    throw new Error(
+      `reportResult failed for match ${matchId}: HTTP ${res.statusCode} — ${res.body}`,
+    );
+  }
+}
+
+// Load all matches for a tournament ordered by (round, match_number).
+async function loadMatches(tournamentId: string) {
+  return prisma.match.findMany({
+    where: { tournament_id: tournamentId, deleted_at: null },
+    orderBy: [{ round: 'asc' }, { match_number: 'asc' }],
+  });
+}
+
+/**
+ * Drive the bracket from start through to (and including) LB Final (round 5),
+ * returning the GF match (round 6) with both player slots set.
+ *
+ * `wbR1M1WinsPlayer` – true  → DE_P1_ID wins WB-R1-M1 (odd), false → DE_P2_ID wins
+ * `wbR1M2WinsPlayer` – true  → DE_P3_ID wins WB-R1-M2 (even), false → DE_ORG_ID wins
+ * `wbFinalWinner`    – which of the two WB-R1 winners proceeds through WB-Final
+ * `lbFinalWinner`    – which player wins the LB path
+ *
+ * For simplicity the helper always makes the same deterministic choices:
+ *   WB-R1-M1 winner = DE_P1_ID (first of the two WB-R1-M1 players)
+ *   WB-R1-M2 winner = DE_P3_ID (first of the two WB-R1-M2 players)
+ *   WB-Final winner = WB-R1-M1 winner (DE_P1_ID)
+ *   LB matches      = always pick player1 of the respective match
+ */
+async function playToGrandFinal(
+  appInst: FastifyInstance,
+  cookie: string,
+  tournamentId: string,
+): Promise<{ gfMatch: Awaited<ReturnType<typeof loadMatches>>[number]; wbChampId: string; lbChampId: string }> {
+  // ── Step 1: Start the bracket ────────────────────────────────────────────
+  const startRes = await appInst.inject({
+    method: 'POST',
+    url: `/api/tournaments/${tournamentId}/start`,
+    headers: { cookie },
+  });
+  if (startRes.statusCode !== 200) {
+    throw new Error(`start failed: HTTP ${startRes.statusCode} — ${startRes.body}`);
+  }
+
+  // ── Step 2: WB R1 (round 1, 2 matches) ──────────────────────────────────
+  let matches = await loadMatches(tournamentId);
+  const wbR1Matches = matches.filter((m) => m.bracket_side === 'WINNERS' && m.round === 1);
+  if (wbR1Matches.length !== 2) throw new Error(`Expected 2 WB-R1 matches, got ${wbR1Matches.length}`);
+
+  // Match with match_number 1 (odd) and match_number 2 (even)
+  const wbR1M1 = wbR1Matches.find((m) => m.match_number === 1)!;
+  const wbR1M2 = wbR1Matches.find((m) => m.match_number === 2)!;
+  if (!wbR1M1.player1_id) throw new Error('WB-R1-M1 player1 not set');
+  if (!wbR1M2.player1_id) throw new Error('WB-R1-M2 player1 not set');
+
+  // winner of M1 = player1 of M1, winner of M2 = player1 of M2
+  const wbR1M1Winner = wbR1M1.player1_id;
+  const wbR1M1Loser  = wbR1M1.player2_id!;
+  const wbR1M2Winner = wbR1M2.player1_id;
+  const wbR1M2Loser  = wbR1M2.player2_id!;
+
+  await reportResult(appInst, cookie, wbR1M1.id, wbR1M1Winner);
+  await reportResult(appInst, cookie, wbR1M2.id, wbR1M2Winner);
+
+  // ── Step 3: WB Final (round 2, 1 match) ─────────────────────────────────
+  matches = await loadMatches(tournamentId);
+  const wbFinal = matches.find(
+    (m) => m.bracket_side === 'WINNERS' && m.round === 2,
+  )!;
+  if (!wbFinal.player1_id || !wbFinal.player2_id) {
+    throw new Error(`WB-Final slots not filled after WB-R1: p1=${wbFinal.player1_id} p2=${wbFinal.player2_id}`);
+  }
+  // WB champion = player1 of WB Final (which is wbR1M1Winner per slot rule)
+  const wbChampId = wbFinal.player1_id;
+  const wbFinalLoser = wbFinal.player2_id;
+  await reportResult(appInst, cookie, wbFinal.id, wbChampId);
+
+  // ── Step 4: LB R1 (round 3, 1 match) ────────────────────────────────────
+  matches = await loadMatches(tournamentId);
+  const lbR1 = matches.find(
+    (m) => m.bracket_side === 'LOSERS' && m.round === 3,
+  )!;
+  if (!lbR1.player1_id || !lbR1.player2_id) {
+    throw new Error(`LB-R1 slots not filled: p1=${lbR1.player1_id} p2=${lbR1.player2_id}`);
+  }
+  const lbR1Winner = lbR1.player1_id;
+  await reportResult(appInst, cookie, lbR1.id, lbR1Winner);
+
+  // ── Step 5: LB R4 is auto-BYE'd (round 4) — skip it, then LB R5 ────────
+  matches = await loadMatches(tournamentId);
+
+  // LB round 5 should now have one slot filled (from BYE promotion of round 4).
+  // The WB-Final loser drops into round 5 as the other slot.
+  const lbR5 = matches.find(
+    (m) => m.bracket_side === 'LOSERS' && m.round === 5,
+  )!;
+  if (!lbR5.player1_id || !lbR5.player2_id) {
+    throw new Error(`LB-R5 slots not filled before playing: p1=${lbR5.player1_id} p2=${lbR5.player2_id}. wbFinalLoser=${wbFinalLoser}`);
+  }
+  const lbChampId = lbR5.player1_id;
+  await reportResult(appInst, cookie, lbR5.id, lbChampId);
+
+  // ── Step 6: Return GF match ───────────────────────────────────────────────
+  matches = await loadMatches(tournamentId);
+  const gfMatch = matches.find(
+    (m) => m.bracket_side === 'GRAND_FINAL' && m.round === 6,
+  )!;
+
+  return { gfMatch, wbChampId, lbChampId };
+}
+
+describe('DE match progression (integration)', () => {
+  let app: FastifyInstance;
+
+  async function cleanupDE() {
+    await prisma.tournamentResult.deleteMany({ where: { tournament_id: DE_TOURN_ID } });
+    await prisma.auditLog.deleteMany({ where: { entity_id: DE_TOURN_ID } });
+    await prisma.auditLog.deleteMany({ where: { actor_id: DE_ORG_ID } });
+    await prisma.match.deleteMany({ where: { tournament_id: DE_TOURN_ID } });
+    await prisma.tournamentParticipant.deleteMany({ where: { tournament_id: DE_TOURN_ID } });
+    await prisma.tournament.deleteMany({ where: { id: DE_TOURN_ID } });
+    await prisma.user.deleteMany({
+      where: { id: { in: [DE_ORG_ID, DE_P1_ID, DE_P2_ID, DE_P3_ID] } },
+    });
+  }
+
+  async function setupDE() {
+    await cleanupDE();
+
+    await prisma.user.createMany({
+      data: [
+        { id: DE_ORG_ID, discord_id: 'dc-org-dep', username: 'org_dep',  role: 'ORGANIZER' },
+        { id: DE_P1_ID,  discord_id: 'dc-p1-dep',  username: 'p1_dep',   role: 'USER' },
+        { id: DE_P2_ID,  discord_id: 'dc-p2-dep',  username: 'p2_dep',   role: 'USER' },
+        { id: DE_P3_ID,  discord_id: 'dc-p3-dep',  username: 'p3_dep',   role: 'USER' },
+      ],
+    });
+
+    await prisma.tournament.create({
+      data: {
+        id: DE_TOURN_ID,
+        name: 'DE Progression Test',
+        slug: `de-prog-test-${DE_TOURN_ID}`,
+        format: 'DOUBLE_ELIMINATION',
+        status: 'REGISTRATION_CLOSED',
+        organizer_id: DE_ORG_ID,
+        start_date: new Date('2026-07-01'),
+        timezone: 'UTC',
+      },
+    });
+
+    await prisma.tournamentParticipant.createMany({
+      data: [
+        { tournament_id: DE_TOURN_ID, user_id: DE_ORG_ID, status: 'CHECKED_IN' },
+        { tournament_id: DE_TOURN_ID, user_id: DE_P1_ID,  status: 'CHECKED_IN' },
+        { tournament_id: DE_TOURN_ID, user_id: DE_P2_ID,  status: 'CHECKED_IN' },
+        { tournament_id: DE_TOURN_ID, user_id: DE_P3_ID,  status: 'CHECKED_IN' },
+      ],
+    });
+  }
+
+  beforeAll(async () => {
+    app = await buildApp({
+      withSocket: false,
+      withRedis: false,
+      withCron: false,
+      withGraphql: false,
+      withDraft: false,
+    });
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await cleanupDE();
+    await app.close();
+  });
+
+  beforeEach(async () => {
+    await setupDE();
+  });
+
+  afterEach(async () => {
+    await cleanupDE();
+  });
+
+  // ── Test 1: Loser-Drop-Slots ──────────────────────────────────────────────
+  it('WB-R1 losers land in correct LB-R1 slots (odd→player1, even→player2)', async () => {
+    const cookie = await getAuthCookie(app, DE_ORG_ID, 'ORGANIZER');
+
+    // Start bracket
+    const startRes = await app.inject({
+      method: 'POST',
+      url: `/api/tournaments/${DE_TOURN_ID}/start`,
+      headers: { cookie },
+    });
+    expect(startRes.statusCode).toBe(200);
+
+    let matches = await loadMatches(DE_TOURN_ID);
+    const wbR1Matches = matches.filter((m) => m.bracket_side === 'WINNERS' && m.round === 1);
+    expect(wbR1Matches).toHaveLength(2);
+
+    const wbR1M1 = wbR1Matches.find((m) => m.match_number === 1)!; // odd
+    const wbR1M2 = wbR1Matches.find((m) => m.match_number === 2)!; // even
+    expect(wbR1M1).toBeDefined();
+    expect(wbR1M2).toBeDefined();
+
+    // Both matches must have two players
+    expect(wbR1M1.player1_id).not.toBeNull();
+    expect(wbR1M1.player2_id).not.toBeNull();
+    expect(wbR1M2.player1_id).not.toBeNull();
+    expect(wbR1M2.player2_id).not.toBeNull();
+
+    // Report M1: player2 wins → player1 is the loser
+    const m1Loser = wbR1M1.player1_id!;
+    const m1Winner = wbR1M1.player2_id!;
+    await reportResult(app, cookie, wbR1M1.id, m1Winner);
+
+    // Report M2: player2 wins → player1 is the loser
+    const m2Loser = wbR1M2.player1_id!;
+    const m2Winner = wbR1M2.player2_id!;
+    await reportResult(app, cookie, wbR1M2.id, m2Winner);
+
+    // Reload and inspect LB-R1
+    matches = await loadMatches(DE_TOURN_ID);
+    const lbR1 = matches.find((m) => m.bracket_side === 'LOSERS' && m.round === 3)!;
+    expect(lbR1).toBeDefined();
+
+    // Odd match_number (1) loser → player1 slot
+    expect(lbR1.player1_id).toBe(m1Loser);
+    // Even match_number (2) loser → player2 slot
+    expect(lbR1.player2_id).toBe(m2Loser);
+  });
+
+  // ── Test 2: Degenerate LB round becomes BYE ───────────────────────────────
+  it('LB round 4 auto-promotes to BYE after LB round 3 completes', async () => {
+    const cookie = await getAuthCookie(app, DE_ORG_ID, 'ORGANIZER');
+
+    // Start + WB-R1
+    const startRes = await app.inject({
+      method: 'POST',
+      url: `/api/tournaments/${DE_TOURN_ID}/start`,
+      headers: { cookie },
+    });
+    expect(startRes.statusCode).toBe(200);
+
+    let matches = await loadMatches(DE_TOURN_ID);
+    const wbR1Matches = matches.filter((m) => m.bracket_side === 'WINNERS' && m.round === 1);
+    const wbR1M1 = wbR1Matches.find((m) => m.match_number === 1)!;
+    const wbR1M2 = wbR1Matches.find((m) => m.match_number === 2)!;
+
+    await reportResult(app, cookie, wbR1M1.id, wbR1M1.player1_id!);
+    await reportResult(app, cookie, wbR1M2.id, wbR1M2.player1_id!);
+
+    // WB-R1 losers are now in LB-R1 (round 3)
+    matches = await loadMatches(DE_TOURN_ID);
+    const lbR1 = matches.find((m) => m.bracket_side === 'LOSERS' && m.round === 3)!;
+    expect(lbR1.player1_id).not.toBeNull();
+    expect(lbR1.player2_id).not.toBeNull();
+
+    const lbR1Winner = lbR1.player1_id!;
+    await reportResult(app, cookie, lbR1.id, lbR1Winner);
+
+    // Reload — LB round 4 should be BYE, with winner = lbR1Winner
+    matches = await loadMatches(DE_TOURN_ID);
+    const lbR4 = matches.find((m) => m.bracket_side === 'LOSERS' && m.round === 4)!;
+    expect(lbR4).toBeDefined();
+    expect(lbR4.status).toBe('BYE');
+    expect(lbR4.winner_id).toBe(lbR1Winner);
+
+    // The LB R4 winner (= lbR1Winner) must already be slotted into LB round 5
+    const lbR5 = matches.find((m) => m.bracket_side === 'LOSERS' && m.round === 5)!;
+    expect(lbR5).toBeDefined();
+    const r5HasPlayer = lbR5.player1_id === lbR1Winner || lbR5.player2_id === lbR1Winner;
+    expect(r5HasPlayer).toBe(true);
+  });
+
+  // ── Test 3: GF — WB champion wins → Reset = FORFEIT ──────────────────────
+  it('GF WB-champion win → Reset match is FORFEIT; finalize assigns placement 1 to WB-champ', async () => {
+    const cookie = await getAuthCookie(app, DE_ORG_ID, 'ORGANIZER');
+
+    const { gfMatch, wbChampId } = await playToGrandFinal(app, cookie, DE_TOURN_ID);
+
+    expect(gfMatch.player1_id).not.toBeNull();
+    expect(gfMatch.player2_id).not.toBeNull();
+
+    // WB champion is player1 of GF
+    expect(gfMatch.player1_id).toBe(wbChampId);
+
+    const gfLoserId = gfMatch.player2_id!;
+
+    // WB champion wins GF
+    await reportResult(app, cookie, gfMatch.id, wbChampId);
+
+    // Reset match must be FORFEIT
+    const matches = await loadMatches(DE_TOURN_ID);
+    const resetMatch = matches.find(
+      (m) => m.bracket_side === 'GRAND_FINAL' && m.round === 7,
+    )!;
+    expect(resetMatch).toBeDefined();
+    expect(resetMatch.status).toBe('FORFEIT');
+    expect(resetMatch.winner_id).toBe(wbChampId);
+
+    // Finalize and check placements
+    const { finalizeTournament } = await import('../src/lib/finalize-tournament.js');
+    await finalizeTournament(prisma, DE_TOURN_ID, DE_ORG_ID);
+
+    const results = await prisma.tournamentResult.findMany({
+      where: { tournament_id: DE_TOURN_ID },
+    });
+
+    const champResult = results.find((r) => r.user_id === wbChampId);
+    const runnerUpResult = results.find((r) => r.user_id === gfLoserId);
+    expect(champResult).toBeDefined();
+    expect(champResult!.placement).toBe(1);
+    expect(runnerUpResult).toBeDefined();
+    expect(runnerUpResult!.placement).toBe(2);
+  });
+
+  // ── Test 4: GF — LB champion wins → Reset is PENDING, then played ─────────
+  it('GF LB-champion win → Reset match is PENDING with both slots; Reset win finalizes correctly', async () => {
+    const cookie = await getAuthCookie(app, DE_ORG_ID, 'ORGANIZER');
+
+    const { gfMatch, wbChampId, lbChampId } = await playToGrandFinal(app, cookie, DE_TOURN_ID);
+
+    expect(gfMatch.player1_id).not.toBeNull();
+    expect(gfMatch.player2_id).not.toBeNull();
+    expect(gfMatch.player1_id).toBe(wbChampId);
+    expect(gfMatch.player2_id).toBe(lbChampId);
+
+    // LB champion wins GF
+    await reportResult(app, cookie, gfMatch.id, lbChampId);
+
+    // Reset match must be PENDING with both slots set
+    let matches = await loadMatches(DE_TOURN_ID);
+    const resetMatch = matches.find(
+      (m) => m.bracket_side === 'GRAND_FINAL' && m.round === 7,
+    )!;
+    expect(resetMatch).toBeDefined();
+    expect(resetMatch.status).toBe('PENDING');
+    expect(resetMatch.player1_id).not.toBeNull(); // WB champ
+    expect(resetMatch.player2_id).not.toBeNull(); // LB champ
+    expect(resetMatch.player2_id).toBe(lbChampId);
+
+    // Play Reset — LB champion wins again
+    await reportResult(app, cookie, resetMatch.id, lbChampId);
+
+    // Finalize and check placements
+    const { finalizeTournament } = await import('../src/lib/finalize-tournament.js');
+    await finalizeTournament(prisma, DE_TOURN_ID, DE_ORG_ID);
+
+    const results = await prisma.tournamentResult.findMany({
+      where: { tournament_id: DE_TOURN_ID },
+    });
+
+    const champResult = results.find((r) => r.user_id === lbChampId);
+    expect(champResult).toBeDefined();
+    expect(champResult!.placement).toBe(1);
+  });
+});

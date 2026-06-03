@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { emitMatchResult, emitBracketUpdate, emitStatusChange } from '../lib/emit.js';
 import { invalidate } from '../lib/cache.js';
 import { InvalidActionError } from '../lib/draft-service.js';
+import { decideProgressionSlot } from '../lib/bracket.js';
+import { Prisma, type BracketSide } from '@rizzotto/db';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -14,6 +16,124 @@ const ReportResultSchema = z.object({
   player1FactionId: z.string().min(1).optional(),
   player2FactionId: z.string().min(1).optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Route plugin
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// DE progression helpers (defined at module scope, receive tx as parameter)
+// ---------------------------------------------------------------------------
+
+type TxClient = Prisma.TransactionClient;
+
+interface AdvanceSrc {
+  tournamentFormat: string;
+  bracket_side: BracketSide | null;
+  match_number: number;
+}
+
+async function advanceToSlot(
+  tx: TxClient,
+  targetId: string,
+  playerId: string | null,
+  src: AdvanceSrc,
+  role: 'winner' | 'loser',
+): Promise<void> {
+  if (playerId === null) return;
+  const t = await tx.match.findUnique({
+    where: { id: targetId },
+    select: { id: true, player1_id: true, player2_id: true, bracket_side: true },
+  });
+  if (!t) return;
+  const slot = decideProgressionSlot({
+    format: src.tournamentFormat,
+    targetBracketSide: t.bracket_side,
+    targetP1IsNull: t.player1_id === null,
+    srcBracketSide: src.bracket_side,
+    srcMatchNumber: src.match_number,
+    role,
+  });
+  await tx.match.update({ where: { id: targetId }, data: { [slot]: playerId } });
+}
+
+async function checkAndPromoteBye(
+  tx: TxClient,
+  matchId: string,
+): Promise<void> {
+  const m = await tx.match.findUnique({
+    where: { id: matchId },
+    select: {
+      id: true,
+      status: true,
+      player1_id: true,
+      player2_id: true,
+      next_match_id: true,
+      bracket_side: true,
+      match_number: true,
+      tournament_id: true,
+    },
+  });
+  if (!m || m.status !== 'PENDING') return;
+  // GF and Reset matches are never auto-BYE'd
+  if (m.bracket_side === 'GRAND_FINAL') return;
+  // Both slots filled → real match, no BYE
+  if (m.player1_id !== null && m.player2_id !== null) return;
+  const present = m.player1_id ?? m.player2_id;
+  // Both empty → not yet decidable
+  if (present === null) return;
+  // Check if any non-terminal feeder match can still fill the empty slot
+  const pendingFeeders = await tx.match.count({
+    where: {
+      tournament_id: m.tournament_id,
+      deleted_at: null,
+      status: { notIn: ['COMPLETED', 'BYE', 'FORFEIT'] },
+      OR: [{ next_match_id: matchId }, { loser_next_match_id: matchId }],
+    },
+  });
+  if (pendingFeeders > 0) return;
+  // Promote to BYE
+  await tx.match.update({ where: { id: matchId }, data: { status: 'BYE', winner_id: present } });
+  if (m.next_match_id) {
+    await advanceToSlot(
+      tx,
+      m.next_match_id,
+      present,
+      { tournamentFormat: 'DOUBLE_ELIMINATION', bracket_side: m.bracket_side, match_number: m.match_number },
+      'winner',
+    );
+    await checkAndPromoteBye(tx, m.next_match_id);
+  }
+}
+
+async function handleGrandFinalProgression(
+  tx: TxClient,
+  gf: { id: string; next_match_id: string | null; player1_id: string | null },
+  winnerId: string | null,
+  loserId: string | null,
+): Promise<void> {
+  // gf IS the Reset match (next_match_id=null) → already the final game
+  if (gf.next_match_id === null) return;
+  if (winnerId === gf.player1_id) {
+    // WB champion wins GF → no Reset needed; mark Reset as FORFEIT
+    await tx.match.update({
+      where: { id: gf.next_match_id },
+      data: {
+        status: 'FORFEIT',
+        player1_id: winnerId,
+        player2_id: loserId,
+        winner_id: winnerId,
+      },
+    });
+  } else {
+    // LB champion wins GF → Reset match must be played
+    // WB champion (original player1 of GF) takes player1 slot; LB champion takes player2 slot
+    await tx.match.update({
+      where: { id: gf.next_match_id },
+      data: { player1_id: gf.player1_id, player2_id: winnerId },
+    });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Route plugin
@@ -48,9 +168,12 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           player1_id: true,
           player2_id: true,
           next_match_id: true,
+          loser_next_match_id: true,
+          bracket_side: true,
+          match_number: true,
           player1_faction_id: true,
           player2_faction_id: true,
-          tournament: { select: { organizer_id: true } },
+          tournament: { select: { organizer_id: true, format: true } },
         },
       });
 
@@ -138,25 +261,31 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
-        // b) Advance winner to next match if applicable
-        if (match.next_match_id) {
-          const nextMatch = await tx.match.findUnique({
-            where: { id: match.next_match_id },
-            select: { id: true, player1_id: true, player2_id: true },
-          });
-          if (nextMatch) {
-            if (nextMatch.player1_id === null) {
-              await tx.match.update({
-                where: { id: nextMatch.id },
-                data: { player1_id: winnerId },
-              });
-            } else {
-              await tx.match.update({
-                where: { id: nextMatch.id },
-                data: { player2_id: winnerId },
-              });
-            }
-          }
+        // b) Advance winner / drop loser to next match(es)
+        const isDE = match.tournament.format === 'DOUBLE_ELIMINATION';
+        const isGFSource = isDE && match.bracket_side === 'GRAND_FINAL';
+        const src: AdvanceSrc = {
+          tournamentFormat: match.tournament.format,
+          bracket_side: match.bracket_side,
+          match_number: match.match_number,
+        };
+
+        // Winner-advance — GF-source is handled exclusively by handleGrandFinalProgression
+        // to avoid premature BYE promotion of the Reset match before both slots are filled.
+        if (match.next_match_id && !isGFSource) {
+          await advanceToSlot(tx, match.next_match_id, winnerId, src, 'winner');
+          await checkAndPromoteBye(tx, match.next_match_id);
+        }
+
+        // Loser-drop (DE only, requires a decisive result)
+        if (isDE && match.loser_next_match_id && winnerId !== null && loserId !== null) {
+          await advanceToSlot(tx, match.loser_next_match_id, loserId, src, 'loser');
+          await checkAndPromoteBye(tx, match.loser_next_match_id);
+        }
+
+        // Grand Final / Reset semantics
+        if (isGFSource) {
+          await handleGrandFinalProgression(tx, match, winnerId, loserId);
         }
 
         // c) FactionStats update (only when active season exists)
