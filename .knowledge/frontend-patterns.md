@@ -84,6 +84,10 @@ export const router = createRouter({ routeTree });
 | `/connect-steam`             | `SteamConnectPage`     | `routes/SteamConnectPage.tsx`     |
 | `/matches/$matchId`          | `MatchDetailPage`      | `routes/MatchDetailPage.tsx`      |
 | `/matches/$matchId/decision` | `MatchDecisionPage`    | `routes/MatchDecisionPage.tsx`    |
+| `/users/$a/vs/$b`            | `H2HPage`              | `routes/H2HPage.tsx`              |
+| `/tournaments/calendar`      | `CalendarPage`         | `routes/CalendarPage.tsx`         |
+
+**Route-Spezifitäts-Hinweis (M6):** `/tournaments/calendar` MUSS in `router.tsx` VOR `/tournaments/$slug` registriert sein. TanStack Router bevorzugt statische Segmente gegenüber Params automatisch, aber die Reihenfolge im `addChildren`-Array schützt gegen Regressionen — in `apps/e2e/tests/m6-routes.spec.ts` runtime-verifiziert.
 
 ---
 
@@ -175,8 +179,11 @@ Verifiziert gegen `src/routes/*.tsx` und `src/hooks/*.ts`:
 | `['match-decision', matchId]`       | Match-Decision-State                    |
 | `['army-list-me', slug]`            | eigene Army-Liste im Tournament         |
 | `['army-list', slug, userId]`       | Gegner-Army-Liste                       |
-| `['army-lists-all', slug]`          | alle Listen (nach Tournament complete)  |
-| `['tournament-participants', slug]` | Teilnehmer-Liste inkl. Status           |
+| `['army-lists-all', slug]`                     | alle Listen (nach Tournament complete)  |
+| `['tournament-participants', slug]`            | Teilnehmer-Liste inkl. Status           |
+| `['h2h', a, b]`                               | Head-to-Head-Stats zweier User          |
+| `['calendar', year, month, status, majorOnly]` | Turniere eines Monats (CalendarPage)    |
+| `['admin-import-log', page, source]`           | paginiertes Import-Log (AdminPage)      |
 
 ---
 
@@ -190,6 +197,7 @@ Verzeichnis: `apps/frontend/src/components/`
 - `StatsDashboard.tsx` — Admin-Statistiken
 - `UserBanModal.tsx` / `UserBanTab.tsx` — Ban/Unban-Workflow
 - `PresetLibraryAdmin.tsx` — Preset-Verwaltung (promote, delete)
+- `ImportLogTable.tsx` — paginiertes Import-Log (M6; Klon von `AuditLogTable.tsx`, Tab `'import'` in `AdminPage`)
 
 **`bracket/`**
 
@@ -226,6 +234,14 @@ Verzeichnis: `apps/frontend/src/components/`
 - `ArmyListUploader.tsx` — Drag-Drop SLT-Army-List-Upload (Welle 2: Screenshot + .army_setup)
 - `ArmyListList.tsx` — Liste hochgeladener Army-Lists
 - `CheckInButton.tsx` — Self-Service Check-in mit Live-Countdown (Welle 2)
+
+**`calendar/`** (M6)
+
+- `MonthCalendarGrid.tsx` — Custom Voll-Monatsraster (nativ `Date`, keine Kalender-Lib, Wochenbeginn Montag)
+
+**`landing/`** (M6)
+
+- `PersonalisedFactionBlock.tsx` — rendert nur wenn `useAuthQuery()`-User + `preferred_factions.length > 0`; löst Slugs gegen `['factions']`-Query auf; Link auf `/factions/$id`
 
 **`layout/`**
 

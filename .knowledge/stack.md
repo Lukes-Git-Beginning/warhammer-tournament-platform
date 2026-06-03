@@ -164,6 +164,18 @@ pnpm 9 fällt nicht von einem unbekannten Script-Namen auf einen Bin-Lookup zur�
 
 `tsx` ist Backend-Runtime-Dependency und wird von pnpm in `apps/backend/node_modules/.bin/tsx` abgelegt, nicht im repo-root `/node_modules/.bin/tsx`. Production-systemd-Unit ExecStart muss den absoluten Pfad zum App-Workspace nutzen (siehe `deploy/systemd/rizzotto-backend.service`).
 
+### 8. `ical-generator` — einzige iCal-Lib im Repo (M6)
+
+`ical-generator@^11` ist in `apps/backend/package.json` als Dependency eingetragen (ISC-Lizenz).
+ESM-Default-Import:
+
+```typescript
+import ical from 'ical-generator';
+```
+
+Verwendungszweck: `GET /api/tournaments/calendar.ics` (iCal-Feed). Kein separates Date-Lib-Bedarf —
+native `Date`-Objekte reichen als Input. Es ist die erste und bisher einzige iCal-Lib im Monorepo.
+
 ### 7. ENV-Werte mit Whitespace brauchen Quotes
 
 `/etc/rizzotto/env/backend.env` wird sowohl von systemd's `EnvironmentFile=` als auch via `set -a; source backend.env; set +a` (Deploy-Scripts) gelesen. systemd akzeptiert beide Formen, Bash bricht aber bei unquoted Whitespace: `DISCORD_SCOPES=identify email` → `bash: email: command not found`. Immer Quotes setzen: `DISCORD_SCOPES="identify email"`.

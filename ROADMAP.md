@@ -1,6 +1,6 @@
 # ROADMAP — Rizzotto
 
-> **Stand:** 2026-05-19 · **Phase:** Post-Launch, Live · **Domain:** rizzotto.gg
+> **Stand:** 2026-06-03 · **Phase:** Post-Launch, Live · **Domain:** rizzotto.gg
 >
 > Diese Roadmap ist die **SSOT** für _was läuft_, _was als nächstes drankommt_ und _was bewusst nicht gebaut wird_. Sub-Pläne (Detail-Plans für einzelne Tracks) liegen unter `~/.claude/plans/`, nicht im Repo. Historie und Welle-Specs siehe `docs/archive/`.
 
@@ -11,8 +11,8 @@
 - **rizzotto.gg ist live seit 2026-05-19** auf Hetzner CX22, Caddy + Cloudflare-Origin-Cert.
 - **M1–M5 + Welle 2 (Steam-Hard-Gate, BPT/SFT/SLT, MMR, Match-Flow, 24 Faction-Sigils) sind durch.**
 - **Heute (2026-05-19) gefixt:** Steam-Hard-Gate end-to-end verdrahtet, Top-Bar-Navigation-Crash, Wordmark-AVIF, Logout (Content-Type), datetime-Submit, Header-Avatar-Profil-Link.
-- **Sofortiges Backlog für nächste Session:** Phase-2-Konsolidierung mergen (Branch `chore/phase2-consolidation` — ⚠️ Merge droppt deprecated MMR-Tabellen auf Prod, CSV-Export erwägen); danach `DISCORD_BOT_TOKEN` + Hetzner-VM-Backup (User-Tasks). Tournament-Lifecycle-UI + Steam-API-Key sind ✅.
-- **Mid-term:** M6 Hub-Foundation (Faction-Crests sind durch → jetzt H2H, Personalisierung, Calendar, Major-Badges). M7 Datentiefe (Army-List-Browser, Scraper-Write-Path). M8 UGC (Battle-Reports, Comments). M9 Team-Play (3v3, SfT, Blind-Pick).
+- **Zuletzt gelandet (2026-06-03):** Phase-2-Konsolidierung (PR #10, MMR-Tabellen auf Prod gedroppt, kein CSV-Export) + **M6 Hub-Foundation** (PR #11) komplett live. Offenes Backlog: `DISCORD_BOT_TOKEN` + Hetzner-VM-Backup (User-Tasks), DOUBLE_ELIMINATION (§6), Cold-Fit-Job + Anti-Farming-UI (§2.4), Community-Links (echte URLs ausstehend).
+- **Mid-term:** ~~M6 Hub-Foundation~~ ✅ live (2026-06-03). Als nächstes: M7 Datentiefe (Army-List-Browser, Scraper-Write-Path). M8 UGC (Battle-Reports, Comments). M9 Team-Play (3v3, SfT, Blind-Pick).
 - **Bewusst geparkt:** In-App-Listenbauer, Live-Stream-Embed, Achievements, Coaching, Multi-Tenant, Native-App.
 
 ---
@@ -34,8 +34,9 @@
 | 24 Faction-Sigils                | ✅ done                 | Default-Sigils im Repo, FactionBadge rendert sie mit Initials-Fallback                                                                                                                                                                                                        |
 | Steam-Hard-Gate live             | ✅ done (2026-05-19)    | Frontend-Guard + Discord-Callback-Redirect + meSelect-Field; verifiziert auf rizzotto.gg                                                                                                                                                                                      |
 | **Welle-1 Pipeline-Ausbau**      | ✅ done (2026-05-20)    | E2E ist Pre-Deploy-Gate (continue-on-error raus), Discord-Webhook bei Failure (#4 + #5), `STEAM_WEB_API_KEY` in Prod gesetzt → echte Personas                                                                                                                                 |
-| **Dynamic Weighted Leaderboard** | ✅ live (2026-06-02)    | Derive-on-read (L2-Logistic-Regression, `lib/rating-model.ts`); `mode=rating_model` ist Live-Default (Prod-Endpoint verifiziert). Frontend (`DynamicLeaderboardTable` + RollOfHonour) + E2E-Contract nachgezogen. Löst Welle-2-MMR ab — Deprecation-Cleanup noch offen (§2.4) |
-| **Phase-2-Konsolidierung**       | 🟡 Branch (2026-06-03)  | `chore/phase2-consolidation` (Commit `b520ff5`, **noch nicht auf `main`**): MMR-DB-Drop (`drop_welle2_mmr_deprecated`), Matrix-/Proficiency-Views im UI, Token-Migration + `DEPLOYMENT.md` fertig. ⚠️ Merge→Auto-Deploy droppt Prod-Daten irreversibel. Verifiziert: typecheck 7/7, 429+68 Unit, E2E grün                |
+| **Dynamic Weighted Leaderboard** | ✅ live (2026-06-02)    | Derive-on-read (L2-Logistic-Regression, `lib/rating-model.ts`); `mode=rating_model` ist Live-Default (Prod-Endpoint verifiziert). Frontend (`DynamicLeaderboardTable` + RollOfHonour) + E2E-Contract nachgezogen. Löst Welle-2-MMR ab — Deprecation-Cleanup gelandet (Phase-2, 2026-06-03) |
+| **Phase-2-Konsolidierung**       | ✅ live (2026-06-03)    | PR #10 (`36e206e`) nach `main` + deployed: MMR-DB-Drop (`drop_welle2_mmr_deprecated`) auf Prod ausgeführt (Welle-2-Tabellen weg, kein CSV-Export — bewusst), Matrix-/Proficiency-Views im UI. Prod-Smoke grün                |
+| **M6 Hub-Foundation**            | ✅ live (2026-06-03)    | PR #11 (`5b8b732`), migrationsfrei: H2H (`/users/$a/vs/$b`), Tournament-Kalender + iCal-Feed, Major-Badge/Filter, ImportLog-Admin-UI, `preferred_factions`-Block. 429+25 Tests, E2E-Routen-Guard grün. Community-Links deferred                |
 
 ---
 
@@ -87,8 +88,8 @@ Komplett auf `main` gelandet (Merge `30d759e`) und live auf rizzotto.gg — `mod
 | 2   | **Tournament-Edit/Delete-Buttons sind Stubs**                                                                | `TournamentDetail.tsx:151,160`                                | Mittel — Admin-Flow blockiert        | §2.1                               |
 | 3   | **Scraper-Write-Path** wirft "not implemented"                                                               | `scraper/src/cli.ts:148,155`                                  | Mittel — Datenhebel ungenutzt        | M7                                 |
 | 4   | `Tournament.poster_url` Upload-Flow fehlt                                                                    | `packages/db/prisma/schema.prisma:172`                        | Niedrig                              | M6 optional                        |
-| 5   | `SigillumSection`-Community-Links Platzhalter                                                                | `apps/frontend/src/components/landing/SigillumSection.tsx:93` | Niedrig                              | M6                                 |
-| 6   | `ImportLog` ohne Admin-UI                                                                                    | —                                                             | Niedrig                              | M6                                 |
+| 5   | `SigillumSection`-Community-Links Platzhalter                                                                | `apps/frontend/src/components/landing/SigillumSection.tsx:93` | Niedrig                              | M6 — 🟡 deferred (echte URLs ausstehend) |
+| 6   | ~~`ImportLog` ohne Admin-UI~~                                                                                | —                                                             | Niedrig                              | ✅ done (2026-06-03) — §4.7        |
 | 7   | `Team`/`TeamMember`-Models reserviert, ungenutzt                                                             | `schema.prisma:286`                                           | —                                    | M9                                 |
 | 8   | **MatchDetailPage ist ganzseitiger Stub** („Full match view (scores, result reporting) — coming in Welle D") | `apps/frontend/src/routes/MatchDetailPage.tsx`                | Mittel — nutzer-sichtbarer Kern-Flow | ✅ done (2026-06-02) — §P1a        |
 
@@ -96,18 +97,18 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 
 ---
 
-## 4. M6 — Hub-Foundation _(1–2 Wochen)_
+## 4. M6 — Hub-Foundation ✅ _(gelandet 2026-06-03, PR #11, migrationsfrei)_
 
-**Ziel:** Die Plattform fühlt sich nach M6 personalisiert, hierarchisch und visuell konsistent an. Alle Punkte unter 1 Tag Arbeit, alle Daten existieren.
+**Ziel:** Die Plattform fühlt sich nach M6 personalisiert, hierarchisch und visuell konsistent an.
 
-1. **Tournament-Lifecycle-UI** (§2.1) — Edit/Delete/Status-Transition
-2. **Head-to-Head Player Stats** — Route `/users/$a/vs/$b`, Direktbegegnungs-History. Match-Daten existieren, nur Aggregation + UI
-3. **`preferred_factions`-Personalisierung** — Landingpage zeigt "Dein Meta" (Winrate-Trend der gewählten Fraktionen, 30 Tage). Feld existiert (`schema.prisma:107`), wird im Onboarding befüllt, nirgends ausgewertet
-4. **Tournament-Kalender-View** + iCal-Export (RFC 5545) — alle Daten da, nur ein Render-Modus
-5. **Major/Regular Tournament UI-Distinction** — Badge auf Cards, Filter auf Liste, Landingpage-Hervorhebung. `Tournament.is_major`-Flag existiert ungenutzt (`schema.prisma:187`)
-6. **Echte Community-Links setzen** — Discord-Server-ID, GitHub-Repo, Reddit (`SigillumSection.tsx:93`)
-7. **ImportLog Admin-UI** — Scraper-Lauf-Sichtbarkeit, paginierte Liste analog zu AuditLog
-8. **`Tournament.poster_url`-Upload-Flow** (optional)
+1. ~~**Tournament-Lifecycle-UI**~~ ✅ (§2.1) — Edit/Delete/Status-Transition
+2. ~~**Head-to-Head Player Stats**~~ ✅ — `GET /api/users/:a/vs/:b` (inkl. Draws, 60s-Cache, `h2h:*`-Invalidierung) + `/users/$a/vs/$b`-Page, verlinkt aus Profil-Match-History
+3. ~~**`preferred_factions`-Personalisierung**~~ ✅ — Landing-Block „Deine Fraktionen" (löst Slugs gegen `/api/factions` auf, Links auf `/factions/$id`). **Scope-Hinweis:** minimaler Faction-Link-Block statt Winrate-Trend-Chart („Dein Meta"); Trend-Variante bei Bedarf später nachrüstbar
+4. ~~**Tournament-Kalender-View + iCal-Export**~~ ✅ — `/tournaments/calendar` (Custom Voll-Monatsraster, keine Kalender-Lib) + `GET /api/tournaments/calendar.ics` (RFC 5545 via `ical-generator`; `end_date`-Heuristik `start + rounds_count*2h`)
+5. ~~**Major/Regular UI-Distinction**~~ ✅ — `major`-Badge (Crown) auf Listing + Landing, `is_major`-Filter auf Liste + via `PATCH` patchbar
+6. **Echte Community-Links setzen** — 🟡 **deferred**: braucht echte Discord-/GitHub-/Reddit-URLs vom User (`SigillumSection.tsx`)
+7. ~~**ImportLog Admin-UI**~~ ✅ — `GET /api/admin/import-log` (paginiert, source-Filter, ADMIN) + Admin-Tab `import` (Klon AuditLogTable)
+8. **`Tournament.poster_url`-Upload-Flow** — offen (optional)
 
 ---
 

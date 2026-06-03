@@ -26,7 +26,7 @@ import { JwtPayloadSchema, BracketNode, ServerToClientEvents } from '@rizzotto/t
 
 | Datei              | Inhalt                                                                                                                                                                                                                                                                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `api-schemas.ts`   | Zod-Schemas + abgeleitete Typen für REST-API (Auth, User, Leaderboard, Factions, Meta). **+2026-06 Dynamic Leaderboard:** `DynamicLeaderboardEntryDto`/`DynamicLeaderboardResponse`, `MatchScoringBreakdownDto`, `PlayerOpponentBreakdownDto`, `FactionMatchupMatrixEntryDto`/`…Response`, `PlayerFactionProficiencyDto`/`…Response` |
+| `api-schemas.ts`   | Zod-Schemas + abgeleitete Typen für REST-API (Auth, User, Leaderboard, Factions, Meta). **+2026-06 Dynamic Leaderboard:** `DynamicLeaderboardEntryDto`/`DynamicLeaderboardResponse`, `MatchScoringBreakdownDto`, `PlayerOpponentBreakdownDto`, `FactionMatchupMatrixEntryDto`/`…Response`, `PlayerFactionProficiencyDto`/`…Response`. **+M6:** `H2HResponseSchema`, `CalendarQuerySchema`, `CalendarTournamentSchema`, `ImportLogEntrySchema`, `ImportLogListResponseSchema`, `TournamentStatusSchema`, `TournamentFormatSchema` (echte Zod-Enums). |
 | `bracket.ts`       | Bracket-Layout-Typen: `BracketNode`, `BracketResponse`, Swiss-Standings                                                                                                                                                                                                                                                              |
 | `draft.ts`         | Draft-State-Machine-Typen, Preset-CRUD-DTOs, Event-DTOs                                                                                                                                                                                                                                                                              |
 | `socket-events.ts` | `ServerToClientEvents`, `ClientToServerEvents`, `InterServerEvents`, `SocketData`                                                                                                                                                                                                                                                    |
@@ -70,6 +70,22 @@ MatchupHeatmapResponseSchema; // { season_id, cells, factions }
 ```
 
 **Weitere:** `HealthResponseSchema`, `ErrorResponseSchema`, `DiscordCallbackQuerySchema`, `UserProfileResponseSchema`, `SnapshotTrendEntrySchema`.
+
+**M6 — neue Schemas:**
+
+```typescript
+TournamentStatusSchema;  // z.enum(['DRAFT','OPEN_REGISTRATION','REGISTRATION_CLOSED','ONGOING','COMPLETED'])
+TournamentFormatSchema;  // z.enum(['SWISS','SINGLE_ELIMINATION','DOUBLE_ELIMINATION','ROUND_ROBIN','DOUBLE_ROUND_ROBIN'])
+H2HResponseSchema;       // { userA, userB, wins_a, wins_b, draws, matches[] }
+CalendarQuerySchema;     // { year, month, status?, is_major? }
+CalendarTournamentSchema;
+ImportLogEntrySchema;
+ImportLogListResponseSchema;
+```
+
+> **Gotcha `TournamentFormatSchema`:** Muss exakt dem Prisma-Enum entsprechen — `SWISS, SINGLE_ELIMINATION, DOUBLE_ELIMINATION, ROUND_ROBIN, DOUBLE_ROUND_ROBIN`. `CUSTOM` existiert nicht, `DOUBLE_ROUND_ROBIN` darf nicht fehlen. `typecheck` fängt das nicht (Zod-Enum ist nur ein String-Set), Fehler zeigt sich erst zur Laufzeit.
+>
+> **Gotcha Boolean-Query-Params:** `z.coerce.boolean()` NICHT für Query-Strings nutzen — `Boolean("false") === true`. Stattdessen: `z.enum(['true','false']).transform(v => v === 'true')`. Betrifft `is_major` in `CalendarQuerySchema`.
 
 ---
 
