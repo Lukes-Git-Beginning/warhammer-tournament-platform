@@ -470,6 +470,7 @@ export function UserProfilePage() {
                   <th className="px-4 py-3 text-right font-medium text-stone-400">
                     {t('common.date')}
                   </th>
+                  <th className="px-4 py-3 text-right font-medium text-stone-400" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-800/60">
@@ -518,6 +519,17 @@ export function UserProfilePage() {
                       <td className="px-4 py-3 text-center text-stone-400">{m.score ?? '—'}</td>
                       <td className="px-4 py-3 text-right text-stone-500">
                         {formatInUserTimezone(m.updatedAt)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {m.opponent && (
+                          <Link
+                            to="/users/$a/vs/$b"
+                            params={{ a: user.id, b: m.opponent.id }}
+                            className="text-xs text-stone-500 hover:text-rizzotto-gold-400 transition-colors whitespace-nowrap"
+                          >
+                            Head-to-Head
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   );

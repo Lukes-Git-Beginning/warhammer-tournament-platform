@@ -15,10 +15,11 @@ import { TournamentDefaultsEditor } from '@/components/admin/TournamentDefaultsE
 import { FeatureFlagsPanel } from '@/components/admin/FeatureFlagsPanel.js';
 import { WelcomeBannerEditor } from '@/components/admin/WelcomeBannerEditor.js';
 import { PageShell } from '@/components/layout/PageShell.js';
+import { ImportLogTable } from '@/components/admin/ImportLogTable.js';
 
-type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings';
+type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings' | 'import';
 
-const ALL_TABS: Tab[] = ['dashboard', 'stats', 'settings', 'users', 'presets', 'audit'];
+const ALL_TABS: Tab[] = ['dashboard', 'stats', 'settings', 'users', 'presets', 'audit', 'import'];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard: 'admin.tabs.dashboard',
@@ -27,6 +28,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
   presets: 'admin.tabs.presets',
   stats: 'admin.tabs.stats',
   settings: 'admin.tabs.settings',
+  import: 'admin.tabs.import',
 };
 
 const STATIC_LABELS: Record<Tab, string> = {
@@ -36,6 +38,7 @@ const STATIC_LABELS: Record<Tab, string> = {
   presets: 'Presets',
   stats: 'Statistics',
   settings: 'Settings',
+  import: 'Import-Log',
 };
 
 function StatsTab() {
@@ -157,6 +160,7 @@ export function AdminPage() {
         {tab === 'presets' && <PresetLibraryAdmin />}
         {tab === 'stats' && <StatsTab />}
         {tab === 'settings' && <SettingsTab />}
+        {tab === 'import' && <ImportLogTable />}
       </div>
     </PageShell>
   );

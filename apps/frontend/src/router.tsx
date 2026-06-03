@@ -19,6 +19,8 @@ import { AdminPage } from './routes/AdminPage';
 import { SteamConnectPage } from './routes/SteamConnectPage';
 import { MatchDecisionPage } from './routes/MatchDecisionPage';
 import { MatchDetailPage } from './routes/MatchDetailPage';
+import { H2HPage } from './routes/H2HPage';
+import { CalendarPage } from './routes/CalendarPage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -48,6 +50,12 @@ const createTournamentRoute = createRoute({
   component: CreateTournamentPage,
 });
 
+const calendarRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/tournaments/calendar',
+  component: CalendarPage,
+});
+
 const tournamentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tournaments/$slug',
@@ -70,6 +78,12 @@ const userProfileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/users/$id',
   component: UserProfilePage,
+});
+
+const h2hRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/users/$a/vs/$b',
+  component: H2HPage,
 });
 
 const metaRoute = createRoute({
@@ -152,10 +166,12 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   tournamentsListingRoute,
   createTournamentRoute,
+  calendarRoute,
   tournamentDetailRoute,
   tournamentEditRoute,
   leaderboardRoute,
   userProfileRoute,
+  h2hRoute,
   metaRoute,
   factionListRoute,
   factionDetailRoute,
