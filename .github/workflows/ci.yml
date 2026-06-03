@@ -94,10 +94,10 @@ jobs:
         run: pnpm --filter @rizzotto/e2e exec playwright install --with-deps chromium
 
       - name: E2E (Playwright)
-        # Blocking pre-deploy gate. Visual-snapshot tests are temporarily
-        # skipped until Linux baseline PNGs are committed (see
-        # update-snapshots.yml workflow and the skip-marker comments in
-        # tests/visual/landing-overhaul.spec.ts).
+        # Blocking pre-deploy gate. Visual-snapshot tests run unconditionally;
+        # Linux baseline PNGs are committed (PR #9, a31cf49). Volatile sections
+        # (leaderboard table, Roll of Honour list) are masked via data-testid
+        # locators in tests/visual/landing-overhaul.spec.ts.
         run: pnpm --filter @rizzotto/e2e test:e2e
         env:
           NODE_ENV: test

@@ -119,8 +119,7 @@ export async function cleanupTournament(tournamentId: string): Promise<void> {
  * Must clean up all FK-referenced child rows first (Welle-2 tables).
  */
 export async function cleanupUsers(userIds: string[]): Promise<void> {
-  // Welle-2 relations with FK on user_id (no Cascade on User delete)
-  await prisma.factionMastery.deleteMany({ where: { user_id: { in: userIds } } });
+  // FK-referenced child rows on user_id (no Cascade on User delete)
   await prisma.steamLink.deleteMany({ where: { user_id: { in: userIds } } });
   await prisma.tournamentArmyList.deleteMany({ where: { user_id: { in: userIds } } });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });

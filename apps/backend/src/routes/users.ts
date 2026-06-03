@@ -293,7 +293,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Resolve season
-      let resolvedSeasonId: string | null = null;
+      let resolvedSeasonId: string | null;
       if (seasonId) {
         const s = await fastify.prisma.season.findUnique({ where: { id: seasonId }, select: { id: true } });
         if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
@@ -326,72 +326,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       const totalWins = recentMatches.filter((m) => m.winner_id === id).length;
       const totalLosses = recentMatches.filter((m) => m.winner_id !== null && m.winner_id !== id).length;
 
-      // Per-faction win-rates from FactionMastery
-      const masteryThresholdRow = await fastify.prisma.adminConfig.findUnique({
-        where: { key: 'mmr_mastery_threshold_games' },
-      });
-      const masteryThreshold = typeof masteryThresholdRow?.value === 'number'
-        ? masteryThresholdRow.value
-        : 10;
-
-      const masteries = await fastify.prisma.factionMastery.findMany({
-        where: { user_id: id },
-        include: { faction: { select: { id: true, name: true } } },
-        orderBy: { games_played: 'desc' },
-      });
-
-      const perFactionWinrate = await Promise.all(
-        masteries.map(async (m) => {
-          if (m.games_played >= masteryThreshold) {
-            return {
-              faction_id: m.faction_id,
-              faction_name: m.faction.name,
-              games_played: m.games_played,
-              wins: m.wins,
-              losses: m.losses,
-              win_rate: m.games_played > 0 ? m.wins / m.games_played : 0,
-              mastery_rating: m.rating,
-              source: 'own_data' as const,
-            };
-          }
-
-          // Below threshold — fallback to TT-seed aggregate win-rate
-          if (resolvedSeasonId) {
-            const ttStats = await fastify.prisma.factionMatchupStat.findMany({
-              where: {
-                season_id: resolvedSeasonId,
-                faction_a_id: m.faction_id,
-              },
-              select: { wins: true, losses: true },
-            });
-            const totalWinsFromTT = ttStats.reduce((acc, s) => acc + s.wins, 0);
-            const totalLossesFromTT = ttStats.reduce((acc, s) => acc + s.losses, 0);
-            const totalGames = totalWinsFromTT + totalLossesFromTT;
-            return {
-              faction_id: m.faction_id,
-              faction_name: m.faction.name,
-              games_played: m.games_played,
-              wins: null,
-              losses: null,
-              win_rate: totalGames > 0 ? totalWinsFromTT / totalGames : null,
-              mastery_rating: null,
-              source: 'tt_seed' as const,
-            };
-          }
-
-          return {
-            faction_id: m.faction_id,
-            faction_name: m.faction.name,
-            games_played: m.games_played,
-            wins: null,
-            losses: null,
-            win_rate: null,
-            mastery_rating: null,
-            source: 'insufficient_data' as const,
-          };
-        }),
-      );
-
       // ELO history from TournamentResults (approximate via placement/points over time)
       const eloHistory = await fastify.prisma.tournamentResult.findMany({
         where: { user_id: id, season_id: resolvedSeasonId ?? undefined },
@@ -404,22 +338,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         runningRating += r.elo_change;
         return { played_at: r.created_at.toISOString(), rating: runningRating };
       });
-
-      // Faction mastery top 5 (only visible for own profile)
-      const isOwnProfile = request.user.sub === id;
-      const masteryTop5 = isOwnProfile
-        ? masteries
-            .slice(0, 5)
-            .map((m) => ({
-              faction_id: m.faction_id,
-              faction_name: m.faction.name,
-              rating: m.rating,
-              games_played: m.games_played,
-              wins: m.wins,
-              losses: m.losses,
-              last_played_at: m.last_played_at?.toISOString() ?? null,
-            }))
-        : null;
 
       const matchHistory = recentMatches.map((m) => {
         const isPlayer1 = m.player1_id === id;
@@ -445,9 +363,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         total_wins: totalWins,
         total_losses: totalLosses,
         win_rate: totalWins + totalLosses > 0 ? totalWins / (totalWins + totalLosses) : 0,
-        per_faction_winrate: perFactionWinrate,
         elo_history: eloHistoryPoints,
-        faction_mastery_top5: masteryTop5,
       };
     },
   );

@@ -1,24 +1,30 @@
-# Deployment — TWW3 Tournament Platform
+# Deployment — Rizzotto
 
-Production-Deployment-Anleitung. Setup: Docker-Compose oder Standalone-Container.
+Production-Deployment-Anleitung. Setup: Caddy + systemd auf Hetzner CX22 (rizzotto.gg).
 
 ## Vorab-Voraussetzungen
 
-- Docker + Docker-Compose
-- PostgreSQL 16 (managed oder Self-Hosted)
-- Redis 7 (managed oder Self-Hosted)
+- Node.js 22+ + pnpm 9
+- PostgreSQL 16 (Self-Hosted oder Managed)
+- Redis 7 (Self-Hosted oder Managed)
+- [Caddy](https://caddyserver.com/) als Reverse-Proxy + Static-File-Server (TLS via Cloudflare Origin Cert)
 - Discord-Application für OAuth (Client-ID + Secret + Redirect-URI)
-- Domain mit TLS-Termination (z.B. via Nginx-Reverse-Proxy oder Cloud-Provider)
+- Steam-API-Key für Steam-OpenID-2.0-Login
+- Domain `rizzotto.gg` hinter Cloudflare (Full-Strict-TLS)
 
 ## Environment-Variablen
 
-Beispiel `.env.production`:
+Beispiel `.env.production` (alle Variablen-Namen aus `.env.example`):
 
 ```
-DATABASE_URL=postgresql://user:pass@db-host:5432/tww3?schema=public
-REDIS_URL=redis://redis-host:6379
+DATABASE_URL=postgresql://user:pass@localhost:5432/rizzotto?schema=public
+REDIS_URL=redis://localhost:6379
 
-JWT_SECRET=<32+ char random string>
+NODE_ENV=production
+PORT=3000
+LOG_LEVEL=info
+
+JWT_SECRET=<openssl rand -base64 48>
 JWT_COOKIE_NAME=auth_token
 JWT_COOKIE_DOMAIN=rizzotto.gg
 JWT_EXPIRES_IN=604800
@@ -27,83 +33,102 @@ DISCORD_CLIENT_ID=<id>
 DISCORD_CLIENT_SECRET=<secret>
 DISCORD_REDIRECT_URI=https://rizzotto.gg/auth/discord/callback
 DISCORD_SCOPES=identify email
+DISCORD_BOT_TOKEN=<optional — notifications>
+
+STEAM_OPENID_RETURN_URL=https://rizzotto.gg/auth/steam/return
+STEAM_WEB_API_KEY=<key>
 
 FRONTEND_URL=https://rizzotto.gg
-
-NODE_ENV=production
-LOG_LEVEL=info
-
-UPLOAD_DIR=/var/lib/tww3/uploads/army-lists
-VITE_PUBLIC_URL=https://rizzotto.gg
 ```
 
-## SEO-Vorbereitungen vor Deploy
-
-Folgende Placeholder müssen vor dem ersten Production-Deploy ersetzt werden:
-
-1. **`apps/frontend/public/og-image.png`** — Platzhalter-Textdatei. Ersetzen durch echtes OG-Bild (1200×630px PNG).
-2. **`apps/frontend/public/sitemap.xml`** — `https://example.com` durch die echte Domain ersetzen.
-3. **`apps/frontend/public/robots.txt`** — Sitemap-URL (`https://example.com/sitemap.xml`) durch die echte Domain ersetzen.
-4. **`apps/frontend/public/icons/factions/*.svg`** — SVG-Placeholders mit Initialen und Faction-Farbe. Ersetzen durch offizielle Faction-Artwork-SVGs. Pfad-Konvention: `/icons/factions/<faction_id>.svg`.
+> `ARMY_LIST_UPLOAD_DIR` ist optional — Standardpfad ist `<cwd>/storage/army-lists`.
 
 ## Build + Deploy
 
 ```bash
-# 1. Build all workspaces
+# 1. Abhängigkeiten installieren
 pnpm install --frozen-lockfile
+
+# 2. Alle Workspaces bauen
 pnpm build
 
-# 2. Apply migrations
+# 3. Migrationen einspiele
 pnpm --filter @rizzotto/db exec prisma migrate deploy
 
-# 3. Seed default data (idempotent — only on first deploy)
+# 4. Seed-Daten (idempotent — nur beim ersten Deploy)
 pnpm db:seed
 
-# 4. Start backend (e.g., via PM2 or systemd)
+# 5. Backend starten (via systemd — siehe unten)
 node apps/backend/dist/server.js
-
-# 5. Serve frontend static files (e.g., via Nginx)
-# Frontend build output: apps/frontend/dist/
 ```
 
-## Docker-Compose-Beispiel
+## Reverse-Proxy: Caddy + systemd
 
-`docker-compose.production.yml` (Skelett):
+### Übersicht
 
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    env_file: .env.production
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    restart: unless-stopped
+Der reale Prod-Stack nutzt **Caddy** (kein Nginx, kein Docker):
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
+| Komponente | Beschreibung |
+|---|---|
+| **Caddy** | TLS-Termination (Cloudflare Origin Cert), API-Reverse-Proxy, SPA-Static-Server |
+| **systemd** | Backend-Prozess-Supervisor (`node apps/backend/dist/server.js`) |
+| **Cloudflare** | DNS + vorgelagerte WAF/DDoS-Mitigation, Full-Strict-TLS-Modus |
 
-  backend:
-    build: .
-    env_file: .env.production
-    depends_on: [postgres, redis]
-    ports: ["3000:3000"]
-    volumes:
-      - uploads:/var/lib/tww3/uploads
-    restart: unless-stopped
+Das Backend (Fastify + Socket.IO) läuft auf `127.0.0.1:3000`; Caddy leitet `/api/*`, `/auth/*`, `/graphql`, `/health` und `/socket.io/*` dorthin weiter.  
+Das Frontend (Vite-Build) wird von Caddy direkt aus `/home/deploy/rizzotto/apps/frontend/dist` als statische Dateien serviert, mit SPA-Fallback auf `index.html`.
 
-  frontend:
-    image: nginx:alpine
-    volumes:
-      - ./apps/frontend/dist:/usr/share/nginx/html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    ports: ["443:443"]
-    restart: unless-stopped
+### Caddy-Konfiguration
 
-volumes:
-  pgdata:
-  uploads:
+Die Repo-SSOT für die Caddy-Konfiguration ist **`deploy/Caddyfile`**. Die Live-Config auf dem Server liegt unter `/etc/caddy/Caddyfile`.
+
+Bei Änderungen manuell synchronisieren:
+
+```bash
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
 ```
+
+> Caddy liest TLS-Zertifikate aus `/etc/rizzotto/secrets/cf-origin.pem` (Cert) und  
+> `/etc/rizzotto/secrets/cf-origin.key` (Key). Ablauf des Cloudflare-Origin-Certs (15 Jahre) rechtzeitig überwachen.
+
+### Backend als systemd-Unit
+
+Das Backend läuft als systemd-Service. Generische Unit-Vorlage (Unit-Name ggf. anpassen):
+
+```ini
+[Unit]
+Description=Rizzotto Backend
+After=network.target
+
+[Service]
+WorkingDirectory=/home/deploy/rizzotto
+EnvironmentFile=/home/deploy/rizzotto/.env.production
+ExecStart=/usr/bin/node apps/backend/dist/server.js
+Restart=on-failure
+RestartSec=5s
+User=deploy
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Typische Verwaltungsbefehle:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart rizzotto-backend   # ggf. Unit-Namen anpassen
+sudo systemctl status rizzotto-backend
+journalctl -u rizzotto-backend -f
+```
+
+## SEO-Vorbereitungen vor Deploy
+
+Folgende Platzhalter müssen vor dem ersten Production-Deploy ersetzt werden:
+
+1. **`apps/frontend/public/og-image.png`** — Platzhalter-Textdatei. Ersetzen durch echtes OG-Bild (1200×630px PNG).
+2. **`apps/frontend/public/sitemap.xml`** — `https://example.com` durch die echte Domain ersetzen.
+3. **`apps/frontend/public/robots.txt`** — Sitemap-URL (`https://example.com/sitemap.xml`) durch die echte Domain ersetzen.
+4. **`apps/frontend/public/icons/factions/*.svg`** — SVG-Platzhalter mit Initialen und Faction-Farbe. Ersetzen durch offizielle Faction-Artwork-SVGs. Pfad-Konvention: `/icons/factions/<faction_id>.svg`.
 
 ## Backup-Strategy
 
@@ -113,9 +138,9 @@ volumes:
 
 ## Health-Checks
 
-- `GET /api/health` — sollte 200 zurückgeben (prüfe Existenz, ggf. ergänzen)
+- `GET /health` — Caddy leitet direkt an das Backend weiter; sollte 200 zurückgeben
 - `GET /api/leaderboard` — funktioneller Smoke
-- Frontend: `GET /` — sollte das React-Bundle servieren
+- Frontend: `GET /` — Caddy serviert das React-Bundle aus `apps/frontend/dist`
 
 ## Production-Smoke vor Live-Schaltung
 
@@ -132,22 +157,18 @@ PLAYWRIGHT_API_URL=https://api.staging.rizzotto.gg \
   pnpm --filter @rizzotto/e2e exec playwright test production-smoke.spec.ts
 ```
 
-## Domain + TLS
-
-- Domain DNS auf den Server pointen
-- Let's-Encrypt via Certbot (oder Cloud-Provider-Managed-Certs)
-- HTTPS-Redirect via Nginx oder Edge-Provider
-
 ## Post-Launch Checks
 
-1. Discord-OAuth funktioniert
-2. Bracket-View auf Mobile + Desktop
-3. Faction-Stats für aktive Season vorhanden (sonst `pnpm db:seed` o. Cron-Trigger)
-4. Cron-Job für FactionStatsSnapshot läuft (Default: 00:05 UTC täglich)
-5. Backup-Job konfiguriert
+1. Discord-OAuth funktioniert (Redirect-URI stimmt mit `DISCORD_REDIRECT_URI` überein)
+2. Steam-OpenID-Login funktioniert (`STEAM_OPENID_RETURN_URL` gesetzt + öffentlich erreichbar)
+3. Bracket-View auf Mobile + Desktop
+4. Faction-Stats für aktive Season vorhanden (sonst `pnpm db:seed` o. Cron-Trigger)
+5. Cron-Job für FactionStatsSnapshot läuft (Default: 00:05 UTC täglich)
+6. Backup-Job konfiguriert
+7. Caddy-Status: `sudo systemctl status caddy` — kein TLS-Fehler in den Logs
 
 ## Rollback
 
-- Container-Tags taggen pre-deploy: `git push origin <tag>`, Docker-Image-Tag
-- Rollback: alte Image-Tag deployen + ggf. `prisma migrate resolve --rolled-back <last-migration>`
-- Bei Schema-Breaking-Change: vorher Forwarder-Migration einbauen, dann rückwärtskompatibel deployen
+- Deploy-Artefakte vor dem Deploy taggen: `git tag <deploy-tag> && git push origin <deploy-tag>`
+- Rollback: alten Commit auschecken, `pnpm build` + `pnpm --filter @rizzotto/db exec prisma migrate deploy` + `sudo systemctl restart rizzotto-backend`
+- Bei Schema-Breaking-Change: vorher Forwarder-Migration einbauen, dann rückwärtskompatibel deployen; notfalls `prisma migrate resolve --rolled-back <last-migration>`

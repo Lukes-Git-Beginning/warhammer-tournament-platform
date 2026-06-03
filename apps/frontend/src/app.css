@@ -57,16 +57,6 @@
   --color-rizzotto-info: #5d7b8f;
 
   /* ─────────────────────────────────────────────────────────── */
-  /* Legacy aliases — temporary migration shims                     */
-  /* TODO(2026-Q3): remove once apps/frontend/src/** is migrated.   */
-  /* See docs/design/14-implementation.md "Migration policy".       */
-  /* ─────────────────────────────────────────────────────────── */
-  --color-warhammer-blood: var(--color-rizzotto-blood-500);
-  --color-warhammer-gold: var(--color-rizzotto-gold-500);
-  --color-warhammer-parchment: var(--color-rizzotto-parchment);
-  --color-warhammer-iron: var(--color-rizzotto-iron-600);
-
-  /* ─────────────────────────────────────────────────────────── */
   /* Container widths                                              */
   /* ─────────────────────────────────────────────────────────── */
   --container-tight: 40rem;

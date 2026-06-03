@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getMatchDetail, getMatchDecision, getScoringBreakdown } from '@/lib/api.js';
+import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown } from '@/lib/api.js';
 import type { MatchDetailDto, MatchScoringBreakdownDto } from '@/lib/api.js';
 import { useAuthQuery } from '@/lib/auth.js';
 import { useLiveMatch } from '@/hooks/useLiveMatch.js';
@@ -241,7 +241,7 @@ export function MatchDetailPage() {
   // Scoring breakdown — only fetched when match is completed
   const { data: breakdown } = useQuery({
     queryKey: ['match-scoring-breakdown', matchId],
-    queryFn: () => getScoringBreakdown(matchId),
+    queryFn: () => getMatchScoringBreakdown(matchId),
     enabled: match?.status === 'COMPLETED',
     retry: false,
   });

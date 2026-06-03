@@ -12,7 +12,8 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { getUserProfile, getUserStats } from '@/lib/api.js';
-import type { UserFactionWinRate, UserFactionMastery, EloHistoryEntry } from '@/lib/api.js';
+import type { EloHistoryEntry } from '@/lib/api.js';
+import { PlayerFactionProficiencyCard } from '../components/meta/PlayerFactionProficiencyCard.js';
 import { useAuthQuery } from '@/lib/auth.js';
 import { useOnboarding } from '@/lib/onboarding.js';
 import { formatInUserTimezone } from '@/lib/timezone.js';
@@ -182,86 +183,12 @@ function EloHistoryCard({ history }: { history: EloHistoryEntry[] }) {
   );
 }
 
-function PerFactionCard({ data }: { data: UserFactionWinRate[] }) {
-  const top5 = [...data].sort((a, b) => b.games_played - a.games_played).slice(0, 5);
-
-  return (
-    <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
-      <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">Per-Faction Win Rate</p>
-      {top5.length === 0 ? (
-        <p className="text-sm text-stone-600">No faction data yet.</p>
-      ) : (
-        <div className="space-y-2">
-          {top5.map((f) => (
-            <div key={f.faction_id} className="flex items-center gap-2">
-              {f.icon_url ? (
-                <img src={f.icon_url} alt={f.faction_name} className="h-5 w-5 object-contain" />
-              ) : (
-                <span className="h-5 w-5 flex items-center justify-center rounded bg-stone-800 text-[10px] text-stone-500">
-                  {f.faction_name.slice(0, 2).toUpperCase()}
-                </span>
-              )}
-              <span className="flex-1 text-xs text-stone-300 truncate">{f.faction_name}</span>
-              <span className="text-xs text-stone-500">{f.games_played}g</span>
-              <span
-                className={`text-xs font-semibold ${
-                  f.is_tt_data ? 'text-stone-500' : 'text-rizzotto-gold-400'
-                }`}
-              >
-                {(f.win_rate * 100).toFixed(0)}%
-              </span>
-              {f.is_tt_data && <span className="text-[9px] text-stone-600 italic">TT</span>}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FactionMasteryCard({ data }: { data: UserFactionMastery[] }) {
-  return (
-    <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
-      <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">Faction Mastery</p>
-      {data.length === 0 ? (
-        <p className="text-sm text-stone-600">No mastery data yet.</p>
-      ) : (
-        <div className="space-y-2">
-          {data.map((f) => (
-            <div key={f.faction_id} className="flex items-center gap-2">
-              {f.icon_url ? (
-                <img src={f.icon_url} alt={f.faction_name} className="h-5 w-5 object-contain" />
-              ) : (
-                <span className="h-5 w-5 flex items-center justify-center rounded bg-stone-800 text-[10px] text-stone-500">
-                  {f.faction_name.slice(0, 2).toUpperCase()}
-                </span>
-              )}
-              <span className="flex-1 text-xs text-stone-300 truncate">{f.faction_name}</span>
-              <div className="flex items-center gap-1">
-                <div className="h-1.5 rounded-full bg-stone-800 w-16 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-rizzotto-gold-500/70"
-                    style={{ width: `${Math.min(100, f.mastery_rating)}%` }}
-                  />
-                </div>
-                <span className="text-xs text-stone-400 w-6 text-right">
-                  {Math.round(f.mastery_rating)}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 interface StatsSectionProps {
   userId: string;
-  isOwnProfile: boolean;
 }
 
-function StatsSection({ userId, isOwnProfile }: StatsSectionProps) {
+function StatsSection({ userId }: StatsSectionProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['user-stats', userId],
     queryFn: () => getUserStats(userId),
@@ -289,8 +216,6 @@ function StatsSection({ userId, isOwnProfile }: StatsSectionProps) {
     );
   }
 
-  const showMastery = isOwnProfile && (data.faction_mastery_top5?.length ?? 0) > 0;
-
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <WinLossCard
@@ -300,8 +225,7 @@ function StatsSection({ userId, isOwnProfile }: StatsSectionProps) {
         trend={data.win_rate_trend}
       />
       <EloHistoryCard history={data.elo_history} />
-      <PerFactionCard data={data.per_faction_winrate} />
-      {showMastery && <FactionMasteryCard data={data.faction_mastery_top5!} />}
+      <PlayerFactionProficiencyCard userId={userId} />
     </div>
   );
 }
@@ -419,7 +343,7 @@ export function UserProfilePage() {
         <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
           Statistics
         </h2>
-        <StatsSection userId={id} isOwnProfile={isOwnProfile} />
+        <StatsSection userId={id} />
       </section>
 
       {/* Recent Tournaments */}

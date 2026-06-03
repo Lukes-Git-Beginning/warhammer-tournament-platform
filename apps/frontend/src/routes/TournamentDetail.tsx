@@ -30,7 +30,7 @@ const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-stone-700 text-stone-300',
   OPEN_REGISTRATION: 'bg-emerald-800 text-emerald-200',
   REGISTRATION_CLOSED: 'bg-yellow-900 text-yellow-200',
-  ONGOING: 'bg-warhammer-blood text-white',
+  ONGOING: 'bg-rizzotto-blood-500 text-white',
   COMPLETED: 'bg-stone-600 text-stone-300',
 };
 
@@ -43,7 +43,7 @@ function SafeMarkdown({ children }: { children: string }) {
         // Override to use sanitized content
         p: ({ children: c }) => <p className="mb-3">{c}</p>,
         h2: ({ children: c }) => (
-          <h2 className="font-display text-xl font-semibold mt-5 mb-2 text-warhammer-gold">{c}</h2>
+          <h2 className="font-display text-xl font-semibold mt-5 mb-2 text-rizzotto-gold-500">{c}</h2>
         ),
         ul: ({ children: c }) => <ul className="list-disc pl-5 mb-3 space-y-1">{c}</ul>,
         ol: ({ children: c }) => <ol className="list-decimal pl-5 mb-3 space-y-1">{c}</ol>,
@@ -170,7 +170,7 @@ export function TournamentDetail() {
         <div className="flex flex-wrap gap-3 mb-6">
           <button
             type="button"
-            className="rounded border border-stone-700 px-4 py-1.5 text-sm text-stone-300 hover:border-warhammer-gold hover:text-warhammer-gold transition-colors"
+            className="rounded border border-stone-700 px-4 py-1.5 text-sm text-stone-300 hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-500 transition-colors"
             onClick={() => navigate({ to: '/tournaments/$slug/edit', params: { slug } })}
           >
             {t('tournament.detail.edit')}
@@ -179,7 +179,7 @@ export function TournamentDetail() {
             <button
               type="button"
               disabled={publishMutation.isPending}
-              className="rounded border border-warhammer-gold px-4 py-1.5 text-sm text-warhammer-gold hover:bg-warhammer-gold/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded border border-rizzotto-gold-500 px-4 py-1.5 text-sm text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => {
                 if (
                   confirm(
@@ -235,9 +235,9 @@ export function TournamentDetail() {
       )}
 
       {activeDraftMatches.length > 0 && (
-        <section className="mb-6 rounded-md border border-warhammer-blood/60 bg-warhammer-blood/10 p-4">
-          <h2 className="font-display text-base font-semibold text-warhammer-gold mb-3 flex items-center gap-2">
-            <span className="inline-block h-2 w-2 rounded-full bg-warhammer-blood animate-pulse" />
+        <section className="mb-6 rounded-md border border-rizzotto-blood-500/60 bg-rizzotto-blood-500/10 p-4">
+          <h2 className="font-display text-base font-semibold text-rizzotto-gold-500 mb-3 flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-rizzotto-blood-500 animate-pulse" />
             {t('tournament.detail.live_drafts')}
           </h2>
           <ul className="space-y-2">
@@ -252,7 +252,7 @@ export function TournamentDetail() {
                 <Link
                   to="/drafts/$id/spectate"
                   params={{ id: match.draft_id! }}
-                  className="rounded bg-warhammer-blood px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors"
+                  className="rounded bg-rizzotto-blood-500 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors"
                 >
                   {t('tournament.detail.live_watch')}
                 </Link>
@@ -307,7 +307,7 @@ export function TournamentDetail() {
 
       {tournament.description && (
         <section className="mb-8">
-          <h2 className="font-display text-xl font-semibold text-warhammer-gold mb-3">
+          <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-3">
             {t('tournament.detail.description')}
           </h2>
           <div className="text-stone-300 leading-relaxed">
@@ -318,7 +318,7 @@ export function TournamentDetail() {
 
       {tournament.rules && (
         <section className="mb-8">
-          <h2 className="font-display text-xl font-semibold text-warhammer-gold mb-3">
+          <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-3">
             {t('tournament.detail.rules')}
           </h2>
           <div className="rounded-md border border-stone-800 bg-stone-900/50 p-6 text-stone-300 leading-relaxed">
