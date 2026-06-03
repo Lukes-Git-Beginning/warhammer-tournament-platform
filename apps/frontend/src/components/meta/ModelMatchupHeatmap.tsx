@@ -1,64 +1,54 @@
-import type { MatchupCell, FactionDto } from '@rizzotto/types';
-import { FactionBadge } from './FactionBadge';
+import type { FactionMatchupMatrixEntryDto, FactionDto } from '@rizzotto/types';
+import { FactionBadge } from './FactionBadge.js';
+import { winrateColor } from './MatchupHeatmap.js';
 
-interface MatchupHeatmapProps {
-  cells: MatchupCell[];
+interface ModelMatchupHeatmapProps {
+  entries: FactionMatchupMatrixEntryDto[];
   factions: FactionDto[];
 }
 
-export function winrateColor(winrate: number, lowConfidence: boolean): string {
-  // Diverging scale: red (losing) ↔ near-white (50%) ↔ green (winning).
-  // Saturation and lightness do the heavy lifting; hue stays linear since
-  // the neutral middle is already desaturated.
-  const dist = Math.abs(winrate - 0.5) * 2; // 0 = neutral, 1 = extreme
-  const hue = winrate * 120;
-  const saturation = 15 + 55 * dist; // 15% → 70%
-  const lightness = 85 - 55 * dist; // 85% → 30%
-  const opacity = lowConfidence ? 0.3 : 1;
-  return `hsla(${hue.toFixed(0)}, ${saturation.toFixed(0)}%, ${lightness.toFixed(0)}%, ${opacity})`;
-}
-
-export function MatchupHeatmap({ cells, factions }: MatchupHeatmapProps) {
-  // Sort by display_order asc
+export function ModelMatchupHeatmap({ entries, factions }: ModelMatchupHeatmapProps) {
+  // Sort factions by display_order for consistent axis ordering
   const sorted = [...factions].sort((a, b) => a.display_order - b.display_order);
 
-  // Build lookup map: "aId|bId" → cell (stored only one way)
-  const cellMap = new Map<string, MatchupCell>();
-  for (const cell of cells) {
-    cellMap.set(`${cell.faction_a_id}|${cell.faction_b_id}`, cell);
+  // Build lookup map: "factionA|factionB" → entry (stored directionally)
+  const entryMap = new Map<string, FactionMatchupMatrixEntryDto>();
+  for (const entry of entries) {
+    entryMap.set(`${entry.factionA}|${entry.factionB}`, entry);
   }
 
   function getCell(
     rowId: string,
     colId: string,
-  ): { winrate: number; total: number; label: string } | null {
-    // Try direct
-    const direct = cellMap.get(`${rowId}|${colId}`);
+  ): { winChance: number; matchupEffect: number; sampleSize: number; lowSampleWarning: boolean; label: string } | null {
+    // Try direct (row = factionA perspective)
+    const direct = entryMap.get(`${rowId}|${colId}`);
     if (direct) {
-      const winrate = direct.winrate_a ?? 0;
-      const total = direct.total;
-      const pct = Math.round(winrate * 100);
       const rowFaction = factions.find((f) => f.id === rowId);
       const colFaction = factions.find((f) => f.id === colId);
+      const pct = (direct.neutralEqualProficiencyWinChance * 100).toFixed(1);
       return {
-        winrate,
-        total,
-        label: `${rowFaction?.name ?? rowId} vs ${colFaction?.name ?? colId}: ${direct.faction_a_wins}-${direct.faction_b_wins} (${total} Matches, ${pct}%)`,
+        winChance: direct.neutralEqualProficiencyWinChance,
+        matchupEffect: direct.matchupEffect,
+        sampleSize: direct.sampleSize,
+        lowSampleWarning: direct.lowSampleWarning,
+        label: `${rowFaction?.name ?? rowId} vs ${colFaction?.name ?? colId}: ${pct}% win chance (matchup effect ${direct.matchupEffect > 0 ? '+' : ''}${direct.matchupEffect.toFixed(3)}, n=${direct.sampleSize})${direct.lowSampleWarning ? ' ⚠ low sample' : ''}`,
       };
     }
-    // Try reversed — row is faction_b, col is faction_a → winrate perspective flipped
-    const reversed = cellMap.get(`${colId}|${rowId}`);
+    // Try reversed — row is factionB, col is factionA → flip win chance
+    const reversed = entryMap.get(`${colId}|${rowId}`);
     if (reversed) {
-      const winrateRaw = reversed.winrate_a ?? 0;
-      const winrate = 1 - winrateRaw;
-      const total = reversed.total;
-      const pct = Math.round(winrate * 100);
+      const winChance = 1 - reversed.neutralEqualProficiencyWinChance;
+      const matchupEffect = -reversed.matchupEffect;
       const rowFaction = factions.find((f) => f.id === rowId);
       const colFaction = factions.find((f) => f.id === colId);
+      const pct = (winChance * 100).toFixed(1);
       return {
-        winrate,
-        total,
-        label: `${rowFaction?.name ?? rowId} vs ${colFaction?.name ?? colId}: ${reversed.faction_b_wins}-${reversed.faction_a_wins} (${total} Matches, ${pct}%)`,
+        winChance,
+        matchupEffect,
+        sampleSize: reversed.sampleSize,
+        lowSampleWarning: reversed.lowSampleWarning,
+        label: `${rowFaction?.name ?? rowId} vs ${colFaction?.name ?? colId}: ${pct}% win chance (matchup effect ${matchupEffect > 0 ? '+' : ''}${matchupEffect.toFixed(3)}, n=${reversed.sampleSize})${reversed.lowSampleWarning ? ' ⚠ low sample' : ''}`,
       };
     }
     return null;
@@ -125,7 +115,7 @@ export function MatchupHeatmap({ cells, factions }: MatchupHeatmapProps) {
                   );
                 }
 
-                const bg = winrateColor(data.winrate, data.total < 5);
+                const bg = winrateColor(data.winChance, data.lowSampleWarning);
 
                 return (
                   <td

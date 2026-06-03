@@ -76,31 +76,32 @@ async function seedBase() {
 // ---------------------------------------------------------------------------
 
 describe('GET /api/leaderboard', () => {
-  it('returns entries in correct rank order when queried by explicit seasonId', async () => {
+  it('returns entries in correct rank order when queried by explicit seasonId (winrate mode)', async () => {
     await seedBase();
 
-    // mode=season_points: legacy mode backed by seeded LeaderboardEntry rows.
-    // (The default mode is now the derive-on-read 'rating_model'.)
+    // mode=winrate: backed by seeded LeaderboardEntry rows (wins/matches_played).
+    // (The default mode is the derive-on-read 'rating_model'.)
     const res = await app.inject({
       method: 'GET',
-      url: `/api/leaderboard?seasonId=${testSeason!.id}&mode=season_points`,
+      url: `/api/leaderboard?seasonId=${testSeason!.id}&mode=winrate`,
     });
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{
       season: { id: string; is_active: boolean };
-      entries: Array<{ rank: number; user: { username: string }; total_points: number }>;
+      entries: Array<{ rank: number; user: { username: string }; win_rate: number }>;
       total: number;
     }>();
 
     expect(body.season.id).toBe(testSeason!.id);
     expect(body.season.is_active).toBe(true);
+    // All 3 users have >= 5 matches_played (10, 8, 6)
     expect(body.total).toBe(3);
     expect(body.entries).toHaveLength(3);
 
     expect(body.entries[0]!.rank).toBe(1);
+    // Alpha: 8/10 = 0.8, Beta: 6/8 = 0.75, Gamma: 4/6 ≈ 0.667 — Alpha ranks first
     expect(body.entries[0]!.user.username).toBe('Alpha');
-    expect(body.entries[0]!.total_points).toBe(100);
 
     expect(body.entries[1]!.rank).toBe(2);
     expect(body.entries[2]!.rank).toBe(3);
@@ -124,7 +125,7 @@ describe('GET /api/leaderboard', () => {
     await seedBase();
     const res = await app.inject({
       method: 'GET',
-      url: `/api/leaderboard?seasonId=${testSeason!.id}&page=2&pageSize=2&mode=season_points`,
+      url: `/api/leaderboard?seasonId=${testSeason!.id}&page=2&pageSize=2&mode=winrate`,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json<{ entries: unknown[]; total: number; page: number }>();

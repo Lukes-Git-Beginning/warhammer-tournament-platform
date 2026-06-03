@@ -3,7 +3,7 @@
 ## TL;DR
 
 - **ELO**: Multi-Player Performance-Rating (A2, zero-sum bei gleichen Ratings), K=32 normal / K=48 Major — `computeEloDeltas()`. Pflegt `LeaderboardEntry.elo_rating` (Legacy, finalizes Tournament).
-- **MMR (Welle 2) — DEPRECATED**: 3-Faktor Win-Punkte-Formel `computeWinPoints()` in `lib/mmr.ts`. Seit `feat/dynamic-leaderboard` (2026-06) **nicht mehr im Match-Pfad aufgerufen** — abgelöst vom dynamischen Rating-Modell (unten). `season_points`/`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` sind deprecated (Spalten erhalten, Writes entfernt).
+- **MMR (Welle 2) — ENTFERNT (2026-06-03)**: `lib/mmr.ts`, die Tabellen `FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` und `LeaderboardEntry.season_points` wurden per Migration `drop_welle2_mmr_deprecated` (Branch `chore/phase2-consolidation`) gedroppt. Vollständig abgelöst vom dynamischen Rating-Modell (unten). Die MMR-Formel-Sektion weiter unten ist nur noch **historisch**.
 - **Dynamic Weighted Leaderboard (Alex-Spec, 2026-06)**: derive-on-read. L2-regularisierte Logistic Regression `fitRatingModel()` in `lib/rating-model.ts` fittet `PlayerFactionSkill(player,faction)` + antisymmetrischen `MatchupEffect(X,Y)`. Punkte rein abgeleitet via `lib/scoring-service.ts` + aggregiert in `lib/leaderboard-service.ts`. Nichts gespeichert, jeder Punkt rekonstruierbar (`lib/breakdown-service.ts`).
 - **Pairings** via `tournament-pairings` v2 — `SingleElimination`, `Swiss`, `RoundRobin` — alle drei Formate in je einer `lib/`-Datei.
 - **Swiss-Tiebreaker** (Welle 2): Buchholz → Solkoff → Head-to-Head (kein ELO) — `sortSwissStandings()`.
@@ -157,9 +157,11 @@ Hook in `routes/bracket.ts:next-round` — nach letzter Swiss-Runde aufrufen.
 
 ---
 
-## MMR — 3-Faktor Win-Punkte-Formel (`lib/mmr.ts`) — Welle 2
+## ~~MMR — 3-Faktor Win-Punkte-Formel (`lib/mmr.ts`)~~ — ENTFERNT (2026-06-03, nur historisch)
 
-**Alex-Spec:** No-Loss (Loss = 0), Win-Quality-skaliert, Anti-Farming.
+> ⚠️ **Dieser gesamte Abschnitt beschreibt totes System.** `lib/mmr.ts`, die Models und `season_points` wurden per `drop_welle2_mmr_deprecated` (Branch `chore/phase2-consolidation`) gedroppt; der Match-Result-Hook unten existiert nicht mehr. Aktuell gilt ausschließlich das **Dynamic Weighted Leaderboard** (Abschnitt darüber). Unten nur zur Nachvollziehbarkeit der Ablösung belassen.
+
+**Alex-Spec (historisch):** No-Loss (Loss = 0), Win-Quality-skaliert, Anti-Farming.
 
 **Formel:**
 ```

@@ -16,6 +16,9 @@ import type {
   DraftEventsResponse,
   MatchDetailDto as MatchDetailDtoFromTypes,
   MatchScoringBreakdownDto,
+  PlayerOpponentBreakdownDto,
+  FactionMatchupMatrixResponse,
+  PlayerFactionProficiencyResponse,
 } from '@rizzotto/types';
 
 export type {
@@ -28,6 +31,9 @@ export type {
   MetaOverviewResponse,
   MatchupHeatmapResponse,
   MatchScoringBreakdownDto,
+  PlayerOpponentBreakdownDto,
+  FactionMatchupMatrixResponse,
+  PlayerFactionProficiencyResponse,
 };
 
 export type AllTimeEntry = LeaderboardEntryDto & { seasons_participated: number };
@@ -294,8 +300,8 @@ export function getBracket(slug: string): Promise<BracketResponse> {
 }
 
 // Default mode is the dynamic weighted leaderboard ('rating_model', Alex-Spec) —
-// derive-on-read shape (playerId/displayName/totalFinalPoints). Legacy modes
-// (season_points/winrate/weighted_winrate) keep the old shape via getLeaderboardByMode.
+// derive-on-read shape (playerId/displayName/totalFinalPoints).
+// 'winrate' mode is available via getLeaderboardByMode.
 export function getLeaderboard(opts?: {
   seasonId?: string;
   page?: number;
@@ -755,7 +761,7 @@ export function putAdminConfig(key: string, value: unknown): Promise<AdminConfig
 // Leaderboard — Extended (mode param)
 // ---------------------------------------------------------------------------
 
-export type LeaderboardMode = 'season_points' | 'winrate' | 'weighted_winrate';
+export type LeaderboardMode = 'rating_model' | 'winrate';
 
 export interface ExtendedLeaderboardEntry {
   rank: number;
@@ -766,7 +772,6 @@ export interface ExtendedLeaderboardEntry {
   wins: number;
   losses: number;
   win_rate?: number;
-  weighted_win_rate?: number;
 }
 
 export interface ExtendedLeaderboardResponse {
@@ -795,23 +800,6 @@ export function getLeaderboardByMode(opts: {
 // User Stats (personal)
 // ---------------------------------------------------------------------------
 
-export interface UserFactionWinRate {
-  faction_id: string;
-  faction_name: string;
-  icon_url: string | null;
-  games_played: number;
-  wins: number;
-  win_rate: number;
-  is_tt_data: boolean;
-}
-
-export interface UserFactionMastery {
-  faction_id: string;
-  faction_name: string;
-  icon_url: string | null;
-  mastery_rating: number;
-}
-
 export interface EloHistoryEntry {
   date: string;
   elo: number;
@@ -825,8 +813,6 @@ export interface UserStatsResponse {
   win_rate: number;
   win_rate_trend?: number;
   elo_history: EloHistoryEntry[];
-  per_faction_winrate: UserFactionWinRate[];
-  faction_mastery_top5?: UserFactionMastery[];
 }
 
 export function getUserStats(userId: string, season?: string): Promise<UserStatsResponse> {
@@ -855,8 +841,52 @@ export function getMatchDetail(matchId: string): Promise<MatchDetailDtoFromTypes
   return apiFetch<MatchDetailDtoFromTypes>(`/api/matches/${matchId}`);
 }
 
-export function getScoringBreakdown(matchId: string): Promise<MatchScoringBreakdownDto> {
+export function getMatchScoringBreakdown(matchId: string): Promise<MatchScoringBreakdownDto> {
   return apiFetch<MatchScoringBreakdownDto>(`/api/matches/${matchId}/scoring-breakdown`);
+}
+
+/** @deprecated Use getMatchScoringBreakdown instead */
+export const getScoringBreakdown = getMatchScoringBreakdown;
+
+// ---------------------------------------------------------------------------
+// Explainability — Faction Matchup Matrix (#4)
+// ---------------------------------------------------------------------------
+
+export function getMatchupMatrix(seasonId?: string): Promise<FactionMatchupMatrixResponse> {
+  const params = new URLSearchParams();
+  if (seasonId) params.set('seasonId', seasonId);
+  const qs = params.toString();
+  return apiFetch<FactionMatchupMatrixResponse>(`/api/factions/matchup-matrix${qs ? `?${qs}` : ''}`);
+}
+
+// ---------------------------------------------------------------------------
+// Explainability — Player Faction Proficiency (#5)
+// ---------------------------------------------------------------------------
+
+export function getPlayerFactionProficiency(
+  playerId: string,
+  seasonId?: string,
+): Promise<PlayerFactionProficiencyResponse> {
+  const params = new URLSearchParams();
+  if (seasonId) params.set('seasonId', seasonId);
+  const qs = params.toString();
+  return apiFetch<PlayerFactionProficiencyResponse>(
+    `/api/players/${playerId}/faction-proficiency${qs ? `?${qs}` : ''}`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Explainability — Anti-Farming Breakdown (#3)
+// ---------------------------------------------------------------------------
+
+export function getAntiFarmingBreakdown(
+  playerId: string,
+  opponentId: string,
+  seasonId?: string,
+): Promise<PlayerOpponentBreakdownDto> {
+  const params = new URLSearchParams({ playerId, opponentId });
+  if (seasonId) params.set('seasonId', seasonId);
+  return apiFetch<PlayerOpponentBreakdownDto>(`/api/leaderboard/anti-farming?${params.toString()}`);
 }
 
 // ---------------------------------------------------------------------------

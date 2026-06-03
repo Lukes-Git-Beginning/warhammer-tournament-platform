@@ -5,7 +5,6 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import fs from 'node:fs/promises';
 import dotenv from 'dotenv';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, FactionCategory, Role } from '../generated/prisma/client.js';
@@ -302,10 +301,6 @@ const ADMIN_CONFIG_DEFAULTS: AdminConfigEntry[] = [
     value: { arena: false, slt: true, bpt: true, sft: true },
   },
   { key: 'welcome_banner_text', value: '' },
-  { key: 'mmr_base_points_tournament', value: 100 },
-  { key: 'mmr_base_points_casual', value: 50 },
-  { key: 'mmr_max_cap_per_combo', value: 200 },
-  { key: 'mmr_mastery_threshold_games', value: 10 },
 ];
 
 async function seedAdminConfig(): Promise<void> {
@@ -327,158 +322,6 @@ async function seedAdminConfig(): Promise<void> {
   console.log(`  ✓ AdminConfig: ${upserted} keys ensured`);
 }
 
-// ---------------------------------------------------------------------------
-// TT-Snapshot Seed — FactionMatchupStat (Welle 2 — Plan 3)
-// Reads the TotalTavern faction stats snapshot and seeds FactionMatchupStat
-// for the active season with source=TT_SEED, confidence=0.5.
-// Idempotent: skips matchups that already exist with a later source (OWN_DATA).
-// ---------------------------------------------------------------------------
-
-/**
- * TT-Snapshot JSON shape (see packages/db/prisma/seed-data/tt-faction-stats-snapshot-2026-05.json)
- */
-interface TTGlobalEntry {
-  faction: string;
-  wins: number;
-  losses: number;
-  win_rate: number;
-}
-
-interface TTMatchupEntry {
-  vs_faction: string;
-  wins: number;
-  losses: number;
-  win_rate: number;
-}
-
-interface TTSnapshot {
-  scraped_at: string;
-  source_url: string;
-  global: TTGlobalEntry[];
-  matchups: Record<string, TTMatchupEntry[]>;
-}
-
-/**
- * Maps TT faction display names to our internal slug-based faction IDs.
- * If a TT name is not listed here, it is skipped with a warning.
- */
-const TT_NAME_TO_SLUG: Record<string, string> = {
-  'Vampire Counts': 'vampire_counts',
-  'Norsca': 'norsca',
-  'Bretonnia': 'bretonnia',
-  'Chaos Dwarfs': 'chaos_dwarfs',
-  'Greenskins': 'greenskins',
-  'Dwarfs': 'dwarfs',
-  'Wood Elves': 'wood_elves',
-  'Vampire Coast': 'vampire_coast',
-  'Tomb Kings': 'tomb_kings',
-  'Kislev': 'kislev',
-  'Beastmen': 'beastmen',
-  'High Elves': 'high_elves',
-  'Skaven': 'skaven',
-  'Dark Elves': 'dark_elves',
-  'Tzeentch': 'tzeentch',
-  'Khorne': 'khorne',
-  'Slaanesh': 'slaanesh',
-  'Empire': 'empire',
-  'Lizardmen': 'lizardmen',
-  'Grand Cathay': 'grand_cathay',
-  'Chaos Demons': 'daemons_of_chaos', // TT uses "Chaos Demons" for our daemons_of_chaos
-  'Daemons of Chaos': 'daemons_of_chaos',
-  'Nurgle': 'nurgle',
-  'Warriors of Chaos': 'warriors_of_chaos',
-  'Ogre Kingdoms': 'ogre_kingdoms',
-};
-
-async function seedTTFactionMatchupStats(activeSeason: { id: string }): Promise<void> {
-  const snapshotPath = path.resolve(__dirname, 'seed-data', 'tt-faction-stats-snapshot-2026-05.json');
-
-  let snapshotRaw: string;
-  try {
-    snapshotRaw = await fs.readFile(snapshotPath, 'utf-8');
-  } catch {
-    console.log('  ⚠ TT snapshot not found at', snapshotPath, '— skipping FactionMatchupStat seed');
-    return;
-  }
-
-  const snapshot: TTSnapshot = JSON.parse(snapshotRaw) as TTSnapshot;
-  const seasonId = activeSeason.id;
-
-  let upserted = 0;
-  let skipped = 0;
-
-  for (const [ttFactionName, matchups] of Object.entries(snapshot.matchups)) {
-    const factionAId = TT_NAME_TO_SLUG[ttFactionName];
-    if (!factionAId) {
-      console.warn(`  ⚠ TT faction "${ttFactionName}" has no slug mapping — skipping`);
-      skipped++;
-      continue;
-    }
-
-    for (const matchup of matchups) {
-      const factionBId = TT_NAME_TO_SLUG[matchup.vs_faction];
-      if (!factionBId) {
-        console.warn(`  ⚠ TT vs_faction "${matchup.vs_faction}" has no slug mapping — skipping`);
-        skipped++;
-        continue;
-      }
-
-      // Skip mirror matchups (same faction vs itself)
-      if (factionAId === factionBId) continue;
-
-      // Check if a non-seed record already exists (OWN_DATA / HYBRID) — don't overwrite
-      const existing = await prisma.factionMatchupStat.findUnique({
-        where: {
-          season_id_faction_a_id_faction_b_id: {
-            season_id: seasonId,
-            faction_a_id: factionAId,
-            faction_b_id: factionBId,
-          },
-        },
-        select: { source: true },
-      });
-
-      if (existing && existing.source !== 'TT_SEED') {
-        // Existing OWN_DATA or HYBRID entry — preserve it
-        skipped++;
-        continue;
-      }
-
-      await prisma.factionMatchupStat.upsert({
-        where: {
-          season_id_faction_a_id_faction_b_id: {
-            season_id: seasonId,
-            faction_a_id: factionAId,
-            faction_b_id: factionBId,
-          },
-        },
-        create: {
-          season_id: seasonId,
-          faction_a_id: factionAId,
-          faction_b_id: factionBId,
-          wins: matchup.wins,
-          losses: matchup.losses,
-          win_rate: matchup.win_rate,
-          source: 'TT_SEED',
-          confidence: 0.5,
-        },
-        update: {
-          wins: matchup.wins,
-          losses: matchup.losses,
-          win_rate: matchup.win_rate,
-          source: 'TT_SEED',
-          confidence: 0.5,
-        },
-      });
-      upserted++;
-    }
-  }
-
-  console.log(
-    `  ✓ FactionMatchupStat (TT_SEED): ${upserted} upserted, ${skipped} skipped (season: ${seasonId})`,
-  );
-}
-
 async function main(): Promise<void> {
   console.log('Seeding database…');
   await seedFactions();
@@ -487,15 +330,6 @@ async function main(): Promise<void> {
   await seedDraftPresets(systemUserId);
   await seedMaps();
   await seedAdminConfig();
-
-  // TT Snapshot Seed — needs active season
-  const activeSeason = await prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
-  if (activeSeason) {
-    await seedTTFactionMatchupStats(activeSeason);
-  } else {
-    console.log('  ⚠ No active season found — skipping TT FactionMatchupStat seed');
-  }
-
   console.log('Done.');
 }
 

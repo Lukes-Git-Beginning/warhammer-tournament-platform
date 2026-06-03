@@ -16,7 +16,7 @@ import { EloRatingDisplay } from '../components/meta/EloRatingDisplay.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 
-type Tab = 'season' | 'all-time' | 'season_points' | 'winrate' | 'weighted_winrate';
+type Tab = 'season' | 'all-time' | 'winrate';
 
 const PAGE_SIZE = 50;
 
@@ -45,7 +45,7 @@ function RankCell({ rank }: { rank: number }) {
 }
 
 // ---------------------------------------------------------------------------
-// Season-Tab (original — season_points default)
+// Season-Tab
 // ---------------------------------------------------------------------------
 
 function SeasonTab() {
@@ -284,11 +284,11 @@ function AllTimeTab() {
 }
 
 // ---------------------------------------------------------------------------
-// Mode-based Tab (season_points / winrate / weighted_winrate)
+// Mode-based Tab (winrate)
 // ---------------------------------------------------------------------------
 
 interface ModeTabProps {
-  mode: LeaderboardMode;
+  mode: Extract<LeaderboardMode, 'winrate'>;
 }
 
 function ModeTab({ mode }: ModeTabProps) {
@@ -313,9 +313,7 @@ function ModeTab({ mode }: ModeTabProps) {
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
   const entries = data?.entries ?? [];
 
-  const isRateBased = mode === 'winrate' || mode === 'weighted_winrate';
-  const rateKey: keyof ExtendedLeaderboardEntry =
-    mode === 'winrate' ? 'win_rate' : 'weighted_win_rate';
+  const rateKey: keyof ExtendedLeaderboardEntry = 'win_rate';
 
   return (
     <div>
@@ -341,11 +339,9 @@ function ModeTab({ mode }: ModeTabProps) {
           </select>
         </div>
 
-        {isRateBased && (
-          <span className="rounded border border-stone-700 bg-stone-900/60 px-2 py-1 text-xs text-stone-500">
-            Min 5 matches required
-          </span>
-        )}
+        <span className="rounded border border-stone-700 bg-stone-900/60 px-2 py-1 text-xs text-stone-500">
+          Min 5 matches required
+        </span>
       </div>
 
       {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>}
@@ -374,14 +370,7 @@ function ModeTab({ mode }: ModeTabProps) {
                 <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
                   <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
                   <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
-                  {isRateBased && (
-                    <th className="px-4 py-3 text-right font-medium text-stone-400">
-                      {mode === 'winrate' ? 'Win Rate' : 'Weighted WR'}
-                    </th>
-                  )}
-                  {mode === 'season_points' && (
-                    <th className="px-4 py-3 text-right font-medium text-stone-400">Points</th>
-                  )}
+                  <th className="px-4 py-3 text-right font-medium text-stone-400">Win Rate</th>
                   <th className="px-4 py-3 text-right font-medium text-stone-400">ELO</th>
                   <th className="px-4 py-3 text-center font-medium text-stone-400">W / L</th>
                   <th className="px-4 py-3 text-right font-medium text-stone-400">Games</th>
@@ -415,16 +404,9 @@ function ModeTab({ mode }: ModeTabProps) {
                           </span>
                         </Link>
                       </td>
-                      {isRateBased && (
-                        <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400">
-                          {rateVal != null ? `${(rateVal * 100).toFixed(1)}%` : '—'}
-                        </td>
-                      )}
-                      {mode === 'season_points' && (
-                        <td className="px-4 py-3 text-right text-stone-200">
-                          {entry.total_points}
-                        </td>
-                      )}
+                      <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400">
+                        {rateVal != null ? `${(rateVal * 100).toFixed(1)}%` : '—'}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <EloRatingDisplay rating={entry.elo_rating} size="sm" />
                       </td>
@@ -633,7 +615,6 @@ function LeaderboardTable({
 const TABS_CONFIG: { id: Tab; label: string }[] = [
   { id: 'season', label: 'Season' },
   { id: 'winrate', label: 'Win Rate' },
-  { id: 'weighted_winrate', label: 'Weighted Win Rate' },
   { id: 'all-time', label: 'All Time' },
 ];
 
@@ -682,9 +663,7 @@ export function LeaderboardPage() {
 
       {activeTab === 'season' && <SeasonTab />}
       {activeTab === 'all-time' && <AllTimeTab />}
-      {(activeTab === 'season_points' ||
-        activeTab === 'winrate' ||
-        activeTab === 'weighted_winrate') && <ModeTab mode={activeTab} />}
+      {activeTab === 'winrate' && <ModeTab mode={activeTab} />}
     </PageShell>
   );
 }

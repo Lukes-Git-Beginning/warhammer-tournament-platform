@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { getMetaOverview, getMatchupHeatmap } from '@/lib/api';
+import { getMetaOverview, getMatchupHeatmap, getMatchupMatrix, getFactions } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { MatchupHeatmap } from '@/components/meta/MatchupHeatmap';
+import { ModelMatchupHeatmap } from '@/components/meta/ModelMatchupHeatmap';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { FactionWithStatsDto } from '@rizzotto/types';
@@ -62,6 +63,27 @@ export function MetaDashboard() {
     queryKey: ['meta-matchups'],
     queryFn: () => getMatchupHeatmap(),
     enabled: !!overview?.season,
+  });
+
+  const seasonId = overview?.season?.id;
+
+  const {
+    data: matrixData,
+    isLoading: matrixLoading,
+    error: matrixError,
+  } = useQuery({
+    queryKey: ['matchup-matrix', seasonId],
+    queryFn: () => getMatchupMatrix(seasonId),
+    enabled: !!seasonId,
+  });
+
+  const {
+    data: factionsData,
+    isLoading: factionsLoading,
+  } = useQuery({
+    queryKey: ['factions', seasonId],
+    queryFn: () => getFactions(seasonId),
+    enabled: !!seasonId,
   });
 
   const hasNoSeason = !!overview && !overview.season;
@@ -181,6 +203,41 @@ export function MetaDashboard() {
 
             {heatmap && heatmap.cells.length > 0 && (
               <MatchupHeatmap cells={heatmap.cells} factions={heatmap.factions} />
+            )}
+          </section>
+
+          <section className="rounded-md border border-rizzotto-iron-700/60 bg-rizzotto-iron-900/40 p-5 backdrop-blur-sm">
+            <h2 className="font-display text-lg font-semibold text-rizzotto-stone-100 mb-1">
+              Model Matchup Matrix
+            </h2>
+            <p className="text-xs text-rizzotto-stone-500 mb-4">
+              Win chance predicted by the L2-Logistic-Regression model at neutral, equal-proficiency
+              conditions. Low-sample cells are faded.
+            </p>
+
+            {(matrixLoading || factionsLoading) && (
+              <div className="py-8 text-center text-rizzotto-stone-400 text-sm">
+                {t('common.loading')}
+              </div>
+            )}
+
+            {matrixError && (
+              <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
+                Failed to load model matchup data.
+              </div>
+            )}
+
+            {matrixData && factionsData && matrixData.entries.length === 0 && (
+              <p className="py-6 text-center text-sm text-rizzotto-stone-500 italic">
+                No model matchup data available for this season yet.
+              </p>
+            )}
+
+            {matrixData && factionsData && matrixData.entries.length > 0 && (
+              <ModelMatchupHeatmap
+                entries={matrixData.entries}
+                factions={factionsData.data.map((f) => f.faction)}
+              />
             )}
           </section>
         </>

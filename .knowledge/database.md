@@ -2,7 +2,7 @@
 
 **TL;DR:**
 - Prisma 7 (`^7.8.0`) mit driver-adapter `PrismaPg` aus `@prisma/adapter-pg` — kein nativer Prisma-Connection-String-Modus.
-- 30 Models in `packages/db/prisma/schema.prisma` (nach Welle 2). Neue Models: Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, FactionMastery, FactionMatchupStat, AntiFarmCap, AdminConfig.
+- 27 Models in `packages/db/prisma/schema.prisma` (nach Phase-2-Drop). Welle-2-Models: Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, AdminConfig. (`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` per `drop_welle2_mmr_deprecated` entfernt — Branch `chore/phase2-consolidation`.)
 - **Gotcha:** `datasource.url` steht NICHT in `schema.prisma`, sondern in `prisma.config.ts` — `schema.prisma` enthält nur `provider = "postgresql"`.
 
 ---
@@ -115,9 +115,7 @@ Wenn Backend vom Host nach Postgres im Container über `127.0.0.1:5432` verbinde
 | `MatchBlindPick` | **Welle 2** — Blind Faction Pick pro Match (BPT/OPEN-Modus); beidseitiger Lock-Timestamp, Reveal nach beidseitigem Lock |
 | `TournamentArmyList` | **Welle 2** — SLT-Pre-Upload (Screenshot required, `.army_setup` optional), Reveal-Logic (nach Match an Gegner, nach Tournament-Complete public) |
 | `SteamLink` | **Welle 2** — Steam-OpenID-2.0-Verifikation pro User (user_id @unique, steam_id @unique); Hard-Gate-Voraussetzung |
-| `FactionMastery` | **Welle 2** — Faction-Mastery-Rating pro User pro Faction (composite-PK, persistent über Seasons), Default-Rating 1200 |
-| `FactionMatchupStat` | **Welle 2** — Faction-vs-Faction Win-Rates pro Season (composite-PK), Season-Reset, Seed via TT-Scraper (`StatsSource.TT_SEED`) |
-| `AntiFarmCap` | **Welle 2** — Pro (player_pair × faction_combo × season) Points-Cap, default 200; Tournaments ignorieren Cap |
+| ~~`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap`~~ | **Welle-2-MMR — ENTFERNT** (Migration `drop_welle2_mmr_deprecated`, Branch `chore/phase2-consolidation`). Abgelöst vom derive-on-read Rating-Modell (`lib/rating-model.ts`) + OpponentShare-Modifier (`lib/scoring-service.ts`). Faction-vs-Faction-Daten leben jetzt in `MatchupStats` (Heatmap). |
 | `AdminConfig` | **Welle 2** — Live-Settings Key-Value-Store (Json `value`); pflegt Defaults, Feature-Flags, Welcome-Banner-Text etc. |
 
 ---
@@ -157,11 +155,11 @@ Wenn Backend vom Host nach Postgres im Container über `127.0.0.1:5432` verbinde
 ### LeaderboardEntry
 - `elo_rating Int @default(1200)` — Standard-ELO-Startwert.
 - `total_points Float` — für Ranglisten-Sortierung; Index `[season_id, total_points(sort: Desc)]`.
-- `season_points Int` — **DEPRECATED** (Welle-2 MMR): seit `feat/dynamic-leaderboard` nicht mehr geschrieben, durch das derive-on-read Leaderboard abgelöst. Spalte erhalten für Legacy-Modus/Historie.
+- ~~`season_points Int`~~ — **ENTFERNT** (Migration `drop_welle2_mmr_deprecated`, Branch `chore/phase2-consolidation`). War Welle-2-MMR, abgelöst durch `total_points` (derive-on-read). Sortierung läuft über `total_points`.
 - Unique-Constraint: `[user_id, season_id]`.
 
-### DEPRECATED Welle-2-MMR-Models
-`FactionMastery`, `FactionMatchupStat`, `AntiFarmCap` sind seit `feat/dynamic-leaderboard` als `// DEPRECATED` markiert — Writes aus dem Match-Pfad entfernt, **Spalten nicht gedroppt** (Drop-Migration nach Validierung). Ersetzt durch die gefitteten Parameter in `lib/rating-model.ts` bzw. den player-spezifischen OpponentShare-Modifier in `lib/scoring-service.ts`.
+### ~~Welle-2-MMR-Models~~ — ENTFERNT (2026-06-03)
+`FactionMastery`, `FactionMatchupStat`, `AntiFarmCap` + `LeaderboardEntry.season_points` + Enum `StatsSource` wurden per Migration `drop_welle2_mmr_deprecated` (Branch `chore/phase2-consolidation`) gedroppt. Ersetzt durch die gefitteten Parameter in `lib/rating-model.ts` bzw. den player-spezifischen OpponentShare-Modifier in `lib/scoring-service.ts`; Faction-vs-Faction-Daten leben in `MatchupStats`.
 
 ### Draft
 - `status DraftStatus` — `PENDING | ONGOING | COMPLETED | CANCELLED`.
@@ -225,9 +223,7 @@ enum MatchPhase {
   GROUP_STAGE | SWISS | PLAYOFF_QF | PLAYOFF_SF | PLAYOFF_FINAL  // Welle 2 — Discriminator für Match.phase
 }
 
-enum StatsSource {
-  TT_SEED | OWN_DATA | HYBRID  // Welle 2 — FactionMatchupStat-Herkunft
-}
+// enum StatsSource — ENTFERNT (drop_welle2_mmr_deprecated); war nur FactionMatchupStat-Herkunft
 
 enum TournamentStatus {
   DRAFT | OPEN_REGISTRATION | REGISTRATION_CLOSED | ONGOING | COMPLETED
@@ -294,6 +290,7 @@ Das Seed-Script liegt bei `packages/db/prisma/seed.ts` und wird via `tsx` ausgef
 | `20260519122538_welle2_tournament_mechanics_and_mmr` | **Welle 2 (Plan 2 + Plan 3)** — Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, FactionMastery, FactionMatchupStat, AntiFarmCap, AdminConfig; neue Enums PlayoffFormat, MatchFormat, MapDecisionMode, StatsSource; TournamentMode +OPEN/BPT/SLT; Tournament +6 Felder (rounds_count, playoff_format, swiss_match_format, playoff_match_format, finale_match_format, map_decision_mode) |
 | `20260519131859_welle2_d_integration_fields` | **Welle 2 (Plan D)** — `MatchPhase` enum + `Match.phase` nullable für Playoff-Discriminator; `LeaderboardEntry.season_points Int @default(0)` + compound DESC-Index für 3-Modi-Leaderboard |
 | `20260601220129_dynamic_leaderboard_match_fields` | **Dynamic Leaderboard (Alex-Spec)** — `Match.season_id` (FK Season, ON DELETE SET NULL) + `played_at` + `ruleset`, Index `[season_id, status]`; **Backfill** bestehender COMPLETED-Matches (`played_at`←`updated_at`, `season_id`←Season-Datumsbereich) |
+| `20260603000000_drop_welle2_mmr_deprecated` | **Phase-2-Cleanup** (Branch `chore/phase2-consolidation`) — DROP `FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` + Spalte `LeaderboardEntry.season_points` (+Index) + Enum `StatsSource`. ⚠️ **Irreversibel** — Prod-Drop läuft beim Auto-Deploy nach `main`-Merge |
 
 Migrations-Lock unter `packages/db/prisma/migrations/migration_lock.toml`.
 
