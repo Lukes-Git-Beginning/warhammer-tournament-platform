@@ -80,6 +80,26 @@ Komplett auf `main` gelandet (Merge `30d759e`) und live auf rizzotto.gg — `mod
 | 3   | Cold-Fit-Kosten validieren (großer Season-Datensatz) — ggf. Fit in deferred Job/Cron auslagern statt im Request                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `lib/rating-model-service.ts`                                                                                        | Niedrig  |
 | 4   | ~~**Breakdown-/Matrix-/Proficiency-Views**~~ ✅ **done auf Branch (2026-06-03)** — alle 4 `routes/rating.ts`-Endpoints im UI: `ModelMatchupHeatmap` auf `/meta` (reuse `winrateColor`), `PlayerFactionProficiencyCard` im Profil (ersetzt Mastery-Card), Match-Breakdown auf `getMatchScoringBreakdown` umgestellt. Anti-Farming-Endpoint hat Getter, UI-Surface optional/offen                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `apps/frontend`, `routes/rating.ts`                                                                                  | ✅ done (Branch) |
 
+### 2.5 Landing/Nav Design-Feedback (Alex, 20.05. → re-iteriert + umgesetzt 03.06.)
+
+Vier annotierte Screenshots von Alex (Stand 20.05.), gegen aktuellen Stand geprüft. Code-Punkte sind umgesetzt; zwei Tasks bleiben extern offen (neues Logo-Asset, Rollen-Promotion).
+
+| #   | Item                                                                                                                                 | Pfad                                       | Status                                |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ | ------------------------------------- |
+| A1  | Redundanten „Home"-Nav-Link entfernt (Logo bleibt Home)                                                                              | `components/layout/Header.tsx`             | ✅ done                               |
+| A2  | „Turniere"-Nav-Reiter ergänzt (Route `/tournaments` + i18n-Key `header.tournaments` existierten bereits)                            | `Header.tsx`                               | ✅ done                               |
+| A3  | „View all" der Live-Tournaments → `/tournaments` (zeigte fälschlich auf `/`)                                                         | `landing/ActiveMustersSection.tsx`         | ✅ done                               |
+| A4  | „Take up arms" auth-aware: eingeloggt → `/tournaments`, sonst → `/login` (bleibt immer sichtbar)                                     | `landing/HeroSection.tsx`                  | ✅ done                               |
+| A5  | Toten „Read the Manifesto"-CTA entfernt (Library-Section hatte kein Backing)                                                         | `landing/ForgeSection.tsx`                 | ✅ done                               |
+| B1  | Spielerzahl „—" gefixt: List- **und** Detail-Endpoint serialisieren jetzt `participantCount` aus `_count.participants`              | `backend/routes/tournaments.ts`            | ✅ done                               |
+| B2  | „Live Tournaments"-Feed holt alle Status gemischt — Filter auf ONGOING/UPCOMING erwägen                                            | `ActiveMustersSection.tsx`                 | 🟡 deferred                           |
+| C   | Rebrand sichtbarer Text → „RizzOtto's Arena" (index.html, i18n de/en, Footer-©, Header/Icon-aria, Discord-Notify, iCal). Domain/Dateinamen bleiben `rizzotto.gg`/`rizzotto-*` | div. Frontend + Backend                    | ✅ done (Text)                        |
+| D   | **Neues Logo/Sigil-Asset** — muss den neuen Namen enthalten (Hero/Nav-Name ist ein Bild). Austausch unter gleichen Pfaden          | `apps/frontend/public/img/*`, favicon, og  | ⚠️ offen — externes Designer-Asset    |
+| E   | **Alex auf ORGANIZER hochstufen** — Turnier-Erstellung ist gewollt Organizer-only (`requireRole('ORGANIZER','MODERATOR','ADMIN')`) | Admin-Panel / DB                           | ⚠️ offen — Ops-Task                   |
+| F   | Library-Section reaktivieren als Einstieg zum Army-List-Browser                                                                      | `ForgeSection.tsx`                         | → M7 (§5.1)                           |
+
+---
+
 ## 3. Bekannte Stubs / 501s
 
 | #   | Issue                                                                                                        | Pfad                                                          | Severity                             | Plan                               |

@@ -148,7 +148,7 @@ export function ActiveMustersSection() {
             </h2>
           </div>
           <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-            <Link to="/" className="!normal-case">
+            <Link to="/tournaments" search={{ tab: 'upcoming', page: 1 }} className="!normal-case">
               {t('musters.view_all')}
               <ArrowRight className="size-3.5" strokeWidth={1.5} />
             </Link>

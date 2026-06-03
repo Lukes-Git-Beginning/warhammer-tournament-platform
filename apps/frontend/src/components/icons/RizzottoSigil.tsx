@@ -23,7 +23,7 @@ export const RizzottoSigil = forwardRef<HTMLSpanElement, RizzottoSigilProps>(
       <span
         ref={ref}
         role="img"
-        aria-label="Rizzotto sigil"
+        aria-label="RizzOtto's Arena sigil"
         className={cn('inline-flex items-center justify-center', className)}
         {...rest}
       >

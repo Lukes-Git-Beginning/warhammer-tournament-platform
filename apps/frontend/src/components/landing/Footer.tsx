@@ -20,7 +20,7 @@ export function Footer() {
 
       <div className="mx-auto max-w-[80rem] px-4 sm:px-6 lg:px-8 xl:px-12">
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
-          <Link to="/" aria-label="Rizzotto — home" className="inline-flex items-center transition-opacity hover:opacity-90">
+          <Link to="/" aria-label="RizzOtto's Arena — home" className="inline-flex items-center transition-opacity hover:opacity-90">
             <RizzottoWordmarkImage bronze className="h-12 w-auto" loading="lazy" />
           </Link>
           <p className="text-xs font-display italic tracking-wider text-rizzotto-bronze/80">
@@ -55,7 +55,7 @@ export function Footer() {
               </li>
             </ul>
           </nav>
-          <p className="font-mono text-xs">© 2026 Rizzotto</p>
+          <p className="font-mono text-xs">© 2026 RizzOtto's Arena</p>
         </div>
 
         <p className="mt-6 text-center text-[11px] leading-relaxed text-rizzotto-stone-400/80">

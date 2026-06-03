@@ -1,6 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
 import { Picture } from '@/components/ui/picture';
 
 /**
@@ -68,11 +67,6 @@ export function ForgeSection() {
           >
             {t('forge_section.motto')}
           </p>
-          <div className="mt-8">
-            <Button variant="etched" size="md">
-              {t('forge_section.cta')}
-            </Button>
-          </div>
         </motion.div>
       </div>
     </section>

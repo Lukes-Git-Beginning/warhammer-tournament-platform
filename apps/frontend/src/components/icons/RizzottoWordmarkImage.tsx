@@ -32,7 +32,7 @@ export const RizzottoWordmarkImage = forwardRef<HTMLImageElement, RizzottoWordma
         <img
           ref={ref}
           src={`${base}.png`}
-          alt="Rizzotto"
+          alt="RizzOtto's Arena"
           loading={loading}
           fetchPriority={loading === 'eager' ? 'high' : undefined}
           decoding="async"

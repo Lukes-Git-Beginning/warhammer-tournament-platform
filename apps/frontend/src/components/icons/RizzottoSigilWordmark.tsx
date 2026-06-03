@@ -20,7 +20,7 @@ export const RizzottoSigilWordmark = forwardRef<HTMLSpanElement, RizzottoSigilWo
       <span
         ref={ref}
         className={cn('inline-flex items-center gap-2.5', className)}
-        aria-label="Rizzotto"
+        aria-label="RizzOtto's Arena"
         {...rest}
       >
         <RizzottoSigil className={cn(cls.sigil, 'text-rizzotto-gold-500')} aria-hidden="true" />
@@ -30,7 +30,7 @@ export const RizzottoSigilWordmark = forwardRef<HTMLSpanElement, RizzottoSigilWo
             cls.word,
           )}
         >
-          Rizzotto
+          RizzOtto&apos;s Arena
         </span>
       </span>
     );

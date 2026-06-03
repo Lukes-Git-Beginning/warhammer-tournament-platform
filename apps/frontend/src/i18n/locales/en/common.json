@@ -20,7 +20,7 @@
     "switch_aria": "Switch language"
   },
   "brand": {
-    "name": "Rizzotto",
+    "name": "RizzOtto's Arena",
     "tagline": "Where Lists Are Forged",
     "motto": "Where Lists Are Forged."
   },
@@ -138,7 +138,7 @@
   "tournament": {
     "create": {
       "title": "Create Tournament",
-      "subtitle": "Create a new tournament for the Rizzotto community.",
+      "subtitle": "Create a new tournament for the RizzOtto's Arena community.",
       "role_warning": "You need the Organizer role to create tournaments. Contact an administrator to upgrade your role.",
       "aside": {
         "heading": "What is a Tournament?",
@@ -386,7 +386,7 @@
     "season_label": "Season: {{name}}",
     "error": "Failed to load meta data.",
     "no_season_title": "No open season yet.",
-    "no_season_body": "Once a season is opened by the Rizzotto community, faction and matchup statistics will appear here.",
+    "no_season_body": "Once a season is opened by the RizzOtto's Arena community, faction and matchup statistics will appear here.",
     "no_season_motto": "\"Tempus Expectandi\"",
     "no_season_motto_title": "A time of waiting",
     "stat_total_matches": "Total matches",

@@ -60,11 +60,11 @@ describe('Header', () => {
     expect(container.querySelector('header')).toBeTruthy();
   });
 
-  it('zeigt Rizzotto Logo-Link zum Home', () => {
+  it('zeigt RizzOtto Logo-Link zum Home', () => {
     renderHeader();
     const logo = container.querySelector('a[href="/"]');
     expect(logo).toBeTruthy();
-    expect(logo?.getAttribute('aria-label')).toContain('Rizzotto');
+    expect(logo?.getAttribute('aria-label')).toContain('RizzOtto');
   });
 
   it('Hamburger-Button ist initial vorhanden', () => {
