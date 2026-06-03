@@ -68,6 +68,7 @@ export const router = createRouter({ routeTree });
 | ---------------------------- | ---------------------- | --------------------------------- |
 | `/`                          | `IndexPage`            | `routes/IndexPage.tsx`            |
 | `/login`                     | `LoginPage`            | `routes/LoginPage.tsx`            |
+| `/tournaments`               | `TournamentsListing`   | `routes/TournamentsListing.tsx`   |
 | `/tournaments/create`        | `CreateTournamentPage` | `routes/CreateTournamentPage.tsx` |
 | `/tournaments/$slug`         | `TournamentDetail`     | `routes/TournamentDetail.tsx`     |
 | `/leaderboard`               | `LeaderboardPage`      | `routes/LeaderboardPage.tsx`      |
@@ -88,6 +89,8 @@ export const router = createRouter({ routeTree });
 | `/tournaments/calendar`      | `CalendarPage`         | `routes/CalendarPage.tsx`         |
 
 **Route-Spezifitäts-Hinweis (M6):** `/tournaments/calendar` MUSS in `router.tsx` VOR `/tournaments/$slug` registriert sein. TanStack Router bevorzugt statische Segmente gegenüber Params automatisch, aber die Reihenfolge im `addChildren`-Array schützt gegen Regressionen — in `apps/e2e/tests/m6-routes.spec.ts` runtime-verifiziert.
+
+**Gotcha — Link auf Route mit Pflicht-`validateSearch`:** Routes mit `validateSearch` (z.B. `/tournaments` → `tab`/`page`) machen `search` im typisierten `<Link>` **zwingend**. `<Link to="/tournaments">` ohne `search` schlägt im Typecheck fehl (`Property 'search' is missing`). Lösung: `search={{ tab: 'upcoming', page: 1 }}` mitgeben (Default-Werte stehen in der `validateSearch`-Fn). Sonderfall: dynamisches `to={cond ? '/a' : '/b'}` weitet den `to`-Typ und umgeht die Pflicht (Runtime füllt fehlende Search via `validateSearch`-Defaults).
 
 ---
 

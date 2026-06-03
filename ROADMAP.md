@@ -11,7 +11,7 @@
 - **rizzotto.gg ist live seit 2026-05-19** auf Hetzner CX22, Caddy + Cloudflare-Origin-Cert.
 - **M1–M5 + Welle 2 (Steam-Hard-Gate, BPT/SFT/SLT, MMR, Match-Flow, 24 Faction-Sigils) sind durch.**
 - **Heute (2026-05-19) gefixt:** Steam-Hard-Gate end-to-end verdrahtet, Top-Bar-Navigation-Crash, Wordmark-AVIF, Logout (Content-Type), datetime-Submit, Header-Avatar-Profil-Link.
-- **Zuletzt gelandet (2026-06-03):** Phase-2-Konsolidierung (PR #10, MMR-Tabellen auf Prod gedroppt, kein CSV-Export) + **M6 Hub-Foundation** (PR #11) komplett live + **DOUBLE_ELIMINATION** (§6, alle Feldgrößen, migrationsfrei). Offenes Backlog: `DISCORD_BOT_TOKEN` + Hetzner-VM-Backup (User-Tasks), Cold-Fit-Job + Anti-Farming-UI (§2.4), Community-Links (echte URLs ausstehend).
+- **Zuletzt gelandet (2026-06-03):** Phase-2-Konsolidierung (PR #10, MMR-Tabellen auf Prod gedroppt, kein CSV-Export) + **M6 Hub-Foundation** (PR #11) komplett live + **DOUBLE_ELIMINATION** (§6, alle Feldgrößen, migrationsfrei). **Landing/Nav Design-Feedback (Alex, §2.5) gelandet + deployed 2026-06-03** (Nav-„Home" raus + „Turniere"-Reiter, „Take up arms" auth-aware, „View all"→`/tournaments`, toter Library-CTA raus, `participantCount` auf List+Detail, sichtbarer Brand-Text → „RizzOtto's Arena"). Offenes Backlog: `DISCORD_BOT_TOKEN` + Hetzner-VM-Backup (User-Tasks), Cold-Fit-Job + Anti-Farming-UI (§2.4), Community-Links (echte URLs ausstehend), **neues Logo-Asset + Alex→ORGANIZER (§2.5, extern)**.
 - **Mid-term:** ~~M6 Hub-Foundation~~ ✅ live (2026-06-03). Als nächstes: M7 Datentiefe (Army-List-Browser, Scraper-Write-Path). M8 UGC (Battle-Reports, Comments). M9 Team-Play (3v3, SfT, Blind-Pick).
 - **Bewusst geparkt:** In-App-Listenbauer, Live-Stream-Embed, Achievements, Coaching, Multi-Tenant, Native-App.
 
