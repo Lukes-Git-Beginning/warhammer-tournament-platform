@@ -82,6 +82,11 @@ return cached(
 | `leaderboard:anti-farming:opponentId=…&playerId=…&seasonId=…` | 60s | `routes/rating.ts` (#3) |
 | `factions:matchup-matrix:seasonId=<uuid>` | 60s | `routes/rating.ts` (#4) |
 | `leaderboard:proficiency:playerId=…&seasonId=…` | 60s | `routes/rating.ts` (#5) |
+| `h2h:a=…&b=…&season=…` | 60s | `routes/users.ts` — Head-to-Head pro Spielerpaar; per-Orientierung (a↔b und b↔a sind eigene Keys); bewusst kurze TTL, da Invalidierung broad via Pattern |
+| `tournaments:calendar:date_from=…&date_to=…&is_major=…&status=…` | 60s | `routes/tournaments.ts` — JSON-Calendar-Feed; alle Filter-Dimensionen im Key |
+| `tournaments:list:date_from=…&date_to=…&is_major=…&page=…&pageSize=…&status=…` | 60s | `routes/tournaments.ts` — List-Route; enthält jetzt auch `status`/`is_major`/`date_from`/`date_to`, damit gefilterte und ungefilterte Ergebnisse nicht kollidieren |
+
+**`/api/tournaments/calendar.ics` wird nicht gecacht** — kein `cached()`-Aufruf. Grund: iCal-String ist günstig zu generieren und würde den `Content-Type`-Header kollidieren lassen, wenn `cached()` JSON-serialisierte Ergebnisse zurückgibt.
 
 ---
 
@@ -134,6 +139,7 @@ Bei einer Mutation (z.B. Punktestand-Update, Rollen-Änderung) immer das **breit
 await invalidate(fastify.redis, 'leaderboard:*');   // deckt breakdown/anti-farming/proficiency mit ab
 await invalidate(fastify.redis, 'factions:*');      // deckt matchup-matrix mit ab
 await invalidate(fastify.redis, 'rating-model:*');  // gecachten Fit verwerfen → neu ableiten
+await invalidate(fastify.redis, 'h2h:*');           // H2H-Stats stale nach Match-Bestätigung
 
 // Nach Rollen-Änderung eines Users:
 await invalidate(fastify.redis, `user:role:${userId}`);

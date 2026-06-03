@@ -196,6 +196,32 @@ Drei nicht-offensichtliche Stolpersteine, die beim Dynamic-Weighted-Leaderboard-
 - **Prisma `notIn` schließt NULL-Rows aus (SQL-3-Wert-Logik).** Swiss-**Runde-1**-Matches (bei `/start` generiert) haben `phase = NULL`; erst `next-round` taggt `phase='SWISS'` (`bracket.ts:603`). Ein Filter `where: { phase: { notIn: ['PLAYOFF_*'] } }` überspringt damit NULL-Phase-Matches → Runde gilt fälschlich als „nicht gespielt". Playoff-Phasen **in JS** ausfiltern, nicht via Prisma `notIn`.
 - **`decision/start` liefert `201 Created`** (nicht 200) — `routes/match-decision.ts:172`.
 
+## M6-Integrationstests + E2E-Guard
+
+### Neue Backend-Test-Files (M6)
+
+Drei neue Test-Files ergänzen die Backend-Suite (jetzt 28 Files):
+
+| File                          | Tests | Schwerpunkte                                                                                               |
+| ----------------------------- | ----- | ---------------------------------------------------------------------------------------------------------- |
+| `h2h.test.ts`                 | 7     | H2H-Summary, Symmetrie, **Draw-Regression**, 404, 400-non-UUID, `faction_breakdown`                       |
+| `tournament-calendar.test.ts` | 13    | `is_major`/`status`-Filter, **`is_major=false`-Regressionsguard**, `end_date`-Heuristik (calendar-JSON), VCALENDAR/VEVENT-Struktur, Content-Type `text/calendar`, PATCH `is_major` |
+| `import-log.test.ts`          | 5     | 401, 403, 200 + `source`-Filter                                                                            |
+
+### Neuer E2E-Spec: `m6-routes.spec.ts`
+
+Pfad: `apps/e2e/tests/m6-routes.spec.ts` — **Routen-Resolution-Guard** für `/tournaments/calendar` und `/users/$a/vs/$b`.
+
+Pattern: `page.waitForResponse(...)` prüft ob die seiteneigene API-Call feuert — copy-unabhängig, robust gegen UI-Text-Änderungen. Beweist, dass eine Route zur richtigen Page auflöst und nicht von einem vorrangigen `$slug`/`$id`-Segment verschluckt wird.
+
+### Gotcha — parallele Sub-Agenten + `typecheck`
+
+Wenn mehrere Sub-Agenten **parallel** Frontend-Dateien editieren und jeder eigenständig `typecheck` läuft, melden sie transiente, widersprüchliche Fehler (Mid-Edit-Snapshots der anderen Agenten). → Nach jeder Agentwelle **einmal** selbst `pnpm -F <ws> typecheck` als Ground Truth fahren; Agenten-Selbstreports sind in diesem Szenario unzuverlässig.
+
+Zusätzlich: Die `typecheck`-tsconfig schließt `test/**` aus. Nach Schema-/Contract-Änderungen zwingend DB-abhängige Tests (`pnpm -F @rizzotto/backend test`) separat fahren — `typecheck`-Grün allein deckt diese Pfade nicht ab.
+
+---
+
 ## Visual-Snapshots — Bootstrap + CI-Validierung
 
 Die 9 Visual-Specs (`visual/landing-overhaul.spec.ts`, landing/login/leaderboard × 3 Viewports) sind seit 2026-06-02 **aktiv in CI** (Linux-Baselines committed, `UPDATE_SNAPSHOTS`-Guard entfernt).
