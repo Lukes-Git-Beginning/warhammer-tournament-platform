@@ -119,34 +119,43 @@ export function generateSingleElim(
 // Double-Elimination progression slot decision
 // ---------------------------------------------------------------------------
 
-/**
- * Determines which slot (player1_id or player2_id) a progressing player should
- * occupy in the target match, based on bracket context and role (winner/loser).
- *
- * Rules (in priority order):
- *  1. Non-DE formats → first free slot heuristic.
- *  2. Target is GRAND_FINAL → WB source → player1, LB source → player2.
- *  3. Loser dropping from WB → odd srcMatchNumber → player1, even → player2.
- *  4. Fallback: first free slot.
- */
-export function decideProgressionSlot(opts: {
-  format: string;
-  targetBracketSide: BracketSide | null;
-  targetP1IsNull: boolean;
-  srcBracketSide: BracketSide | null;
-  srcMatchNumber: number;
+/** A single way a source match feeds a target: its winner advances, or its loser drops. */
+export interface FeederEvent {
+  matchId: string;
+  round: number;
+  matchNumber: number;
   role: 'winner' | 'loser';
-}): 'player1_id' | 'player2_id' {
-  if (opts.format !== 'DOUBLE_ELIMINATION') {
-    return opts.targetP1IsNull ? 'player1_id' : 'player2_id';
-  }
-  if (opts.targetBracketSide === 'GRAND_FINAL') {
-    return opts.srcBracketSide === 'WINNERS' ? 'player1_id' : 'player2_id';
-  }
-  if (opts.role === 'loser' && opts.srcBracketSide === 'WINNERS') {
-    return opts.srcMatchNumber % 2 === 1 ? 'player1_id' : 'player2_id';
-  }
-  return opts.targetP1IsNull ? 'player1_id' : 'player2_id';
+}
+
+/**
+ * Order-independent slot decision for double-elimination progression.
+ *
+ * Every target match has at most two incoming feed events — a winner advancing
+ * (next_match_id) and/or a loser dropping (loser_next_match_id) from a source
+ * match. We sort those events deterministically by (round, matchNumber, role)
+ * and map slot index 0 → player1, 1 → player2. Because the ordering depends
+ * only on the static bracket structure (never on the order results are
+ * reported), a given source always lands in the same slot — so a winner-advance
+ * and a loser-drop into the same lower-bracket match can never overwrite each
+ * other regardless of play order.
+ *
+ * For the grand final (WB-final winner + LB-final winner) the WB final has the
+ * lower round → player1, the LB final → player2, matching the bracket-reset
+ * convention (WB champion in player1, LB champion in player2).
+ */
+export function slotForFeeder(
+  feeders: FeederEvent[],
+  srcMatchId: string,
+  srcRole: 'winner' | 'loser',
+): 'player1_id' | 'player2_id' {
+  const sorted = [...feeders].sort(
+    (a, b) =>
+      a.round - b.round ||
+      a.matchNumber - b.matchNumber ||
+      (a.role === b.role ? 0 : a.role === 'winner' ? -1 : 1),
+  );
+  const idx = sorted.findIndex((e) => e.matchId === srcMatchId && e.role === srcRole);
+  return idx === 1 ? 'player2_id' : 'player1_id';
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +167,28 @@ function nextPow2(n: number): number {
   let p = 1;
   while (p < n) p <<= 1;
   return p;
+}
+
+/**
+ * Standard single-elimination seed order for a `size`-slot bracket (power of
+ * two). Returns the seed numbers (1-based) in bracket-slot order so the top
+ * seed meets the bottom seed first and byes (seed numbers > participant count)
+ * are distributed to the strongest seeds. e.g. size 4 → [1,4,2,3];
+ * size 8 → [1,8,4,5,2,7,3,6]. Because N > size/2 always holds (size = nextPow2),
+ * every first-round pairing receives at least one real player — no empty match.
+ */
+function seedSlotOrder(size: number): number[] {
+  let order = [1, 2];
+  while (order.length < size) {
+    const n = order.length * 2;
+    const next: number[] = [];
+    for (const s of order) {
+      next.push(s);
+      next.push(n + 1 - s);
+    }
+    order = next;
+  }
+  return order;
 }
 
 /**
@@ -185,8 +216,10 @@ function nextPow2(n: number): number {
  *       LB(2*R_W-2) (consol): 1 match      — LB semi-final result
  *       (no final LB consol for last WB loser — goes directly to GF)
  *
- * BYE handling: non-power-of-2 inputs are padded with null; WB R1 matches with
- * exactly one real player are auto-completed as BYE, winner propagated.
+ * BYE handling: non-power-of-2 inputs are distributed across the first round via
+ * standard seed ordering so no first-round match is empty. A topological pass
+ * then resolves byes and phantom (player-less) lower-bracket matches up front,
+ * advancing deterministic bye winners and neutralising phantoms.
  *
  * Returns matches sorted by (round, match_number).
  */
@@ -198,9 +231,12 @@ export function generateDoubleElim(
   const R_W = Math.log2(S); // WB rounds
   const R_L = 2 * R_W - 1; // LB rounds
 
-  // Pad to power-of-two with null slots
-  const seeded: Array<string | null> = participantIds.slice();
-  while (seeded.length < S) seeded.push(null);
+  // Distribute byes across the first round via standard bracket seed order so
+  // every WB round-1 pairing gets at least one real player (no empty matches).
+  const slotOrder = seedSlotOrder(S);
+  const seeded: Array<string | null> = slotOrder.map((seed) =>
+    seed <= participantIds.length ? participantIds[seed - 1]! : null,
+  );
 
   // -------------------------------------------------------------------------
   // 1. Pre-generate all UUIDs so cross-references can be set in one pass.
@@ -371,42 +407,95 @@ export function generateDoubleElim(
   });
 
   // -------------------------------------------------------------------------
-  // 3. Propagate WB R1 BYE winners into WB R2 and LB R1.
+  // 3. Resolve byes and phantom matches up-front via a topological pass.
+  //
+  // With distributed seeding every WB round-1 pairing has >=1 real player, but
+  // non-power-of-2 fields still leave lower-bracket matches whose feeders
+  // produce no real loser. We walk matches in (round, match_number) order — so
+  // every feeder is processed before its target — and classify each as REAL
+  // (>=2 incoming players), BYE (exactly 1) or PHANTOM (0). Deterministic bye
+  // winners are advanced into their next match using the SAME feeder ordering
+  // the runtime uses (slotForFeeder), so generation- and runtime-placed players
+  // never collide. PHANTOM matches are marked terminal so they cannot stall
+  // progression. Grand final + reset are left to the result handler at runtime.
   // -------------------------------------------------------------------------
-  const byeMap = new Map<string, DEBracketMatchInput>();
+  const winnerFeedersOf = new Map<string, DEBracketMatchInput[]>();
+  const loserFeedersOf = new Map<string, DEBracketMatchInput[]>();
   for (const m of all) {
-    byeMap.set(m.id, m);
+    if (m.next_match_id) {
+      const list = winnerFeedersOf.get(m.next_match_id) ?? [];
+      list.push(m);
+      winnerFeedersOf.set(m.next_match_id, list);
+    }
+    if (m.loser_next_match_id) {
+      const list = loserFeedersOf.get(m.loser_next_match_id) ?? [];
+      list.push(m);
+      loserFeedersOf.set(m.loser_next_match_id, list);
+    }
   }
+  const byId = new Map(all.map((m) => [m.id, m]));
 
-  const wbR1Matches = all.filter((m) => m.round === 1);
-  for (const m of wbR1Matches) {
-    if (m.status === 'BYE' && m.winner_id !== null) {
-      // Advance winner to WB R2
-      if (m.next_match_id) {
-        const nextMatch = byeMap.get(m.next_match_id);
-        if (nextMatch) {
-          if (nextMatch.player1_id === null) {
-            nextMatch.player1_id = m.winner_id;
-          } else if (nextMatch.player2_id === null) {
-            nextMatch.player2_id = m.winner_id;
-          }
-          // Recalculate BYE status for next match
-          if (nextMatch.player1_id !== null && nextMatch.player2_id === null) {
-            nextMatch.status = 'BYE';
-            nextMatch.winner_id = nextMatch.player1_id;
-          } else if (nextMatch.player1_id === null && nextMatch.player2_id !== null) {
-            nextMatch.status = 'BYE';
-            nextMatch.winner_id = nextMatch.player2_id;
-          } else if (nextMatch.player1_id !== null && nextMatch.player2_id !== null) {
-            nextMatch.status = 'PENDING';
-            nextMatch.winner_id = null;
-          }
-        }
+  const feederEventsFor = (targetId: string): FeederEvent[] => {
+    const events: FeederEvent[] = [];
+    for (const f of winnerFeedersOf.get(targetId) ?? [])
+      events.push({ matchId: f.id, round: f.round, matchNumber: f.match_number, role: 'winner' });
+    for (const f of loserFeedersOf.get(targetId) ?? [])
+      events.push({ matchId: f.id, round: f.round, matchNumber: f.match_number, role: 'loser' });
+    return events;
+  };
+
+  const placeForward = (srcId: string, targetId: string, playerId: string) => {
+    const target = byId.get(targetId);
+    if (!target) return;
+    const slot = slotForFeeder(feederEventsFor(targetId), srcId, 'winner');
+    if (slot === 'player1_id') target.player1_id = playerId;
+    else target.player2_id = playerId;
+  };
+
+  type Classification = 'REAL' | 'BYE' | 'PHANTOM';
+  const classification = new Map<string, Classification>();
+
+  const topo = [...all].sort((a, b) => a.round - b.round || a.match_number - b.match_number);
+  for (const m of topo) {
+    if (m.bracket_side === 'GRAND_FINAL') {
+      classification.set(m.id, 'REAL');
+      continue;
+    }
+
+    // Concrete players already in this match's slots (seeded round-1 players or
+    // deterministic bye winners pushed in by earlier-processed feeders).
+    const concrete = [m.player1_id, m.player2_id].filter((x): x is string => x !== null);
+
+    // Feeders that will deliver an as-yet-undetermined player at runtime.
+    let undetermined = 0;
+    for (const f of winnerFeedersOf.get(m.id) ?? []) {
+      const c = classification.get(f.id);
+      if (c === 'PHANTOM') continue; // sends no winner
+      if (c === 'BYE' && f.winner_id !== null) continue; // already pushed (counted in concrete)
+      undetermined++; // REAL match, or pass-through bye (winner not yet known)
+    }
+    for (const f of loserFeedersOf.get(m.id) ?? []) {
+      if (classification.get(f.id) === 'REAL') undetermined++; // only real matches drop a loser
+    }
+
+    const total = concrete.length + undetermined;
+    if (total >= 2) {
+      classification.set(m.id, 'REAL');
+    } else if (total === 1) {
+      classification.set(m.id, 'BYE');
+      if (concrete.length === 1) {
+        // Deterministic bye — winner known now, mark it and advance forward.
+        m.status = 'BYE';
+        m.winner_id = concrete[0]!;
+        if (m.next_match_id) placeForward(m.id, m.next_match_id, concrete[0]!);
       }
-      // BYE winner does NOT drop to LB — only real losers drop.
-      // The loser_next_match_id slot in LB R1 stays null until a real WB R1 loser arrives.
-      // Since a BYE match has no real loser, the corresponding LB slot remains unfilled
-      // and the LB match with only one player will itself become a BYE when resolved.
+      // else: pass-through bye — its single player arrives at runtime, where the
+      // result handler promotes it once its real feeder reports.
+    } else {
+      // PHANTOM — no players will ever arrive; mark terminal so it never blocks.
+      classification.set(m.id, 'PHANTOM');
+      m.status = 'BYE';
+      m.winner_id = null;
     }
   }
 

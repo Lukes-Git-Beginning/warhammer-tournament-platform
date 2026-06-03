@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { emitMatchResult, emitBracketUpdate, emitStatusChange } from '../lib/emit.js';
 import { invalidate } from '../lib/cache.js';
 import { InvalidActionError } from '../lib/draft-service.js';
-import { decideProgressionSlot } from '../lib/bracket.js';
+import { slotForFeeder, type FeederEvent } from '../lib/bracket.js';
 import { Prisma, type BracketSide } from '@rizzotto/db';
 
 // ---------------------------------------------------------------------------
@@ -28,6 +28,7 @@ const ReportResultSchema = z.object({
 type TxClient = Prisma.TransactionClient;
 
 interface AdvanceSrc {
+  id: string;
   tournamentFormat: string;
   bracket_side: BracketSide | null;
   match_number: number;
@@ -43,17 +44,42 @@ async function advanceToSlot(
   if (playerId === null) return;
   const t = await tx.match.findUnique({
     where: { id: targetId },
-    select: { id: true, player1_id: true, player2_id: true, bracket_side: true },
+    select: { id: true, player1_id: true, player2_id: true, tournament_id: true },
   });
   if (!t) return;
-  const slot = decideProgressionSlot({
-    format: src.tournamentFormat,
-    targetBracketSide: t.bracket_side,
-    targetP1IsNull: t.player1_id === null,
-    srcBracketSide: src.bracket_side,
-    srcMatchNumber: src.match_number,
-    role,
-  });
+
+  let slot: 'player1_id' | 'player2_id';
+  if (src.tournamentFormat !== 'DOUBLE_ELIMINATION') {
+    // SE / Swiss / RR keep the simple first-free heuristic (clean binary tree).
+    slot = t.player1_id === null ? 'player1_id' : 'player2_id';
+  } else {
+    // DE: derive the slot from the target's static feeder structure so the
+    // assignment is independent of the order results are reported. This stops
+    // a loser-drop and a winner-advance into the same lower-bracket match from
+    // overwriting each other.
+    const feederRows = await tx.match.findMany({
+      where: {
+        tournament_id: t.tournament_id,
+        OR: [{ next_match_id: targetId }, { loser_next_match_id: targetId }],
+      },
+      select: {
+        id: true,
+        round: true,
+        match_number: true,
+        next_match_id: true,
+        loser_next_match_id: true,
+      },
+    });
+    const events: FeederEvent[] = [];
+    for (const f of feederRows) {
+      if (f.next_match_id === targetId)
+        events.push({ matchId: f.id, round: f.round, matchNumber: f.match_number, role: 'winner' });
+      if (f.loser_next_match_id === targetId)
+        events.push({ matchId: f.id, round: f.round, matchNumber: f.match_number, role: 'loser' });
+    }
+    slot = slotForFeeder(events, src.id, role);
+  }
+
   await tx.match.update({ where: { id: targetId }, data: { [slot]: playerId } });
 }
 
@@ -99,7 +125,7 @@ async function checkAndPromoteBye(
       tx,
       m.next_match_id,
       present,
-      { tournamentFormat: 'DOUBLE_ELIMINATION', bracket_side: m.bracket_side, match_number: m.match_number },
+      { id: m.id, tournamentFormat: 'DOUBLE_ELIMINATION', bracket_side: m.bracket_side, match_number: m.match_number },
       'winner',
     );
     await checkAndPromoteBye(tx, m.next_match_id);
@@ -265,6 +291,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         const isDE = match.tournament.format === 'DOUBLE_ELIMINATION';
         const isGFSource = isDE && match.bracket_side === 'GRAND_FINAL';
         const src: AdvanceSrc = {
+          id: match.id,
           tournamentFormat: match.tournament.format,
           bracket_side: match.bracket_side,
           match_number: match.match_number,
