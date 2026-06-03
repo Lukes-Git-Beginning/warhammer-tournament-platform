@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { motion, useReducedMotion } from 'motion/react';
-import { ArrowRight, Users, Clock } from 'lucide-react';
+import { ArrowRight, Crown, Users, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,6 +51,12 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
         {state === 'completed' && (
           <Badge variant="default" className="self-start">
             {t('musters.status_completed')}
+          </Badge>
+        )}
+        {tournament.is_major && (
+          <Badge variant="major" className="self-start">
+            <Crown className="size-3" strokeWidth={1.5} />
+            Major
           </Badge>
         )}
         <CardTitle className="line-clamp-2">{tournament.name}</CardTitle>

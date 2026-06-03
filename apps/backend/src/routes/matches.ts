@@ -247,13 +247,14 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       // model (lib/rating-model.ts, lib/leaderboard-service.ts). FactionStats +
       // MatchupStats above stay (they power faction analytics, not scoring).
 
-      // Invalidate faction, meta, leaderboard + rating-model caches after commit
+      // Invalidate faction, meta, leaderboard, rating-model + h2h caches after commit
       if (fastify.redis) {
         await Promise.all([
           invalidate(fastify.redis, 'factions:*'),
           invalidate(fastify.redis, 'meta:*'),
           invalidate(fastify.redis, 'leaderboard:*'),
           invalidate(fastify.redis, 'rating-model:*'),
+          invalidate(fastify.redis, 'h2h:*'),
         ]);
       }
 

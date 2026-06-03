@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, Clock, Users } from 'lucide-react';
+import { ArrowRight, Clock, Crown, Users } from 'lucide-react';
 import { listTournaments, type Tournament } from '@/lib/api.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { Badge } from '@/components/ui/badge.js';
@@ -49,6 +49,12 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
         {isCompleted && (
           <Badge variant="default" className="self-start">
             {t('musters.status_completed')}
+          </Badge>
+        )}
+        {tournament.is_major && (
+          <Badge variant="major" className="self-start">
+            <Crown className="size-3" strokeWidth={1.5} />
+            Major
           </Badge>
         )}
         <CardTitle className="line-clamp-2">{tournament.name}</CardTitle>
@@ -113,6 +119,7 @@ export function TournamentsListing() {
 
   const activeTab: TournamentTab = search.tab ?? 'upcoming';
   const page = search.page ?? 1;
+  const majorOnly = search.major === true;
 
   // Map tab → backend status values. The API accepts a single status param;
   // for "upcoming" we default to OPEN_REGISTRATION which covers most real cases.
@@ -121,8 +128,14 @@ export function TournamentsListing() {
   const statusParam = activeTab === 'live' ? 'ONGOING' : activeTab === 'archive' ? 'COMPLETED' : undefined;
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['tournaments-listing', activeTab, page],
-    queryFn: () => listTournaments(page, PAGE_SIZE, statusParam as Tournament['status'] | undefined),
+    queryKey: ['tournaments-listing', activeTab, page, majorOnly],
+    queryFn: () =>
+      listTournaments(
+        page,
+        PAGE_SIZE,
+        statusParam as Tournament['status'] | undefined,
+        majorOnly || undefined,
+      ),
     retry: false,
   });
 
@@ -131,11 +144,17 @@ export function TournamentsListing() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function setTab(tab: TournamentTab) {
-    void navigate({ search: { tab, page: 1 } });
+    void navigate({ search: { tab, page: 1, major: majorOnly || undefined } });
   }
 
   function setPage(p: number) {
-    void navigate({ search: { tab: activeTab, page: p } });
+    void navigate({ search: { tab: activeTab, page: p, major: majorOnly || undefined } });
+  }
+
+  function toggleMajor() {
+    void navigate({
+      search: { tab: activeTab, page: 1, major: majorOnly ? undefined : true },
+    });
   }
 
   const TABS: TournamentTab[] = ['upcoming', 'live', 'archive'];
@@ -165,6 +184,23 @@ export function TournamentsListing() {
             {TAB_LABELS[tab].en}
           </button>
         ))}
+      </div>
+
+      {/* Major filter */}
+      <div className="mb-6 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={toggleMajor}
+          className={`inline-flex items-center gap-2 rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
+            majorOnly
+              ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+              : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+          }`}
+          aria-pressed={majorOnly}
+        >
+          <Crown className="size-3.5" strokeWidth={1.5} />
+          Nur Majors
+        </button>
       </div>
 
       {/* Content */}

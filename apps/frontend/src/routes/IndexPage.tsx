@@ -1,6 +1,7 @@
 import { HeroSection } from '@/components/landing/HeroSection';
 import { ForgeSection } from '@/components/landing/ForgeSection';
 import { ActiveMustersSection } from '@/components/landing/ActiveMustersSection';
+import { PersonalisedFactionBlock } from '@/components/landing/PersonalisedFactionBlock';
 import { RollOfHonourSection } from '@/components/landing/RollOfHonourSection';
 import { ConclaveSection } from '@/components/landing/ConclaveSection';
 import { SigillumSection } from '@/components/landing/SigillumSection';
@@ -13,6 +14,7 @@ export function IndexPage() {
         <HeroSection />
         <ForgeSection />
         <ActiveMustersSection />
+        <PersonalisedFactionBlock />
         <RollOfHonourSection />
         <ConclaveSection />
         <SigillumSection />

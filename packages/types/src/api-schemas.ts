@@ -1,6 +1,7 @@
 // Shared Zod schemas for API request/response bodies.
 
 import { z } from 'zod';
+import { MatchResultTypeSchema } from './match.js';
 
 export const HealthResponseSchema = z.object({
   status: z.literal('ok'),
@@ -348,3 +349,120 @@ export const MatchupHeatmapResponseSchema = z.object({
   factions: z.array(FactionDtoSchema),
 });
 export type MatchupHeatmapResponse = z.infer<typeof MatchupHeatmapResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Tournament Enums (shared between Calendar + other Hub-Foundation routes)
+// ---------------------------------------------------------------------------
+
+export const TournamentStatusSchema = z.enum([
+  'DRAFT',
+  'OPEN_REGISTRATION',
+  'REGISTRATION_CLOSED',
+  'ONGOING',
+  'COMPLETED',
+]);
+export type TournamentStatus = z.infer<typeof TournamentStatusSchema>;
+
+export const TournamentFormatSchema = z.enum([
+  'SWISS',
+  'SINGLE_ELIMINATION',
+  'DOUBLE_ELIMINATION',
+  'ROUND_ROBIN',
+  'DOUBLE_ROUND_ROBIN',
+]);
+export type TournamentFormat = z.infer<typeof TournamentFormatSchema>;
+
+// ---------------------------------------------------------------------------
+// Hub-Foundation — Milestone 6
+// ---------------------------------------------------------------------------
+
+// Inline player-ref reused from UserPublicSchema (id, username, avatar_url)
+const _H2HPlayerRefSchema = UserPublicSchema.pick({ id: true, username: true, avatar_url: true });
+
+// H2H Response
+export const H2HResponseSchema = z.object({
+  player_a: _H2HPlayerRefSchema,
+  player_b: _H2HPlayerRefSchema,
+  summary: z.object({
+    a_wins: z.number().int().min(0),
+    b_wins: z.number().int().min(0),
+    draws: z.number().int().min(0),
+    total: z.number().int().min(0),
+  }),
+  winrate_a: z.number().min(0).max(1),
+  faction_breakdown: z.array(
+    z.object({
+      faction_id: z.string(),
+      faction_name: z.string(),
+      a_wins: z.number().int().min(0),
+      b_wins: z.number().int().min(0),
+      draws: z.number().int().min(0),
+    }),
+  ),
+  recent_matches: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        played_at: z.string().datetime().nullable(),
+        result: MatchResultTypeSchema.nullable(),
+        tournament_slug: z.string().nullable(),
+        player_a_faction: z
+          .object({ id: z.string(), name: z.string() })
+          .nullable(),
+        player_b_faction: z
+          .object({ id: z.string(), name: z.string() })
+          .nullable(),
+      }),
+    )
+    .max(5),
+});
+export type H2HResponse = z.infer<typeof H2HResponseSchema>;
+
+// Calendar Query — query-string params
+export const CalendarQuerySchema = z.object({
+  status: TournamentStatusSchema.optional(),
+  // NB: z.coerce.boolean() is wrong for query strings — Boolean("false") === true.
+  // Accept the literal strings and map explicitly.
+  is_major: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
+  date_from: z.string().datetime().optional(),
+  date_to: z.string().datetime().optional(),
+});
+export type CalendarQuery = z.infer<typeof CalendarQuerySchema>;
+
+// Calendar Tournament entry
+export const CalendarTournamentSchema = z.object({
+  id: z.string().uuid(),
+  slug: z.string(),
+  name: z.string(),
+  start_date: z.string().datetime(),
+  end_date: z.string().datetime(),
+  format: TournamentFormatSchema,
+  is_major: z.boolean(),
+  status: TournamentStatusSchema,
+  timezone: z.string(),
+});
+export type CalendarTournament = z.infer<typeof CalendarTournamentSchema>;
+
+// Import Log Entry
+export const ImportLogEntrySchema = z.object({
+  id: z.string().uuid(),
+  source: z.string(),
+  status: z.string(),
+  records_imported: z.number().int().min(0),
+  error_message: z.string().nullable(),
+  started_at: z.string().datetime(),
+  finished_at: z.string().datetime().nullable(),
+});
+export type ImportLogEntry = z.infer<typeof ImportLogEntrySchema>;
+
+// Import Log List Response — mirrors LeaderboardResponseSchema pagination shape
+export const ImportLogListResponseSchema = z.object({
+  entries: z.array(ImportLogEntrySchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+});
+export type ImportLogListResponse = z.infer<typeof ImportLogListResponseSchema>;

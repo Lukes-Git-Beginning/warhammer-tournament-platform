@@ -19,6 +19,8 @@ import { AdminPage } from './routes/AdminPage';
 import { SteamConnectPage } from './routes/SteamConnectPage';
 import { MatchDecisionPage } from './routes/MatchDecisionPage';
 import { MatchDetailPage } from './routes/MatchDetailPage';
+import { H2HPage } from './routes/H2HPage';
+import { CalendarPage } from './routes/CalendarPage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -36,16 +38,26 @@ export const tournamentsListingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tournaments',
   component: TournamentsListing,
-  validateSearch: (search: Record<string, unknown>) => ({
-    tab: (search.tab as 'upcoming' | 'live' | 'archive' | undefined) ?? 'upcoming',
-    page: typeof search.page === 'number' ? search.page : 1,
-  }),
+  validateSearch: (search: Record<string, unknown>) => {
+    const isMajor = search.major === true || search.major === 'true';
+    return {
+      tab: (search.tab as 'upcoming' | 'live' | 'archive' | undefined) ?? 'upcoming',
+      page: typeof search.page === 'number' ? search.page : 1,
+      ...(isMajor ? { major: true as const } : {}),
+    };
+  },
 });
 
 const createTournamentRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tournaments/create',
   component: CreateTournamentPage,
+});
+
+const calendarRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/tournaments/calendar',
+  component: CalendarPage,
 });
 
 const tournamentDetailRoute = createRoute({
@@ -70,6 +82,12 @@ const userProfileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/users/$id',
   component: UserProfilePage,
+});
+
+const h2hRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/users/$a/vs/$b',
+  component: H2HPage,
 });
 
 const metaRoute = createRoute({
@@ -152,10 +170,12 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   tournamentsListingRoute,
   createTournamentRoute,
+  calendarRoute,
   tournamentDetailRoute,
   tournamentEditRoute,
   leaderboardRoute,
   userProfileRoute,
+  h2hRoute,
   metaRoute,
   factionListRoute,
   factionDetailRoute,

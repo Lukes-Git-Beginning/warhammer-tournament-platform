@@ -77,6 +77,9 @@ importers:
       fastify-plugin:
         specifier: ^5.0.1
         version: 5.1.0
+      ical-generator:
+        specifier: ^11.0.0
+        version: 11.0.0(@types/node@22.19.19)
       ioredis:
         specifier: ^5.4.2
         version: 5.10.1
@@ -2913,6 +2916,39 @@ packages:
       typescript: ^5 || ^6
     peerDependenciesMeta:
       typescript:
+        optional: true
+
+  ical-generator@11.0.0:
+    resolution: {integrity: sha512-OScZbXduIbjqtJzq0WLyPpAuKnc106+l28wszD+Wi2O9jXn76NVBfr4Ksv2XFyQn4JNZ9vWr5xAac0uT/FhVag==}
+    engines: {node: 22 || >=24.0.0}
+    peerDependencies:
+      '@touch4it/ical-timezones': '>=1.6.0'
+      '@types/luxon': '>= 1.26.0'
+      '@types/mocha': '>= 8.2.1'
+      '@types/node': '*'
+      dayjs: '>= 1.10.0'
+      luxon: '>= 1.26.0'
+      moment: '>= 2.29.0'
+      moment-timezone: '>= 0.5.33'
+      rrule: '>= 2.6.8'
+    peerDependenciesMeta:
+      '@touch4it/ical-timezones':
+        optional: true
+      '@types/luxon':
+        optional: true
+      '@types/mocha':
+        optional: true
+      '@types/node':
+        optional: true
+      dayjs:
+        optional: true
+      luxon:
+        optional: true
+      moment:
+        optional: true
+      moment-timezone:
+        optional: true
+      rrule:
         optional: true
 
   iconv-lite@0.6.3:
@@ -6813,6 +6849,10 @@ snapshots:
   i18next@26.1.0(typescript@5.9.3):
     optionalDependencies:
       typescript: 5.9.3
+
+  ical-generator@11.0.0(@types/node@22.19.19):
+    optionalDependencies:
+      '@types/node': 22.19.19
 
   iconv-lite@0.6.3:
     dependencies:
