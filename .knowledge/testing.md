@@ -214,6 +214,12 @@ Pfad: `apps/e2e/tests/m6-routes.spec.ts` — **Routen-Resolution-Guard** für `/
 
 Pattern: `page.waitForResponse(...)` prüft ob die seiteneigene API-Call feuert — copy-unabhängig, robust gegen UI-Text-Änderungen. Beweist, dass eine Route zur richtigen Page auflöst und nicht von einem vorrangigen `$slug`/`$id`-Segment verschluckt wird.
 
+### Neuer E2E-Spec: `double-elimination.spec.ts`
+
+Pfad: `apps/e2e/tests/double-elimination.spec.ts` — 8-Player-DE-Lifecycle über den echten Server-Stack + Browser-Render-Check.
+
+Wiederverwendbares Pattern **„drive-to-completion"**: ein generischer Loop (Iterations-Cap gegen Endlosschleifen) lädt das Bracket neu, meldet für jedes Match mit beiden gesetzten Slots ein Ergebnis (player1 gewinnt), bis kein spielbares Match mehr übrig ist — funktioniert für beliebige Bracket-Formate/Feldgrößen. `createTournament`-Fixture akzeptiert jetzt `DOUBLE_ELIMINATION`. Backend-seitig deckt `double-elimination.test.ts` dasselbe via DB-Integration für 4/5/6/7 Spieler + Order-Independence ab.
+
 ### Gotcha — parallele Sub-Agenten + `typecheck`
 
 Wenn mehrere Sub-Agenten **parallel** Frontend-Dateien editieren und jeder eigenständig `typecheck` läuft, melden sie transiente, widersprüchliche Fehler (Mid-Edit-Snapshots der anderen Agenten). → Nach jeder Agentwelle **einmal** selbst `pnpm -F <ws> typecheck` als Ground Truth fahren; Agenten-Selbstreports sind in diesem Szenario unzuverlässig.
