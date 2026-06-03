@@ -23,7 +23,7 @@ export function SVGBracket({ data, playerNameMap, onMatchClick }: SVGBracketProp
       xmlns="http://www.w3.org/2000/svg"
       className="select-none"
     >
-      {/* Connector lines first (behind match nodes) */}
+      {/* Winner-progression connector lines (behind match nodes) */}
       {data.matches.map((m) => {
         if (!m.nextMatchId) return null;
         const from = layout.positions.get(m.matchId);
@@ -42,6 +42,32 @@ export function SVGBracket({ data, playerNameMap, onMatchClick }: SVGBracketProp
             d={`M ${startX} ${startY} H ${midX} V ${endY} H ${endX}`}
             stroke="#3a3a3a"
             strokeWidth="2"
+            fill="none"
+          />
+        );
+      })}
+
+      {/* Loser-drop connector lines (dashed, dark-red) */}
+      {data.matches.map((m) => {
+        if (!m.loserNextMatchId) return null;
+        const from = layout.positions.get(m.matchId);
+        const to = layout.positions.get(m.loserNextMatchId);
+        if (!from || !to) return null;
+
+        const startX = from.x + MATCH_WIDTH / 2 + PAD;
+        const startY = from.y + MATCH_HEIGHT + PAD;
+        const endX = to.x + PAD;
+        const endY = to.y + MATCH_HEIGHT / 2 + PAD;
+        // Drop down then route horizontally to target
+        const midY = startY + (endY - startY) / 2;
+
+        return (
+          <path
+            key={`lose-${m.matchId}`}
+            d={`M ${startX} ${startY} V ${midY} H ${endX} V ${endY}`}
+            stroke="#7f1d1d"
+            strokeWidth="2"
+            strokeDasharray="5 3"
             fill="none"
           />
         );
