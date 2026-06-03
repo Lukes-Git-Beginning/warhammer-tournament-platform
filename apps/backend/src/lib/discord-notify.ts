@@ -136,11 +136,11 @@ export async function notifyTournamentAnnounce(tournament: TournamentForNotify):
 
     const embed = {
       title: `⚔️ Tournament Announced: ${tournament.name}`,
-      description: `A new tournament has been published on Rizzotto!\n\n**Start:** <t:${Math.floor(tournament.start_date.getTime() / 1000)}:F>`,
+      description: `A new tournament has been published on RizzOtto's Arena!\n\n**Start:** <t:${Math.floor(tournament.start_date.getTime() / 1000)}:F>`,
       url: `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`,
       color: 0xc8a96e, // Iron/Gold token
       timestamp: new Date().toISOString(),
-      footer: { text: 'Rizzotto — Where Lists Are Forged' },
+      footer: { text: "RizzOtto's Arena — Where Lists Are Forged" },
     };
 
     const body: Record<string, unknown> = { embeds: [embed] };
@@ -180,7 +180,7 @@ export async function notifyCheckInReminder(tournament: TournamentForNotify): Pr
 
     const startTs = Math.floor(tournament.start_date.getTime() / 1000);
     const message =
-      `**[Rizzotto] Check-in Reminder: ${tournament.name}**\n\n` +
+      `**[RizzOtto's Arena] Check-in Reminder: ${tournament.name}**\n\n` +
       `The tournament starts <t:${startTs}:R>. ` +
       `Please check in at ${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug} before the start time!`;
 
@@ -233,12 +233,12 @@ export async function notifyRoundPairings(
     // DM each player with their specific opponent
     const dmPromises = pairings.flatMap((p) => {
       const p1Msg =
-        `**[Rizzotto] Round ${round} Pairing — ${tournament.name}**\n` +
+        `**[RizzOtto's Arena] Round ${round} Pairing — ${tournament.name}**\n` +
         `You are playing against **${p.player2.username}**` +
         (p.map ? ` on *${p.map}*` : '') +
         `.`;
       const p2Msg =
-        `**[Rizzotto] Round ${round} Pairing — ${tournament.name}**\n` +
+        `**[RizzOtto's Arena] Round ${round} Pairing — ${tournament.name}**\n` +
         `You are playing against **${p.player1.username}**` +
         (p.map ? ` on *${p.map}*` : '') +
         `.`;
@@ -282,7 +282,7 @@ export async function notifyDispute(
     ]);
 
     const message =
-      `**[Rizzotto] ⚠️ Match Dispute — ${match.tournament.name}**\n\n` +
+      `**[RizzOtto's Arena] ⚠️ Match Dispute — ${match.tournament.name}**\n\n` +
       `Match ID: \`${match.id}\`\n` +
       `Reported by: **${reporter.username}**\n\n` +
       `Please review and resolve the dispute at ${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${match.tournament.slug}`;

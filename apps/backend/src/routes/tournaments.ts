@@ -160,7 +160,11 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           }),
           fastify.prisma.tournament.count({ where }),
         ]);
-        return { data: tournaments, total, page, pageSize };
+        const data = tournaments.map(({ _count, ...rest }) => ({
+          ...rest,
+          participantCount: _count.participants,
+        }));
+        return { data, total, page, pageSize };
       },
       { ttlSeconds: 30 },
     );
@@ -432,8 +436,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     const cal = ical({
-      name: 'Rizzotto Tournaments',
-      prodId: { company: 'Rizzotto', product: 'tournaments' },
+      name: "RizzOtto's Arena Tournaments",
+      prodId: { company: "RizzOtto's Arena", product: 'tournaments' },
     });
 
     for (const t of tournaments) {
@@ -522,7 +526,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    return tournament;
+    const { _count, ...rest } = tournament;
+    return { ...rest, participantCount: _count.participants };
   });
 
   // PATCH /api/tournaments/:slug

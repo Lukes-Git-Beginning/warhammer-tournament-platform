@@ -24,8 +24,13 @@ export function Header() {
 
   const navLinks = (
     <>
-      <Link to="/" className={NAV_LINK_CLASS} activeProps={NAV_LINK_ACTIVE_PROPS}>
-        {t('header.home')}
+      <Link
+        to="/tournaments"
+        search={{ tab: 'upcoming', page: 1 }}
+        className={NAV_LINK_CLASS}
+        activeProps={NAV_LINK_ACTIVE_PROPS}
+      >
+        {t('header.tournaments')}
       </Link>
       <Link
         to="/leaderboard"
@@ -72,7 +77,7 @@ export function Header() {
         {/* Logo lockup */}
         <Link
           to="/"
-          aria-label="Rizzotto — home"
+          aria-label="RizzOtto's Arena — home"
           className="inline-flex items-center transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rizzotto-gold-500 focus-visible:ring-offset-2 focus-visible:ring-offset-rizzotto-iron-950 rounded-sm"
         >
           <RizzottoWordmarkImage className="h-12 w-auto sm:h-14" />

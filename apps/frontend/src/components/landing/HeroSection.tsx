@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { motion, useReducedMotion } from 'motion/react';
 import { RizzottoWordmarkImage } from '@/components/icons/RizzottoWordmarkImage';
+import { useAuthQuery } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Picture } from '@/components/ui/picture';
 import { ScrollCue } from './ScrollCue';
@@ -16,6 +17,7 @@ import { ScrollCue } from './ScrollCue';
 export function HeroSection() {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
+  const { data: user } = useAuthQuery();
 
   return (
     <section
@@ -98,7 +100,7 @@ export function HeroSection() {
             }}
           >
             <Button asChild variant="forge" size="lg">
-              <Link to="/login">{t('hero.cta_primary')}</Link>
+              <Link to={user ? '/tournaments' : '/login'}>{t('hero.cta_primary')}</Link>
             </Button>
           </motion.div>
           <motion.div

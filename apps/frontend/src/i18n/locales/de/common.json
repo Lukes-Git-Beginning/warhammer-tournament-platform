@@ -20,7 +20,7 @@
     "switch_aria": "Sprache wechseln"
   },
   "brand": {
-    "name": "Rizzotto",
+    "name": "RizzOtto's Arena",
     "tagline": "Wo Listen geschmiedet werden",
     "motto": "Where Lists Are Forged."
   },
@@ -138,7 +138,7 @@
   "tournament": {
     "create": {
       "title": "Turnier erstellen",
-      "subtitle": "Erstelle ein neues Turnier für die Rizzotto-Gemeinde.",
+      "subtitle": "Erstelle ein neues Turnier für die Community von RizzOtto's Arena.",
       "role_warning": "Du benötigst die Organisator-Rolle, um Turniere zu erstellen. Wende dich an einen Administrator, um deine Rolle zu erhöhen.",
       "aside": {
         "heading": "Was ist ein Turnier?",
@@ -386,7 +386,7 @@
     "season_label": "Season: {{name}}",
     "error": "Fehler beim Laden der Meta-Daten.",
     "no_season_title": "Noch keine offene Season.",
-    "no_season_body": "Sobald die Rizzotto-Gemeinde eine Season eröffnet, erscheinen hier Fraktions- und Matchup-Statistiken.",
+    "no_season_body": "Sobald die Community von RizzOtto's Arena eine Season eröffnet, erscheinen hier Fraktions- und Matchup-Statistiken.",
     "no_season_motto": "\"Tempus Expectandi\"",
     "no_season_motto_title": "A time of waiting",
     "stat_total_matches": "Gesamt-Matches",
