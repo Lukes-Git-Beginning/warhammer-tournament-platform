@@ -13,6 +13,8 @@ const badgeVariants = cva(
         blood: 'bg-rizzotto-blood-500/15 border-rizzotto-blood-500/40 text-rizzotto-blood-500',
         bronze: 'bg-rizzotto-bronze/15 border-rizzotto-bronze/40 text-rizzotto-bronze',
         success: 'bg-rizzotto-success/15 border-rizzotto-success/40 text-rizzotto-success',
+        major:
+          'bg-rizzotto-gold-500/25 border-rizzotto-gold-400/70 text-rizzotto-gold-300 shadow-[0_0_0_1px_theme(colors.rizzotto-gold-500/20)]',
       },
     },
     defaultVariants: { variant: 'default' },

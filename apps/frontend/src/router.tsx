@@ -38,10 +38,14 @@ export const tournamentsListingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tournaments',
   component: TournamentsListing,
-  validateSearch: (search: Record<string, unknown>) => ({
-    tab: (search.tab as 'upcoming' | 'live' | 'archive' | undefined) ?? 'upcoming',
-    page: typeof search.page === 'number' ? search.page : 1,
-  }),
+  validateSearch: (search: Record<string, unknown>) => {
+    const isMajor = search.major === true || search.major === 'true';
+    return {
+      tab: (search.tab as 'upcoming' | 'live' | 'archive' | undefined) ?? 'upcoming',
+      page: typeof search.page === 'number' ? search.page : 1,
+      ...(isMajor ? { major: true as const } : {}),
+    };
+  },
 });
 
 const createTournamentRoute = createRoute({

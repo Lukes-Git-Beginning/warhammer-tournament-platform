@@ -74,6 +74,7 @@ export interface Tournament {
   };
   participantCount?: number;
   created_at: string;
+  is_major?: boolean;
   // Welle 2 fields
   rounds_count?: number | null;
   playoff_format?: 'NONE' | 'TOP4' | 'TOP8' | null;
@@ -258,9 +259,11 @@ export function listTournaments(
   page = 1,
   pageSize = 20,
   status?: Tournament['status'],
+  isMajor?: boolean,
 ): Promise<{ data: Tournament[]; total: number; page: number; pageSize: number }> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (status) params.set('status', status);
+  if (isMajor === true) params.set('is_major', 'true');
   return apiFetch<{ data: Tournament[]; total: number; page: number; pageSize: number }>(
     `/api/tournaments?${params.toString()}`,
   );
