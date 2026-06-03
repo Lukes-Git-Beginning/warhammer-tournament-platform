@@ -1,10 +1,16 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import ical from 'ical-generator';
 import { generateSlug, validateStatusTransition, TournamentStatus } from '../lib/tournament-utils.js';
 import { emitStatusChange } from '../lib/emit.js';
 import { finalizeTournament } from '../lib/finalize-tournament.js';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
 import type { TournamentStatusLiteral } from '@rizzotto/types';
+import {
+  CalendarQuerySchema,
+  CalendarTournamentSchema,
+  TournamentStatusSchema,
+} from '@rizzotto/types';
 import { notifyTournamentAnnounce } from '../lib/discord-notify.js';
 
 // ---------------------------------------------------------------------------
@@ -14,6 +20,14 @@ import { notifyTournamentAnnounce } from '../lib/discord-notify.js';
 const ListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  status: TournamentStatusSchema.optional(),
+  // NB: z.coerce.boolean() is wrong for query strings — Boolean("false") === true.
+  is_major: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
+  date_from: z.string().datetime().optional(),
+  date_to: z.string().datetime().optional(),
 });
 
 const CreateTournamentSchema = z.object({
@@ -63,6 +77,7 @@ const PatchTournamentSchema = z.object({
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN']).optional(),
   map_pool: z.array(z.string().min(1)).min(3).max(36).optional(),
+  is_major: z.boolean().optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
 
 // ---------------------------------------------------------------------------
@@ -97,16 +112,30 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         statusCode: 400,
       });
     }
-    const { page, pageSize } = parsed.data;
+    const { page, pageSize, status, is_major, date_from, date_to } = parsed.data;
     const skip = (page - 1) * pageSize;
 
     const result = await cached(
       fastify.redis,
-      cacheKey('tournaments:list', { page, pageSize }),
+      cacheKey('tournaments:list', { page, pageSize, status, is_major, date_from, date_to }),
       async () => {
+        const where = {
+          deleted_at: null,
+          visibility: 'PUBLIC' as const,
+          ...(status !== undefined ? { status } : {}),
+          ...(is_major !== undefined ? { is_major } : {}),
+          ...(date_from !== undefined || date_to !== undefined
+            ? {
+                start_date: {
+                  ...(date_from !== undefined ? { gte: new Date(date_from) } : {}),
+                  ...(date_to !== undefined ? { lte: new Date(date_to) } : {}),
+                },
+              }
+            : {}),
+        };
         const [tournaments, total] = await Promise.all([
           fastify.prisma.tournament.findMany({
-            where: { deleted_at: null, visibility: 'PUBLIC' },
+            where,
             select: {
               id: true,
               slug: true,
@@ -129,7 +158,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
             skip,
             take: pageSize,
           }),
-          fastify.prisma.tournament.count({ where: { deleted_at: null, visibility: 'PUBLIC' } }),
+          fastify.prisma.tournament.count({ where }),
         ]);
         return { data: tournaments, total, page, pageSize };
       },
@@ -284,6 +313,146 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(201).send(tournament);
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // GET /api/tournaments/calendar
+  // JSON calendar feed — array of CalendarTournament.
+  // NOTE: registered BEFORE /:slug so static path wins.
+  // ---------------------------------------------------------------------------
+  fastify.get('/api/tournaments/calendar', async (request, reply) => {
+    const parsed = CalendarQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: 'BadRequest',
+        message: parsed.error.message,
+        statusCode: 400,
+      });
+    }
+    const { status, is_major, date_from, date_to } = parsed.data;
+
+    const result = await cached(
+      fastify.redis,
+      cacheKey('tournaments:calendar', { status, is_major, date_from, date_to }),
+      async () => {
+        const where = {
+          deleted_at: null,
+          ...(status !== undefined ? { status } : {}),
+          ...(is_major !== undefined ? { is_major } : {}),
+          ...(date_from !== undefined || date_to !== undefined
+            ? {
+                start_date: {
+                  ...(date_from !== undefined ? { gte: new Date(date_from) } : {}),
+                  ...(date_to !== undefined ? { lte: new Date(date_to) } : {}),
+                },
+              }
+            : {}),
+        };
+
+        const tournaments = await fastify.prisma.tournament.findMany({
+          where,
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            start_date: true,
+            format: true,
+            is_major: true,
+            status: true,
+            timezone: true,
+            rounds_count: true,
+          },
+          orderBy: { start_date: 'asc' },
+        });
+
+        return tournaments.map((t) => {
+          const roundsCount = t.rounds_count ?? 5;
+          const endDate = new Date(t.start_date.getTime() + roundsCount * 2 * 60 * 60 * 1000);
+          const entry = {
+            id: t.id,
+            slug: t.slug,
+            name: t.name,
+            start_date: t.start_date.toISOString(),
+            end_date: endDate.toISOString(),
+            format: t.format,
+            is_major: t.is_major,
+            status: t.status,
+            timezone: t.timezone,
+          };
+          // Validate shape matches CalendarTournamentSchema
+          return CalendarTournamentSchema.parse(entry);
+        });
+      },
+      { ttlSeconds: 60 },
+    );
+
+    return result;
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/tournaments/calendar.ics
+  // iCal feed — same filters as /calendar.
+  // NOTE: registered BEFORE /:slug so static path wins.
+  // ---------------------------------------------------------------------------
+  fastify.get('/api/tournaments/calendar.ics', async (request, reply) => {
+    const parsed = CalendarQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: 'BadRequest',
+        message: parsed.error.message,
+        statusCode: 400,
+      });
+    }
+    const { status, is_major, date_from, date_to } = parsed.data;
+
+    const where = {
+      deleted_at: null,
+      ...(status !== undefined ? { status } : {}),
+      ...(is_major !== undefined ? { is_major } : {}),
+      ...(date_from !== undefined || date_to !== undefined
+        ? {
+            start_date: {
+              ...(date_from !== undefined ? { gte: new Date(date_from) } : {}),
+              ...(date_to !== undefined ? { lte: new Date(date_to) } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const tournaments = await fastify.prisma.tournament.findMany({
+      where,
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        start_date: true,
+        is_major: true,
+        rounds_count: true,
+      },
+      orderBy: { start_date: 'asc' },
+    });
+
+    const cal = ical({
+      name: 'Rizzotto Tournaments',
+      prodId: { company: 'Rizzotto', product: 'tournaments' },
+    });
+
+    for (const t of tournaments) {
+      const roundsCount = t.rounds_count ?? 5;
+      const endDate = new Date(t.start_date.getTime() + roundsCount * 2 * 60 * 60 * 1000);
+      cal.createEvent({
+        id: t.id,
+        start: t.start_date,
+        end: endDate,
+        summary: t.name,
+        description: `Geschätztes Ende (start + rounds*2h). Major: ${t.is_major ? 'ja' : 'nein'}`,
+        url: `https://rizzotto.gg/tournaments/${t.slug}`,
+      });
+    }
+
+    reply.header('Content-Type', 'text/calendar; charset=utf-8');
+    reply.header('Content-Disposition', 'inline; filename="rizzotto-tournaments.ics"');
+    return reply.send(cal.toString());
+  });
 
   // GET /api/tournaments/:slug
   fastify.get('/api/tournaments/:slug', async (request, reply) => {

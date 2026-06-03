@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { ImportLogListResponseSchema } from '@rizzotto/types';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -834,6 +835,49 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (fastify.redis) await invalidate(fastify.redis, 'factions:*');
     return { id, icon_url: iconUrl };
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/admin/import-log
+  // -------------------------------------------------------------------------
+
+  fastify.get('/api/admin/import-log', async (request, reply) => {
+    const QuerySchema = z.object({
+      page: z.coerce.number().int().min(1).default(1),
+      pageSize: z.coerce.number().int().min(1).max(100).default(20),
+      source: z.string().optional(),
+    });
+
+    const parsed = QuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { page, pageSize, source } = parsed.data;
+
+    const where = source ? { source } : {};
+
+    const [total, rows] = await Promise.all([
+      fastify.prisma.importLog.count({ where }),
+      fastify.prisma.importLog.findMany({
+        where,
+        orderBy: { started_at: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    const entries = rows.map((r) => ({
+      id: r.id,
+      source: r.source,
+      status: r.status,
+      records_imported: r.records_imported,
+      error_message: r.error_message ?? null,
+      started_at: r.started_at.toISOString(),
+      finished_at: r.finished_at != null ? r.finished_at.toISOString() : null,
+    }));
+
+    const response = ImportLogListResponseSchema.parse({ entries, total, page, pageSize });
+    return response;
   });
 
   // -------------------------------------------------------------------------

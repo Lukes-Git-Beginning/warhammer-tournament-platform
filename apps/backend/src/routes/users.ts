@@ -3,9 +3,11 @@ import {
   UpdateMeSchema,
   UpdateOnboardingStageSchema,
   UpdateUserRoleRequestSchema,
+  H2HResponseSchema,
+  type H2HResponse,
 } from '@rizzotto/types';
 import { z } from 'zod';
-import { invalidate } from '../lib/cache.js';
+import { cached, cacheKey, invalidate } from '../lib/cache.js';
 
 const meSelect = {
   id: true,
@@ -365,6 +367,187 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         win_rate: totalWins + totalLosses > 0 ? totalWins / (totalWins + totalLosses) : 0,
         elo_history: eloHistoryPoints,
       };
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // GET /api/users/:a/vs/:b — Head-to-Head stats between two players
+  // Auth: same gating as GET /api/users/:id/stats (authenticate required)
+  // -------------------------------------------------------------------------
+  fastify.get(
+    '/api/users/:a/vs/:b',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      // --- Param + query validation ---
+      const paramSchema = z.object({
+        a: z.string().uuid(),
+        b: z.string().uuid(),
+      });
+      const paramParsed = paramSchema.safeParse(request.params);
+      if (!paramParsed.success) {
+        return reply.code(400).send({
+          error: 'BadRequest',
+          message: paramParsed.error.message,
+          statusCode: 400,
+        });
+      }
+      const { a, b } = paramParsed.data;
+
+      const querySchema = z.object({
+        season_id: z.string().uuid().optional(),
+      });
+      const queryParsed = querySchema.safeParse(request.query);
+      if (!queryParsed.success) {
+        return reply.code(400).send({
+          error: 'BadRequest',
+          message: queryParsed.error.message,
+          statusCode: 400,
+        });
+      }
+      const { season_id } = queryParsed.data;
+
+      // --- Cache wrapper ---
+      const compute = async (): Promise<H2HResponse> => {
+        // Load both users
+        const [userA, userB] = await Promise.all([
+          fastify.prisma.user.findUnique({
+            where: { id: a, deleted_at: null },
+            select: { id: true, username: true, avatar_url: true },
+          }),
+          fastify.prisma.user.findUnique({
+            where: { id: b, deleted_at: null },
+            select: { id: true, username: true, avatar_url: true },
+          }),
+        ]);
+
+        if (!userA) {
+          // Signal 404 via thrown error — caught below outside cached()
+          throw Object.assign(new Error('User A not found'), { __h2h404: 'a' });
+        }
+        if (!userB) {
+          throw Object.assign(new Error('User B not found'), { __h2h404: 'b' });
+        }
+
+        // H2H counts all completed games between the two players (including
+        // draws, which have winner_id = null) on leaderboard-counting
+        // tournaments. Deliberately broader than confirmedMatchWhere(), which
+        // is decisive-only because it feeds the rating model.
+        const baseWhere = {
+          status: 'COMPLETED' as const,
+          deleted_at: null,
+          player1_id: { not: null },
+          player2_id: { not: null },
+          tournament: { counts_for_leaderboard: true },
+          ...(season_id ? { season_id } : {}),
+        };
+
+        const matches = await fastify.prisma.match.findMany({
+          where: {
+            ...baseWhere,
+            OR: [
+              { player1_id: a, player2_id: b },
+              { player1_id: b, player2_id: a },
+            ],
+          },
+          orderBy: { played_at: 'desc' },
+          include: {
+            tournament: { select: { slug: true } },
+            player1_faction: { select: { id: true, name: true } },
+            player2_faction: { select: { id: true, name: true } },
+          },
+        });
+
+        // --- Aggregate summary relative to player A ---
+        let aWins = 0;
+        let bWins = 0;
+        let draws = 0;
+
+        for (const m of matches) {
+          if (m.winner_id === a) {
+            aWins++;
+          } else if (m.winner_id === b) {
+            bWins++;
+          } else {
+            draws++;
+          }
+        }
+
+        const total = aWins + bWins + draws;
+        const winrateA = total > 0 ? aWins / total : 0;
+
+        // --- Faction breakdown (grouped by the faction player A used) ---
+        type FactionRow = {
+          faction_id: string;
+          faction_name: string;
+          a_wins: number;
+          b_wins: number;
+          draws: number;
+        };
+        const factionMap = new Map<string, FactionRow>();
+
+        for (const m of matches) {
+          const aFaction = m.player1_id === a ? m.player1_faction : m.player2_faction;
+          if (!aFaction) continue;
+
+          const key = aFaction.id;
+          let row = factionMap.get(key);
+          if (!row) {
+            row = { faction_id: key, faction_name: aFaction.name, a_wins: 0, b_wins: 0, draws: 0 };
+            factionMap.set(key, row);
+          }
+
+          if (m.winner_id === a) row.a_wins++;
+          else if (m.winner_id === b) row.b_wins++;
+          else row.draws++;
+        }
+
+        const factionBreakdown = Array.from(factionMap.values());
+
+        // --- Recent matches (last 5) — already sorted desc by played_at ---
+        const recent = matches.slice(0, 5).map((m) => {
+          const aFaction = m.player1_id === a ? m.player1_faction : m.player2_faction;
+          const bFaction = m.player1_id === b ? m.player1_faction : m.player2_faction;
+          return {
+            id: m.id,
+            played_at: m.played_at?.toISOString() ?? null,
+            result: m.result ?? null,
+            tournament_slug: m.tournament.slug ?? null,
+            player_a_faction: aFaction ? { id: aFaction.id, name: aFaction.name } : null,
+            player_b_faction: bFaction ? { id: bFaction.id, name: bFaction.name } : null,
+          };
+        });
+
+        return {
+          player_a: { id: userA.id, username: userA.username, avatar_url: userA.avatar_url },
+          player_b: { id: userB.id, username: userB.username, avatar_url: userB.avatar_url },
+          summary: { a_wins: aWins, b_wins: bWins, draws, total },
+          winrate_a: winrateA,
+          faction_breakdown: factionBreakdown,
+          recent_matches: recent,
+        };
+      };
+
+      let result: H2HResponse;
+      try {
+        result = await cached(
+          fastify.redis,
+          cacheKey('h2h', { a, b, season: season_id ?? 'all' }),
+          compute,
+          { ttlSeconds: 60 },
+        );
+      } catch (err: unknown) {
+        const h2hErr = err as { __h2h404?: string; message?: string };
+        if (h2hErr.__h2h404) {
+          return reply.code(404).send({
+            error: 'NotFound',
+            message: h2hErr.message ?? 'User not found',
+            statusCode: 404,
+          });
+        }
+        throw err;
+      }
+
+      return reply.code(200).send(H2HResponseSchema.parse(result));
     },
   );
 

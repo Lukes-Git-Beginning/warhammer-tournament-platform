@@ -421,7 +421,12 @@ export type H2HResponse = z.infer<typeof H2HResponseSchema>;
 // Calendar Query — query-string params
 export const CalendarQuerySchema = z.object({
   status: TournamentStatusSchema.optional(),
-  is_major: z.coerce.boolean().optional(),
+  // NB: z.coerce.boolean() is wrong for query strings — Boolean("false") === true.
+  // Accept the literal strings and map explicitly.
+  is_major: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
   date_from: z.string().datetime().optional(),
   date_to: z.string().datetime().optional(),
 });
