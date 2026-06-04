@@ -23,15 +23,55 @@ import type { ServerToClientEvents, FactionWithStatsDto } from '@rizzotto/types'
 interface CoinFlipPhaseProps {
   decision: MatchDecisionState;
   currentUserId: string;
+  topPlayerAvatar?: string | null;
+  bottomPlayerAvatar?: string | null;
+  topPlayerName?: string;
+  bottomPlayerName?: string;
 }
 
-function CoinFlipPhase({ decision, currentUserId }: CoinFlipPhaseProps) {
+function CoinFace({
+  avatarUrl,
+  name,
+  winner,
+}: {
+  avatarUrl?: string | null;
+  name?: string;
+  winner: boolean;
+}) {
+  const initials = (name ?? '?').slice(0, 2).toUpperCase();
+  return (
+    <div
+      className={`absolute inset-0 rounded-full overflow-hidden flex items-center justify-center
+        ${winner ? 'border-2 border-rizzotto-gold-500 shadow-[0_0_16px_2px_rgba(212,175,55,0.35)]' : 'border-2 border-rizzotto-iron-500'}`}
+    >
+      {avatarUrl ? (
+        <img src={avatarUrl} alt={name ?? ''} className="h-full w-full object-cover" draggable={false} />
+      ) : (
+        <span className="font-display text-3xl font-bold text-rizzotto-gold-400 bg-rizzotto-iron-800 h-full w-full flex items-center justify-center">
+          {initials}
+        </span>
+      )}
+      {/* subtle vignette */}
+      <div className="absolute inset-0 rounded-full bg-gradient-to-b from-transparent to-rizzotto-iron-950/40 pointer-events-none" />
+    </div>
+  );
+}
+
+function CoinFlipPhase({
+  decision,
+  currentUserId,
+  topPlayerAvatar,
+  bottomPlayerAvatar,
+  topPlayerName,
+  bottomPlayerName,
+}: CoinFlipPhaseProps) {
   const [revealed, setRevealed] = useState(false);
   const isTop = decision.topPlayerId === currentUserId;
   const isBottom = decision.bottomPlayerId === currentUserId;
 
+  // Reveal result 200ms after the spin animation ends (2000ms)
   useEffect(() => {
-    const timer = setTimeout(() => setRevealed(true), 1800);
+    const timer = setTimeout(() => setRevealed(true), 2200);
     return () => clearTimeout(timer);
   }, []);
 
@@ -41,29 +81,36 @@ function CoinFlipPhase({ decision, currentUserId }: CoinFlipPhaseProps) {
         Coin Flip
       </h2>
 
-      <motion.div
-        animate={
-          revealed
-            ? { rotateY: 0, scale: 1 }
-            : { rotateY: [0, 180, 360, 540, 720], scale: [1, 1.1, 1, 1.1, 1] }
-        }
-        transition={revealed ? { duration: 0.3 } : { duration: 1.6, ease: 'easeOut' }}
-        className="relative h-28 w-28 rounded-full border-2 border-rizzotto-gold-500 bg-rizzotto-iron-900 flex items-center justify-center shadow-rizzotto-emboss"
-        style={{ perspective: 600 }}
-      >
-        {revealed ? (
-          <motion.span
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.15 }}
-            className="font-display text-4xl font-bold text-rizzotto-gold-400"
+      {/* 3D coin — front = topPlayer (winner), back = bottomPlayer */}
+      <div style={{ perspective: 800 }} className="h-28 w-28">
+        <motion.div
+          animate={{ rotateY: [0, 360, 720, 1080, 1440] }}
+          transition={{ duration: 2, ease: 'easeOut', times: [0, 0.25, 0.5, 0.75, 1] }}
+          className="relative h-28 w-28"
+          style={{ transformStyle: 'preserve-3d' }}
+        >
+          {/* Front face — topPlayer (winner, lands face-up) */}
+          <div style={{ backfaceVisibility: 'hidden' }} className="absolute inset-0">
+            <CoinFace
+              avatarUrl={topPlayerAvatar}
+              name={topPlayerName}
+              winner={true}
+            />
+          </div>
+
+          {/* Back face — bottomPlayer */}
+          <div
+            style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+            className="absolute inset-0"
           >
-            ⚔
-          </motion.span>
-        ) : (
-          <span className="h-12 w-12 rounded-full bg-rizzotto-gold-500/30 animate-pulse" />
-        )}
-      </motion.div>
+            <CoinFace
+              avatarUrl={bottomPlayerAvatar}
+              name={bottomPlayerName}
+              winner={false}
+            />
+          </div>
+        </motion.div>
+      </div>
 
       <AnimatePresence>
         {revealed && (
@@ -73,32 +120,46 @@ function CoinFlipPhase({ decision, currentUserId }: CoinFlipPhaseProps) {
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             className="w-full max-w-sm space-y-3"
           >
-            {/* Top player */}
+            {/* Top player (winner) */}
             <div
-              className={`flex items-center justify-between rounded-md border px-5 py-3 transition-colors ${
+              className={`flex items-center gap-3 rounded-md border px-4 py-3 transition-colors ${
                 decision.topPlayerId === currentUserId
                   ? 'border-rizzotto-gold-500/60 bg-rizzotto-gold-500/10'
                   : 'border-rizzotto-iron-600 bg-rizzotto-iron-900'
               }`}
             >
-              <span className="text-sm text-rizzotto-stone-300">
-                {isTop ? 'You' : 'Opponent'}
+              {topPlayerAvatar ? (
+                <img src={topPlayerAvatar} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" />
+              ) : (
+                <span className="h-7 w-7 rounded-full bg-rizzotto-iron-700 flex items-center justify-center text-xs font-bold text-rizzotto-stone-300 shrink-0">
+                  {(topPlayerName ?? '?').slice(0, 2).toUpperCase()}
+                </span>
+              )}
+              <span className="flex-1 text-sm text-rizzotto-stone-300">
+                {isTop ? 'You' : (topPlayerName ?? 'Opponent')}
               </span>
               <span className="font-display text-xs font-semibold tracking-widest text-rizzotto-gold-400 uppercase">
-                Top
+                ⚔ Top
               </span>
             </div>
 
             {/* Bottom player */}
             <div
-              className={`flex items-center justify-between rounded-md border px-5 py-3 transition-colors ${
+              className={`flex items-center gap-3 rounded-md border px-4 py-3 transition-colors ${
                 decision.bottomPlayerId === currentUserId
                   ? 'border-rizzotto-gold-500/60 bg-rizzotto-gold-500/10'
                   : 'border-rizzotto-iron-600 bg-rizzotto-iron-900'
               }`}
             >
-              <span className="text-sm text-rizzotto-stone-300">
-                {isBottom ? 'You' : 'Opponent'}
+              {bottomPlayerAvatar ? (
+                <img src={bottomPlayerAvatar} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" />
+              ) : (
+                <span className="h-7 w-7 rounded-full bg-rizzotto-iron-700 flex items-center justify-center text-xs font-bold text-rizzotto-stone-300 shrink-0">
+                  {(bottomPlayerName ?? '?').slice(0, 2).toUpperCase()}
+                </span>
+              )}
+              <span className="flex-1 text-sm text-rizzotto-stone-300">
+                {isBottom ? 'You' : (bottomPlayerName ?? 'Opponent')}
               </span>
               <span className="font-display text-xs font-semibold tracking-widest text-rizzotto-stone-400 uppercase">
                 Bottom
@@ -688,6 +749,14 @@ export function MatchDecisionPage() {
 
   const mapPool: MapDto[] = allMapsData?.data ?? [];
 
+  // Resolve player names + avatars for the coin flip
+  const topPlayer = decision
+    ? (matchDetail?.player1?.id === decision.topPlayerId ? matchDetail?.player1 : matchDetail?.player2)
+    : null;
+  const bottomPlayer = decision
+    ? (matchDetail?.player1?.id === decision.bottomPlayerId ? matchDetail?.player1 : matchDetail?.player2)
+    : null;
+
   // Phase transitions
   const rawPhase = resolvePhase(decision);
   let phase = rawPhase;
@@ -735,7 +804,14 @@ export function MatchDecisionPage() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
             >
-              <CoinFlipPhase decision={decision} currentUserId={user.id} />
+              <CoinFlipPhase
+                decision={decision}
+                currentUserId={user.id}
+                topPlayerAvatar={topPlayer?.avatar_url ?? null}
+                bottomPlayerAvatar={bottomPlayer?.avatar_url ?? null}
+                topPlayerName={topPlayer?.username}
+                bottomPlayerName={bottomPlayer?.username}
+              />
             </motion.div>
           )}
 
