@@ -7,6 +7,7 @@ import {
   deleteTournament,
   getBracket,
   getParticipantMe,
+  getParticipants,
   getTournament,
   patchTournament,
   startTournament,
@@ -19,6 +20,7 @@ import { CheckInButton } from '@/components/tournament/CheckInButton';
 import { RegisterButton } from '@/components/tournament/RegisterButton';
 import { ParticipantsList } from '@/components/tournament/ParticipantsList';
 import { ArmyListUploader } from '@/components/tournament/ArmyListUploader';
+import { MyMatchSection } from '@/components/match/MyMatchSection';
 import type { ParticipantStatus } from '@/lib/api';
 
 // Format labels are now handled via i18n — see t('tournament.format.*')
@@ -111,6 +113,13 @@ export function TournamentDetail() {
     queryFn: () => getBracket(slug),
     enabled: !!tournament && (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED'),
     refetchInterval: 15000,
+  });
+
+  // Participants — shared cache with BracketView and ParticipantsList
+  const { data: participantsData } = useQuery({
+    queryKey: ['tournament-participants', slug],
+    queryFn: () => getParticipants(slug),
+    enabled: !!tournament && tournament.status !== 'DRAFT',
   });
 
   // Fetch participant status for current user from the new endpoint
@@ -402,6 +411,17 @@ export function TournamentDetail() {
             <SafeMarkdown>{tournament.rules}</SafeMarkdown>
           </div>
         </section>
+      )}
+
+      {/* My Match — only shown to participants during an ongoing tournament */}
+      {user && tournament.status === 'ONGOING' && bracket && participantsData && (
+        <MyMatchSection
+          currentUserId={user.id}
+          matches={bracket.matches}
+          playerNames={Object.fromEntries(
+            participantsData.data.map((p) => [p.user.id, p.user.username]),
+          )}
+        />
       )}
 
       {/* Bracket breaks out of the narrow page container — it needs width. */}

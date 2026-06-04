@@ -54,9 +54,15 @@ export function MatchNode({
   const p1Winner = match.winnerId && match.winnerId === match.player1Id;
   const p2Winner = match.winnerId && match.winnerId === match.player2Id;
 
-  const scoreParts = match.score ? match.score.split('-') : [];
-  const score1 = scoreParts[0] ?? '';
-  const score2 = scoreParts[1] ?? '';
+  // Use game wins if available, fall back to legacy score string
+  const score1 =
+    match.player1GameWins > 0 || match.player2GameWins > 0
+      ? String(match.player1GameWins)
+      : (match.score ? (match.score.split('-')[0] ?? '') : '');
+  const score2 =
+    match.player1GameWins > 0 || match.player2GameWins > 0
+      ? String(match.player2GameWins)
+      : (match.score ? (match.score.split('-')[1] ?? '') : '');
 
   return (
     <div

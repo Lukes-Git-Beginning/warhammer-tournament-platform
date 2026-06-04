@@ -934,6 +934,69 @@ export function getMatchDecision(matchId: string): Promise<MatchDecisionState> {
 }
 
 // ---------------------------------------------------------------------------
+// Match Games
+// ---------------------------------------------------------------------------
+
+export interface GameDto {
+  id: string | null;
+  gameNumber: number;
+  status: string;
+  winnerId: string | null;
+  lobbyCode: string | null;
+  reportedWinnerId: string | null;
+  reporter_id: string | null;
+  reportedAt: string | null;
+  confirmedAt: string | null;
+  replayUrl: string | null;
+  playedAt: string | null;
+  decision: MatchDecisionState | null;
+  blindPick: {
+    player1Locked: boolean;
+    player2Locked: boolean;
+    revealedAt: string | null;
+    player1FactionId: string | null;
+    player2FactionId: string | null;
+  } | null;
+}
+
+export function getMatchGames(matchId: string): Promise<{ games: GameDto[] }> {
+  return apiFetch<{ games: GameDto[] }>(`/api/matches/${matchId}/games`);
+}
+
+export function setLobbyCode(
+  matchId: string,
+  gameNumber: number,
+  lobbyCode: string | null,
+): Promise<{ ok: true; lobby_code: string | null }> {
+  return apiFetch(`/api/matches/${matchId}/games/${gameNumber}/lobby-code`, {
+    method: 'PATCH',
+    body: JSON.stringify({ lobby_code: lobbyCode }),
+  });
+}
+
+export async function reportGameResult(
+  matchId: string,
+  gameNumber: number,
+  winnerId: string,
+  replayFile?: File,
+): Promise<{ provisional?: boolean; confirmed?: boolean; disputed?: boolean; winnerId?: string; autoConfirmsAt?: string }> {
+  const form = new FormData();
+  form.append('winner_id', winnerId);
+  if (replayFile) form.append('replay', replayFile);
+
+  const res = await fetch(`/api/matches/${matchId}/games/${gameNumber}/result`, {
+    method: 'POST',
+    credentials: 'include',
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { message?: string };
+    throw new Error(body.message ?? res.statusText);
+  }
+  return res.json() as Promise<{ provisional?: boolean; confirmed?: boolean; disputed?: boolean; winnerId?: string; autoConfirmsAt?: string }>;
+}
+
+// ---------------------------------------------------------------------------
 // Check-in
 // ---------------------------------------------------------------------------
 
