@@ -380,6 +380,8 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         const replayUrl = `/uploads/replays/${matchId}/${filename}`;
         const now = new Date();
 
+        // Store report metadata (replay, reporter) then finalize immediately.
+        // The bracket advances right away — disputes go via the organizer override.
         await fastify.prisma.matchGame.update({
           where: { id: gameId },
           data: {
@@ -390,24 +392,9 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
-        if (fastify.io) {
-          fastify.io.to(`match_decision_${matchId}`).emit('match.game.updated', {
-            matchId,
-            gameNumber,
-            status: 'PENDING',
-            winnerId: null,
-            lobbyCode: null,
-            reportedWinnerId: winnerIdField,
-            reportedAt: now.toISOString(),
-            confirmedAt: null,
-          });
-        }
+        await finalizeGameResult(fastify, gameId);
 
-        return reply.code(200).send({
-          provisional: true,
-          reportedWinnerId: winnerIdField,
-          autoConfirmsAt: new Date(now.getTime() + 30 * 60 * 1000).toISOString(),
-        });
+        return reply.code(200).send({ confirmed: true, winnerId: winnerIdField });
       }
 
       // -----------------------------------------------------------------------
