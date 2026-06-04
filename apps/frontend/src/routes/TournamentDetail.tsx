@@ -9,6 +9,7 @@ import {
   getParticipantMe,
   getTournament,
   patchTournament,
+  startTournament,
 } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
 import { formatInUserTimezone } from '@/lib/timezone';
@@ -84,6 +85,23 @@ export function TournamentDetail() {
     mutationFn: () => patchTournament(slug, { status: 'OPEN_REGISTRATION' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+    },
+  });
+
+  const closeRegistrationMutation = useMutation({
+    mutationFn: () => patchTournament(slug, { status: 'REGISTRATION_CLOSED' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+    },
+  });
+
+  const startMutation = useMutation({
+    mutationFn: (id: string) => startTournament(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
       void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
     },
   });
@@ -194,6 +212,49 @@ export function TournamentDetail() {
             >
               {t('tournament.detail.publish')}
             </button>
+          )}
+          {tournament.status === 'OPEN_REGISTRATION' && (
+            <button
+              type="button"
+              disabled={closeRegistrationMutation.isPending}
+              className="rounded border border-rizzotto-gold-500 px-4 py-1.5 text-sm text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => {
+                if (
+                  confirm(
+                    t('tournament.detail.close_registration_confirm', { name: tournament.name }),
+                  )
+                ) {
+                  closeRegistrationMutation.mutate();
+                }
+              }}
+            >
+              {t('tournament.detail.close_registration')}
+            </button>
+          )}
+          {tournament.status === 'REGISTRATION_CLOSED' && (
+            <button
+              type="button"
+              disabled={startMutation.isPending}
+              className="rounded bg-rizzotto-gold-500 px-4 py-1.5 text-sm font-semibold text-rizzotto-iron-950 hover:bg-rizzotto-gold-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => {
+                if (
+                  confirm(
+                    t('tournament.detail.start_tournament_confirm', { name: tournament.name }),
+                  )
+                ) {
+                  startMutation.mutate(tournament.id);
+                }
+              }}
+            >
+              {startMutation.isPending
+                ? t('tournament.detail.start_tournament_pending')
+                : t('tournament.detail.start_tournament')}
+            </button>
+          )}
+          {startMutation.isError && (
+            <span className="self-center text-xs text-rizzotto-danger">
+              {(startMutation.error as Error).message}
+            </span>
           )}
           <button
             type="button"

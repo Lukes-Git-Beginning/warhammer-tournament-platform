@@ -290,6 +290,13 @@ export function patchTournament(
   });
 }
 
+/** Generates the bracket and transitions to ONGOING. Organizer only; note :id, not :slug. */
+export function startTournament(id: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/tournaments/${id}/start`, {
+    method: 'POST',
+  });
+}
+
 export function deleteTournament(slug: string): Promise<void> {
   return apiFetch<void>(`/api/tournaments/${slug}`, { method: 'DELETE' });
 }
