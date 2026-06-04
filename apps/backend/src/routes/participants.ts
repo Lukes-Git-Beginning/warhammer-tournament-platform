@@ -480,7 +480,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
     const tournament = await fastify.prisma.tournament.findFirst({
       where: { slug, deleted_at: null },
-      select: { id: true },
+      select: { id: true, mode: true, status: true },
     });
 
     if (!tournament) {
@@ -504,7 +504,14 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       orderBy: { registered_at: 'asc' },
     });
 
-    return { data: participants, total: participants.length };
+    const started = tournament.status === 'ONGOING' || tournament.status === 'COMPLETED';
+    const maskFactions = tournament.mode === 'SFT' && !started;
+
+    const data = maskFactions
+      ? participants.map((p) => ({ ...p, faction: null }))
+      : participants;
+
+    return { data, total: data.length };
   });
 };
 
