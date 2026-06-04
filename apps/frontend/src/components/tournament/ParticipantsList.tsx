@@ -1,0 +1,80 @@
+import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
+import { getParticipants } from '@/lib/api';
+
+export interface ParticipantsListProps {
+  slug: string;
+}
+
+/**
+ * Public participant roster for a tournament.
+ * Shows avatar/initials, username (links to profile), faction and status.
+ * Withdrawn/disqualified entries render dimmed with strikethrough.
+ */
+export function ParticipantsList({ slug }: ParticipantsListProps) {
+  const { t } = useTranslation();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['tournament-participants', slug],
+    queryFn: () => getParticipants(slug),
+  });
+
+  if (isLoading || !data) return null;
+
+  return (
+    <section className="mb-8">
+      <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-3">
+        {t('tournament.participants.heading', { count: data.total })}
+      </h2>
+      {data.total === 0 ? (
+        <p className="text-sm text-rizzotto-stone-500">{t('tournament.participants.empty')}</p>
+      ) : (
+        <ul className="divide-y divide-rizzotto-iron-600 rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900">
+          {data.data.map((p) => {
+            const inactive = p.status === 'WITHDRAWN' || p.status === 'DISQUALIFIED';
+            return (
+              <li
+                key={p.id}
+                className={`flex items-center gap-3 px-4 py-2.5 ${inactive ? 'opacity-50' : ''}`}
+              >
+                {p.user.avatar_url ? (
+                  <img
+                    src={p.user.avatar_url}
+                    alt=""
+                    className="h-7 w-7 rounded-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-rizzotto-iron-600 text-xs font-semibold text-rizzotto-stone-300">
+                    {p.user.username.slice(0, 2).toUpperCase()}
+                  </span>
+                )}
+                <Link
+                  to="/users/$id"
+                  params={{ id: p.user.id }}
+                  className={`text-sm text-rizzotto-stone-200 hover:text-rizzotto-gold-400 transition-colors ${inactive ? 'line-through' : ''}`}
+                >
+                  {p.user.username}
+                </Link>
+                {p.faction && (
+                  <span className="flex items-center gap-1.5 text-xs text-rizzotto-stone-400">
+                    <span
+                      className="inline-block h-2 w-2 rounded-full"
+                      style={{ backgroundColor: p.faction.color_hex }}
+                      aria-hidden="true"
+                    />
+                    {p.faction.name}
+                  </span>
+                )}
+                <span className="ml-auto text-xs text-rizzotto-stone-500">
+                  {t(`tournament.participants.status.${p.status.toLowerCase()}`)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}

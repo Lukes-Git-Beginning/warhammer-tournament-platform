@@ -15,6 +15,8 @@ import { formatInUserTimezone } from '@/lib/timezone';
 import { BracketView } from '@/components/bracket/BracketView';
 import { PageShell } from '@/components/layout/PageShell';
 import { CheckInButton } from '@/components/tournament/CheckInButton';
+import { RegisterButton } from '@/components/tournament/RegisterButton';
+import { ParticipantsList } from '@/components/tournament/ParticipantsList';
 import { ArmyListUploader } from '@/components/tournament/ArmyListUploader';
 import type { ParticipantStatus } from '@/lib/api';
 
@@ -210,6 +212,17 @@ export function TournamentDetail() {
         </div>
       )}
 
+      {/* ─── Registration CTA ─── */}
+      {tournament.status === 'OPEN_REGISTRATION' && (
+        <section className="mb-6">
+          <RegisterButton
+            tournament={tournament}
+            participantStatus={participantStatus}
+            isLoggedIn={!!user}
+          />
+        </section>
+      )}
+
       {/* ─── Check-in (for registered participants) ─── */}
       {user && participantStatus && (
         tournament.status === 'REGISTRATION_CLOSED' || tournament.status === 'ONGOING' || tournament.status === 'OPEN_REGISTRATION'
@@ -304,6 +317,9 @@ export function TournamentDetail() {
           )}
         </div>
       </div>
+
+      {/* ─── Participant roster ─── */}
+      {tournament.status !== 'DRAFT' && <ParticipantsList slug={tournament.slug} />}
 
       {tournament.description && (
         <section className="mb-8">

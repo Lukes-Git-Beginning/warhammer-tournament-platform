@@ -208,6 +208,23 @@
       "organizer": "Organisator:",
       "discord_server": "Discord-Server"
     },
+    "register": {
+      "cta": "Jetzt anmelden",
+      "pending": "Wird angemeldet…",
+      "confirmed": "Du bist angemeldet!",
+      "full": "Das Turnier ist voll.",
+      "login_required": "Zum Anmelden mit Discord einloggen"
+    },
+    "participants": {
+      "heading": "Teilnehmer ({{count}})",
+      "empty": "Noch keine Anmeldungen — sei der Erste!",
+      "status": {
+        "registered": "angemeldet",
+        "checked_in": "eingecheckt",
+        "withdrawn": "zurückgezogen",
+        "disqualified": "disqualifiziert"
+      }
+    },
     "edit": {
       "title": "Turnier bearbeiten",
       "subtitle": "Turnier-Details anpassen. Format und Modus können nach der Erstellung nicht mehr geändert werden.",

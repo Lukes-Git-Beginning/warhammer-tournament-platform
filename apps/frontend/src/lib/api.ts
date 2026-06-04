@@ -1006,3 +1006,31 @@ export interface ParticipantMeResponse {
 export function getParticipantMe(slug: string): Promise<ParticipantMeResponse> {
   return apiFetch<ParticipantMeResponse>(`/api/tournaments/${slug}/participants/me`);
 }
+
+export interface TournamentParticipantEntry {
+  id: string;
+  status: ParticipantStatus;
+  registered_at: string;
+  lists_locked_at: string | null;
+  user: { id: string; username: string; avatar_url: string | null };
+  faction: { id: string; name: string; color_hex: string } | null;
+}
+
+export interface TournamentParticipantsResponse {
+  data: TournamentParticipantEntry[];
+  total: number;
+}
+
+export function getParticipants(slug: string): Promise<TournamentParticipantsResponse> {
+  return apiFetch<TournamentParticipantsResponse>(`/api/tournaments/${slug}/participants`);
+}
+
+export function registerForTournament(
+  slug: string,
+): Promise<{ id: string; status: ParticipantStatus }> {
+  return apiFetch<{ id: string; status: ParticipantStatus }>(
+    `/api/tournaments/${slug}/register`,
+    // Empty JSON body — the route zod-parses request.body, a bodyless POST would 400.
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+}

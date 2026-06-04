@@ -208,6 +208,23 @@
       "organizer": "Organizer:",
       "discord_server": "Discord server"
     },
+    "register": {
+      "cta": "Register now",
+      "pending": "Registering…",
+      "confirmed": "You are registered!",
+      "full": "This tournament is full.",
+      "login_required": "Log in with Discord to register"
+    },
+    "participants": {
+      "heading": "Participants ({{count}})",
+      "empty": "No registrations yet — be the first!",
+      "status": {
+        "registered": "registered",
+        "checked_in": "checked in",
+        "withdrawn": "withdrawn",
+        "disqualified": "disqualified"
+      }
+    },
     "edit": {
       "title": "Edit Tournament",
       "subtitle": "Adjust tournament details. Format and mode cannot be changed after creation.",
