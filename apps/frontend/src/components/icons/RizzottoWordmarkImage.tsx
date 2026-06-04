@@ -7,7 +7,7 @@ export interface RizzottoWordmarkImageProps extends HTMLAttributes<HTMLImageElem
   /**
    * Width in pixels. Height scales automatically (aspect-ratio of asset).
    * Do NOT combine with `h-*` Tailwind classes — that forces both dimensions
-   * and breaks the natural aspect ratio (1.5:1 for the wordmark asset).
+   * and breaks the natural aspect ratio (~2.6:1 for the wordmark asset).
    */
   width?: number;
   /** Loading strategy. Default 'eager' for header, 'lazy' for footer. */
@@ -37,7 +37,7 @@ export const RizzottoWordmarkImage = forwardRef<HTMLImageElement, RizzottoWordma
           fetchPriority={loading === 'eager' ? 'high' : undefined}
           decoding="async"
           width={width}
-          className={cn('h-auto select-none', className)}
+          className={cn('h-auto select-none wordmark-contrast', className)}
           style={{ ...style, ...(width ? { width: `${width}px` } : undefined) }}
           {...rest}
         />

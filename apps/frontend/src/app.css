@@ -311,6 +311,16 @@ h6 {
   );
 }
 
+/* Wordmark contrast lift: black drop shadow separates the logo from
+   photographic backdrops (hero), the faint bronze halo lifts it off
+   near-black surfaces (header). Tuned for the cast-iron wordmark. */
+@utility wordmark-contrast {
+  filter: drop-shadow(0 3px 14px rgb(0 0 0 / 0.95))
+    drop-shadow(0 0 2px rgb(0 0 0 / 0.8))
+    drop-shadow(0 0 14px rgb(176 141 87 / 0.55))
+    drop-shadow(0 0 32px rgb(176 141 87 / 0.4));
+}
+
 @utility bg-parchment-aged-texture {
   background-image: image-set(
     url('/textures/parchment-aged.avif') type('image/avif'),

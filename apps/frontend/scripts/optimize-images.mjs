@@ -33,7 +33,7 @@ const ASSET_CLASSES = [
   },
   {
     name: 'wordmark',
-    test: ({ stem }) => stem.startsWith('karaz-wordmark'),
+    test: ({ stem }) => stem.startsWith('rizzotto-wordmark'),
     // Wordmark renders max 640 CSS-px wide (hero) / 160 CSS-px wide (header,
     // footer). Source PNGs are 1024–1536 px wide — resize to 768 covers
     // 2× retina at the largest display use. Bronze variant has heavy
