@@ -44,6 +44,57 @@ describe('generateSingleElim', () => {
     }
   });
 
+  // Regression (2026-06-04): on non-pow2 fields the play-in target was
+  // prematurely finalized as BYE, orphaning the play-in winner. A match with
+  // one player whose free slot is fed by another match must stay PENDING.
+  describe('non-pow2 fields — no premature BYE on feeder targets', () => {
+    for (const n of [5, 6, 7, 9, 12]) {
+      it(`${n} players → BYE only without unresolved feeders, all players placed once`, () => {
+        const ids = fakeIds(n);
+        const matches = generateSingleElim(TOURNAMENT_ID, ids);
+
+        // Feeder structure from the generated graph itself.
+        const feedersByTarget = new Map<string, typeof matches>();
+        for (const m of matches) {
+          if (m.next_match_id !== null) {
+            const arr = feedersByTarget.get(m.next_match_id) ?? [];
+            arr.push(m);
+            feedersByTarget.set(m.next_match_id, arr);
+          }
+        }
+
+        for (const m of matches) {
+          const unresolved = (feedersByTarget.get(m.id) ?? []).filter(
+            (f) => f.winner_id === null,
+          ).length;
+          const filled =
+            (m.player1_id !== null ? 1 : 0) + (m.player2_id !== null ? 1 : 0);
+
+          if (m.status === 'BYE') {
+            // A BYE must have its winner set and no feeder still delivering.
+            expect(m.winner_id).not.toBeNull();
+            expect(unresolved).toBe(0);
+          }
+          if (filled === 1 && unresolved > 0) {
+            // Half-filled match awaiting a play-in winner must stay open.
+            expect(m.status).toBe('PENDING');
+            expect(m.winner_id).toBeNull();
+          }
+        }
+
+        // Every participant appears exactly once as an initially placed player.
+        const placed = matches
+          .flatMap((m) => [m.player1_id, m.player2_id])
+          .filter((id): id is string => id !== null);
+        // BYE propagation duplicates winners into later rounds — count uniques.
+        expect(new Set(placed).size).toBe(n);
+        for (const id of ids) {
+          expect(placed).toContain(id);
+        }
+      });
+    }
+  });
+
   it('8 players → 7 matches, 3 rounds', () => {
     const ids = fakeIds(8);
     const matches = generateSingleElim(TOURNAMENT_ID, ids);
@@ -111,25 +162,26 @@ describe('generateSingleElim', () => {
     expect(unique.size).toBe(matches.length);
   });
 
-  it('BYE match has status=BYE and winner_id set', () => {
-    // 5 players will always produce at least one BYE in library output
+  it('5 players → play-in structure, no BYE at generation time', () => {
+    // tournament-pairings builds a play-in round for non-pow2 fields instead
+    // of classic BYEs: the half-filled round-2 match awaits the play-in
+    // winner and must NOT be finalized as BYE (regression 2026-06-04).
     const ids = fakeIds(5);
     const matches = generateSingleElim(TOURNAMENT_ID, ids);
 
-    const byeMatches = matches.filter((m) => m.status === 'BYE');
-    expect(byeMatches.length).toBeGreaterThan(0);
+    expect(matches.filter((m) => m.status === 'BYE')).toHaveLength(0);
 
-    for (const bye of byeMatches) {
-      expect(bye.winner_id).not.toBeNull();
-      // One slot is set, other is null
-      const hasOnePlayer =
-        (bye.player1_id !== null && bye.player2_id === null) ||
-        (bye.player1_id === null && bye.player2_id !== null) ||
-        // After propagation the bye winner may have been moved to next match,
-        // so both slots may now be null if the original BYE was a pure slot.
-        (bye.player1_id === null && bye.player2_id === null);
-      expect(hasOnePlayer).toBe(true);
-    }
+    // Exactly one round-1 play-in with two players, feeding a half-filled
+    // PENDING round-2 match.
+    const r1 = matches.filter((m) => m.round === 1);
+    expect(r1).toHaveLength(1);
+    expect(r1[0]!.player1_id).not.toBeNull();
+    expect(r1[0]!.player2_id).not.toBeNull();
+    expect(r1[0]!.next_match_id).not.toBeNull();
+
+    const target = matches.find((m) => m.id === r1[0]!.next_match_id)!;
+    expect(target.status).toBe('PENDING');
+    expect(target.winner_id).toBeNull();
   });
 
   it('all matches belong to the correct tournamentId', () => {

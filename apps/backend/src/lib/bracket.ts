@@ -23,10 +23,12 @@ export interface DEBracketMatchInput extends BracketMatchInput {
  * Generate a single-elimination bracket from a list of participant IDs.
  *
  * Seeding: order as delivered (caller may shuffle beforehand).
- * BYE-handling:
- *   - Exactly one player set → status=BYE, winner_id=that player.
- *   - Both null → status=PENDING (empty feeder slot).
- *   - BYE winners are propagated into the next match during generation.
+ * BYE-handling (feeder-aware, mirrors the DE fix from 2026-06-03):
+ *   - A match is a BYE only when exactly one slot is filled AND no feeder
+ *     match still delivers a winner into the free slot. Play-in targets on
+ *     non-pow2 fields (5, 9, 12 … players) therefore stay PENDING.
+ *   - BYE winners propagate immediately; rounds are processed ascending so
+ *     cascades resolve in a single sweep.
  *
  * Returns matches sorted by (round, match_number).
  */
@@ -42,7 +44,18 @@ export function generateSingleElim(
     idMap.set(`${m.round}:${m.match}`, randomUUID());
   }
 
-  // Second pass: build mutable output objects so BYE-propagation can mutate them.
+  // Static feeder structure: whose winner flows into which target match.
+  const feedersByTarget = new Map<string, string[]>();
+  for (const m of libMatches) {
+    if (m.win) {
+      const target = `${m.win.round}:${m.win.match}`;
+      const arr = feedersByTarget.get(target) ?? [];
+      arr.push(`${m.round}:${m.match}`);
+      feedersByTarget.set(target, arr);
+    }
+  }
+
+  // Second pass: build mutable output objects; everything starts PENDING.
   const outputMap = new Map<string, BracketMatchInput>();
 
   for (const m of libMatches) {
@@ -51,60 +64,47 @@ export function generateSingleElim(
     const nextKey = m.win ? `${m.win.round}:${m.win.match}` : null;
     const next_match_id = nextKey ? (idMap.get(nextKey) ?? null) : null;
 
-    const p1 = typeof m.player1 === 'string' ? m.player1 : null;
-    const p2 = typeof m.player2 === 'string' ? m.player2 : null;
-
-    let status: MatchStatus = 'PENDING';
-    let winner_id: string | null = null;
-
-    const hasBye = (p1 !== null && p2 === null) || (p1 === null && p2 !== null);
-    if (hasBye) {
-      status = 'BYE';
-      winner_id = p1 ?? p2;
-    }
-
     outputMap.set(key, {
       id,
       tournament_id: tournamentId,
       round: m.round,
       match_number: m.match,
-      player1_id: p1,
-      player2_id: p2,
-      status,
+      player1_id: typeof m.player1 === 'string' ? m.player1 : null,
+      player2_id: typeof m.player2 === 'string' ? m.player2 : null,
+      status: 'PENDING',
       next_match_id,
-      winner_id,
+      winner_id: null,
     });
   }
 
-  // Third pass: propagate BYE winners into the appropriate slot of the next match.
-  // Convention for which slot to fill in the next match:
-  //   odd match_number  → player1 slot
-  //   even match_number → player2 slot
-  for (const m of libMatches) {
+  // Third pass: feeder-aware BYE classification, rounds ascending.
+  // A feeder still "delivers" while its winner_id is null — earlier-round
+  // BYEs resolve first (their winner is set + propagated), so by the time a
+  // later match is visited its remaining feeder count is accurate.
+  const unresolvedFeeders = (key: string): number =>
+    (feedersByTarget.get(key) ?? []).filter((fk) => outputMap.get(fk)!.winner_id === null)
+      .length;
+
+  const sorted = [...libMatches].sort((a, b) => a.round - b.round || a.match - b.match);
+  for (const m of sorted) {
     const key = `${m.round}:${m.match}`;
     const entry = outputMap.get(key)!;
+    const filled =
+      (entry.player1_id !== null ? 1 : 0) + (entry.player2_id !== null ? 1 : 0);
 
-    if (entry.status === 'BYE' && entry.winner_id !== null && m.win) {
-      const nextKey = `${m.win.round}:${m.win.match}`;
-      const nextEntry = outputMap.get(nextKey);
+    if (filled !== 1 || unresolvedFeeders(key) > 0) continue;
+
+    entry.status = 'BYE';
+    entry.winner_id = entry.player1_id ?? entry.player2_id;
+
+    // Propagate the BYE winner into the free slot of the next match.
+    if (m.win) {
+      const nextEntry = outputMap.get(`${m.win.round}:${m.win.match}`);
       if (nextEntry) {
-        // Place the BYE winner in the free slot of the target match.
         if (nextEntry.player1_id === null) {
           nextEntry.player1_id = entry.winner_id;
         } else if (nextEntry.player2_id === null) {
           nextEntry.player2_id = entry.winner_id;
-        }
-        // Recalculate BYE status for the target match after propagation.
-        const np1 = nextEntry.player1_id;
-        const np2 = nextEntry.player2_id;
-        if ((np1 !== null && np2 === null) || (np1 === null && np2 !== null)) {
-          nextEntry.status = 'BYE';
-          nextEntry.winner_id = np1 ?? np2;
-        }
-        // If both slots are now filled, it's a real match.
-        if (np1 !== null && np2 !== null && nextEntry.status === 'BYE') {
-          nextEntry.status = 'PENDING';
-          nextEntry.winner_id = null;
         }
       }
     }
