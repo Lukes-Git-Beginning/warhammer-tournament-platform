@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { reportMatchResult } from '@/lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getFactions, reportMatchResult } from '@/lib/api';
+import type { FactionListResponse } from '@/lib/api';
 
 interface MatchScoreModalProps {
   matchId: string;
@@ -22,12 +23,23 @@ export function MatchScoreModal({
   const queryClient = useQueryClient();
   const [winnerId, setWinnerId] = useState<string>('');
   const [score, setScore] = useState('');
+  const [p1FactionId, setP1FactionId] = useState('');
+  const [p2FactionId, setP2FactionId] = useState('');
+
+  // Faction pre-pick feeds MatchupStats/heatmap — optional but encouraged.
+  const { data: factionData } = useQuery<FactionListResponse>({
+    queryKey: ['factions'],
+    queryFn: () => getFactions(),
+  });
+  const factions = (factionData?.data ?? []).map((entry) => entry.faction);
 
   const mutation = useMutation({
     mutationFn: () =>
       reportMatchResult(matchId, {
         winnerId,
         score: score || undefined,
+        player1FactionId: p1FactionId || undefined,
+        player2FactionId: p2FactionId || undefined,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['bracket'] });
@@ -78,6 +90,52 @@ export function MatchScoreModal({
                 />
                 {player2Name ?? player2Id}
               </label>
+            )}
+          </div>
+        </fieldset>
+
+        <fieldset className="mb-4">
+          <legend className="text-xs text-stone-400 mb-2">
+            Fraktionen (optional — füttert die Meta-Statistiken)
+          </legend>
+          <div className="space-y-2">
+            {player1Id && (
+              <div className="flex items-center gap-2">
+                <span className="w-28 truncate text-xs text-stone-400">
+                  {player1Name ?? player1Id}
+                </span>
+                <select
+                  value={p1FactionId}
+                  onChange={(e) => setP1FactionId(e.target.value)}
+                  className="flex-1 rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+                >
+                  <option value="">— keine Angabe —</option>
+                  {factions.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {player2Id && (
+              <div className="flex items-center gap-2">
+                <span className="w-28 truncate text-xs text-stone-400">
+                  {player2Name ?? player2Id}
+                </span>
+                <select
+                  value={p2FactionId}
+                  onChange={(e) => setP2FactionId(e.target.value)}
+                  className="flex-1 rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+                >
+                  <option value="">— keine Angabe —</option>
+                  {factions.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
           </div>
         </fieldset>
