@@ -53,6 +53,7 @@ function serializeGame(game: {
     winnerId: game.winner_id,
     lobbyCode: includeLobbyCodes ? game.lobby_code : null,
     reportedWinnerId: game.reported_winner_id,
+    reporterId: game.reporter_id,
     reportedAt: game.reported_at?.toISOString() ?? null,
     confirmedAt: game.confirmed_at?.toISOString() ?? null,
     replayUrl: game.replay_url,

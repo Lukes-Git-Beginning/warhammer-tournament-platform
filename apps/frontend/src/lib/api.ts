@@ -950,7 +950,7 @@ export interface GameDto {
   winnerId: string | null;
   lobbyCode: string | null;
   reportedWinnerId: string | null;
-  reporter_id: string | null;
+  reporterId: string | null;
   reportedAt: string | null;
   confirmedAt: string | null;
   replayUrl: string | null;

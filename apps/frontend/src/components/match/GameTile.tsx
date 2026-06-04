@@ -69,9 +69,9 @@ export function GameTile({
       (game.decision.blindPick == null || game.decision.blindPick.revealedAt),
   );
 
-  const isReporter = game.reportedWinnerId !== null && game.reporter_id === currentUserId;
+  const isReporter = game.reportedWinnerId !== null && game.reporterId === currentUserId;
   const isOpponentReporter =
-    game.reportedWinnerId !== null && game.reporter_id !== null && game.reporter_id !== currentUserId;
+    game.reportedWinnerId !== null && game.reporterId !== null && game.reporterId !== currentUserId;
 
   function handleWinnerSelect(winnerId: string) {
     setSelectedWinnerId(winnerId);
@@ -337,7 +337,7 @@ function ProvisionalPanel({
 
   const reportedWinnerName =
     game.reportedWinnerId === player1Id ? player1Name : player2Name;
-  const isReporter = game.reporter_id === currentUserId;
+  const isReporter = game.reporterId === currentUserId;
   const isOpponent = !isReporter;
 
   return (
