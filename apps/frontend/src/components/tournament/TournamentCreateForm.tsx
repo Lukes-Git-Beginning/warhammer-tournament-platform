@@ -26,9 +26,9 @@ const TournamentCreateSchema = z.object({
   // Welle 2 fields
   rounds_count: z.coerce.number().int().min(3).max(6).default(5),
   playoff_format: z.enum(['NONE', 'TOP4', 'TOP8']).default('NONE'),
-  swiss_match_format: z.enum(['BO1', 'BO3']).default('BO1'),
-  playoff_match_format: z.enum(['BO3', 'BO5']).default('BO3'),
-  finale_match_format: z.enum(['BO3', 'BO5']).default('BO3'),
+  swiss_match_format: z.enum(['BO1']).default('BO1'),
+  playoff_match_format: z.enum(['BO1']).default('BO1'), // Bo3/Bo5 re-enable with series support
+  finale_match_format: z.enum(['BO1']).default('BO1'),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN']).default('PICK_BAN'),
   map_pool: z.array(z.string()).min(3).max(36).default([]),
 });
@@ -48,8 +48,8 @@ export function TournamentCreateForm() {
     rounds_count: 5,
     playoff_format: 'NONE',
     swiss_match_format: 'BO1',
-    playoff_match_format: 'BO3',
-    finale_match_format: 'BO3',
+    playoff_match_format: 'BO1',
+    finale_match_format: 'BO1',
     map_decision_mode: 'PICK_BAN',
     map_pool: [],
   });
@@ -356,7 +356,6 @@ export function TournamentCreateForm() {
               onChange={handleChange}
             >
               <option value="BO1">Best of 1</option>
-              <option value="BO3">Best of 3</option>
             </Select>
           </div>
           <div>
@@ -364,11 +363,11 @@ export function TournamentCreateForm() {
             <Select
               id="tcf-playoff-fmt"
               name="playoff_match_format"
-              value={form.playoff_match_format ?? 'BO3'}
+              value="BO1"
+              disabled
               onChange={handleChange}
             >
-              <option value="BO3">Best of 3</option>
-              <option value="BO5">Best of 5</option>
+              <option value="BO1">Best of 1</option>
             </Select>
           </div>
           <div>
@@ -376,11 +375,11 @@ export function TournamentCreateForm() {
             <Select
               id="tcf-finale-fmt"
               name="finale_match_format"
-              value={form.finale_match_format ?? 'BO3'}
+              value="BO1"
+              disabled
               onChange={handleChange}
             >
-              <option value="BO3">Best of 3</option>
-              <option value="BO5">Best of 5</option>
+              <option value="BO1">Best of 1</option>
             </Select>
           </div>
         </div>

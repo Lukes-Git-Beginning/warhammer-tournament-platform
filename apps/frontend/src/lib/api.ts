@@ -78,9 +78,9 @@ export interface Tournament {
   // Welle 2 fields
   rounds_count?: number | null;
   playoff_format?: 'NONE' | 'TOP4' | 'TOP8' | null;
-  swiss_match_format?: 'BO1' | 'BO3' | null;
-  playoff_match_format?: 'BO3' | 'BO5' | null;
-  finale_match_format?: 'BO3' | 'BO5' | null;
+  swiss_match_format?: 'BO1' | null;
+  playoff_match_format?: 'BO1' | null; // Bo3/Bo5 re-enable with series support
+  finale_match_format?: 'BO1' | null;
   map_decision_mode?: 'RANDOM' | 'PICK_BAN' | null;
   map_pool?: MapDto[];
 }
@@ -142,9 +142,9 @@ export interface TournamentCreate {
   // Welle 2 fields
   rounds_count?: number;
   playoff_format?: 'NONE' | 'TOP4' | 'TOP8';
-  swiss_match_format?: 'BO1' | 'BO3';
-  playoff_match_format?: 'BO3' | 'BO5';
-  finale_match_format?: 'BO3' | 'BO5';
+  swiss_match_format?: 'BO1';
+  playoff_match_format?: 'BO1'; // Bo3/Bo5 re-enable with series support
+  finale_match_format?: 'BO1';
   map_decision_mode?: 'RANDOM' | 'PICK_BAN';
   map_pool?: string[];
 }

@@ -5,9 +5,9 @@ import { getAdminConfig, putAdminConfig } from '@/lib/api.js';
 interface TournamentDefaults {
   rounds_count: number;
   playoff_format: 'NONE' | 'TOP4' | 'TOP8';
-  swiss_match_format: 'BO1' | 'BO3';
-  playoff_match_format: 'BO3' | 'BO5';
-  finale_match_format: 'BO3' | 'BO5';
+  swiss_match_format: 'BO1';
+  playoff_match_format: 'BO1'; // Bo3/Bo5 re-enable with series support
+  finale_match_format: 'BO1';
   map_decision_mode: 'RANDOM' | 'PICK_BAN';
 }
 
@@ -17,8 +17,8 @@ const DEFAULT_DEFAULTS: TournamentDefaults = {
   rounds_count: 4,
   playoff_format: 'TOP4',
   swiss_match_format: 'BO1',
-  playoff_match_format: 'BO3',
-  finale_match_format: 'BO3',
+  playoff_match_format: 'BO1',
+  finale_match_format: 'BO1',
   map_decision_mode: 'RANDOM',
 };
 
@@ -94,17 +94,17 @@ export function TournamentDefaultsEditor() {
               {
                 key: 'swiss_match_format' as const,
                 label: 'Swiss Match Format',
-                options: ['BO1', 'BO3'] as const,
+                options: ['BO1'] as const,
               },
               {
                 key: 'playoff_match_format' as const,
                 label: 'Playoff Match Format',
-                options: ['BO3', 'BO5'] as const,
+                options: ['BO1'] as const,
               },
               {
                 key: 'finale_match_format' as const,
                 label: 'Finale Match Format',
-                options: ['BO3', 'BO5'] as const,
+                options: ['BO1'] as const,
               },
               {
                 key: 'map_decision_mode' as const,
