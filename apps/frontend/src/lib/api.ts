@@ -1112,3 +1112,7 @@ export function registerForTournament(
     { method: 'POST', body: JSON.stringify({}) },
   );
 }
+
+export function withdrawFromTournament(slug: string): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/api/tournaments/${slug}/withdraw`, { method: 'POST' });
+}

@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { registerForTournament } from '@/lib/api';
+import { registerForTournament, withdrawFromTournament } from '@/lib/api';
 import type { Tournament, ParticipantStatus } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 
@@ -23,6 +24,7 @@ export interface RegisterButtonProps {
 export function RegisterButton({ tournament, participantStatus, isLoggedIn }: RegisterButtonProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
 
   const register = useMutation({
     mutationFn: () => registerForTournament(tournament.slug),
@@ -33,26 +35,69 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
     },
   });
 
+  const withdraw = useMutation({
+    mutationFn: () => withdrawFromTournament(tournament.slug),
+    onSuccess: () => {
+      setConfirmingWithdraw(false);
+      void queryClient.invalidateQueries({ queryKey: ['tournament', tournament.slug] });
+      void queryClient.invalidateQueries({ queryKey: ['participant-me', tournament.slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants', tournament.slug] });
+    },
+  });
+
   if (tournament.status !== 'OPEN_REGISTRATION') return null;
 
   if (participantStatus === 'REGISTERED' || participantStatus === 'CHECKED_IN') {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-rizzotto-success/40 bg-rizzotto-success/10 px-4 py-2.5">
-        <svg
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className="h-4 w-4 text-rizzotto-success shrink-0"
-          aria-hidden="true"
-        >
-          <path
-            fillRule="evenodd"
-            d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-            clipRule="evenodd"
-          />
-        </svg>
-        <span className="text-sm font-semibold text-rizzotto-success">
-          {t('tournament.register.confirmed')}
-        </span>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 rounded-md border border-rizzotto-success/40 bg-rizzotto-success/10 px-4 py-2.5">
+          <svg
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="h-4 w-4 text-rizzotto-success shrink-0"
+            aria-hidden="true"
+          >
+            <path
+              fillRule="evenodd"
+              d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span className="text-sm font-semibold text-rizzotto-success">
+            {t('tournament.register.confirmed')}
+          </span>
+        </div>
+        {!confirmingWithdraw ? (
+          <button
+            type="button"
+            onClick={() => setConfirmingWithdraw(true)}
+            className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-danger transition-colors self-start"
+          >
+            Withdraw from tournament
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-rizzotto-stone-400">Are you sure?</span>
+            <button
+              type="button"
+              onClick={() => withdraw.mutate()}
+              disabled={withdraw.isPending}
+              className="text-xs text-rizzotto-danger hover:text-red-300 transition-colors disabled:opacity-50"
+            >
+              {withdraw.isPending ? 'Withdrawing…' : 'Yes, withdraw'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingWithdraw(false)}
+              className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+        {withdraw.isError && (
+          <span className="text-xs text-rizzotto-danger">{(withdraw.error as Error).message}</span>
+        )}
       </div>
     );
   }
