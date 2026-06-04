@@ -39,7 +39,7 @@ function PresetCard({
       </div>
 
       <div className="flex items-center gap-3 text-xs text-stone-500">
-        <span>{preset.turns.length} Züge</span>
+        <span>{preset.turns.length} moves</span>
         <span>•</span>
         <span>{preset.turn_seconds}s pro Zug</span>
       </div>
@@ -51,14 +51,14 @@ function PresetCard({
             params={{ id: preset.id }}
             className="text-xs rounded border border-stone-700 px-2.5 py-1 text-stone-300 hover:border-stone-500 hover:text-stone-100 transition-colors"
           >
-            Bearbeiten
+            Edit
           </Link>
           <button
             type="button"
             onClick={onDelete}
             className="text-xs text-red-600 hover:text-red-400 transition-colors"
           >
-            Löschen
+            Delete
           </button>
         </div>
       )}

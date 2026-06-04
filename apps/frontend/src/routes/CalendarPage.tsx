@@ -168,7 +168,7 @@ export function CalendarPage() {
           type="button"
           onClick={() => setCursor((c) => addMonths(c, -1))}
           className="rounded border border-rizzotto-iron-700 px-3 py-1.5 text-sm text-rizzotto-stone-300 transition-colors hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-100"
-          aria-label="Vorheriger Monat"
+          aria-label="Previous month"
         >
           ←
         </button>
@@ -181,7 +181,7 @@ export function CalendarPage() {
           type="button"
           onClick={() => setCursor((c) => addMonths(c, 1))}
           className="rounded border border-rizzotto-iron-700 px-3 py-1.5 text-sm text-rizzotto-stone-300 transition-colors hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-100"
-          aria-label="Nächster Monat"
+          aria-label="Next month"
         >
           →
         </button>
@@ -195,7 +195,7 @@ export function CalendarPage() {
           }}
           className="ml-auto rounded border border-rizzotto-iron-700 px-3 py-1.5 text-xs text-rizzotto-stone-400 transition-colors hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200"
         >
-          Heute
+          Today
         </button>
       </div>
 
@@ -205,8 +205,8 @@ export function CalendarPage() {
       {!isLoading && isError && (
         <EmptyState
           variant="sigil"
-          title="Fehler beim Laden"
-          body="Der Kalender konnte nicht geladen werden. Bitte versuche es später erneut."
+          title="Failed to load"
+          body="The calendar could not be loaded. Please try again later."
         />
       )}
 
@@ -216,7 +216,7 @@ export function CalendarPage() {
 
           {(data ?? []).length === 0 && (
             <p className="mt-4 text-center text-sm text-rizzotto-stone-500">
-              Keine Turniere in diesem Monat gefunden.
+              No tournaments found this month.
             </p>
           )}
         </>

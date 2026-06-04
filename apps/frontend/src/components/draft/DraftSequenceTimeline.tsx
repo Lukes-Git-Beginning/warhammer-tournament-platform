@@ -31,7 +31,7 @@ export function DraftSequenceTimeline({ turns, current }: DraftSequenceTimelineP
   if (turns.length === 0) {
     return (
       <div className="rounded-md border border-stone-800 bg-stone-900/40 p-4 text-center text-stone-500 text-sm">
-        Keine Züge definiert
+        No moves defined
       </div>
     );
   }

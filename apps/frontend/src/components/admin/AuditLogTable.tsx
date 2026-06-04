@@ -88,18 +88,18 @@ export function AuditLogTable() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-stone-800 bg-stone-900/60">
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">Datum</th>
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">Entity-Typ</th>
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">Entity-ID</th>
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">Aktion</th>
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">Akteur</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone-400">Date</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone-400">Entity Type</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone-400">Entity ID</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone-400">Action</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone-400">Actor</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-800/60">
                 {entries.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-stone-500">
-                      Keine Einträge.
+                      No entries.
                     </td>
                   </tr>
                 )}
@@ -134,10 +134,10 @@ export function AuditLogTable() {
                 disabled={page <= 1}
                 className="rounded border border-stone-700 px-3 py-1.5 text-stone-300 hover:border-stone-500 hover:text-stone-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                ← Zurück
+                ← Back
               </button>
               <span className="text-stone-500">
-                Seite {page} / {totalPages}
+                Page {page} / {totalPages}
               </span>
               <button
                 type="button"
@@ -145,7 +145,7 @@ export function AuditLogTable() {
                 disabled={page >= totalPages}
                 className="rounded border border-stone-700 px-3 py-1.5 text-stone-300 hover:border-stone-500 hover:text-stone-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                Weiter →
+                Next →
               </button>
             </div>
           )}

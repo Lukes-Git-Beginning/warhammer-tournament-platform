@@ -6,7 +6,6 @@ import { useAuthQuery, useLogout } from '@/lib/auth';
 import { DiscordLoginButton } from '@/components/auth/DiscordLoginButton';
 import { RizzottoWordmarkImage } from '@/components/icons/RizzottoWordmarkImage';
 import { Button } from '@/components/ui/button';
-import { LanguageToggle } from '@/components/layout/LanguageToggle';
 import { cn } from '@/lib/utils';
 
 const NAV_LINK_CLASS =
@@ -88,9 +87,8 @@ export function Header() {
           {navLinks}
         </nav>
 
-        {/* Auth area + Language + Hamburger */}
+        {/* Auth area + Hamburger */}
         <div className="flex items-center gap-3">
-          <LanguageToggle className="hidden sm:inline-flex" />
           {user ? (
             <>
               <Link
@@ -155,9 +153,6 @@ export function Header() {
           data-testid="mobile-menu"
         >
           {navLinks}
-          <div className="pt-2">
-            <LanguageToggle />
-          </div>
         </nav>
       )}
     </header>

@@ -116,7 +116,7 @@ function RecentMatchesList({ data }: { data: H2HResponse }) {
 
   if (recent_matches.length === 0) {
     return (
-      <p className="text-sm text-stone-500 italic">Keine kürzlichen Duelle gefunden.</p>
+      <p className="text-sm text-stone-500 italic">No recent duels found.</p>
     );
   }
 
@@ -124,7 +124,7 @@ function RecentMatchesList({ data }: { data: H2HResponse }) {
     <div className="space-y-2">
       {recent_matches.map((m) => {
         const dateStr = m.played_at
-          ? new Date(m.played_at).toLocaleDateString('de-DE', {
+          ? new Date(m.played_at).toLocaleDateString('en-GB', {
               day: '2-digit',
               month: '2-digit',
               year: 'numeric',
@@ -133,11 +133,11 @@ function RecentMatchesList({ data }: { data: H2HResponse }) {
 
         const resultLabel =
           m.result === 'PLAYER1_WIN'
-            ? `${player_a.username} gewinnt`
+            ? `${player_a.username} wins`
             : m.result === 'PLAYER2_WIN'
-              ? `${player_b.username} gewinnt`
+              ? `${player_b.username} wins`
               : m.result === 'DRAW'
-                ? 'Unentschieden'
+                ? 'Draw'
                 : '—';
 
         const resultColor =
@@ -264,7 +264,7 @@ export function H2HPage() {
       {/* Summary */}
       <section>
         <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          Übersicht
+          Overview
         </h2>
         <SummaryBlock data={data} />
       </section>
@@ -272,7 +272,7 @@ export function H2HPage() {
       {/* Faction Breakdown */}
       <section>
         <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          Fraktions-Breakdown
+          Faction Breakdown
         </h2>
         <FactionBreakdown data={data} />
       </section>
@@ -280,7 +280,7 @@ export function H2HPage() {
       {/* Recent Matches */}
       <section>
         <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          Letzte Duelle
+          Recent Duels
         </h2>
         <RecentMatchesList data={data} />
       </section>

@@ -62,11 +62,11 @@ export function PresetLibraryAdmin() {
                 <td className="px-4 py-3">
                   {preset.is_public ? (
                     <span className="rounded bg-emerald-900/40 px-2 py-0.5 text-xs font-medium text-emerald-300">
-                      Öffentlich
+                      Public
                     </span>
                   ) : (
                     <span className="rounded bg-stone-800 px-2 py-0.5 text-xs font-medium text-stone-400">
-                      Privat
+                      Private
                     </span>
                   )}
                 </td>

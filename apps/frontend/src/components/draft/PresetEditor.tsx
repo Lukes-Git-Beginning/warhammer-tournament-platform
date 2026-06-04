@@ -153,7 +153,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
     const result = CreateDraftPresetSchema.safeParse(formData);
     if (!result.success) {
       const first = result.error.errors[0];
-      setError(first ? `${first.path.join('.')}: ${first.message}` : 'Validierungsfehler');
+      setError(first ? `${first.path.join('.')}: ${first.message}` : 'Validation error');
       return;
     }
 
@@ -161,7 +161,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
     try {
       await onSave(result.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+      setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
@@ -174,7 +174,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
     <form onSubmit={handleSubmit} className="space-y-8">
       {/* Basic Info */}
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-stone-200">Grundeinstellungen</h2>
+        <h2 className="text-lg font-semibold text-stone-200">Basic Settings</h2>
 
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Name */}
@@ -188,14 +188,14 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
               onChange={(e) => setName(e.target.value)}
               maxLength={120}
               required
-              placeholder="z.B. Standard 5-Ban 3-Pick"
+              placeholder="e.g. Standard 5-Ban 3-Pick"
               className="rounded border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
             />
           </div>
 
           {/* Turn seconds */}
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-stone-400">Zeit pro Zug (Sek.)</label>
+            <label className="text-sm text-stone-400">Time per move (sec.)</label>
             <input
               type="number"
               value={turnSeconds}
@@ -209,13 +209,13 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
 
         {/* Description */}
         <div className="flex flex-col gap-1">
-          <label className="text-sm text-stone-400">Beschreibung</label>
+          <label className="text-sm text-stone-400">Description</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             maxLength={2000}
             rows={3}
-            placeholder="Optional — Kurzbeschreibung des Preset-Formats"
+            placeholder="Optional — brief description of the preset format"
             className="rounded border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-rizzotto-gold-500 focus:outline-none resize-none"
           />
         </div>
@@ -228,7 +228,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
             onChange={(e) => setIsPublic(e.target.checked)}
             className="rounded border-stone-600 bg-stone-800 accent-rizzotto-gold-500"
           />
-          <span className="text-sm text-stone-300">Öffentlich sichtbar</span>
+          <span className="text-sm text-stone-300">Publicly visible</span>
         </label>
       </section>
 
@@ -240,7 +240,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
       {/* Sequence Timeline */}
       {turns.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-lg font-semibold text-stone-200">Sequenz-Vorschau</h2>
+          <h2 className="text-lg font-semibold text-stone-200">Sequence Preview</h2>
           <DraftSequenceTimeline turns={turns} />
         </section>
       )}
@@ -248,35 +248,35 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
       {/* Turn list with DnD */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-stone-200">Züge ({turns.length})</h2>
+          <h2 className="text-lg font-semibold text-stone-200">Moves ({turns.length})</h2>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => addTurn('host')}
               className="text-xs rounded border border-blue-700 px-2.5 py-1 text-blue-300 hover:border-blue-500 hover:text-blue-100 transition-colors"
             >
-              + Host-Zug
+              + Host Move
             </button>
             <button
               type="button"
               onClick={() => addTurn('guest')}
               className="text-xs rounded border border-red-800 px-2.5 py-1 text-red-300 hover:border-red-600 hover:text-red-100 transition-colors"
             >
-              + Guest-Zug
+              + Guest Move
             </button>
             <button
               type="button"
               onClick={() => addTurn('admin')}
               className="text-xs rounded border border-stone-600 px-2.5 py-1 text-stone-300 hover:border-stone-400 hover:text-stone-100 transition-colors"
             >
-              + Admin-Reveal-Zug
+              + Admin Reveal Move
             </button>
           </div>
         </div>
 
         {turns.length === 0 && (
           <div className="rounded-md border border-stone-800 bg-stone-900/40 p-8 text-center text-stone-500 text-sm">
-            Noch keine Züge — füge Host-, Guest- oder Admin-Züge hinzu.
+            No moves yet — add host, guest, or admin moves.
           </div>
         )}
 
@@ -313,7 +313,7 @@ export function PresetEditor({ initialPreset, onSave }: PresetEditorProps) {
           disabled={saving}
           className="rounded border border-rizzotto-gold-500/60 bg-rizzotto-gold-500/10 px-6 py-2 text-sm font-medium text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/20 disabled:opacity-50 transition-colors"
         >
-          {saving ? 'Speichern…' : 'Preset speichern'}
+          {saving ? 'Saving…' : 'Save preset'}
         </button>
       </div>
     </form>

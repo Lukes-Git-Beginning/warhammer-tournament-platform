@@ -96,7 +96,7 @@ export function MatchScoreModal({
 
         <fieldset className="mb-4">
           <legend className="text-xs text-stone-400 mb-2">
-            Fraktionen (optional — füttert die Meta-Statistiken)
+            Factions (optional — feeds the meta statistics)
           </legend>
           <div className="space-y-2">
             {player1Id && (

@@ -58,19 +58,19 @@ export function TurnEditor({
             type="button"
             {...dragHandleProps}
             className="cursor-grab text-stone-500 hover:text-stone-300 select-none px-1"
-            aria-label="Reihenfolge ändern"
+            aria-label="Reorder"
           >
             ⋮⋮
           </button>
-          <span className="text-sm font-medium text-stone-300">Zug #{index + 1}</span>
+          <span className="text-sm font-medium text-stone-300">Move #{index + 1}</span>
         </div>
         <button
           type="button"
           onClick={onDelete}
           className="text-xs text-red-500 hover:text-red-400 transition-colors"
-          aria-label="Zug löschen"
+          aria-label="Delete move"
         >
-          Löschen
+          Delete
         </button>
       </div>
 
@@ -78,7 +78,7 @@ export function TurnEditor({
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {/* Actor */}
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-stone-500">Akteur</label>
+          <label className="text-xs text-stone-500">Actor</label>
           <select
             value={turn.actor}
             onChange={(e) => update({ actor: e.target.value as DraftTurn['actor'] })}
