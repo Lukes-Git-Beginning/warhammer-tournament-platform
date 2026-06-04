@@ -21,8 +21,8 @@
   },
   "brand": {
     "name": "RizzOtto's Arena",
-    "tagline": "Wo Listen geschmiedet werden",
-    "motto": "Where Lists Are Forged."
+    "tagline": "",
+    "motto": ""
   },
   "header": {
     "home": "Home",
@@ -38,8 +38,8 @@
     "admin": "Admin"
   },
   "hero": {
-    "tagline": "Wo Listen geschmiedet werden",
-    "cta_primary": "In den Kampf",
+    "tagline": "",
+    "cta_primary": "Anmelden",
     "cta_secondary": "Zum Leaderboard",
     "scroll_cue": "Mehr entdecken"
   },

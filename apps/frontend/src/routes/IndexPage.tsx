@@ -1,5 +1,4 @@
 import { HeroSection } from '@/components/landing/HeroSection';
-import { ForgeSection } from '@/components/landing/ForgeSection';
 import { ActiveMustersSection } from '@/components/landing/ActiveMustersSection';
 import { PersonalisedFactionBlock } from '@/components/landing/PersonalisedFactionBlock';
 import { RollOfHonourSection } from '@/components/landing/RollOfHonourSection';
@@ -12,7 +11,6 @@ export function IndexPage() {
     <>
       <main id="main-content">
         <HeroSection />
-        <ForgeSection />
         <ActiveMustersSection />
         <PersonalisedFactionBlock />
         <RollOfHonourSection />

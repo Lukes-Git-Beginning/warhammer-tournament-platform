@@ -21,8 +21,8 @@
   },
   "brand": {
     "name": "RizzOtto's Arena",
-    "tagline": "Where Lists Are Forged",
-    "motto": "Where Lists Are Forged."
+    "tagline": "",
+    "motto": ""
   },
   "header": {
     "home": "Home",
@@ -38,8 +38,8 @@
     "admin": "Admin"
   },
   "hero": {
-    "tagline": "Where Lists Are Forged",
-    "cta_primary": "Take Up Arms",
+    "tagline": "",
+    "cta_primary": "Sign In",
     "cta_secondary": "View the Leaderboard",
     "scroll_cue": "Discover more"
   },
@@ -97,8 +97,8 @@
     "cta": "Join Now"
   },
   "footer": {
-    "tagline": "Where Lists Are Forged.",
-    "motto": "Where Lists Are Forged.",
+    "tagline": "",
+    "motto": "",
     "imprint": "Imprint",
     "privacy": "Privacy",
     "terms": "Terms",

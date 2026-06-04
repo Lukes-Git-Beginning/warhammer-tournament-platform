@@ -24,7 +24,7 @@ export function Footer() {
             <RizzottoWordmarkImage bronze className="h-12 w-auto" loading="lazy" />
           </Link>
           <p className="text-xs font-display italic tracking-wider text-rizzotto-bronze/80">
-            Where Lists Are Forged.
+            Tournament Platform for Warhammer: The Old World
           </p>
         </div>
 
