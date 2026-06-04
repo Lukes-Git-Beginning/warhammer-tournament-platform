@@ -86,9 +86,11 @@ for (const player of players) {
 
 Nutzt `SingleElimination` aus `tournament-pairings`. Funktion: `generateSingleElim(tournamentId, participantIds)`.
 
-**BYE-Handling:** Library füllt auf — falls genau ein Slot besetzt ist → `status = 'BYE'`, `winner_id = Spieler`. BYE-Winner wird in 3. Pass in den freien Slot des Folge-Matches propagiert.
+**BYE-Handling (feeder-aware seit 2026-06-04):** Ein Match ist nur dann `BYE`, wenn genau ein Slot besetzt ist **und kein Feeder-Match mehr in den freien Slot liefert**. Klassifikation läuft rundenaufsteigend, BYE-Winner propagieren sofort (Kaskaden lösen sich in einem Sweep). Vorher wurde bei Non-pow2-Feldern (5, 9, 12 … Spieler) das Play-in-Ziel vorzeitig als BYE finalisiert — der Play-in-Sieger hatte keinen Slot mehr (Spiegel des DE-Fixes vom 03.06.). Wichtig: `tournament-pairings` erzeugt für Non-pow2 **Play-in-Runden, keine klassischen BYEs** — zur Generierungszeit existieren dann gar keine BYE-Matches. Regression-Tests: `test/bracket.test.ts` (5/6/7/9/12 Spieler).
 
 **`next_match_id`-Verkettung:** Zwei-Pass-Verfahren — erster Pass weist UUIDs zu, zweiter verknüpft via `m.win.round / m.win.match` → UUID-Map. Ermöglicht Live-Bracket-Updates über `next_match_id` in `Match`-Records.
+
+**Gotcha Re-Generate:** Soft-deletete Matches blockieren `tx.match.createMany()` über den Unique-Constraint `(tournament_id, round, match_number)` — ein Bracket-Reset-Feature braucht partiellen Index oder Hard-Cleanup (ROADMAP §2.6).
 
 ```typescript
 export function generateSingleElim(

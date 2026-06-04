@@ -58,6 +58,7 @@ Alle Commands werden im Repo-Root ausgeführt (pnpm delegiert via Turborepo).
 | `pnpm db:migrate`        | `prisma migrate dev` im `@rizzotto/db`-Workspace                     |
 | `pnpm db:migrate:deploy` | `prisma migrate deploy` für Production                           |
 | `pnpm db:seed`           | Seed-Script (`prisma/seed.ts`) im `@rizzotto/db`-Workspace           |
+| `pnpm db:seed:dummies`   | Dummy-User für lokales Turnier-Testing (`-- --tournament <slug>`, `--with-factions`); verweigert nicht-lokale DBs |
 | `pnpm db:studio`         | Prisma Studio öffnen                                             |
 | `pnpm docker:up`         | `docker compose up -d` (Postgres + Redis lokal)                  |
 | `pnpm docker:down`       | `docker compose down`                                            |

@@ -80,6 +80,32 @@ Komplett auf `main` gelandet (Merge `30d759e`) und live auf rizzotto.gg — `mod
 | 3   | Cold-Fit-Kosten validieren (großer Season-Datensatz) — ggf. Fit in deferred Job/Cron auslagern statt im Request                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `lib/rating-model-service.ts`                                                                                        | Niedrig  |
 | 4   | ~~**Breakdown-/Matrix-/Proficiency-Views**~~ ✅ **done auf Branch (2026-06-03)** — alle 4 `routes/rating.ts`-Endpoints im UI: `ModelMatchupHeatmap` auf `/meta` (reuse `winrateColor`), `PlayerFactionProficiencyCard` im Profil (ersetzt Mastery-Card), Match-Breakdown auf `getMatchScoringBreakdown` umgestellt. Anti-Farming-Endpoint hat Getter, UI-Surface optional/offen                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `apps/frontend`, `routes/rating.ts`                                                                                  | ✅ done (Branch) |
 
+### 2.6 Session 2026-06-04 (Alex) — Tournament-Flow end-to-end + Findings
+
+Alex' erstes lokales Probeturnier (9 Spieler, Single-Elim, Dummy-User) deckte massive UI-Löcher im Kern-Flow auf — Backend war jeweils fertig, Frontend fehlte. Alles gefixt + committet (lokal, Push ausstehend):
+
+| Item | Status |
+| --- | --- |
+| **Tournament-Registration-UI** — Anmelde-Button + Teilnehmerliste existierten nie; kein Spieler konnte sich je über die Site anmelden (`RegisterButton.tsx`, `ParticipantsList.tsx`) | ✅ done |
+| **Lifecycle-Buttons** — „Anmeldung schließen" + „Turnier starten" fehlten (nur Publish existierte, §2.1 war unvollständig) | ✅ done |
+| **SE-Generator-Bug (non-pow2):** Play-in-Ziel wurde bei 5/9/12… Spielern vorzeitig als BYE finalisiert — Spiegel des DE-Fixes vom 03.06., jetzt feeder-aware (`lib/bracket.ts` + Regression-Tests) | ✅ done |
+| Bracket: Spielernamen + Avatare statt UUIDs, Score-Modal-Namen, Full-width-Breakout + 70vh | ✅ done |
+| Faction-Select im Score-Modal (füttert Heatmap/MatchupStats) | ✅ done |
+| Dummy-User-Seeder `pnpm db:seed:dummies` (--tournament, --with-factions; nur lokale DB) | ✅ done |
+| `db:migrate`/`db:migrate:deploy` Root-Scripts: fehlendes `exec` | ✅ done |
+| Logo-Rebrand-Assets (§2.5 D) — Cast-Iron-Wordmark/Sigil/Favicon/og-image + `wordmark-contrast`-Utility | ✅ done |
+
+**Neue offene Items:**
+
+| # | Item | Notiz |
+| --- | --- | --- |
+| 1 | **Abmelden/Withdraw-UI** — Spieler können sich anmelden, aber nicht abmelden | Backend-Endpoint prüfen |
+| 2 | **Bracket-Reset-Feature** — Soft-Delete-Matches kollidieren mit Unique `(tournament_id, round, match_number)` beim Re-Generate; braucht partiellen Index oder Hard-Cleanup im /start | Organisatoren-Realität („falsch ausgelost") |
+| 3 | **ONBOARDING.md ergänzen:** `pnpm -F @rizzotto/frontend run images:optimize` (sonst lokal kaputte Bilder — AVIF/WebP sind gitignored Build-Artefakte) + `playwright install chromium` | beide Lücken kosteten Alex Zeit |
+| 4 | `MatchScoreModal`/`CheckInButton` sind hardcoded deutsch/englisch statt i18n | Bestand + neu, vereinheitlichen |
+| 5 | **M7-Reprioritisierung (Alex):** Army-List-Browser-Annahme widerlegt — 1-List-Tournaments extrem selten; eigene Prio-Session fällig, §5 + §2.5 F umbauen | Product-Owner-Entscheidung |
+| 6 | **Push + Deploy der Session-Commits** (11 Commits lokal auf `main`) | Push → CI → Auto-Deploy live |
+
 ### 2.5 Landing/Nav Design-Feedback (Alex, 20.05. → re-iteriert + umgesetzt 03.06.)
 
 Vier annotierte Screenshots von Alex (Stand 20.05.), gegen aktuellen Stand geprüft. Code-Punkte sind umgesetzt; zwei Tasks bleiben extern offen (neues Logo-Asset, Rollen-Promotion).
@@ -94,8 +120,8 @@ Vier annotierte Screenshots von Alex (Stand 20.05.), gegen aktuellen Stand gepr�
 | B1  | Spielerzahl „—" gefixt: List- **und** Detail-Endpoint serialisieren jetzt `participantCount` aus `_count.participants`              | `backend/routes/tournaments.ts`            | ✅ done                               |
 | B2  | „Live Tournaments"-Feed holt alle Status gemischt — Filter auf ONGOING/UPCOMING erwägen                                            | `ActiveMustersSection.tsx`                 | 🟡 deferred                           |
 | C   | Rebrand sichtbarer Text → „RizzOtto's Arena" (index.html, i18n de/en, Footer-©, Header/Icon-aria, Discord-Notify, iCal). Domain/Dateinamen bleiben `rizzotto.gg`/`rizzotto-*` | div. Frontend + Backend                    | ✅ done (Text)                        |
-| D   | **Neues Logo/Sigil-Asset** — muss den neuen Namen enthalten (Hero/Nav-Name ist ein Bild). Austausch unter gleichen Pfaden          | `apps/frontend/public/img/*`, favicon, og  | ⚠️ offen — externes Designer-Asset    |
-| E   | **Alex auf ORGANIZER hochstufen** — Turnier-Erstellung ist gewollt Organizer-only (`requireRole('ORGANIZER','MODERATOR','ADMIN')`) | Admin-Panel / DB                           | ⚠️ offen — Ops-Task                   |
+| D   | ~~**Neues Logo/Sigil-Asset**~~ ✅ done (2026-06-04) — Cast-Iron-Logo von Alex eingebaut (Wordmark/Sigil/Favicon/og), Gamma-Aufhellung + CSS-Kontrast-Glow | `apps/frontend/public/img/*`, favicon, og  | ✅ done (lokal committet)             |
+| E   | ~~**Alex auf ORGANIZER hochstufen**~~ ✅ war bereits erledigt — Alex sieht Create-Tournament auf Prod (Rolle vorhanden); lokal ist er ADMIN | Admin-Panel / DB                           | ✅ done                               |
 | F   | Library-Section reaktivieren als Einstieg zum Army-List-Browser                                                                      | `ForgeSection.tsx`                         | → M7 (§5.1)                           |
 
 ---
