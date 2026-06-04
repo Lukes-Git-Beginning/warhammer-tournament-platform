@@ -421,6 +421,7 @@ export function TournamentDetail() {
           playerNames={Object.fromEntries(
             participantsData.data.map((p) => [p.user.id, p.user.username]),
           )}
+          tournamentSlug={tournament.slug}
         />
       )}
 

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { getMatchGames } from '@/lib/api';
+import { getMatchGames, getTournamentMaps } from '@/lib/api';
+import type { MapDto } from '@/lib/api';
 import type { BracketNode } from '@rizzotto/types';
 import { useMatchDecisionSocket } from '@/hooks/useMatchDecisionSocket';
 import { GameTile } from './GameTile';
@@ -11,13 +12,15 @@ interface Props {
   matches: BracketNode[];
   /** Player id → display name lookup */
   playerNames: Record<string, string>;
+  /** Tournament slug — used to load the map pool for name resolution */
+  tournamentSlug: string;
 }
 
 /**
  * Shows the current user's active match tile(s) above the Bracket.
  * Only renders when the user has a PENDING or ONGOING match in the tournament.
  */
-export function MyMatchSection({ currentUserId, matches, playerNames }: Props) {
+export function MyMatchSection({ currentUserId, matches, playerNames, tournamentSlug }: Props) {
   const myMatch = matches.find(
     (m) =>
       (m.status === 'PENDING' || m.status === 'ONGOING') &&
@@ -26,17 +29,26 @@ export function MyMatchSection({ currentUserId, matches, playerNames }: Props) {
 
   if (!myMatch) return null;
 
-  return <MyMatchInner match={myMatch} currentUserId={currentUserId} playerNames={playerNames} />;
+  return (
+    <MyMatchInner
+      match={myMatch}
+      currentUserId={currentUserId}
+      playerNames={playerNames}
+      tournamentSlug={tournamentSlug}
+    />
+  );
 }
 
 function MyMatchInner({
   match,
   currentUserId,
   playerNames,
+  tournamentSlug,
 }: {
   match: BracketNode;
   currentUserId: string;
   playerNames: Record<string, string>;
+  tournamentSlug: string;
 }) {
   useMatchDecisionSocket(match.matchId);
 
@@ -45,6 +57,13 @@ function MyMatchInner({
     queryFn: () => getMatchGames(match.matchId),
     refetchInterval: 30_000,
   });
+
+  const { data: mapsData } = useQuery({
+    queryKey: ['tournament-maps', tournamentSlug],
+    queryFn: () => getTournamentMaps(tournamentSlug),
+    staleTime: 5 * 60_000,
+  });
+  const maps: MapDto[] = mapsData?.data ?? [];
 
   const p1Name = (match.player1Id && playerNames[match.player1Id]) ?? 'Player 1';
   const p2Name = (match.player2Id && playerNames[match.player2Id]) ?? 'Player 2';
@@ -79,6 +98,7 @@ function MyMatchInner({
               player1Name={p1Name}
               player2Name={p2Name}
               isParticipant={true}
+              maps={maps}
             />
           ))}
         </div>

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { reportGameResult, startMatchDecision } from '@/lib/api';
-import type { GameDto } from '@/lib/api';
+import type { GameDto, MapDto } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { LobbyCodeField } from './LobbyCodeField';
 
@@ -16,6 +16,8 @@ interface Props {
   player2Name: string;
   /** Whether the current user is a participant in this match */
   isParticipant: boolean;
+  /** Map pool for resolving picked map name */
+  maps?: MapDto[];
 }
 
 export function GameTile({
@@ -27,6 +29,7 @@ export function GameTile({
   player1Name,
   player2Name,
   isParticipant,
+  maps = [],
 }: Props) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -108,7 +111,11 @@ export function GameTile({
           </p>
           {game.decision?.pickedMapId && (
             <p className="text-xs text-rizzotto-stone-500">
-              Map: <span className="text-rizzotto-stone-300">{game.decision.pickedMapId}</span>
+              Map:{' '}
+              <span className="text-rizzotto-stone-300">
+                {maps.find((m) => m.id === game.decision!.pickedMapId)?.name
+                  ?? game.decision.pickedMapId}
+              </span>
             </p>
           )}
           {game.replayUrl && (
@@ -183,7 +190,8 @@ export function GameTile({
                 <div className="text-center">
                   <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider">Battlefield</span>
                   <p className="text-sm font-semibold text-rizzotto-stone-100 mt-0.5">
-                    {game.decision.pickedMapId}
+                    {maps.find((m) => m.id === game.decision!.pickedMapId)?.name
+                      ?? game.decision.pickedMapId}
                   </p>
                 </div>
               )}
