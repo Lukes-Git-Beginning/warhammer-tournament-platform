@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import { getBracket, startNextSwissRound } from '@/lib/api';
+import { getBracket, getParticipants, startNextSwissRound } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { SVGBracket } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
@@ -21,6 +21,14 @@ export function BracketView({ slug, tournamentId, canManage = false }: BracketVi
   const { data, isLoading, error } = useQuery({
     queryKey: ['bracket', slug],
     queryFn: () => getBracket(slug),
+    enabled: !!slug,
+  });
+
+  // Same query key as ParticipantsList — shares the cache. Used to resolve
+  // player ids to usernames inside the bracket nodes.
+  const { data: participantsData } = useQuery({
+    queryKey: ['tournament-participants', slug],
+    queryFn: () => getParticipants(slug),
     enabled: !!slug,
   });
 
@@ -143,7 +151,15 @@ export function BracketView({ slug, tournamentId, canManage = false }: BracketVi
                 wrapperStyle={{ width: '100%', height: '600px' }}
                 contentStyle={{ padding: '16px' }}
               >
-                <SVGBracket data={data} onMatchClick={(matchId) => setSelectedMatchId(matchId)} />
+                <SVGBracket
+                  data={data}
+                  playerNameMap={
+                    new Map(
+                      (participantsData?.data ?? []).map((p) => [p.user.id, p.user.username]),
+                    )
+                  }
+                  onMatchClick={(matchId) => setSelectedMatchId(matchId)}
+                />
               </TransformComponent>
             </>
           )}
