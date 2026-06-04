@@ -1,6 +1,6 @@
 # ROADMAP — Rizzotto
 
-> **Stand:** 2026-06-03 · **Phase:** Post-Launch, Live · **Domain:** rizzotto.gg
+> **Stand:** 2026-06-04 · **Phase:** Live (Beta) — auf dem Weg zu Launch v1 · **Domain:** rizzotto.gg (Prod-Betrieb: Luke)
 >
 > Diese Roadmap ist die **SSOT** für _was läuft_, _was als nächstes drankommt_ und _was bewusst nicht gebaut wird_. Sub-Pläne (Detail-Plans für einzelne Tracks) liegen unter `~/.claude/plans/`, nicht im Repo. Historie und Welle-Specs siehe `docs/archive/`.
 
@@ -8,12 +8,12 @@
 
 ## TL;DR
 
-- **rizzotto.gg ist live seit 2026-05-19** auf Hetzner CX22, Caddy + Cloudflare-Origin-Cert.
-- **M1–M5 + Welle 2 (Steam-Hard-Gate, BPT/SFT/SLT, MMR, Match-Flow, 24 Faction-Sigils) sind durch.**
-- **Heute (2026-05-19) gefixt:** Steam-Hard-Gate end-to-end verdrahtet, Top-Bar-Navigation-Crash, Wordmark-AVIF, Logout (Content-Type), datetime-Submit, Header-Avatar-Profil-Link.
-- **Zuletzt gelandet (2026-06-03):** Phase-2-Konsolidierung (PR #10, MMR-Tabellen auf Prod gedroppt, kein CSV-Export) + **M6 Hub-Foundation** (PR #11) komplett live + **DOUBLE_ELIMINATION** (§6, alle Feldgrößen, migrationsfrei). **Landing/Nav Design-Feedback (Alex, §2.5) gelandet + deployed 2026-06-03** (Nav-„Home" raus + „Turniere"-Reiter, „Take up arms" auth-aware, „View all"→`/tournaments`, toter Library-CTA raus, `participantCount` auf List+Detail, sichtbarer Brand-Text → „RizzOtto's Arena"). Offenes Backlog: `DISCORD_BOT_TOKEN` + Hetzner-VM-Backup (User-Tasks), Cold-Fit-Job + Anti-Farming-UI (§2.4), Community-Links (echte URLs ausstehend), **neues Logo-Asset + Alex→ORGANIZER (§2.5, extern)**.
-- **Mid-term:** ~~M6 Hub-Foundation~~ ✅ live (2026-06-03). Als nächstes: M7 Datentiefe (Army-List-Browser, Scraper-Write-Path). M8 UGC (Battle-Reports, Comments). M9 Team-Play (3v3, SfT, Blind-Pick).
-- **Bewusst geparkt:** In-App-Listenbauer, Live-Stream-Embed, Achievements, Coaching, Multi-Tenant, Native-App.
+- **rizzotto.gg ist live seit 2026-05-19** auf Hetzner CX22, Caddy + Cloudflare-Origin-Cert. **Rollenmodell seit 2026-06-04:** Alex = Product Owner + lokale Entwicklung, Luke = Prod-Betrieb (Server, Cloudflare, Deploys); Handover künftig per Feature-Branch-PR.
+- **M1–M6 + Welle 2 + DOUBLE_ELIMINATION + Dynamic Weighted Leaderboard sind durch.**
+- **Zuletzt live (2026-06-04):** Die 13 Commits der Nacht-Session (Registration-UI, Lifecycle-Buttons, SE-Generator-Fix, Bracket-Polish, Faction-Select, Cast-Iron-Logo) sind deployed — nach CI-Fix (Visual-Baselines, §2.7). Live-Smoke grün; 1 staler Cloudflare-Cache-Eintrag (`rizzotto-wordmark.avif`) wartet auf Luke-Purge.
+- **Aktueller Fokus: M7 — Launch v1 „Match Hub" (§5, Alex-Spec 2026-06-04):** Match-Klärung (BPT-Pick, Map-Ban&Pick, 4 Map-Modi) lebt im Match-Panel statt in Discord-DMs — der intrinsische Mehrwert ggü. Totaltavern. Dazu: Decision-Flow-Reparatur (§2.7-Audit), SFT-Hidden-Fix, Withdraw, Bracket-Reset, Englisch-only. Danach gestufter Community-Launch (geschlossener Kreis → öffentlich).
+- **Reprioritisiert (Prio-Session 2026-06-04):** **Open Play/Ladder → M8 (§7, neu — Alex-Wunsch, regelmäßig auf Prio ansprechen)**, Datentiefe → M9 (§8.1), UGC → M10 (§8.2), Team-Play → M11 (§8.3), **Army-Lists/SLT/3×3 → M12 on hold (§8.4, Re-Eval bei v1-Launch)**.
+- **Bewusst geparkt:** In-App-Listenbauer, Live-Stream-Embed, Achievements, Coaching, Multi-Tenant, Native-App, Draft-Builder für fremde Hosts (§9).
 
 ---
 
@@ -51,7 +51,7 @@ Bundled in `f4e3705` und deployed 2026-05-20: Delete-Button, Status-Transition (
 | #   | Item                                                                          | Wo                           | Notiz                                                                 |
 | --- | ----------------------------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------- |
 | 1   | ~~`STEAM_WEB_API_KEY` in `/etc/rizzotto/env/backend.env` setzen~~             | Server                       | ✅ done 2026-05-20                                                    |
-| 2   | **`DISCORD_BOT_TOKEN`** in env setzen + Discord-Bot starten                   | Server + Discord-Application | Vorbereitung für M8 Discord-Bot-Integration                           |
+| 2   | **`DISCORD_BOT_TOKEN`** in env setzen + Discord-Bot starten                   | Server + Discord-Application | Schaltet vorhandene Notify-Features frei (`discord-notify.ts`: Announce, Check-in, Pairings, Dispute); Bot-Commands später in M10 (§8.2). Teil der Luke-Checkliste §5.3 |
 | 3   | **Hetzner-VM-Backup aktivieren**                                              | Hetzner Cloud-Console        | ~1.68 €/mo, User-Task                                                 |
 | 4   | ~~`.env.example` ergänzen um `STEAM_OPENID_RETURN_URL`, `STEAM_WEB_API_KEY`~~ | root `.env.example`          | ✅ war faktisch schon geschlossen (Zeile 45, 48); §2.2 #4 war Phantom |
 
@@ -99,16 +99,24 @@ Alex' erstes lokales Probeturnier (9 Spieler, Single-Elim, Dummy-User) deckte ma
 
 | # | Item | Notiz |
 | --- | --- | --- |
-| 1 | **Abmelden/Withdraw-UI** — Spieler können sich anmelden, aber nicht abmelden | Backend-Endpoint prüfen |
-| 2 | **Bracket-Reset-Feature** — Soft-Delete-Matches kollidieren mit Unique `(tournament_id, round, match_number)` beim Re-Generate; braucht partiellen Index oder Hard-Cleanup im /start | Organisatoren-Realität („falsch ausgelost") |
+| 1 | **Abmelden/Withdraw-UI** — Backend-Endpoint existiert (`POST /api/tournaments/:slug/withdraw`, `participants.ts`), nur Frontend fehlt | → **M7 (§5.2)** |
+| 2 | **Bracket-Reset-Feature** — Soft-Delete-Matches kollidieren mit Unique `(tournament_id, round, match_number)` beim Re-Generate; braucht partiellen Index oder Hard-Cleanup im /start | → **M7 (§5.2)** |
 | 3 | ~~**ONBOARDING.md ergänzen:** `pnpm -F @rizzotto/frontend run images:optimize` + `playwright install chromium`~~ ✅ done (2026-06-04) — `images:optimize` als Pflichtschritt in Teil 4 (inkl. Warnbox: kein PNG-Fallback bei 404), korrekter `-F @rizzotto/e2e`-Install-Befehl in Teil 6 | beide Lücken kosteten Alex Zeit |
-| 4 | `MatchScoreModal`/`CheckInButton` sind hardcoded deutsch/englisch statt i18n | Bestand + neu, vereinheitlichen |
-| 5 | **M7-Reprioritisierung (Alex):** Army-List-Browser-Annahme widerlegt — 1-List-Tournaments extrem selten; eigene Prio-Session fällig, §5 + §2.5 F umbauen | Product-Owner-Entscheidung |
-| 6 | **Push + Deploy der Session-Commits** (11 Commits lokal auf `main`) | Push → CI → Auto-Deploy live |
+| 4 | ~~`MatchScoreModal`/`CheckInButton` hardcoded deutsch/englisch~~ — aufgegangen in **Englisch-only** (Alex 2026-06-04: deutsche Version unnötig, Site konsistent Englisch) | → **M7 (§5.2)** |
+| 5 | ~~**M7-Reprioritisierung (Alex)**~~ ✅ done (2026-06-04) — Prio-Session durchgeführt, ROADMAP umgebaut: M7 = Launch v1 (§5), Open Play → M8 (§7), Army-Lists/SLT/3×3 → M12 on hold (§8.4) | Product-Owner-Entscheidung |
+| 6 | ~~**Push + Deploy der Session-Commits**~~ ✅ done (2026-06-04) — Push löste rote CI aus (Visual-Baselines, §2.7), nach Fix CI grün + Deploy success, Live-Smoke verifiziert | Push → CI → Auto-Deploy live |
+
+### 2.7 Session 2026-06-04 (Tag) — CI-Fix, Live-Verifikation, Prio-Session
+
+- **CI-Fix:** CI #70 war rot — 3 Landing-Visual-Baselines nach Logo-Rebrand veraltet (einziger Failure; Deploy #25 deshalb geskippt). Actual-PNGs aus dem `playwright-report`-CI-Artifact als neue Linux-Baselines übernommen (`07e88cd`) → CI grün, Deploy success. **Lehre:** Logo-/Landing-Änderungen ⇒ Linux-Baselines aus dem CI-Artifact mitziehen (auf Windows nicht generierbar).
+- **Live-Smoke grün:** Registration-Button + Teilnehmerliste live (`test-turnier`), Cast-Iron favicon/og-image live. **Offen:** `https://rizzotto.gg/img/rizzotto-wordmark.avif` hängt im Cloudflare-Edge-Cache (HIT, Stand 03.06.) → **Luke: Custom Purge** (s. §5.3 Checkliste).
+- **Rollenmodell geklärt:** Alex = PO + lokale Entwicklung, Luke = Prod-Betrieb (bewusst, Alex hat keinen Cloudflare-/Server-Zugang und will keinen). Feature-Arbeit künftig auf `feat/launch-v1`, Handover = PR.
+- **Decision-Flow-Audit** (Grundlage für §5.1): `GET /api/matches/:id/decision` und `POST …/decision/random` existieren im Backend **nicht**, werden vom Frontend aber aufgerufen → `MatchDecisionPage` ist live de facto tot; Socket-Room-Join für `match_decision_*` fehlt (unverifiziert); einziger Entry-Point ist `MatchDetailPage`, keiner im Bracket. **SFT-Leak:** `faction` wird entgegen FieldHint („revealed at tournament start") sofort öffentlich serialisiert (`participants.ts` GET). PICK_BAN funktioniert nur bei Pool = 3 (kein expliziter Pick-Step), RANDOM ohne Re-Pick-Schutz.
+- **Tech-Debt neu:** Cache-Busting für `public/img`-Assets (Dateinamen-Versionierung o. ä.); `DraftService forceAutoSelect`-PrismaError im CI-WebServer-Log (Tests grün, beobachten).
 
 ### 2.5 Landing/Nav Design-Feedback (Alex, 20.05. → re-iteriert + umgesetzt 03.06.)
 
-Vier annotierte Screenshots von Alex (Stand 20.05.), gegen aktuellen Stand geprüft. Code-Punkte sind umgesetzt; zwei Tasks bleiben extern offen (neues Logo-Asset, Rollen-Promotion).
+Vier annotierte Screenshots von Alex (Stand 20.05.), gegen aktuellen Stand geprüft. Alle Punkte umgesetzt; nur B2 bleibt deferred, F wandert mit dem Listen-Block nach M12.
 
 | #   | Item                                                                                                                                 | Pfad                                       | Status                                |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ | ------------------------------------- |
@@ -122,7 +130,7 @@ Vier annotierte Screenshots von Alex (Stand 20.05.), gegen aktuellen Stand gepr�
 | C   | Rebrand sichtbarer Text → „RizzOtto's Arena" (index.html, i18n de/en, Footer-©, Header/Icon-aria, Discord-Notify, iCal). Domain/Dateinamen bleiben `rizzotto.gg`/`rizzotto-*` | div. Frontend + Backend                    | ✅ done (Text)                        |
 | D   | ~~**Neues Logo/Sigil-Asset**~~ ✅ done (2026-06-04) — Cast-Iron-Logo von Alex eingebaut (Wordmark/Sigil/Favicon/og), Gamma-Aufhellung + CSS-Kontrast-Glow | `apps/frontend/public/img/*`, favicon, og  | ✅ done (lokal committet)             |
 | E   | ~~**Alex auf ORGANIZER hochstufen**~~ ✅ war bereits erledigt — Alex sieht Create-Tournament auf Prod (Rolle vorhanden); lokal ist er ADMIN | Admin-Panel / DB                           | ✅ done                               |
-| F   | Library-Section reaktivieren als Einstieg zum Army-List-Browser                                                                      | `ForgeSection.tsx`                         | → M7 (§5.1)                           |
+| F   | Library-Section reaktivieren als Einstieg zum Army-List-Browser                                                                      | `ForgeSection.tsx`                         | → M12 (§8.4) — on hold                |
 
 ---
 
@@ -131,12 +139,15 @@ Vier annotierte Screenshots von Alex (Stand 20.05.), gegen aktuellen Stand gepr�
 | #   | Issue                                                                                                        | Pfad                                                          | Severity                             | Plan                               |
 | --- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------ | ---------------------------------- |
 | 1   | ~~**DOUBLE_ELIMINATION wirft 501**~~ ✅ **gelöst (2026-06-03)** — Format end-to-end implementiert     | `apps/backend/src/routes/bracket.ts`                          | —                                    | s. §6                              |
-| 2   | **Tournament-Edit/Delete-Buttons sind Stubs**                                                                | `TournamentDetail.tsx:151,160`                                | Mittel — Admin-Flow blockiert        | §2.1                               |
-| 3   | **Scraper-Write-Path** wirft "not implemented"                                                               | `scraper/src/cli.ts:148,155`                                  | Mittel — Datenhebel ungenutzt        | M7                                 |
+| 2   | ~~**Tournament-Edit/Delete-Buttons sind Stubs**~~ ✅ done — Lifecycle-UI gelandet (§2.1, `f4e3705`)          | `TournamentDetail.tsx`                                        | —                                    | §2.1                               |
+| 3   | **Scraper-Write-Path** wirft "not implemented"                                                               | `scraper/src/cli.ts:148,155`                                  | Mittel — Datenhebel ungenutzt        | M9 (§8.1)                          |
+| 9   | **`GET /api/matches/:id/decision` + `POST …/decision/random` fehlen im Backend** — Frontend (`api.ts`/`MatchDecisionPage`) ruft beide auf → Decision-UI de facto tot | `apps/backend/src/routes/match-decision.ts`                   | **Hoch — v1-Kernfeature**            | M7 (§5.1 #1)                       |
+| 10  | **SFT-Fraktions-Leak:** `faction` ist entgegen FieldHint sofort öffentlich (kein Hidden-until-Start)          | `apps/backend/src/routes/participants.ts` (GET participants) | Mittel — Counterpick-Schutz fehlt    | M7 (§5.1 #5)                       |
+| 11  | **PICK_BAN nur bei Pool = 3 funktional** (kein expliziter Pick-Step); **RANDOM ohne Re-Pick-Schutz**          | `apps/backend/src/routes/match-decision.ts`                   | Mittel                               | M7 (§5.1 #3)                       |
 | 4   | `Tournament.poster_url` Upload-Flow fehlt                                                                    | `packages/db/prisma/schema.prisma:172`                        | Niedrig                              | M6 optional                        |
 | 5   | `SigillumSection`-Community-Links Platzhalter                                                                | `apps/frontend/src/components/landing/SigillumSection.tsx:93` | Niedrig                              | M6 — 🟡 deferred (echte URLs ausstehend) |
 | 6   | ~~`ImportLog` ohne Admin-UI~~                                                                                | —                                                             | Niedrig                              | ✅ done (2026-06-03) — §4.7        |
-| 7   | `Team`/`TeamMember`-Models reserviert, ungenutzt                                                             | `schema.prisma:286`                                           | —                                    | M9                                 |
+| 7   | `Team`/`TeamMember`-Models reserviert, ungenutzt                                                             | `schema.prisma:286`                                           | —                                    | M11 (§8.3)                         |
 | 8   | **MatchDetailPage ist ganzseitiger Stub** („Full match view (scores, result reporting) — coming in Welle D") | `apps/frontend/src/routes/MatchDetailPage.tsx`                | Mittel — nutzer-sichtbarer Kern-Flow | ✅ done (2026-06-02) — §P1a        |
 
 Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
@@ -158,16 +169,39 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 
 ---
 
-## 5. M7 — Datentiefe & Army-List-Database _(2–3 Wochen)_
+## 5. M7 — Launch v1 „Match Hub" _(aktueller Fokus — Alex-Spec, Prio-Session 2026-06-04)_
 
-**Ziel:** Rizzotto wird **Inspirationsdatenbank** für Listenbau + bekommt echte externe Daten.
+**Ziel:** Alles, was zum Match zu klären ist, lebt **im Match-Panel auf der Turnierseite** — keine Discord-DMs, kein externes Draft-Tool. Das ist der intrinsische Mehrwert gegenüber dem Status quo der Szene (Totaltavern: Bracket auf TT, Draft auf aoe2cm, Matrix + Map-Bans per Discord-DM). **BPT + SFT decken 80–90 % der real gespielten Turniere ab** — sie sind der v1-Scope; das mit Abstand häufigste Format ist **Swiss SFT, 4–5 Runden + Top-4-Playoffs**.
 
-1. **Army-List-Browser** — `ArmyList.parsed_data` ist ein JSON-Schatz (`{ battle_type, lord, units }`). UI mit Filter (Faction/Lord/Battle-Type), Search, "neueste", "meistgesehene". Killer-Feature für Listenbauer
-2. **Scraper-Write-Path implementieren** — `ExternalTournament`-Tabelle anlegen, totaltavern.com-Daten persistieren. `FactionStats` bekommt externe Match-Basis
-3. **Realtime-Leaderboard** — Socket-Push bei ELO-Änderung. Aktuell REST-Pull
-4. **News-/Patch-Notes-Feed** — `News`-Tabelle (Admin-only), Frontend-Route `/news`, Landingpage-Integration
-5. **Scraper-Backup-Source** — tabletop.to als zweite Datenquelle einbauen, damit `FactionStats` nicht an DOM-Änderungen einer Quelle stirbt
-6. **Sentinel-Tests** für Scraper-Selektoren (wöchentlich gegen Live-DOM)
+**Arbeitsmodell:** Alex entwickelt lokal auf `feat/launch-v1`; Handover = PR → Luke reviewt/merged → Auto-Deploy. Direkte `main`-Pushes nur noch für Docs.
+
+### 5.1 Kern — Match-Klärung im Match-Panel
+
+1. **Decision-Flow reparieren** (Audit §2.7): `GET /api/matches/:id/decision` implementieren (Frontend ruft sie bereits — 404), `POST /api/matches/:id/decision/random` implementieren, Socket-Room-Join für `match_decision_*` verifizieren/bauen
+2. **Match-Panel** auf der Turnierseite, außerhalb des Bracket-Embeds (Alex-UI-Spec): das eigene aktuelle Match mit Spielern, Avataren, Fraktionen, Map und Phase-Status — alle Klärungs-Aktionen inline, Bracket verlinkt hinein. Inkl. **Lobby-Code-Feld** (Host trägt den Ingame-Code ein, Gegner sieht ihn — damit entfällt der letzte DM-Anlass)
+3. **Vier Map-Modi** (ersetzen heutiges RANDOM/PICK_BAN):
+   - a) **Random pro Runde** — ohne Map-Wiederholung im selben Turnier (Re-Pick-Schutz neu)
+   - b) **Host-Preset, 1 Map pro Runde** — keine Spielerwahl (Schema: Runden-Map-Zuordnung neu)
+   - c) **Host-Preset, 3 Maps pro Runde** — Coin-Flip bestimmt Banner (1 Ban), der Gegner **pickt explizit** aus den verbleibenden 2
+   - d) **Random 3 aus dem Pool** — gleicher Ban→Pick-Ablauf wie c)
+4. **BPT im Panel:** verdeckter Fraktions-Pick per Dropdown, beidseitiger Lock, simultaner Reveal. **Sequenz:** nach Map-Bekanntgabe bei Modi a/b, **vor** der Map-Phase bei Modi c/d
+5. **SFT fixen:** Fraktion wird bei Anmeldung gewählt, bleibt aber **hidden bis Turnierstart** (Anti-Counterpick) — Public-Serialisierung in `participants.ts` maskieren; löst den heute faktisch falschen FieldHint („revealed at tournament start") ein. Map-Phase immer nach Fraktions-Reveal
+6. **Mode-Cleanup:** `OPEN` **entfernen** (Begründung Alex: offenes Picking ohne Lock = endlose Counterpick-Spirale, mit Lock = First-Lock-Nachteil → BPT ist das einzig sinnvolle offene Picking, vgl. Ingame-Ladder). **SFT wird Default.** Migration bestehender OPEN-Turniere + Alt-Enum-Werte (`ONE_V_ONE`/`THREE_V_THREE`/`BLIND_PICK`) aufräumen
+
+### 5.2 Begleiter — Organisator- & UX-Basics
+
+7. **Withdraw-UI** — Backend existiert (`POST /:slug/withdraw`), nur Frontend-Button + Bestätigung
+8. **Bracket-Reset** („falsch ausgelost"): Unique `(tournament_id, round, match_number)` vs. Soft-Delete → partieller Index oder Hard-Cleanup im `/start`
+9. **Englisch-only** (Stufe-1-Blocker): LanguageToggle raus, Default `en`, hardcoded DE-Strings → EN; i18n-Infra bleibt im Code. Dabei Texte fixen: Create-Aside (behauptet „mode sets the match size — 1v1 or team encounters" — falsch, Mode = Picking-Format) + „What is a tournament?"-Header neu
+10. **UI-Kleinkram:** Turnier-Kacheln überall voll klickbar (`TournamentsListing` + `ActiveMustersSection` haben noch „View Tournament"-Buttons), **Datum + Uhrzeit** auf Kacheln (`showTime: true`), **BO1** für `playoff_match_format`/`finale_match_format` zulassen (Enum kann es, Zod/UI sperren), Map-Pool **„Select All"** (36 Checkboxen einzeln ist unzumutbar)
+
+### 5.3 Generalprobe & gestufter Launch
+
+11. **Lokale Generalprobe:** Swiss SFT, 4–5 Runden + Top-4-Playoffs mit `db:seed:dummies` — kompletter Organisator-Durchlauf (Alex' manuelle Probeturniere sind die wirksamste QA der Plattform; der Swiss-Pfad hatte noch keinen Praxistest)
+12. **Handover-PR** an Luke → Review/Merge → Auto-Deploy
+13. **Luke-Checkliste (extern):** Cloudflare Custom Purge `https://rizzotto.gg/img/rizzotto-wordmark.avif` · Hetzner-VM-Backup aktivieren (~1.68 €/mo) · `DISCORD_BOT_TOKEN` setzen · echte Community-Links (`SigillumSection`) · Caddyfile-Live-Sync (§2.3 #1)
+14. **Stufe 1 — geschlossener Kreis:** Prod-Generalprobe (Alex als ORGANIZER auf rizzotto.gg), dann erstes echtes Turnier (Swiss SFT) mit Discord-Kreis
+15. **Stufe 2 — öffentlich** (Reddit/Foren): erst nach 1–2 sauberen Stufe-1-Turnieren
 
 ---
 
@@ -186,30 +220,64 @@ Details: `.knowledge/algorithms.md` (Abschnitt „Bracket — Double-Elimination
 
 ---
 
-## 7. M8 — UGC & Battle-Reports _(3–4 Wochen, transformativ)_
+## 7. M8 — Open Play / Ladder _(direkt nach v1 — Alex-Wunsch 2026-06-04)_
+
+**Ziel:** Leaderboard-relevante Matches **ohne Turnier-Commitment** — „viele Spieler scheuen sich vor dem Commitment von Turnieren" (Alex). Matchmaking auf der Site senkt die Einstiegshürde und füttert Leaderboard + Meta, bevor Spieler sich an Turniere trauen.
+
+> **Prio-Vermerk:** Alex in regelmäßigen Abständen auf dieses Thema ansprechen — es ist ihm wichtig und könnte weiter vorrücken.
+
+1. **Challenge-/Open-Match-Modell** (Schema-Entscheidung): `Match.tournament_id` ist heute required → nullable machen oder eigenes Challenge-Konzept. Matches tragen bereits den Season-Tag (Rating-Einbeziehung möglich); **Anti-Farm-Modifier existiert** im Rating-Modell (Validierung gegen Punkte-Schieberei)
+2. **Friendlies (Bo1) + organisierte Bo3/Bo5-Series**
+3. **Challenge-Flow:** erstellen (Zeit, Format, Map-Modus) → browsen/annehmen → Termin im **M6-Kalender** (+ iCal)
+4. **Match-Panel-Wiederverwendung** aus v1: BPT-Pick, Map-Verfahren, Lobby-Code — identische Klärungs-UX wie im Turnier
+5. **Rating:** Open-Play-Ergebnisse fließen ins Season-Leaderboard; Anti-Farming-Kalibrierung prüfen
+
+---
+
+## 8. Spätere Milestones — M9 / M10 / M11 / M12 _(Reihenfolge nach Stufe-1-Erfahrung re-evaluieren)_
+
+### 8.1 M9 — Datentiefe
+
+**Ziel:** Echte externe Turnierdaten füllen Meta/Heatmap auch ohne eigene User-Masse. (Listen-unabhängige Reste des alten M7.)
+
+1. **Scraper-Write-Path implementieren** — `ExternalTournament`-Tabelle anlegen, totaltavern.com-Daten persistieren. `FactionStats` bekommt externe Match-Basis
+2. **News-/Patch-Notes-Feed** — `News`-Tabelle (Admin-only), Frontend-Route `/news`, Landingpage-Integration (Kommunikationskanal für die Launch-Community)
+3. **Realtime-Leaderboard** — Socket-Push bei Rating-Änderung (Live-Ticker-Komfort; Recording passiert ohnehin — derive-on-read)
+4. **Scraper-Backup-Source** — tabletop.to als zweite Datenquelle, damit `FactionStats` nicht an DOM-Änderungen einer Quelle stirbt
+5. **Sentinel-Tests** für Scraper-Selektoren (wöchentlich gegen Live-DOM)
+
+### 8.2 M10 — UGC & Battle-Reports _(3–4 Wochen, transformativ)_
 
 **Ziel:** Plattform wird Content-Hub.
 
 1. **Battle-Report-Editor** — Markdown + Photo-Upload, Match-Timeline, Card-Embeds für referenzierte Listen/Fraktionen. Verknüpft mit `Match.id` (optional)
 2. **Comment-System** — Match-Detail, Tournament, Battle-Report. Markdown, Soft-Delete, Moderation-Flag
-3. **Discord-Bot zur Match-Reporting-Integration** — Spieler reportet im Discord-Channel, Bot triggert Backend. Braucht `DISCORD_BOT_TOKEN` (§2.2)
+3. **Discord-Bot zur Match-Reporting-Integration** — Spieler reportet im Discord-Channel, Bot triggert Backend. Braucht `DISCORD_BOT_TOKEN` (§5.3 Luke-Checkliste)
 
 **Risiko:** UGC braucht Moderation. Plan ab ~50 aktive Schreiber: Flag-Queue + Auto-Throttle für neue Accounts.
 
-**Henne-Ei-Caveat:** M8 braucht kritische Masse. M6/M7 zuerst (haben auch mit einem Nutzer Wert).
+**Henne-Ei-Caveat:** M10 braucht kritische Masse. M7–M9 zuerst (haben auch mit wenigen Nutzern Wert).
 
----
+### 8.3 M11 — Team-Play _(4+ Wochen, große Wette)_
 
-## 8. M9 — Team-Play _(4+ Wochen, große Wette)_
-
-**Ziel:** 3v3 / SfT / Blind-Pick aktivieren.
+**Ziel:** 3v3 / SfT aktivieren.
 
 1. **Team-Management UI** — `Team`/`TeamMember`-Models existieren als "Phase 3 reserved" (`schema.prisma:286`). UI: Team gründen, Mitglieder einladen, Team-Profil
-2. **`TournamentMode.THREE_V_THREE`** — Schema vorhanden, Backend-Logik fehlt
-3. **Blind-Pick-Modus** — Pick ohne Sicht auf Gegner-Listen bis Runde 1
-4. **SfT (Swiss-for-Teams)** — Pairing-Algorithmus für Teams
+2. **`TournamentMode.THREE_V_THREE`** — Schema vorhanden, Backend-Logik fehlt (Enum-Wert wird in M7 §5.1 #6 mit aufgeräumt — Re-Einführung dann sauber)
+3. **SfT (Swiss-for-Teams)** — Pairing-Algorithmus für Teams
 
 **Vorab:** Spec-Klärung mit Insidern bevor Schema final.
+
+### 8.4 M12 — Listen, SLT & 3×3-Matrix _(on hold)_
+
+**Kontext (Alex, Prio-Session 2026-06-04):** Die Army-List-Annahme der ursprünglichen Planung ist widerlegt — 1-List-Tournaments sind in der Szene extrem selten, ohne organische Uploads hat ein Listen-Browser keine Inhalte. Die 3×3-Matrix (beide Spieler melden 3 Fraktionen, Matrix-Verfahren entscheidet die Matchups) ist populär, aber zu komplex für v1 — „maybe with or before the lists".
+
+1. **Army-List-Browser** (ex-M7-Kern) — Filter (Faction/Lord/Battle-Type), Search, "neueste"/"meistgesehene"
+2. **Library-Section-Reaktivierung** als Einstieg (§2.5 F)
+3. **SLT-Vertiefung** (Listen-Upload bei Anmeldung, Reveal-Regeln)
+4. **3×3-Matrix-Format** im Match-Panel
+
+> **Re-Eval-Trigger:** Wenn v1 produktiv live geht, Alex erneut fragen, wie dieser Block priorisiert wird — nicht vorher anfassen.
 
 ---
 
@@ -218,11 +286,12 @@ Details: `.knowledge/algorithms.md` (Abschnitt „Bracket — Double-Elimination
 | Idee                              | Begründung                                                                |
 | --------------------------------- | ------------------------------------------------------------------------- |
 | **In-App-Listenbauer**            | Externe Tools (Old World Builder, Almanack) decken's. **Skip.**           |
-| **Live-Stream-Twitch-Embed**      | Old-World-Stream-Szene zu klein. **Wait** (Re-Eval nach M9)               |
+| **Live-Stream-Twitch-Embed**      | Old-World-Stream-Szene zu klein. **Wait** (Re-Eval nach M11)              |
 | **Coaching-/Mentorship-Matching** | Nische zu klein, Moderations-Aufwand zu hoch. **Skip**                    |
-| **Achievements/Badges**           | Gamification kann billig wirken. **Wait** bis M8 + UGC-Engagement messbar |
+| **Achievements/Badges**           | Gamification kann billig wirken. **Wait** bis M10 + UGC-Engagement messbar |
 | **Federation/Multi-Tenant**       | Single-Tenant bleibt. **Permanent skip**                                  |
 | **Mobile-Native-App**             | PWA-Pfad ist pragmatischer. PWA-Manifest in M6+ ergänzen, nicht Native    |
+| **Draft-Preset-Builder für fremde Hosts** | Der Admin-Draft-Bereich (Presets in aoe2cm-Komplexität) bleibt Alex' Werkzeug; Öffnung für andere Organisatoren ist Zukunftsmusik (Alex, 2026-06-04). **Wait** |
 
 ---
 
