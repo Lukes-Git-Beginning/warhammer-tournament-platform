@@ -71,6 +71,16 @@ export default fp(
 
       socket.on('leave_tournament', (id) => void socket.leave(`tournament_${id}`));
 
+      socket.on('join_match_decision', (matchId) => {
+        if (typeof matchId !== 'string' || !uuidRe.test(matchId)) {
+          fastify.log.warn({ sid: socket.id, matchId }, 'join_match_decision: invalid UUID, ignoring');
+          return;
+        }
+        void socket.join(`match_decision_${matchId}`);
+      });
+
+      socket.on('leave_match_decision', (matchId) => void socket.leave(`match_decision_${matchId}`));
+
       // ------------------------------------------------------------------
       // M4.5 Draft-Room handlers
       // ------------------------------------------------------------------

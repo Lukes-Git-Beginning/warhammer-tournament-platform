@@ -130,6 +130,8 @@ export interface ServerToClientEvents {
 export interface ClientToServerEvents {
   join_tournament: (tournamentId: string) => void;
   leave_tournament: (tournamentId: string) => void;
+  join_match_decision: (matchId: string) => void;
+  leave_match_decision: (matchId: string) => void;
   // M4 Draft events
   join_draft: (draftId: string) => void;
   leave_draft: (draftId: string) => void;

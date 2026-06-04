@@ -912,7 +912,7 @@ export function startMatchDecision(matchId: string): Promise<MatchDecisionState>
 export function banMap(matchId: string, mapId: string): Promise<MatchDecisionState> {
   return apiFetch<MatchDecisionState>(`/api/matches/${matchId}/decision/ban`, {
     method: 'POST',
-    body: JSON.stringify({ mapId }),
+    body: JSON.stringify({ map_id: mapId }),
   });
 }
 
@@ -923,9 +923,9 @@ export function randomPickMap(matchId: string): Promise<MatchDecisionState> {
 }
 
 export function lockBlindPick(matchId: string, factionId: string): Promise<{ ok: true }> {
-  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/blind-pick/lock`, {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/decision/blind-pick/lock`, {
     method: 'POST',
-    body: JSON.stringify({ factionId }),
+    body: JSON.stringify({ faction_id: factionId }),
   });
 }
 

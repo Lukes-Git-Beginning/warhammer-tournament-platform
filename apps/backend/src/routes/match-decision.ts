@@ -41,10 +41,95 @@ function matchDecisionRoom(matchId: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Shared serializer
+// ---------------------------------------------------------------------------
+
+type DecisionRow = {
+  mode: string;
+  top_player_id: string;
+  bottom_player_id: string;
+  coin_flip_seed: string;
+  bans_top: unknown;
+  bans_bottom: unknown;
+  picked_map_id: string | null;
+  decided_at: Date | null;
+};
+
+type BlindPickRow = {
+  player1_locked_at: Date | null;
+  player2_locked_at: Date | null;
+  revealed_at: Date | null;
+  player1_faction_id: string | null;
+  player2_faction_id: string | null;
+} | null;
+
+function serializeDecisionState(matchId: string, decision: DecisionRow, blindPick: BlindPickRow) {
+  return {
+    matchId,
+    mode: decision.mode as 'RANDOM' | 'PICK_BAN',
+    topPlayerId: decision.top_player_id,
+    bottomPlayerId: decision.bottom_player_id,
+    seed: decision.coin_flip_seed,
+    bansTop: (decision.bans_top as string[]) ?? [],
+    bansBottom: (decision.bans_bottom as string[]) ?? [],
+    pickedMapId: decision.picked_map_id,
+    decidedAt: decision.decided_at?.toISOString() ?? null,
+    blindPick: blindPick
+      ? {
+          player1Locked: Boolean(blindPick.player1_locked_at),
+          player2Locked: Boolean(blindPick.player2_locked_at),
+          revealedAt: blindPick.revealed_at?.toISOString() ?? null,
+          player1FactionId: blindPick.revealed_at ? (blindPick.player1_faction_id ?? null) : null,
+          player2FactionId: blindPick.revealed_at ? (blindPick.player2_faction_id ?? null) : null,
+        }
+      : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Route plugin
 // ---------------------------------------------------------------------------
 
 const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
+  // -------------------------------------------------------------------------
+  // GET /api/matches/:id/decision
+  // Returns the current decision state for a match (no auth required).
+  // 404 if no decision flow has been started yet.
+  // -------------------------------------------------------------------------
+  fastify.get(
+    '/api/matches/:id/decision',
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: {
+          id: true,
+          map_decision: true,
+          blind_pick: true,
+        },
+      });
+
+      if (!match) {
+        return reply.code(404).send({
+          error: 'NotFound',
+          message: 'Match not found',
+          statusCode: 404,
+        });
+      }
+
+      if (!match.map_decision) {
+        return reply.code(404).send({
+          error: 'NotFound',
+          message: 'No decision flow started for this match',
+          statusCode: 404,
+        });
+      }
+
+      return reply.code(200).send(serializeDecisionState(matchId, match.map_decision, match.blind_pick));
+    },
+  );
+
   // -------------------------------------------------------------------------
   // POST /api/matches/:id/decision/start
   // Initializes the match-decision flow: coin-flip, persist MatchMapDecision.
@@ -144,7 +229,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      const payload = {
+      const socketPayload = {
         matchId,
         mode,
         topPlayerId,
@@ -155,7 +240,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Emit to match-decision room (both players should join this room via Socket.IO)
       if (fastify.io) {
-        fastify.io.to(matchDecisionRoom(matchId)).emit('match.decision.started', payload);
+        fastify.io.to(matchDecisionRoom(matchId)).emit('match.decision.started', socketPayload);
       }
 
       // Also emit complete if RANDOM resolved immediately
@@ -169,7 +254,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      return reply.code(201).send(payload);
+      return reply.code(201).send(serializeDecisionState(matchId, decision, null));
     },
   );
 
@@ -345,6 +430,54 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(200).send(updatePayload);
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // POST /api/matches/:id/decision/random
+  // Idempotent confirmation for RANDOM mode — returns current decision state.
+  // Called by the frontend after the coin-flip animation to confirm the picked map.
+  // -------------------------------------------------------------------------
+  fastify.post(
+    '/api/matches/:id/decision/random',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: {
+          id: true,
+          map_decision: true,
+          blind_pick: true,
+        },
+      });
+
+      if (!match) {
+        return reply.code(404).send({
+          error: 'NotFound',
+          message: 'Match not found',
+          statusCode: 404,
+        });
+      }
+
+      if (!match.map_decision) {
+        return reply.code(409).send({
+          error: 'Conflict',
+          message: 'Decision flow has not been started for this match. Call POST /decision/start first.',
+          statusCode: 409,
+        });
+      }
+
+      if (match.map_decision.mode !== 'RANDOM') {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'This endpoint is only available for RANDOM mode matches',
+          statusCode: 422,
+        });
+      }
+
+      return reply.code(200).send(serializeDecisionState(matchId, match.map_decision, match.blind_pick));
     },
   );
 
