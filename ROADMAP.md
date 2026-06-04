@@ -178,13 +178,14 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 ### 5.1 Kern — Match-Klärung im Match-Panel
 
 1. **Decision-Flow reparieren** (Audit §2.7): `GET /api/matches/:id/decision` implementieren (Frontend ruft sie bereits — 404), `POST /api/matches/:id/decision/random` implementieren, Socket-Room-Join für `match_decision_*` verifizieren/bauen
-2. **Match-Panel** auf der Turnierseite, außerhalb des Bracket-Embeds (Alex-UI-Spec): das eigene aktuelle Match mit Spielern, Avataren, Fraktionen, Map und Phase-Status — alle Klärungs-Aktionen inline, Bracket verlinkt hinein. Inkl. **Lobby-Code-Feld** (Host trägt den Ingame-Code ein, Gegner sieht ihn — damit entfällt der letzte DM-Anlass)
+2. **Match-Panel** auf der Turnierseite, außerhalb der Bracket-View (Alex-UI-Spec): das eigene aktuelle Match mit Spielern, Avataren, Fraktionen, Map und Phase-Status — alle Klärungs-Aktionen inline, Bracket verlinkt hinein. Inkl. **Lobby-Code-Feld** (Host trägt den Ingame-Code ein, Gegner sieht ihn — damit entfällt der letzte DM-Anlass). **Game-Kacheln (Alex-Spec 2026-06-04):** pro Game der Serie eine Kachel, sequenziell aktiviert (Bo1 = eine Kachel; Serie endet, sobald entschieden — Bo5 ggf. nach 3 Games); jede Kachel trägt ihren eigenen Map-/Faction-Klärungs-Vorgang. Mappt 1:1 auf das vorhandene `MatchGame`-Modell
 3. **Vier Map-Modi** (ersetzen heutiges RANDOM/PICK_BAN):
    - a) **Random pro Runde** — ohne Map-Wiederholung im selben Turnier (Re-Pick-Schutz neu)
    - b) **Host-Preset, 1 Map pro Runde** — keine Spielerwahl (Schema: Runden-Map-Zuordnung neu)
    - c) **Host-Preset, 3 Maps pro Runde** — Coin-Flip bestimmt Banner (1 Ban), der Gegner **pickt explizit** aus den verbleibenden 2
    - d) **Random 3 aus dem Pool** — gleicher Ban→Pick-Ablauf wie c)
-4. **BPT im Panel:** verdeckter Fraktions-Pick per Dropdown, beidseitiger Lock, simultaner Reveal. **Sequenz:** nach Map-Bekanntgabe bei Modi a/b, **vor** der Map-Phase bei Modi c/d
+   - **Serien (Bo3/Bo5):** Der eingestellte Modus läuft **pro Game-Kachel** neu; innerhalb einer Serie keine Map-Wiederholung (gespielte Serien-Maps fliegen aus den Kandidaten)
+4. **BPT im Panel:** verdeckter Fraktions-Pick per Dropdown, beidseitiger Lock, simultaner Reveal. **Sequenz:** nach Map-Bekanntgabe bei Modi a/b, **vor** der Map-Phase bei Modi c/d. **Serien-Option (Host-Checkbox im Create-Form):** Blind-Pick gilt **pro Game** oder **einmal pro Serie** — Host entscheidet beim Erstellen
 5. **SFT fixen:** Fraktion wird bei Anmeldung gewählt, bleibt aber **hidden bis Turnierstart** (Anti-Counterpick) — Public-Serialisierung in `participants.ts` maskieren; löst den heute faktisch falschen FieldHint („revealed at tournament start") ein. Map-Phase immer nach Fraktions-Reveal
 6. **Mode-Cleanup:** `OPEN` **entfernen** (Begründung Alex: offenes Picking ohne Lock = endlose Counterpick-Spirale, mit Lock = First-Lock-Nachteil → BPT ist das einzig sinnvolle offene Picking, vgl. Ingame-Ladder). **SFT wird Default.** Migration bestehender OPEN-Turniere + Alt-Enum-Werte (`ONE_V_ONE`/`THREE_V_THREE`/`BLIND_PICK`) aufräumen
 
