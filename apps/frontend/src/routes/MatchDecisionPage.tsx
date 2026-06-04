@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useRouter } from '@tanstack/react-router';
+import { useParams, useRouter, useRouterState } from '@tanstack/react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuthQuery } from '@/lib/auth';
@@ -624,8 +624,14 @@ function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
 export function MatchDecisionPage() {
   const { matchId } = useParams({ from: '/matches/$matchId/decision' });
   const router = useRouter();
+  const routerState = useRouterState();
   const { data: user } = useAuthQuery();
   const queryClient = useQueryClient();
+
+  // True when navigated here via "Choose Battlefield" — show coin-toss animation even though
+  // the decision already exists in the DB by the time the query resolves.
+  const isFreshDecision =
+    (routerState.location.state as { freshDecision?: boolean } | null)?.freshDecision === true;
 
   const [decision, setDecision] = useState<MatchDecisionState | null>(null);
   // True when decision was already in the DB when the page loaded — skip the coin flip animation.
@@ -643,9 +649,11 @@ export function MatchDecisionPage() {
   useEffect(() => {
     if (initialDecision) {
       setDecision(initialDecision);
-      setDecisionPreloaded(true); // came from server, not a fresh toss on this page
+      if (!isFreshDecision) {
+        setDecisionPreloaded(true); // came from server, not a fresh toss on this page
+      }
     }
-  }, [initialDecision]);
+  }, [initialDecision, isFreshDecision]);
 
   // Factions for blind pick
   const { data: factionsData } = useQuery({

@@ -2,6 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useNavigate } from '@tanstack/react-router';
+
+declare module '@tanstack/react-router' {
+  interface HistoryState {
+    freshDecision?: boolean;
+  }
+}
 import { reportGameResult, startMatchDecision } from '@/lib/api';
 import type { GameDto, MapDto } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -45,7 +51,7 @@ export function GameTile({
   const startDecisionMutation = useMutation({
     mutationFn: () => startMatchDecision(matchId),
     onSuccess: () => {
-      void navigate({ to: '/matches/$matchId/decision', params: { matchId } });
+      void navigate({ to: '/matches/$matchId/decision', params: { matchId }, state: { freshDecision: true } });
     },
   });
 
