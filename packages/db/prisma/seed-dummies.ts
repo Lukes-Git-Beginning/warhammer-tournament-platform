@@ -37,6 +37,9 @@ const { values: args } = parseArgs({
   options: {
     count: { type: 'string', default: '8' },
     tournament: { type: 'string' },
+    // Real registrations carry no faction (pre-pick only exists in SFT mode) —
+    // default to none so dummies mirror reality; opt in for draft/SFT testing.
+    'with-factions': { type: 'boolean', default: false },
   },
 });
 
@@ -97,19 +100,23 @@ async function main() {
       );
     }
 
-    const factions = await prisma.faction.findMany({ select: { id: true } });
+    const withFactions = args['with-factions'] === true;
+    const factions = withFactions
+      ? await prisma.faction.findMany({ select: { id: true } })
+      : [];
     let registered = 0;
     for (const [i, user] of users.entries()) {
-      const faction = factions.length ? factions[i % factions.length] : null;
+      const faction_id = withFactions && factions.length ? factions[i % factions.length].id : null;
       await prisma.tournamentParticipant.upsert({
         where: {
           tournament_id_user_id: { tournament_id: tournament.id, user_id: user.id },
         },
-        update: { status: 'REGISTERED', deleted_at: null },
+        // update also syncs faction_id so re-runs clean up earlier seeds
+        update: { status: 'REGISTERED', deleted_at: null, faction_id },
         create: {
           tournament_id: tournament.id,
           user_id: user.id,
-          faction_id: faction?.id,
+          faction_id,
           status: 'REGISTERED',
         },
       });
