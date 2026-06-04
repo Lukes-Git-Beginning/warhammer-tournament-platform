@@ -2,6 +2,7 @@ import fp from 'fastify-plugin';
 import cron from 'node-cron';
 import { takeFactionsSnapshot } from '../lib/faction-snapshot.js';
 import { notifyCheckInReminder } from '../lib/discord-notify.js';
+import { autoConfirmExpiredGameResults } from '../lib/match-games.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -137,11 +138,30 @@ export default fp(
       { timezone: 'UTC' },
     );
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask]);
+    // -----------------------------------------------------------------------
+    // Auto-confirm provisional game results — every minute
+    // -----------------------------------------------------------------------
+    const gameConfirmTask = cron.schedule(
+      '*/1 * * * *',
+      async () => {
+        try {
+          const count = await autoConfirmExpiredGameResults(fastify);
+          if (count > 0) {
+            fastify.log.info({ count }, 'Auto-confirmed expired game results');
+          }
+        } catch (err) {
+          fastify.log.error({ err }, 'Auto-confirm cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
       checkinTask.stop();
+      gameConfirmTask.stop();
     });
   },
   { name: 'cron', dependencies: ['db'] },

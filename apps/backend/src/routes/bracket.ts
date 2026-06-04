@@ -63,6 +63,9 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           player1_faction_id: true,
           player2_faction_id: true,
           draft: { select: { id: true, status: true } },
+          games: {
+            select: { winner_id: true, status: true },
+          },
         },
       });
 
@@ -88,6 +91,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           bracketSide: m.bracket_side,
           player1FactionId: m.player1_faction_id,
           player2FactionId: m.player2_faction_id,
+          player1GameWins: m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length,
+          player2GameWins: m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length,
           draft_id: m.draft?.id ?? null,
           draft_status: (m.draft?.status ?? null) as BracketResponse['matches'][number]['draft_status'],
         })),

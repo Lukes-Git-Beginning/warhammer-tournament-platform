@@ -19,6 +19,8 @@ export interface BracketNode {
   bracketSide: 'WINNERS' | 'LOSERS' | 'GRAND_FINAL' | null;
   player1FactionId: string | null;
   player2FactionId: string | null;
+  player1GameWins: number;
+  player2GameWins: number;
   draft_id?: string | null;
   draft_status?: 'PENDING' | 'ONGOING' | 'COMPLETED' | 'CANCELLED' | null;
 }

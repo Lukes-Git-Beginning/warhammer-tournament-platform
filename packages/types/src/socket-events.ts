@@ -125,6 +125,16 @@ export interface ServerToClientEvents {
     player1FactionId: string | null; // null until reveal
     player2FactionId: string | null;
   }) => void;
+  'match.game.updated': (payload: {
+    matchId: string;
+    gameNumber: number;
+    status: string;
+    winnerId: string | null;
+    lobbyCode: string | null;
+    reportedWinnerId: string | null;
+    reportedAt: string | null;
+    confirmedAt: string | null;
+  }) => void;
 }
 
 export interface ClientToServerEvents {
