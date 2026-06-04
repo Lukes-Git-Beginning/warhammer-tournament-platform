@@ -101,7 +101,7 @@ Alex' erstes lokales Probeturnier (9 Spieler, Single-Elim, Dummy-User) deckte ma
 | --- | --- | --- |
 | 1 | **Abmelden/Withdraw-UI** — Spieler können sich anmelden, aber nicht abmelden | Backend-Endpoint prüfen |
 | 2 | **Bracket-Reset-Feature** — Soft-Delete-Matches kollidieren mit Unique `(tournament_id, round, match_number)` beim Re-Generate; braucht partiellen Index oder Hard-Cleanup im /start | Organisatoren-Realität („falsch ausgelost") |
-| 3 | **ONBOARDING.md ergänzen:** `pnpm -F @rizzotto/frontend run images:optimize` (sonst lokal kaputte Bilder — AVIF/WebP sind gitignored Build-Artefakte) + `playwright install chromium` | beide Lücken kosteten Alex Zeit |
+| 3 | ~~**ONBOARDING.md ergänzen:** `pnpm -F @rizzotto/frontend run images:optimize` + `playwright install chromium`~~ ✅ done (2026-06-04) — `images:optimize` als Pflichtschritt in Teil 4 (inkl. Warnbox: kein PNG-Fallback bei 404), korrekter `-F @rizzotto/e2e`-Install-Befehl in Teil 6 | beide Lücken kosteten Alex Zeit |
 | 4 | `MatchScoreModal`/`CheckInButton` sind hardcoded deutsch/englisch statt i18n | Bestand + neu, vereinheitlichen |
 | 5 | **M7-Reprioritisierung (Alex):** Army-List-Browser-Annahme widerlegt — 1-List-Tournaments extrem selten; eigene Prio-Session fällig, §5 + §2.5 F umbauen | Product-Owner-Entscheidung |
 | 6 | **Push + Deploy der Session-Commits** (11 Commits lokal auf `main`) | Push → CI → Auto-Deploy live |

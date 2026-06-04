@@ -173,8 +173,16 @@ pnpm docker:up        # Postgres 16 (:5432) + Redis 7 (:6379) im Hintergrund
 pnpm db:migrate       # Prisma migrate dev — legt das DB-Schema an
 pnpm db:generate      # Prisma Client generieren (sicherheitshalber)
 pnpm db:seed          # Seed-Daten einspielen
+pnpm -F @rizzotto/frontend run images:optimize   # AVIF/WebP-Bilder generieren (einmalig)
 pnpm dev              # Backend (:3000) + Frontend (:5173) parallel via Turbo
 ```
+
+> **`images:optimize` nicht überspringen:** Die AVIF/WebP-Varianten aller Bilder
+> (Logo, Hero, Sigils) sind **gitignorierte Build-Artefakte**
+> (`apps/frontend/.gitignore`) — sie kommen nicht per `git clone`. Ohne diesen
+> Lauf sind Logo und alle Bilder lokal kaputt, denn der Browser fällt bei einem
+> 404 auf der gewählten `<source>` **nicht** auf das PNG zurück. `pnpm build`
+> führt den Schritt automatisch aus, `pnpm dev` nicht.
 
 **Verifikation:** <http://localhost:5173> öffnen und den **Discord-Login** durchspielen.
 Wenn du nach Discord-Autorisierung eingeloggt zurückkommst, läuft das volle Setup
@@ -224,8 +232,8 @@ und ein **Filesystem-MCP** auf `.knowledge/`. Für das Grund-Setup nicht nötig.
 pnpm typecheck                  # tsc --noEmit über alle Workspaces
 pnpm test                       # Backend- + Frontend-Unit-Tests (Vitest)
 
-# Nur falls du E2E fahren willst:
-pnpm exec playwright install    # Browser-Binaries für Playwright
+# Nur falls du E2E fahren willst (einmalig Chromium installieren):
+pnpm -F @rizzotto/e2e exec playwright install chromium
 pnpm test:e2e                   # Playwright (braucht laufende Services)
 ```
 
