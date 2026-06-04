@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
+import { ensureMatchGame } from '../lib/match-games.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -105,8 +106,11 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: matchId, deleted_at: null },
         select: {
           id: true,
-          map_decision: true,
-          blind_pick: true,
+          games: {
+            where: { game_number: 1 },
+            select: { map_decision: true, blind_pick: true },
+            take: 1,
+          },
         },
       });
 
@@ -118,7 +122,8 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      if (!match.map_decision) {
+      const game = match.games[0];
+      if (!game?.map_decision) {
         return reply.code(404).send({
           error: 'NotFound',
           message: 'No decision flow started for this match',
@@ -126,7 +131,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      return reply.code(200).send(serializeDecisionState(matchId, match.map_decision, match.blind_pick));
+      return reply.code(200).send(serializeDecisionState(matchId, game.map_decision, game.blind_pick));
     },
   );
 
@@ -155,7 +160,11 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
               map_pool: { select: { map_id: true } },
             },
           },
-          map_decision: { select: { match_id: true } },
+          games: {
+            where: { game_number: 1 },
+            select: { id: true, map_decision: { select: { game_id: true } } },
+            take: 1,
+          },
         },
       });
 
@@ -176,8 +185,8 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Idempotency guard
-      if (match.map_decision) {
+      // Idempotency guard — decision already exists for game 1
+      if (match.games[0]?.map_decision) {
         return reply.code(409).send({
           error: 'Conflict',
           message: 'Decision flow already started for this match',
@@ -203,6 +212,9 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      // Ensure a MatchGame row exists for game 1
+      const gameId = match.games[0]?.id ?? await ensureMatchGame(fastify.prisma, matchId, 1);
+
       // Coin flip: 0 = player1 is top, 1 = player2 is top
       const seed = randomBytes(16).toString('hex');
       const flip = randomInt(2);
@@ -217,7 +229,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
 
       const decision = await fastify.prisma.matchMapDecision.create({
         data: {
-          match_id: matchId,
+          game_id: gameId,
           mode,
           coin_flip_seed: seed,
           top_player_id: topPlayerId,
@@ -282,14 +294,18 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       const { map_id } = parsed.data;
       const userId = request.user.sub;
 
-      // Load decision with tournament pool
+      // Load game 1 with its map decision and tournament pool
       const match = await fastify.prisma.match.findFirst({
         where: { id: matchId, deleted_at: null },
         select: {
           id: true,
           player1_id: true,
           player2_id: true,
-          map_decision: true,
+          games: {
+            where: { game_number: 1 },
+            select: { id: true, map_decision: true },
+            take: 1,
+          },
           tournament: {
             select: {
               map_pool: { select: { map_id: true } },
@@ -306,7 +322,8 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const decision = match.map_decision;
+      const game = match.games[0];
+      const decision = game?.map_decision ?? null;
       if (!decision) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
@@ -398,7 +415,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const updated = await fastify.prisma.matchMapDecision.update({
-        where: { match_id: matchId },
+        where: { game_id: game!.id },
         data: {
           bans_top: newBansTop,
           bans_bottom: newBansBottom,
@@ -448,8 +465,11 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: matchId, deleted_at: null },
         select: {
           id: true,
-          map_decision: true,
-          blind_pick: true,
+          games: {
+            where: { game_number: 1 },
+            select: { map_decision: true, blind_pick: true },
+            take: 1,
+          },
         },
       });
 
@@ -461,7 +481,8 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      if (!match.map_decision) {
+      const game = match.games[0];
+      if (!game?.map_decision) {
         return reply.code(409).send({
           error: 'Conflict',
           message: 'Decision flow has not been started for this match. Call POST /decision/start first.',
@@ -469,7 +490,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      if (match.map_decision.mode !== 'RANDOM') {
+      if (game.map_decision.mode !== 'RANDOM') {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
           message: 'This endpoint is only available for RANDOM mode matches',
@@ -477,7 +498,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      return reply.code(200).send(serializeDecisionState(matchId, match.map_decision, match.blind_pick));
+      return reply.code(200).send(serializeDecisionState(matchId, game.map_decision, game.blind_pick));
     },
   );
 
@@ -509,8 +530,15 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           player1_id: true,
           player2_id: true,
-          map_decision: { select: { picked_map_id: true } },
-          blind_pick: true,
+          games: {
+            where: { game_number: 1 },
+            select: {
+              id: true,
+              map_decision: { select: { picked_map_id: true } },
+              blind_pick: true,
+            },
+            take: 1,
+          },
           tournament: { select: { mode: true } },
         },
       });
@@ -533,8 +561,10 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      const game = match.games[0];
+
       // Map decision must be resolved first
-      if (!match.map_decision?.picked_map_id) {
+      if (!game?.map_decision?.picked_map_id) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
           message: 'Map decision must be completed before blind-pick phase',
@@ -568,14 +598,15 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const now = new Date();
+      const gameId = game.id;
 
       // Upsert MatchBlindPick
-      let blindPick = match.blind_pick;
+      let blindPick = game.blind_pick;
 
       if (!blindPick) {
         blindPick = await fastify.prisma.matchBlindPick.create({
           data: {
-            match_id: matchId,
+            game_id: gameId,
             player1_faction_id: isPlayer1 ? faction_id : null,
             player2_faction_id: isPlayer2 ? faction_id : null,
             player1_locked_at: isPlayer1 ? now : null,
@@ -600,7 +631,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         blindPick = await fastify.prisma.matchBlindPick.update({
-          where: { match_id: matchId },
+          where: { game_id: gameId },
           data: {
             ...(isPlayer1 ? { player1_faction_id: faction_id, player1_locked_at: now } : {}),
             ...(isPlayer2 ? { player2_faction_id: faction_id, player2_locked_at: now } : {}),
@@ -612,7 +643,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (bothLocked && !blindPick.revealed_at) {
         blindPick = await fastify.prisma.matchBlindPick.update({
-          where: { match_id: matchId },
+          where: { game_id: gameId },
           data: { revealed_at: new Date() },
         });
       }
@@ -631,12 +662,12 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.io.to(matchDecisionRoom(matchId)).emit('match.blind-pick.update', updatePayload);
       }
 
-      if (blindPick.revealed_at && match.map_decision?.picked_map_id) {
+      if (blindPick.revealed_at && game.map_decision?.picked_map_id) {
         if (fastify.io) {
           fastify.io.to(matchDecisionRoom(matchId)).emit('match.decision.complete', {
             matchId,
-            pickedMapId: match.map_decision.picked_map_id,
-            decidedAt: match.map_decision.picked_map_id ? blindPick.revealed_at.toISOString() : '',
+            pickedMapId: game.map_decision.picked_map_id,
+            decidedAt: blindPick.revealed_at.toISOString(),
           });
         }
       }

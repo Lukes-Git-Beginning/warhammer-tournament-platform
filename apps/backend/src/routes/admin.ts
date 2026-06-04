@@ -585,9 +585,9 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
             bans_top: true,
             bans_bottom: true,
             picked_map_id: true,
-            match: { select: { winner_id: true, status: true } },
+            game: { select: { match: { select: { winner_id: true, status: true } } } },
           },
-          where: { match: { status: 'COMPLETED', deleted_at: null } },
+          where: { game: { match: { status: 'COMPLETED', deleted_at: null } } },
         });
 
         const maps = await fastify.prisma.map.findMany({
@@ -609,7 +609,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
             const s = mapStats.get(d.picked_map_id);
             if (s) {
               s.picks++;
-              if (d.match.winner_id) s.wins++;
+              if (d.game.match.winner_id) s.wins++;
             }
           }
         }

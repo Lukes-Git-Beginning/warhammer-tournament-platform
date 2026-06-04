@@ -320,7 +320,11 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           player2: { select: { id: true, username: true } },
           player1_faction: { select: { id: true, name: true } },
           player2_faction: { select: { id: true, name: true } },
-          map_decision: { select: { picked_map_id: true } },
+          games: {
+            where: { game_number: 1 },
+            select: { map_decision: { select: { picked_map_id: true } } },
+            take: 1,
+          },
         },
       });
 
@@ -354,7 +358,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           opponent_score: won ? 0 : 1,
           my_faction: myFaction ? { id: myFaction.id, name: myFaction.name } : null,
           opponent_faction: opponentFaction ? { id: opponentFaction.id, name: opponentFaction.name } : null,
-          map_id: m.map_decision?.picked_map_id ?? null,
+          map_id: m.games[0]?.map_decision?.picked_map_id ?? null,
           played_at: m.updated_at.toISOString(),
           won,
         };

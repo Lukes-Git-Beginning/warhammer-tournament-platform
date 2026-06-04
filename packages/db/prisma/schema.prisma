@@ -238,8 +238,8 @@ model Tournament {
   rounds_count           Int                  @default(5) // 3–6 via constraint
   playoff_format         PlayoffFormat        @default(NONE)
   swiss_match_format     MatchFormat          @default(BO1)
-  playoff_match_format   MatchFormat          @default(BO3)
-  finale_match_format    MatchFormat          @default(BO3)
+  playoff_match_format   MatchFormat          @default(BO1) // Bo3/Bo5 re-enable with series support
+  finale_match_format    MatchFormat          @default(BO1)
   map_decision_mode      MapDecisionMode      @default(PICK_BAN)
   created_at             DateTime             @default(now())
   updated_at             DateTime             @updatedAt
@@ -345,8 +345,7 @@ model Match {
   player2_faction  Faction?          @relation("MatchPlayer2Faction", fields: [player2_faction_id], references: [id])
   draft            Draft?
   reports          MatchReport[]
-  map_decision     MatchMapDecision?
-  blind_pick       MatchBlindPick?
+  games            MatchGame[]
 
   @@unique([tournament_id, round, match_number])
   @@index([tournament_id, status])
@@ -356,10 +355,39 @@ model Match {
   @@index([deleted_at])
 }
 
-// Welle 2: Map decision (coin-flip, pick/ban) per match game.
+// M7: MatchGame — one row per Battle in a Match (Bo1=1 game, Bo3=up to 3, Bo5=up to 5).
+// v1: always game_number=1 (Bo1 only). Schema is series-ready for Bo3/Bo5.
+model MatchGame {
+  id                 String      @id @default(uuid()) @db.Uuid
+  match_id           String      @db.Uuid
+  game_number        Int         @default(1)
+  status             MatchStatus @default(PENDING)
+  winner_id          String?     @db.Uuid
+  player1_faction_id String?     // auto-resolved from BlindPick/SFT on finalization
+  player2_faction_id String?
+  lobby_code         String?     // optional ingame lobby code
+  // Provisional-result flow (30-min auto-confirm)
+  reported_winner_id String?     @db.Uuid
+  reporter_id        String?     @db.Uuid
+  reported_at        DateTime?
+  confirmed_at       DateTime?   // set on opponent-confirm OR cron auto-confirm
+  replay_url         String?     // required on first report (anti-farming)
+  played_at          DateTime?
+  created_at         DateTime    @default(now())
+  updated_at         DateTime    @updatedAt
+
+  match        Match             @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  map_decision MatchMapDecision?
+  blind_pick   MatchBlindPick?
+
+  @@unique([match_id, game_number])
+  @@index([match_id])
+  @@index([reported_at]) // cron scan for auto-confirm
+}
+
+// Welle 2: Map decision (coin-flip, pick/ban) per game.
 model MatchMapDecision {
-  match_id         String          @id @db.Uuid
-  game_index       Int             @default(0) // Bo3/Bo5: Game 1=0, Game 2=1, …
+  game_id          String          @id @db.Uuid
   mode             MapDecisionMode
   coin_flip_seed   String
   top_player_id    String          @db.Uuid
@@ -369,24 +397,19 @@ model MatchMapDecision {
   picked_map_id    String? // final picked Map ID
   decided_at       DateTime?
 
-  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
-
-  @@index([match_id])
+  game MatchGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
 }
 
-// Welle 2: Blind faction pick per match game (BPT mode).
+// Welle 2: Blind faction pick per game (BPT mode).
 model MatchBlindPick {
-  match_id           String    @id @db.Uuid
-  game_index         Int       @default(0)
+  game_id            String    @id @db.Uuid
   player1_faction_id String?
   player2_faction_id String?
   player1_locked_at  DateTime?
   player2_locked_at  DateTime?
   revealed_at        DateTime?
 
-  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
-
-  @@index([match_id])
+  game MatchGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
 }
 
 // Q4: Dual-submit match reports. Each player submits their own report; agreement
