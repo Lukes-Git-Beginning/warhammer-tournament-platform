@@ -2,13 +2,18 @@ import type { BracketResponse } from '@rizzotto/types';
 import { computeBracketLayout, MATCH_WIDTH, MATCH_HEIGHT, ROUND_GAP } from './computeBracketLayout';
 import { MatchNode } from './MatchNode';
 
+export interface BracketPlayerInfo {
+  name: string;
+  avatarUrl: string | null;
+}
+
 interface SVGBracketProps {
   data: BracketResponse;
-  playerNameMap?: Map<string, string>;
+  players?: Map<string, BracketPlayerInfo>;
   onMatchClick?: (matchId: string) => void;
 }
 
-export function SVGBracket({ data, playerNameMap, onMatchClick }: SVGBracketProps) {
+export function SVGBracket({ data, players, onMatchClick }: SVGBracketProps) {
   const layout = computeBracketLayout(data.matches);
 
   // Add padding so connectors and labels don't clip
@@ -78,8 +83,8 @@ export function SVGBracket({ data, playerNameMap, onMatchClick }: SVGBracketProp
         const pos = layout.positions.get(m.matchId);
         if (!pos) return null;
 
-        const p1Name = m.player1Id ? (playerNameMap?.get(m.player1Id) ?? undefined) : undefined;
-        const p2Name = m.player2Id ? (playerNameMap?.get(m.player2Id) ?? undefined) : undefined;
+        const p1 = m.player1Id ? players?.get(m.player1Id) : undefined;
+        const p2 = m.player2Id ? players?.get(m.player2Id) : undefined;
 
         return (
           <foreignObject
@@ -94,8 +99,10 @@ export function SVGBracket({ data, playerNameMap, onMatchClick }: SVGBracketProp
           <div {...({ xmlns: 'http://www.w3.org/1999/xhtml' } as any)} style={{ width: '100%', height: '100%' }}>
               <MatchNode
                 match={m}
-                player1Name={p1Name}
-                player2Name={p2Name}
+                player1Name={p1?.name}
+                player2Name={p2?.name}
+                player1AvatarUrl={p1?.avatarUrl}
+                player2AvatarUrl={p2?.avatarUrl}
                 onClick={onMatchClick ? () => onMatchClick(m.matchId) : undefined}
               />
             </div>

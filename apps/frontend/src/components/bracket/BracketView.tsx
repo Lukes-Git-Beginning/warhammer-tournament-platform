@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { getBracket, getParticipants, startNextSwissRound } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
-import { SVGBracket } from './SVGBracket';
+import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
 import { SwissStandings } from './SwissStandings';
 
@@ -64,6 +64,13 @@ export function BracketView({ slug, tournamentId, canManage = false }: BracketVi
   const selectedMatch = selectedMatchId
     ? (data.matches.find((m) => m.matchId === selectedMatchId) ?? null)
     : null;
+
+  const players = new Map<string, BracketPlayerInfo>(
+    (participantsData?.data ?? []).map((p) => [
+      p.user.id,
+      { name: p.user.username, avatarUrl: p.user.avatar_url },
+    ]),
+  );
 
   const swiss = data.swiss;
   const showNextRoundButton =
@@ -148,16 +155,12 @@ export function BracketView({ slug, tournamentId, canManage = false }: BracketVi
               </div>
 
               <TransformComponent
-                wrapperStyle={{ width: '100%', height: '600px' }}
+                wrapperStyle={{ width: '100%', height: 'max(480px, 70vh)' }}
                 contentStyle={{ padding: '16px' }}
               >
                 <SVGBracket
                   data={data}
-                  playerNameMap={
-                    new Map(
-                      (participantsData?.data ?? []).map((p) => [p.user.id, p.user.username]),
-                    )
-                  }
+                  players={players}
                   onMatchClick={(matchId) => setSelectedMatchId(matchId)}
                 />
               </TransformComponent>
@@ -170,6 +173,12 @@ export function BracketView({ slug, tournamentId, canManage = false }: BracketVi
             matchId={selectedMatch.matchId}
             player1Id={selectedMatch.player1Id}
             player2Id={selectedMatch.player2Id}
+            player1Name={
+              selectedMatch.player1Id ? players.get(selectedMatch.player1Id)?.name : undefined
+            }
+            player2Name={
+              selectedMatch.player2Id ? players.get(selectedMatch.player2Id)?.name : undefined
+            }
             onClose={() => setSelectedMatchId(null)}
           />
         )}

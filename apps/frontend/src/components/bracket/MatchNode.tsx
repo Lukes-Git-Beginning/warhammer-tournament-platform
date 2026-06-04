@@ -4,7 +4,27 @@ interface MatchNodeProps {
   match: BracketNode;
   player1Name?: string;
   player2Name?: string;
+  player1AvatarUrl?: string | null;
+  player2AvatarUrl?: string | null;
   onClick?: () => void;
+}
+
+/** Tiny avatar with initials fallback, sized for the cramped match node rows. */
+function PlayerAvatar({ name, avatarUrl }: { name?: string; avatarUrl?: string | null }) {
+  if (!name) return null;
+  return avatarUrl ? (
+    <img
+      src={avatarUrl}
+      alt=""
+      className="mr-1.5 h-4 w-4 shrink-0 rounded-full object-cover"
+      loading="lazy"
+      draggable={false}
+    />
+  ) : (
+    <span className="mr-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-700 text-[8px] font-semibold text-stone-300">
+      {name.slice(0, 2).toUpperCase()}
+    </span>
+  );
 }
 
 export const statusColors: Record<string, string> = {
@@ -15,7 +35,14 @@ export const statusColors: Record<string, string> = {
   FORFEIT: 'border-amber-700 bg-amber-950/40',
 };
 
-export function MatchNode({ match, player1Name, player2Name, onClick }: MatchNodeProps) {
+export function MatchNode({
+  match,
+  player1Name,
+  player2Name,
+  player1AvatarUrl,
+  player2AvatarUrl,
+  onClick,
+}: MatchNodeProps) {
   const isBye = match.status === 'BYE';
   const isOngoing = match.status === 'ONGOING';
 
@@ -40,6 +67,7 @@ export function MatchNode({ match, player1Name, player2Name, onClick }: MatchNod
     >
       {/* Player 1 row */}
       <div className="flex-1 flex items-center px-2 border-b border-stone-800">
+        {!isBye && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
             p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'
@@ -58,6 +86,7 @@ export function MatchNode({ match, player1Name, player2Name, onClick }: MatchNod
 
       {/* Player 2 row */}
       <div className="flex-1 flex items-center px-2">
+        {!isBye && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
             p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'

@@ -404,8 +404,9 @@ export function TournamentDetail() {
         </section>
       )}
 
+      {/* Bracket breaks out of the narrow page container — it needs width. */}
       {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
-        <section>
+        <section className="relative left-1/2 w-[min(94vw,1600px)] -translate-x-1/2">
           <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-3">
             {t('tournament.detail.bracket')}
           </h2>
