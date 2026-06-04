@@ -933,6 +933,12 @@ export function getMatchDecision(matchId: string): Promise<MatchDecisionState> {
   return apiFetch<MatchDecisionState>(`/api/matches/${matchId}/decision`);
 }
 
+export function forceResolveDecision(matchId: string): Promise<MatchDecisionState> {
+  return apiFetch<MatchDecisionState>(`/api/matches/${matchId}/decision/force-resolve`, {
+    method: 'POST',
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Match Games
 // ---------------------------------------------------------------------------

@@ -675,6 +675,102 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(200).send(updatePayload);
     },
   );
+
+  // -------------------------------------------------------------------------
+  // POST /api/matches/:id/decision/force-resolve
+  // Organizer / Moderator / Admin only: immediately resolve an in-progress
+  // PICK_BAN decision by randomly selecting from the remaining (non-banned)
+  // maps. Useful when a player goes AFK during the ban phase.
+  // -------------------------------------------------------------------------
+  fastify.post(
+    '/api/matches/:id/decision/force-resolve',
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+      ],
+    },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: {
+          id: true,
+          games: {
+            where: { game_number: 1 },
+            select: { id: true, map_decision: true },
+            take: 1,
+          },
+          tournament: {
+            select: {
+              map_pool: { select: { map_id: true } },
+            },
+          },
+        },
+      });
+
+      if (!match) {
+        return reply.code(404).send({
+          error: 'NotFound',
+          message: 'Match not found',
+          statusCode: 404,
+        });
+      }
+
+      const game = match.games[0];
+      const decision = game?.map_decision ?? null;
+
+      if (!decision) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'Decision flow has not been started for this match',
+          statusCode: 422,
+        });
+      }
+
+      if (decision.picked_map_id) {
+        return reply.code(409).send({
+          error: 'Conflict',
+          message: 'Map has already been decided for this match',
+          statusCode: 409,
+        });
+      }
+
+      const poolMapIds = match.tournament.map_pool.map((p) => p.map_id);
+      const allBanned = [
+        ...(decision.bans_top as string[]),
+        ...(decision.bans_bottom as string[]),
+      ];
+      const remaining = poolMapIds.filter((id) => !allBanned.includes(id));
+
+      if (remaining.length === 0) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'No maps remaining after bans — cannot force resolve',
+          statusCode: 422,
+        });
+      }
+
+      const pickedMapId = remaining[randomInt(remaining.length)]!;
+      const decidedAt = new Date();
+
+      const updated = await fastify.prisma.matchMapDecision.update({
+        where: { game_id: game!.id },
+        data: { picked_map_id: pickedMapId, decided_at: decidedAt },
+      });
+
+      if (fastify.io) {
+        fastify.io.to(matchDecisionRoom(matchId)).emit('match.decision.complete', {
+          matchId,
+          pickedMapId,
+          decidedAt: decidedAt.toISOString(),
+        });
+      }
+
+      return reply.code(200).send(serializeDecisionState(matchId, updated, null));
+    },
+  );
 };
 
 export default matchDecisionRoutes;

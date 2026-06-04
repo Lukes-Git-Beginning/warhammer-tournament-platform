@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from '@tanstack/react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuthQuery } from '@/lib/auth';
 import {
   getMatchDecision,
+  forceResolveDecision,
   banMap,
   lockBlindPick,
   getFactions,
@@ -766,6 +767,17 @@ export function MatchDecisionPage() {
     ? (matchDetail?.player1?.id === decision.bottomPlayerId ? matchDetail?.player1 : matchDetail?.player2)
     : null;
 
+  const isOrganizerOrAdmin =
+    user && (user.role === 'ORGANIZER' || user.role === 'MODERATOR' || user.role === 'ADMIN');
+
+  const forceResolveMutation = useMutation({
+    mutationFn: () => forceResolveDecision(matchId),
+    onSuccess: (data) => {
+      setDecision(data);
+      void queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
+    },
+  });
+
   // Phase transitions
   const rawPhase = resolvePhase(decision);
   let phase = rawPhase;
@@ -907,6 +919,19 @@ export function MatchDecisionPage() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Organizer/Admin escape hatch — force-pick a random map if a player is AFK */}
+      {isOrganizerOrAdmin && phase === 'map_pick_ban' && !decision.pickedMapId && (
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={() => forceResolveMutation.mutate()}
+            disabled={forceResolveMutation.isPending}
+            className="text-xs text-rizzotto-stone-600 hover:text-rizzotto-stone-400 transition-colors disabled:opacity-50"
+          >
+            {forceResolveMutation.isPending ? 'Resolving…' : 'Admin: Force resolve map'}
+          </button>
+        </div>
+      )}
     </PageShell>
   );
 }
