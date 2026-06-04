@@ -928,7 +928,7 @@ export function MatchDecisionPage() {
             disabled={forceResolveMutation.isPending}
             className="text-xs text-rizzotto-stone-600 hover:text-rizzotto-stone-400 transition-colors disabled:opacity-50"
           >
-            {forceResolveMutation.isPending ? 'Resolving…' : 'Admin: Force resolve map'}
+            {forceResolveMutation.isPending ? 'Picking…' : 'Organizer: Pick random map'}
           </button>
         </div>
       )}

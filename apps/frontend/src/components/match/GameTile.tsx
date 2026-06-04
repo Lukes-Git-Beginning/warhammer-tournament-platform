@@ -174,7 +174,7 @@ export function GameTile({
                       onClick={() => startDecisionMutation.mutate()}
                       disabled={startDecisionMutation.isPending}
                     >
-                      {startDecisionMutation.isPending ? 'Starting…' : 'Start Decision Flow'}
+                      {startDecisionMutation.isPending ? 'Rolling…' : 'Choose Battlefield'}
                     </Button>
                   </div>
                 ) : (
@@ -186,8 +186,8 @@ export function GameTile({
                 <div className="flex flex-col items-center gap-3">
                   <p className="text-sm text-rizzotto-stone-400 text-center">
                     {game.decision.mode === 'RANDOM'
-                      ? 'Map draw in progress…'
-                      : 'Map pick/ban in progress…'}
+                      ? 'Drawing battlefield…'
+                      : 'Picking battlefield…'}
                   </p>
                   <Link
                     to="/matches/$matchId/decision"
