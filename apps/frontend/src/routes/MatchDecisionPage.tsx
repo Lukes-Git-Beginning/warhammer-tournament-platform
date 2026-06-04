@@ -27,6 +27,8 @@ interface CoinFlipPhaseProps {
   bottomPlayerAvatar?: string | null;
   topPlayerName?: string;
   bottomPlayerName?: string;
+  /** Skip the spin animation — coin shows result immediately (returning to an existing decision). */
+  skipAnimation?: boolean;
 }
 
 function CoinFace({
@@ -64,16 +66,18 @@ function CoinFlipPhase({
   bottomPlayerAvatar,
   topPlayerName,
   bottomPlayerName,
+  skipAnimation = false,
 }: CoinFlipPhaseProps) {
-  const [revealed, setRevealed] = useState(false);
+  // If we're returning to an existing decision, start revealed immediately.
+  const [revealed, setRevealed] = useState(skipAnimation);
   const isTop = decision.topPlayerId === currentUserId;
   const isBottom = decision.bottomPlayerId === currentUserId;
 
-  // Reveal result 200ms after the spin animation ends (2000ms)
   useEffect(() => {
+    if (skipAnimation) return;
     const timer = setTimeout(() => setRevealed(true), 2200);
     return () => clearTimeout(timer);
-  }, []);
+  }, [skipAnimation]);
 
   return (
     <div className="flex flex-col items-center gap-8">
@@ -84,8 +88,8 @@ function CoinFlipPhase({
       {/* 3D coin — front = topPlayer (winner), back = bottomPlayer */}
       <div style={{ perspective: 800 }} className="h-28 w-28">
         <motion.div
-          animate={{ rotateY: [0, 360, 720, 1080, 1440] }}
-          transition={{ duration: 2, ease: 'easeOut', times: [0, 0.25, 0.5, 0.75, 1] }}
+          animate={{ rotateY: skipAnimation ? 0 : [0, 360, 720, 1080, 1440] }}
+          transition={skipAnimation ? { duration: 0 } : { duration: 2, ease: 'easeOut', times: [0, 0.25, 0.5, 0.75, 1] }}
           className="relative h-28 w-28"
           style={{ transformStyle: 'preserve-3d' }}
         >
@@ -623,6 +627,8 @@ export function MatchDecisionPage() {
   const queryClient = useQueryClient();
 
   const [decision, setDecision] = useState<MatchDecisionState | null>(null);
+  // True when decision was already in the DB when the page loaded — skip the coin flip animation.
+  const [decisionPreloaded, setDecisionPreloaded] = useState(false);
   const [coinFlipDone, setCoinFlipDone] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -634,7 +640,10 @@ export function MatchDecisionPage() {
   });
 
   useEffect(() => {
-    if (initialDecision) setDecision(initialDecision);
+    if (initialDecision) {
+      setDecision(initialDecision);
+      setDecisionPreloaded(true); // came from server, not a fresh toss on this page
+    }
   }, [initialDecision]);
 
   // Factions for blind pick
@@ -811,6 +820,7 @@ export function MatchDecisionPage() {
                 bottomPlayerAvatar={bottomPlayer?.avatar_url ?? null}
                 topPlayerName={topPlayer?.username}
                 bottomPlayerName={bottomPlayer?.username}
+                skipAnimation={decisionPreloaded}
               />
             </motion.div>
           )}

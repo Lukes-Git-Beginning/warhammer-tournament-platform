@@ -168,7 +168,7 @@ export function GameTile({
                     params={{ matchId }}
                     className="text-sm text-rizzotto-gold-400 hover:underline"
                   >
-                    Open Decision Flow →
+                    Go to map selection →
                   </Link>
                 </div>
               )}
