@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getMatchGames, getTournamentMaps } from '@/lib/api';
+import { getMatchGames, getTournamentMaps, getFactions } from '@/lib/api';
 import type { MapDto } from '@/lib/api';
 import type { BracketNode } from '@rizzotto/types';
 import { useMatchDecisionSocket } from '@/hooks/useMatchDecisionSocket';
@@ -65,6 +65,15 @@ function MyMatchInner({
   });
   const maps: MapDto[] = mapsData?.data ?? [];
 
+  const { data: factionsData } = useQuery({
+    queryKey: ['factions'],
+    queryFn: () => getFactions(),
+    staleTime: 60 * 60_000,
+  });
+  const factionNames: Record<string, string> = Object.fromEntries(
+    (factionsData?.data ?? []).map((f) => [f.faction.id, f.faction.name]),
+  );
+
   const p1Name = (match.player1Id && playerNames[match.player1Id]) ?? 'Player 1';
   const p2Name = (match.player2Id && playerNames[match.player2Id]) ?? 'Player 2';
 
@@ -99,6 +108,7 @@ function MyMatchInner({
               player2Name={p2Name}
               isParticipant={true}
               maps={maps}
+              factionNames={factionNames}
             />
           ))}
         </div>

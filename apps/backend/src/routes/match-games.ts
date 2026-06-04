@@ -21,6 +21,8 @@ function serializeGame(game: {
   game_number: number;
   status: string;
   winner_id: string | null;
+  player1_faction_id: string | null;
+  player2_faction_id: string | null;
   lobby_code: string | null;
   reported_winner_id: string | null;
   reporter_id: string | null;
@@ -51,6 +53,8 @@ function serializeGame(game: {
     gameNumber: game.game_number,
     status: game.status,
     winnerId: game.winner_id,
+    player1FactionId: game.player1_faction_id,
+    player2FactionId: game.player2_faction_id,
     lobbyCode: includeLobbyCodes ? game.lobby_code : null,
     reportedWinnerId: game.reported_winner_id,
     reporterId: game.reporter_id,
@@ -91,6 +95,8 @@ const GAME_SELECT = {
   game_number: true,
   status: true,
   winner_id: true,
+  player1_faction_id: true,
+  player2_faction_id: true,
   lobby_code: true,
   reported_winner_id: true,
   reporter_id: true,

@@ -948,6 +948,8 @@ export interface GameDto {
   gameNumber: number;
   status: string;
   winnerId: string | null;
+  player1FactionId: string | null;
+  player2FactionId: string | null;
   lobbyCode: string | null;
   reportedWinnerId: string | null;
   reporterId: string | null;

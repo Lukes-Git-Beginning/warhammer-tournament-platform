@@ -18,6 +18,8 @@ interface Props {
   isParticipant: boolean;
   /** Map pool for resolving picked map name */
   maps?: MapDto[];
+  /** Faction id → name lookup */
+  factionNames?: Record<string, string>;
 }
 
 export function GameTile({
@@ -30,6 +32,7 @@ export function GameTile({
   player2Name,
   isParticipant,
   maps = [],
+  factionNames = {},
 }: Props) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -61,6 +64,15 @@ export function GameTile({
 
   const isPlayer1 = currentUserId === player1Id;
   const isPlayer2 = currentUserId === player2Id;
+
+  // Resolve faction IDs — prefer MatchGame fields (set after finalization),
+  // fall back to BlindPick reveal (BPT, pre-finalization).
+  const p1FactionId =
+    game.player1FactionId ?? game.blindPick?.player1FactionId ?? null;
+  const p2FactionId =
+    game.player2FactionId ?? game.blindPick?.player2FactionId ?? null;
+  const p1FactionName = p1FactionId ? (factionNames[p1FactionId] ?? null) : null;
+  const p2FactionName = p2FactionId ? (factionNames[p2FactionId] ?? null) : null;
   const myId = isPlayer1 ? player1Id : isPlayer2 ? player2Id : null;
   const opponentId = isPlayer1 ? player2Id : isPlayer2 ? player1Id : null;
 
@@ -117,6 +129,13 @@ export function GameTile({
                   ?? game.decision.pickedMapId}
               </span>
             </p>
+          )}
+          {(p1FactionName || p2FactionName) && (
+            <div className="flex items-center gap-3 text-xs text-rizzotto-stone-500">
+              <span>{player1Name}: <span className="text-rizzotto-stone-300">{p1FactionName ?? '—'}</span></span>
+              <span>·</span>
+              <span>{player2Name}: <span className="text-rizzotto-stone-300">{p2FactionName ?? '—'}</span></span>
+            </div>
           )}
           {game.replayUrl && (
             <a
@@ -193,6 +212,15 @@ export function GameTile({
                     {maps.find((m) => m.id === game.decision!.pickedMapId)?.name
                       ?? game.decision.pickedMapId}
                   </p>
+                </div>
+              )}
+
+              {/* Factions */}
+              {(p1FactionName || p2FactionName) && (
+                <div className="flex items-center gap-3 text-xs text-rizzotto-stone-400">
+                  <span>{player1Name}: <span className="text-rizzotto-stone-200 font-medium">{p1FactionName ?? '—'}</span></span>
+                  <span>·</span>
+                  <span>{player2Name}: <span className="text-rizzotto-stone-200 font-medium">{p2FactionName ?? '—'}</span></span>
                 </div>
               )}
 
