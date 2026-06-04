@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { reportGameResult, startMatchDecision } from '@/lib/api';
 import type { GameDto, MapDto } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,7 @@ export function GameTile({
   factionNames = {},
 }: Props) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedWinnerId, setSelectedWinnerId] = useState<string | null>(null);
   const [replayFile, setReplayFile] = useState<File | null>(null);
@@ -43,8 +45,7 @@ export function GameTile({
   const startDecisionMutation = useMutation({
     mutationFn: () => startMatchDecision(matchId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['match-games', matchId] });
-      void queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
+      void navigate({ to: '/matches/$matchId/decision', params: { matchId } });
     },
   });
 
