@@ -90,9 +90,16 @@ async function seedFactions(): Promise<void> {
 }
 
 async function seedDefaultSeason(): Promise<void> {
-  const existing = await prisma.season.findFirst({ where: { is_active: true } });
-  if (existing) {
-    console.log(`  ✓ Active season already exists: "${existing.name}" (${existing.id})`);
+  const active = await prisma.season.findFirst({ where: { is_active: true } });
+  if (active) {
+    console.log(`  ✓ Active season already exists: "${active.name}" (${active.id})`);
+    return;
+  }
+  // Activate the most recent existing season instead of creating a duplicate
+  const latest = await prisma.season.findFirst({ orderBy: { start_date: 'desc' } });
+  if (latest) {
+    await prisma.season.update({ where: { id: latest.id }, data: { is_active: true } });
+    console.log(`  ✓ Activated existing season: "${latest.name}" (${latest.id})`);
     return;
   }
   const now = new Date();
