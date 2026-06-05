@@ -19,14 +19,12 @@ export function FactionBadge({ colorHex, initials, name, size = 'md', iconUrl }:
     return (
       <span
         title={name}
-        className="inline-flex items-center justify-center rounded-full overflow-hidden select-none shrink-0 ring-1"
+        className="inline-flex items-center justify-center rounded-full overflow-hidden select-none shrink-0 p-1"
         style={{
           width: px,
           height: px,
           minWidth: px,
-          backgroundColor: colorHex,
-          // @ts-expect-error CSS custom property for ring color
-          '--tw-ring-color': colorHex,
+          backgroundColor: '#e5e7eb',
         }}
       >
         <img
@@ -36,7 +34,7 @@ export function FactionBadge({ colorHex, initials, name, size = 'md', iconUrl }:
           height={px}
           loading="lazy"
           decoding="async"
-          className="w-full h-full object-cover"
+          className="w-full h-full object-contain"
         />
       </span>
     );
