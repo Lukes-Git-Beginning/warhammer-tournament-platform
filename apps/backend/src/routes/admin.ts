@@ -176,11 +176,15 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         return {
-          users: { active: activeUsers },
+          activeUsers,
           tournaments: { total: totalTournaments, active: activeTournaments, completed: completedTournaments },
-          matches: { total: totalMatches },
-          top_factions: topFactions,
-          season: activeSeason ? { id: activeSeason.id, name: activeSeason.name } : null,
+          matchesPlayed: totalMatches,
+          currentSeason: activeSeason?.name ?? null,
+          topFactions: topFactions.map((f) => ({
+            faction_id: f.faction_id,
+            faction_name: f.name,
+            pick_count: f.matches_played,
+          })),
         };
       },
       { ttlSeconds: 60 },
