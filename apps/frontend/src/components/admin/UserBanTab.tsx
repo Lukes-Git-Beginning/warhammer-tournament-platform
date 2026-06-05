@@ -10,52 +10,51 @@ export function UserBanTab() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-users', search],
     queryFn: () => searchUsers(search),
-    enabled: search.length >= 2,
   });
 
   const users = data?.users ?? [];
+  const filtered = search.length >= 2
+    ? users
+    : users;
 
   return (
     <div>
       <div className="mb-4 flex items-center gap-3">
-        <label htmlFor="user-search" className="text-sm text-stone-400">
-          Suche:
-        </label>
         <input
           id="user-search"
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Username oder Discord-ID (min. 2 Zeichen)"
-          className="w-full max-w-sm rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 placeholder:text-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
+          placeholder="Search by username or Discord ID…"
+          className="w-full max-w-sm rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 placeholder:text-stone-500 focus:border-rizzotto-gold-500 focus:outline-none"
         />
+        {data && (
+          <span className="text-xs text-rizzotto-stone-400">{data.total ?? users.length} members</span>
+        )}
       </div>
 
-      {search.length > 0 && search.length < 2 && (
-        <p className="text-xs text-stone-500">Mindestens 2 Zeichen eingeben.</p>
-      )}
-
-      {isLoading && <div className="py-4 text-center text-stone-400 text-sm">Wird geladen…</div>}
+      {isLoading && <div className="py-8 text-center text-rizzotto-stone-400 text-sm">Loading…</div>}
 
       {error && (
         <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
-          Fehler beim Laden der User.
+          Failed to load members.
         </div>
       )}
 
-      {!isLoading && !error && users.length > 0 && (
+      {!isLoading && !error && (
         <div className="overflow-x-auto rounded-md border border-stone-800">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-stone-800 bg-stone-900/60">
-                <th className="px-4 py-3 text-left font-medium text-stone-400">Username</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Member</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Role</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Joined</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Status</th>
-                <th className="px-4 py-3 text-left font-medium text-stone-400">Aktion</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-800/60">
-              {users.map((user) => (
+              {filtered.map((user) => (
                 <tr key={user.id} className="hover:bg-stone-800/30 transition-colors">
                   <td className="px-4 py-3">
                     <span className="flex items-center gap-2">
@@ -74,15 +73,14 @@ export function UserBanTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-stone-400">{user.role}</td>
+                  <td className="px-4 py-3 text-stone-500 text-xs">
+                    {new Date(user.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </td>
                   <td className="px-4 py-3">
                     {user.is_banned ? (
-                      <span className="rounded bg-red-900/50 px-2 py-0.5 text-xs font-medium text-red-300">
-                        Gebannt
-                      </span>
+                      <span className="rounded bg-red-900/50 px-2 py-0.5 text-xs font-medium text-red-300">Banned</span>
                     ) : (
-                      <span className="rounded bg-emerald-900/40 px-2 py-0.5 text-xs font-medium text-emerald-300">
-                        Aktiv
-                      </span>
+                      <span className="rounded bg-emerald-900/40 px-2 py-0.5 text-xs font-medium text-emerald-300">Active</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -100,13 +98,14 @@ export function UserBanTab() {
                   </td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-stone-500">No members found.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
-      )}
-
-      {!isLoading && !error && search.length >= 2 && users.length === 0 && (
-        <p className="py-4 text-center text-stone-500 text-sm">Keine User gefunden.</p>
       )}
 
       {selectedUser && <UserBanModal user={selectedUser} onClose={() => setSelectedUser(null)} />}

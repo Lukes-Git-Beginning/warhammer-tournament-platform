@@ -493,6 +493,7 @@ export interface AdminUser {
   avatar_url: string | null;
   role: string;
   is_banned: boolean;
+  created_at: string;
 }
 
 export function getAdminAuditLog(opts?: {
@@ -512,8 +513,9 @@ export function getAdminStats(): Promise<AdminStats> {
   return apiFetch('/api/admin/stats');
 }
 
-export function searchUsers(search: string): Promise<{ users: AdminUser[] }> {
-  const params = new URLSearchParams({ search });
+export function searchUsers(search?: string): Promise<{ users: AdminUser[]; total: number }> {
+  const params = new URLSearchParams();
+  if (search && search.length >= 2) params.set('search', search);
   return apiFetch(`/api/users?${params.toString()}`);
 }
 

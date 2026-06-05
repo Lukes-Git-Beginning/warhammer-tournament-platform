@@ -214,9 +214,9 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [fastify.authenticate, fastify.requireRole('ADMIN')] },
     async (request, reply) => {
       const SearchQuerySchema = z.object({
-        search: z.string().min(2).max(50),
+        search: z.string().max(50).optional(),
         page: z.coerce.number().int().min(1).default(1),
-        limit: z.coerce.number().int().min(1).max(100).default(20),
+        limit: z.coerce.number().int().min(1).max(100).default(50),
       });
 
       const parsed = SearchQuerySchema.safeParse(request.query);
@@ -231,14 +231,14 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       const { search, page, limit } = parsed.data;
       const skip = (page - 1) * limit;
 
+      const searchFilter = search && search.length >= 2
+        ? { OR: [{ username: { contains: search, mode: 'insensitive' as const } }, { discord_id: search }] }
+        : {};
+
       const [users, total] = await Promise.all([
         fastify.prisma.user.findMany({
           where: {
-            deleted_at: null,
-            OR: [
-              { username: { contains: search, mode: 'insensitive' } },
-              { discord_id: search },
-            ],
+            ...searchFilter,
           },
           select: {
             id: true,
@@ -257,19 +257,21 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.user.count({
           where: {
             deleted_at: null,
-            OR: [
-              { username: { contains: search, mode: 'insensitive' } },
-              { discord_id: search },
-            ],
+            ...searchFilter,
           },
         }),
       ]);
 
       return {
         users: users.map((u) => ({
-          ...u,
+          id: u.id,
+          discord_id: u.discord_id,
+          username: u.username,
+          email: u.email,
+          avatar_url: u.avatar_url,
+          role: u.role,
           created_at: u.created_at.toISOString(),
-          deleted_at: u.deleted_at?.toISOString() ?? null,
+          is_banned: u.deleted_at !== null,
         })),
         total,
         page,
