@@ -469,6 +469,19 @@ export function TournamentDetail() {
         />
       )}
 
+      {/* ─── Game History link ─── */}
+      {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
+        <div className="mb-4 flex justify-end">
+          <Link
+            to="/tournaments/$slug/games"
+            params={{ slug: tournament.slug }}
+            className="text-xs text-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors"
+          >
+            Alle Spiele ansehen →
+          </Link>
+        </div>
+      )}
+
       {/* ─── Bracket ─── */}
       {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
         <section className="relative left-1/2 w-[min(94vw,1600px)] -translate-x-1/2">

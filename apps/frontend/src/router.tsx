@@ -3,6 +3,7 @@ import { rootRoute } from './routes/__root';
 import { IndexPage } from './routes/IndexPage';
 import { LoginPage } from './routes/LoginPage';
 import { TournamentDetail } from './routes/TournamentDetail';
+import { TournamentGamesPage } from './routes/TournamentGamesPage';
 import { TournamentEditPage } from './routes/TournamentEditPage';
 import { TournamentsListing } from './routes/TournamentsListing';
 import { CreateTournamentPage } from './routes/CreateTournamentPage';
@@ -64,6 +65,12 @@ const tournamentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tournaments/$slug',
   component: TournamentDetail,
+});
+
+const tournamentGamesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/tournaments/$slug/games',
+  component: TournamentGamesPage,
 });
 
 const tournamentEditRoute = createRoute({
@@ -172,6 +179,7 @@ const routeTree = rootRoute.addChildren([
   createTournamentRoute,
   calendarRoute,
   tournamentDetailRoute,
+  tournamentGamesRoute,
   tournamentEditRoute,
   leaderboardRoute,
   userProfileRoute,

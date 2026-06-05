@@ -159,6 +159,86 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       { ttlSeconds: 120 },
     );
   });
+
+  // -------------------------------------------------------------------------
+  // GET /api/meta/games?page=1&limit=50
+  // Public — global game history across all tournaments, most recent first.
+  // -------------------------------------------------------------------------
+  fastify.get('/api/meta/games', async (request, reply) => {
+    const parsed = z.object({
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+    }).safeParse(request.query);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    const { page, limit } = parsed.data;
+    const skip = (page - 1) * limit;
+
+    const [games, total] = await Promise.all([
+      fastify.prisma.matchGame.findMany({
+        where: { status: 'COMPLETED', played_at: { not: null } },
+        select: {
+          id: true,
+          game_number: true,
+          match_id: true,
+          winner_id: true,
+          player1_faction_id: true,
+          player2_faction_id: true,
+          played_at: true,
+          replay_url: true,
+          match: {
+            select: {
+              round: true,
+              match_number: true,
+              player1: { select: { id: true, username: true, avatar_url: true } },
+              player2: { select: { id: true, username: true, avatar_url: true } },
+              tournament: { select: { id: true, name: true, slug: true } },
+            },
+          },
+          map_decision: { select: { picked_map_id: true } },
+        },
+        orderBy: { played_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      fastify.prisma.matchGame.count({ where: { status: 'COMPLETED', played_at: { not: null } } }),
+    ]);
+
+    const mapIds = [...new Set(games.map((g) => g.map_decision?.picked_map_id).filter(Boolean) as string[])];
+    const maps = mapIds.length
+      ? await fastify.prisma.map.findMany({ where: { id: { in: mapIds } }, select: { id: true, name: true } })
+      : [];
+    const mapById = new Map(maps.map((m) => [m.id, m.name]));
+
+    return reply.code(200).send({
+      total,
+      page,
+      limit,
+      games: games.map((g) => ({
+        id: g.id,
+        gameNumber: g.game_number,
+        matchId: g.match_id,
+        round: g.match.round,
+        matchNumber: g.match.match_number,
+        playedAt: g.played_at!.toISOString(),
+        player1: g.match.player1 ?? null,
+        player2: g.match.player2 ?? null,
+        winnerId: g.winner_id,
+        player1FactionId: g.player1_faction_id,
+        player2FactionId: g.player2_faction_id,
+        mapName: g.map_decision?.picked_map_id ? (mapById.get(g.map_decision.picked_map_id) ?? null) : null,
+        replayUrl: g.replay_url,
+        tournament: {
+          id: g.match.tournament.id,
+          name: g.match.tournament.name,
+          slug: g.match.tournament.slug,
+        },
+      })),
+    });
+  });
 };
 
 export default metaRoutes;

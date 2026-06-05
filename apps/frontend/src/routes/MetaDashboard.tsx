@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { getMetaOverview, getMatchupHeatmap, getMatchupMatrix, getFactions } from '@/lib/api';
+import { getMetaOverview, getMatchupHeatmap, getMatchupMatrix, getFactions, getMetaGames } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { MatchupHeatmap } from '@/components/meta/MatchupHeatmap';
 import { ModelMatchupHeatmap } from '@/components/meta/ModelMatchupHeatmap';
+import { GameHistoryTable } from '@/components/match/GameHistoryTable';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { FactionWithStatsDto } from '@rizzotto/types';
@@ -66,6 +67,11 @@ export function MetaDashboard() {
   });
 
   const seasonId = overview?.season?.id;
+
+  const { data: gamesData } = useQuery({
+    queryKey: ['meta-games'],
+    queryFn: () => getMetaGames(1, 50),
+  });
 
   const {
     data: matrixData,
@@ -242,6 +248,19 @@ export function MetaDashboard() {
           </section>
         </>
       )}
+
+      {/* ─── Global Game History ─── */}
+      <section className="mt-10">
+        <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-4">
+          Letzte Spiele
+        </h2>
+        {gamesData && <GameHistoryTable games={gamesData.games} showTournament />}
+        {!gamesData && (
+          <div className="flex justify-center py-6">
+            <span className="h-5 w-5 rounded-full border-2 border-rizzotto-gold-400 border-t-transparent animate-spin" />
+          </div>
+        )}
+      </section>
     </PageShell>
   );
 }

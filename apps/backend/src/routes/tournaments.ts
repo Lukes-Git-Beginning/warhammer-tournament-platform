@@ -890,6 +890,70 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       { ttlSeconds: 300 },
     );
   });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/tournaments/:slug/games
+  // Public — all completed games for a tournament, sorted by played_at desc.
+  // ---------------------------------------------------------------------------
+  fastify.get('/api/tournaments/:slug/games', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+
+    const tournament = await fastify.prisma.tournament.findFirst({
+      where: { slug, deleted_at: null },
+      select: { id: true },
+    });
+    if (!tournament) {
+      return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+    }
+
+    const games = await fastify.prisma.matchGame.findMany({
+      where: { status: 'COMPLETED', played_at: { not: null }, match: { tournament_id: tournament.id } },
+      select: {
+        id: true,
+        game_number: true,
+        match_id: true,
+        winner_id: true,
+        player1_faction_id: true,
+        player2_faction_id: true,
+        played_at: true,
+        replay_url: true,
+        match: {
+          select: {
+            round: true,
+            match_number: true,
+            player1: { select: { id: true, username: true, avatar_url: true } },
+            player2: { select: { id: true, username: true, avatar_url: true } },
+          },
+        },
+        map_decision: { select: { picked_map_id: true } },
+      },
+      orderBy: { played_at: 'desc' },
+    });
+
+    const mapIds = [...new Set(games.map((g) => g.map_decision?.picked_map_id).filter(Boolean) as string[])];
+    const maps = mapIds.length
+      ? await fastify.prisma.map.findMany({ where: { id: { in: mapIds } }, select: { id: true, name: true } })
+      : [];
+    const mapById = new Map(maps.map((m) => [m.id, m.name]));
+
+    return reply.code(200).send({
+      games: games.map((g) => ({
+        id: g.id,
+        gameNumber: g.game_number,
+        matchId: g.match_id,
+        round: g.match.round,
+        matchNumber: g.match.match_number,
+        playedAt: g.played_at!.toISOString(),
+        player1: g.match.player1 ?? null,
+        player2: g.match.player2 ?? null,
+        winnerId: g.winner_id,
+        player1FactionId: g.player1_faction_id,
+        player2FactionId: g.player2_faction_id,
+        mapName: g.map_decision?.picked_map_id ? (mapById.get(g.map_decision.picked_map_id) ?? null) : null,
+        replayUrl: g.replay_url,
+      })),
+    });
+  });
 };
 
 export default tournamentRoutes;
