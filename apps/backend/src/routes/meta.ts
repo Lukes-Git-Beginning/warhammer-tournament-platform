@@ -177,37 +177,63 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const { page, limit } = parsed.data;
     const skip = (page - 1) * limit;
 
-    const [games, total] = await Promise.all([
-      fastify.prisma.matchGame.findMany({
-        where: { status: 'COMPLETED', played_at: { not: null } },
+    const [completedMatches, total] = await Promise.all([
+      fastify.prisma.match.findMany({
+        where: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null } },
         select: {
           id: true,
-          game_number: true,
-          match_id: true,
+          round: true,
+          match_number: true,
           winner_id: true,
           player1_faction_id: true,
           player2_faction_id: true,
           played_at: true,
-          replay_url: true,
-          match: {
+          player1: { select: { id: true, username: true, avatar_url: true } },
+          player2: { select: { id: true, username: true, avatar_url: true } },
+          tournament: { select: { id: true, name: true, slug: true } },
+          games: {
+            where: { status: 'COMPLETED' },
             select: {
-              round: true,
-              match_number: true,
-              player1: { select: { id: true, username: true, avatar_url: true } },
-              player2: { select: { id: true, username: true, avatar_url: true } },
-              tournament: { select: { id: true, name: true, slug: true } },
+              id: true,
+              game_number: true,
+              winner_id: true,
+              player1_faction_id: true,
+              player2_faction_id: true,
+              played_at: true,
+              replay_url: true,
+              map_decision: { select: { picked_map_id: true } },
             },
+            orderBy: { game_number: 'asc' },
           },
-          map_decision: { select: { picked_map_id: true } },
         },
         orderBy: { played_at: 'desc' },
         skip,
         take: limit,
       }),
-      fastify.prisma.matchGame.count({ where: { status: 'COMPLETED', played_at: { not: null } } }),
+      fastify.prisma.match.count({ where: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null } } }),
     ]);
 
-    const mapIds = [...new Set(games.map((g) => g.map_decision?.picked_map_id).filter(Boolean) as string[])];
+    const rows = completedMatches.flatMap((m) => {
+      const base = { round: m.round, matchNumber: m.match_number, player1: m.player1 ?? null, player2: m.player2 ?? null, tournament: m.tournament, matchId: m.id };
+      if (m.games.length > 0) {
+        return m.games.map((g) => ({
+          ...base,
+          id: g.id,
+          gameNumber: g.game_number,
+          playedAt: (g.played_at ?? m.played_at)?.toISOString() ?? null,
+          winnerId: g.winner_id,
+          player1FactionId: g.player1_faction_id ?? m.player1_faction_id,
+          player2FactionId: g.player2_faction_id ?? m.player2_faction_id,
+          mapPickedId: g.map_decision?.picked_map_id ?? null,
+          replayUrl: g.replay_url,
+        }));
+      }
+      return [{ ...base, id: m.id, gameNumber: 1, playedAt: m.played_at?.toISOString() ?? null, winnerId: m.winner_id, player1FactionId: m.player1_faction_id, player2FactionId: m.player2_faction_id, mapPickedId: null, replayUrl: null }];
+    });
+
+    rows.sort((a, b) => (b.playedAt ?? '').localeCompare(a.playedAt ?? ''));
+
+    const mapIds = [...new Set(rows.map((r) => r.mapPickedId).filter(Boolean) as string[])];
     const maps = mapIds.length
       ? await fastify.prisma.map.findMany({ where: { id: { in: mapIds } }, select: { id: true, name: true } })
       : [];
@@ -217,26 +243,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       total,
       page,
       limit,
-      games: games.map((g) => ({
-        id: g.id,
-        gameNumber: g.game_number,
-        matchId: g.match_id,
-        round: g.match.round,
-        matchNumber: g.match.match_number,
-        playedAt: g.played_at!.toISOString(),
-        player1: g.match.player1 ?? null,
-        player2: g.match.player2 ?? null,
-        winnerId: g.winner_id,
-        player1FactionId: g.player1_faction_id,
-        player2FactionId: g.player2_faction_id,
-        mapName: g.map_decision?.picked_map_id ? (mapById.get(g.map_decision.picked_map_id) ?? null) : null,
-        replayUrl: g.replay_url,
-        tournament: {
-          id: g.match.tournament.id,
-          name: g.match.tournament.name,
-          slug: g.match.tournament.slug,
-        },
-      })),
+      games: rows.map((r) => ({ ...r, mapName: r.mapPickedId ? (mapById.get(r.mapPickedId) ?? null) : null, mapPickedId: undefined })),
     });
   });
 };
