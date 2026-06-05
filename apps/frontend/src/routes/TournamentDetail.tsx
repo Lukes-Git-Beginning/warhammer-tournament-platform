@@ -16,6 +16,7 @@ import {
 import { useAuthQuery } from '@/lib/auth';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { BracketView } from '@/components/bracket/BracketView';
+import { SwissStandings } from '@/components/bracket/SwissStandings';
 import { PageShell } from '@/components/layout/PageShell';
 import { CheckInButton } from '@/components/tournament/CheckInButton';
 import { RegisterButton } from '@/components/tournament/RegisterButton';
@@ -383,10 +384,6 @@ export function TournamentDetail() {
             <span className="text-stone-500">{t('tournament.detail.start')}</span>{' '}
             <span className="text-stone-200">{startDate}</span>
           </div>
-          <div>
-            <span className="text-stone-500">{t('tournament.detail.timezone')}</span>{' '}
-            <span className="text-stone-200">{tournament.timezone}</span>
-          </div>
           {tournament.max_participants && (
             <div>
               <span className="text-stone-500">{t('tournament.detail.max_participants')}</span>{' '}
@@ -420,9 +417,6 @@ export function TournamentDetail() {
         </div>
       </div>
 
-      {/* ─── Participant roster ─── */}
-      {tournament.status !== 'DRAFT' && <ParticipantsList slug={tournament.slug} />}
-
       {tournament.description && (
         <section className="mb-8">
           <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-3">
@@ -445,7 +439,25 @@ export function TournamentDetail() {
         </section>
       )}
 
-      {/* My Match — only shown to participants during an ongoing tournament */}
+      {/* ─── Participants or Standings ─── */}
+      {tournament.status !== 'DRAFT' && (() => {
+        const swiss = bracket?.swiss;
+        const hasStandings = swiss && swiss.standings.length > 0;
+        if (hasStandings) {
+          return (
+            <section className="mb-8">
+              <SwissStandings
+                standings={swiss.standings}
+                currentRound={swiss.currentRound}
+                recommendedRounds={swiss.recommendedRounds}
+              />
+            </section>
+          );
+        }
+        return <ParticipantsList slug={tournament.slug} />;
+      })()}
+
+      {/* ─── My Match (GameTiles) — only shown to participants during ongoing ─── */}
       {user && tournament.status === 'ONGOING' && bracket && participantsData && (
         <MyMatchSection
           currentUserId={user.id}
@@ -457,7 +469,7 @@ export function TournamentDetail() {
         />
       )}
 
-      {/* Bracket breaks out of the narrow page container — it needs width. */}
+      {/* ─── Bracket ─── */}
       {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
         <section className="relative left-1/2 w-[min(94vw,1600px)] -translate-x-1/2">
           <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-3">
@@ -467,6 +479,7 @@ export function TournamentDetail() {
             slug={tournament.slug}
             tournamentId={tournament.id}
             canManage={!!canManage}
+            hideStandings
           />
         </section>
       )}

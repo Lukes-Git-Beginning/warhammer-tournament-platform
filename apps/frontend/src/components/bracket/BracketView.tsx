@@ -11,10 +11,10 @@ interface BracketViewProps {
   slug: string;
   tournamentId: string;
   canManage?: boolean;
-  tournamentSlugForRefresh?: string;
+  hideStandings?: boolean;
 }
 
-export function BracketView({ slug, tournamentId, canManage = false }: BracketViewProps) {
+export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false }: BracketViewProps) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -90,8 +90,8 @@ export function BracketView({ slug, tournamentId, canManage = false }: BracketVi
         </div>
       )}
 
-      {/* Swiss Standings — shown above bracket when swiss data is present */}
-      {swiss && (
+      {/* Swiss Standings — suppressed when parent already renders them */}
+      {swiss && !hideStandings && (
         <SwissStandings
           standings={swiss.standings}
           currentRound={swiss.currentRound}

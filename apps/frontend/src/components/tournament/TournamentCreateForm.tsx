@@ -275,15 +275,6 @@ export function TournamentCreateForm() {
           <FieldError message={errors.start_date} />
         </div>
 
-        <div className="min-w-0">
-          <Label htmlFor="tcf-tz">{t('tournament.form.timezone')}</Label>
-          <Input
-            id="tcf-tz"
-            name="timezone"
-            value={form.timezone ?? defaultTimezone}
-            onChange={handleChange}
-          />
-        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
