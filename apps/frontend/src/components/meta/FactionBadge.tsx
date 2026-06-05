@@ -7,9 +7,9 @@ interface FactionBadgeProps {
 }
 
 const SIZE_MAP = {
-  sm: { px: 24, textClass: 'text-xs' },
-  md: { px: 32, textClass: 'text-sm' },
-  lg: { px: 48, textClass: 'text-base' },
+  sm: { px: 30, textClass: 'text-xs' },
+  md: { px: 40, textClass: 'text-sm' },
+  lg: { px: 60, textClass: 'text-base' },
 } as const;
 
 export function FactionBadge({ colorHex, initials, name, size = 'md', iconUrl }: FactionBadgeProps) {
