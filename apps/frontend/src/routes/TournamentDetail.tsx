@@ -445,7 +445,7 @@ export function TournamentDetail() {
         const hasStandings = swiss && swiss.standings.length > 0;
         if (hasStandings) {
           return (
-            <section className="mb-8">
+            <section className="mb-4">
               <SwissStandings
                 standings={swiss.standings}
                 currentRound={swiss.currentRound}
@@ -457,6 +457,19 @@ export function TournamentDetail() {
         return <ParticipantsList slug={tournament.slug} />;
       })()}
 
+      {/* ─── Game History link — below standings/participants ─── */}
+      {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
+        <div className="mb-6 flex justify-end">
+          <Link
+            to="/tournaments/$slug/games"
+            params={{ slug: tournament.slug }}
+            className="text-xs text-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors"
+          >
+            All games →
+          </Link>
+        </div>
+      )}
+
       {/* ─── My Match (GameTiles) — only shown to participants during ongoing ─── */}
       {user && tournament.status === 'ONGOING' && bracket && participantsData && (
         <MyMatchSection
@@ -467,19 +480,6 @@ export function TournamentDetail() {
           )}
           tournamentSlug={tournament.slug}
         />
-      )}
-
-      {/* ─── Game History link ─── */}
-      {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
-        <div className="mb-4 flex justify-end">
-          <Link
-            to="/tournaments/$slug/games"
-            params={{ slug: tournament.slug }}
-            className="text-xs text-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors"
-          >
-            Alle Spiele ansehen →
-          </Link>
-        </div>
       )}
 
       {/* ─── Bracket ─── */}

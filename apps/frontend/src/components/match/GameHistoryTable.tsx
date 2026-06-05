@@ -39,7 +39,7 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
   );
 
   if (games.length === 0) {
-    return <p className="text-stone-500 text-sm py-4">Noch keine Spiele gespielt.</p>;
+    return <p className="text-stone-500 text-sm py-4">No games played yet.</p>;
   }
 
   return (
@@ -48,16 +48,16 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
         <thead>
           <tr className="border-b border-stone-800 bg-stone-900/60">
             {showTournament && (
-              <th className="px-3 py-2 text-left font-medium text-stone-400">Turnier</th>
+              <th className="px-3 py-2 text-left font-medium text-stone-400">Tournament</th>
             )}
-            <th className="px-3 py-2 text-left font-medium text-stone-400">Datum</th>
-            <th className="px-3 py-2 text-center font-medium text-stone-400">Runde</th>
-            <th className="px-3 py-2 text-left font-medium text-stone-400">Spieler 1</th>
-            <th className="px-3 py-2 text-left font-medium text-stone-400">Fraktion</th>
-            <th className="px-3 py-2 text-left font-medium text-stone-400">Spieler 2</th>
-            <th className="px-3 py-2 text-left font-medium text-stone-400">Fraktion</th>
+            <th className="px-3 py-2 text-left font-medium text-stone-400">Date</th>
+            <th className="px-3 py-2 text-center font-medium text-stone-400">Round</th>
+            <th className="px-3 py-2 text-left font-medium text-stone-400">Player 1</th>
+            <th className="px-3 py-2 text-left font-medium text-stone-400">Faction</th>
+            <th className="px-3 py-2 text-left font-medium text-stone-400">Player 2</th>
+            <th className="px-3 py-2 text-left font-medium text-stone-400">Faction</th>
             <th className="px-3 py-2 text-left font-medium text-stone-400">Map</th>
-            <th className="px-3 py-2 text-left font-medium text-stone-400">Sieger</th>
+            <th className="px-3 py-2 text-left font-medium text-stone-400">Winner</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-stone-800/60">

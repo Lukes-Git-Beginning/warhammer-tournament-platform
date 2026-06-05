@@ -33,7 +33,7 @@ export function SwissStandings({
     <div className="mb-6 rounded-md border border-stone-800 bg-stone-900/40 overflow-hidden">
       <div className="px-4 py-3 border-b border-stone-800 bg-stone-900/60">
         <h3 className="font-display text-base font-semibold text-rizzotto-gold-500">
-          Standings (Runde {currentRound}/{recommendedRounds})
+          Standings (Round {currentRound}/{recommendedRounds})
         </h3>
       </div>
       <div className="overflow-x-auto">

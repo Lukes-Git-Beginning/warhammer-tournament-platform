@@ -252,7 +252,7 @@ export function MetaDashboard() {
       {/* ─── Global Game History ─── */}
       <section className="mt-10">
         <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-4">
-          Letzte Spiele
+          Recent Games
         </h2>
         {gamesData && <GameHistoryTable games={gamesData.games} showTournament />}
         {!gamesData && (
