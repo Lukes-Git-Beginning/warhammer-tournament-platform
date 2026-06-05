@@ -564,12 +564,24 @@ export function TournamentCreateForm() {
 
         {/* Map search */}
         <div>
-          <Label>
-            Map Selection{' '}
-            <span className="text-rizzotto-stone-500 font-normal text-xs">
-              ({(form.map_pool ?? []).length}/36 selected, min 3)
-            </span>
-          </Label>
+          <div className="flex items-center justify-between">
+            <Label>
+              Map Selection{' '}
+              <span className="text-rizzotto-stone-500 font-normal text-xs">
+                ({(form.map_pool ?? []).length}/{allMaps.length} selected, min 3)
+              </span>
+            </Label>
+            <button
+              type="button"
+              onClick={() => {
+                const allSelected = allMaps.every((m) => (form.map_pool ?? []).includes(m.id));
+                setForm((prev) => ({ ...prev, map_pool: allSelected ? [] : allMaps.map((m) => m.id) }));
+              }}
+              className="text-xs text-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors"
+            >
+              {allMaps.every((m) => (form.map_pool ?? []).includes(m.id)) ? 'Alle abwählen' : 'Alle auswählen'}
+            </button>
+          </div>
           <input
             type="text"
             placeholder="Search maps…"
