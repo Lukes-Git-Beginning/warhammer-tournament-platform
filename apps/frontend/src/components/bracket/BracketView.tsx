@@ -163,7 +163,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                   players={players}
                   onMatchClick={(matchId) => {
                     const m = data.matches.find((x) => x.matchId === matchId);
-                    if (canManage && (m?.status === 'PENDING' || m?.status === 'ONGOING')) {
+                    if (canManage && m?.status !== 'BYE' && m?.status !== 'FORFEIT') {
                       setSelectedMatchId(matchId);
                     }
                   }}
@@ -176,6 +176,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
         {selectedMatch && (
           <MatchScoreModal
             matchId={selectedMatch.matchId}
+            matchStatus={selectedMatch.status}
             player1Id={selectedMatch.player1Id}
             player2Id={selectedMatch.player2Id}
             player1Name={

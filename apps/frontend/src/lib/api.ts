@@ -406,6 +406,21 @@ export function reportMatchResult(
   });
 }
 
+export function overrideMatchResult(
+  matchId: string,
+  body: {
+    result: 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'DRAW' | 'DOUBLE_LOSS';
+    player1_score?: number;
+    player2_score?: number;
+    reason: string;
+  },
+): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/result`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Draft Presets
 // ---------------------------------------------------------------------------
