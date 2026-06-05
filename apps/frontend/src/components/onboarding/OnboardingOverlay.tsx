@@ -6,7 +6,6 @@ import { OnboardingProgressBar } from './OnboardingProgressBar';
 import { OnboardingStage1Welcome } from './OnboardingStage1Welcome';
 import { OnboardingStage2Prefs } from './OnboardingStage2Prefs';
 import { OnboardingStage3Tour } from './OnboardingStage3Tour';
-import { OnboardingStage4Action } from './OnboardingStage4Action';
 import { OnboardingStage5Done } from './OnboardingStage5Done';
 
 export function OnboardingOverlay() {
@@ -65,7 +64,7 @@ export function OnboardingOverlay() {
 
       {/* Stage content */}
       {isTour ? (
-        <OnboardingStage3Tour onAdvance={() => advance(3)} />
+        <OnboardingStage3Tour onAdvance={() => advance(4)} />
       ) : (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-rizzotto-iron-950/97 backdrop-blur-sm">
           <div className="flex min-h-screen w-full items-center justify-center px-4 py-16 sm:py-20">
@@ -85,9 +84,6 @@ export function OnboardingOverlay() {
                 {stage === 0 && <OnboardingStage1Welcome onAdvance={() => advance(1)} />}
                 {stage === 1 && (
                   <OnboardingStage2Prefs user={user} onAdvance={() => advance(2)} />
-                )}
-                {stage === 3 && (
-                  <OnboardingStage4Action user={user} onAdvance={() => advance(4)} />
                 )}
                 {stage === 4 && (
                   <OnboardingStage5Done
