@@ -19,12 +19,12 @@ export function FactionBadge({ colorHex, initials, name, size = 'md', iconUrl }:
     return (
       <span
         title={name}
-        className="inline-flex items-center justify-center rounded-full overflow-hidden select-none shrink-0 p-1"
+        className="inline-flex items-center justify-center rounded-sm overflow-hidden select-none shrink-0"
         style={{
           width: px,
           height: px,
           minWidth: px,
-          backgroundColor: '#e5e7eb',
+          backgroundColor: '#c8ccd0',
         }}
       >
         <img
