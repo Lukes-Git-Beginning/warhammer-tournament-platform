@@ -297,6 +297,12 @@ export function startTournament(id: string): Promise<{ ok: true }> {
   });
 }
 
+export function resetBracket(id: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/tournaments/${id}/bracket/reset`, {
+    method: 'POST',
+  });
+}
+
 export function deleteTournament(slug: string): Promise<void> {
   return apiFetch<void>(`/api/tournaments/${slug}`, { method: 'DELETE' });
 }

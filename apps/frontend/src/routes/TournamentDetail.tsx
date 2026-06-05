@@ -10,6 +10,7 @@ import {
   getParticipants,
   getTournament,
   patchTournament,
+  resetBracket,
   startTournament,
 } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
@@ -105,6 +106,14 @@ export function TournamentDetail() {
       void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
       void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
       void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+    },
+  });
+
+  const resetBracketMutation = useMutation({
+    mutationFn: (id: string) => resetBracket(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
     },
   });
 
@@ -265,6 +274,24 @@ export function TournamentDetail() {
               {(startMutation.error as Error).message}
             </span>
           )}
+          {tournament.status === 'ONGOING' && (
+            <button
+              type="button"
+              disabled={resetBracketMutation.isPending}
+              className="rounded border border-orange-900 px-4 py-1.5 text-sm text-orange-400 hover:border-orange-600 hover:text-orange-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => {
+                if (
+                  confirm(
+                    `Reset bracket for "${tournament.name}"? All match results will be deleted and status returns to REGISTRATION_CLOSED.`,
+                  )
+                ) {
+                  resetBracketMutation.mutate(tournament.id);
+                }
+              }}
+            >
+              {resetBracketMutation.isPending ? 'Resetting…' : 'Reset Bracket'}
+            </button>
+          )}
           <button
             type="button"
             disabled={deleteMutation.isPending}
@@ -279,6 +306,11 @@ export function TournamentDetail() {
           >
             {t('tournament.detail.delete')}
           </button>
+          {resetBracketMutation.isError && (
+            <span className="self-center text-xs text-rizzotto-danger">
+              {(resetBracketMutation.error as Error).message}
+            </span>
+          )}
         </div>
       )}
 

@@ -794,6 +794,79 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       });
     },
   );
+
+  /**
+   * POST /api/tournaments/:id/bracket/reset
+   * Deletes all matches (and cascaded sub-entities) and resets status to
+   * REGISTRATION_CLOSED so the organizer can re-start from scratch.
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/api/tournaments/:id/bracket/reset',
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+      ],
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { id, deleted_at: null },
+        select: { id: true, slug: true, status: true, organizer_id: true },
+      });
+
+      if (!tournament) {
+        return reply.code(404).send({
+          error: 'NotFound',
+          message: 'Tournament not found',
+          statusCode: 404,
+        });
+      }
+
+      const actorRole = request.user.role;
+      if (actorRole === 'ORGANIZER' && tournament.organizer_id !== request.user.sub) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Only the tournament organizer can reset this bracket',
+          statusCode: 403,
+        });
+      }
+
+      if (tournament.status !== TournamentStatus.ONGOING) {
+        return reply.code(400).send({
+          error: 'BadRequest',
+          message: 'Bracket can only be reset while tournament is ONGOING',
+          statusCode: 400,
+        });
+      }
+
+      await fastify.prisma.$transaction(async (tx) => {
+        // Null self-referencing FKs first to avoid NoAction constraint violations
+        await tx.match.updateMany({
+          where: { tournament_id: id },
+          data: { next_match_id: null, loser_next_match_id: null },
+        });
+
+        // Delete all matches — cascades MatchGame, MatchMapDecision, MatchBlindPick,
+        // Draft, DraftEvent, and MatchReport automatically
+        await tx.match.deleteMany({ where: { tournament_id: id } });
+
+        await tx.tournament.update({
+          where: { id },
+          data: { status: TournamentStatus.REGISTRATION_CLOSED },
+        });
+      });
+
+      emitBracketUpdate(fastify.io, id);
+      emitStatusChange(fastify.io, {
+        tournamentId: id,
+        status: TournamentStatus.REGISTRATION_CLOSED,
+      });
+
+      return reply.code(200).send({ ok: true });
+    },
+  );
 };
 
 export default bracketRoutes;
