@@ -198,13 +198,13 @@ enum TournamentFormat {
 }
 
 enum TournamentMode {
-  OPEN           // Default (Welle 2) — keine Restriktion, Casual
+  // OPEN entfernt (2026-06-05) — Migration 20260605000000_remove_open_mode
   ONE_V_ONE      // legacy 1v1
   THREE_V_THREE  // reserviert Phase 3
   BLIND_PICK     // legacy reserved
-  BPT            // Welle 2 — Blind Pick Tournament (per-match blind faction pick)
-  SFT            // Welle 2 — Single Faction Tournament (faction pre-pick at registration)
-  SLT            // Welle 2 — Single List Tournament (army-list pre-upload at registration)
+  BPT            // Default — Blind Pick Tournament (per-match blind faction pick)
+  SFT            // Single Faction Tournament (faction pre-pick at registration, hidden until ONGOING)
+  SLT            // Single List Tournament (army-list pre-upload at registration)
 }
 
 enum PlayoffFormat {
@@ -291,6 +291,9 @@ Das Seed-Script liegt bei `packages/db/prisma/seed.ts` und wird via `tsx` ausgef
 | `20260519131859_welle2_d_integration_fields` | **Welle 2 (Plan D)** — `MatchPhase` enum + `Match.phase` nullable für Playoff-Discriminator; `LeaderboardEntry.season_points Int @default(0)` + compound DESC-Index für 3-Modi-Leaderboard |
 | `20260601220129_dynamic_leaderboard_match_fields` | **Dynamic Leaderboard (Alex-Spec)** — `Match.season_id` (FK Season, ON DELETE SET NULL) + `played_at` + `ruleset`, Index `[season_id, status]`; **Backfill** bestehender COMPLETED-Matches (`played_at`←`updated_at`, `season_id`←Season-Datumsbereich) |
 | `20260603000000_drop_welle2_mmr_deprecated` | **Phase-2-Cleanup** (Branch `chore/phase2-consolidation`) — DROP `FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` + Spalte `LeaderboardEntry.season_points` (+Index) + Enum `StatsSource`. ⚠️ **Irreversibel** — Prod-Drop läuft beim Auto-Deploy nach `main`-Merge |
+| `20260604000000_m7_match_game` | **M7** — `MatchGame`-Model + zugehörige Relations (Lobby-Code, Replay-URL, Winner, Status, FactionIDs); `MatchGame`-Status-Enum; `Match.reporterId`, `Match.confirmedAt` |
+| `20260605000000_remove_open_mode` | **M7 Mode-Cleanup** — `OPEN` aus `TournamentMode`-Enum entfernt; bestehende OPEN-Rows per `UPDATE … SET mode='BPT'` migriert; Default von `OPEN` auf `BPT` geändert. **Muss vor dem nächsten Prod-Deploy via `pnpm db:migrate:deploy` appliziert werden** |
+| `20260605054848_fix_enum_drift` | Auto-Drift-Fix — fehlende Column-Defaults (`MatchGame.id`, `MatchGame.updated_at`, `Tournament.finale_match_format`, `Tournament.playoff_match_format`) aus Migration-History-Inkonsistenz |
 
 Migrations-Lock unter `packages/db/prisma/migrations/migration_lock.toml`.
 

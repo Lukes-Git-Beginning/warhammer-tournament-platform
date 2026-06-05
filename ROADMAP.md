@@ -1,6 +1,6 @@
 # ROADMAP — Rizzotto
 
-> **Stand:** 2026-06-04 · **Phase:** Live (Beta) — auf dem Weg zu Launch v1 · **Domain:** rizzotto.gg (Prod-Betrieb: Luke)
+> **Stand:** 2026-06-05 · **Phase:** Live (Beta) — auf dem Weg zu Launch v1 · **Domain:** rizzotto.gg (Prod-Betrieb: Luke)
 >
 > Diese Roadmap ist die **SSOT** für _was läuft_, _was als nächstes drankommt_ und _was bewusst nicht gebaut wird_. Sub-Pläne (Detail-Plans für einzelne Tracks) liegen unter `~/.claude/plans/`, nicht im Repo. Historie und Welle-Specs siehe `docs/archive/`.
 
@@ -142,7 +142,7 @@ Vier annotierte Screenshots von Alex (Stand 20.05.), gegen aktuellen Stand gepr�
 | 2   | ~~**Tournament-Edit/Delete-Buttons sind Stubs**~~ ✅ done — Lifecycle-UI gelandet (§2.1, `f4e3705`)          | `TournamentDetail.tsx`                                        | —                                    | §2.1                               |
 | 3   | **Scraper-Write-Path** wirft "not implemented"                                                               | `scraper/src/cli.ts:148,155`                                  | Mittel — Datenhebel ungenutzt        | M9 (§8.1)                          |
 | 9   | **`GET /api/matches/:id/decision` + `POST …/decision/random` fehlen im Backend** — Frontend (`api.ts`/`MatchDecisionPage`) ruft beide auf → Decision-UI de facto tot | `apps/backend/src/routes/match-decision.ts`                   | **Hoch — v1-Kernfeature**            | M7 (§5.1 #1)                       |
-| 10  | **SFT-Fraktions-Leak:** `faction` ist entgegen FieldHint sofort öffentlich (kein Hidden-until-Start)          | `apps/backend/src/routes/participants.ts` (GET participants) | Mittel — Counterpick-Schutz fehlt    | M7 (§5.1 #5)                       |
+| 10  | ~~**SFT-Fraktions-Leak:** `faction` ist entgegen FieldHint sofort öffentlich~~ ✅ **done (2026-06-05)** — GET participants maskiert `faction: null` wenn mode=SFT und Status nicht ONGOING/COMPLETED | `apps/backend/src/routes/participants.ts` | — | M7 (§5.1 #5) |
 | 11  | **PICK_BAN nur bei Pool = 3 funktional** (kein expliziter Pick-Step); **RANDOM ohne Re-Pick-Schutz**          | `apps/backend/src/routes/match-decision.ts`                   | Mittel                               | M7 (§5.1 #3)                       |
 | 4   | `Tournament.poster_url` Upload-Flow fehlt                                                                    | `packages/db/prisma/schema.prisma:172`                        | Niedrig                              | M6 optional                        |
 | 5   | `SigillumSection`-Community-Links Platzhalter                                                                | `apps/frontend/src/components/landing/SigillumSection.tsx:93` | Niedrig                              | M6 — 🟡 deferred (echte URLs ausstehend) |
@@ -186,15 +186,29 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
    - d) **Random 3 aus dem Pool** — gleicher Ban→Pick-Ablauf wie c)
    - **Serien (Bo3/Bo5):** Der eingestellte Modus läuft **pro Game-Kachel** neu; innerhalb einer Serie keine Map-Wiederholung (gespielte Serien-Maps fliegen aus den Kandidaten)
 4. **BPT im Panel:** verdeckter Fraktions-Pick per Dropdown, beidseitiger Lock, simultaner Reveal. **Sequenz:** nach Map-Bekanntgabe bei Modi a/b, **vor** der Map-Phase bei Modi c/d. **Serien-Option (Host-Checkbox im Create-Form):** Blind-Pick gilt **pro Game** oder **einmal pro Serie** — Host entscheidet beim Erstellen
-5. **SFT fixen:** Fraktion wird bei Anmeldung gewählt, bleibt aber **hidden bis Turnierstart** (Anti-Counterpick) — Public-Serialisierung in `participants.ts` maskieren; löst den heute faktisch falschen FieldHint („revealed at tournament start") ein. Map-Phase immer nach Fraktions-Reveal
-6. **Mode-Cleanup:** `OPEN` **entfernen** (Begründung Alex: offenes Picking ohne Lock = endlose Counterpick-Spirale, mit Lock = First-Lock-Nachteil → BPT ist das einzig sinnvolle offene Picking, vgl. Ingame-Ladder). **SFT wird Default.** Migration bestehender OPEN-Turniere + Alt-Enum-Werte (`ONE_V_ONE`/`THREE_V_THREE`/`BLIND_PICK`) aufräumen
+5. ~~**SFT fixen:** Fraktion wird bei Anmeldung gewählt, bleibt aber **hidden bis Turnierstart**~~ ✅ **done (2026-06-05)** — `GET /api/tournaments/:slug/participants` gibt `faction: null` für alle Teilnehmer zurück, solange Status nicht `ONGOING` oder `COMPLETED`
+6. ~~**Mode-Cleanup:** `OPEN` **entfernen**~~ ✅ **done (2026-06-05)** — `OPEN` aus `TournamentMode`-Enum entfernt, BPT ist neuer Default; Migration `20260605000000_remove_open_mode` appliziert; Blind-Pick-Guard in `match-decision.ts` auf nur `BPT` reduziert
 
 ### 5.2 Begleiter — Organisator- & UX-Basics
 
-7. **Withdraw-UI** — Backend existiert (`POST /:slug/withdraw`), nur Frontend-Button + Bestätigung
-8. **Bracket-Reset** („falsch ausgelost"): Unique `(tournament_id, round, match_number)` vs. Soft-Delete → partieller Index oder Hard-Cleanup im `/start`
-9. **Englisch-only** (Stufe-1-Blocker): LanguageToggle raus, Default `en`, hardcoded DE-Strings → EN; i18n-Infra bleibt im Code. Dabei Texte fixen: Create-Aside (behauptet „mode sets the match size — 1v1 or team encounters" — falsch, Mode = Picking-Format) + „What is a tournament?"-Header neu
-10. **UI-Kleinkram:** Turnier-Kacheln überall voll klickbar (`TournamentsListing` + `ActiveMustersSection` haben noch „View Tournament"-Buttons), **Datum + Uhrzeit** auf Kacheln (`showTime: true`), **BO1** für `playoff_match_format`/`finale_match_format` zulassen (Enum kann es, Zod/UI sperren), Map-Pool **„Select All"** (36 Checkboxen einzeln ist unzumutbar)
+7. ~~**Withdraw-UI**~~ ✅ **done (2026-06-05)** — 2-Stufen-Confirm in `RegisterButton.tsx`; `withdrawFromTournament()` in `api.ts`; invalidiert tournament/participant-me/tournament-participants
+8. ~~**Bracket-Reset**~~ ✅ **done (2026-06-05)** — `POST /api/tournaments/:id/bracket/reset`: nullt Self-Referenz-FKs, `deleteMany` Matches (cascaded), setzt Status auf `REGISTRATION_CLOSED`. Frontend: oranges Reset-Button in Admin-Controls (nur bei ONGOING). Lösung für Unique-Constraint: Hard-Delete statt Soft-Delete + FK-Null-Pass vor Delete
+9. ~~**Englisch-only**~~ ✅ **done (2026-06-05)** — `LanguageToggle.tsx` gelöscht, Header bereinigt; alle DE-Strings in 13 Dateien → EN (bracket, draft, admin, tournament, calendar, H2H, preset-Bereiche)
+10. **UI-Kleinkram:** Map-Pool **„Select All"** (36 Checkboxen einzeln ist unzumutbar) — **offen**
+
+### 5.2b Session 2026-06-05 — M7-Begleit-Items + Bugfixes ✅
+
+| Item | Status |
+|---|---|
+| **Coin-Toss-Bug (Runde 2):** `decisionPreloaded=true` übersprang Animation auch bei frischer Navigation — Fix: `state: { freshDecision: true }` in GameTile navigate, `useRouterState` in MatchDecisionPage zum Auslesen, `decisionPreloaded` nur setzen wenn Flag fehlt | ✅ done |
+| **SFT Hidden-Fix** (§5.1 #5) — GET participants maskiert faction vor Turnierstart | ✅ done |
+| **Englisch-only** (§5.2 #9) — LanguageToggle raus, 13 Dateien DE→EN | ✅ done |
+| **Withdraw-UI** (§5.2 #7) — 2-Stufen-Confirm in RegisterButton | ✅ done |
+| **Bracket-Reset** (§5.2 #8) — Backend + Frontend | ✅ done |
+| **Mode-Cleanup** (§5.1 #6) — OPEN aus TournamentMode entfernt, BPT Default | ✅ done |
+| **Onboarding „Build Your First List"-Step entfernt** — Stage 3 aus OnboardingOverlay; Tour springt direkt zu „Done" | ✅ done |
+| **DB-Migration-Reset** — Migration-History-Inkonsistenz aus Session 04 bereinigt; migrate reset + seed + Drift-Migration `20260605054848_fix_enum_drift` | ✅ done |
+| **feat/launch-v1 gepusht** zu origin | ✅ done |
 
 ### 5.3 Generalprobe & gestufter Launch
 
