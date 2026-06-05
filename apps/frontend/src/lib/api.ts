@@ -78,9 +78,9 @@ export interface Tournament {
   // Welle 2 fields
   rounds_count?: number | null;
   playoff_format?: 'NONE' | 'TOP4' | 'TOP8' | null;
-  swiss_match_format?: 'BO1' | null;
-  playoff_match_format?: 'BO1' | null; // Bo3/Bo5 re-enable with series support
-  finale_match_format?: 'BO1' | null;
+  swiss_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
+  playoff_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
+  finale_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
   map_decision_mode?: MapDecisionMode | null;
   map_preset_config?: MapPresetConfig | null;
   map_pool?: MapDto[];
@@ -147,9 +147,9 @@ export interface TournamentCreate {
   // Welle 2 fields
   rounds_count?: number;
   playoff_format?: 'NONE' | 'TOP4' | 'TOP8';
-  swiss_match_format?: 'BO1';
-  playoff_match_format?: 'BO1'; // Bo3/Bo5 re-enable with series support
-  finale_match_format?: 'BO1';
+  swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
+  playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
+  finale_match_format?: 'BO1' | 'BO3' | 'BO5';
   map_decision_mode?: MapDecisionMode;
   map_preset_config?: MapPresetConfig | null;
   map_pool?: string[];
@@ -918,8 +918,9 @@ export function getAntiFarmingBreakdown(
 // Match Decision
 // ---------------------------------------------------------------------------
 
-export function startMatchDecision(matchId: string): Promise<MatchDecisionState> {
-  return apiFetch<MatchDecisionState>(`/api/matches/${matchId}/decision/start`, {
+export function startMatchDecision(matchId: string, gameNumber = 1): Promise<MatchDecisionState> {
+  const params = gameNumber > 1 ? `?gameNumber=${gameNumber}` : '';
+  return apiFetch<MatchDecisionState>(`/api/matches/${matchId}/decision/start${params}`, {
     method: 'POST',
   });
 }

@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { getMatchGames, getTournamentMaps, getFactions } from '@/lib/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getMatchGames, getTournamentMaps, getFactions, startMatchDecision } from '@/lib/api';
 import type { MapDto } from '@/lib/api';
 import type { BracketNode } from '@rizzotto/types';
 import { useMatchDecisionSocket } from '@/hooks/useMatchDecisionSocket';
@@ -51,6 +51,7 @@ function MyMatchInner({
   tournamentSlug: string;
 }) {
   useMatchDecisionSocket(match.matchId);
+  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['match-games', match.matchId],
@@ -111,6 +112,33 @@ function MyMatchInner({
               factionNames={factionNames}
             />
           ))}
+          {(() => {
+            const games = data.games;
+            const lastGame = games[games.length - 1];
+            const isParticipant =
+              match.player1Id === currentUserId || match.player2Id === currentUserId;
+            if (
+              isParticipant &&
+              match.status === 'ONGOING' &&
+              lastGame?.status === 'COMPLETED' &&
+              !games.some((g) => g.status === 'PENDING' || g.status === 'ONGOING')
+            ) {
+              const nextGameNumber = lastGame.gameNumber + 1;
+              return (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await startMatchDecision(match.matchId, nextGameNumber);
+                    queryClient.invalidateQueries({ queryKey: ['match-games', match.matchId] });
+                  }}
+                  className="rounded-md border border-rizzotto-gold-500 bg-rizzotto-gold-500/10 px-4 py-2 text-sm font-medium text-rizzotto-gold-300 hover:bg-rizzotto-gold-500/20 transition-colors"
+                >
+                  Start Game {nextGameNumber}
+                </button>
+              );
+            }
+            return null;
+          })()}
         </div>
       )}
     </section>

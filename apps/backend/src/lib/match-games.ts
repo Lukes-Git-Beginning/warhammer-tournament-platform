@@ -25,9 +25,18 @@ export async function ensureMatchGame(
   return created.id;
 }
 
+function resolveMatchFormat(
+  tournament: { swiss_match_format: string; playoff_match_format: string; finale_match_format: string },
+  phase: string | null,
+): 'BO1' | 'BO3' | 'BO5' {
+  if (phase === 'PLAYOFF_FINAL') return tournament.finale_match_format as 'BO1' | 'BO3' | 'BO5';
+  if (phase?.startsWith('PLAYOFF')) return tournament.playoff_match_format as 'BO1' | 'BO3' | 'BO5';
+  return tournament.swiss_match_format as 'BO1' | 'BO3' | 'BO5';
+}
+
 /**
  * Finalizes a game result: sets game COMPLETED, resolves factions automatically,
- * and (for Bo1) triggers full match completion + bracket progression.
+ * then either completes the match (series won) or creates the next MatchGame row.
  */
 export async function finalizeGameResult(
   fastify: FastifyInstance,
@@ -53,9 +62,13 @@ export async function finalizeGameResult(
           player2_id: true,
           player1_faction_id: true,
           player2_faction_id: true,
+          phase: true,
           tournament: {
             select: {
               mode: true,
+              swiss_match_format: true,
+              playoff_match_format: true,
+              finale_match_format: true,
               participants: {
                 select: {
                   user_id: true,
@@ -107,18 +120,6 @@ export async function finalizeGameResult(
     },
   });
 
-  // For Bo1: game winner = match winner → complete the match
-  // (Bo3/Bo5: aggregate game wins first — to be implemented with series support)
-  if (game.game_number === 1) {
-    await completeMatch(fastify, {
-      matchId: game.match_id,
-      winnerId: game.reported_winner_id,
-      player1FactionId: p1FactionId,
-      player2FactionId: p2FactionId,
-      actorId: game.reported_winner_id,
-    });
-  }
-
   // Emit game-updated socket event
   if (fastify.io) {
     fastify.io.to(`match_decision_${game.match_id}`).emit('match.game.updated', {
@@ -131,6 +132,46 @@ export async function finalizeGameResult(
       reportedAt: null,
       confirmedAt: now.toISOString(),
     });
+  }
+
+  // Series completion: count wins and decide whether to continue or complete
+  const format = resolveMatchFormat(game.match.tournament, game.match.phase ?? null);
+  const winsNeeded = format === 'BO5' ? 3 : format === 'BO3' ? 2 : 1;
+
+  const completedGames = await fastify.prisma.matchGame.findMany({
+    where: { match_id: game.match_id, status: 'COMPLETED' },
+    select: { winner_id: true },
+  });
+
+  const p1Wins = completedGames.filter((g) => g.winner_id === game.match.player1_id).length;
+  const p2Wins = completedGames.filter((g) => g.winner_id === game.match.player2_id).length;
+
+  if (p1Wins >= winsNeeded || p2Wins >= winsNeeded) {
+    const matchWinner = p1Wins >= winsNeeded ? game.match.player1_id! : game.match.player2_id!;
+    await completeMatch(fastify, {
+      matchId: game.match_id,
+      winnerId: matchWinner,
+      player1FactionId: p1FactionId,
+      player2FactionId: p2FactionId,
+      actorId: matchWinner,
+    });
+  } else {
+    // Series continues — create next game row so the frontend can trigger the decision
+    const nextGameNumber = game.game_number + 1;
+    await ensureMatchGame(fastify.prisma, game.match_id, nextGameNumber);
+
+    if (fastify.io) {
+      fastify.io.to(`match_decision_${game.match_id}`).emit('match.game.updated', {
+        matchId: game.match_id,
+        gameNumber: nextGameNumber,
+        status: 'PENDING',
+        winnerId: null,
+        lobbyCode: null,
+        reportedWinnerId: null,
+        reportedAt: null,
+        confirmedAt: null,
+      });
+    }
   }
 }
 
