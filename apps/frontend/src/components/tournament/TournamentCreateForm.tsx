@@ -45,24 +45,33 @@ type MapDecisionModeOption = {
 const MAP_DECISION_MODES: MapDecisionModeOption[] = [
   { value: 'RANDOM_NO_REPEAT', label: 'Random (No Repeat)', description: 'Server picks one random map. Already-played maps are excluded.' },
   { value: 'HOST_PRESET', label: 'Host Preset (1 Map)', description: 'Organizer sets one map per round in order. No player interaction needed.' },
-  { value: 'HOST_PRESET_PICK_BAN', label: 'Host Preset + Ban', description: 'Organizer defines 3 maps per round & game. Each player bans one.' },
-  { value: 'RANDOM_PICK_BAN', label: 'Random + Ban', description: 'Server draws 3 random maps per game. Each player bans one.' },
+  { value: 'HOST_PRESET_PICK_BAN', label: 'Host Preset Ban&Pick', description: 'Organizer defines 3 maps per round & game. Each player bans one.' },
+  { value: 'RANDOM_PICK_BAN', label: 'Random Ban&Pick', description: 'Server draws 3 random maps per game. Each player bans one.' },
 ];
+
+function formatToMaxGames(fmt?: string): number {
+  if (fmt === 'BO3') return 3;
+  if (fmt === 'BO5') return 5;
+  return 1;
+}
 
 function buildRoundKeys(form: Partial<FormData>): { key: string; label: string; maxGames: number }[] {
   const keys: { key: string; label: string; maxGames: number }[] = [];
   if (form.format !== 'SWISS') return keys;
   const rounds = form.rounds_count ?? 5;
+  const swissGames = formatToMaxGames(form.swiss_match_format);
+  const playoffGames = formatToMaxGames(form.playoff_match_format);
+  const finaleGames = formatToMaxGames(form.finale_match_format);
   for (let i = 1; i <= rounds; i++) {
-    keys.push({ key: `swiss_${i}`, label: `Swiss Round ${i}`, maxGames: 1 });
+    keys.push({ key: `swiss_${i}`, label: `Swiss Round ${i}`, maxGames: swissGames });
   }
   if (form.playoff_format === 'TOP4') {
-    keys.push({ key: 'playoff_1', label: 'Semifinal', maxGames: 3 });
-    keys.push({ key: 'playoff_2', label: 'Final', maxGames: 3 });
+    keys.push({ key: 'playoff_1', label: 'Semifinal', maxGames: playoffGames });
+    keys.push({ key: 'playoff_2', label: 'Final', maxGames: finaleGames });
   } else if (form.playoff_format === 'TOP8') {
-    keys.push({ key: 'playoff_1', label: 'Quarterfinal', maxGames: 3 });
-    keys.push({ key: 'playoff_2', label: 'Semifinal', maxGames: 3 });
-    keys.push({ key: 'playoff_3', label: 'Final', maxGames: 3 });
+    keys.push({ key: 'playoff_1', label: 'Quarterfinal', maxGames: playoffGames });
+    keys.push({ key: 'playoff_2', label: 'Semifinal', maxGames: playoffGames });
+    keys.push({ key: 'playoff_3', label: 'Final', maxGames: finaleGames });
   }
   return keys;
 }
@@ -562,8 +571,8 @@ export function TournamentCreateForm() {
           );
         })()}
 
-        {/* Map search */}
-        <div>
+        {/* Map pool — hidden for preset modes (maps are configured per round above) */}
+        {form.map_decision_mode !== 'HOST_PRESET' && form.map_decision_mode !== 'HOST_PRESET_PICK_BAN' && (<><div>
           <div className="flex items-center justify-between">
             <Label>
               Map Selection{' '}
@@ -631,7 +640,7 @@ export function TournamentCreateForm() {
                 })}
             </div>
           )}
-        </div>
+        </div></>)}
         {(form.map_decision_mode === 'RANDOM_NO_REPEAT' || form.map_decision_mode === 'RANDOM_PICK_BAN') && (
           <FieldHint>
             Minimum pool: For random modes the pool must contain at least as many maps as the maximum games in the match format (BO1=1, BO3=3, BO5=5).
