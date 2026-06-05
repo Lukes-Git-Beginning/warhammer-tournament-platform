@@ -125,8 +125,14 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             player2_id: m.player2_id,
             winner_id: m.winner_id,
             status: m.status,
-            player1_game_wins: m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length,
-            player2_game_wins: m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length,
+            // Only provide game counts when MatchGame records exist; otherwise leave
+            // undefined so swiss.ts falls back to the winner-based heuristic (1/0).
+            player1_game_wins: m.games.length > 0
+              ? m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length
+              : undefined,
+            player2_game_wins: m.games.length > 0
+              ? m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length
+              : undefined,
           }));
 
         const rawStandings = sortSwissStandings(
