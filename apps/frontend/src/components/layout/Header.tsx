@@ -67,6 +67,15 @@ export function Header() {
           {t('header.create_tournament')}
         </Link>
       )}
+      {user?.role === 'ADMIN' && (
+        <Link
+          to="/admin"
+          className={NAV_LINK_CLASS}
+          activeProps={NAV_LINK_ACTIVE_PROPS}
+        >
+          Admin
+        </Link>
+      )}
     </>
   );
 

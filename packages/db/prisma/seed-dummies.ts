@@ -63,12 +63,15 @@ async function main() {
     const username = `Dummy-${NAMES[i % NAMES.length]}`;
     const steam_id = `9000000000000${String(i + 1).padStart(3, '0')}`;
 
+    const avatar_url = `https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(NAMES[i % NAMES.length])}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+
     const user = await prisma.user.upsert({
       where: { discord_id },
-      update: { username, deleted_at: null },
+      update: { username, avatar_url, deleted_at: null },
       create: {
         discord_id,
         username,
+        avatar_url,
         role: 'USER',
         steam_link: {
           create: {
