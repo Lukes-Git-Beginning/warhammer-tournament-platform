@@ -328,11 +328,12 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Cannot override already-completed matches (unless ADMIN)
-      if (match.status === 'COMPLETED' && user.role !== 'ADMIN') {
+      // Cannot override already-completed matches unless ADMIN or the tournament's own organizer
+      const isOwnOrganizer = match.tournament.organizer_id === user.sub;
+      if (match.status === 'COMPLETED' && user.role !== 'ADMIN' && !isOwnOrganizer) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: 'Match is already COMPLETED — only ADMIN can re-override',
+          message: 'Match is already COMPLETED — only the tournament organizer or an admin can re-override',
           statusCode: 422,
         });
       }
