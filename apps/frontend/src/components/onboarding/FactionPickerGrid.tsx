@@ -68,6 +68,14 @@ export function FactionPickerGrid({
                 className="h-6 w-1 shrink-0 rounded-sm"
                 style={{ backgroundColor: f.color_hex }}
               />
+              {f.icon_url ? (
+                <img
+                  src={f.icon_url}
+                  alt=""
+                  aria-hidden="true"
+                  className="h-6 w-6 shrink-0 object-contain"
+                />
+              ) : null}
               <span className="truncate font-display text-[12px] uppercase tracking-wide">
                 {f.name}
               </span>
