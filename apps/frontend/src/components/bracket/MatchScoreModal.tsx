@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getFactions, reportMatchResult } from '@/lib/api';
 import type { FactionListResponse } from '@/lib/api';
+import { useState } from 'react';
 
 interface MatchScoreModalProps {
   matchId: string;
@@ -10,6 +10,41 @@ interface MatchScoreModalProps {
   player1Id: string | null;
   player2Id: string | null;
   onClose: () => void;
+}
+
+function ScoreCounter({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <span className="text-xs text-stone-400 truncate max-w-[80px] text-center">{label}</span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(0, value - 1))}
+          className="w-7 h-7 rounded bg-stone-700 text-stone-200 text-base font-bold hover:bg-stone-600 transition-colors select-none"
+        >
+          −
+        </button>
+        <span className="w-8 text-center text-lg font-semibold text-rizzotto-gold-400 tabular-nums">
+          {value}
+        </span>
+        <button
+          type="button"
+          onClick={() => onChange(value + 1)}
+          className="w-7 h-7 rounded bg-stone-700 text-stone-200 text-base font-bold hover:bg-stone-600 transition-colors select-none"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function MatchScoreModal({
@@ -22,22 +57,24 @@ export function MatchScoreModal({
 }: MatchScoreModalProps) {
   const queryClient = useQueryClient();
   const [winnerId, setWinnerId] = useState<string>('');
-  const [score, setScore] = useState('');
+  const [p1Score, setP1Score] = useState(0);
+  const [p2Score, setP2Score] = useState(0);
   const [p1FactionId, setP1FactionId] = useState('');
   const [p2FactionId, setP2FactionId] = useState('');
 
-  // Faction pre-pick feeds MatchupStats/heatmap — optional but encouraged.
   const { data: factionData } = useQuery<FactionListResponse>({
     queryKey: ['factions'],
     queryFn: () => getFactions(),
   });
-  const factions = (factionData?.data ?? []).map((entry) => entry.faction);
+  const factions = (factionData?.data ?? [])
+    .map((entry) => entry.faction)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const mutation = useMutation({
     mutationFn: () =>
       reportMatchResult(matchId, {
         winnerId,
-        score: score || undefined,
+        score: `${p1Score}-${p2Score}`,
         player1FactionId: p1FactionId || undefined,
         player2FactionId: p2FactionId || undefined,
       }),
@@ -47,7 +84,6 @@ export function MatchScoreModal({
     },
   });
 
-  // Close on backdrop click
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose();
   };
@@ -91,6 +127,23 @@ export function MatchScoreModal({
                 {player2Name ?? player2Id}
               </label>
             )}
+          </div>
+        </fieldset>
+
+        <fieldset className="mb-4">
+          <legend className="text-xs text-stone-400 mb-2">Score</legend>
+          <div className="flex items-center justify-center gap-6">
+            <ScoreCounter
+              label={player1Name ?? 'Spieler 1'}
+              value={p1Score}
+              onChange={setP1Score}
+            />
+            <span className="text-stone-600 text-lg font-bold">:</span>
+            <ScoreCounter
+              label={player2Name ?? 'Spieler 2'}
+              value={p2Score}
+              onChange={setP2Score}
+            />
           </div>
         </fieldset>
 
@@ -140,23 +193,9 @@ export function MatchScoreModal({
           </div>
         </fieldset>
 
-        <div className="mb-6">
-          <label className="text-xs text-stone-400 block mb-1" htmlFor="score-input">
-            Score (optional, z.B. "2-1")
-          </label>
-          <input
-            id="score-input"
-            type="text"
-            value={score}
-            onChange={(e) => setScore(e.target.value)}
-            placeholder="2-1"
-            className="w-full rounded border border-stone-700 bg-stone-800 px-3 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
-          />
-        </div>
-
         {mutation.isError && (
           <p className="text-red-400 text-xs mb-3">
-            Fehler beim Speichern. Bitte erneut versuchen.
+            Fehler beim Speichern: {(mutation.error as Error).message}
           </p>
         )}
 

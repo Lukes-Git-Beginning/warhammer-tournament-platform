@@ -122,7 +122,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           maxScale={2}
           initialScale={data.matches.length > 32 ? 0.6 : 1}
           limitToBounds={false}
-          wheel={{ step: 0.1 }}
+          wheel={{ step: 0.1, activationKeys: ['Control'] }}
         >
           {({ zoomIn, zoomOut, resetTransform }) => (
             <>
@@ -161,7 +161,12 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                 <SVGBracket
                   data={data}
                   players={players}
-                  onMatchClick={(matchId) => setSelectedMatchId(matchId)}
+                  onMatchClick={(matchId) => {
+                    const m = data.matches.find((x) => x.matchId === matchId);
+                    if (canManage && (m?.status === 'PENDING' || m?.status === 'ONGOING')) {
+                      setSelectedMatchId(matchId);
+                    }
+                  }}
                 />
               </TransformComponent>
             </>
