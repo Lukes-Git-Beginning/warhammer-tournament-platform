@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { registerForTournament, withdrawFromTournament } from '@/lib/api';
+import { registerForTournament, withdrawFromTournament, getFactions } from '@/lib/api';
 import type { Tournament, ParticipantStatus } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 
@@ -12,23 +12,71 @@ export interface RegisterButtonProps {
   isLoggedIn: boolean;
 }
 
-/**
- * Tournament self-registration CTA.
- *
- * States (only rendered while status === OPEN_REGISTRATION):
- * - not logged in: link to /login
- * - registered / checked in: green confirmation banner
- * - tournament full: muted notice
- * - otherwise: "Register now" button → POST /api/tournaments/:slug/register
- */
+function FactionSelectGrid({
+  selected,
+  onSelect,
+}: {
+  selected: string;
+  onSelect: (id: string) => void;
+}) {
+  const { data } = useQuery({
+    queryKey: ['factions'],
+    queryFn: () => getFactions(),
+    staleTime: 60 * 60_000,
+  });
+  const factions = (data?.data ?? [])
+    .map((e) => e.faction)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+      {factions.map((f) => {
+        const isSelected = selected === f.id;
+        return (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => onSelect(f.id)}
+            className={[
+              'flex flex-col items-center gap-1.5 rounded-md border p-2 transition-colors text-left',
+              isSelected
+                ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/10'
+                : 'border-rizzotto-iron-700 bg-rizzotto-iron-900/60 hover:border-rizzotto-iron-500',
+            ].join(' ')}
+          >
+            {f.icon_url ? (
+              <img src={f.icon_url} alt={f.name} className="w-8 h-8 object-contain" />
+            ) : (
+              <div
+                className="w-8 h-8 rounded-full"
+                style={{ backgroundColor: f.color_hex ?? '#555' }}
+              />
+            )}
+            <span className="text-[11px] text-center leading-tight text-rizzotto-stone-300 line-clamp-2">
+              {f.name}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function RegisterButton({ tournament, participantStatus, isLoggedIn }: RegisterButtonProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
+  const [pickingFaction, setPickingFaction] = useState(false);
+  const [selectedFaction, setSelectedFaction] = useState('');
+
+  const isSFT = tournament.mode === 'SFT';
 
   const register = useMutation({
-    mutationFn: () => registerForTournament(tournament.slug),
+    mutationFn: (factionId?: string) =>
+      registerForTournament(tournament.slug, factionId ? { factionId } : undefined),
     onSuccess: () => {
+      setPickingFaction(false);
+      setSelectedFaction('');
       void queryClient.invalidateQueries({ queryKey: ['tournament', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['participant-me', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['tournament-participants', tournament.slug] });
@@ -51,46 +99,24 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
     return (
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 rounded-md border border-rizzotto-success/40 bg-rizzotto-success/10 px-4 py-2.5">
-          <svg
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="h-4 w-4 text-rizzotto-success shrink-0"
-            aria-hidden="true"
-          >
-            <path
-              fillRule="evenodd"
-              d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-              clipRule="evenodd"
-            />
+          <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-rizzotto-success shrink-0" aria-hidden="true">
+            <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
           </svg>
           <span className="text-sm font-semibold text-rizzotto-success">
             {t('tournament.register.confirmed')}
           </span>
         </div>
         {!confirmingWithdraw ? (
-          <button
-            type="button"
-            onClick={() => setConfirmingWithdraw(true)}
-            className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-danger transition-colors self-start"
-          >
+          <button type="button" onClick={() => setConfirmingWithdraw(true)} className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-danger transition-colors self-start">
             Withdraw from tournament
           </button>
         ) : (
           <div className="flex items-center gap-2">
             <span className="text-xs text-rizzotto-stone-400">Are you sure?</span>
-            <button
-              type="button"
-              onClick={() => withdraw.mutate()}
-              disabled={withdraw.isPending}
-              className="text-xs text-rizzotto-danger hover:text-red-300 transition-colors disabled:opacity-50"
-            >
+            <button type="button" onClick={() => withdraw.mutate()} disabled={withdraw.isPending} className="text-xs text-rizzotto-danger hover:text-red-300 transition-colors disabled:opacity-50">
               {withdraw.isPending ? 'Withdrawing…' : 'Yes, withdraw'}
             </button>
-            <button
-              type="button"
-              onClick={() => setConfirmingWithdraw(false)}
-              className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors"
-            >
+            <button type="button" onClick={() => setConfirmingWithdraw(false)} className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors">
               Cancel
             </button>
           </div>
@@ -102,28 +128,49 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
     );
   }
 
-  // Withdrawn / disqualified players get no re-register CTA (organizer call).
   if (participantStatus === 'WITHDRAWN' || participantStatus === 'DISQUALIFIED') return null;
 
   if (!isLoggedIn) {
     return (
-      <Link
-        to="/login"
-        className="inline-flex items-center rounded border border-rizzotto-gold-500 px-4 py-2 text-sm font-semibold text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 transition-colors"
-      >
+      <Link to="/login" className="inline-flex items-center rounded border border-rizzotto-gold-500 px-4 py-2 text-sm font-semibold text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 transition-colors">
         {t('tournament.register.login_required')}
       </Link>
     );
   }
 
-  const isFull =
-    tournament.max_participants != null &&
-    (tournament.participantCount ?? 0) >= tournament.max_participants;
-
+  const isFull = tournament.max_participants != null && (tournament.participantCount ?? 0) >= tournament.max_participants;
   if (isFull) {
     return (
       <div className="flex items-center gap-2 rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900 px-4 py-2.5">
         <span className="text-sm text-rizzotto-stone-400">{t('tournament.register.full')}</span>
+      </div>
+    );
+  }
+
+  if (isSFT && pickingFaction) {
+    return (
+      <div className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4 space-y-4">
+        <div>
+          <p className="text-sm font-semibold text-rizzotto-stone-200 mb-1">Choose your faction</p>
+          <p className="text-xs text-rizzotto-stone-500">SFT — Single Faction Tournament. Your faction is locked for the entire event.</p>
+        </div>
+        <FactionSelectGrid selected={selectedFaction} onSelect={setSelectedFaction} />
+        {register.isError && (
+          <p className="text-xs text-rizzotto-danger">{(register.error as Error).message}</p>
+        )}
+        <div className="flex gap-3 pt-1">
+          <Button
+            variant="forge"
+            size="md"
+            disabled={!selectedFaction || register.isPending}
+            onClick={() => register.mutate(selectedFaction)}
+          >
+            {register.isPending ? t('tournament.register.pending') : 'Confirm Registration'}
+          </Button>
+          <button type="button" onClick={() => { setPickingFaction(false); setSelectedFaction(''); }} className="text-sm text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors">
+            Cancel
+          </button>
+        </div>
       </div>
     );
   }
@@ -134,7 +181,13 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
         variant="forge"
         size="md"
         disabled={register.isPending}
-        onClick={() => register.mutate()}
+        onClick={() => {
+          if (isSFT) {
+            setPickingFaction(true);
+          } else {
+            register.mutate(undefined);
+          }
+        }}
       >
         {register.isPending ? t('tournament.register.pending') : t('tournament.register.cta')}
       </Button>

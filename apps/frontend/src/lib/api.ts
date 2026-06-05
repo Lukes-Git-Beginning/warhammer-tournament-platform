@@ -1121,11 +1121,11 @@ export function getParticipants(slug: string): Promise<TournamentParticipantsRes
 
 export function registerForTournament(
   slug: string,
+  opts?: { factionId?: string },
 ): Promise<{ id: string; status: ParticipantStatus }> {
   return apiFetch<{ id: string; status: ParticipantStatus }>(
     `/api/tournaments/${slug}/register`,
-    // Empty JSON body — the route zod-parses request.body, a bodyless POST would 400.
-    { method: 'POST', body: JSON.stringify({}) },
+    { method: 'POST', body: JSON.stringify({ faction_id: opts?.factionId }) },
   );
 }
 
