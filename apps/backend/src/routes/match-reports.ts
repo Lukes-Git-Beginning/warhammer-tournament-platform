@@ -288,7 +288,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { result, player1_points, player2_points, reason } = parsed.data;
+      const { result, player1_points, player2_points, player1_score, player2_score, reason } = parsed.data;
 
       // Load match
       const match = await fastify.prisma.match.findFirst({
@@ -351,6 +351,14 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         },
         fastify.io,
       );
+
+      if (player1_score != null || player2_score != null) {
+        await fastify.prisma.match.update({
+          where: { id: matchId },
+          data: { score: `${player1_score ?? 0}-${player2_score ?? 0}` },
+        });
+      }
+
       await invalidateScoringCaches(fastify.redis);
 
       // Reload reports to build response

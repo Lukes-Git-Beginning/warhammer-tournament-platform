@@ -9,6 +9,9 @@ interface MatchScoreModalProps {
   player2Name?: string;
   player1Id: string | null;
   player2Id: string | null;
+  initialWinnerId?: string | null;
+  initialP1Score?: number;
+  initialP2Score?: number;
   onClose: () => void;
 }
 
@@ -54,14 +57,17 @@ export function MatchScoreModal({
   player2Name,
   player1Id,
   player2Id,
+  initialWinnerId,
+  initialP1Score = 0,
+  initialP2Score = 0,
   onClose,
 }: MatchScoreModalProps) {
   const queryClient = useQueryClient();
   const isCompleted = matchStatus === 'COMPLETED';
 
-  const [winnerId, setWinnerId] = useState<string>('');
-  const [p1Score, setP1Score] = useState(0);
-  const [p2Score, setP2Score] = useState(0);
+  const [winnerId, setWinnerId] = useState<string>(initialWinnerId ?? '');
+  const [p1Score, setP1Score] = useState(initialP1Score);
+  const [p2Score, setP2Score] = useState(initialP2Score);
   const [reason, setReason] = useState('');
 
   const mutation = useMutation({

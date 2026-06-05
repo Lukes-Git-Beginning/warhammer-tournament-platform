@@ -173,21 +173,32 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           )}
         </TransformWrapper>
 
-        {selectedMatch && (
-          <MatchScoreModal
-            matchId={selectedMatch.matchId}
-            matchStatus={selectedMatch.status}
-            player1Id={selectedMatch.player1Id}
-            player2Id={selectedMatch.player2Id}
-            player1Name={
-              selectedMatch.player1Id ? players.get(selectedMatch.player1Id)?.name : undefined
-            }
-            player2Name={
-              selectedMatch.player2Id ? players.get(selectedMatch.player2Id)?.name : undefined
-            }
-            onClose={() => setSelectedMatchId(null)}
-          />
-        )}
+        {selectedMatch && (() => {
+          const p1GameWins = selectedMatch.player1GameWins;
+          const p2GameWins = selectedMatch.player2GameWins;
+          const hasGameWins = p1GameWins > 0 || p2GameWins > 0;
+          const scoreParts = selectedMatch.score?.split('-');
+          const initP1 = hasGameWins ? p1GameWins : Number(scoreParts?.[0] ?? 0);
+          const initP2 = hasGameWins ? p2GameWins : Number(scoreParts?.[1] ?? 0);
+          return (
+            <MatchScoreModal
+              matchId={selectedMatch.matchId}
+              matchStatus={selectedMatch.status}
+              player1Id={selectedMatch.player1Id}
+              player2Id={selectedMatch.player2Id}
+              initialWinnerId={selectedMatch.winnerId}
+              initialP1Score={initP1}
+              initialP2Score={initP2}
+              player1Name={
+                selectedMatch.player1Id ? players.get(selectedMatch.player1Id)?.name : undefined
+              }
+              player2Name={
+                selectedMatch.player2Id ? players.get(selectedMatch.player2Id)?.name : undefined
+              }
+              onClose={() => setSelectedMatchId(null)}
+            />
+          );
+        })()}
       </div>
     </div>
   );
