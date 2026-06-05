@@ -43,10 +43,10 @@ type MapDecisionModeOption = {
 };
 
 const MAP_DECISION_MODES: MapDecisionModeOption[] = [
-  { value: 'RANDOM_NO_REPEAT', label: 'Zufall (No Repeat)', description: 'Server pickt eine zufällige Map. Bereits gespielte Maps werden ausgeschlossen.' },
-  { value: 'HOST_PRESET', label: 'Host-Preset (1 Map)', description: 'Organizer legt pro Runde eine Map in Reihenfolge fest. Keine Spieler-Interaktion.' },
-  { value: 'HOST_PRESET_PICK_BAN', label: 'Host-Preset + Ban', description: 'Organizer bestimmt 3 Maps pro Runde & Spiel. Beide Spieler bannen je 1 Map.' },
-  { value: 'RANDOM_PICK_BAN', label: 'Zufall + Ban', description: 'Server zieht 3 zufällige Maps pro Spiel. Beide Spieler bannen je 1 Map.' },
+  { value: 'RANDOM_NO_REPEAT', label: 'Random (No Repeat)', description: 'Server picks one random map. Already-played maps are excluded.' },
+  { value: 'HOST_PRESET', label: 'Host Preset (1 Map)', description: 'Organizer sets one map per round in order. No player interaction needed.' },
+  { value: 'HOST_PRESET_PICK_BAN', label: 'Host Preset + Ban', description: 'Organizer defines 3 maps per round & game. Each player bans one.' },
+  { value: 'RANDOM_PICK_BAN', label: 'Random + Ban', description: 'Server draws 3 random maps per game. Each player bans one.' },
 ];
 
 function buildRoundKeys(form: Partial<FormData>): { key: string; label: string; maxGames: number }[] {
@@ -54,15 +54,15 @@ function buildRoundKeys(form: Partial<FormData>): { key: string; label: string; 
   if (form.format !== 'SWISS') return keys;
   const rounds = form.rounds_count ?? 5;
   for (let i = 1; i <= rounds; i++) {
-    keys.push({ key: `swiss_${i}`, label: `Swiss Runde ${i}`, maxGames: 1 });
+    keys.push({ key: `swiss_${i}`, label: `Swiss Round ${i}`, maxGames: 1 });
   }
   if (form.playoff_format === 'TOP4') {
-    keys.push({ key: 'playoff_1', label: 'Halbfinale', maxGames: 3 });
-    keys.push({ key: 'playoff_2', label: 'Finale', maxGames: 3 });
+    keys.push({ key: 'playoff_1', label: 'Semifinal', maxGames: 3 });
+    keys.push({ key: 'playoff_2', label: 'Final', maxGames: 3 });
   } else if (form.playoff_format === 'TOP8') {
-    keys.push({ key: 'playoff_1', label: 'Viertelfinale', maxGames: 3 });
-    keys.push({ key: 'playoff_2', label: 'Halbfinale', maxGames: 3 });
-    keys.push({ key: 'playoff_3', label: 'Finale', maxGames: 3 });
+    keys.push({ key: 'playoff_1', label: 'Quarterfinal', maxGames: 3 });
+    keys.push({ key: 'playoff_2', label: 'Semifinal', maxGames: 3 });
+    keys.push({ key: 'playoff_3', label: 'Final', maxGames: 3 });
   }
   return keys;
 }
@@ -470,10 +470,10 @@ export function TournamentCreateForm() {
           return (
             <div className="space-y-3 rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900/40 p-3">
               <p className="text-xs font-semibold text-rizzotto-stone-300 uppercase tracking-wide">
-                {isPickBan ? 'Map-Preset pro Runde & Spiel (3 Maps je Spiel)' : 'Map-Preset pro Runde (1 Map je Spiel)'}
+                {isPickBan ? 'Map preset per round & game (3 maps per game)' : 'Map preset per round (1 map per game)'}
               </p>
               {roundKeys.length === 0 && (
-                <p className="text-xs text-rizzotto-stone-500">Wähle zuerst Format und Rundenanzahl.</p>
+                <p className="text-xs text-rizzotto-stone-500">Select format and round count first.</p>
               )}
               {roundKeys.map(({ key, label, maxGames }) => {
                 const entry = config[key];
@@ -486,7 +486,7 @@ export function TournamentCreateForm() {
                       <p className="text-xs font-medium text-rizzotto-stone-400">{label}</p>
                       {Array.from({ length: maxGames }).map((_, gi) => (
                         <div key={gi} className="flex items-center gap-2">
-                          {maxGames > 1 && <span className="text-xs text-rizzotto-stone-600 w-12 shrink-0">Spiel {gi + 1}</span>}
+                          {maxGames > 1 && <span className="text-xs text-rizzotto-stone-600 w-12 shrink-0">Game {gi + 1}</span>}
                           <select
                             value={mapsForRound[gi] ?? ''}
                             onChange={(e) => {
@@ -499,7 +499,7 @@ export function TournamentCreateForm() {
                             }}
                             className="flex-1 rounded border border-rizzotto-iron-600 bg-rizzotto-iron-800 px-2 py-1 text-xs text-rizzotto-stone-200"
                           >
-                            <option value="">— Map wählen —</option>
+                            <option value="">— Select map —</option>
                             {allMaps.map((m) => (
                               <option key={m.id} value={m.id}>{m.name}</option>
                             ))}
@@ -519,7 +519,7 @@ export function TournamentCreateForm() {
                       const selectedForGame = (Array.isArray(setsForRound[gi]) ? setsForRound[gi] : []) as string[];
                       return (
                         <div key={gi} className="space-y-1">
-                          {maxGames > 1 && <p className="text-xs text-rizzotto-stone-600 pl-1">Spiel {gi + 1}</p>}
+                          {maxGames > 1 && <p className="text-xs text-rizzotto-stone-600 pl-1">Game {gi + 1}</p>}
                           <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 max-h-32 overflow-y-auto rounded border border-rizzotto-iron-700 p-1.5">
                             {allMaps.map((m) => {
                               const isSel = selectedForGame.includes(m.id);
@@ -550,7 +550,7 @@ export function TournamentCreateForm() {
                             })}
                           </div>
                           {selectedForGame.length > 0 && selectedForGame.length < 3 && (
-                            <p className="text-xs text-amber-500 pl-1">Noch {3 - selectedForGame.length} Map(s) auswählen</p>
+                            <p className="text-xs text-amber-500 pl-1">{3 - selectedForGame.length} more map(s) needed</p>
                           )}
                         </div>
                       );
@@ -579,7 +579,7 @@ export function TournamentCreateForm() {
               }}
               className="text-xs text-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors"
             >
-              {allMaps.every((m) => (form.map_pool ?? []).includes(m.id)) ? 'Alle abwählen' : 'Alle auswählen'}
+              {allMaps.every((m) => (form.map_pool ?? []).includes(m.id)) ? 'Deselect all' : 'Select all'}
             </button>
           </div>
           <input
@@ -634,7 +634,7 @@ export function TournamentCreateForm() {
         </div>
         {(form.map_decision_mode === 'RANDOM_NO_REPEAT' || form.map_decision_mode === 'RANDOM_PICK_BAN') && (
           <FieldHint>
-            Mindest-Pool: Bei Zufall-Modi muss der Pool mindestens so viele Maps enthalten wie maximale Spiele im Match (BO1=3, BO3=3, BO5=5).
+            Minimum pool: For random modes the pool must contain at least as many maps as the maximum games in the match format (BO1=1, BO3=3, BO5=5).
           </FieldHint>
         )}
         {(form.map_pool ?? []).length < 3 && (form.map_pool ?? []).length > 0 && (

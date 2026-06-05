@@ -358,7 +358,6 @@ function ModeTab({ mode }: ModeTabProps) {
           title="No entries"
           body="No players qualify for this ranking yet."
           motto="In lapide sigillata."
-          mottoTitle="Karaz Ankor"
         />
       )}
 

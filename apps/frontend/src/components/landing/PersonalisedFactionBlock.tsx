@@ -72,15 +72,12 @@ export function PersonalisedFactionBlock() {
       />
       <div className="relative mx-auto max-w-[80rem] px-4 sm:px-6 lg:px-8 xl:px-12">
         <div className="mb-8 lg:mb-12">
-          <span className="font-display text-xs font-semibold uppercase tracking-[0.3em] text-rizzotto-gold-500">
-            Karaz Ankor
-          </span>
           <h2
             id="pref-factions-heading"
-            className="mt-2 font-display font-bold text-rizzotto-stone-100"
+            className="font-display font-bold text-rizzotto-stone-100"
             style={{ fontSize: 'clamp(1.625rem, 3.5vw, 2.5rem)', lineHeight: 1.15 }}
           >
-            Deine Fraktionen
+            Your Factions
           </h2>
         </div>
 
