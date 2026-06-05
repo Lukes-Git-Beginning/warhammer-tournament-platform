@@ -24,7 +24,7 @@ export function FactionBadge({ colorHex, initials, name, size = 'md', iconUrl }:
           width: px,
           height: px,
           minWidth: px,
-          backgroundColor: '#9ca3af',
+          backgroundColor: '#837a6f',
         }}
       >
         <img
