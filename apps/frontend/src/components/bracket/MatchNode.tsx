@@ -73,13 +73,13 @@ export function MatchNode({
     >
       {/* Player 1 row */}
       <div className="flex-1 flex items-center px-2 border-b border-stone-800">
-        {!isBye && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
+        {match.player1Id && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
             p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'
           }`}
         >
-          {isBye ? 'BYE' : (player1Name ?? match.player1Id ?? '—')}
+          {match.player1Id ? (player1Name ?? match.player1Id) : 'BYE'}
         </span>
         {score1 && (
           <span
@@ -92,13 +92,13 @@ export function MatchNode({
 
       {/* Player 2 row */}
       <div className="flex-1 flex items-center px-2">
-        {!isBye && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
+        {match.player2Id && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
             p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'
           }`}
         >
-          {isBye ? 'BYE' : (player2Name ?? match.player2Id ?? '—')}
+          {match.player2Id ? (player2Name ?? match.player2Id) : 'BYE'}
         </span>
         {score2 && (
           <span
