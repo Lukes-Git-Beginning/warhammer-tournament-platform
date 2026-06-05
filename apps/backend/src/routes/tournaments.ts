@@ -33,7 +33,7 @@ const ListQuerySchema = z.object({
 const CreateTournamentSchema = z.object({
   name: z.string().min(3).max(120),
   format: z.enum(['SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN']),
-  mode: z.enum(['OPEN', 'ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT']).optional(),
+  mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT']).optional(),
   start_date: z.string().datetime(),
   timezone: z.string().min(1).max(64),
   max_participants: z.number().int().min(2).max(512).optional(),

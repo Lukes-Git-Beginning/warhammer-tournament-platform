@@ -59,7 +59,7 @@ export interface Tournament {
   name: string;
   description: string | null;
   format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION';
-  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'OPEN' | 'BPT' | 'SFT' | 'SLT';
+  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT';
   status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
   start_date: string;
   timezone: string;
@@ -129,7 +129,7 @@ export interface MatchDecisionState {
 export interface TournamentCreate {
   name: string;
   format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN';
-  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'OPEN' | 'BPT' | 'SFT' | 'SLT';
+  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT';
   start_date: string;
   timezone: string;
   max_participants?: number;

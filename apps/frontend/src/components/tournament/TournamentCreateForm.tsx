@@ -14,7 +14,7 @@ const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
   format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN']),
-  mode: z.enum(['OPEN', 'BPT', 'SFT', 'SLT']).default('OPEN'),
+  mode: z.enum(['BPT', 'SFT', 'SLT']).default('BPT'),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
   max_participants: z.coerce.number().int().positive().optional().or(z.literal('')),
@@ -42,7 +42,7 @@ export function TournamentCreateForm() {
 
   const [form, setForm] = useState<Partial<FormData>>({
     format: 'SINGLE_ELIMINATION',
-    mode: 'OPEN',
+    mode: 'BPT',
     timezone: defaultTimezone,
     draft_enabled: false,
     rounds_count: 5,
@@ -201,16 +201,15 @@ export function TournamentCreateForm() {
           <Select
             id="tcf-mode"
             name="mode"
-            value={form.mode ?? 'OPEN'}
+            value={form.mode ?? 'BPT'}
             onChange={handleChange}
           >
-            <option value="OPEN">Open (Casual)</option>
             <option value="BPT">BPT — Blind Pick Tournament</option>
             <option value="SFT">SFT — Single Faction Tournament</option>
             <option value="SLT">SLT — Single List Tournament</option>
           </Select>
           <FieldHint>
-            {form.mode === 'BPT' && 'Every match includes a blind faction pick phase.'}
+            {(form.mode === 'BPT' || !form.mode) && 'Every match includes a blind faction pick phase.'}
             {form.mode === 'SFT' && 'Players pre-select a faction at registration; revealed at tournament start.'}
             {form.mode === 'SLT' && 'Players upload their army list at registration. Reveal after each completed match.'}
           </FieldHint>

@@ -553,10 +553,10 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Validate tournament mode supports blind pick
       const mode = match.tournament.mode as string;
-      if (mode !== 'BPT' && mode !== 'OPEN') {
+      if (mode !== 'BPT') {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: 'Blind pick is only available in BPT or OPEN mode tournaments',
+          message: 'Blind pick is only available in BPT mode tournaments',
           statusCode: 422,
         });
       }

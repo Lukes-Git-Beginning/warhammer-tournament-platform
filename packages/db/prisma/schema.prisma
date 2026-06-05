@@ -37,7 +37,6 @@ enum TournamentFormat {
 }
 
 enum TournamentMode {
-  OPEN // no restriction (new default, casual)
   ONE_V_ONE // legacy 1v1
   THREE_V_THREE // reserved for Phase 3
   BLIND_PICK // reserved for Phase 3
@@ -220,7 +219,7 @@ model Tournament {
   poster_url             String?
   organizer_id           String               @db.Uuid
   format                 TournamentFormat
-  mode                   TournamentMode       @default(OPEN)
+  mode                   TournamentMode       @default(BPT)
   status                 TournamentStatus     @default(DRAFT)
   visibility             TournamentVisibility @default(PUBLIC)
   max_participants       Int?
