@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import type { PrismaClient } from '@rizzotto/db';
 import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
 import { ensureMatchGame } from '../lib/match-games.js';
@@ -52,6 +53,7 @@ type DecisionRow = {
   coin_flip_seed: string;
   bans_top: unknown;
   bans_bottom: unknown;
+  active_pool: unknown;
   picked_map_id: string | null;
   decided_at: Date | null;
 };
@@ -64,15 +66,18 @@ type BlindPickRow = {
   player2_faction_id: string | null;
 } | null;
 
+type MapDecisionModeLiteral = 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
+
 function serializeDecisionState(matchId: string, decision: DecisionRow, blindPick: BlindPickRow) {
   return {
     matchId,
-    mode: decision.mode as 'RANDOM' | 'PICK_BAN',
+    mode: decision.mode as MapDecisionModeLiteral,
     topPlayerId: decision.top_player_id,
     bottomPlayerId: decision.bottom_player_id,
     seed: decision.coin_flip_seed,
     bansTop: (decision.bans_top as string[]) ?? [],
     bansBottom: (decision.bans_bottom as string[]) ?? [],
+    activePool: (decision.active_pool as string[]) ?? [],
     pickedMapId: decision.picked_map_id,
     decidedAt: decision.decided_at?.toISOString() ?? null,
     blindPick: blindPick
@@ -85,6 +90,90 @@ function serializeDecisionState(matchId: string, decision: DecisionRow, blindPic
         }
       : null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Map-decision helper functions
+// ---------------------------------------------------------------------------
+
+/** Gibt Map-IDs zurück, die in früheren Games desselben Matches bereits gespielt wurden. */
+async function getPlayedMapsInMatch(
+  prisma: PrismaClient,
+  matchId: string,
+  currentGameNumber: number,
+): Promise<string[]> {
+  const games = await prisma.matchGame.findMany({
+    where: { match_id: matchId, game_number: { lt: currentGameNumber } },
+    select: { map_decision: { select: { picked_map_id: true } } },
+  });
+  return games
+    .map((g) => g.map_decision?.picked_map_id)
+    .filter((id): id is string => id !== null && id !== undefined);
+}
+
+/**
+ * Zieht `count` Maps aus `pool`; berücksichtigt No-Repeat im Match (`exclude`)
+ * und turnierweit (`tournament.random_map_pool_played`).
+ * Aktualisiert `random_map_pool_played` in einer Transaktion.
+ */
+async function drawMapsWithNoRepeat(
+  prisma: PrismaClient,
+  tournamentId: string,
+  pool: string[],
+  exclude: string[],
+  count: number,
+): Promise<string[]> {
+  return await prisma.$transaction(async (tx) => {
+    const t = await tx.tournament.findUniqueOrThrow({
+      where: { id: tournamentId },
+      select: { random_map_pool_played: true },
+    });
+
+    let played = t.random_map_pool_played;
+    let available = pool.filter((id) => !played.includes(id) && !exclude.includes(id));
+
+    // Zyklus zurücksetzen, wenn nicht genug Maps verfügbar sind
+    if (available.length < count) {
+      played = [];
+      available = pool.filter((id) => !exclude.includes(id));
+    }
+
+    if (available.length < count) {
+      throw new Error(`Not enough maps in pool (pool=${pool.length}, exclude=${exclude.length}, need=${count})`);
+    }
+
+    const drawn: string[] = [];
+    const remaining = [...available];
+    for (let i = 0; i < count; i++) {
+      const idx = randomInt(remaining.length);
+      drawn.push(remaining[idx] as string);
+      remaining.splice(idx, 1);
+    }
+
+    await tx.tournament.update({
+      where: { id: tournamentId },
+      data: { random_map_pool_played: [...played, ...drawn] },
+    });
+
+    return drawn;
+  });
+}
+
+/** Baut den Round-Key für map_preset_config aus Phase und Runden-Nummer. */
+function buildRoundKey(phase: string | null, round: number): string {
+  return `${phase ?? 'swiss'}_${round}`;
+}
+
+/**
+ * Liest den Preset-Eintrag für eine Runde aus map_preset_config.
+ * Gibt ein Array von Maps zurück (HOST_PRESET: string[], HOST_PRESET_PICK_BAN: string[][]).
+ */
+function getPresetForRound(config: unknown, phase: string | null, round: number): unknown[] | null {
+  if (!config || typeof config !== 'object') return null;
+  const key = buildRoundKey(phase, round);
+  const entry = (config as Record<string, unknown>)[key];
+  if (!Array.isArray(entry)) return null;
+  return entry;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,10 +242,13 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           status: true,
           player1_id: true,
           player2_id: true,
+          round: true,
+          phase: true,
           tournament: {
             select: {
               id: true,
               map_decision_mode: true,
+              map_preset_config: true,
               map_pool: { select: { map_id: true } },
             },
           },
@@ -204,7 +296,12 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const mapPool = match.tournament.map_pool.map((p) => p.map_id);
-      if (mapPool.length === 0) {
+      const mode = match.tournament.map_decision_mode as MapDecisionModeLiteral;
+      const gameNumber = 1; // v1: BO1 — game_number always 1; BO3/BO5 will pass game_number via route params
+
+      // Preset-only modes don't require a tournament map pool
+      const needsPool = mode === 'RANDOM' || mode === 'RANDOM_NO_REPEAT' || mode === 'RANDOM_PICK_BAN' || mode === 'PICK_BAN';
+      if (needsPool && mapPool.length === 0) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
           message: 'Tournament has no map pool configured',
@@ -221,11 +318,67 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       const topPlayerId = flip === 0 ? match.player1_id : match.player2_id;
       const bottomPlayerId = flip === 0 ? match.player2_id : match.player1_id;
 
-      const mode = match.tournament.map_decision_mode as 'RANDOM' | 'PICK_BAN';
+      let pickedMapId: string | null = null;
+      let activePool: string[] = [];
 
-      // For RANDOM mode: pick map deterministically from seed
-      const pickedMapId =
-        mode === 'RANDOM' ? deterministicMapPick(mapPool, seed) : null;
+      switch (mode) {
+        case 'RANDOM':
+          pickedMapId = deterministicMapPick(mapPool, seed);
+          break;
+
+        case 'RANDOM_NO_REPEAT': {
+          const playedInMatch = await getPlayedMapsInMatch(fastify.prisma, matchId, gameNumber);
+          const drawn = await drawMapsWithNoRepeat(fastify.prisma, match.tournament.id, mapPool, playedInMatch, 1);
+          pickedMapId = drawn[0] ?? null;
+          break;
+        }
+
+        case 'HOST_PRESET': {
+          const preset = getPresetForRound(match.tournament.map_preset_config, match.phase, match.round);
+          const mapForGame = preset?.[gameNumber - 1] as string | undefined;
+          if (!mapForGame || typeof mapForGame !== 'string') {
+            return reply.code(422).send({
+              error: 'UnprocessableEntity',
+              message: `No preset map configured for round ${match.round}, game ${gameNumber}`,
+              statusCode: 422,
+            });
+          }
+          pickedMapId = mapForGame;
+          break;
+        }
+
+        case 'HOST_PRESET_PICK_BAN': {
+          const preset = getPresetForRound(match.tournament.map_preset_config, match.phase, match.round);
+          const gameSets = preset as unknown[] | null;
+          const setForGame = gameSets?.[gameNumber - 1];
+          if (!Array.isArray(setForGame) || setForGame.length !== 3) {
+            return reply.code(422).send({
+              error: 'UnprocessableEntity',
+              message: `No 3-map preset configured for round ${match.round}, game ${gameNumber}`,
+              statusCode: 422,
+            });
+          }
+          activePool = setForGame as string[];
+          break;
+        }
+
+        case 'RANDOM_PICK_BAN': {
+          if (mapPool.length < 3) {
+            return reply.code(422).send({
+              error: 'UnprocessableEntity',
+              message: 'Tournament map pool must have at least 3 maps for RANDOM_PICK_BAN mode',
+              statusCode: 422,
+            });
+          }
+          const playedInMatch = await getPlayedMapsInMatch(fastify.prisma, matchId, gameNumber);
+          activePool = await drawMapsWithNoRepeat(fastify.prisma, match.tournament.id, mapPool, playedInMatch, 3);
+          break;
+        }
+
+        case 'PICK_BAN':
+          // Legacy: Ban-Flow mit vollem Tournament-Pool, kein active_pool
+          break;
+      }
 
       const decision = await fastify.prisma.matchMapDecision.create({
         data: {
@@ -236,6 +389,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           bottom_player_id: bottomPlayerId,
           bans_top: [],
           bans_bottom: [],
+          active_pool: activePool,
           picked_map_id: pickedMapId,
           decided_at: pickedMapId ? new Date() : null,
         },
@@ -248,6 +402,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         bottomPlayerId,
         seed,
         pickedMapId: decision.picked_map_id,
+        activePool: (decision.active_pool as string[]) ?? [],
       };
 
       // Emit to match-decision room (both players should join this room via Socket.IO)
@@ -255,7 +410,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.io.to(matchDecisionRoom(matchId)).emit('match.decision.started', socketPayload);
       }
 
-      // Also emit complete if RANDOM resolved immediately
+      // Also emit complete if resolved immediately (RANDOM, RANDOM_NO_REPEAT, HOST_PRESET)
       if (decision.picked_map_id && decision.decided_at) {
         if (fastify.io) {
           fastify.io.to(matchDecisionRoom(matchId)).emit('match.decision.complete', {
@@ -332,10 +487,11 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      if (decision.mode !== 'PICK_BAN') {
+      const banModes = new Set(['PICK_BAN', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']);
+      if (!banModes.has(decision.mode)) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: 'Ban is only allowed in PICK_BAN mode',
+          message: 'Ban is only allowed in PICK_BAN, HOST_PRESET_PICK_BAN, or RANDOM_PICK_BAN mode',
           statusCode: 422,
         });
       }
@@ -348,13 +504,19 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const poolMapIds = match.tournament.map_pool.map((p) => p.map_id);
+      // Determine the active map set for this Ban round:
+      // New modes (HOST_PRESET_PICK_BAN, RANDOM_PICK_BAN) use active_pool; legacy PICK_BAN uses tournament pool.
+      const decisionActivePool = decision.active_pool as string[];
+      const poolMapIds =
+        decisionActivePool.length > 0
+          ? decisionActivePool
+          : match.tournament.map_pool.map((p) => p.map_id);
 
       // Validate map is in pool
       if (!poolMapIds.includes(map_id)) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: 'Map is not in the tournament map pool',
+          message: 'Map is not in the active map pool for this ban round',
           statusCode: 422,
         });
       }
@@ -490,10 +652,11 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      if (game.map_decision.mode !== 'RANDOM') {
+      const randomModes = new Set(['RANDOM', 'RANDOM_NO_REPEAT', 'HOST_PRESET']);
+      if (!randomModes.has(game.map_decision.mode)) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: 'This endpoint is only available for RANDOM mode matches',
+          message: 'This endpoint is only available for RANDOM, RANDOM_NO_REPEAT, or HOST_PRESET mode matches',
           statusCode: 422,
         });
       }
@@ -737,7 +900,11 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const poolMapIds = match.tournament.map_pool.map((p) => p.map_id);
+      const decisionActivePool = decision.active_pool as string[];
+      const poolMapIds =
+        decisionActivePool.length > 0
+          ? decisionActivePool
+          : match.tournament.map_pool.map((p) => p.map_id);
       const allBanned = [
         ...(decision.bans_top as string[]),
         ...(decision.bans_bottom as string[]),

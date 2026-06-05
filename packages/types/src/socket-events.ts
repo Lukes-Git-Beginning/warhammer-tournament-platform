@@ -99,7 +99,7 @@ export interface ServerToClientEvents {
   // Welle 2 — Match-Decision flow
   'match.decision.started': (payload: {
     matchId: string;
-    mode: 'RANDOM' | 'PICK_BAN';
+    mode: 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
     topPlayerId: string;
     bottomPlayerId: string;
     seed: string;

@@ -604,6 +604,9 @@ type DecisionPhase =
   | 'blind_pick'
   | 'ready';
 
+const RANDOM_MODES = new Set(['RANDOM', 'RANDOM_NO_REPEAT', 'HOST_PRESET']);
+const BAN_MODES = new Set(['PICK_BAN', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']);
+
 function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
   if (!d) return 'loading';
   if (d.pickedMapId) {
@@ -612,8 +615,8 @@ function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
     if (d.blindPick != null) return 'blind_pick';
     return 'ready';
   }
-  if (d.mode === 'RANDOM') return 'map_random';
-  if (d.mode === 'PICK_BAN') {
+  if (RANDOM_MODES.has(d.mode)) return 'map_random';
+  if (BAN_MODES.has(d.mode)) {
     // Show coin flip briefly first if neither ban has happened
     if (d.bansTop.length === 0 && d.bansBottom.length === 0) return 'coin_flip';
     return 'map_pick_ban';
@@ -765,7 +768,12 @@ export function MatchDecisionPage() {
     enabled: true,
   });
 
-  const mapPool: MapDto[] = allMapsData?.data ?? [];
+  const allTournamentMaps: MapDto[] = allMapsData?.data ?? [];
+  // Für Modi mit active_pool (HOST_PRESET_PICK_BAN, RANDOM_PICK_BAN) nur die 3 aktiven Maps zeigen
+  const mapPool: MapDto[] =
+    decision && decision.activePool && decision.activePool.length > 0
+      ? allTournamentMaps.filter((m) => decision.activePool.includes(m.id))
+      : allTournamentMaps;
 
   // Resolve player names + avatars for the coin flip
   const topPlayer = decision
@@ -790,7 +798,7 @@ export function MatchDecisionPage() {
   const rawPhase = resolvePhase(decision);
   let phase = rawPhase;
   if (rawPhase === 'coin_flip' && coinFlipDone) {
-    phase = decision?.mode === 'RANDOM' ? 'map_random' : 'map_pick_ban';
+    phase = RANDOM_MODES.has(decision?.mode ?? '') ? 'map_random' : 'map_pick_ban';
   }
 
   // Auto-advance from coin flip

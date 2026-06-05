@@ -8,7 +8,7 @@ interface TournamentDefaults {
   swiss_match_format: 'BO1';
   playoff_match_format: 'BO1'; // Bo3/Bo5 re-enable with series support
   finale_match_format: 'BO1';
-  map_decision_mode: 'RANDOM' | 'PICK_BAN';
+  map_decision_mode: 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
 }
 
 const CONFIG_KEY = 'default_tournament_settings';
@@ -19,7 +19,7 @@ const DEFAULT_DEFAULTS: TournamentDefaults = {
   swiss_match_format: 'BO1',
   playoff_match_format: 'BO1',
   finale_match_format: 'BO1',
-  map_decision_mode: 'RANDOM',
+  map_decision_mode: 'RANDOM_PICK_BAN',
 };
 
 export function TournamentDefaultsEditor() {
@@ -109,7 +109,7 @@ export function TournamentDefaultsEditor() {
               {
                 key: 'map_decision_mode' as const,
                 label: 'Map Decision Mode',
-                options: ['RANDOM', 'PICK_BAN'] as const,
+                options: ['RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN', 'RANDOM', 'PICK_BAN'] as const,
               },
             ] as const
           ).map(({ key, label, options }) => (

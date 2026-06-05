@@ -81,9 +81,13 @@ export interface Tournament {
   swiss_match_format?: 'BO1' | null;
   playoff_match_format?: 'BO1' | null; // Bo3/Bo5 re-enable with series support
   finale_match_format?: 'BO1' | null;
-  map_decision_mode?: 'RANDOM' | 'PICK_BAN' | null;
+  map_decision_mode?: MapDecisionMode | null;
+  map_preset_config?: MapPresetConfig | null;
   map_pool?: MapDto[];
 }
+
+export type MapDecisionMode = 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
+export type MapPresetConfig = Record<string, string[] | string[][]>;
 
 export interface MapDto {
   id: string;
@@ -109,12 +113,13 @@ export interface TournamentArmyList {
 
 export interface MatchDecisionState {
   matchId: string;
-  mode: 'RANDOM' | 'PICK_BAN';
+  mode: MapDecisionMode;
   topPlayerId: string;
   bottomPlayerId: string;
   seed: string;
   bansTop: string[];
   bansBottom: string[];
+  activePool: string[];
   pickedMapId: string | null;
   decidedAt: string | null;
   blindPick?: {
@@ -145,7 +150,8 @@ export interface TournamentCreate {
   swiss_match_format?: 'BO1';
   playoff_match_format?: 'BO1'; // Bo3/Bo5 re-enable with series support
   finale_match_format?: 'BO1';
-  map_decision_mode?: 'RANDOM' | 'PICK_BAN';
+  map_decision_mode?: MapDecisionMode;
+  map_preset_config?: MapPresetConfig | null;
   map_pool?: string[];
 }
 
@@ -169,7 +175,8 @@ export interface TournamentPatchInput {
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
   finale_match_format?: 'BO1' | 'BO3' | 'BO5';
-  map_decision_mode?: 'RANDOM' | 'PICK_BAN';
+  map_decision_mode?: MapDecisionMode;
+  map_preset_config?: MapPresetConfig | null;
   map_pool?: string[];
 }
 

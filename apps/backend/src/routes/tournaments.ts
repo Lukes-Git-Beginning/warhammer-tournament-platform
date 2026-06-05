@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import type { Prisma } from '@rizzotto/db';
 import { z } from 'zod';
 import ical from 'ical-generator';
 import { generateSlug, validateStatusTransition, TournamentStatus } from '../lib/tournament-utils.js';
@@ -52,8 +53,9 @@ const CreateTournamentSchema = z.object({
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
-  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN']).optional(),
+  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).optional(),
   map_pool: z.array(z.string().min(1)).min(3).max(36).optional(),
+  map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 const PatchTournamentSchema = z.object({
@@ -75,8 +77,9 @@ const PatchTournamentSchema = z.object({
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
-  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN']).optional(),
+  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).optional(),
   map_pool: z.array(z.string().min(1)).min(3).max(36).optional(),
+  map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   is_major: z.boolean().optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
 
@@ -271,6 +274,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           playoff_match_format: data.playoff_match_format,
           finale_match_format: data.finale_match_format,
           map_decision_mode: data.map_decision_mode,
+          map_preset_config: data.map_preset_config != null ? (data.map_preset_config as Prisma.InputJsonValue) : undefined,
         },
         select: {
           id: true,
@@ -287,6 +291,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           playoff_match_format: true,
           finale_match_format: true,
           map_decision_mode: true,
+          map_preset_config: true,
           created_at: true,
         },
       });
@@ -483,6 +488,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         counts_for_leaderboard: true,
         is_major: true,
         organizer_id: true,
+        map_decision_mode: true,
+        map_preset_config: true,
         created_at: true,
         updated_at: true,
         organizer: { select: { id: true, username: true, avatar_url: true } },
@@ -552,6 +559,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           registration_deadline: true,
           max_participants: true,
           visibility: true,
+          map_preset_config: true,
         },
       });
 

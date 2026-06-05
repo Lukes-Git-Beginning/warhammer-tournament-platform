@@ -29,11 +29,43 @@ const TournamentCreateSchema = z.object({
   swiss_match_format: z.enum(['BO1']).default('BO1'),
   playoff_match_format: z.enum(['BO1']).default('BO1'), // Bo3/Bo5 re-enable with series support
   finale_match_format: z.enum(['BO1']).default('BO1'),
-  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN']).default('PICK_BAN'),
+  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).default('RANDOM_PICK_BAN'),
   map_pool: z.array(z.string()).min(3).max(36).default([]),
+  map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 type FormData = z.infer<typeof TournamentCreateSchema>;
+
+type MapDecisionModeOption = {
+  value: FormData['map_decision_mode'];
+  label: string;
+  description: string;
+};
+
+const MAP_DECISION_MODES: MapDecisionModeOption[] = [
+  { value: 'RANDOM_NO_REPEAT', label: 'Zufall (No Repeat)', description: 'Server pickt eine zufällige Map. Bereits gespielte Maps werden ausgeschlossen.' },
+  { value: 'HOST_PRESET', label: 'Host-Preset (1 Map)', description: 'Organizer legt pro Runde eine Map in Reihenfolge fest. Keine Spieler-Interaktion.' },
+  { value: 'HOST_PRESET_PICK_BAN', label: 'Host-Preset + Ban', description: 'Organizer bestimmt 3 Maps pro Runde & Spiel. Beide Spieler bannen je 1 Map.' },
+  { value: 'RANDOM_PICK_BAN', label: 'Zufall + Ban', description: 'Server zieht 3 zufällige Maps pro Spiel. Beide Spieler bannen je 1 Map.' },
+];
+
+function buildRoundKeys(form: Partial<FormData>): { key: string; label: string; maxGames: number }[] {
+  const keys: { key: string; label: string; maxGames: number }[] = [];
+  if (form.format !== 'SWISS') return keys;
+  const rounds = form.rounds_count ?? 5;
+  for (let i = 1; i <= rounds; i++) {
+    keys.push({ key: `swiss_${i}`, label: `Swiss Runde ${i}`, maxGames: 1 });
+  }
+  if (form.playoff_format === 'TOP4') {
+    keys.push({ key: 'playoff_1', label: 'Halbfinale', maxGames: 3 });
+    keys.push({ key: 'playoff_2', label: 'Finale', maxGames: 3 });
+  } else if (form.playoff_format === 'TOP8') {
+    keys.push({ key: 'playoff_1', label: 'Viertelfinale', maxGames: 3 });
+    keys.push({ key: 'playoff_2', label: 'Halbfinale', maxGames: 3 });
+    keys.push({ key: 'playoff_3', label: 'Finale', maxGames: 3 });
+  }
+  return keys;
+}
 
 export function TournamentCreateForm() {
   const { t } = useTranslation();
@@ -50,8 +82,9 @@ export function TournamentCreateForm() {
     swiss_match_format: 'BO1',
     playoff_match_format: 'BO1',
     finale_match_format: 'BO1',
-    map_decision_mode: 'PICK_BAN',
+    map_decision_mode: 'RANDOM_PICK_BAN',
     map_pool: [],
+    map_preset_config: null,
   });
   const [mapSearch, setMapSearch] = useState('');
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
@@ -116,6 +149,7 @@ export function TournamentCreateForm() {
       draft_enabled,
       draft_preset_id,
       map_pool,
+      map_preset_config,
       start_date,
       ...rest
     } = result.data;
@@ -141,6 +175,7 @@ export function TournamentCreateForm() {
       draft_enabled: draft_enabled ?? false,
       ...(draft_preset_id ? { draft_preset_id } : {}),
       map_pool: map_pool ?? [],
+      ...(map_preset_config ? { map_preset_config: map_preset_config as Record<string, string[] | string[][]> } : {}),
     });
   }
 
@@ -393,24 +428,139 @@ export function TournamentCreateForm() {
         {/* Map decision mode */}
         <div>
           <Label>Map Decision Mode</Label>
-          <div className="flex gap-4 mt-1">
-            {(['PICK_BAN', 'RANDOM'] as const).map((opt) => (
-              <label key={opt} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="map_decision_mode"
-                  value={opt}
-                  checked={(form.map_decision_mode ?? 'PICK_BAN') === opt}
-                  onChange={handleChange}
-                  className="accent-rizzotto-gold-400"
-                />
-                <span className="text-sm text-rizzotto-stone-300">
-                  {opt === 'PICK_BAN' ? 'Pick & Ban' : 'Random Draw'}
-                </span>
-              </label>
-            ))}
+          <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-2">
+            {MAP_DECISION_MODES.map((opt) => {
+              const isSelected = (form.map_decision_mode ?? 'RANDOM_PICK_BAN') === opt.value;
+              return (
+                <label
+                  key={opt.value}
+                  className={[
+                    'flex flex-col gap-0.5 rounded-md border px-3 py-2 cursor-pointer transition-colors',
+                    isSelected
+                      ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/10'
+                      : 'border-rizzotto-iron-600 hover:border-rizzotto-iron-500',
+                  ].join(' ')}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="map_decision_mode"
+                      value={opt.value}
+                      checked={isSelected}
+                      onChange={handleChange}
+                      className="accent-rizzotto-gold-400 shrink-0"
+                    />
+                    <span className={['text-sm font-medium', isSelected ? 'text-rizzotto-gold-300' : 'text-rizzotto-stone-200'].join(' ')}>
+                      {opt.label}
+                    </span>
+                  </div>
+                  <p className="text-xs text-rizzotto-stone-500 pl-5">{opt.description}</p>
+                </label>
+              );
+            })}
           </div>
         </div>
+
+        {/* Preset configuration for HOST_PRESET and HOST_PRESET_PICK_BAN */}
+        {(form.map_decision_mode === 'HOST_PRESET' || form.map_decision_mode === 'HOST_PRESET_PICK_BAN') && (() => {
+          const roundKeys = buildRoundKeys(form);
+          const isPickBan = form.map_decision_mode === 'HOST_PRESET_PICK_BAN';
+          const config = (form.map_preset_config ?? {}) as Record<string, string[] | string[][]>;
+
+          return (
+            <div className="space-y-3 rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900/40 p-3">
+              <p className="text-xs font-semibold text-rizzotto-stone-300 uppercase tracking-wide">
+                {isPickBan ? 'Map-Preset pro Runde & Spiel (3 Maps je Spiel)' : 'Map-Preset pro Runde (1 Map je Spiel)'}
+              </p>
+              {roundKeys.length === 0 && (
+                <p className="text-xs text-rizzotto-stone-500">Wähle zuerst Format und Rundenanzahl.</p>
+              )}
+              {roundKeys.map(({ key, label, maxGames }) => {
+                const entry = config[key];
+
+                if (!isPickBan) {
+                  // HOST_PRESET: Pro Runde 1 Map-Select pro Game-Slot
+                  const mapsForRound = (Array.isArray(entry) ? entry : []) as string[];
+                  return (
+                    <div key={key} className="space-y-1">
+                      <p className="text-xs font-medium text-rizzotto-stone-400">{label}</p>
+                      {Array.from({ length: maxGames }).map((_, gi) => (
+                        <div key={gi} className="flex items-center gap-2">
+                          {maxGames > 1 && <span className="text-xs text-rizzotto-stone-600 w-12 shrink-0">Spiel {gi + 1}</span>}
+                          <select
+                            value={mapsForRound[gi] ?? ''}
+                            onChange={(e) => {
+                              const updated = [...mapsForRound];
+                              updated[gi] = e.target.value;
+                              setForm((prev) => ({
+                                ...prev,
+                                map_preset_config: { ...config, [key]: updated },
+                              }));
+                            }}
+                            className="flex-1 rounded border border-rizzotto-iron-600 bg-rizzotto-iron-800 px-2 py-1 text-xs text-rizzotto-stone-200"
+                          >
+                            <option value="">— Map wählen —</option>
+                            {allMaps.map((m) => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+
+                // HOST_PRESET_PICK_BAN: Pro Runde, pro Game-Slot 3 Checkboxen
+                const setsForRound = (Array.isArray(entry) ? entry : []) as string[][];
+                return (
+                  <div key={key} className="space-y-2">
+                    <p className="text-xs font-medium text-rizzotto-stone-400">{label}</p>
+                    {Array.from({ length: maxGames }).map((_, gi) => {
+                      const selectedForGame = (Array.isArray(setsForRound[gi]) ? setsForRound[gi] : []) as string[];
+                      return (
+                        <div key={gi} className="space-y-1">
+                          {maxGames > 1 && <p className="text-xs text-rizzotto-stone-600 pl-1">Spiel {gi + 1}</p>}
+                          <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 max-h-32 overflow-y-auto rounded border border-rizzotto-iron-700 p-1.5">
+                            {allMaps.map((m) => {
+                              const isSel = selectedForGame.includes(m.id);
+                              const atMax = !isSel && selectedForGame.length >= 3;
+                              return (
+                                <label
+                                  key={m.id}
+                                  className={['flex items-center gap-1.5 rounded px-1.5 py-1 text-xs cursor-pointer', isSel ? 'bg-rizzotto-gold-500/15 text-rizzotto-gold-400' : atMax ? 'opacity-40 cursor-not-allowed text-rizzotto-stone-500' : 'hover:bg-rizzotto-iron-800 text-rizzotto-stone-300'].join(' ')}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSel}
+                                    disabled={atMax}
+                                    onChange={() => {
+                                      const updated = isSel ? selectedForGame.filter((id) => id !== m.id) : [...selectedForGame, m.id];
+                                      const newSets = [...setsForRound];
+                                      newSets[gi] = updated;
+                                      setForm((prev) => ({
+                                        ...prev,
+                                        map_preset_config: { ...config, [key]: newSets },
+                                      }));
+                                    }}
+                                    className="accent-rizzotto-gold-400 shrink-0"
+                                  />
+                                  <span className="truncate">{m.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {selectedForGame.length > 0 && selectedForGame.length < 3 && (
+                            <p className="text-xs text-amber-500 pl-1">Noch {3 - selectedForGame.length} Map(s) auswählen</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* Map search */}
         <div>
@@ -470,6 +620,11 @@ export function TournamentCreateForm() {
             </div>
           )}
         </div>
+        {(form.map_decision_mode === 'RANDOM_NO_REPEAT' || form.map_decision_mode === 'RANDOM_PICK_BAN') && (
+          <FieldHint>
+            Mindest-Pool: Bei Zufall-Modi muss der Pool mindestens so viele Maps enthalten wie maximale Spiele im Match (BO1=3, BO3=3, BO5=5).
+          </FieldHint>
+        )}
         {(form.map_pool ?? []).length < 3 && (form.map_pool ?? []).length > 0 && (
           <FieldError message={`Select at least 3 maps (${(form.map_pool ?? []).length} selected)`} />
         )}
