@@ -120,6 +120,42 @@ export async function finalizeGameResult(
     },
   });
 
+  // Write per-game FactionStats and MatchupStats (game-level granularity for meta)
+  const activeSeason = await fastify.prisma.season.findFirst({
+    where: { is_active: true },
+    select: { id: true },
+  });
+  if (activeSeason) {
+    const seasonId = activeSeason.id;
+    const gameWinnerId = game.reported_winner_id;
+    const winnerFactionId = gameWinnerId === game.match.player1_id ? p1FactionId : p2FactionId;
+    const loserFactionId = gameWinnerId === game.match.player1_id ? p2FactionId : p1FactionId;
+
+    for (const [factionId, isWinner] of [
+      [winnerFactionId, true] as const,
+      [loserFactionId, false] as const,
+    ]) {
+      if (!factionId) continue;
+      await fastify.prisma.factionStats.upsert({
+        where: { faction_id_season_id: { faction_id: factionId, season_id: seasonId } },
+        create: { faction_id: factionId, season_id: seasonId, matches_played: 1, wins: isWinner ? 1 : 0, losses: isWinner ? 0 : 1, draws: 0, pick_count: 1, ban_count: 0 },
+        update: { matches_played: { increment: 1 }, pick_count: { increment: 1 }, ...(isWinner ? { wins: { increment: 1 } } : { losses: { increment: 1 } }) },
+      });
+    }
+
+    if (p1FactionId && p2FactionId) {
+      const sorted = [p1FactionId, p2FactionId].sort();
+      const aId = sorted[0]!;
+      const bId = sorted[1]!;
+      const winnerIsA = winnerFactionId === aId;
+      await fastify.prisma.matchupStats.upsert({
+        where: { faction_a_id_faction_b_id_season_id: { faction_a_id: aId, faction_b_id: bId, season_id: seasonId } },
+        create: { faction_a_id: aId, faction_b_id: bId, season_id: seasonId, faction_a_wins: winnerIsA ? 1 : 0, faction_b_wins: winnerIsA ? 0 : 1, draws: 0 },
+        update: winnerIsA ? { faction_a_wins: { increment: 1 } } : { faction_b_wins: { increment: 1 } },
+      });
+    }
+  }
+
   // Emit game-updated socket event
   if (fastify.io) {
     fastify.io.to(`match_decision_${game.match_id}`).emit('match.game.updated', {
@@ -154,6 +190,7 @@ export async function finalizeGameResult(
       player1FactionId: p1FactionId,
       player2FactionId: p2FactionId,
       actorId: matchWinner,
+      skipStats: true, // stats already written per-game above
     });
   } else {
     // Series continues — create next game row so the frontend can trigger the decision

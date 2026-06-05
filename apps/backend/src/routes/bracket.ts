@@ -125,9 +125,14 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             player2_id: m.player2_id,
             winner_id: m.winner_id,
             status: m.status,
+            player1_game_wins: m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length,
+            player2_game_wins: m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length,
           }));
 
-        const rawStandings = computeSwissStandings(participantIds, completedMatches);
+        const rawStandings = sortSwissStandings(
+          computeSwissStandings(participantIds, completedMatches),
+          completedMatches,
+        );
 
         const standings: SwissStandingEntry[] = rawStandings.map((s) => {
           const user = userMap.get(s.userId);
@@ -140,6 +145,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             losses: s.losses,
             draws: s.draws,
             byes: s.byes,
+            gamesLost: s.gamesLost,
             buchholz: s.buchholz,
             solkoff: s.solkoff,
           };

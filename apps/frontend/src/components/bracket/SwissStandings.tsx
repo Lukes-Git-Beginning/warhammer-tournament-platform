@@ -44,6 +44,8 @@ export function SwissStandings({
               <th className="px-4 py-2 text-left font-medium text-stone-400">Spieler</th>
               <th className="px-4 py-2 text-right font-medium text-stone-400">Punkte</th>
               <th className="px-4 py-2 text-center font-medium text-stone-400">W / L / B</th>
+              <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Games Lost">GL</th>
+              <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Buchholz">BH</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-800/60">
@@ -72,6 +74,8 @@ export function SwissStandings({
                     <span className="text-stone-600"> / </span>
                     <span className="text-stone-400">{entry.byes}</span>
                   </td>
+                  <td className="px-4 py-2 text-right text-stone-400 tabular-nums">{entry.gamesLost}</td>
+                  <td className="px-4 py-2 text-right text-stone-500 tabular-nums text-xs">{entry.buchholz.toFixed(1)}</td>
                 </tr>
               );
             })}

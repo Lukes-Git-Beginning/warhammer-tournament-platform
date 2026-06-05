@@ -34,6 +34,7 @@ export interface SwissStandingEntry {
   losses: number;
   draws: number;
   byes: number;
+  gamesLost: number;
   buchholz: number;
   solkoff: number;
 }

@@ -133,6 +133,8 @@ export interface CompleteMatchOpts {
   player2FactionId?: string | null;
   actorId: string;
   score?: string | null;
+  /** Skip FactionStats/MatchupStats writes — set true when stats are written per-game upstream */
+  skipStats?: boolean;
 }
 
 /**
@@ -224,7 +226,7 @@ export async function completeMatch(
       await handleGrandFinalProgression(tx, match, winnerId, loserId);
     }
 
-    if (activeSeason) {
+    if (activeSeason && !opts.skipStats) {
       const seasonId = activeSeason.id;
       const factionIdsToUpdate = [winnerFactionId, loserFactionId].filter(
         (f): f is string => f !== null,
@@ -252,7 +254,7 @@ export async function completeMatch(
       }
     }
 
-    if (activeSeason && player1FactionId && player2FactionId) {
+    if (activeSeason && !opts.skipStats && player1FactionId && player2FactionId) {
       const sorted = [player1FactionId, player2FactionId].sort();
       const aId = sorted[0]!;
       const bId = sorted[1]!;
