@@ -7,6 +7,8 @@ interface SwissStandingsProps {
   currentRound: number;
   recommendedRounds: number;
   factionMap?: Map<string, FactionDto>;
+  /** userId → factionId, derived from bracket matches as fallback */
+  playerFactionMap?: Map<string, string>;
 }
 
 function Avatar({ url, username }: { url: string | null; username: string }) {
@@ -31,6 +33,7 @@ export function SwissStandings({
   currentRound,
   recommendedRounds,
   factionMap,
+  playerFactionMap,
 }: SwissStandingsProps) {
   return (
     <div className="mb-6 rounded-md border border-stone-800 bg-stone-900/40 overflow-hidden">
@@ -44,9 +47,9 @@ export function SwissStandings({
           <thead>
             <tr className="border-b border-stone-800">
               <th className="px-4 py-2 text-left font-medium text-stone-400">#</th>
-              <th className="px-4 py-2 text-left font-medium text-stone-400">Spieler</th>
-              <th className="px-4 py-2 text-left font-medium text-stone-400">Fraktion</th>
-              <th className="px-4 py-2 text-right font-medium text-stone-400">Punkte</th>
+              <th className="px-4 py-2 text-left font-medium text-stone-400">Player</th>
+              <th className="px-4 py-2 text-left font-medium text-stone-400">Faction</th>
+              <th className="px-4 py-2 text-right font-medium text-stone-400">Score</th>
               <th className="px-4 py-2 text-center font-medium text-stone-400">W / L / B</th>
               <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Games Lost">GL</th>
               <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Buchholz">BH</th>
@@ -55,7 +58,8 @@ export function SwissStandings({
           <tbody className="divide-y divide-stone-800/60">
             {standings.map((entry, idx) => {
               const displayName = entry.username ?? entry.userId;
-              const faction = entry.factionId ? factionMap?.get(entry.factionId) : undefined;
+              const factionId = entry.factionId ?? playerFactionMap?.get(entry.userId);
+              const faction = factionId ? factionMap?.get(factionId) : undefined;
               return (
                 <tr key={entry.userId} className="hover:bg-stone-800/30 transition-colors">
                   <td className="px-4 py-2 text-stone-500">{idx + 1}</td>

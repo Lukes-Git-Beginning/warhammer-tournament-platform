@@ -360,10 +360,12 @@ function PlayerInfo({
         <img
           src={avatarUrl}
           alt=""
-          className="h-10 w-10 rounded-full object-cover border border-rizzotto-iron-600"
+          className="rounded-full object-cover border border-rizzotto-iron-600"
+          style={{ width: 30, height: 30 }}
         />
       ) : (
-        <span className="h-10 w-10 rounded-full flex items-center justify-center bg-rizzotto-iron-700 text-rizzotto-stone-300 text-sm font-semibold select-none">
+        <span className="rounded-full flex items-center justify-center bg-rizzotto-iron-700 text-rizzotto-stone-300 text-xs font-semibold select-none"
+          style={{ width: 30, height: 30 }}>
           {name.slice(0, 1).toUpperCase()}
         </span>
       )}

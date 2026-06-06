@@ -47,6 +47,18 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     (factionsData?.data ?? []).map((f) => [f.faction.id, f.faction]),
   );
 
+  // Faction per player derived from match nodes (backend already applied 3-level fallback
+  // including TournamentParticipant). Used as fallback when SwissStandingEntry.factionId is null.
+  const playerFactionMap = new Map<string, string>();
+  for (const m of data?.matches ?? []) {
+    if (m.player1Id && m.player1FactionId && !playerFactionMap.has(m.player1Id)) {
+      playerFactionMap.set(m.player1Id, m.player1FactionId);
+    }
+    if (m.player2Id && m.player2FactionId && !playerFactionMap.has(m.player2Id)) {
+      playerFactionMap.set(m.player2Id, m.player2FactionId);
+    }
+  }
+
   // Auto-fit: center and scale the bracket to fill the container whenever
   // the layout dimensions change (initial load or new round added).
   const layout = data && data.matches.length > 0 ? computeBracketLayout(data.matches) : null;
@@ -127,6 +139,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           currentRound={swiss.currentRound}
           recommendedRounds={swiss.recommendedRounds}
           factionMap={factionMap}
+          playerFactionMap={playerFactionMap}
         />
       )}
 

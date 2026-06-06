@@ -109,6 +109,7 @@ export function MatchNode({
         >
           {match.player1Id ? (player1Name ?? match.player1Id) : 'BYE'}
         </span>
+        {match.player1Id && <FactionIndicator faction={player1Faction} />}
         {score1 && (
           <span
             className={`text-xs ml-1 tabular-nums ${p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
@@ -116,7 +117,6 @@ export function MatchNode({
             {score1}
           </span>
         )}
-        {match.player1Id && <FactionIndicator faction={player1Faction} />}
       </div>
 
       {/* Player 2 row */}
@@ -129,6 +129,7 @@ export function MatchNode({
         >
           {match.player2Id ? (player2Name ?? match.player2Id) : 'BYE'}
         </span>
+        {match.player2Id && <FactionIndicator faction={player2Faction} />}
         {score2 && (
           <span
             className={`text-xs ml-1 tabular-nums ${p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
@@ -136,7 +137,6 @@ export function MatchNode({
             {score2}
           </span>
         )}
-        {match.player2Id && <FactionIndicator faction={player2Faction} />}
       </div>
 
       {/* ONGOING indicator */}
