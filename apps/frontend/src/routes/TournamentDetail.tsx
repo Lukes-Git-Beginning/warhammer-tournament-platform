@@ -530,6 +530,7 @@ export function TournamentDetail() {
 
       {/* ─── My Match (GameTiles) — only shown to participants during ongoing ─── */}
       {user && tournament.status === 'ONGOING' && bracket && participantsData && (
+        <div id="my-match">
         <MyMatchSection
           currentUserId={user.id}
           matches={bracket.matches}
@@ -538,6 +539,7 @@ export function TournamentDetail() {
           )}
           tournamentSlug={tournament.slug}
         />
+        </div>
       )}
 
       {/* ─── Bracket ─── */}
