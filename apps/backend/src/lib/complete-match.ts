@@ -160,7 +160,7 @@ export async function completeMatch(
       match_number: true,
       player1_faction_id: true,
       player2_faction_id: true,
-      tournament: { select: { organizer_id: true, format: true } },
+      tournament: { select: { organizer_id: true, format: true, mode: true } },
     },
   });
 
@@ -202,6 +202,23 @@ export async function completeMatch(
         ...(player2FactionId ? { player2_faction_id: player2FactionId } : {}),
       },
     });
+
+    // In SFT tournaments: latch faction onto the participant record if not yet set.
+    // This covers players who registered before the faction picker existed.
+    if (match.tournament.mode === 'SFT') {
+      if (player1FactionId && match.player1_id) {
+        await tx.tournamentParticipant.updateMany({
+          where: { tournament_id: match.tournament_id, user_id: match.player1_id, faction_id: null, deleted_at: null },
+          data: { faction_id: player1FactionId },
+        });
+      }
+      if (player2FactionId && match.player2_id) {
+        await tx.tournamentParticipant.updateMany({
+          where: { tournament_id: match.tournament_id, user_id: match.player2_id, faction_id: null, deleted_at: null },
+          data: { faction_id: player2FactionId },
+        });
+      }
+    }
 
     const isDE = match.tournament.format === 'DOUBLE_ELIMINATION';
     const isGFSource = isDE && match.bracket_side === 'GRAND_FINAL';
