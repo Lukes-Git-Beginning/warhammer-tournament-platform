@@ -63,7 +63,23 @@ export function generateSwissRound(
   players: SwissPlayer[],
   round: number,
 ): SwissMatchInput[] {
-  const libPlayers = players.map((p) => ({
+  let activePlayers = players;
+  let byePlayer: SwissPlayer | null = null;
+
+  // With an odd number of players, explicitly assign the Bye to the player
+  // with the lowest score who hasn't received a Bye yet — so no top-scorer
+  // slides into the playoffs on a free win.
+  if (players.length % 2 === 1) {
+    const eligible = players
+      .filter((p) => !p.receivedBye)
+      .sort((a, b) => a.score - b.score);
+    byePlayer = eligible[0] ?? players.sort((a, b) => a.score - b.score)[0] ?? null;
+    if (byePlayer) {
+      activePlayers = players.filter((p) => p.userId !== byePlayer!.userId);
+    }
+  }
+
+  const libPlayers = activePlayers.map((p) => ({
     id: p.userId,
     score: p.score,
     avoid: p.avoid,
@@ -94,6 +110,21 @@ export function generateSwissRound(
       winner_id,
     });
   });
+
+  // Append the explicit Bye match for the pre-selected player
+  if (byePlayer) {
+    result.push({
+      id: randomUUID(),
+      tournament_id: tournamentId,
+      round,
+      match_number: result.length + 1,
+      player1_id: byePlayer.userId,
+      player2_id: null,
+      status: 'BYE',
+      next_match_id: null,
+      winner_id: byePlayer.userId,
+    });
+  }
 
   result.sort((a, b) => a.round - b.round || a.match_number - b.match_number);
   return result;
