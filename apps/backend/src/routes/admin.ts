@@ -124,9 +124,9 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         entity_type: e.entity_type,
         entity_id: e.entity_id,
         action: e.action,
-        actor: e.actor
-          ? { id: e.actor.id, username: e.actor.username, avatar_url: e.actor.avatar_url }
-          : null,
+        actor_id: e.actor?.id ?? null,
+        actor_username: e.actor?.username ?? null,
+        actor_avatar_url: e.actor?.avatar_url ?? null,
         old_value: e.old_value,
         new_value: e.new_value,
         created_at: e.created_at.toISOString(),
