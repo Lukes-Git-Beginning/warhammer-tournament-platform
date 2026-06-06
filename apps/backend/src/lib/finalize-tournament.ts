@@ -278,24 +278,35 @@ export async function finalizeTournament(
   });
   const seasonId = activeSeason?.id ?? null;
 
-  // Per-user stats for leaderboard
+  // Per-user stats at MatchGame level — consistent with the Season tab's
+  // derive-on-read approach. A BO3 Final (2-1) contributes W+2, L+1, not W+1.
+  const confirmedGames = await prisma.matchGame.findMany({
+    where: {
+      match: { tournament_id: tournamentId, deleted_at: null, status: 'COMPLETED' },
+      status: 'COMPLETED',
+      winner_id: { not: null },
+    },
+    select: {
+      winner_id: true,
+      match: { select: { player1_id: true, player2_id: true } },
+    },
+  });
+
   const userWins = new Map<string, number>();
   const userLosses = new Map<string, number>();
   const userMatchesPlayed = new Map<string, number>();
 
-  for (const match of matches) {
-    if (match.status !== 'COMPLETED') continue;
-    if (!match.winner_id) continue;
+  for (const game of confirmedGames) {
+    if (!game.winner_id) continue;
+    const { player1_id, player2_id } = game.match;
+    const loserId = game.winner_id === player1_id ? player2_id : player1_id;
 
-    const { winner_id, player1_id, player2_id } = match;
-    userWins.set(winner_id, (userWins.get(winner_id) ?? 0) + 1);
-    userMatchesPlayed.set(winner_id, (userMatchesPlayed.get(winner_id) ?? 0) + 1);
+    userWins.set(game.winner_id, (userWins.get(game.winner_id) ?? 0) + 1);
+    if (loserId) userLosses.set(loserId, (userLosses.get(loserId) ?? 0) + 1);
+  }
 
-    const loser = player1_id === winner_id ? player2_id : player1_id;
-    if (loser) {
-      userLosses.set(loser, (userLosses.get(loser) ?? 0) + 1);
-      userMatchesPlayed.set(loser, (userMatchesPlayed.get(loser) ?? 0) + 1);
-    }
+  for (const id of participantIds) {
+    userMatchesPlayed.set(id, (userWins.get(id) ?? 0) + (userLosses.get(id) ?? 0));
   }
 
   // ---------------------------------------------------------------------------
