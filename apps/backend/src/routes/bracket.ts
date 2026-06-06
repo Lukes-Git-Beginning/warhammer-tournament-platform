@@ -42,6 +42,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      const participantFactions = await fastify.prisma.tournamentParticipant.findMany({
+        where: { tournament_id: tournament.id, deleted_at: null },
+        select: { user_id: true, faction_id: true },
+      });
+      const factionByUser = new Map(participantFactions.map((p) => [p.user_id, p.faction_id]));
+
       const matches = await fastify.prisma.match.findMany({
         where: { tournament_id: tournament.id, deleted_at: null },
         orderBy: [{ round: 'asc' }, { match_number: 'asc' }],
@@ -93,8 +99,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           nextMatchId: m.next_match_id,
           loserNextMatchId: m.loser_next_match_id,
           bracketSide: m.bracket_side,
-          player1FactionId: m.player1_faction_id,
-          player2FactionId: m.player2_faction_id,
+          player1FactionId: m.player1_faction_id ?? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null),
+          player2FactionId: m.player2_faction_id ?? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null),
           player1GameWins: m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length,
           player2GameWins: m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length,
           pickedMapId: m.games.find((g) => g.map_decision?.picked_map_id)?.map_decision?.picked_map_id ?? null,
