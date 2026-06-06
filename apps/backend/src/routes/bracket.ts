@@ -366,6 +366,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             loser_next_match_id: m.loser_next_match_id ?? null,
             bracket_side: m.bracket_side ?? null,
             winner_id: m.winner_id,
+            phase: tournament.format === TournamentFormat.SWISS ? ('SWISS' as const) : null,
           })),
         });
 
