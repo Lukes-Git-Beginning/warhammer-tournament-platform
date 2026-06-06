@@ -137,8 +137,8 @@ export function MetaDashboard() {
         <>
           <div className="grid grid-cols-2 gap-4 mb-10 sm:grid-cols-4">
             <StatCard
-              label={t('meta_page.stat_total_matches')}
-              value={overview.total_matches}
+              label={t('meta_page.stat_total_games')}
+              value={overview.total_games}
             />
             <StatCard
               label={t('meta_page.stat_faction_diversity')}

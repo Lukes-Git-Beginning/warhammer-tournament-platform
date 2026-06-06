@@ -327,7 +327,7 @@ export const MetaOverviewResponseSchema = z.object({
   season: SeasonSummarySchema.nullable(),
   top_factions_by_winrate: z.array(FactionWithStatsDtoSchema),
   top_factions_by_pickrate: z.array(FactionWithStatsDtoSchema),
-  total_matches: z.number().int(),
+  total_games: z.number().int(),
   faction_diversity: z.number(),
 });
 export type MetaOverviewResponse = z.infer<typeof MetaOverviewResponseSchema>;

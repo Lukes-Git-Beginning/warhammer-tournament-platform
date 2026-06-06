@@ -45,7 +45,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           season: null,
           top_factions_by_winrate: [],
           top_factions_by_pickrate: [],
-          total_matches: 0,
+          total_games: 0,
           faction_diversity: 0,
         };
       }
@@ -57,14 +57,16 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('meta:overview', { seasonId: resolvedSeasonId }),
       async () => {
-        const [allFactions, total_matches] = await Promise.all([
+        const [allFactions, total_games] = await Promise.all([
           getFactionsWithStats(fastify.prisma, resolvedSeasonId),
-          fastify.prisma.match.count({
+          fastify.prisma.matchGame.count({
             where: {
               status: 'COMPLETED',
-              deleted_at: null,
-              season_id: resolvedSeasonId,
-              tournament: { counts_for_leaderboard: true },
+              match: {
+                season_id: resolvedSeasonId,
+                deleted_at: null,
+                tournament: { counts_for_leaderboard: true },
+              },
             },
           }),
         ]);
@@ -110,7 +112,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           },
           top_factions_by_winrate,
           top_factions_by_pickrate,
-          total_matches,
+          total_games,
           faction_diversity,
         };
       },
