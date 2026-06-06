@@ -212,11 +212,19 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 
 ### 5.3 Generalprobe & gestufter Launch
 
-11. **Lokale Generalprobe:** Swiss SFT, 4–5 Runden + Top-4-Playoffs mit `db:seed:dummies` — kompletter Organisator-Durchlauf (Alex' manuelle Probeturniere sind die wirksamste QA der Plattform; der Swiss-Pfad hatte noch keinen Praxistest)
+11. **Lokale Generalprobe:** Swiss SFT, 4–5 Runden + Top-4-Playoffs mit `db:seed:dummies` — **läuft aktiv (2026-06-06), Runde 3 gespielt.** Zahlreiche Bugs gefunden und gefixed (Faction-Latch, GL-Berechnung, All-Games-Architektur, Leaderboard-Pfade).
 12. **Handover-PR** an Luke → Review/Merge → Auto-Deploy
 13. **Luke-Checkliste (extern):** Cloudflare Custom Purge `https://rizzotto.gg/img/rizzotto-wordmark.avif` · Hetzner-VM-Backup aktivieren (~1.68 €/mo) · `DISCORD_BOT_TOKEN` setzen · echte Community-Links (`SigillumSection`) · Caddyfile-Live-Sync (§2.3 #1)
 14. **Stufe 1 — geschlossener Kreis:** Prod-Generalprobe (Alex als ORGANIZER auf rizzotto.gg), dann erstes echtes Turnier (Swiss SFT) mit Discord-Kreis
 15. **Stufe 2 — öffentlich** (Reddit/Foren): erst nach 1–2 sauberen Stufe-1-Turnieren
+
+**Offene Items aus Generalprobe (vor Handover-PR abschließen):**
+- [ ] Meta-Overview-Counter: aus All-Games-Quelle statt FactionStats
+- [ ] Faction-Diversity-Metrik: Pielou's J (normierte Shannon-Entropie) statt "% aktiver Factions"
+- [ ] Heatmap-Achsen: alphabetisch statt `display_order`
+- [ ] Leaderboard: `confirmedMatchWhere` Faction-Filter entfernen, Null-Factions = neutrale Gewichtung
+- [ ] Feature: Faction-Beschränkung bei Turniererstellung (SFT + BPT + 3×3), Select-All/Deselect-All, Default alle ausgewählt, blockiert wenn Turnier läuft
+- [ ] FactionStats-Drift bei Overrides: Counter über-inkrementiert → mittelfristig Recalculate-Endpoint oder Event-Sourcing
 
 ---
 

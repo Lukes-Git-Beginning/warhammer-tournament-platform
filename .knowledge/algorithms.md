@@ -6,7 +6,8 @@
 - **MMR (Welle 2) — ENTFERNT (2026-06-03)**: `lib/mmr.ts`, die Tabellen `FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` und `LeaderboardEntry.season_points` wurden per Migration `drop_welle2_mmr_deprecated` (Branch `chore/phase2-consolidation`) gedroppt. Vollständig abgelöst vom dynamischen Rating-Modell (unten). Die MMR-Formel-Sektion weiter unten ist nur noch **historisch**.
 - **Dynamic Weighted Leaderboard (Alex-Spec, 2026-06)**: derive-on-read. L2-regularisierte Logistic Regression `fitRatingModel()` in `lib/rating-model.ts` fittet `PlayerFactionSkill(player,faction)` + antisymmetrischen `MatchupEffect(X,Y)`. Punkte rein abgeleitet via `lib/scoring-service.ts` + aggregiert in `lib/leaderboard-service.ts`. Nichts gespeichert, jeder Punkt rekonstruierbar (`lib/breakdown-service.ts`).
 - **Pairings** via `tournament-pairings` v2 — `SingleElimination`, `Swiss`, `RoundRobin` — alle drei Formate in je einer `lib/`-Datei.
-- **Swiss-Tiebreaker** (Welle 2): Buchholz → Solkoff → Head-to-Head (kein ELO) — `sortSwissStandings()`.
+- **Swiss-Tiebreaker** (Welle 2): Score → GL (Games Lost, aufsteigend) → Buchholz → Solkoff → H2H — `sortSwissStandings()`. **+2026-06-06:** GL-Tiebreaker war broken (PENDING MatchGame-Records blockierten Fallback) → gefixt in `bracket.ts` (nur COMPLETED Games zählen für GL).
+**Swiss-Bye** (2026-06-06): Niedrigster Score ohne bisherige Bye bekommt die Freirunde; bei Gleichstand zufällig aus der Gruppe. Kein Doppel-Bye. `lib/swiss.ts`: `byePlayer` wird vor dem Blossom-Algorithmus explizit herausgefiltert.
 - **Playoff-Generator** (Welle 2): `generatePlayoffBracket()` in `lib/playoff-generator.ts` — NONE/TOP4/TOP8 mit Auto-Fallback TOP8→TOP4 bei <16 checked-in.
 - `finalizeTournament()` schreibt Placements → ELO-Deltas → Tournament-Points → upsert `LeaderboardEntry` + `TournamentResult` in einer Transaktion.
 
@@ -35,6 +36,8 @@ FinalPoints      = RawPoints · OpponentModifier ;  LeaderboardScore = Σ FinalP
 Dynamische Erholung: viele andere Gegner spielen senkt die Share → frühere Punkte kommen zurück.
 
 Tests: `test/{scoring-service,rating-model,leaderboard-service}.test.ts` (alle 8 Spec-Cases + Optimizer + DB-Integration inkl. Explainability-Invariante).
+
+**ACHTUNG (2026-06-06):** `confirmedMatchWhere()` filtert aktuell auf `player1_faction_id NOT NULL` + `player2_faction_id NOT NULL`. Das ist intentional für das Rating-Modell (braucht Faction-Matchup-Daten), aber schließt Matches ohne Factions komplett aus dem Leaderboard aus. Geplante Änderung nächste Session: Filter entfernen, Null-Factions = neutrale Gewichtung (0.5 Gewinnchance).
 
 ---
 
