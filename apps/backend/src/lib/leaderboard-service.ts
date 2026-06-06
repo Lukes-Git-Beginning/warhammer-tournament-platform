@@ -123,6 +123,34 @@ export async function computeSeasonLeaderboard(
   const games = await loadConfirmedGames(prisma, seasonId);
   const model = await getRatingModel(prisma, redis, { seasonId });
 
+  // Match-level W/L for display (1 win/loss per encounter, regardless of BO format)
+  // Route via tournament_id because BYE matches never get season_id stamped.
+  const seasonTournamentIds = (
+    await prisma.tournamentResult.findMany({
+      where: { season_id: seasonId },
+      select: { tournament_id: true },
+      distinct: ['tournament_id'],
+    })
+  ).map((r) => r.tournament_id);
+
+  const seasonMatches = await prisma.match.findMany({
+    where: {
+      tournament_id: { in: seasonTournamentIds },
+      deleted_at: null,
+      status: { in: ['COMPLETED', 'FORFEIT', 'BYE'] },
+      winner_id: { not: null },
+    },
+    select: { winner_id: true, player1_id: true, player2_id: true },
+  });
+  const matchWins = new Map<string, number>();
+  const matchLosses = new Map<string, number>();
+  for (const m of seasonMatches) {
+    if (!m.winner_id) continue;
+    const loser = m.winner_id === m.player1_id ? m.player2_id : m.player1_id;
+    matchWins.set(m.winner_id, (matchWins.get(m.winner_id) ?? 0) + 1);
+    if (loser) matchLosses.set(loser, (matchLosses.get(loser) ?? 0) + 1);
+  }
+
   // --- Pass 1: per-player totals + per-(player, opponent) game counts --------
   const agg = new Map<string, PlayerAgg>();
   const opponentCounts = new Map<string, Map<string, number>>();
@@ -195,9 +223,9 @@ export async function computeSeasonLeaderboard(
       avatarUrl: u?.avatar_url ?? null,
       totalFinalPoints: a.totalFinalPoints,
       totalRawPoints: a.totalRawPoints,
-      totalGames: a.games,
-      wins: a.wins,
-      losses: a.losses,
+      totalGames: (matchWins.get(id) ?? 0) + (matchLosses.get(id) ?? 0),
+      wins: matchWins.get(id) ?? 0,
+      losses: matchLosses.get(id) ?? 0,
     };
   });
 

@@ -330,35 +330,18 @@ export async function finalizeTournament(
   });
   const seasonId = activeSeason?.id ?? null;
 
-  // Per-user stats at MatchGame level — consistent with the Season tab's
-  // derive-on-read approach. A BO3 Final (2-1) contributes W+2, L+1, not W+1.
-  const confirmedGames = await prisma.matchGame.findMany({
-    where: {
-      match: { tournament_id: tournamentId, deleted_at: null, status: 'COMPLETED' },
-      status: 'COMPLETED',
-      winner_id: { not: null },
-    },
-    select: {
-      winner_id: true,
-      match: { select: { player1_id: true, player2_id: true } },
-    },
-  });
-
+  // Per-user W/L at match level: one win/loss per match encounter regardless
+  // of format (BO1/BO3/BO5). A BO3 Final counts as 1W or 1L, not 2W+1L.
+  // Uses the already-loaded `matches` array — no extra query needed.
   const userWins = new Map<string, number>();
   const userLosses = new Map<string, number>();
-  const userMatchesPlayed = new Map<string, number>();
 
-  for (const game of confirmedGames) {
-    if (!game.winner_id) continue;
-    const { player1_id, player2_id } = game.match;
-    const loserId = game.winner_id === player1_id ? player2_id : player1_id;
-
-    userWins.set(game.winner_id, (userWins.get(game.winner_id) ?? 0) + 1);
+  for (const m of matches) {
+    if (!['COMPLETED', 'FORFEIT', 'BYE'].includes(m.status) || !m.winner_id) continue;
+    const loserId = m.winner_id === m.player1_id ? m.player2_id : m.player1_id;
+    userWins.set(m.winner_id, (userWins.get(m.winner_id) ?? 0) + 1);
+    // BYE has no opponent (player2_id = null) → no loser to record
     if (loserId) userLosses.set(loserId, (userLosses.get(loserId) ?? 0) + 1);
-  }
-
-  for (const id of participantIds) {
-    userMatchesPlayed.set(id, (userWins.get(id) ?? 0) + (userLosses.get(id) ?? 0));
   }
 
   // ---------------------------------------------------------------------------
@@ -412,36 +395,43 @@ export async function finalizeTournament(
     priorPointsMap.set(r.user_id, (priorPointsMap.get(r.user_id) ?? 0) + r.points_earned);
   }
 
-  // 3. Season-total W/L: count COMPLETED MatchGames across ALL season tournaments.
-  //    Uses Match.season_id which is stamped when a match completes.
-  const allSeasonGames =
+  // 3. Season-total W/L at match level across ALL season tournaments.
+  //    BYE matches never get season_id stamped (completeMatch is not called),
+  //    so we route via tournament_id. Collect all tournament IDs in the season
+  //    from TournamentResult (prior tournaments) + the current tournament.
+  const priorTournamentIds =
     seasonId && finalizedUserIds.length > 0
-      ? await prisma.matchGame.findMany({
+      ? (await prisma.tournamentResult.findMany({
+          where: { season_id: seasonId },
+          select: { tournament_id: true },
+          distinct: ['tournament_id'],
+        })).map((r) => r.tournament_id)
+      : [];
+  const allSeasonTournamentIds = [...new Set([...priorTournamentIds, tournamentId])];
+
+  const allSeasonMatches =
+    allSeasonTournamentIds.length > 0 && finalizedUserIds.length > 0
+      ? await prisma.match.findMany({
           where: {
-            status: 'COMPLETED',
+            tournament_id: { in: allSeasonTournamentIds },
+            deleted_at: null,
+            status: { in: ['COMPLETED', 'FORFEIT', 'BYE'] },
             winner_id: { not: null },
-            match: {
-              season_id: seasonId,
-              OR: [
-                { player1_id: { in: finalizedUserIds } },
-                { player2_id: { in: finalizedUserIds } },
-              ],
-            },
+            OR: [
+              { player1_id: { in: finalizedUserIds } },
+              { player2_id: { in: finalizedUserIds } },
+            ],
           },
-          select: {
-            winner_id: true,
-            match: { select: { player1_id: true, player2_id: true } },
-          },
+          select: { winner_id: true, player1_id: true, player2_id: true },
         })
       : [];
 
   const seasonWins = new Map<string, number>();
   const seasonLosses = new Map<string, number>();
-  for (const g of allSeasonGames) {
-    if (!g.winner_id) continue;
-    const loser =
-      g.winner_id === g.match.player1_id ? g.match.player2_id : g.match.player1_id;
-    seasonWins.set(g.winner_id, (seasonWins.get(g.winner_id) ?? 0) + 1);
+  for (const m of allSeasonMatches) {
+    if (!m.winner_id) continue;
+    const loser = m.winner_id === m.player1_id ? m.player2_id : m.player1_id;
+    seasonWins.set(m.winner_id, (seasonWins.get(m.winner_id) ?? 0) + 1);
     if (loser) seasonLosses.set(loser, (seasonLosses.get(loser) ?? 0) + 1);
   }
 
