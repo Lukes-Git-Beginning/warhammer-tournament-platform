@@ -70,10 +70,11 @@ export function generateSwissRound(
   // with the lowest score who hasn't received a Bye yet — so no top-scorer
   // slides into the playoffs on a free win.
   if (players.length % 2 === 1) {
-    const eligible = players
-      .filter((p) => !p.receivedBye)
-      .sort((a, b) => a.score - b.score);
-    byePlayer = eligible[0] ?? players.sort((a, b) => a.score - b.score)[0] ?? null;
+    const eligible = players.filter((p) => !p.receivedBye);
+    const pool = eligible.length > 0 ? eligible : players;
+    const minScore = Math.min(...pool.map((p) => p.score));
+    const tied = pool.filter((p) => p.score === minScore);
+    byePlayer = tied[Math.floor(Math.random() * tied.length)] ?? null;
     if (byePlayer) {
       activePlayers = players.filter((p) => p.userId !== byePlayer!.userId);
     }
