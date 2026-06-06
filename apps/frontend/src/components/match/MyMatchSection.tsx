@@ -5,6 +5,13 @@ import type { BracketNode, FactionDto } from '@rizzotto/types';
 import { useMatchDecisionSocket } from '@/hooks/useMatchDecisionSocket';
 import { GameTile } from './GameTile';
 
+function matchPhaseLabel(phase: BracketNode['phase'], round: number): string {
+  if (phase === 'PLAYOFF_FINAL') return 'Grand Final';
+  if (phase === 'PLAYOFF_SF') return 'Semifinal';
+  if (phase === 'PLAYOFF_QF') return 'Quarterfinal';
+  return `Round ${round}`;
+}
+
 interface Props {
   /** Current user's id */
   currentUserId: string;
@@ -95,7 +102,7 @@ function MyMatchInner({
           Your Match
         </h2>
         <span className="text-xs text-rizzotto-stone-500">
-          Round {match.round} · {p1Name} vs {p2Name}
+          {matchPhaseLabel(match.phase, match.round)} · {p1Name} vs {p2Name}
         </span>
       </div>
 

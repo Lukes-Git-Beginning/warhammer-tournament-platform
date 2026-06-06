@@ -60,6 +60,13 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     }
   }
 
+  // Players in the Grand Final match — used for the "→ Grand Final" divider in Standings.
+  const finalistIds = new Set(
+    data?.matches
+      .filter((m) => m.phase === 'PLAYOFF_FINAL')
+      .flatMap((m) => [m.player1Id, m.player2Id].filter((id): id is string => id !== null)) ?? [],
+  );
+
   // Auto-fit: center and scale the bracket to fill the container whenever
   // the layout dimensions change (initial load or new round added).
   const layout = data && data.matches.length > 0 ? computeBracketLayout(data.matches) : null;
@@ -170,6 +177,8 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           factionMap={factionMap}
           playerFactionMap={playerFactionMap}
           tournamentMode={data.mode}
+          playoffFormat={playoffFormat}
+          finalistIds={finalistIds}
         />
       )}
 

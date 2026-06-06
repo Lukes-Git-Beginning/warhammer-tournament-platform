@@ -147,6 +147,11 @@ export function TournamentDetail() {
       standingsPlayerFactionMap.set(m.player2Id, m.player2FactionId);
     }
   }
+  const standingsFinalistIds = new Set(
+    (bracket?.matches ?? [])
+      .filter((m) => m.phase === 'PLAYOFF_FINAL')
+      .flatMap((m) => [m.player1Id, m.player2Id].filter((id): id is string => id !== null)),
+  );
 
   // Drive standings updates from socket events directly, not via BracketView
   useLiveBracket(tournament?.id ?? '');
@@ -479,6 +484,8 @@ export function TournamentDetail() {
                 tournamentMode={tournament.mode}
                 factionMap={standingsFactionMap}
                 playerFactionMap={standingsPlayerFactionMap}
+                playoffFormat={tournament.playoff_format ?? undefined}
+                finalistIds={standingsFinalistIds}
               />
             </section>
           );

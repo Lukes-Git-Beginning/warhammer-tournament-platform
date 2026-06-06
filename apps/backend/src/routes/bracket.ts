@@ -67,6 +67,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           next_match_id: true,
           loser_next_match_id: true,
           bracket_side: true,
+          phase: true,
           player1_faction_id: true,
           player2_faction_id: true,
           draft: { select: { id: true, status: true } },
@@ -132,6 +133,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           pickedMapId: m.games.find((g) => g.map_decision?.picked_map_id)?.map_decision?.picked_map_id ?? null,
           draft_id: m.draft?.id ?? null,
           draft_status: (m.draft?.status ?? null) as BracketResponse['matches'][number]['draft_status'],
+          phase: (m.phase ?? null) as BracketResponse['matches'][number]['phase'],
         })),
       };
 
