@@ -112,6 +112,13 @@ export function MatchScoreModal({
 
   const canSubmit = !!winnerId && (!isCompleted || reason.trim().length > 0);
 
+  const scoreWinnerId =
+    p1Score > p2Score ? player1Id
+    : p2Score > p1Score ? player2Id
+    : null;
+  const scoreMismatch =
+    winnerId && scoreWinnerId && scoreWinnerId !== winnerId;
+
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose();
   };
@@ -206,6 +213,12 @@ export function MatchScoreModal({
               className="w-full rounded border border-stone-700 bg-stone-800 px-3 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
             />
           </div>
+        )}
+
+        {scoreMismatch && (
+          <p className="text-amber-400 text-xs mb-3">
+            Score suggests a different winner — double-check before saving.
+          </p>
         )}
 
         {mutation.isError && (
