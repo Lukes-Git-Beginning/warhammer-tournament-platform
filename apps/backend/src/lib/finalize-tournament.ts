@@ -330,20 +330,6 @@ export async function finalizeTournament(
   });
   const seasonId = activeSeason?.id ?? null;
 
-  // Per-user W/L at match level: one win/loss per match encounter regardless
-  // of format (BO1/BO3/BO5). A BO3 Final counts as 1W or 1L, not 2W+1L.
-  // Uses the already-loaded `matches` array — no extra query needed.
-  const userWins = new Map<string, number>();
-  const userLosses = new Map<string, number>();
-
-  for (const m of matches) {
-    if (!['COMPLETED', 'FORFEIT', 'BYE'].includes(m.status) || !m.winner_id) continue;
-    const loserId = m.winner_id === m.player1_id ? m.player2_id : m.player1_id;
-    userWins.set(m.winner_id, (userWins.get(m.winner_id) ?? 0) + 1);
-    // BYE has no opponent (player2_id = null) → no loser to record
-    if (loserId) userLosses.set(loserId, (userLosses.get(loserId) ?? 0) + 1);
-  }
-
   // ---------------------------------------------------------------------------
   // ELO computation (before transaction — reads current ratings from DB)
   // ---------------------------------------------------------------------------
@@ -395,43 +381,37 @@ export async function finalizeTournament(
     priorPointsMap.set(r.user_id, (priorPointsMap.get(r.user_id) ?? 0) + r.points_earned);
   }
 
-  // 3. Season-total W/L at match level across ALL season tournaments.
-  //    BYE matches never get season_id stamped (completeMatch is not called),
-  //    so we route via tournament_id. Collect all tournament IDs in the season
-  //    from TournamentResult (prior tournaments) + the current tournament.
-  const priorTournamentIds =
+  // 3. Season-total W/L at game level across ALL season tournaments.
+  //    BYEs have no MatchGame records → automatically excluded.
+  const allSeasonGames =
     seasonId && finalizedUserIds.length > 0
-      ? (await prisma.tournamentResult.findMany({
-          where: { season_id: seasonId },
-          select: { tournament_id: true },
-          distinct: ['tournament_id'],
-        })).map((r) => r.tournament_id)
-      : [];
-  const allSeasonTournamentIds = [...new Set([...priorTournamentIds, tournamentId])];
-
-  const allSeasonMatches =
-    allSeasonTournamentIds.length > 0 && finalizedUserIds.length > 0
-      ? await prisma.match.findMany({
+      ? await prisma.matchGame.findMany({
           where: {
-            tournament_id: { in: allSeasonTournamentIds },
-            deleted_at: null,
-            status: { in: ['COMPLETED', 'FORFEIT', 'BYE'] },
+            status: 'COMPLETED',
             winner_id: { not: null },
-            OR: [
-              { player1_id: { in: finalizedUserIds } },
-              { player2_id: { in: finalizedUserIds } },
-            ],
+            match: {
+              season_id: seasonId,
+              deleted_at: null,
+              tournament: { counts_for_leaderboard: true },
+              OR: [
+                { player1_id: { in: finalizedUserIds } },
+                { player2_id: { in: finalizedUserIds } },
+              ],
+            },
           },
-          select: { winner_id: true, player1_id: true, player2_id: true },
+          select: {
+            winner_id: true,
+            match: { select: { player1_id: true, player2_id: true } },
+          },
         })
       : [];
 
   const seasonWins = new Map<string, number>();
   const seasonLosses = new Map<string, number>();
-  for (const m of allSeasonMatches) {
-    if (!m.winner_id) continue;
-    const loser = m.winner_id === m.player1_id ? m.player2_id : m.player1_id;
-    seasonWins.set(m.winner_id, (seasonWins.get(m.winner_id) ?? 0) + 1);
+  for (const g of allSeasonGames) {
+    if (!g.winner_id) continue;
+    const loser = g.winner_id === g.match.player1_id ? g.match.player2_id : g.match.player1_id;
+    seasonWins.set(g.winner_id, (seasonWins.get(g.winner_id) ?? 0) + 1);
     if (loser) seasonLosses.set(loser, (seasonLosses.get(loser) ?? 0) + 1);
   }
 
@@ -478,14 +458,14 @@ export async function finalizeTournament(
             user_id: userId,
             season_id: seasonId,
             total_points: totalPoints,
-            matches_played: totalWins + totalLosses,
+            games_played: totalWins + totalLosses,
             wins: totalWins,
             losses: totalLosses,
             elo_rating: newEloRating,
           },
           update: {
             total_points: totalPoints,
-            matches_played: totalWins + totalLosses,
+            games_played: totalWins + totalLosses,
             wins: totalWins,
             losses: totalLosses,
             elo_rating: newEloRating,

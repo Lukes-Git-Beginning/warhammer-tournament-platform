@@ -415,7 +415,7 @@ function ModeTab({ mode }: ModeTabProps) {
                         <span className="text-red-400">{entry.losses}</span>
                       </td>
                       <td className="px-4 py-3 text-right text-stone-400">
-                        {entry.matches_played}
+                        {entry.games_played}
                       </td>
                     </tr>
                   );
@@ -569,7 +569,7 @@ function LeaderboardTable({
                     <span className="text-stone-600"> / </span>
                     <span className="text-red-400">{entry.losses}</span>
                   </td>
-                  <td className="px-4 py-3 text-right text-stone-400">{entry.matches_played}</td>
+                  <td className="px-4 py-3 text-right text-stone-400">{entry.games_played}</td>
                   {extraColumn === 'seasons_participated' && (
                     <td className="px-4 py-3 text-right text-stone-400">
                       {(entry as AllTimeEntry).seasons_participated}

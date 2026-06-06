@@ -306,7 +306,7 @@ export function UserProfilePage() {
               </StatCard>
               <StatCard
                 label={t('user_profile.stats.games')}
-                value={current_season.matches_played}
+                value={current_season.games_played}
               />
               <StatCard label={t('user_profile.stats.wins')} value={current_season.wins} />
               <StatCard label={t('user_profile.stats.losses')} value={current_season.losses} />
@@ -327,7 +327,7 @@ export function UserProfilePage() {
           {t('user_profile.all_time')}
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <StatCard label={t('user_profile.stats.games')} value={all_time.matches_played} />
+          <StatCard label={t('user_profile.stats.games')} value={all_time.games_played} />
           <StatCard label={t('user_profile.stats.wins')} value={all_time.wins} />
           <StatCard label={t('user_profile.stats.losses')} value={all_time.losses} />
           <StatCard

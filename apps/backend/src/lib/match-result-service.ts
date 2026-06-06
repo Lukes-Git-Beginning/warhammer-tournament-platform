@@ -287,14 +287,14 @@ export async function resolveMatchResult(
             create: {
               user_id: p.userId,
               season_id: seasonId,
-              matches_played: 1,
+              games_played: 1,
               wins: p.isWinner ? 1 : 0,
               losses: !p.isWinner && !p.isDraw ? 1 : 0,
               total_points: p.points,
               elo_rating: 1200,
             },
             update: {
-              matches_played: { increment: 1 },
+              games_played: { increment: 1 },
               wins: p.isWinner ? { increment: 1 } : undefined,
               losses: !p.isWinner && !p.isDraw ? { increment: 1 } : undefined,
               total_points: { increment: p.points },

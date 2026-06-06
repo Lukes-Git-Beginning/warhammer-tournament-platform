@@ -587,7 +587,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           },
           total_points: entry.total_points,
           elo_rating: entry.elo_rating,
-          matches_played: entry.matches_played,
+          games_played: entry.games_played,
           wins: entry.wins,
           losses: entry.losses,
         };
@@ -597,7 +597,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     // All-time stats
     const allTimeAgg = await fastify.prisma.leaderboardEntry.aggregate({
       where: { user_id: id },
-      _sum: { matches_played: true, wins: true, losses: true, total_points: true },
+      _sum: { games_played: true, wins: true, losses: true, total_points: true },
       _count: { season_id: true },
     });
     const tournamentsPlayed = await fastify.prisma.tournamentResult.count({ where: { user_id: id } });
@@ -642,7 +642,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       },
       current_season: currentSeasonEntry,
       all_time: {
-        matches_played: allTimeAgg._sum.matches_played ?? 0,
+        games_played: allTimeAgg._sum.games_played ?? 0,
         wins: allTimeAgg._sum.wins ?? 0,
         losses: allTimeAgg._sum.losses ?? 0,
         tournaments_played: tournamentsPlayed,

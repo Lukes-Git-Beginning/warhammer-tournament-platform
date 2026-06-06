@@ -822,7 +822,7 @@ export interface ExtendedLeaderboardEntry {
   user: { id: string; username: string; avatar_url: string | null; role: string };
   total_points: number;
   elo_rating: number;
-  matches_played: number;
+  games_played: number;
   wins: number;
   losses: number;
   win_rate?: number;

@@ -86,7 +86,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
           season_id: string;
           total_points: number;
           elo_rating: number;
-          matches_played: number;
+          games_played: number;
           wins: number;
           losses: number;
           rank: bigint;
@@ -95,7 +95,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         };
 
         // ---------------------------------------------------------------
-        // mode = 'winrate' — sort by wins/(wins+losses) desc, min 5 matches
+        // mode = 'winrate' — sort by wins/(wins+losses) desc, min 5 games
         // ---------------------------------------------------------------
         {
           type WinrateRow = LeaderboardRow & { win_rate: number };
@@ -107,29 +107,29 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
               le.season_id,
               le.total_points,
               le.elo_rating,
-              le.matches_played,
+              le.games_played,
               le.wins,
               le.losses,
               u.username,
               u.avatar_url,
-              CAST(le.wins AS FLOAT) / NULLIF(le.matches_played, 0) AS win_rate,
+              CAST(le.wins AS FLOAT) / NULLIF(le.games_played, 0) AS win_rate,
               RANK() OVER (
                 ORDER BY
-                  CAST(le.wins AS FLOAT) / NULLIF(le.matches_played, 0) DESC NULLS LAST,
-                  le.matches_played DESC
+                  CAST(le.wins AS FLOAT) / NULLIF(le.games_played, 0) DESC NULLS LAST,
+                  le.games_played DESC
               ) AS rank
             FROM "LeaderboardEntry" le
             INNER JOIN "User" u ON u.id = le.user_id
             WHERE le.season_id = ${resolvedSeasonId}::uuid
-              AND le.matches_played >= ${MIN_MATCHES_FOR_RATE}
+              AND le.games_played >= ${MIN_MATCHES_FOR_RATE}
             ORDER BY
-              CAST(le.wins AS FLOAT) / NULLIF(le.matches_played, 0) DESC NULLS LAST,
-              le.matches_played DESC
+              CAST(le.wins AS FLOAT) / NULLIF(le.games_played, 0) DESC NULLS LAST,
+              le.games_played DESC
             LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize};
           `;
 
           const total = await fastify.prisma.leaderboardEntry.count({
-            where: { season_id: resolvedSeasonId, matches_played: { gte: MIN_MATCHES_FOR_RATE } },
+            where: { season_id: resolvedSeasonId, games_played: { gte: MIN_MATCHES_FOR_RATE } },
           });
 
           return {
@@ -146,7 +146,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
               user: { id: r.user_id, username: r.username, avatar_url: r.avatar_url },
               total_points: r.total_points,
               elo_rating: r.elo_rating,
-              matches_played: r.matches_played,
+              games_played: r.games_played,
               wins: r.wins,
               losses: r.losses,
               win_rate: r.win_rate ?? 0,
@@ -176,7 +176,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         // Aggregate per user across all seasons
         const grouped = await fastify.prisma.leaderboardEntry.groupBy({
           by: ['user_id'],
-          _sum: { total_points: true, matches_played: true, wins: true, losses: true },
+          _sum: { total_points: true, games_played: true, wins: true, losses: true },
           _max: { elo_rating: true },
           _count: { season_id: true },
           orderBy: { _sum: { total_points: 'desc' } },
@@ -202,7 +202,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
                 : { id: g.user_id, username: 'Unknown', avatar_url: null },
               total_points: g._sum.total_points ?? 0,
               elo_rating: g._max.elo_rating ?? 1200,
-              matches_played: g._sum.matches_played ?? 0,
+              games_played: g._sum.games_played ?? 0,
               wins: g._sum.wins ?? 0,
               losses: g._sum.losses ?? 0,
               seasons_participated: g._count.season_id,
