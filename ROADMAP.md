@@ -212,7 +212,7 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 
 ### 5.3 Generalprobe & gestufter Launch
 
-11. **Lokale Generalprobe:** Swiss SFT, 4–5 Runden + Top-4-Playoffs mit `db:seed:dummies` — **läuft aktiv (2026-06-06), Runde 3 gespielt.** Zahlreiche Bugs gefunden und gefixed (Faction-Latch, GL-Berechnung, All-Games-Architektur, Leaderboard-Pfade).
+11. **Lokale Generalprobe:** Swiss SFT, 4–5 Runden + Top-4-Playoffs mit `db:seed:dummies` — **abgeschlossen (2026-06-06), alle Runden + Playoffs gespielt.** Zahlreiche Bugs gefunden und gefixed (Faction-Latch, GL-Berechnung, All-Games-Architektur, Leaderboard-Pfade, Match/Game-Terminologie-Konvention).
 12. **Handover-PR** an Luke → Review/Merge → Auto-Deploy
 13. **Luke-Checkliste (extern):** Cloudflare Custom Purge `https://rizzotto.gg/img/rizzotto-wordmark.avif` · Hetzner-VM-Backup aktivieren (~1.68 €/mo) · `DISCORD_BOT_TOKEN` setzen · echte Community-Links (`SigillumSection`) · Caddyfile-Live-Sync (§2.3 #1)
 14. **Stufe 1 — geschlossener Kreis:** Prod-Generalprobe (Alex als ORGANIZER auf rizzotto.gg), dann erstes echtes Turnier (Swiss SFT) mit Discord-Kreis
@@ -226,7 +226,8 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 - [x] Feature: Faction-Beschränkung bei Turniererstellung — ✅ done (2026-06-06, `TournamentFactionAllowlist`, Backend + Frontend-Fieldset)
 - [x] Leaderboard auf Game-Ebene (MatchGame) umgestellt — ✅ done (2026-06-06, `loadSeasonObservations` + `loadConfirmedGames` via Match-first + Game-Expansion; `totalMatches` → `totalGames` in DTO + UI)
 - [ ] **FactionStats-Drift bei Overrides:** Counter über-inkrementiert → mittelfristig Recalculate-Endpoint oder Event-Sourcing
-- [ ] **Generalprobe fortsetzen** (Runde 4–5 + Playoffs) → Handover-PR vorbereiten
+- [x] **Generalprobe abgeschlossen** (alle Runden + Playoffs; Session-4-Terminologie-Fixes: `games_played`, game-level W/L, idempotentes `finalizeTournament`, `meta total_games` via MatchGame) — ✅ done (2026-06-06)
+- [ ] **Handover-PR** erstellen + App-Test vor Deploy
 
 ---
 
