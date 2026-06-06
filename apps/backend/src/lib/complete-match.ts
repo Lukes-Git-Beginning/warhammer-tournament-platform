@@ -160,7 +160,7 @@ export async function completeMatch(
       match_number: true,
       player1_faction_id: true,
       player2_faction_id: true,
-      tournament: { select: { organizer_id: true, format: true, mode: true } },
+      tournament: { select: { organizer_id: true, format: true, mode: true, counts_for_leaderboard: true } },
     },
   });
 
@@ -299,6 +299,23 @@ export async function completeMatch(
             ? { faction_a_wins: { increment: 1 } }
             : { faction_b_wins: { increment: 1 } },
       });
+    }
+
+    // LeaderboardEntry — mirrors resolveMatchResult so GameTile matches count on the leaderboard
+    if (activeSeason && match.tournament.counts_for_leaderboard) {
+      const seasonId = activeSeason.id;
+      const WIN_PTS = 3, LOSS_PTS = 0;
+      const entries = [
+        match.player1_id ? { userId: match.player1_id, isWinner: winnerId === match.player1_id, points: winnerId === match.player1_id ? WIN_PTS : LOSS_PTS } : null,
+        match.player2_id ? { userId: match.player2_id, isWinner: winnerId === match.player2_id, points: winnerId === match.player2_id ? WIN_PTS : LOSS_PTS } : null,
+      ].filter((e): e is NonNullable<typeof e> => e !== null);
+      for (const e of entries) {
+        await tx.leaderboardEntry.upsert({
+          where: { user_id_season_id: { user_id: e.userId, season_id: seasonId } },
+          create: { user_id: e.userId, season_id: seasonId, matches_played: 1, wins: e.isWinner ? 1 : 0, losses: e.isWinner ? 0 : 1, total_points: e.points, elo_rating: 1200 },
+          update: { matches_played: { increment: 1 }, wins: e.isWinner ? { increment: 1 } : undefined, losses: !e.isWinner ? { increment: 1 } : undefined, total_points: { increment: e.points } },
+        });
+      }
     }
 
     await tx.auditLog.create({
