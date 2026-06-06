@@ -1,10 +1,11 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { reportMatchResult, overrideMatchResult } from '@/lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { reportMatchResult, overrideMatchResult, getTournamentMaps } from '@/lib/api';
 import { useState } from 'react';
 
 interface MatchScoreModalProps {
   matchId: string;
   matchStatus?: string;
+  tournamentSlug?: string;
   player1Name?: string;
   player2Name?: string;
   player1Id: string | null;
@@ -53,6 +54,7 @@ function ScoreCounter({
 export function MatchScoreModal({
   matchId,
   matchStatus,
+  tournamentSlug,
   player1Name,
   player2Name,
   player1Id,
@@ -69,6 +71,15 @@ export function MatchScoreModal({
   const [p1Score, setP1Score] = useState(initialP1Score);
   const [p2Score, setP2Score] = useState(initialP2Score);
   const [reason, setReason] = useState('');
+  const [mapId, setMapId] = useState('');
+
+  const { data: mapsData } = useQuery({
+    queryKey: ['tournament-maps', tournamentSlug],
+    queryFn: () => getTournamentMaps(tournamentSlug!),
+    enabled: !!tournamentSlug,
+    staleTime: 5 * 60_000,
+  });
+  const maps = mapsData?.data ?? [];
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -82,11 +93,13 @@ export function MatchScoreModal({
           player1_score: p1Score,
           player2_score: p2Score,
           reason,
+          map_id: mapId || undefined,
         });
       }
       return reportMatchResult(matchId, {
         winnerId,
         score: `${p1Score}-${p2Score}`,
+        map_id: mapId || undefined,
       });
     },
     onSuccess: () => {
@@ -157,6 +170,25 @@ export function MatchScoreModal({
             <ScoreCounter label={player2Name ?? 'Spieler 2'} value={p2Score} onChange={setP2Score} />
           </div>
         </fieldset>
+
+        {maps.length > 0 && (
+          <div className="mb-4">
+            <label className="text-xs text-stone-400 block mb-1" htmlFor="map-select">
+              Map <span className="text-stone-600">(optional)</span>
+            </label>
+            <select
+              id="map-select"
+              value={mapId}
+              onChange={(e) => setMapId(e.target.value)}
+              className="w-full rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+            >
+              <option value="">— select map —</option>
+              {maps.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {isCompleted && (
           <div className="mb-4">

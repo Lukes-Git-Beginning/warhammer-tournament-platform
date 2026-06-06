@@ -15,6 +15,7 @@ import {
   type MatchReportingState,
 } from '@rizzotto/types';
 import { resolveMatchResult, disputeMatch } from '../lib/match-result-service.js';
+import { ensureMatchGame } from '../lib/match-games.js';
 import { tournamentRoom } from '../lib/emit.js';
 import { notifyDispute } from '../lib/discord-notify.js';
 import { invalidate } from '../lib/cache.js';
@@ -288,7 +289,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { result, player1_points, player2_points, player1_score, player2_score, reason } = parsed.data;
+      const { result, player1_points, player2_points, player1_score, player2_score, reason, map_id } = parsed.data;
 
       // Load match
       const match = await fastify.prisma.match.findFirst({
@@ -356,6 +357,26 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         await fastify.prisma.match.update({
           where: { id: matchId },
           data: { score: `${player1_score ?? 0}-${player2_score ?? 0}` },
+        });
+      }
+
+      if (map_id && match.player1_id && match.player2_id) {
+        const gameId = await ensureMatchGame(fastify.prisma, matchId, 1);
+        await fastify.prisma.matchMapDecision.upsert({
+          where: { game_id: gameId },
+          create: {
+            game_id: gameId,
+            mode: 'HOST_PRESET',
+            coin_flip_seed: 'manual',
+            top_player_id: match.player1_id,
+            bottom_player_id: match.player2_id,
+            bans_top: [],
+            bans_bottom: [],
+            active_pool: [],
+            picked_map_id: map_id,
+            decided_at: new Date(),
+          },
+          update: { picked_map_id: map_id },
         });
       }
 

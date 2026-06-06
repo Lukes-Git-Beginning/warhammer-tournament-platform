@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { emitStatusChange } from '../lib/emit.js';
 import { InvalidActionError } from '../lib/draft-service.js';
 import { completeMatch } from '../lib/complete-match.js';
+import { ensureMatchGame } from '../lib/match-games.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -13,6 +14,7 @@ const ReportResultSchema = z.object({
   score: z.string().max(64).optional(),
   player1FactionId: z.string().min(1).optional(),
   player2FactionId: z.string().min(1).optional(),
+  map_id: z.string().uuid().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -36,7 +38,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { winnerId, score, player1FactionId, player2FactionId } = parsed.data;
+      const { winnerId, score, player1FactionId, player2FactionId, map_id } = parsed.data;
 
       const match = await fastify.prisma.match.findFirst({
         where: { id: matchId, deleted_at: null },
@@ -95,6 +97,26 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         actorId: user.sub,
         score,
       });
+
+      if (map_id && match.player1_id && match.player2_id) {
+        const gameId = await ensureMatchGame(fastify.prisma, matchId, 1);
+        await fastify.prisma.matchMapDecision.upsert({
+          where: { game_id: gameId },
+          create: {
+            game_id: gameId,
+            mode: 'HOST_PRESET',
+            coin_flip_seed: 'manual',
+            top_player_id: match.player1_id,
+            bottom_player_id: match.player2_id,
+            bans_top: [],
+            bans_bottom: [],
+            active_pool: [],
+            picked_map_id: map_id,
+            decided_at: new Date(),
+          },
+          update: { picked_map_id: map_id },
+        });
+      }
 
       request.log.info({ matchId, winnerId }, 'Match result reported');
       return reply.code(200).send({ matchId, winnerId, score: score ?? null });
