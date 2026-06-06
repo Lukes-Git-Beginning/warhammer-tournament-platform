@@ -177,6 +177,8 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const { page, limit } = parsed.data;
     const skip = (page - 1) * limit;
 
+    // Fetch all tournament participant factions for the page's matches as fallback
+    // (resolved after match query to know which tournament IDs are involved)
     const [completedMatches, total] = await Promise.all([
       fastify.prisma.match.findMany({
         where: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null } },
@@ -213,6 +215,21 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.match.count({ where: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null } } }),
     ]);
 
+    // Load participant factions for the tournaments on this page (SFT fallback)
+    const tournamentIds = [...new Set(completedMatches.map((m) => m.tournament.id))];
+    const participantsRaw = tournamentIds.length
+      ? await fastify.prisma.tournamentParticipant.findMany({
+          where: { tournament_id: { in: tournamentIds }, deleted_at: null },
+          select: { tournament_id: true, user_id: true, faction_id: true },
+        })
+      : [];
+    // key: `${tournamentId}:${userId}` → faction_id
+    const participantFaction = new Map(
+      participantsRaw.map((p) => [`${p.tournament_id}:${p.user_id}`, p.faction_id]),
+    );
+    const pFaction = (tournamentId: string, userId: string | null | undefined) =>
+      userId ? (participantFaction.get(`${tournamentId}:${userId}`) ?? null) : null;
+
     const rows = completedMatches.flatMap((m) => {
       const base = { round: m.round, matchNumber: m.match_number, player1: m.player1 ?? null, player2: m.player2 ?? null, tournament: m.tournament, matchId: m.id };
       if (m.games.length > 0) {
@@ -222,13 +239,13 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           gameNumber: g.game_number,
           playedAt: (g.played_at ?? m.played_at)?.toISOString() ?? null,
           winnerId: g.winner_id,
-          player1FactionId: g.player1_faction_id ?? m.player1_faction_id,
-          player2FactionId: g.player2_faction_id ?? m.player2_faction_id,
+          player1FactionId: g.player1_faction_id ?? m.player1_faction_id ?? pFaction(m.tournament.id, m.player1?.id),
+          player2FactionId: g.player2_faction_id ?? m.player2_faction_id ?? pFaction(m.tournament.id, m.player2?.id),
           mapPickedId: g.map_decision?.picked_map_id ?? null,
           replayUrl: g.replay_url,
         }));
       }
-      return [{ ...base, id: m.id, gameNumber: 1, playedAt: m.played_at?.toISOString() ?? null, winnerId: m.winner_id, player1FactionId: m.player1_faction_id, player2FactionId: m.player2_faction_id, mapPickedId: null, replayUrl: null }];
+      return [{ ...base, id: m.id, gameNumber: 1, playedAt: m.played_at?.toISOString() ?? null, winnerId: m.winner_id, player1FactionId: m.player1_faction_id ?? pFaction(m.tournament.id, m.player1?.id), player2FactionId: m.player2_faction_id ?? pFaction(m.tournament.id, m.player2?.id), mapPickedId: null, replayUrl: null }];
     });
 
     rows.sort((a, b) => (b.playedAt ?? '').localeCompare(a.playedAt ?? ''));

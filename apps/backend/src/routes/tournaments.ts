@@ -906,6 +906,13 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
     }
 
+    // Participant factions as final fallback (SFT: faction locked at registration)
+    const participants = await fastify.prisma.tournamentParticipant.findMany({
+      where: { tournament_id: tournament.id, deleted_at: null },
+      select: { user_id: true, faction_id: true },
+    });
+    const participantFaction = new Map(participants.map((p) => [p.user_id, p.faction_id]));
+
     // Query at match level — matches without MatchGame records (entered via
     // score modal) get a synthetic game entry built from the match itself.
     const matches = await fastify.prisma.match.findMany({
@@ -956,8 +963,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           player1: m.player1 ?? null,
           player2: m.player2 ?? null,
           winnerId: g.winner_id,
-          player1FactionId: g.player1_faction_id ?? m.player1_faction_id,
-          player2FactionId: g.player2_faction_id ?? m.player2_faction_id,
+          player1FactionId: g.player1_faction_id ?? m.player1_faction_id ?? (m.player1?.id ? participantFaction.get(m.player1.id) ?? null : null),
+          player2FactionId: g.player2_faction_id ?? m.player2_faction_id ?? (m.player2?.id ? participantFaction.get(m.player2.id) ?? null : null),
           mapPickedId: g.map_decision?.picked_map_id ?? null,
           replayUrl: g.replay_url,
         }));
@@ -973,8 +980,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         player1: m.player1 ?? null,
         player2: m.player2 ?? null,
         winnerId: m.winner_id,
-        player1FactionId: m.player1_faction_id,
-        player2FactionId: m.player2_faction_id,
+        player1FactionId: m.player1_faction_id ?? (m.player1?.id ? participantFaction.get(m.player1.id) ?? null : null),
+        player2FactionId: m.player2_faction_id ?? (m.player2?.id ? participantFaction.get(m.player2.id) ?? null : null),
         mapPickedId: null,
         replayUrl: null,
       }];
