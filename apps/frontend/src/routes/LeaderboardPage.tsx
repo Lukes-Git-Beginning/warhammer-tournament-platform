@@ -340,7 +340,7 @@ function ModeTab({ mode }: ModeTabProps) {
         </div>
 
         <span className="rounded border border-stone-700 bg-stone-900/60 px-2 py-1 text-xs text-stone-500">
-          Min 5 matches required
+          Min 5 games required
         </span>
       </div>
 
