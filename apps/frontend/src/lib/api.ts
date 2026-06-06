@@ -84,6 +84,7 @@ export interface Tournament {
   map_decision_mode?: MapDecisionMode | null;
   map_preset_config?: MapPresetConfig | null;
   map_pool?: MapDto[];
+  faction_allowlist?: string[];
 }
 
 export type MapDecisionMode = 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
@@ -153,6 +154,7 @@ export interface TournamentCreate {
   map_decision_mode?: MapDecisionMode;
   map_preset_config?: MapPresetConfig | null;
   map_pool?: string[];
+  faction_pool?: string[];
 }
 
 // Mirror of backend PatchTournamentSchema (apps/backend/src/routes/tournaments.ts).

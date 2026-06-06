@@ -27,8 +27,9 @@ const RATING_MODEL_TTL = 3600; // 1h fallback; primary refresh is event-driven i
 
 /**
  * Prisma `where` for the matches that feed the dynamic leaderboard: confirmed,
- * decisive (has a winner), both factions known, on a leaderboard-counting
- * tournament, tagged to this season. Single source of truth for "what counts".
+ * decisive (has a winner), on a leaderboard-counting tournament, tagged to this
+ * season. Faction fields are intentionally not required — matches without faction
+ * data contribute with neutral weighting (p=0.5) to the score computation.
  */
 export function confirmedMatchWhere(seasonId: string): Prisma.MatchWhereInput {
   return {
@@ -38,8 +39,6 @@ export function confirmedMatchWhere(seasonId: string): Prisma.MatchWhereInput {
     winner_id: { not: null },
     player1_id: { not: null },
     player2_id: { not: null },
-    player1_faction_id: { not: null },
-    player2_faction_id: { not: null },
     tournament: { counts_for_leaderboard: true },
   };
 }
@@ -60,13 +59,15 @@ export async function loadSeasonObservations(
     },
   });
 
-  return matches.map((m) => ({
-    playerAId: m.player1_id!,
-    playerBId: m.player2_id!,
-    factionXId: m.player1_faction_id!,
-    factionYId: m.player2_faction_id!,
-    aWon: m.winner_id === m.player1_id,
-  }));
+  return matches
+    .filter((m) => m.player1_faction_id !== null && m.player2_faction_id !== null)
+    .map((m) => ({
+      playerAId: m.player1_id!,
+      playerBId: m.player2_id!,
+      factionXId: m.player1_faction_id!,
+      factionYId: m.player2_faction_id!,
+      aWon: m.winner_id === m.player1_id,
+    }));
 }
 
 /** Reads rating-model lambdas/thresholds from AdminConfig (falls back to defaults). */

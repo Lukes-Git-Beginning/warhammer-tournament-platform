@@ -29,8 +29,8 @@ interface ConfirmedMatch {
   player1_id: string;
   player2_id: string;
   winner_id: string;
-  player1_faction_id: string;
-  player2_faction_id: string;
+  player1_faction_id: string | null;
+  player2_faction_id: string | null;
 }
 
 interface PlayerAgg {
@@ -41,7 +41,7 @@ interface PlayerAgg {
   totalFinalPoints: number;
 }
 
-/** Load the confirmed-match rows of a season (non-null fields guaranteed by the where-clause). */
+/** Load the confirmed-match rows of a season. Faction fields may be null for pre-Faction-Picker matches. */
 export async function loadConfirmedMatches(
   prisma: PrismaClient,
   seasonId: string,
@@ -110,7 +110,10 @@ export async function computeSeasonLeaderboard(
     const winnerFaction = winnerIsP1 ? m.player1_faction_id : m.player2_faction_id;
     const loserFaction = winnerIsP1 ? m.player2_faction_id : m.player1_faction_id;
 
-    const p = model.expectedChanceToWin(winnerId, winnerFaction, loserId, loserFaction);
+    const p =
+      winnerFaction && loserFaction
+        ? model.expectedChanceToWin(winnerId, winnerFaction, loserId, loserFaction)
+        : 0.5; // no faction data — neutral weighting
     const raw = rawPoints(p);
 
     const winnerTotal = agg.get(winnerId)!.matches;

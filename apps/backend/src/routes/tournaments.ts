@@ -56,6 +56,7 @@ const CreateTournamentSchema = z.object({
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).optional(),
   map_pool: z.array(z.string().min(1)).min(3).max(36).optional(),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
+  faction_pool: z.array(z.string().min(1)).max(24).optional(),
 });
 
 const PatchTournamentSchema = z.object({
@@ -307,6 +308,17 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      // Persist faction allowlist (empty = all factions allowed)
+      if (data.faction_pool && data.faction_pool.length > 0) {
+        await fastify.prisma.tournamentFactionAllowlist.createMany({
+          data: data.faction_pool.map((factionId) => ({
+            tournament_id: tournament.id,
+            faction_id: factionId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
       await fastify.prisma.auditLog.create({
         data: {
           entity_type: 'Tournament',
@@ -496,6 +508,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         _count: {
           select: { participants: { where: { deleted_at: null } } },
         },
+        faction_allowlist: { select: { faction_id: true } },
       },
     });
 
@@ -533,8 +546,12 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    const { _count, ...rest } = tournament;
-    return { ...rest, participantCount: _count.participants };
+    const { _count, faction_allowlist, ...rest } = tournament;
+    return {
+      ...rest,
+      participantCount: _count.participants,
+      faction_allowlist: faction_allowlist.map((fa) => fa.faction_id),
+    };
   });
 
   // PATCH /api/tournaments/:slug

@@ -57,18 +57,31 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('meta:overview', { seasonId: resolvedSeasonId }),
       async () => {
-        const allFactions = await getFactionsWithStats(fastify.prisma, resolvedSeasonId);
+        const [allFactions, total_matches] = await Promise.all([
+          getFactionsWithStats(fastify.prisma, resolvedSeasonId),
+          fastify.prisma.match.count({
+            where: {
+              status: 'COMPLETED',
+              deleted_at: null,
+              season_id: resolvedSeasonId,
+              tournament: { counts_for_leaderboard: true },
+            },
+          }),
+        ]);
 
-        // total_matches: sum of matches_played / 2 (each match counts 2 factions)
-        const totalMatchesSummed = allFactions.reduce(
-          (sum, f) => sum + (f.stats?.matches_played ?? 0),
-          0,
-        );
-        const total_matches = Math.floor(totalMatchesSummed / 2);
-
-        // faction_diversity: factions with at least 1 match played / 24
-        const activeCount = allFactions.filter((f) => (f.stats?.matches_played ?? 0) > 0).length;
-        const faction_diversity = activeCount / 24;
+        // Pielou's J: normalised Shannon entropy — 1 = perfect balance, 0 = one faction monopoly
+        const played = allFactions.map((f) => f.stats?.matches_played ?? 0);
+        const totalPlayed = played.reduce((s, v) => s + v, 0);
+        let faction_diversity = 0;
+        if (totalPlayed > 0) {
+          const active = played.filter((v) => v > 0);
+          const H = -active.reduce((s, v) => {
+            const p = v / totalPlayed;
+            return s + p * Math.log(p);
+          }, 0);
+          const Hmax = Math.log(active.length);
+          faction_diversity = Hmax > 0 ? H / Hmax : 1;
+        }
 
         // top 5 by winrate — minimum 10 matches played
         const eligibleForWinrate = allFactions

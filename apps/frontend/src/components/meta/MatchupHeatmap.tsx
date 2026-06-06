@@ -19,8 +19,7 @@ export function winrateColor(winrate: number, lowConfidence: boolean): string {
 }
 
 export function MatchupHeatmap({ cells, factions }: MatchupHeatmapProps) {
-  // Sort by display_order asc
-  const sorted = [...factions].sort((a, b) => a.display_order - b.display_order);
+  const sorted = [...factions].sort((a, b) => a.name.localeCompare(b.name));
 
   // Build lookup map: "aId|bId" → cell (stored only one way)
   const cellMap = new Map<string, MatchupCell>();

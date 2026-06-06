@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { createTournament, listDraftPresets, getMaps } from '@/lib/api';
+import { createTournament, listDraftPresets, getMaps, getFactions } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,6 +32,7 @@ const TournamentCreateSchema = z.object({
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).default('RANDOM_PICK_BAN'),
   map_pool: z.array(z.string()).min(3).max(36).default([]),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
+  faction_pool: z.array(z.string()).optional(),
 });
 
 type FormData = z.infer<typeof TournamentCreateSchema>;
@@ -96,6 +97,7 @@ export function TournamentCreateForm() {
     map_preset_config: null,
   });
   const [mapSearch, setMapSearch] = useState('');
+  const [factionPoolEnabled, setFactionPoolEnabled] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
   const { data: draftPresets } = useQuery({
@@ -108,6 +110,12 @@ export function TournamentCreateForm() {
     queryFn: getMaps,
   });
   const allMaps = mapsData?.data ?? [];
+
+  const { data: factionsData } = useQuery({
+    queryKey: ['factions'],
+    queryFn: () => getFactions(),
+  });
+  const allFactions = (factionsData?.data ?? []).map((f) => f.faction).sort((a, b) => a.name.localeCompare(b.name));
 
   const mutation = useMutation({
     mutationFn: createTournament,
@@ -185,6 +193,9 @@ export function TournamentCreateForm() {
       ...(draft_preset_id ? { draft_preset_id } : {}),
       map_pool: map_pool ?? [],
       ...(map_preset_config ? { map_preset_config: map_preset_config as Record<string, string[] | string[][]> } : {}),
+      ...(factionPoolEnabled && (form.faction_pool ?? []).length > 0 && (form.faction_pool ?? []).length < allFactions.length
+        ? { faction_pool: form.faction_pool }
+        : {}),
     });
   }
 
@@ -643,6 +654,92 @@ export function TournamentCreateForm() {
         )}
         {(form.map_pool ?? []).length < 3 && (form.map_pool ?? []).length > 0 && (
           <FieldError message={`Select at least 3 maps (${(form.map_pool ?? []).length} selected)`} />
+        )}
+      </fieldset>
+
+      {/* ─── Faction Pool ──────────────────────────────────────────────── */}
+      <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+        <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
+          Faction Pool
+        </legend>
+
+        <label className="flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            checked={factionPoolEnabled}
+            onChange={(e) => {
+              setFactionPoolEnabled(e.target.checked);
+              if (!e.target.checked) setForm((prev) => ({ ...prev, faction_pool: [] }));
+            }}
+            className="h-4 w-4 rounded border-rizzotto-iron-600 bg-rizzotto-iron-800 text-rizzotto-gold-500 focus:ring-rizzotto-gold-500"
+          />
+          <span className="text-sm text-rizzotto-stone-300">
+            Restrict to a faction subset
+          </span>
+        </label>
+        <FieldHint>Default: all factions allowed. Enable to limit which factions players may register with.</FieldHint>
+
+        {factionPoolEnabled && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>
+                Allowed Factions{' '}
+                <span className="text-rizzotto-stone-500 font-normal text-xs">
+                  ({(form.faction_pool ?? []).length}/{allFactions.length} selected)
+                </span>
+              </Label>
+              <button
+                type="button"
+                onClick={() => {
+                  const allSelected = allFactions.every((f) => (form.faction_pool ?? []).includes(f.id));
+                  setForm((prev) => ({ ...prev, faction_pool: allSelected ? [] : allFactions.map((f) => f.id) }));
+                }}
+                className="text-xs text-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors"
+              >
+                {allFactions.every((f) => (form.faction_pool ?? []).includes(f.id)) ? 'Deselect all' : 'Select all'}
+              </button>
+            </div>
+            <div className="max-h-52 overflow-y-auto rounded-md border border-rizzotto-iron-700 p-2">
+              {allFactions.length === 0 ? (
+                <p className="text-xs text-rizzotto-stone-500 text-center py-4">Loading factions…</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+                  {allFactions.map((faction) => {
+                    const isSelected = (form.faction_pool ?? []).includes(faction.id);
+                    return (
+                      <label
+                        key={faction.id}
+                        className={[
+                          'flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer transition-colors text-sm',
+                          isSelected
+                            ? 'bg-rizzotto-gold-500/15 text-rizzotto-gold-400'
+                            : 'hover:bg-rizzotto-iron-800 text-rizzotto-stone-300',
+                        ].join(' ')}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            const pool = form.faction_pool ?? [];
+                            const updated = isSelected
+                              ? pool.filter((id) => id !== faction.id)
+                              : [...pool, faction.id];
+                            setForm((prev) => ({ ...prev, faction_pool: updated }));
+                          }}
+                          className="accent-rizzotto-gold-400 shrink-0"
+                        />
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: `#${faction.color_hex}` }}
+                        />
+                        <span className="truncate">{faction.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </fieldset>
 

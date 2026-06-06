@@ -105,16 +105,31 @@ export const resolvers = {
       const season = await resolveActiveSeason(ctx.prisma, args.seasonId);
       if (!season) return null;
 
-      const allFactions = await getFactionsWithStats(ctx.prisma, season.id);
+      const [allFactions, total_matches] = await Promise.all([
+        getFactionsWithStats(ctx.prisma, season.id),
+        ctx.prisma.match.count({
+          where: {
+            status: 'COMPLETED',
+            deleted_at: null,
+            season_id: season.id,
+            tournament: { counts_for_leaderboard: true },
+          },
+        }),
+      ]);
 
-      const totalMatchesSummed = allFactions.reduce(
-        (sum, f) => sum + (f.stats?.matches_played ?? 0),
-        0,
-      );
-      const total_matches = Math.floor(totalMatchesSummed / 2);
-
-      const activeCount = allFactions.filter((f) => (f.stats?.matches_played ?? 0) > 0).length;
-      const faction_diversity = activeCount / 24;
+      // Pielou's J: normalised Shannon entropy — 1 = perfect balance, 0 = one faction monopoly
+      const played = allFactions.map((f) => f.stats?.matches_played ?? 0);
+      const totalPlayed = played.reduce((s, v) => s + v, 0);
+      let faction_diversity = 0;
+      if (totalPlayed > 0) {
+        const active = played.filter((v) => v > 0);
+        const H = -active.reduce((s, v) => {
+          const p = v / totalPlayed;
+          return s + p * Math.log(p);
+        }, 0);
+        const Hmax = Math.log(active.length);
+        faction_diversity = Hmax > 0 ? H / Hmax : 1;
+      }
 
       const eligibleForWinrate = allFactions
         .filter((f) => (f.stats?.matches_played ?? 0) >= 10)
