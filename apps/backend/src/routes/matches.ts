@@ -99,11 +99,20 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (map_id && match.player1_id && match.player2_id) {
-        const gameId = await ensureMatchGame(fastify.prisma, matchId, 1);
+        // Upsert MatchGame as COMPLETED so GL computation uses it correctly
+        await fastify.prisma.matchGame.upsert({
+          where: { match_id_game_number: { match_id: matchId, game_number: 1 } },
+          create: { match_id: matchId, game_number: 1, status: 'COMPLETED', winner_id: winnerId, played_at: new Date() },
+          update: { status: 'COMPLETED', winner_id: winnerId, played_at: new Date() },
+        });
+        const game = await fastify.prisma.matchGame.findUniqueOrThrow({
+          where: { match_id_game_number: { match_id: matchId, game_number: 1 } },
+          select: { id: true },
+        });
         await fastify.prisma.matchMapDecision.upsert({
-          where: { game_id: gameId },
+          where: { game_id: game.id },
           create: {
-            game_id: gameId,
+            game_id: game.id,
             mode: 'HOST_PRESET',
             coin_flip_seed: 'manual',
             top_player_id: match.player1_id,

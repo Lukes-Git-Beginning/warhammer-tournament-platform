@@ -132,10 +132,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             status: m.status,
             // Only provide game counts when MatchGame records exist; otherwise leave
             // undefined so swiss.ts falls back to the winner-based heuristic (1/0).
-            player1_game_wins: m.games.length > 0
+            // Only use actual game records when at least one is COMPLETED.
+            // PENDING records (created for map-tracking only) must not block the fallback.
+            player1_game_wins: m.games.some((g) => g.status === 'COMPLETED')
               ? m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length
               : undefined,
-            player2_game_wins: m.games.length > 0
+            player2_game_wins: m.games.some((g) => g.status === 'COMPLETED')
               ? m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length
               : undefined,
           }));
