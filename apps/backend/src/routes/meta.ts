@@ -57,19 +57,20 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('meta:overview', { seasonId: resolvedSeasonId }),
       async () => {
-        const [allFactions, total_games] = await Promise.all([
+        // Same matchWhere as /api/meta/games so the counter matches the list.
+        const globalMatchWhere = {
+          status: 'COMPLETED' as const,
+          player1_id: { not: null },
+          player2_id: { not: null },
+          deleted_at: null,
+        };
+
+        const [allFactions, realGameCount, syntheticGameCount] = await Promise.all([
           getFactionsWithStats(fastify.prisma, resolvedSeasonId),
-          fastify.prisma.matchGame.count({
-            where: {
-              status: 'COMPLETED',
-              match: {
-                season_id: resolvedSeasonId,
-                deleted_at: null,
-                tournament: { counts_for_leaderboard: true },
-              },
-            },
-          }),
+          fastify.prisma.matchGame.count({ where: { match: globalMatchWhere } }),
+          fastify.prisma.match.count({ where: { ...globalMatchWhere, games: { none: {} } } }),
         ]);
+        const total_games = realGameCount + syntheticGameCount;
 
         // Pielou's J: normalised Shannon entropy — 1 = perfect balance, 0 = one faction monopoly
         const played = allFactions.map((f) => f.stats?.matches_played ?? 0);
