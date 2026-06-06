@@ -59,7 +59,7 @@ export function AuditLogTable() {
     <div>
       <div className="mb-4 flex items-center gap-3">
         <label htmlFor="entity-type-filter" className="text-sm text-stone-400">
-          Entity-Typ:
+          Entity type:
         </label>
         <input
           id="entity-type-filter"
@@ -69,16 +69,16 @@ export function AuditLogTable() {
             setPage(1);
             setEntityTypeFilter(e.target.value);
           }}
-          placeholder="z.B. DraftPreset, User…"
+          placeholder="e.g. Match, Tournament…"
           className="rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 placeholder:text-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
         />
       </div>
 
-      {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Wird geladen…</div>}
+      {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>}
 
       {error && (
         <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
-          Fehler beim Laden des Audit-Logs.
+          Failed to load audit log.
         </div>
       )}
 
@@ -93,35 +93,51 @@ export function AuditLogTable() {
                   <th className="px-4 py-3 text-left font-medium text-stone-400">Entity ID</th>
                   <th className="px-4 py-3 text-left font-medium text-stone-400">Action</th>
                   <th className="px-4 py-3 text-left font-medium text-stone-400">Actor</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone-400">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-800/60">
                 {entries.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-stone-500">
+                    <td colSpan={6} className="px-4 py-8 text-center text-stone-500">
                       No entries.
                     </td>
                   </tr>
                 )}
-                {entries.map((entry) => (
-                  <tr key={entry.id} className="hover:bg-stone-800/30 transition-colors">
-                    <td className="px-4 py-3 text-stone-400 whitespace-nowrap">
-                      {formatDate(entry.created_at)}
-                    </td>
-                    <td className="px-4 py-3 text-stone-300">{entry.entity_type}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-stone-400">
-                      {truncate(entry.entity_id)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="rounded bg-stone-800 px-2 py-0.5 text-xs font-medium text-rizzotto-gold-500">
-                        {entry.action}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <ActorCell entry={entry} />
-                    </td>
-                  </tr>
-                ))}
+                {entries.map((entry) => {
+                  const newVal = entry.new_value as Record<string, unknown> | null;
+                  const reason = typeof newVal?.reason === 'string' ? newVal.reason : null;
+                  const result = typeof newVal?.result === 'string' ? newVal.result : null;
+                  return (
+                    <tr key={entry.id} className="hover:bg-stone-800/30 transition-colors">
+                      <td className="px-4 py-3 text-stone-400 whitespace-nowrap">
+                        {formatDate(entry.created_at)}
+                      </td>
+                      <td className="px-4 py-3 text-stone-300">{entry.entity_type}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-stone-400">
+                        {truncate(entry.entity_id)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="rounded bg-stone-800 px-2 py-0.5 text-xs font-medium text-rizzotto-gold-500">
+                          {entry.action}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <ActorCell entry={entry} />
+                      </td>
+                      <td className="px-4 py-3 text-stone-400 text-xs max-w-xs">
+                        {reason && (
+                          <span className="text-amber-400" title={reason}>
+                            {reason.length > 60 ? `${reason.slice(0, 60)}…` : reason}
+                          </span>
+                        )}
+                        {result && !reason && (
+                          <span className="text-stone-500">{result}</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
