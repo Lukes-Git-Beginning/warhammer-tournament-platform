@@ -19,6 +19,7 @@ export interface BracketNode {
   bracketSide: 'WINNERS' | 'LOSERS' | 'GRAND_FINAL' | null;
   player1FactionId: string | null;
   player2FactionId: string | null;
+  matchFormat?: string | null;
   player1GameWins: number;
   player2GameWins: number;
   pickedMapId?: string | null;

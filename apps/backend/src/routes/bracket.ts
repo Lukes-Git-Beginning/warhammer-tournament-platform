@@ -31,7 +31,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, format: true, mode: true },
+        select: { id: true, format: true, mode: true, swiss_match_format: true, playoff_match_format: true, finale_match_format: true },
       });
 
       if (!tournament) {
@@ -120,6 +120,11 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           nextMatchId: m.next_match_id,
           loserNextMatchId: m.loser_next_match_id,
           bracketSide: m.bracket_side,
+          matchFormat: m.phase === 'PLAYOFF_FINAL'
+            ? tournament.finale_match_format
+            : m.phase?.startsWith('PLAYOFF')
+              ? tournament.playoff_match_format
+              : tournament.swiss_match_format,
           // SFT: TournamentParticipant.faction_id is the committed faction — always authoritative.
           // Other modes: per-match faction first, TournamentParticipant as fallback.
           player1FactionId: tournament.mode === TournamentMode.SFT

@@ -16,7 +16,7 @@ interface SVGBracketProps {
 }
 
 export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchClick }: SVGBracketProps) {
-  const showFaction = tournamentMode === 'SFT';
+  const isSft = tournamentMode === 'SFT';
   const layout = computeBracketLayout(data.matches);
 
   // Add padding so connectors and labels don't clip
@@ -90,6 +90,8 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
         const p2 = m.player2Id ? players?.get(m.player2Id) : undefined;
         const f1 = m.player1FactionId ? factionMap?.get(m.player1FactionId) : undefined;
         const f2 = m.player2FactionId ? factionMap?.get(m.player2FactionId) : undefined;
+        // Show faction logo for SFT (fixed faction per event) or BPT Bo1 (single game → faction is unambiguous).
+        const showFaction = isSft || m.matchFormat === 'BO1';
 
         return (
           <foreignObject

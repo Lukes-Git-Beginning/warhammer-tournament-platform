@@ -121,6 +121,14 @@ export function TournamentDetail() {
     },
   });
 
+  const completeMutation = useMutation({
+    mutationFn: () => patchTournament(slug, { status: 'COMPLETED' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+    },
+  });
+
   const { data: bracket } = useQuery({
     queryKey: ['bracket', slug],
     queryFn: () => getBracket(slug),
@@ -305,6 +313,20 @@ export function TournamentDetail() {
             <span className="self-center text-xs text-rizzotto-danger">
               {(startMutation.error as Error).message}
             </span>
+          )}
+          {tournament.status === 'ONGOING' && (
+            <button
+              type="button"
+              disabled={completeMutation.isPending}
+              className="rounded border border-rizzotto-gold-500 px-4 py-1.5 text-sm text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => {
+                if (confirm(`Turnier "${tournament.name}" abschließen? Platzierungen und ELO werden berechnet. Diese Aktion kann nicht rückgängig gemacht werden.`)) {
+                  completeMutation.mutate();
+                }
+              }}
+            >
+              {completeMutation.isPending ? 'Abschließen…' : 'Turnier abschließen'}
+            </button>
           )}
           {tournament.status === 'ONGOING' && (
             <button
