@@ -15,6 +15,7 @@ import {
 } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
 import { formatInUserTimezone } from '@/lib/timezone';
+import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { BracketView } from '@/components/bracket/BracketView';
 import { SwissStandings } from '@/components/bracket/SwissStandings';
 import { PageShell } from '@/components/layout/PageShell';
@@ -123,7 +124,11 @@ export function TournamentDetail() {
     queryFn: () => getBracket(slug),
     enabled: !!tournament && (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED'),
     refetchInterval: 15000,
+    staleTime: 0,
   });
+
+  // Drive standings updates from socket events directly, not via BracketView
+  useLiveBracket(tournament?.id ?? '');
 
   // Participants — shared cache with BracketView and ParticipantsList
   const { data: participantsData } = useQuery({
