@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
-import { MatchStatus, TournamentFormat, TournamentStatus } from '@rizzotto/db';
+import { MatchStatus, TournamentFormat, TournamentMode, TournamentStatus } from '@rizzotto/db';
 import type { BracketResponse, SwissStandingEntry } from '@rizzotto/types';
 import { generateSingleElim, generateDoubleElim } from '../lib/bracket.js';
 import { generateRoundRobin } from '../lib/round-robin.js';
@@ -119,8 +119,14 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           nextMatchId: m.next_match_id,
           loserNextMatchId: m.loser_next_match_id,
           bracketSide: m.bracket_side,
-          player1FactionId: m.player1_faction_id ?? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null),
-          player2FactionId: m.player2_faction_id ?? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null),
+          // SFT: TournamentParticipant.faction_id is the committed faction — always authoritative.
+          // Other modes: per-match faction first, TournamentParticipant as fallback.
+          player1FactionId: tournament.mode === TournamentMode.SFT
+            ? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null)
+            : m.player1_faction_id ?? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null),
+          player2FactionId: tournament.mode === TournamentMode.SFT
+            ? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null)
+            : m.player2_faction_id ?? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null),
           player1GameWins: m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length,
           player2GameWins: m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length,
           pickedMapId: m.games.find((g) => g.map_decision?.picked_map_id)?.map_decision?.picked_map_id ?? null,
