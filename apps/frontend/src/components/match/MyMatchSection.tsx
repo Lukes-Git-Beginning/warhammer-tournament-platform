@@ -119,6 +119,8 @@ function MyMatchInner({
               player2Name={p2Name}
               player1AvatarUrl={match.player1Id ? (playerAvatars[match.player1Id] ?? null) : null}
               player2AvatarUrl={match.player2Id ? (playerAvatars[match.player2Id] ?? null) : null}
+              matchPlayer1FactionId={match.player1FactionId}
+              matchPlayer2FactionId={match.player2FactionId}
               isParticipant={true}
               maps={maps}
               factions={factions}

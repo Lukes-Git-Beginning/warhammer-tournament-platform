@@ -178,7 +178,19 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                 </button>
                 <button
                   type="button"
-                  onClick={() => resetTransform()}
+                  onClick={() => {
+                    if (!transformRef.current || !containerRef.current || !layout) {
+                      resetTransform();
+                      return;
+                    }
+                    const containerW = containerRef.current.clientWidth;
+                    const containerH = containerRef.current.clientHeight;
+                    const PAD = 20;
+                    const svgW = layout.width + PAD * 2;
+                    const svgH = layout.height + PAD * 2;
+                    const fitted = Math.min(containerW / svgW, containerH / svgH, 1);
+                    transformRef.current.centerView(fitted, 200);
+                  }}
                   aria-label="Reset zoom"
                   className="rounded bg-stone-800 px-2 py-1 text-xs text-stone-200 hover:bg-stone-700 transition-colors select-none"
                 >

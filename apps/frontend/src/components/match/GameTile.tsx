@@ -25,6 +25,9 @@ interface Props {
   player2Name: string;
   player1AvatarUrl?: string | null;
   player2AvatarUrl?: string | null;
+  /** Faction IDs from the BracketNode (3-level fallback incl. TournamentParticipant) */
+  matchPlayer1FactionId?: string | null;
+  matchPlayer2FactionId?: string | null;
   /** Whether the current user is a participant in this match */
   isParticipant: boolean;
   /** Map pool for resolving picked map name */
@@ -43,6 +46,8 @@ export function GameTile({
   player2Name,
   player1AvatarUrl,
   player2AvatarUrl,
+  matchPlayer1FactionId,
+  matchPlayer2FactionId,
   isParticipant,
   maps = [],
   factions = {},
@@ -78,12 +83,12 @@ export function GameTile({
   const isPlayer1 = currentUserId === player1Id;
   const isPlayer2 = currentUserId === player2Id;
 
-  // Resolve faction IDs — prefer MatchGame fields (set after finalization),
-  // fall back to BlindPick reveal (BPT, pre-finalization).
+  // Resolve faction IDs — prefer MatchGame fields, then BlindPick reveal (BPT),
+  // then BracketNode (which has TournamentParticipant as final fallback).
   const p1FactionId =
-    game.player1FactionId ?? game.blindPick?.player1FactionId ?? null;
+    game.player1FactionId ?? game.blindPick?.player1FactionId ?? matchPlayer1FactionId ?? null;
   const p2FactionId =
-    game.player2FactionId ?? game.blindPick?.player2FactionId ?? null;
+    game.player2FactionId ?? game.blindPick?.player2FactionId ?? matchPlayer2FactionId ?? null;
   const p1Faction = p1FactionId ? (factions[p1FactionId] ?? null) : null;
   const p2Faction = p2FactionId ? (factions[p2FactionId] ?? null) : null;
   const myId = isPlayer1 ? player1Id : isPlayer2 ? player2Id : null;
@@ -350,7 +355,7 @@ function PlayerInfo({
   isWinner?: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center gap-1.5 w-20 shrink-0">
+    <div className="flex flex-col items-center gap-1.5 w-24 shrink-0">
       {avatarUrl ? (
         <img
           src={avatarUrl}
@@ -363,20 +368,26 @@ function PlayerInfo({
         </span>
       )}
       <span
-        className={`text-xs text-center truncate w-full ${
+        className={`text-xs text-center w-full leading-tight ${
           isWinner ? 'text-rizzotto-gold-400 font-semibold' : 'text-rizzotto-stone-300'
         }`}
+        style={{ overflowWrap: 'break-word' }}
       >
         {name}
       </span>
       {faction && (
-        <FactionBadge
-          size="sm"
-          colorHex={faction.color_hex}
-          initials={faction.initials}
-          name={faction.name}
-          iconUrl={faction.icon_url}
-        />
+        <>
+          <FactionBadge
+            size="sm"
+            colorHex={faction.color_hex}
+            initials={faction.initials}
+            name={faction.name}
+            iconUrl={faction.icon_url}
+          />
+          <span className="text-[10px] text-rizzotto-stone-500 text-center w-full leading-tight" style={{ overflowWrap: 'break-word' }}>
+            {faction.name}
+          </span>
+        </>
       )}
     </div>
   );

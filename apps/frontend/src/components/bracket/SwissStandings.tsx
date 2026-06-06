@@ -45,6 +45,7 @@ export function SwissStandings({
             <tr className="border-b border-stone-800">
               <th className="px-4 py-2 text-left font-medium text-stone-400">#</th>
               <th className="px-4 py-2 text-left font-medium text-stone-400">Spieler</th>
+              <th className="px-4 py-2 text-left font-medium text-stone-400">Fraktion</th>
               <th className="px-4 py-2 text-right font-medium text-stone-400">Punkte</th>
               <th className="px-4 py-2 text-center font-medium text-stone-400">W / L / B</th>
               <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Games Lost">GL</th>
@@ -54,6 +55,7 @@ export function SwissStandings({
           <tbody className="divide-y divide-stone-800/60">
             {standings.map((entry, idx) => {
               const displayName = entry.username ?? entry.userId;
+              const faction = entry.factionId ? factionMap?.get(entry.factionId) : undefined;
               return (
                 <tr key={entry.userId} className="hover:bg-stone-800/30 transition-colors">
                   <td className="px-4 py-2 text-stone-500">{idx + 1}</td>
@@ -64,20 +66,24 @@ export function SwissStandings({
                       className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
                     >
                       <Avatar url={entry.avatarUrl} username={displayName} />
-                      {(() => {
-                        const faction = entry.factionId ? factionMap?.get(entry.factionId) : undefined;
-                        return faction ? (
-                          <FactionBadge
-                            size="sm"
-                            colorHex={faction.color_hex}
-                            initials={faction.initials}
-                            name={faction.name}
-                            iconUrl={faction.icon_url}
-                          />
-                        ) : null;
-                      })()}
                       <span className="text-stone-200">{displayName}</span>
                     </Link>
+                  </td>
+                  <td className="px-4 py-2">
+                    {faction ? (
+                      <div className="flex items-center gap-2">
+                        <FactionBadge
+                          size="sm"
+                          colorHex={faction.color_hex}
+                          initials={faction.initials}
+                          name={faction.name}
+                          iconUrl={faction.icon_url}
+                        />
+                        <span className="text-xs text-stone-300">{faction.name}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-stone-600">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-right font-semibold text-stone-100">
                     {entry.score}

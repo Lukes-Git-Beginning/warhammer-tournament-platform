@@ -37,7 +37,7 @@ function FactionIndicator({ faction }: { faction?: FactionDto | null }) {
       src={faction.icon_url}
       alt=""
       title={faction.name}
-      className="mr-1 h-4 w-4 shrink-0 rounded-sm object-contain"
+      className="ml-1 h-4 w-4 shrink-0 rounded-sm object-contain"
       style={{ backgroundColor: '#837a6f' }}
       loading="lazy"
       draggable={false}
@@ -45,7 +45,7 @@ function FactionIndicator({ faction }: { faction?: FactionDto | null }) {
   ) : (
     <span
       title={faction.name}
-      className="mr-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-[7px] font-bold text-white"
+      className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-[7px] font-bold text-white"
       style={{ backgroundColor: faction.color_hex }}
     >
       {faction.initials}
@@ -102,7 +102,6 @@ export function MatchNode({
       {/* Player 1 row */}
       <div className="flex-1 flex items-center px-2 border-b border-stone-800">
         {match.player1Id && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
-        {match.player1Id && <FactionIndicator faction={player1Faction} />}
         <span
           className={`flex-1 text-xs truncate ${
             p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'
@@ -117,12 +116,12 @@ export function MatchNode({
             {score1}
           </span>
         )}
+        {match.player1Id && <FactionIndicator faction={player1Faction} />}
       </div>
 
       {/* Player 2 row */}
       <div className="flex-1 flex items-center px-2">
         {match.player2Id && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
-        {match.player2Id && <FactionIndicator faction={player2Faction} />}
         <span
           className={`flex-1 text-xs truncate ${
             p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'
@@ -137,6 +136,7 @@ export function MatchNode({
             {score2}
           </span>
         )}
+        {match.player2Id && <FactionIndicator faction={player2Faction} />}
       </div>
 
       {/* ONGOING indicator */}
