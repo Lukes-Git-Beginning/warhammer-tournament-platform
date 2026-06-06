@@ -11,7 +11,7 @@
 
 import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
-import { confirmedMatchWhere, getRatingModel } from './rating-model-service.js';
+import { confirmedGameWhere, getRatingModel } from './rating-model-service.js';
 import { rawPoints, opponentShare, opponentModifier, finalPoints } from './scoring-service.js';
 
 export interface DynamicLeaderboardEntry {
@@ -20,12 +20,12 @@ export interface DynamicLeaderboardEntry {
   avatarUrl: string | null;
   totalFinalPoints: number;
   totalRawPoints: number;
-  totalMatches: number;
+  totalGames: number;
   wins: number;
   losses: number;
 }
 
-interface ConfirmedMatch {
+interface ConfirmedGame {
   player1_id: string;
   player2_id: string;
   winner_id: string;
@@ -34,29 +34,63 @@ interface ConfirmedMatch {
 }
 
 interface PlayerAgg {
-  matches: number;
+  games: number;
   wins: number;
   losses: number;
   totalRawPoints: number;
   totalFinalPoints: number;
 }
 
-/** Load the confirmed-match rows of a season. Faction fields may be null for pre-Faction-Picker matches. */
-export async function loadConfirmedMatches(
+/** Load confirmed games of a season. Resolves factions via 3-tier fallback: game → match → participant. */
+export async function loadConfirmedGames(
   prisma: PrismaClient,
   seasonId: string,
-): Promise<ConfirmedMatch[]> {
-  const rows = await prisma.match.findMany({
-    where: confirmedMatchWhere(seasonId),
+): Promise<ConfirmedGame[]> {
+  const games = await prisma.matchGame.findMany({
+    where: confirmedGameWhere(seasonId),
     select: {
-      player1_id: true,
-      player2_id: true,
       winner_id: true,
       player1_faction_id: true,
       player2_faction_id: true,
+      match: {
+        select: {
+          player1_id: true,
+          player2_id: true,
+          player1_faction_id: true,
+          player2_faction_id: true,
+          tournament_id: true,
+        },
+      },
     },
   });
-  return rows as ConfirmedMatch[];
+
+  const tournamentIds = [...new Set(games.map((g) => g.match.tournament_id))];
+  const participants = tournamentIds.length
+    ? await prisma.tournamentParticipant.findMany({
+        where: { tournament_id: { in: tournamentIds }, deleted_at: null },
+        select: { tournament_id: true, user_id: true, faction_id: true },
+      })
+    : [];
+  const pfMap = new Map(
+    participants.map((p) => [`${p.tournament_id}:${p.user_id}`, p.faction_id]),
+  );
+  const pf = (tid: string, uid: string) => pfMap.get(`${tid}:${uid}`) ?? null;
+
+  return games
+    .filter((g) => g.match.player1_id && g.match.player2_id && g.winner_id)
+    .map((g) => ({
+      player1_id: g.match.player1_id!,
+      player2_id: g.match.player2_id!,
+      winner_id: g.winner_id!,
+      player1_faction_id:
+        g.player1_faction_id ??
+        g.match.player1_faction_id ??
+        pf(g.match.tournament_id, g.match.player1_id!),
+      player2_faction_id:
+        g.player2_faction_id ??
+        g.match.player2_faction_id ??
+        pf(g.match.tournament_id, g.match.player2_id!),
+    }));
 }
 
 /**
@@ -68,17 +102,17 @@ export async function computeSeasonLeaderboard(
   redis: Redis | undefined,
   seasonId: string,
 ): Promise<DynamicLeaderboardEntry[]> {
-  const matches = await loadConfirmedMatches(prisma, seasonId);
+  const games = await loadConfirmedGames(prisma, seasonId);
   const model = await getRatingModel(prisma, redis, { seasonId });
 
-  // --- Pass 1: per-player totals + per-(player, opponent) match counts -------
+  // --- Pass 1: per-player totals + per-(player, opponent) game counts --------
   const agg = new Map<string, PlayerAgg>();
   const opponentCounts = new Map<string, Map<string, number>>();
 
   const ensureAgg = (id: string): PlayerAgg => {
     let a = agg.get(id);
     if (!a) {
-      a = { matches: 0, wins: 0, losses: 0, totalRawPoints: 0, totalFinalPoints: 0 };
+      a = { games: 0, wins: 0, losses: 0, totalRawPoints: 0, totalFinalPoints: 0 };
       agg.set(id, a);
     }
     return a;
@@ -92,23 +126,23 @@ export async function computeSeasonLeaderboard(
     inner.set(opponent, (inner.get(opponent) ?? 0) + 1);
   };
 
-  for (const m of matches) {
-    const loserId = m.winner_id === m.player1_id ? m.player2_id : m.player1_id;
-    ensureAgg(m.winner_id).wins += 1;
+  for (const g of games) {
+    const loserId = g.winner_id === g.player1_id ? g.player2_id : g.player1_id;
+    ensureAgg(g.winner_id).wins += 1;
     ensureAgg(loserId).losses += 1;
-    ensureAgg(m.winner_id).matches += 1;
-    ensureAgg(loserId).matches += 1;
-    bumpOpponent(m.player1_id, m.player2_id);
-    bumpOpponent(m.player2_id, m.player1_id);
+    ensureAgg(g.winner_id).games += 1;
+    ensureAgg(loserId).games += 1;
+    bumpOpponent(g.player1_id, g.player2_id);
+    bumpOpponent(g.player2_id, g.player1_id);
   }
 
   // --- Pass 2: points for each win, using current model + current shares -----
-  for (const m of matches) {
-    const winnerIsP1 = m.winner_id === m.player1_id;
-    const winnerId = m.winner_id;
-    const loserId = winnerIsP1 ? m.player2_id : m.player1_id;
-    const winnerFaction = winnerIsP1 ? m.player1_faction_id : m.player2_faction_id;
-    const loserFaction = winnerIsP1 ? m.player2_faction_id : m.player1_faction_id;
+  for (const g of games) {
+    const winnerIsP1 = g.winner_id === g.player1_id;
+    const winnerId = g.winner_id;
+    const loserId = winnerIsP1 ? g.player2_id : g.player1_id;
+    const winnerFaction = winnerIsP1 ? g.player1_faction_id : g.player2_faction_id;
+    const loserFaction = winnerIsP1 ? g.player2_faction_id : g.player1_faction_id;
 
     const p =
       winnerFaction && loserFaction
@@ -116,7 +150,7 @@ export async function computeSeasonLeaderboard(
         : 0.5; // no faction data — neutral weighting
     const raw = rawPoints(p);
 
-    const winnerTotal = agg.get(winnerId)!.matches;
+    const winnerTotal = agg.get(winnerId)!.games;
     const vsOpponent = opponentCounts.get(winnerId)?.get(loserId) ?? 0;
     const share = opponentShare(vsOpponent, winnerTotal);
     const mod = opponentModifier(share, winnerTotal);
@@ -143,7 +177,7 @@ export async function computeSeasonLeaderboard(
       avatarUrl: u?.avatar_url ?? null,
       totalFinalPoints: a.totalFinalPoints,
       totalRawPoints: a.totalRawPoints,
-      totalMatches: a.matches,
+      totalGames: a.games,
       wins: a.wins,
       losses: a.losses,
     };

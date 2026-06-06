@@ -133,7 +133,7 @@ export const DynamicLeaderboardEntryDtoSchema = z.object({
   avatarUrl: z.string().url().nullable(),
   totalFinalPoints: z.number(),
   totalRawPoints: z.number(),
-  totalMatches: z.number().int(),
+  totalGames: z.number().int(),
   wins: z.number().int(),
   losses: z.number().int(),
 });

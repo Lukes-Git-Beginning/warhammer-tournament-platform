@@ -26,10 +26,28 @@ import {
 const RATING_MODEL_TTL = 3600; // 1h fallback; primary refresh is event-driven invalidation
 
 /**
- * Prisma `where` for the matches that feed the dynamic leaderboard: confirmed,
- * decisive (has a winner), on a leaderboard-counting tournament, tagged to this
- * season. Faction fields are intentionally not required — matches without faction
- * data contribute with neutral weighting (p=0.5) to the score computation.
+ * Prisma `where` for MatchGame records that feed the leaderboard: decisive
+ * (has a winner), belonging to a completed, leaderboard-counting match of this
+ * season. Games are the statistical unit — one observation per Battle, not per
+ * Match series.
+ */
+export function confirmedGameWhere(seasonId: string): Prisma.MatchGameWhereInput {
+  return {
+    winner_id: { not: null },
+    match: {
+      season_id: seasonId,
+      status: 'COMPLETED',
+      deleted_at: null,
+      player1_id: { not: null },
+      player2_id: { not: null },
+      tournament: { counts_for_leaderboard: true },
+    },
+  };
+}
+
+/**
+ * Prisma `where` for Match records (used by breakdown-service explainability
+ * helpers that still operate at match level).
  */
 export function confirmedMatchWhere(seasonId: string): Prisma.MatchWhereInput {
   return {
@@ -43,31 +61,63 @@ export function confirmedMatchWhere(seasonId: string): Prisma.MatchWhereInput {
   };
 }
 
-/** Load confirmed matches of a season as model observations (A = player1). */
+/** Load confirmed games of a season as model observations (A = player1). */
 export async function loadSeasonObservations(
   prisma: PrismaClient,
   seasonId: string,
 ): Promise<MatchObservation[]> {
-  const matches = await prisma.match.findMany({
-    where: confirmedMatchWhere(seasonId),
+  const games = await prisma.matchGame.findMany({
+    where: confirmedGameWhere(seasonId),
     select: {
-      player1_id: true,
-      player2_id: true,
       winner_id: true,
       player1_faction_id: true,
       player2_faction_id: true,
+      match: {
+        select: {
+          player1_id: true,
+          player2_id: true,
+          player1_faction_id: true,
+          player2_faction_id: true,
+          tournament_id: true,
+        },
+      },
     },
   });
 
-  return matches
-    .filter((m) => m.player1_faction_id !== null && m.player2_faction_id !== null)
-    .map((m) => ({
-      playerAId: m.player1_id!,
-      playerBId: m.player2_id!,
-      factionXId: m.player1_faction_id!,
-      factionYId: m.player2_faction_id!,
-      aWon: m.winner_id === m.player1_id,
-    }));
+  // Load TournamentParticipant factions for SFT fallback (faction set at registration)
+  const tournamentIds = [...new Set(games.map((g) => g.match.tournament_id))];
+  const participants = tournamentIds.length
+    ? await prisma.tournamentParticipant.findMany({
+        where: { tournament_id: { in: tournamentIds }, deleted_at: null },
+        select: { tournament_id: true, user_id: true, faction_id: true },
+      })
+    : [];
+  const pfMap = new Map(participants.map((p) => [`${p.tournament_id}:${p.user_id}`, p.faction_id]));
+  const pf = (tid: string, uid: string) => pfMap.get(`${tid}:${uid}`) ?? null;
+
+  return games
+    .filter((g) => g.match.player1_id && g.match.player2_id)
+    .map((g): MatchObservation | null => {
+      const p1 = g.match.player1_id!;
+      const p2 = g.match.player2_id!;
+      const fX =
+        g.player1_faction_id ??
+        g.match.player1_faction_id ??
+        pf(g.match.tournament_id, p1);
+      const fY =
+        g.player2_faction_id ??
+        g.match.player2_faction_id ??
+        pf(g.match.tournament_id, p2);
+      if (!fX || !fY) return null;
+      return {
+        playerAId: p1,
+        playerBId: p2,
+        factionXId: fX,
+        factionYId: fY,
+        aWon: g.winner_id === p1,
+      };
+    })
+    .filter((obs): obs is MatchObservation => obs !== null);
 }
 
 /** Reads rating-model lambdas/thresholds from AdminConfig (falls back to defaults). */

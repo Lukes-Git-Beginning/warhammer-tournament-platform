@@ -70,7 +70,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
               avatarUrl: e.avatarUrl,
               totalFinalPoints: e.totalFinalPoints,
               totalRawPoints: e.totalRawPoints,
-              totalMatches: e.totalMatches,
+              totalGames: e.totalGames,
               wins: e.wins,
               losses: e.losses,
             })),

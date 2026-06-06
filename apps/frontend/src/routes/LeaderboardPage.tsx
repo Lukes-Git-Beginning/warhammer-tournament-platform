@@ -223,7 +223,7 @@ function DynamicLeaderboardTable({
                     <span className="text-stone-600"> / </span>
                     <span className="text-red-400">{entry.losses}</span>
                   </td>
-                  <td className="px-4 py-3 text-right text-stone-400">{entry.totalMatches}</td>
+                  <td className="px-4 py-3 text-right text-stone-400">{entry.totalGames}</td>
                 </tr>
               );
             })}
