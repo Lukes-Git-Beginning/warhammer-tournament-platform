@@ -6,6 +6,7 @@ import DOMPurify from 'dompurify';
 import {
   deleteTournament,
   getBracket,
+  getFactions,
   getParticipantMe,
   getParticipants,
   getTournament,
@@ -13,6 +14,7 @@ import {
   resetBracket,
   startTournament,
 } from '@/lib/api';
+import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
@@ -126,6 +128,25 @@ export function TournamentDetail() {
     refetchInterval: 15000,
     staleTime: 0,
   });
+
+  // Shared cache with BracketView — faction data for SwissStandings faction column.
+  const { data: factionsData } = useQuery({
+    queryKey: ['factions'],
+    queryFn: () => getFactions(),
+    staleTime: 60 * 60_000,
+  });
+  const standingsFactionMap = new Map<string, FactionDto>(
+    (factionsData?.data ?? []).map((f) => [f.faction.id, f.faction]),
+  );
+  const standingsPlayerFactionMap = new Map<string, string>();
+  for (const m of bracket?.matches ?? []) {
+    if (m.player1Id && m.player1FactionId && !standingsPlayerFactionMap.has(m.player1Id)) {
+      standingsPlayerFactionMap.set(m.player1Id, m.player1FactionId);
+    }
+    if (m.player2Id && m.player2FactionId && !standingsPlayerFactionMap.has(m.player2Id)) {
+      standingsPlayerFactionMap.set(m.player2Id, m.player2FactionId);
+    }
+  }
 
   // Drive standings updates from socket events directly, not via BracketView
   useLiveBracket(tournament?.id ?? '');
@@ -455,6 +476,9 @@ export function TournamentDetail() {
                 standings={swiss.standings}
                 currentRound={swiss.currentRound}
                 recommendedRounds={swiss.recommendedRounds}
+                tournamentMode={tournament.mode}
+                factionMap={standingsFactionMap}
+                playerFactionMap={standingsPlayerFactionMap}
               />
             </section>
           );

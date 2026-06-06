@@ -355,17 +355,19 @@ function PlayerInfo({
   isWinner?: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center gap-1.5 w-24 shrink-0">
+    <div className="flex flex-col items-center gap-2 w-28 shrink-0">
       {avatarUrl ? (
         <img
           src={avatarUrl}
           alt=""
           className="rounded-full object-cover border border-rizzotto-iron-600"
-          style={{ width: 30, height: 30 }}
+          style={{ width: 60, height: 60 }}
         />
       ) : (
-        <span className="rounded-full flex items-center justify-center bg-rizzotto-iron-700 text-rizzotto-stone-300 text-xs font-semibold select-none"
-          style={{ width: 30, height: 30 }}>
+        <span
+          className="rounded-full flex items-center justify-center bg-rizzotto-iron-700 text-rizzotto-stone-300 text-xl font-semibold select-none"
+          style={{ width: 60, height: 60 }}
+        >
           {name.slice(0, 1).toUpperCase()}
         </span>
       )}
@@ -380,13 +382,18 @@ function PlayerInfo({
       {faction && (
         <>
           <FactionBadge
-            size="sm"
+            size="lg"
             colorHex={faction.color_hex}
             initials={faction.initials}
             name={faction.name}
             iconUrl={faction.icon_url}
           />
-          <span className="text-[10px] text-rizzotto-stone-500 text-center w-full leading-tight" style={{ overflowWrap: 'break-word' }}>
+          <span
+            className={`text-xs text-center w-full leading-tight ${
+              isWinner ? 'text-rizzotto-gold-400' : 'text-rizzotto-stone-300'
+            }`}
+            style={{ overflowWrap: 'break-word' }}
+          >
             {faction.name}
           </span>
         </>
