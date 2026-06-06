@@ -393,6 +393,10 @@ export function startNextSwissRound(tournamentId: string): Promise<{ ok: true }>
   });
 }
 
+export function startPlayoffs(tournamentId: string): Promise<{ tournamentId: string; format: string; matches_created: number }> {
+  return apiFetch(`/api/tournaments/${tournamentId}/start-playoffs`, { method: 'POST' });
+}
+
 export function reportMatchResult(
   matchId: string,
   body: {

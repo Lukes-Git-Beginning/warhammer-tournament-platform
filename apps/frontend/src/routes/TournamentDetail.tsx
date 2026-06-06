@@ -498,6 +498,7 @@ export function TournamentDetail() {
             tournamentId={tournament.id}
             canManage={!!canManage}
             hideStandings
+            playoffFormat={tournament.playoff_format ?? 'NONE'}
           />
         </section>
       )}

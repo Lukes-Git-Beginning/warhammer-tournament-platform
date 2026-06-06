@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import type { FactionDto } from '@rizzotto/types';
-import { getBracket, getParticipants, startNextSwissRound, getFactions } from '@/lib/api';
+import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, getFactions } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { computeBracketLayout } from './computeBracketLayout';
 import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
@@ -15,9 +15,10 @@ interface BracketViewProps {
   tournamentId: string;
   canManage?: boolean;
   hideStandings?: boolean;
+  playoffFormat?: 'NONE' | 'TOP4' | 'TOP8' | null;
 }
 
-export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false }: BracketViewProps) {
+export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false, playoffFormat }: BracketViewProps) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
@@ -87,6 +88,17 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     },
   });
 
+  const {
+    mutate: doStartPlayoffs,
+    isPending: isStartingPlayoffs,
+    error: startPlayoffsError,
+  } = useMutation({
+    mutationFn: () => startPlayoffs(tournamentId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+    },
+  });
+
   if (isLoading) {
     return <div className="text-stone-400 text-sm py-6">Bracket wird geladen…</div>;
   }
@@ -117,6 +129,23 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   const swiss = data.swiss;
   const showNextRoundButton =
     canManage && swiss !== undefined && swiss.currentRound < swiss.recommendedRounds;
+
+  // Show "Advance to Playoffs" after last Swiss round is fully complete and playoffs not yet generated.
+  const hasPlayoffMatches = swiss !== undefined && data.matches.some((m) => m.round > swiss.recommendedRounds);
+  const lastSwissRoundDone =
+    swiss !== undefined &&
+    swiss.currentRound >= swiss.recommendedRounds &&
+    data.matches
+      .filter((m) => m.round === swiss.recommendedRounds)
+      .every((m) => m.status === 'COMPLETED' || m.status === 'BYE');
+  const showAdvanceToPlayoffs =
+    canManage &&
+    playoffFormat &&
+    playoffFormat !== 'NONE' &&
+    lastSwissRoundDone &&
+    !hasPlayoffMatches;
+  const advanceLabel =
+    playoffFormat === 'TOP8' ? 'Advance to Quarterfinals' : 'Advance to Semifinals';
 
   const isDE = data.matches.some((m) => m.bracketSide !== null);
   const allDone = data.matches.every(
@@ -156,6 +185,23 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
             className="rounded border border-rizzotto-gold-500/60 px-4 py-2 text-sm font-medium text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isStartingRound ? 'Starting…' : 'Start next round'}
+          </button>
+        </div>
+      )}
+
+      {/* Advance to Playoffs button — shown only after all Swiss rounds are complete */}
+      {showAdvanceToPlayoffs && (
+        <div className="mb-4">
+          {startPlayoffsError && (
+            <p className="mb-2 text-sm text-red-400">Error: {(startPlayoffsError as Error).message}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => doStartPlayoffs()}
+            disabled={isStartingPlayoffs}
+            className="rounded border border-rizzotto-gold-500/60 px-4 py-2 text-sm font-medium text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isStartingPlayoffs ? 'Starting…' : advanceLabel}
           </button>
         </div>
       )}
