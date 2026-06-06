@@ -378,6 +378,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
             <MatchScoreModal
               matchId={selectedMatch.matchId}
               matchStatus={selectedMatch.status}
+              matchFormat={selectedMatch.matchFormat}
               tournamentSlug={slug}
               player1Id={selectedMatch.player1Id}
               player2Id={selectedMatch.player2Id}

@@ -144,30 +144,42 @@ export function computeRankedPlacements(
 ): Map<string, number> {
   const wins = new Map<string, number>();
   const losses = new Map<string, number>();
+  const opponents = new Map<string, string[]>();
 
   for (const id of participantIds) {
     wins.set(id, 0);
     losses.set(id, 0);
+    opponents.set(id, []);
   }
 
   for (const match of matches) {
     if (match.status !== 'COMPLETED') continue;
-    if (!match.winner_id) continue;
+    if (!match.winner_id || !match.player1_id || !match.player2_id) continue;
 
     const { winner_id, player1_id, player2_id } = match;
     wins.set(winner_id, (wins.get(winner_id) ?? 0) + 1);
 
     const loser = player1_id === winner_id ? player2_id : player1_id;
-    if (loser) {
-      losses.set(loser, (losses.get(loser) ?? 0) + 1);
-    }
+    if (loser) losses.set(loser, (losses.get(loser) ?? 0) + 1);
+
+    opponents.get(player1_id)?.push(player2_id);
+    opponents.get(player2_id)?.push(player1_id);
   }
 
-  // Sort: wins desc, losses asc
+  // Buchholz: sum of each opponent's wins
+  const buchholz = new Map<string, number>();
+  for (const id of participantIds) {
+    const bh = (opponents.get(id) ?? []).reduce((s, opp) => s + (wins.get(opp) ?? 0), 0);
+    buchholz.set(id, bh);
+  }
+
+  // Sort: wins desc → losses asc → buchholz desc
   const sorted = [...participantIds].sort((a, b) => {
     const wDiff = (wins.get(b) ?? 0) - (wins.get(a) ?? 0);
     if (wDiff !== 0) return wDiff;
-    return (losses.get(a) ?? 0) - (losses.get(b) ?? 0);
+    const lDiff = (losses.get(a) ?? 0) - (losses.get(b) ?? 0);
+    if (lDiff !== 0) return lDiff;
+    return (buchholz.get(b) ?? 0) - (buchholz.get(a) ?? 0);
   });
 
   const placements = new Map<string, number>();
@@ -177,13 +189,14 @@ export function computeRankedPlacements(
     const id = sorted[i]!;
     const w = wins.get(id) ?? 0;
     const l = losses.get(id) ?? 0;
+    const bh = buchholz.get(id) ?? 0;
 
-    // Find all tied players
     let j = i;
     while (
       j < sorted.length &&
       (wins.get(sorted[j]!) ?? 0) === w &&
-      (losses.get(sorted[j]!) ?? 0) === l
+      (losses.get(sorted[j]!) ?? 0) === l &&
+      (buchholz.get(sorted[j]!) ?? 0) === bh
     ) {
       placements.set(sorted[j]!, currentPlacement);
       j++;

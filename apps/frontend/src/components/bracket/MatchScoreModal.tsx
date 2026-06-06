@@ -5,6 +5,7 @@ import { useState } from 'react';
 interface MatchScoreModalProps {
   matchId: string;
   matchStatus?: string;
+  matchFormat?: string | null;
   tournamentSlug?: string;
   player1Name?: string;
   player2Name?: string;
@@ -57,6 +58,7 @@ function ScoreCounter({
 export function MatchScoreModal({
   matchId,
   matchStatus,
+  matchFormat,
   tournamentSlug,
   player1Name,
   player2Name,
@@ -72,6 +74,7 @@ export function MatchScoreModal({
 }: MatchScoreModalProps) {
   const queryClient = useQueryClient();
   const isCompleted = matchStatus === 'COMPLETED';
+  const isBo1 = matchFormat === 'BO1';
 
   const [winnerId, setWinnerId] = useState<string>(initialWinnerId ?? '');
   const [p1Score, setP1Score] = useState(initialP1Score);
@@ -118,9 +121,12 @@ export function MatchScoreModal({
           player2FactionId: p2FactionId || undefined,
         });
       }
+      const score = isBo1
+        ? (winnerId === player1Id ? '1-0' : '0-1')
+        : `${p1Score}-${p2Score}`;
       return reportMatchResult(matchId, {
         winnerId,
-        score: `${p1Score}-${p2Score}`,
+        score,
         map_id: mapId || undefined,
         player1FactionId: p1FactionId || undefined,
         player2FactionId: p2FactionId || undefined,
@@ -193,14 +199,16 @@ export function MatchScoreModal({
           </div>
         </fieldset>
 
-        <fieldset className="mb-4">
-          <legend className="text-xs text-stone-400 mb-2">Score</legend>
-          <div className="flex items-center justify-center gap-6">
-            <ScoreCounter label={player1Name ?? 'Spieler 1'} value={p1Score} onChange={setP1Score} />
-            <span className="text-stone-600 text-lg font-bold">:</span>
-            <ScoreCounter label={player2Name ?? 'Spieler 2'} value={p2Score} onChange={setP2Score} />
-          </div>
-        </fieldset>
+        {!isBo1 && (
+          <fieldset className="mb-4">
+            <legend className="text-xs text-stone-400 mb-2">Score</legend>
+            <div className="flex items-center justify-center gap-6">
+              <ScoreCounter label={player1Name ?? 'Spieler 1'} value={p1Score} onChange={setP1Score} />
+              <span className="text-stone-600 text-lg font-bold">:</span>
+              <ScoreCounter label={player2Name ?? 'Spieler 2'} value={p2Score} onChange={setP2Score} />
+            </div>
+          </fieldset>
+        )}
 
         {maps.length > 0 && (
           <div className="mb-4">
