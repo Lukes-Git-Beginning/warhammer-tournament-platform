@@ -102,6 +102,25 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
+      // Link historical TT game records where player name matches this user's
+      // display name. Only updates rows where the FK is still null, so re-logins
+      // are no-ops. Fire-and-forget failures are acceptable — records stay
+      // unresolved and can be reconciled on the next login.
+      void fastify.prisma.$transaction([
+        fastify.prisma.externalGame.updateMany({
+          where: { player1_name: user.username, player1_id: null },
+          data: { player1_id: user.id },
+        }),
+        fastify.prisma.externalGame.updateMany({
+          where: { player2_name: user.username, player2_id: null },
+          data: { player2_id: user.id },
+        }),
+        fastify.prisma.externalGame.updateMany({
+          where: { winner_name: user.username, winner_id: null },
+          data: { winner_id: user.id },
+        }),
+      ]);
+
       const payload: JwtPayload = {
         sub: user.id,
         discord_id: user.discord_id,
