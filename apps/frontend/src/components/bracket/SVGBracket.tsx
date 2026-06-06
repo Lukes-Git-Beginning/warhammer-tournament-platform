@@ -11,10 +11,12 @@ interface SVGBracketProps {
   data: BracketResponse;
   players?: Map<string, BracketPlayerInfo>;
   factionMap?: Map<string, FactionDto>;
+  tournamentMode?: string;
   onMatchClick?: (matchId: string) => void;
 }
 
-export function SVGBracket({ data, players, factionMap, onMatchClick }: SVGBracketProps) {
+export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchClick }: SVGBracketProps) {
+  const showFaction = tournamentMode === 'SFT';
   const layout = computeBracketLayout(data.matches);
 
   // Add padding so connectors and labels don't clip
@@ -108,6 +110,7 @@ export function SVGBracket({ data, players, factionMap, onMatchClick }: SVGBrack
                 player2AvatarUrl={p2?.avatarUrl}
                 player1Faction={f1}
                 player2Faction={f2}
+                showFaction={showFaction}
                 onClick={onMatchClick ? () => onMatchClick(m.matchId) : undefined}
               />
             </div>

@@ -8,6 +8,7 @@ interface MatchNodeProps {
   player2AvatarUrl?: string | null;
   player1Faction?: FactionDto | null;
   player2Faction?: FactionDto | null;
+  showFaction?: boolean;
   onClick?: () => void;
 }
 
@@ -69,6 +70,7 @@ export function MatchNode({
   player2AvatarUrl,
   player1Faction,
   player2Faction,
+  showFaction = false,
   onClick,
 }: MatchNodeProps) {
   const isBye = match.status === 'BYE';
@@ -109,7 +111,7 @@ export function MatchNode({
         >
           {match.player1Id ? (player1Name ?? match.player1Id) : 'BYE'}
         </span>
-        {match.player1Id && <FactionIndicator faction={player1Faction} />}
+        {showFaction && match.player1Id && <FactionIndicator faction={player1Faction} />}
         {score1 && (
           <span
             className={`text-xs ml-1 tabular-nums ${p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
@@ -129,7 +131,7 @@ export function MatchNode({
         >
           {match.player2Id ? (player2Name ?? match.player2Id) : 'BYE'}
         </span>
-        {match.player2Id && <FactionIndicator faction={player2Faction} />}
+        {showFaction && match.player2Id && <FactionIndicator faction={player2Faction} />}
         {score2 && (
           <span
             className={`text-xs ml-1 tabular-nums ${p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}

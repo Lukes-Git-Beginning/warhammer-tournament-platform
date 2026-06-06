@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import type { FactionDto } from '@rizzotto/types';
-import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, getFactions } from '@/lib/api';
+import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, getFactions, patchTournament } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { computeBracketLayout } from './computeBracketLayout';
 import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
@@ -106,6 +106,19 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     },
   });
 
+  const {
+    mutate: doComplete,
+    isPending: isCompleting,
+    error: completeError,
+  } = useMutation({
+    mutationFn: () => patchTournament(slug, { status: 'COMPLETED' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+    },
+  });
+
   if (isLoading) {
     return <div className="text-stone-400 text-sm py-6">Bracket wird geladen…</div>;
   }
@@ -158,6 +171,8 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   const allDone = data.matches.every(
     (m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT',
   );
+  const showCompleteButton =
+    canManage && allDone && !showNextRoundButton && !showAdvanceToPlayoffs;
 
   return (
     <div>
@@ -212,6 +227,27 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
             className="rounded border border-rizzotto-gold-500/60 px-4 py-2 text-sm font-medium text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isStartingPlayoffs ? 'Starting…' : advanceLabel}
+          </button>
+        </div>
+      )}
+
+      {/* Complete Tournament button — shown when all matches are done */}
+      {showCompleteButton && (
+        <div className="mb-4">
+          {completeError && (
+            <p className="mb-2 text-sm text-red-400">Error: {(completeError as Error).message}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm('Turnier abschließen? Platzierungen und ELO werden berechnet. Diese Aktion kann nicht rückgängig gemacht werden.')) {
+                doComplete();
+              }
+            }}
+            disabled={isCompleting}
+            className="rounded border border-rizzotto-gold-500/60 px-4 py-2 text-sm font-medium text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isCompleting ? 'Abschließen…' : 'Complete Tournament'}
           </button>
         </div>
       )}
@@ -275,6 +311,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                   data={data}
                   players={players}
                   factionMap={factionMap}
+                  tournamentMode={data.mode}
                   onMatchClick={(matchId) => {
                     const m = data.matches.find((x) => x.matchId === matchId);
                     if (canManage && m?.status !== 'BYE' && m?.status !== 'FORFEIT') {
