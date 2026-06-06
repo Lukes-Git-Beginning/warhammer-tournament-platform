@@ -61,31 +61,37 @@ export function confirmedMatchWhere(seasonId: string): Prisma.MatchWhereInput {
   };
 }
 
-/** Load confirmed games of a season as model observations (A = player1). */
+/**
+ * Load confirmed games of a season as model observations.
+ * Mirrors All-Games logic: load via Match (for correct season/leaderboard
+ * filtering), expand to individual MatchGame records where they exist, fall back
+ * to a synthetic single-game observation for matches that have no game records.
+ */
 export async function loadSeasonObservations(
   prisma: PrismaClient,
   seasonId: string,
 ): Promise<MatchObservation[]> {
-  const games = await prisma.matchGame.findMany({
-    where: confirmedGameWhere(seasonId),
+  const matches = await prisma.match.findMany({
+    where: confirmedMatchWhere(seasonId),
     select: {
+      player1_id: true,
+      player2_id: true,
       winner_id: true,
       player1_faction_id: true,
       player2_faction_id: true,
-      match: {
+      tournament_id: true,
+      games: {
         select: {
-          player1_id: true,
-          player2_id: true,
+          winner_id: true,
           player1_faction_id: true,
           player2_faction_id: true,
-          tournament_id: true,
         },
       },
     },
   });
 
   // Load TournamentParticipant factions for SFT fallback (faction set at registration)
-  const tournamentIds = [...new Set(games.map((g) => g.match.tournament_id))];
+  const tournamentIds = [...new Set(matches.map((m) => m.tournament_id))];
   const participants = tournamentIds.length
     ? await prisma.tournamentParticipant.findMany({
         where: { tournament_id: { in: tournamentIds }, deleted_at: null },
@@ -95,29 +101,27 @@ export async function loadSeasonObservations(
   const pfMap = new Map(participants.map((p) => [`${p.tournament_id}:${p.user_id}`, p.faction_id]));
   const pf = (tid: string, uid: string) => pfMap.get(`${tid}:${uid}`) ?? null;
 
-  return games
-    .filter((g) => g.match.player1_id && g.match.player2_id)
-    .map((g): MatchObservation | null => {
-      const p1 = g.match.player1_id!;
-      const p2 = g.match.player2_id!;
-      const fX =
-        g.player1_faction_id ??
-        g.match.player1_faction_id ??
-        pf(g.match.tournament_id, p1);
-      const fY =
-        g.player2_faction_id ??
-        g.match.player2_faction_id ??
-        pf(g.match.tournament_id, p2);
-      if (!fX || !fY) return null;
-      return {
-        playerAId: p1,
-        playerBId: p2,
-        factionXId: fX,
-        factionYId: fY,
-        aWon: g.winner_id === p1,
-      };
-    })
-    .filter((obs): obs is MatchObservation => obs !== null);
+  return matches.flatMap((m): (MatchObservation | null)[] => {
+    const p1 = m.player1_id!;
+    const p2 = m.player2_id!;
+    const matchFX = m.player1_faction_id ?? pf(m.tournament_id, p1);
+    const matchFY = m.player2_faction_id ?? pf(m.tournament_id, p2);
+
+    const decisiveGames = m.games.filter((g) => g.winner_id !== null);
+
+    if (decisiveGames.length > 0) {
+      return decisiveGames.map((g): MatchObservation | null => {
+        const fX = g.player1_faction_id ?? matchFX;
+        const fY = g.player2_faction_id ?? matchFY;
+        if (!fX || !fY) return null;
+        return { playerAId: p1, playerBId: p2, factionXId: fX, factionYId: fY, aWon: g.winner_id === p1 };
+      });
+    }
+
+    // No game records — treat the match as a single synthetic game
+    if (!m.winner_id || !matchFX || !matchFY) return [null];
+    return [{ playerAId: p1, playerBId: p2, factionXId: matchFX, factionYId: matchFY, aWon: m.winner_id === p1 }];
+  }).filter((obs): obs is MatchObservation => obs !== null);
 }
 
 /** Reads rating-model lambdas/thresholds from AdminConfig (falls back to defaults). */

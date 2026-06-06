@@ -11,7 +11,7 @@
 
 import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
-import { confirmedGameWhere, getRatingModel } from './rating-model-service.js';
+import { confirmedMatchWhere, getRatingModel } from './rating-model-service.js';
 import { rawPoints, opponentShare, opponentModifier, finalPoints } from './scoring-service.js';
 
 export interface DynamicLeaderboardEntry {
@@ -41,30 +41,35 @@ interface PlayerAgg {
   totalFinalPoints: number;
 }
 
-/** Load confirmed games of a season. Resolves factions via 3-tier fallback: game → match → participant. */
+/**
+ * Load confirmed games of a season. Mirrors All-Games logic: load via Match,
+ * expand to MatchGame records where they exist, synthesise a single game for
+ * matches that have no game records (pre-GL-fix data).
+ */
 export async function loadConfirmedGames(
   prisma: PrismaClient,
   seasonId: string,
 ): Promise<ConfirmedGame[]> {
-  const games = await prisma.matchGame.findMany({
-    where: confirmedGameWhere(seasonId),
+  const matches = await prisma.match.findMany({
+    where: confirmedMatchWhere(seasonId),
     select: {
+      player1_id: true,
+      player2_id: true,
       winner_id: true,
       player1_faction_id: true,
       player2_faction_id: true,
-      match: {
+      tournament_id: true,
+      games: {
         select: {
-          player1_id: true,
-          player2_id: true,
+          winner_id: true,
           player1_faction_id: true,
           player2_faction_id: true,
-          tournament_id: true,
         },
       },
     },
   });
 
-  const tournamentIds = [...new Set(games.map((g) => g.match.tournament_id))];
+  const tournamentIds = [...new Set(matches.map((m) => m.tournament_id))];
   const participants = tournamentIds.length
     ? await prisma.tournamentParticipant.findMany({
         where: { tournament_id: { in: tournamentIds }, deleted_at: null },
@@ -76,21 +81,34 @@ export async function loadConfirmedGames(
   );
   const pf = (tid: string, uid: string) => pfMap.get(`${tid}:${uid}`) ?? null;
 
-  return games
-    .filter((g) => g.match.player1_id && g.match.player2_id && g.winner_id)
-    .map((g) => ({
-      player1_id: g.match.player1_id!,
-      player2_id: g.match.player2_id!,
-      winner_id: g.winner_id!,
-      player1_faction_id:
-        g.player1_faction_id ??
-        g.match.player1_faction_id ??
-        pf(g.match.tournament_id, g.match.player1_id!),
-      player2_faction_id:
-        g.player2_faction_id ??
-        g.match.player2_faction_id ??
-        pf(g.match.tournament_id, g.match.player2_id!),
-    }));
+  return matches.flatMap((m): ConfirmedGame[] => {
+    const p1 = m.player1_id!;
+    const p2 = m.player2_id!;
+    const matchFX = m.player1_faction_id ?? pf(m.tournament_id, p1);
+    const matchFY = m.player2_faction_id ?? pf(m.tournament_id, p2);
+
+    const decisiveGames = m.games.filter((g) => g.winner_id !== null);
+
+    if (decisiveGames.length > 0) {
+      return decisiveGames.map((g) => ({
+        player1_id: p1,
+        player2_id: p2,
+        winner_id: g.winner_id!,
+        player1_faction_id: g.player1_faction_id ?? matchFX,
+        player2_faction_id: g.player2_faction_id ?? matchFY,
+      }));
+    }
+
+    // No game records — treat the match as a single synthetic game
+    if (!m.winner_id) return [];
+    return [{
+      player1_id: p1,
+      player2_id: p2,
+      winner_id: m.winner_id,
+      player1_faction_id: matchFX,
+      player2_faction_id: matchFY,
+    }];
+  });
 }
 
 /**
