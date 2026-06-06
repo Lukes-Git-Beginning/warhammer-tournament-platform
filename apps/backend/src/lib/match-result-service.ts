@@ -47,6 +47,9 @@ export interface ResolveMatchResultOpts {
   actorId?: string;
   /** Reason text stored in audit log (for overrides) */
   reason?: string;
+  /** Faction overrides — written to the match and latched onto TournamentParticipant if not set */
+  player1FactionId?: string;
+  player2FactionId?: string;
 }
 
 /**
@@ -94,6 +97,7 @@ export async function resolveMatchResult(
           id: true,
           counts_for_leaderboard: true,
           is_major: true,
+          mode: true,
         },
       },
     },
@@ -125,6 +129,9 @@ export async function resolveMatchResult(
       select: { id: true },
     });
 
+    const p1FactionId = opts.player1FactionId ?? match.player1_faction_id ?? null;
+    const p2FactionId = opts.player2FactionId ?? match.player2_faction_id ?? null;
+
     // 1. Update match
     await tx.match.update({
       where: { id: matchId },
@@ -134,11 +141,28 @@ export async function resolveMatchResult(
         winner_id: winnerId,
         player1_points: p1Points,
         player2_points: p2Points,
-        // Dynamic leaderboard: stamp the season + play time at completion.
         season_id: activeSeason?.id ?? null,
         played_at: new Date(),
+        ...(p1FactionId ? { player1_faction_id: p1FactionId } : {}),
+        ...(p2FactionId ? { player2_faction_id: p2FactionId } : {}),
       },
     });
+
+    // Latch faction onto TournamentParticipant if not yet set (SFT: faction locked at registration)
+    if (match.tournament.mode === 'SFT') {
+      if (p1FactionId && match.player1_id) {
+        await tx.tournamentParticipant.updateMany({
+          where: { tournament_id: match.tournament_id, user_id: match.player1_id, faction_id: null, deleted_at: null },
+          data: { faction_id: p1FactionId },
+        });
+      }
+      if (p2FactionId && match.player2_id) {
+        await tx.tournamentParticipant.updateMany({
+          where: { tournament_id: match.tournament_id, user_id: match.player2_id, faction_id: null, deleted_at: null },
+          data: { faction_id: p2FactionId },
+        });
+      }
+    }
 
     // 2. Bracket progression — advance winner to next match
     if (match.next_match_id && winnerId) {
@@ -283,8 +307,8 @@ export async function resolveMatchResult(
     // 4. FactionStats + MatchupStats — mirrors the logic in routes/matches.ts.
     //    Only written when an active season exists and faction IDs are set on the match.
     //    These feed the 24×24 faction heatmap and per-faction analytics.
-    const effectiveP1FactionId = match.player1_faction_id ?? null;
-    const effectiveP2FactionId = match.player2_faction_id ?? null;
+    const effectiveP1FactionId = p1FactionId;
+    const effectiveP2FactionId = p2FactionId;
 
     const isDraw = result === 'DRAW' || result === 'DOUBLE_LOSS';
 
