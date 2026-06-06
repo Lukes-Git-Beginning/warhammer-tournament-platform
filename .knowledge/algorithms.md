@@ -29,7 +29,7 @@ RawPoints(Sieger)    = 100 · (1 − ExpectedChanceToWin)         // kein Cap/Fl
 
 **Anti-Farming** (`scoring-service.ts`) — player-spezifisch, asymmetrisch, **nicht** auf Faktion/Matchup/Combo:
 ```
-OpponentShare    = matchesVsOpponent / playerTotalMatches
+OpponentShare    = gamesVsOpponent / playerTotalGames
 OpponentModifier = total<20 → 1 ; share≤0.05 → 1 ; share≥0.10 → 0 ; sonst (0.10−share)/0.05
 FinalPoints      = RawPoints · OpponentModifier ;  LeaderboardScore = Σ FinalPoints über Siege
 ```
@@ -37,7 +37,11 @@ Dynamische Erholung: viele andere Gegner spielen senkt die Share → frühere Pu
 
 Tests: `test/{scoring-service,rating-model,leaderboard-service}.test.ts` (alle 8 Spec-Cases + Optimizer + DB-Integration inkl. Explainability-Invariante).
 
-**ACHTUNG (2026-06-06):** `confirmedMatchWhere()` filtert aktuell auf `player1_faction_id NOT NULL` + `player2_faction_id NOT NULL`. Das ist intentional für das Rating-Modell (braucht Faction-Matchup-Daten), aber schließt Matches ohne Factions komplett aus dem Leaderboard aus. Geplante Änderung nächste Session: Filter entfernen, Null-Factions = neutrale Gewichtung (0.5 Gewinnchance).
+**Game-Ebene (2026-06-06):** Leaderboard und Rating-Modell rechnen auf **MatchGame**-Ebene, nicht Match-Ebene. Jede Battle ist eine separate Observation. Laden via `confirmedMatchWhere()` auf Match → Expansion auf `MatchGame`-Records (`m.games`) → Fallback auf synthetisches Einzel-Game wenn `games.length === 0` (pre-GL-fix Daten). Faction-Fallback 3-stufig: `MatchGame.player1_faction_id` → `Match.player1_faction_id` → `TournamentParticipant.faction_id`. Null-Factions → p=0.5 neutral in Score-Berechnung; für Modell-Training übersprungen.
+
+**`confirmedGameWhere()`** in `rating-model-service.ts` existiert als Hilfs-Where für MatchGame-Queries, wird aber im Leaderboard nicht mehr als primärer Filter verwendet (Match-first-Ansatz). `confirmedMatchWhere()` bleibt für `breakdown-service.ts` (Explainability-Helpers bleiben auf Match-Ebene).
+
+**API-Shape:** `DynamicLeaderboardEntryDto.totalMatches` → **`totalGames`** (seit 2026-06-06, `packages/types/src/api-schemas.ts`).
 
 ---
 

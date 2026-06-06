@@ -219,12 +219,14 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 15. **Stufe 2 — öffentlich** (Reddit/Foren): erst nach 1–2 sauberen Stufe-1-Turnieren
 
 **Offene Items aus Generalprobe (vor Handover-PR abschließen):**
-- [ ] Meta-Overview-Counter: aus All-Games-Quelle statt FactionStats
-- [ ] Faction-Diversity-Metrik: Pielou's J (normierte Shannon-Entropie) statt "% aktiver Factions"
-- [ ] Heatmap-Achsen: alphabetisch statt `display_order`
-- [ ] Leaderboard: `confirmedMatchWhere` Faction-Filter entfernen, Null-Factions = neutrale Gewichtung
-- [ ] Feature: Faction-Beschränkung bei Turniererstellung (SFT + BPT + 3×3), Select-All/Deselect-All, Default alle ausgewählt, blockiert wenn Turnier läuft
-- [ ] FactionStats-Drift bei Overrides: Counter über-inkrementiert → mittelfristig Recalculate-Endpoint oder Event-Sourcing
+- [x] Meta-Overview-Counter: aus All-Games-Quelle statt FactionStats — ✅ done (2026-06-06, direktes `prisma.match.count()`)
+- [x] Faction-Diversity-Metrik: Pielou's J — ✅ done (2026-06-06, `meta.ts` + `resolvers.ts`)
+- [x] Heatmap-Achsen: alphabetisch — ✅ done (2026-06-06, `name.localeCompare()`)
+- [x] Leaderboard: Faction-Filter entfernen, Null-Factions = neutrale Gewichtung — ✅ done (2026-06-06)
+- [x] Feature: Faction-Beschränkung bei Turniererstellung — ✅ done (2026-06-06, `TournamentFactionAllowlist`, Backend + Frontend-Fieldset)
+- [x] Leaderboard auf Game-Ebene (MatchGame) umgestellt — ✅ done (2026-06-06, `loadSeasonObservations` + `loadConfirmedGames` via Match-first + Game-Expansion; `totalMatches` → `totalGames` in DTO + UI)
+- [ ] **FactionStats-Drift bei Overrides:** Counter über-inkrementiert → mittelfristig Recalculate-Endpoint oder Event-Sourcing
+- [ ] **Generalprobe fortsetzen** (Runde 4–5 + Playoffs) → Handover-PR vorbereiten
 
 ---
 
