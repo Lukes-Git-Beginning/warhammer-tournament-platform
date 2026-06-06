@@ -158,7 +158,7 @@ function DynamicLeaderboardTable({
 
   return (
     <div data-testid="leaderboard-data-table">
-      <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-parchment-aged-texture bg-[length:512px_512px] bg-blend-overlay backdrop-blur-sm">
+      <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-stone-wall-texture bg-[length:512px_512px] bg-blend-soft-light backdrop-blur-sm">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
@@ -504,7 +504,7 @@ function LeaderboardTable({
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-parchment-aged-texture bg-[length:512px_512px] bg-blend-overlay backdrop-blur-sm">
+      <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-stone-wall-texture bg-[length:512px_512px] bg-blend-soft-light backdrop-blur-sm">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
