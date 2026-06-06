@@ -194,7 +194,6 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           player2: { select: { id: true, username: true, avatar_url: true } },
           tournament: { select: { id: true, name: true, slug: true } },
           games: {
-            where: { status: 'COMPLETED' },
             select: {
               id: true,
               game_number: true,
@@ -213,7 +212,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         take: limit,
       }),
       // Game-level total: completed MatchGames + matches with no MatchGame records (synthetic rows)
-      fastify.prisma.matchGame.count({ where: { status: 'COMPLETED', match: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null }, deleted_at: null } } })
+      fastify.prisma.matchGame.count({ where: { match: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null }, deleted_at: null } } })
         .then(async (gameCount) => {
           const syntheticCount = await fastify.prisma.match.count({
             where: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null }, deleted_at: null, games: { none: {} } },
@@ -245,7 +244,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           id: g.id,
           gameNumber: g.game_number,
           playedAt: (g.played_at ?? m.played_at)?.toISOString() ?? null,
-          winnerId: g.winner_id,
+          winnerId: g.winner_id ?? m.winner_id,
           player1FactionId: g.player1_faction_id ?? m.player1_faction_id ?? pFaction(m.tournament.id, m.player1?.id),
           player2FactionId: g.player2_faction_id ?? m.player2_faction_id ?? pFaction(m.tournament.id, m.player2?.id),
           mapPickedId: g.map_decision?.picked_map_id ?? null,
