@@ -37,7 +37,7 @@ function FactionIndicator({ faction }: { faction?: FactionDto | null }) {
       src={faction.icon_url}
       alt=""
       title={faction.name}
-      className="ml-1 h-4 w-4 shrink-0 rounded-sm object-contain"
+      className="ml-2 h-4 w-4 shrink-0 rounded-sm object-contain"
       style={{ backgroundColor: '#837a6f' }}
       loading="lazy"
       draggable={false}
@@ -45,7 +45,7 @@ function FactionIndicator({ faction }: { faction?: FactionDto | null }) {
   ) : (
     <span
       title={faction.name}
-      className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-[7px] font-bold text-white"
+      className="ml-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-[7px] font-bold text-white"
       style={{ backgroundColor: faction.color_hex }}
     >
       {faction.initials}
