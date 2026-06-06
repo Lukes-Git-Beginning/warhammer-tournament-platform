@@ -60,7 +60,7 @@ export function GameTile({
   const [replayError, setReplayError] = useState<string | null>(null);
 
   const startDecisionMutation = useMutation({
-    mutationFn: () => startMatchDecision(matchId),
+    mutationFn: () => startMatchDecision(matchId, game.gameNumber),
     onSuccess: () => {
       void navigate({ to: '/matches/$matchId/decision', params: { matchId }, state: { freshDecision: true } });
     },
