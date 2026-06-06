@@ -31,7 +31,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, format: true },
+        select: { id: true, format: true, mode: true },
       });
 
       if (!tournament) {
@@ -103,6 +103,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       const response: BracketResponse = {
         tournamentId: tournament.id,
         rounds,
+        mode: tournament.mode ?? undefined,
         matches: matches.map((m) => ({
           matchId: m.id,
           round: m.round,
@@ -178,7 +179,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             userId: s.userId,
             username: user?.username ?? null,
             avatarUrl: user?.avatar_url ?? null,
-            factionId: factionFromGames.get(s.userId) ?? factionByUser.get(s.userId) ?? null,
+            factionId: factionByUser.get(s.userId) ?? factionFromGames.get(s.userId) ?? null,
             score: s.score,
             wins: s.wins,
             losses: s.losses,

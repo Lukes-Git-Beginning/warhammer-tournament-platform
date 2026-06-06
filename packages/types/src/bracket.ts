@@ -51,6 +51,8 @@ export interface BracketResponse {
   tournamentId: string;
   rounds: number;
   matches: BracketNode[];
+  /** Tournament mode (e.g. 'SFT', 'ONE_V_ONE', 'BPT') — drives conditional UI like faction column */
+  mode?: string;
   /** Present only for SWISS format tournaments */
   swiss?: SwissMeta;
 }

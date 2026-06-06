@@ -169,6 +169,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           recommendedRounds={swiss.recommendedRounds}
           factionMap={factionMap}
           playerFactionMap={playerFactionMap}
+          tournamentMode={data.mode}
         />
       )}
 

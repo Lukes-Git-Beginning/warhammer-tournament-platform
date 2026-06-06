@@ -9,6 +9,8 @@ interface SwissStandingsProps {
   factionMap?: Map<string, FactionDto>;
   /** userId → factionId, derived from bracket matches as fallback */
   playerFactionMap?: Map<string, string>;
+  /** Tournament mode — Faction column shown only for SFT (and future 2FT/3FT) */
+  tournamentMode?: string;
 }
 
 function Avatar({ url, username }: { url: string | null; username: string }) {
@@ -28,13 +30,17 @@ function Avatar({ url, username }: { url: string | null; username: string }) {
   );
 }
 
+const FACTION_MODES = new Set(['SFT', '2FT', 'DFT', '3FT', 'TFT']);
+
 export function SwissStandings({
   standings,
   currentRound,
   recommendedRounds,
   factionMap,
   playerFactionMap,
+  tournamentMode,
 }: SwissStandingsProps) {
+  const showFactionColumn = tournamentMode ? FACTION_MODES.has(tournamentMode) : false;
   return (
     <div className="mb-6 rounded-md border border-stone-800 bg-stone-900/40 overflow-hidden">
       <div className="px-4 py-3 border-b border-stone-800 bg-stone-900/60">
@@ -48,7 +54,7 @@ export function SwissStandings({
             <tr className="border-b border-stone-800">
               <th className="px-4 py-2 text-left font-medium text-stone-400">#</th>
               <th className="px-4 py-2 text-left font-medium text-stone-400">Player</th>
-              <th className="px-4 py-2 text-left font-medium text-stone-400">Faction</th>
+              {showFactionColumn && <th className="px-4 py-2 text-left font-medium text-stone-400">Faction</th>}
               <th className="px-4 py-2 text-right font-medium text-stone-400">Score</th>
               <th className="px-4 py-2 text-center font-medium text-stone-400">W / L / B</th>
               <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Games Lost">GL</th>
@@ -73,22 +79,24 @@ export function SwissStandings({
                       <span className="text-stone-200">{displayName}</span>
                     </Link>
                   </td>
-                  <td className="px-4 py-2">
-                    {faction ? (
-                      <div className="flex items-center gap-2">
-                        <FactionBadge
-                          size="sm"
-                          colorHex={faction.color_hex}
-                          initials={faction.initials}
-                          name={faction.name}
-                          iconUrl={faction.icon_url}
-                        />
-                        <span className="text-xs text-stone-300">{faction.name}</span>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-stone-600">—</span>
-                    )}
-                  </td>
+                  {showFactionColumn && (
+                    <td className="px-4 py-2">
+                      {faction ? (
+                        <div className="flex items-center gap-2">
+                          <FactionBadge
+                            size="sm"
+                            colorHex={faction.color_hex}
+                            initials={faction.initials}
+                            name={faction.name}
+                            iconUrl={faction.icon_url}
+                          />
+                          <span className="text-xs text-stone-300">{faction.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-stone-600">—</span>
+                      )}
+                    </td>
+                  )}
                   <td className="px-4 py-2 text-right font-semibold text-stone-100">
                     {entry.score}
                   </td>
