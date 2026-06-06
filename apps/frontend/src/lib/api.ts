@@ -487,7 +487,7 @@ export interface AuditLogEntry {
   entity_type: string;
   entity_id: string;
   action: string;
-  actor_id: string;
+  actor_id: string | null;
   actor_username: string | null;
   actor_avatar_url: string | null;
   old_value: unknown;

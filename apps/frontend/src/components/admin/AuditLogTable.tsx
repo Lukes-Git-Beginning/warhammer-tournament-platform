@@ -15,7 +15,7 @@ function truncate(str: string, maxLen = 12): string {
 }
 
 function ActorCell({ entry }: { entry: AuditLogEntry }) {
-  const name = entry.actor_username ?? entry.actor_id.slice(0, 8);
+  const name = entry.actor_username ?? (entry.actor_id ? entry.actor_id.slice(0, 8) : 'system');
   if (entry.actor_avatar_url) {
     return (
       <span className="flex items-center gap-2">
