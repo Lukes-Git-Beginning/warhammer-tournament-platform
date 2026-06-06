@@ -778,17 +778,21 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             ? { 1: 'PLAYOFF_QF', 2: 'PLAYOFF_SF', 3: 'PLAYOFF_FINAL' }
             : { 1: 'PLAYOFF_SF', 2: 'PLAYOFF_FINAL' };
 
-        const playoffMatches = playoffResult.matches.map((pm: PlayoffMatch) => ({
-          id: randomUUID(),
-          tournament_id: id,
-          round: playoffRoundOffset + pm.round,
-          match_number: pm.bracket_position,
-          player1_id: pm.player1_id || null,
-          player2_id: pm.player2_id || null,
-          status: 'PENDING' as MatchStatus,
-          next_match_id: null,
-          phase: phaseMap[pm.round] ?? null,
-        }));
+        // Only generate the first playoff round — subsequent rounds are advanced
+        // one at a time via POST /advance-playoffs once each round completes.
+        const playoffMatches = playoffResult.matches
+          .filter((pm: PlayoffMatch) => pm.round === 1)
+          .map((pm: PlayoffMatch) => ({
+            id: randomUUID(),
+            tournament_id: id,
+            round: playoffRoundOffset + pm.round,
+            match_number: pm.bracket_position,
+            player1_id: pm.player1_id || null,
+            player2_id: pm.player2_id || null,
+            status: 'PENDING' as MatchStatus,
+            next_match_id: null,
+            phase: phaseMap[pm.round] ?? null,
+          }));
 
         await fastify.prisma.$transaction(async (tx) => {
           await tx.match.createMany({
@@ -838,6 +842,113 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         }
         throw err;
       }
+    },
+  );
+
+  /**
+   * POST /api/tournaments/:id/advance-playoffs
+   * Generate the next playoff round from the winners of the current one.
+   * Called after all QF matches are done (to create SF) or all SF are done (to create Final).
+   */
+  fastify.post(
+    '/api/tournaments/:id/advance-playoffs',
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+      ],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { id, deleted_at: null, status: 'ONGOING' },
+        select: { id: true, organizer_id: true, playoff_match_format: true, finale_match_format: true },
+      });
+      if (!tournament) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      }
+      if (request.user.role === 'ORGANIZER' && tournament.organizer_id !== request.user.sub) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
+      }
+
+      const allPlayoffMatches = await fastify.prisma.match.findMany({
+        where: {
+          tournament_id: id,
+          deleted_at: null,
+          phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL'] },
+        },
+        orderBy: [{ round: 'asc' }, { match_number: 'asc' }],
+      });
+
+      if (allPlayoffMatches.length === 0) {
+        return reply.code(409).send({ error: 'Conflict', message: 'No playoff matches — call start-playoffs first', statusCode: 409 });
+      }
+      if (allPlayoffMatches.some((m) => m.phase === 'PLAYOFF_FINAL')) {
+        return reply.code(409).send({ error: 'Conflict', message: 'Playoffs already fully generated', statusCode: 409 });
+      }
+
+      const currentRound = Math.max(...allPlayoffMatches.map((m) => m.round));
+      const currentRoundMatches = allPlayoffMatches
+        .filter((m) => m.round === currentRound)
+        .sort((a, b) => a.match_number - b.match_number);
+
+      const incomplete = currentRoundMatches.filter(
+        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT',
+      );
+      if (incomplete.length > 0) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: `${incomplete.length} match(es) in current playoff round not yet completed`,
+          statusCode: 422,
+        });
+      }
+
+      const currentPhases = new Set(currentRoundMatches.map((m) => m.phase));
+      const nextPhase: 'PLAYOFF_SF' | 'PLAYOFF_FINAL' = currentPhases.has('PLAYOFF_QF')
+        ? 'PLAYOFF_SF'
+        : 'PLAYOFF_FINAL';
+
+      // Pair winners: match 1+2 → next match 1, match 3+4 → next match 2, etc.
+      type NextMatch = {
+        id: string; tournament_id: string; round: number; match_number: number;
+        player1_id: string | null; player2_id: string | null;
+        status: MatchStatus; next_match_id: null; phase: 'PLAYOFF_SF' | 'PLAYOFF_FINAL';
+      };
+      const nextMatches: NextMatch[] = [];
+      for (let i = 0; i < currentRoundMatches.length; i += 2) {
+        const m1 = currentRoundMatches[i];
+        const m2 = currentRoundMatches[i + 1];
+        if (!m1) continue;
+        nextMatches.push({
+          id: randomUUID(),
+          tournament_id: id,
+          round: currentRound + 1,
+          match_number: Math.floor(i / 2) + 1,
+          player1_id: m1.winner_id ?? null,
+          player2_id: m2?.winner_id ?? null,
+          status: 'PENDING' as MatchStatus,
+          next_match_id: null,
+          phase: nextPhase,
+        });
+      }
+
+      await fastify.prisma.$transaction(async (tx) => {
+        await tx.match.createMany({ data: nextMatches });
+        await tx.auditLog.create({
+          data: {
+            entity_type: 'Tournament',
+            entity_id: id,
+            action: 'advance_playoffs',
+            actor_id: request.user.sub,
+            new_value: { phase: nextPhase, matches_created: nextMatches.length },
+          },
+        });
+      });
+
+      emitBracketUpdate(fastify.io, id);
+
+      return reply.code(200).send({ phase: nextPhase, matches_created: nextMatches.length });
     },
   );
 

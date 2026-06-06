@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import type { FactionDto } from '@rizzotto/types';
-import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, getFactions, patchTournament } from '@/lib/api';
+import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, getFactions, patchTournament } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { computeBracketLayout } from './computeBracketLayout';
 import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
@@ -107,6 +107,17 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   });
 
   const {
+    mutate: doAdvancePlayoffs,
+    isPending: isAdvancingPlayoffs,
+    error: advancePlayoffsError,
+  } = useMutation({
+    mutationFn: () => advancePlayoffs(tournamentId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+    },
+  });
+
+  const {
     mutate: doComplete,
     isPending: isCompleting,
     error: completeError,
@@ -167,12 +178,27 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   const advanceLabel =
     playoffFormat === 'TOP8' ? 'Advance to Quarterfinals' : 'Advance to Semifinals';
 
+  // Advance to next playoff round (QF→SF or SF→Final): shown when current playoff
+  // round is fully done and no Final match exists yet.
+  const playoffPhases = data.matches.filter((m) => m.phase?.startsWith('PLAYOFF'));
+  const hasFinalMatch = playoffPhases.some((m) => m.phase === 'PLAYOFF_FINAL');
+  const lastPlayoffRound = playoffPhases.length > 0 ? Math.max(...playoffPhases.map((m) => m.round)) : 0;
+  const lastPlayoffRoundDone =
+    playoffPhases.length > 0 &&
+    playoffPhases
+      .filter((m) => m.round === lastPlayoffRound)
+      .every((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT');
+  const currentPlayoffPhase = playoffPhases.find((m) => m.round === lastPlayoffRound)?.phase ?? null;
+  const nextPlayoffLabel = currentPlayoffPhase === 'PLAYOFF_QF' ? 'Advance to Semifinals' : 'Advance to Grand Final';
+  const showAdvanceToNextPlayoffRound =
+    canManage && hasPlayoffMatches && lastPlayoffRoundDone && !hasFinalMatch;
+
   const isDE = data.matches.some((m) => m.bracketSide !== null);
   const allDone = data.matches.every(
     (m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT',
   );
   const showCompleteButton =
-    canManage && allDone && !showNextRoundButton && !showAdvanceToPlayoffs;
+    canManage && allDone && !showNextRoundButton && !showAdvanceToPlayoffs && !showAdvanceToNextPlayoffRound;
 
   return (
     <div>
@@ -227,6 +253,23 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
             className="rounded border border-rizzotto-gold-500/60 px-4 py-2 text-sm font-medium text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isStartingPlayoffs ? 'Starting…' : advanceLabel}
+          </button>
+        </div>
+      )}
+
+      {/* Advance to next playoff round (QF→SF or SF→Grand Final) */}
+      {showAdvanceToNextPlayoffRound && (
+        <div className="mb-4">
+          {advancePlayoffsError && (
+            <p className="mb-2 text-sm text-red-400">Error: {(advancePlayoffsError as Error).message}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => doAdvancePlayoffs()}
+            disabled={isAdvancingPlayoffs}
+            className="rounded border border-rizzotto-gold-500/60 px-4 py-2 text-sm font-medium text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isAdvancingPlayoffs ? 'Starting…' : nextPlayoffLabel}
           </button>
         </div>
       )}

@@ -397,6 +397,10 @@ export function startPlayoffs(tournamentId: string): Promise<{ tournamentId: str
   return apiFetch(`/api/tournaments/${tournamentId}/start-playoffs`, { method: 'POST' });
 }
 
+export function advancePlayoffs(tournamentId: string): Promise<{ phase: string; matches_created: number }> {
+  return apiFetch(`/api/tournaments/${tournamentId}/advance-playoffs`, { method: 'POST' });
+}
+
 export function reportMatchResult(
   matchId: string,
   body: {
