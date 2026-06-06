@@ -13,6 +13,7 @@ interface MatchScoreModalProps {
   initialWinnerId?: string | null;
   initialP1Score?: number;
   initialP2Score?: number;
+  initialMapId?: string;
   onClose: () => void;
 }
 
@@ -62,6 +63,7 @@ export function MatchScoreModal({
   initialWinnerId,
   initialP1Score = 0,
   initialP2Score = 0,
+  initialMapId,
   onClose,
 }: MatchScoreModalProps) {
   const queryClient = useQueryClient();
@@ -71,7 +73,7 @@ export function MatchScoreModal({
   const [p1Score, setP1Score] = useState(initialP1Score);
   const [p2Score, setP2Score] = useState(initialP2Score);
   const [reason, setReason] = useState('');
-  const [mapId, setMapId] = useState('');
+  const [mapId, setMapId] = useState(initialMapId ?? '');
 
   const { data: mapsData } = useQuery({
     queryKey: ['tournament-maps', tournamentSlug],

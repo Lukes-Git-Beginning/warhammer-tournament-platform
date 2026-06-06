@@ -14,7 +14,7 @@ const ReportResultSchema = z.object({
   score: z.string().max(64).optional(),
   player1FactionId: z.string().min(1).optional(),
   player2FactionId: z.string().min(1).optional(),
-  map_id: z.string().uuid().optional(),
+  map_id: z.string().min(1).optional(),
 });
 
 // ---------------------------------------------------------------------------

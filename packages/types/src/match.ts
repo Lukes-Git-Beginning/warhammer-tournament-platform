@@ -35,7 +35,7 @@ export const OverrideMatchResultSchema = z.object({
   player1_score: z.number().int().min(0).max(10000).nullable().optional(),
   player2_score: z.number().int().min(0).max(10000).nullable().optional(),
   reason: z.string().min(1).max(2000),
-  map_id: z.string().uuid().optional(),
+  map_id: z.string().min(1).optional(),
 });
 export type OverrideMatchResultPayload = z.infer<typeof OverrideMatchResultSchema>;
 

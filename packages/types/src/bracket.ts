@@ -21,6 +21,7 @@ export interface BracketNode {
   player2FactionId: string | null;
   player1GameWins: number;
   player2GameWins: number;
+  pickedMapId?: string | null;
   draft_id?: string | null;
   draft_status?: 'PENDING' | 'ONGOING' | 'COMPLETED' | 'CANCELLED' | null;
 }
