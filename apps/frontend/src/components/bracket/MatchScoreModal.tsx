@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { reportMatchResult, overrideMatchResult, getTournamentMaps } from '@/lib/api';
+import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions } from '@/lib/api';
 import { useState } from 'react';
 
 interface MatchScoreModalProps {
@@ -14,6 +14,8 @@ interface MatchScoreModalProps {
   initialP1Score?: number;
   initialP2Score?: number;
   initialMapId?: string;
+  initialP1FactionId?: string;
+  initialP2FactionId?: string;
   onClose: () => void;
 }
 
@@ -64,6 +66,8 @@ export function MatchScoreModal({
   initialP1Score = 0,
   initialP2Score = 0,
   initialMapId,
+  initialP1FactionId,
+  initialP2FactionId,
   onClose,
 }: MatchScoreModalProps) {
   const queryClient = useQueryClient();
@@ -74,6 +78,8 @@ export function MatchScoreModal({
   const [p2Score, setP2Score] = useState(initialP2Score);
   const [reason, setReason] = useState('');
   const [mapId, setMapId] = useState(initialMapId ?? '');
+  const [p1FactionId, setP1FactionId] = useState(initialP1FactionId ?? '');
+  const [p2FactionId, setP2FactionId] = useState(initialP2FactionId ?? '');
 
   const { data: mapsData } = useQuery({
     queryKey: ['tournament-maps', tournamentSlug],
@@ -82,6 +88,18 @@ export function MatchScoreModal({
     staleTime: 5 * 60_000,
   });
   const maps = mapsData?.data ?? [];
+
+  const { data: factionData } = useQuery({
+    queryKey: ['factions'],
+    queryFn: () => getFactions(),
+    staleTime: 60 * 60_000,
+  });
+  const factions = (factionData?.data ?? [])
+    .map((e) => e.faction)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const p1FactionChanged = p1FactionId !== (initialP1FactionId ?? '');
+  const p2FactionChanged = p2FactionId !== (initialP2FactionId ?? '');
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -96,12 +114,16 @@ export function MatchScoreModal({
           player2_score: p2Score,
           reason,
           map_id: mapId || undefined,
+          player1FactionId: p1FactionId || undefined,
+          player2FactionId: p2FactionId || undefined,
         });
       }
       return reportMatchResult(matchId, {
         winnerId,
         score: `${p1Score}-${p2Score}`,
         map_id: mapId || undefined,
+        player1FactionId: p1FactionId || undefined,
+        player2FactionId: p2FactionId || undefined,
       });
     },
     onSuccess: () => {
@@ -197,6 +219,35 @@ export function MatchScoreModal({
               ))}
             </select>
           </div>
+        )}
+
+        {factions.length > 0 && (
+          <fieldset className="mb-4">
+            <legend className="text-xs text-stone-400 mb-2">
+              Factions <span className="text-stone-600">(optional)</span>
+            </legend>
+            <div className="space-y-2">
+              {[
+                { label: player1Name ?? 'Player 1', value: p1FactionId, onChange: setP1FactionId, changed: p1FactionChanged },
+                { label: player2Name ?? 'Player 2', value: p2FactionId, onChange: setP2FactionId, changed: p2FactionChanged },
+              ].map(({ label, value, onChange, changed }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <span className="w-24 truncate text-xs text-stone-400">{label}</span>
+                  <select
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    className={`flex-1 rounded border px-2 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500 bg-stone-800 ${changed ? 'border-amber-500' : 'border-stone-700'}`}
+                  >
+                    <option value="">— no faction —</option>
+                    {factions.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                  {changed && <span className="text-amber-400 text-xs">changed</span>}
+                </div>
+              ))}
+            </div>
+          </fieldset>
         )}
 
         {isCompleted && (

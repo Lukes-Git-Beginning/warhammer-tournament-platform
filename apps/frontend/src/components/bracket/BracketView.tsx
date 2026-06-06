@@ -191,6 +191,8 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
               initialP1Score={initP1}
               initialP2Score={initP2}
               initialMapId={selectedMatch.pickedMapId ?? undefined}
+              initialP1FactionId={selectedMatch.player1FactionId ?? undefined}
+              initialP2FactionId={selectedMatch.player2FactionId ?? undefined}
               player1Name={
                 selectedMatch.player1Id ? players.get(selectedMatch.player1Id)?.name : undefined
               }

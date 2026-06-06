@@ -415,6 +415,8 @@ export function overrideMatchResult(
     player2_score?: number;
     reason: string;
     map_id?: string;
+    player1FactionId?: string;
+    player2FactionId?: string;
   },
 ): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/matches/${matchId}/result`, {
