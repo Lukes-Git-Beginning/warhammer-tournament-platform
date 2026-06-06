@@ -162,7 +162,10 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         );
 
         const completedMatches = matches
-          .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE')
+          .filter((m) =>
+            (m.status === 'COMPLETED' || m.status === 'BYE') &&
+            (m.phase === null || m.phase === 'SWISS'),
+          )
           .map((m) => ({
             round: m.round,
             player1_id: m.player1_id,

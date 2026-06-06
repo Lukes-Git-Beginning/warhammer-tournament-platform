@@ -165,7 +165,6 @@ export function computeSwissStandings(
         const r = recordMap.get(byePlayer)!;
         r.byes += 1;
         r.score += 1;
-        r.wins += 1;
       }
       continue;
     }
