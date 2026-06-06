@@ -1,4 +1,4 @@
-import type { BracketResponse } from '@rizzotto/types';
+import type { BracketResponse, FactionDto } from '@rizzotto/types';
 import { computeBracketLayout, MATCH_WIDTH, MATCH_HEIGHT, ROUND_GAP } from './computeBracketLayout';
 import { MatchNode } from './MatchNode';
 
@@ -10,10 +10,11 @@ export interface BracketPlayerInfo {
 interface SVGBracketProps {
   data: BracketResponse;
   players?: Map<string, BracketPlayerInfo>;
+  factionMap?: Map<string, FactionDto>;
   onMatchClick?: (matchId: string) => void;
 }
 
-export function SVGBracket({ data, players, onMatchClick }: SVGBracketProps) {
+export function SVGBracket({ data, players, factionMap, onMatchClick }: SVGBracketProps) {
   const layout = computeBracketLayout(data.matches);
 
   // Add padding so connectors and labels don't clip
@@ -85,6 +86,8 @@ export function SVGBracket({ data, players, onMatchClick }: SVGBracketProps) {
 
         const p1 = m.player1Id ? players?.get(m.player1Id) : undefined;
         const p2 = m.player2Id ? players?.get(m.player2Id) : undefined;
+        const f1 = m.player1FactionId ? factionMap?.get(m.player1FactionId) : undefined;
+        const f2 = m.player2FactionId ? factionMap?.get(m.player2FactionId) : undefined;
 
         return (
           <foreignObject
@@ -103,6 +106,8 @@ export function SVGBracket({ data, players, onMatchClick }: SVGBracketProps) {
                 player2Name={p2?.name}
                 player1AvatarUrl={p1?.avatarUrl}
                 player2AvatarUrl={p2?.avatarUrl}
+                player1Faction={f1}
+                player2Faction={f2}
                 onClick={onMatchClick ? () => onMatchClick(m.matchId) : undefined}
               />
             </div>

@@ -30,6 +30,7 @@ export interface SwissStandingEntry {
   userId: string;
   username: string | null;
   avatarUrl: string | null;
+  factionId: string | null;
   score: number;
   wins: number;
   losses: number;

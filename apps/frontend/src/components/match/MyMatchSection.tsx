@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getMatchGames, getTournamentMaps, getFactions, startMatchDecision } from '@/lib/api';
+import { getMatchGames, getTournamentMaps, getFactions, getParticipants, startMatchDecision } from '@/lib/api';
 import type { MapDto } from '@/lib/api';
-import type { BracketNode } from '@rizzotto/types';
+import type { BracketNode, FactionDto } from '@rizzotto/types';
 import { useMatchDecisionSocket } from '@/hooks/useMatchDecisionSocket';
 import { GameTile } from './GameTile';
 
@@ -71,8 +71,18 @@ function MyMatchInner({
     queryFn: () => getFactions(),
     staleTime: 60 * 60_000,
   });
-  const factionNames: Record<string, string> = Object.fromEntries(
-    (factionsData?.data ?? []).map((f) => [f.faction.id, f.faction.name]),
+  const factions: Record<string, FactionDto> = Object.fromEntries(
+    (factionsData?.data ?? []).map((f) => [f.faction.id, f.faction]),
+  );
+
+  // Reuses the cache populated by BracketView / ParticipantsList for avatar URLs.
+  const { data: participantsData } = useQuery({
+    queryKey: ['tournament-participants', tournamentSlug],
+    queryFn: () => getParticipants(tournamentSlug),
+    staleTime: 5 * 60_000,
+  });
+  const playerAvatars: Record<string, string | null> = Object.fromEntries(
+    (participantsData?.data ?? []).map((p) => [p.user.id, p.user.avatar_url]),
   );
 
   const p1Name = (match.player1Id && playerNames[match.player1Id]) ?? 'Player 1';
@@ -107,9 +117,11 @@ function MyMatchInner({
               player2Id={match.player2Id}
               player1Name={p1Name}
               player2Name={p2Name}
+              player1AvatarUrl={match.player1Id ? (playerAvatars[match.player1Id] ?? null) : null}
+              player2AvatarUrl={match.player2Id ? (playerAvatars[match.player2Id] ?? null) : null}
               isParticipant={true}
               maps={maps}
-              factionNames={factionNames}
+              factions={factions}
             />
           ))}
           {(() => {

@@ -1,4 +1,4 @@
-import type { BracketNode } from '@rizzotto/types';
+import type { BracketNode, FactionDto } from '@rizzotto/types';
 
 interface MatchNodeProps {
   match: BracketNode;
@@ -6,6 +6,8 @@ interface MatchNodeProps {
   player2Name?: string;
   player1AvatarUrl?: string | null;
   player2AvatarUrl?: string | null;
+  player1Faction?: FactionDto | null;
+  player2Faction?: FactionDto | null;
   onClick?: () => void;
 }
 
@@ -16,13 +18,37 @@ function PlayerAvatar({ name, avatarUrl }: { name?: string; avatarUrl?: string |
     <img
       src={avatarUrl}
       alt=""
-      className="mr-1.5 h-4 w-4 shrink-0 rounded-full object-cover"
+      className="mr-1 h-4 w-4 shrink-0 rounded-full object-cover"
       loading="lazy"
       draggable={false}
     />
   ) : (
-    <span className="mr-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-700 text-[8px] font-semibold text-stone-300">
+    <span className="mr-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-700 text-[8px] font-semibold text-stone-300">
       {name.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
+/** Tiny faction icon (16×16) for use inside the cramped bracket node rows. */
+function FactionIndicator({ faction }: { faction?: FactionDto | null }) {
+  if (!faction) return null;
+  return faction.icon_url ? (
+    <img
+      src={faction.icon_url}
+      alt=""
+      title={faction.name}
+      className="mr-1 h-4 w-4 shrink-0 rounded-sm object-contain"
+      style={{ backgroundColor: '#837a6f' }}
+      loading="lazy"
+      draggable={false}
+    />
+  ) : (
+    <span
+      title={faction.name}
+      className="mr-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-[7px] font-bold text-white"
+      style={{ backgroundColor: faction.color_hex }}
+    >
+      {faction.initials}
     </span>
   );
 }
@@ -41,6 +67,8 @@ export function MatchNode({
   player2Name,
   player1AvatarUrl,
   player2AvatarUrl,
+  player1Faction,
+  player2Faction,
   onClick,
 }: MatchNodeProps) {
   const isBye = match.status === 'BYE';
@@ -74,6 +102,7 @@ export function MatchNode({
       {/* Player 1 row */}
       <div className="flex-1 flex items-center px-2 border-b border-stone-800">
         {match.player1Id && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
+        {match.player1Id && <FactionIndicator faction={player1Faction} />}
         <span
           className={`flex-1 text-xs truncate ${
             p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'
@@ -93,6 +122,7 @@ export function MatchNode({
       {/* Player 2 row */}
       <div className="flex-1 flex items-center px-2">
         {match.player2Id && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
+        {match.player2Id && <FactionIndicator faction={player2Faction} />}
         <span
           className={`flex-1 text-xs truncate ${
             p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'

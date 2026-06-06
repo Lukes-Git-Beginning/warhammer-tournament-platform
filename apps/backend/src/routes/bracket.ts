@@ -159,6 +159,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             userId: s.userId,
             username: user?.username ?? null,
             avatarUrl: user?.avatar_url ?? null,
+            factionId: factionByUser.get(s.userId) ?? null,
             score: s.score,
             wins: s.wins,
             losses: s.losses,

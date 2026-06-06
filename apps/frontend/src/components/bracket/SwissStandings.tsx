@@ -1,10 +1,12 @@
 import { Link } from '@tanstack/react-router';
-import type { SwissMeta } from '@rizzotto/types';
+import type { FactionDto, SwissMeta } from '@rizzotto/types';
+import { FactionBadge } from '@/components/meta/FactionBadge';
 
 interface SwissStandingsProps {
   standings: SwissMeta['standings'];
   currentRound: number;
   recommendedRounds: number;
+  factionMap?: Map<string, FactionDto>;
 }
 
 function Avatar({ url, username }: { url: string | null; username: string }) {
@@ -28,6 +30,7 @@ export function SwissStandings({
   standings,
   currentRound,
   recommendedRounds,
+  factionMap,
 }: SwissStandingsProps) {
   return (
     <div className="mb-6 rounded-md border border-stone-800 bg-stone-900/40 overflow-hidden">
@@ -61,6 +64,18 @@ export function SwissStandings({
                       className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
                     >
                       <Avatar url={entry.avatarUrl} username={displayName} />
+                      {(() => {
+                        const faction = entry.factionId ? factionMap?.get(entry.factionId) : undefined;
+                        return faction ? (
+                          <FactionBadge
+                            size="sm"
+                            colorHex={faction.color_hex}
+                            initials={faction.initials}
+                            name={faction.name}
+                            iconUrl={faction.icon_url}
+                          />
+                        ) : null;
+                      })()}
                       <span className="text-stone-200">{displayName}</span>
                     </Link>
                   </td>

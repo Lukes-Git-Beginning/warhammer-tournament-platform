@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import { getBracket, getParticipants, startNextSwissRound } from '@/lib/api';
+import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
+import type { FactionDto } from '@rizzotto/types';
+import { getBracket, getParticipants, startNextSwissRound, getFactions } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
+import { computeBracketLayout } from './computeBracketLayout';
 import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
 import { SwissStandings } from './SwissStandings';
@@ -17,6 +20,8 @@ interface BracketViewProps {
 export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false }: BracketViewProps) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const transformRef = useRef<ReactZoomPanPinchRef>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['bracket', slug],
@@ -31,6 +36,31 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     queryFn: () => getParticipants(slug),
     enabled: !!slug,
   });
+
+  // Faction lookup — shared with SVGBracket (node logos) and SwissStandings.
+  const { data: factionsData } = useQuery({
+    queryKey: ['factions'],
+    queryFn: () => getFactions(),
+    staleTime: 60 * 60_000,
+  });
+  const factionMap = new Map<string, FactionDto>(
+    (factionsData?.data ?? []).map((f) => [f.faction.id, f.faction]),
+  );
+
+  // Auto-fit: center and scale the bracket to fill the container whenever
+  // the layout dimensions change (initial load or new round added).
+  const layout = data && data.matches.length > 0 ? computeBracketLayout(data.matches) : null;
+  useEffect(() => {
+    if (!transformRef.current || !containerRef.current || !layout) return;
+    const containerW = containerRef.current.clientWidth;
+    const containerH = containerRef.current.clientHeight;
+    const PAD = 20;
+    const svgW = layout.width + PAD * 2;
+    const svgH = layout.height + PAD * 2;
+    const fitted = Math.min(containerW / svgW, containerH / svgH, 1);
+    transformRef.current.centerView(fitted, 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout?.width, layout?.height]);
 
   useLiveBracket(tournamentId);
 
@@ -96,6 +126,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           standings={swiss.standings}
           currentRound={swiss.currentRound}
           recommendedRounds={swiss.recommendedRounds}
+          factionMap={factionMap}
         />
       )}
 
@@ -116,11 +147,12 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
         </div>
       )}
 
-      <div className="relative w-full overflow-hidden rounded-md border border-stone-800 bg-stone-950">
+      <div ref={containerRef} className="relative w-full overflow-hidden rounded-md border border-stone-800 bg-stone-950">
         <TransformWrapper
+          ref={transformRef}
           minScale={0.3}
           maxScale={2}
-          initialScale={data.matches.length > 32 ? 0.6 : 1}
+          initialScale={1}
           limitToBounds={false}
           wheel={{ step: 0.1, activationKeys: ['Control'] }}
         >
@@ -161,6 +193,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                 <SVGBracket
                   data={data}
                   players={players}
+                  factionMap={factionMap}
                   onMatchClick={(matchId) => {
                     const m = data.matches.find((x) => x.matchId === matchId);
                     if (canManage && m?.status !== 'BYE' && m?.status !== 'FORFEIT') {

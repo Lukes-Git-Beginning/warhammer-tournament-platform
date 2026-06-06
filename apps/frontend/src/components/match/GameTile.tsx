@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useNavigate } from '@tanstack/react-router';
+import type { FactionDto } from '@rizzotto/types';
+import { FactionBadge } from '@/components/meta/FactionBadge';
 
 declare module '@tanstack/react-router' {
   interface HistoryState {
@@ -21,12 +23,14 @@ interface Props {
   player2Id: string | null;
   player1Name: string;
   player2Name: string;
+  player1AvatarUrl?: string | null;
+  player2AvatarUrl?: string | null;
   /** Whether the current user is a participant in this match */
   isParticipant: boolean;
   /** Map pool for resolving picked map name */
   maps?: MapDto[];
-  /** Faction id → name lookup */
-  factionNames?: Record<string, string>;
+  /** Faction id → full DTO lookup */
+  factions?: Record<string, FactionDto>;
 }
 
 export function GameTile({
@@ -37,9 +41,11 @@ export function GameTile({
   player2Id,
   player1Name,
   player2Name,
+  player1AvatarUrl,
+  player2AvatarUrl,
   isParticipant,
   maps = [],
-  factionNames = {},
+  factions = {},
 }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -78,8 +84,8 @@ export function GameTile({
     game.player1FactionId ?? game.blindPick?.player1FactionId ?? null;
   const p2FactionId =
     game.player2FactionId ?? game.blindPick?.player2FactionId ?? null;
-  const p1FactionName = p1FactionId ? (factionNames[p1FactionId] ?? null) : null;
-  const p2FactionName = p2FactionId ? (factionNames[p2FactionId] ?? null) : null;
+  const p1Faction = p1FactionId ? (factions[p1FactionId] ?? null) : null;
+  const p2Faction = p2FactionId ? (factions[p2FactionId] ?? null) : null;
   const myId = isPlayer1 ? player1Id : isPlayer2 ? player2Id : null;
   const opponentId = isPlayer1 ? player2Id : isPlayer2 ? player1Id : null;
 
@@ -118,41 +124,48 @@ export function GameTile({
 
       {/* COMPLETED */}
       {game.status === 'COMPLETED' && (
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-12 w-12 rounded-full border-2 border-rizzotto-gold-400 flex items-center justify-center text-rizzotto-gold-400 text-xl">
-            ⚔
-          </div>
-          <p className="text-sm font-semibold text-rizzotto-gold-400">
-            Winner:{' '}
-            <span className="text-rizzotto-stone-100">
-              {game.winnerId === player1Id ? player1Name : player2Name}
-            </span>
-          </p>
-          {game.decision?.pickedMapId && (
-            <p className="text-xs text-rizzotto-stone-500">
-              Map:{' '}
-              <span className="text-rizzotto-stone-300">
-                {maps.find((m) => m.id === game.decision!.pickedMapId)?.name
-                  ?? game.decision.pickedMapId}
+        <div className="flex items-start justify-between gap-3">
+          <PlayerInfo
+            name={player1Name}
+            avatarUrl={player1AvatarUrl}
+            faction={p1Faction}
+            isWinner={game.winnerId === player1Id}
+          />
+          <div className="flex-1 flex flex-col items-center gap-2 pt-1 min-w-0">
+            <div className="h-10 w-10 rounded-full border-2 border-rizzotto-gold-400 flex items-center justify-center text-rizzotto-gold-400 text-lg">
+              ⚔
+            </div>
+            <p className="text-xs font-semibold text-rizzotto-gold-400 text-center">
+              Winner:{' '}
+              <span className="text-rizzotto-stone-100">
+                {game.winnerId === player1Id ? player1Name : player2Name}
               </span>
             </p>
-          )}
-          {(p1FactionName || p2FactionName) && (
-            <div className="flex items-center gap-3 text-xs text-rizzotto-stone-500">
-              <span>{player1Name}: <span className="text-rizzotto-stone-300">{p1FactionName ?? '—'}</span></span>
-              <span>·</span>
-              <span>{player2Name}: <span className="text-rizzotto-stone-300">{p2FactionName ?? '—'}</span></span>
-            </div>
-          )}
-          {game.replayUrl && (
-            <a
-              href={game.replayUrl}
-              className="text-xs text-rizzotto-gold-400 hover:underline"
-              download
-            >
-              Download Replay
-            </a>
-          )}
+            {game.decision?.pickedMapId && (
+              <p className="text-xs text-rizzotto-stone-500 text-center">
+                Map:{' '}
+                <span className="text-rizzotto-stone-300">
+                  {maps.find((m) => m.id === game.decision!.pickedMapId)?.name
+                    ?? game.decision.pickedMapId}
+                </span>
+              </p>
+            )}
+            {game.replayUrl && (
+              <a
+                href={game.replayUrl}
+                className="text-xs text-rizzotto-gold-400 hover:underline"
+                download
+              >
+                Download Replay
+              </a>
+            )}
+          </div>
+          <PlayerInfo
+            name={player2Name}
+            avatarUrl={player2AvatarUrl}
+            faction={p2Faction}
+            isWinner={game.winnerId === player2Id}
+          />
         </div>
       )}
 
@@ -211,25 +224,22 @@ export function GameTile({
           {/* Decision complete — show map + lobby code + result reporting */}
           {decisionComplete && (
             <div className="flex flex-col gap-4">
-              {/* Map info */}
-              {game.decision?.pickedMapId && (
-                <div className="text-center">
-                  <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider">Battlefield</span>
-                  <p className="text-sm font-semibold text-rizzotto-stone-100 mt-0.5">
-                    {maps.find((m) => m.id === game.decision!.pickedMapId)?.name
-                      ?? game.decision.pickedMapId}
-                  </p>
-                </div>
-              )}
-
-              {/* Factions */}
-              {(p1FactionName || p2FactionName) && (
-                <div className="flex items-center gap-3 text-xs text-rizzotto-stone-400">
-                  <span>{player1Name}: <span className="text-rizzotto-stone-200 font-medium">{p1FactionName ?? '—'}</span></span>
-                  <span>·</span>
-                  <span>{player2Name}: <span className="text-rizzotto-stone-200 font-medium">{p2FactionName ?? '—'}</span></span>
-                </div>
-              )}
+              {/* Player info + Map (3-column layout) */}
+              <div className="flex items-start justify-between gap-3">
+                <PlayerInfo name={player1Name} avatarUrl={player1AvatarUrl} faction={p1Faction} />
+                {game.decision?.pickedMapId ? (
+                  <div className="flex-1 flex flex-col items-center gap-1 min-w-0">
+                    <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider">Battlefield</span>
+                    <p className="text-sm font-semibold text-rizzotto-stone-100 text-center">
+                      {maps.find((m) => m.id === game.decision!.pickedMapId)?.name
+                        ?? game.decision.pickedMapId}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex-1" />
+                )}
+                <PlayerInfo name={player2Name} avatarUrl={player2AvatarUrl} faction={p2Faction} />
+              </div>
 
               {/* Lobby code */}
               <LobbyCodeField
@@ -327,6 +337,50 @@ export function GameTile({
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+function PlayerInfo({
+  name,
+  avatarUrl,
+  faction,
+  isWinner,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  faction?: FactionDto | null;
+  isWinner?: boolean;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1.5 w-20 shrink-0">
+      {avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt=""
+          className="h-10 w-10 rounded-full object-cover border border-rizzotto-iron-600"
+        />
+      ) : (
+        <span className="h-10 w-10 rounded-full flex items-center justify-center bg-rizzotto-iron-700 text-rizzotto-stone-300 text-sm font-semibold select-none">
+          {name.slice(0, 1).toUpperCase()}
+        </span>
+      )}
+      <span
+        className={`text-xs text-center truncate w-full ${
+          isWinner ? 'text-rizzotto-gold-400 font-semibold' : 'text-rizzotto-stone-300'
+        }`}
+      >
+        {name}
+      </span>
+      {faction && (
+        <FactionBadge
+          size="sm"
+          colorHex={faction.color_hex}
+          initials={faction.initials}
+          name={faction.name}
+          iconUrl={faction.icon_url}
+        />
+      )}
+    </div>
+  );
+}
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
