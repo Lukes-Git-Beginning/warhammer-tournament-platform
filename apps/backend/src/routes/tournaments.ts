@@ -933,7 +933,6 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         player1: { select: { id: true, username: true, avatar_url: true } },
         player2: { select: { id: true, username: true, avatar_url: true } },
         games: {
-          where: { status: 'COMPLETED' },
           select: {
             id: true,
             game_number: true,
@@ -962,7 +961,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           playedAt: (g.played_at ?? m.played_at)?.toISOString() ?? null,
           player1: m.player1 ?? null,
           player2: m.player2 ?? null,
-          winnerId: g.winner_id,
+          winnerId: g.winner_id ?? m.winner_id,
           player1FactionId: g.player1_faction_id ?? m.player1_faction_id ?? (m.player1?.id ? participantFaction.get(m.player1.id) ?? null : null),
           player2FactionId: g.player2_faction_id ?? m.player2_faction_id ?? (m.player2?.id ? participantFaction.get(m.player2.id) ?? null : null),
           mapPickedId: g.map_decision?.picked_map_id ?? null,
