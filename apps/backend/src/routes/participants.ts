@@ -513,6 +513,108 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
     return { data, total: data.length };
   });
+
+  // ---------------------------------------------------------------------------
+  // POST /api/tournaments/:slug/participants/:userId/drop
+  // Drop a participant mid-tournament. Callable by the player themselves OR by
+  // organizer/moderator/admin. Sets status WITHDREW, forfeits any open match,
+  // and voids (deletes) unfinished MatchGames with no winner yet.
+  // ---------------------------------------------------------------------------
+  fastify.post(
+    '/api/tournaments/:slug/participants/:userId/drop',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug, userId } = request.params as { slug: string; userId: string };
+      const callerId = request.user.sub;
+      const callerRole = request.user.role;
+
+      const isSelf = callerId === userId;
+      const isStaff = callerRole === 'ORGANIZER' || callerRole === 'MODERATOR' || callerRole === 'ADMIN';
+
+      if (!isSelf && !isStaff) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not authorised to drop this participant', statusCode: 403 });
+      }
+
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { slug, deleted_at: null },
+        select: { id: true, status: true, organizer_id: true },
+      });
+      if (!tournament) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      }
+      if (tournament.status !== 'ONGOING') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Can only drop participants from an ongoing tournament', statusCode: 422 });
+      }
+      if (callerRole === 'ORGANIZER' && !isSelf && tournament.organizer_id !== callerId) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
+      }
+
+      const participant = await fastify.prisma.tournamentParticipant.findFirst({
+        where: { tournament_id: tournament.id, user_id: userId, deleted_at: null },
+      });
+      if (!participant) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Participant not found', statusCode: 404 });
+      }
+      if (participant.status === 'WITHDREW' || participant.status === 'DISQUALIFIED') {
+        return reply.code(409).send({ error: 'Conflict', message: 'Participant has already been dropped', statusCode: 409 });
+      }
+
+      // Find the player's open match (PENDING or ONGOING, not yet decided)
+      const openMatches = await fastify.prisma.match.findMany({
+        where: {
+          tournament_id: tournament.id,
+          deleted_at: null,
+          status: { in: ['PENDING', 'ONGOING'] },
+          OR: [{ player1_id: userId }, { player2_id: userId }],
+        },
+        include: {
+          games: { where: { status: { not: 'COMPLETED' } }, select: { id: true } },
+        },
+      });
+
+      let matchesForfeited = 0;
+      let gamesVoided = 0;
+
+      await fastify.prisma.$transaction(async (tx) => {
+        // Mark participant as withdrawn
+        await tx.tournamentParticipant.update({
+          where: { id: participant.id },
+          data: { status: 'WITHDREW' },
+        });
+
+        for (const match of openMatches) {
+          const opponent = match.player1_id === userId ? match.player2_id : match.player1_id;
+
+          // Void (delete) any unfinished games
+          if (match.games.length > 0) {
+            await tx.matchGame.deleteMany({ where: { id: { in: match.games.map((g) => g.id) } } });
+            gamesVoided += match.games.length;
+          }
+
+          // Forfeit the match in favour of the opponent
+          await tx.match.update({
+            where: { id: match.id },
+            data: { status: 'FORFEIT', winner_id: opponent },
+          });
+          matchesForfeited++;
+        }
+
+        await tx.auditLog.create({
+          data: {
+            entity_type: 'Tournament',
+            entity_id: tournament.id,
+            action: 'participant_drop',
+            actor_id: callerId,
+            new_value: { userId, isSelf, matchesForfeited, gamesVoided },
+          },
+        });
+      });
+
+      emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'withdrew' });
+
+      return reply.code(200).send({ dropped: true, matchesForfeited, gamesVoided });
+    },
+  );
 };
 
 export default participantRoutes;

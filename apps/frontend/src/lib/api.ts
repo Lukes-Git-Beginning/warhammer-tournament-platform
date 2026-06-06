@@ -99,7 +99,7 @@ export interface MapDto {
   deleted_at?: string | null;
 }
 
-export type ParticipantStatus = 'REGISTERED' | 'CHECKED_IN' | 'WITHDRAWN' | 'DISQUALIFIED';
+export type ParticipantStatus = 'REGISTERED' | 'CHECKED_IN' | 'WITHDREW' | 'DISQUALIFIED';
 
 export interface TournamentArmyList {
   id: string;
@@ -1160,6 +1160,13 @@ export function registerForTournament(
 
 export function withdrawFromTournament(slug: string): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/tournaments/${slug}/withdraw`, { method: 'POST' });
+}
+
+export function dropParticipant(
+  slug: string,
+  userId: string,
+): Promise<{ dropped: boolean; matchesForfeited: number; gamesVoided: number }> {
+  return apiFetch(`/api/tournaments/${slug}/participants/${userId}/drop`, { method: 'POST' });
 }
 
 // ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
 import {
   deleteTournament,
+  dropParticipant,
   getBracket,
   getFactions,
   getParticipantMe,
@@ -126,6 +127,16 @@ export function TournamentDetail() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
       void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+    },
+  });
+
+  const selfDropMutation = useMutation({
+    mutationFn: (userId: string) => dropParticipant(slug, userId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['participant-me', slug] });
     },
   });
 
@@ -382,9 +393,51 @@ export function TournamentDetail() {
       {/* ─── Check-in (for registered participants) ─── */}
       {user && participantStatus && (
         tournament.status === 'REGISTRATION_CLOSED' || tournament.status === 'ONGOING' || tournament.status === 'OPEN_REGISTRATION'
-      ) && participantStatus !== 'WITHDRAWN' && participantStatus !== 'DISQUALIFIED' && (
+      ) && participantStatus !== 'WITHDREW' && participantStatus !== 'DISQUALIFIED' && (
         <section className="mb-6">
           <CheckInButton tournament={tournament} participantStatus={participantStatus} />
+        </section>
+      )}
+
+      {/* ─── Self-Drop (active participants during ONGOING) ─── */}
+      {user && tournament.status === 'ONGOING' &&
+        (participantStatus === 'REGISTERED' || participantStatus === 'CHECKED_IN') && (
+        <section className="mb-6">
+          {(() => {
+            const openMatch = (bracket?.matches ?? []).find(
+              (m) =>
+                (m.status === 'PENDING' || m.status === 'ONGOING') &&
+                (m.player1Id === user.id || m.player2Id === user.id),
+            );
+            const opponentId = openMatch
+              ? (openMatch.player1Id === user.id ? openMatch.player2Id : openMatch.player1Id)
+              : null;
+            const opponentName = opponentId
+              ? participantsData?.data.find((p) => p.user.id === opponentId)?.user.username
+              : null;
+            return (
+              <button
+                type="button"
+                disabled={selfDropMutation.isPending}
+                className="rounded border border-red-800 px-4 py-1.5 text-sm text-red-400 hover:border-red-600 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => {
+                  const warning = openMatch
+                    ? `Du hast ein offenes Match gegen ${opponentName ?? 'deinen Gegner'}. Wenn du droppst, gewinnt dieser das Match automatisch. Noch nicht abgeschlossene Spiele werden nicht gewertet. Trotzdem droppen?`
+                    : 'Möchtest du wirklich aus dem Turnier droppen? Deine bisherigen Ergebnisse bleiben erhalten.';
+                  if (confirm(warning)) {
+                    selfDropMutation.mutate(user.id);
+                  }
+                }}
+              >
+                {selfDropMutation.isPending ? 'Droppe…' : 'Aus Turnier droppen'}
+              </button>
+            );
+          })()}
+          {selfDropMutation.isError && (
+            <p className="mt-2 text-xs text-rizzotto-danger">
+              {(selfDropMutation.error as Error).message}
+            </p>
+          )}
         </section>
       )}
 
@@ -512,7 +565,7 @@ export function TournamentDetail() {
             </section>
           );
         }
-        return <ParticipantsList slug={tournament.slug} />;
+        return <ParticipantsList slug={tournament.slug} canManage={!!canManage} tournamentStatus={tournament.status} />;
       })()}
 
       {/* ─── Game History link — below standings/participants ─── */}

@@ -128,7 +128,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
     );
   }
 
-  if (participantStatus === 'WITHDRAWN' || participantStatus === 'DISQUALIFIED') return null;
+  if (participantStatus === 'WITHDREW' || participantStatus === 'DISQUALIFIED') return null;
 
   if (!isLoggedIn) {
     return (

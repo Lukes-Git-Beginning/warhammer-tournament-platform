@@ -1,26 +1,41 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { getParticipants } from '@/lib/api';
+import { getParticipants, dropParticipant } from '@/lib/api';
 
 export interface ParticipantsListProps {
   slug: string;
+  canManage?: boolean;
+  tournamentStatus?: string;
 }
 
 /**
  * Public participant roster for a tournament.
  * Shows avatar/initials, username (links to profile), faction and status.
  * Withdrawn/disqualified entries render dimmed with strikethrough.
+ * When canManage=true and tournament is ONGOING, shows a Drop button per active participant.
  */
-export function ParticipantsList({ slug }: ParticipantsListProps) {
+export function ParticipantsList({ slug, canManage = false, tournamentStatus }: ParticipantsListProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['tournament-participants', slug],
     queryFn: () => getParticipants(slug),
   });
 
+  const dropMutation = useMutation({
+    mutationFn: (userId: string) => dropParticipant(slug, userId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+    },
+  });
+
   if (isLoading || !data) return null;
+
+  const showDropButtons = canManage && tournamentStatus === 'ONGOING';
 
   return (
     <section className="mb-8">
@@ -32,7 +47,8 @@ export function ParticipantsList({ slug }: ParticipantsListProps) {
       ) : (
         <ul className="divide-y divide-rizzotto-iron-600 rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900">
           {data.data.map((p) => {
-            const inactive = p.status === 'WITHDRAWN' || p.status === 'DISQUALIFIED';
+            const inactive = p.status === 'WITHDREW' || p.status === 'DISQUALIFIED';
+            const canDrop = showDropButtons && !inactive;
             return (
               <li
                 key={p.id}
@@ -70,6 +86,20 @@ export function ParticipantsList({ slug }: ParticipantsListProps) {
                 <span className="ml-auto text-xs text-rizzotto-stone-500">
                   {t(`tournament.participants.status.${p.status.toLowerCase()}`)}
                 </span>
+                {canDrop && (
+                  <button
+                    type="button"
+                    disabled={dropMutation.isPending}
+                    className="ml-2 rounded border border-red-900 px-2 py-0.5 text-xs text-red-500 hover:border-red-600 hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => {
+                      if (confirm(`${p.user.username} aus dem Turnier droppen? Offene Matches werden für den Gegner gewertet.`)) {
+                        dropMutation.mutate(p.user.id);
+                      }
+                    }}
+                  >
+                    Drop
+                  </button>
+                )}
               </li>
             );
           })}
