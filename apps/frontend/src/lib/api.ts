@@ -1160,7 +1160,9 @@ export type { GameHistoryEntry } from '@rizzotto/types';
 import type { GameHistoryEntry } from '@rizzotto/types';
 
 export function getTournamentGames(slug: string): Promise<{ games: GameHistoryEntry[] }> {
-  return apiFetch<{ games: GameHistoryEntry[] }>(`/api/tournaments/${slug}/games`);
+  return apiFetch<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }>(
+    `/api/meta/games?tournamentSlug=${encodeURIComponent(slug)}&limit=100`,
+  );
 }
 
 export function getMetaGames(page = 1, limit = 50): Promise<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }> {

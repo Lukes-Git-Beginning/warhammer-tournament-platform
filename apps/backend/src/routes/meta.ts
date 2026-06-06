@@ -168,20 +168,26 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const parsed = z.object({
       page: z.coerce.number().int().min(1).default(1),
       limit: z.coerce.number().int().min(1).max(100).default(50),
+      tournamentSlug: z.string().optional(),
     }).safeParse(request.query);
 
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
 
-    const { page, limit } = parsed.data;
+    const { page, limit, tournamentSlug } = parsed.data;
     const skip = (page - 1) * limit;
 
-    // Fetch all tournament participant factions for the page's matches as fallback
-    // (resolved after match query to know which tournament IDs are involved)
+    const matchWhere = {
+      status: 'COMPLETED' as const,
+      player1_id: { not: null },
+      player2_id: { not: null },
+      ...(tournamentSlug ? { tournament: { slug: tournamentSlug, deleted_at: null } } : { deleted_at: null }),
+    };
+
     const [completedMatches, total] = await Promise.all([
       fastify.prisma.match.findMany({
-        where: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null } },
+        where: matchWhere,
         select: {
           id: true,
           round: true,
@@ -211,12 +217,10 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         skip,
         take: limit,
       }),
-      // Game-level total: completed MatchGames + matches with no MatchGame records (synthetic rows)
-      fastify.prisma.matchGame.count({ where: { match: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null }, deleted_at: null } } })
+      // Game-level total: MatchGames + synthetic rows for matches with no games
+      fastify.prisma.matchGame.count({ where: { match: matchWhere } })
         .then(async (gameCount) => {
-          const syntheticCount = await fastify.prisma.match.count({
-            where: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null }, deleted_at: null, games: { none: {} } },
-          });
+          const syntheticCount = await fastify.prisma.match.count({ where: { ...matchWhere, games: { none: {} } } });
           return gameCount + syntheticCount;
         }),
     ]);
