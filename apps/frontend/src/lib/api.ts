@@ -1156,27 +1156,13 @@ export function withdrawFromTournament(slug: string): Promise<{ message: string 
 // Game History
 // ---------------------------------------------------------------------------
 
-export interface GameHistoryEntry {
-  id: string;
-  gameNumber: number;
-  matchId: string;
-  round: number;
-  matchNumber: number;
-  playedAt: string;
-  player1: { id: string; username: string; avatar_url: string | null } | null;
-  player2: { id: string; username: string; avatar_url: string | null } | null;
-  winnerId: string | null;
-  player1FactionId: string | null;
-  player2FactionId: string | null;
-  mapName: string | null;
-  replayUrl: string | null;
-  tournament?: { id: string; name: string; slug: string };
-}
+export type { GameHistoryEntry } from '@rizzotto/types';
+import type { GameHistoryEntry } from '@rizzotto/types';
 
 export function getTournamentGames(slug: string): Promise<{ games: GameHistoryEntry[] }> {
   return apiFetch<{ games: GameHistoryEntry[] }>(`/api/tournaments/${slug}/games`);
 }
 
 export function getMetaGames(page = 1, limit = 50): Promise<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }> {
-  return apiFetch(`/api/meta/games?page=${page}&limit=${limit}`);
+  return apiFetch<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }>(`/api/meta/games?page=${page}&limit=${limit}`);
 }

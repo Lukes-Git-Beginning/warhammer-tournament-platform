@@ -212,7 +212,14 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         skip,
         take: limit,
       }),
-      fastify.prisma.match.count({ where: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null } } }),
+      // Game-level total: completed MatchGames + matches with no MatchGame records (synthetic rows)
+      fastify.prisma.matchGame.count({ where: { status: 'COMPLETED', match: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null }, deleted_at: null } } })
+        .then(async (gameCount) => {
+          const syntheticCount = await fastify.prisma.match.count({
+            where: { status: 'COMPLETED', player1_id: { not: null }, player2_id: { not: null }, deleted_at: null, games: { none: {} } },
+          });
+          return gameCount + syntheticCount;
+        }),
     ]);
 
     // Load participant factions for the tournaments on this page (SFT fallback)

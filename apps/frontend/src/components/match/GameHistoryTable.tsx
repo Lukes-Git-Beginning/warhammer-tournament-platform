@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { getFactions } from '@/lib/api';
-import type { GameHistoryEntry } from '@/lib/api';
+import type { GameHistoryEntry } from '@rizzotto/types';
 import { formatInUserTimezone } from '@/lib/timezone';
 
 interface Props {
@@ -58,6 +58,7 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
             <th className="px-3 py-2 text-left font-medium text-stone-400">Faction</th>
             <th className="px-3 py-2 text-left font-medium text-stone-400">Map</th>
             <th className="px-3 py-2 text-left font-medium text-stone-400">Winner</th>
+            <th className="px-3 py-2 text-left font-medium text-stone-400">Replay</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-stone-800/60">
@@ -78,7 +79,7 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
                   </td>
                 )}
                 <td className="px-3 py-2 text-stone-500 text-xs whitespace-nowrap">
-                  {formatInUserTimezone(g.playedAt)}
+                  {g.playedAt ? formatInUserTimezone(g.playedAt) : '—'}
                 </td>
                 <td className="px-3 py-2 text-center text-stone-400 text-xs">
                   R{g.round}·G{g.gameNumber}
@@ -104,6 +105,12 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
                   {g.winnerId
                     ? (g.player1?.id === g.winnerId ? g.player1?.username : g.player2?.username) ?? '—'
                     : '—'}
+                </td>
+                <td className="px-3 py-2">
+                  {g.replayUrl
+                    ? <a href={g.replayUrl} download className="text-rizzotto-gold-400 hover:text-rizzotto-gold-300 text-xs underline">Download</a>
+                    : <span className="text-stone-600 text-xs">—</span>
+                  }
                 </td>
               </tr>
             );

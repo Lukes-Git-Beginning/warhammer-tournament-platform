@@ -136,3 +136,37 @@ export const MatchDetailDtoSchema = z.object({
   player2_faction: MatchFactionRefSchema.nullable(),
 });
 export type MatchDetailDto = z.infer<typeof MatchDetailDtoSchema>;
+
+// ---------------------------------------------------------------------------
+// Game History — one row per MatchGame (or synthetic row for legacy matches)
+// ---------------------------------------------------------------------------
+
+export interface GameHistoryPlayer {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+}
+
+export interface GameHistoryTournament {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface GameHistoryEntry {
+  /** MatchGame.id for real records; Match.id for synthetic legacy rows */
+  id: string;
+  gameNumber: number;
+  matchId: string;
+  round: number;
+  matchNumber: number;
+  playedAt: string | null;
+  player1: GameHistoryPlayer | null;
+  player2: GameHistoryPlayer | null;
+  winnerId: string | null;
+  player1FactionId: string | null;
+  player2FactionId: string | null;
+  mapName: string | null;
+  replayUrl: string | null;
+  tournament?: GameHistoryTournament;
+}
