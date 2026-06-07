@@ -9,6 +9,7 @@ function matchPhaseLabel(phase: BracketNode['phase'], round: number): string {
   if (phase === 'PLAYOFF_FINAL') return 'Grand Final';
   if (phase === 'PLAYOFF_SF') return 'Semifinal';
   if (phase === 'PLAYOFF_QF') return 'Quarterfinal';
+  if (phase === 'PLAYOFF_THIRD_PLACE') return '3rd Place';
   return `Round ${round}`;
 }
 

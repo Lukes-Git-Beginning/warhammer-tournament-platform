@@ -100,6 +100,8 @@ export function MatchNode({
       ? String(match.player2GameWins)
       : (match.score ? (match.score.split('-')[1] ?? '') : '');
 
+  const isThirdPlace = match.phase === 'PLAYOFF_THIRD_PLACE';
+
   return (
     <div
       className={`w-full h-full ${borderStyle} ${statusCls} rounded flex flex-col overflow-hidden ${
@@ -107,6 +109,11 @@ export function MatchNode({
       } relative`}
       onClick={onClick}
     >
+      {isThirdPlace && (
+        <div className="absolute top-0 right-0 bg-amber-800/80 text-amber-200 text-[8px] font-bold uppercase tracking-wider px-1 rounded-bl">
+          3rd Place
+        </div>
+      )}
       {/* Player 1 row */}
       <div className="flex-1 flex items-center px-2 border-b border-stone-800">
         {match.player1Id && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}

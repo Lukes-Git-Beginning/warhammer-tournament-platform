@@ -115,6 +115,7 @@ enum MatchPhase {
   PLAYOFF_QF // Quarter-Final
   PLAYOFF_SF // Semi-Final
   PLAYOFF_FINAL // Grand Final
+  PLAYOFF_THIRD_PLACE // Third-place match (losers of semis)
 }
 
 enum FactionCategory {
@@ -247,6 +248,7 @@ model Tournament {
   is_major               Boolean              @default(false)
   // Welle 2 — Tournament-Mechanik
   rounds_count           Int                  @default(5) // 3–6 via constraint
+  has_third_place_match  Boolean              @default(false)
   playoff_format         PlayoffFormat        @default(NONE)
   swiss_match_format     MatchFormat          @default(BO1)
   playoff_match_format   MatchFormat          @default(BO1) // Bo3/Bo5 re-enable with series support

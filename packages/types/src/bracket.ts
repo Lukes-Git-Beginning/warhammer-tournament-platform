@@ -25,7 +25,7 @@ export interface BracketNode {
   pickedMapId?: string | null;
   draft_id?: string | null;
   draft_status?: 'PENDING' | 'ONGOING' | 'COMPLETED' | 'CANCELLED' | null;
-  phase?: 'SWISS' | 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL' | null;
+  phase?: 'SWISS' | 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL' | 'PLAYOFF_THIRD_PLACE' | null;
 }
 
 export interface SwissStandingEntry {

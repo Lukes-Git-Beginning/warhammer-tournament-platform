@@ -25,6 +25,7 @@ const TournamentCreateSchema = z.object({
   draft_preset_id: z.string().uuid().nullable().optional(),
   // Welle 2 fields
   rounds_count: z.coerce.number().int().min(3).max(6).default(5),
+  has_third_place_match: z.boolean().default(false),
   playoff_format: z.enum(['NONE', 'TOP4', 'TOP8']).default('NONE'),
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
@@ -88,6 +89,7 @@ export function TournamentCreateForm() {
     timezone: defaultTimezone,
     draft_enabled: false,
     rounds_count: 5,
+    has_third_place_match: false,
     playoff_format: 'NONE',
     swiss_match_format: 'BO1',
     playoff_match_format: 'BO1',
@@ -393,6 +395,20 @@ export function TournamentCreateForm() {
               )}
             </div>
 
+            {/* Third-place match — only when playoffs are enabled (SE uses its own below) */}
+            {form.playoff_format && form.playoff_format !== 'NONE' && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  name="has_third_place_match"
+                  checked={form.has_third_place_match ?? false}
+                  onChange={handleChange}
+                  className="accent-rizzotto-gold-400 h-4 w-4"
+                />
+                <span className="text-sm text-rizzotto-stone-300">Third-place match (Small Final)</span>
+              </label>
+            )}
+
             {/* Match formats */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
@@ -437,19 +453,33 @@ export function TournamentCreateForm() {
             </div>
           </>
         ) : (
-          <div>
-            <Label htmlFor="tcf-elim-fmt">Match Format</Label>
-            <Select
-              id="tcf-elim-fmt"
-              name="swiss_match_format"
-              value={form.swiss_match_format ?? 'BO1'}
-              onChange={handleChange}
-            >
-              <option value="BO1">Best of 1</option>
-              <option value="BO3">Best of 3</option>
-              <option value="BO5">Best of 5</option>
-            </Select>
-          </div>
+          <>
+            <div>
+              <Label htmlFor="tcf-elim-fmt">Match Format</Label>
+              <Select
+                id="tcf-elim-fmt"
+                name="swiss_match_format"
+                value={form.swiss_match_format ?? 'BO1'}
+                onChange={handleChange}
+              >
+                <option value="BO1">Best of 1</option>
+                <option value="BO3">Best of 3</option>
+                <option value="BO5">Best of 5</option>
+              </Select>
+            </div>
+            {form.format === 'SINGLE_ELIMINATION' && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  name="has_third_place_match"
+                  checked={form.has_third_place_match ?? false}
+                  onChange={handleChange}
+                  className="accent-rizzotto-gold-400 h-4 w-4"
+                />
+                <span className="text-sm text-rizzotto-stone-300">Third-place match (Small Final)</span>
+              </label>
+            )}
+          </>
         )}
       </fieldset>
 

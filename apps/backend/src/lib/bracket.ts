@@ -12,6 +12,8 @@ export interface BracketMatchInput {
   status: MatchStatus;
   next_match_id: string | null;
   winner_id: string | null;
+  loser_next_match_id?: string | null;
+  phase?: string | null;
 }
 
 export interface DEBracketMatchInput extends BracketMatchInput {
@@ -35,6 +37,7 @@ export interface DEBracketMatchInput extends BracketMatchInput {
 export function generateSingleElim(
   tournamentId: string,
   participantIds: string[],
+  opts?: { hasThirdPlace?: boolean },
 ): BracketMatchInput[] {
   const libMatches = SingleElimination(participantIds, 1, false, true);
 
@@ -112,6 +115,37 @@ export function generateSingleElim(
 
   const result = Array.from(outputMap.values());
   result.sort((a, b) => a.round - b.round || a.match_number - b.match_number);
+
+  if (opts?.hasThirdPlace) {
+    // Find the Final (only match with next_match_id === null in the last round)
+    const finalMatch = result.find((m) => m.next_match_id === null);
+    if (finalMatch) {
+      // Find the two Semi-Finals (matches whose winner flows into the Final)
+      const semis = result.filter((m) => m.next_match_id === finalMatch.id);
+      if (semis.length === 2) {
+        const thirdPlaceId = randomUUID();
+        // Wire the loser connectors on both SFs
+        for (const semi of semis) {
+          semi.loser_next_match_id = thirdPlaceId;
+        }
+        // Add the third-place match in the same round as the Final
+        result.push({
+          id: thirdPlaceId,
+          tournament_id: tournamentId,
+          round: finalMatch.round,
+          match_number: 2,
+          player1_id: null,
+          player2_id: null,
+          status: 'PENDING',
+          next_match_id: null,
+          winner_id: null,
+          loser_next_match_id: null,
+          phase: 'PLAYOFF_THIRD_PLACE',
+        });
+      }
+    }
+  }
+
   return result;
 }
 
