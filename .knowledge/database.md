@@ -2,7 +2,9 @@
 
 **TL;DR:**
 - Prisma 7 (`^7.8.0`) mit driver-adapter `PrismaPg` aus `@prisma/adapter-pg` — kein nativer Prisma-Connection-String-Modus.
-- 27 Models in `packages/db/prisma/schema.prisma` (nach Phase-2-Drop). Welle-2-Models: Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, AdminConfig. (`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` per `drop_welle2_mmr_deprecated` entfernt — Branch `chore/phase2-consolidation`.)
+- 27 Models in `packages/db/prisma/schema.prisma` (nach Phase-2-Drop). Welle-2-Models: Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, AdminConfig. (`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` per `drop_welle2_mmr_deprecated` entfernt.)
+- **2026-06-07 Migration `remove_elo`**: `LeaderboardEntry.elo_rating` (Int) und `TournamentResult.elo_change` (Int) gedroppt. `LeaderboardEntry` hat jetzt nur noch: `total_points`, `games_played`, `wins`, `losses`.
+- **Gotcha Advisory Lock**: Bei abgebrochenem `prisma migrate` hält die DB einen Lock. Fix: `docker exec tww3-postgres psql -U tww3 -d tww3 -c "SELECT pg_advisory_unlock_all();"` + danach pg_terminate_backend auf alle aktiven Connections.
 - **Gotcha:** `datasource.url` steht NICHT in `schema.prisma`, sondern in `prisma.config.ts` — `schema.prisma` enthält nur `provider = "postgresql"`.
 
 ---

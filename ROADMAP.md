@@ -225,9 +225,12 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 - [x] Leaderboard: Faction-Filter entfernen, Null-Factions = neutrale Gewichtung — ✅ done (2026-06-06)
 - [x] Feature: Faction-Beschränkung bei Turniererstellung — ✅ done (2026-06-06, `TournamentFactionAllowlist`, Backend + Frontend-Fieldset)
 - [x] Leaderboard auf Game-Ebene (MatchGame) umgestellt — ✅ done (2026-06-06, `loadSeasonObservations` + `loadConfirmedGames` via Match-first + Game-Expansion; `totalMatches` → `totalGames` in DTO + UI)
-- [ ] **FactionStats-Drift bei Overrides:** Counter über-inkrementiert → mittelfristig Recalculate-Endpoint oder Event-Sourcing
-- [x] **Generalprobe abgeschlossen** (alle Runden + Playoffs; Session-4-Terminologie-Fixes: `games_played`, game-level W/L, idempotentes `finalizeTournament`, `meta total_games` via MatchGame) — ✅ done (2026-06-06)
-- [ ] **Handover-PR** erstellen + App-Test vor Deploy
+- [ ] **FactionStats-Drift bei Overrides:** Counter über-inkrementiert → mittelfristig Recalculate-Endpoint oder Event-Sourcing (post-v1)
+- [x] **Generalprobe abgeschlossen** — ✅ done (2026-06-06)
+- [x] **ELO-System entfernt** (placement-basiert, faction-blind, zu wenig Datenmasse für kleine Szene) — ✅ done (2026-06-07, Migration `remove_elo`)
+- [x] **Win-Rate-Tab** auf dynamische MatchGame-Quelle umgestellt (war: `LeaderboardEntry`, jetzt: `computeSeasonLeaderboard`) — ✅ done (2026-06-07)
+- [ ] **Handover-PR** feat/launch-v1 → main erstellen (PR-Body-Entwurf in `.claude/pr-body.md`, braucht noch Session-5-Abschnitt)
+- [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant, dynamisch aus MatchGame berechenbar; nur noch `total_points` für All-Time-Tab nötig
 
 ---
 
