@@ -179,7 +179,7 @@ export function GameTile({
                     <img
                       src={pickedMap.image_url}
                       alt={pickedMap.name}
-                      className="w-full h-20 object-cover"
+                      className="w-full object-contain"
                       loading="lazy"
                     />
                   </button>
@@ -281,7 +281,7 @@ export function GameTile({
                         <img
                           src={pickedMap.image_url}
                           alt={pickedMap.name}
-                          className="w-full h-20 object-cover"
+                          className="w-full object-contain"
                           loading="lazy"
                         />
                       </button>
