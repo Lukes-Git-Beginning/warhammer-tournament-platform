@@ -591,27 +591,6 @@ export function getAdminFactionWinRates(opts?: {
   return apiFetch(`/api/admin/stats/faction-winrates${qs ? `?${qs}` : ''}`);
 }
 
-export interface EloDistributionBucket {
-  bucket: number;
-  count: number;
-}
-
-export interface EloDistributionResponse {
-  buckets: EloDistributionBucket[];
-  median: number;
-  p1: number;
-  p99: number;
-  total: number;
-}
-
-export function getAdminEloDistribution(opts?: {
-  season?: string;
-}): Promise<EloDistributionResponse> {
-  const params = new URLSearchParams();
-  if (opts?.season) params.set('season', opts.season);
-  const qs = params.toString();
-  return apiFetch(`/api/admin/stats/elo-distribution${qs ? `?${qs}` : ''}`);
-}
 
 export interface DropOffFunnelStage {
   label: string;
