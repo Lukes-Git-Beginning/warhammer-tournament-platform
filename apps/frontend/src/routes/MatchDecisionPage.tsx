@@ -553,6 +553,7 @@ function BlindPickPhase({
           <p className="text-sm text-rizzotto-stone-400">
             Faction locked. Waiting for opponent…
           </p>
+          <BlindPickCountdown firstLockedAt={bp?.firstLockedAt ?? null} timeoutMs={2 * 60 * 1000} />
         </div>
       ) : (
         <>
@@ -619,6 +620,33 @@ type DecisionPhase =
   | 'map_pick_ban'
   | 'blind_pick'
   | 'ready';
+
+function BlindPickCountdown({ firstLockedAt, timeoutMs }: { firstLockedAt: string | null; timeoutMs: number }) {
+  const [label, setLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!firstLockedAt) return;
+    const deadline = new Date(new Date(firstLockedAt).getTime() + timeoutMs);
+
+    function tick() {
+      const diff = deadline.getTime() - Date.now();
+      if (diff <= 0) {
+        setLabel('Auto-picking now…');
+        return;
+      }
+      const m = Math.floor(diff / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setLabel(`Auto-pick in ${m}:${s.toString().padStart(2, '0')}`);
+    }
+
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [firstLockedAt, timeoutMs]);
+
+  if (!label) return null;
+  return <p className="text-xs text-rizzotto-stone-500 font-mono">{label}</p>;
+}
 
 const RANDOM_MODES = new Set(['RANDOM', 'RANDOM_NO_REPEAT', 'HOST_PRESET']);
 const BAN_MODES = new Set(['PICK_BAN', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']);

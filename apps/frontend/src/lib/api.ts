@@ -129,6 +129,7 @@ export interface MatchDecisionState {
     player1Locked: boolean;
     player2Locked: boolean;
     revealedAt: string | null;
+    firstLockedAt?: string | null;
     player1FactionId: string | null;
     player2FactionId: string | null;
   } | null;

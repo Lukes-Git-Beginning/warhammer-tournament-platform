@@ -93,6 +93,11 @@ function serializeDecisionState(
           player1Locked: Boolean(blindPick.player1_locked_at),
           player2Locked: Boolean(blindPick.player2_locked_at),
           revealedAt: blindPick.revealed_at?.toISOString() ?? null,
+          firstLockedAt: (
+            blindPick.player1_locked_at && blindPick.player2_locked_at
+              ? (blindPick.player1_locked_at < blindPick.player2_locked_at ? blindPick.player1_locked_at : blindPick.player2_locked_at)
+              : (blindPick.player1_locked_at ?? blindPick.player2_locked_at)
+          )?.toISOString() ?? null,
           player1FactionId: blindPick.revealed_at ? (blindPick.player1_faction_id ?? null) : null,
           player2FactionId: blindPick.revealed_at ? (blindPick.player2_faction_id ?? null) : null,
         }
