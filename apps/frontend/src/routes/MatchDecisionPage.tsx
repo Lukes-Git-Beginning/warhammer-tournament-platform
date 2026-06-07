@@ -454,8 +454,12 @@ function BlindPickPhase({
   const [lockError, setLockError] = useState<string | null>(null);
 
   const bp = decision.blindPick;
-  const isPlayer1 = decision.topPlayerId === currentUserId;
-  const myLocked = isPlayer1 ? bp?.player1Locked : bp?.player2Locked;
+  // Use match player ordering (player1_id/player2_id) not coin-flip ordering
+  // (topPlayerId). The backend sets player1_locked_at for match.player1_id.
+  const isMatchPlayer1 = decision.matchPlayer1Id
+    ? decision.matchPlayer1Id === currentUserId
+    : decision.topPlayerId === currentUserId; // fallback for older responses
+  const myLocked = isMatchPlayer1 ? bp?.player1Locked : bp?.player2Locked;
   const revealed = bp?.revealedAt != null;
 
   async function handleLockIn() {
@@ -474,8 +478,8 @@ function BlindPickPhase({
   }
 
   if (revealed && bp) {
-    const myFactionId = isPlayer1 ? bp.player1FactionId : bp.player2FactionId;
-    const opponentFactionId = isPlayer1 ? bp.player2FactionId : bp.player1FactionId;
+    const myFactionId = isMatchPlayer1 ? bp.player1FactionId : bp.player2FactionId;
+    const opponentFactionId = isMatchPlayer1 ? bp.player2FactionId : bp.player1FactionId;
     const myEntry = factions.find((f) => f.faction.id === myFactionId);
     const opponentEntry = factions.find((f) => f.faction.id === opponentFactionId);
 

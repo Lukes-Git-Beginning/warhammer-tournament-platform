@@ -73,12 +73,14 @@ function serializeDecisionState(
   decision: DecisionRow,
   blindPick: BlindPickRow,
   tournamentMode: string | null = null,
+  matchPlayer1Id: string | null = null,
 ) {
   return {
     matchId,
     mode: decision.mode as MapDecisionModeLiteral,
     topPlayerId: decision.top_player_id,
     bottomPlayerId: decision.bottom_player_id,
+    matchPlayer1Id,
     seed: decision.coin_flip_seed,
     bansTop: (decision.bans_top as string[]) ?? [],
     bansBottom: (decision.bans_bottom as string[]) ?? [],
@@ -201,6 +203,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: matchId, deleted_at: null },
         select: {
           id: true,
+          player1_id: true,
           tournament: { select: { mode: true } },
           games: {
             where: { map_decision: { isNot: null } },
@@ -229,7 +232,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(200).send(
-        serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament.mode),
+        serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament.mode, match.player1_id),
       );
     },
   );

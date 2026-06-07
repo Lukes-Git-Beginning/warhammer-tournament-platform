@@ -124,6 +124,7 @@ export interface MatchDecisionState {
   pickedMapId: string | null;
   decidedAt: string | null;
   tournamentMode?: string | null;
+  matchPlayer1Id?: string | null;
   blindPick?: {
     player1Locked: boolean;
     player2Locked: boolean;
