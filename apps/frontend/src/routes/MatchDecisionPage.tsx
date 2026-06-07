@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useRouter, useRouterState } from '@tanstack/react-router';
+import { useParams, useRouter, useRouterState, Link } from '@tanstack/react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuthQuery } from '@/lib/auth';
@@ -688,11 +688,13 @@ export function MatchDecisionPage() {
   const [coinFlipDone, setCoinFlipDone] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Initial fetch
+  // Initial fetch — poll every 5s so the UI stays in sync even when the
+  // socket room event doesn't arrive (e.g. blind-pick auto-resolve by cron).
   const { data: initialDecision, isLoading } = useQuery({
     queryKey: ['match-decision', matchId],
     queryFn: () => getMatchDecision(matchId),
     retry: false,
+    refetchInterval: 5000,
   });
 
   useEffect(() => {
@@ -868,7 +870,16 @@ export function MatchDecisionPage() {
 
   return (
     <PageShell variant="tight" spacing="base">
-      <div className="mb-8 text-center">
+      <div className="mb-8 text-center relative">
+        {matchDetail?.tournament_slug && (
+          <Link
+            to="/tournaments/$slug"
+            params={{ slug: matchDetail.tournament_slug }}
+            className="absolute left-0 top-1 text-sm text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors"
+          >
+            ← Back to tournament
+          </Link>
+        )}
         <h1 className="font-display text-2xl font-bold text-rizzotto-stone-100">
           Match Decision
         </h1>
