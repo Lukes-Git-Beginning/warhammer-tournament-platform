@@ -103,8 +103,11 @@ Nutzt `SingleElimination` aus `tournament-pairings`. Funktion: `generateSingleEl
 export function generateSingleElim(
   tournamentId: string,
   participantIds: string[],
+  opts?: { hasThirdPlace?: boolean },
 ): BracketMatchInput[]
 ```
+
+**Third-place match (2026-06-08):** When `opts.hasThirdPlace` is true, the generator finds the two SF matches (those whose `next_match_id === finalId`), creates a third-place match at `round = finalRound, match_number = 2, phase = 'PLAYOFF_THIRD_PLACE'`, and sets `loser_next_match_id` on both SFs pointing to it. The `computeLinearLayout` algorithm naturally places it below the Final in the same column (fallbackY after Final's feeder-computed position). SVGBracket draws the dashed loser-connector lines.
 
 ---
 
@@ -250,6 +253,8 @@ export function generatePlayoffBracket(args: {
 
 Hook in `routes/bracket.ts:next-round` — nach letzter Swiss-Runde aufrufen.
 
+**Third-place in playoffs (2026-06-08):** When `tournament.has_third_place_match` is true, `advance-playoffs` creates the third-place match **alongside the Grand Final** in the same transaction — exactly analogous to the GF being created with SF winners. The two SF losers are filled in immediately as `player1_id`/`player2_id`. The SF rows are then retroactively updated with `loser_next_match_id` pointing to the third-place match (for SVG loser-connector lines). Phase: `PLAYOFF_THIRD_PLACE`.
+
 ---
 
 ## ~~MMR — 3-Faktor Win-Punkte-Formel (`lib/mmr.ts`)~~ — ENTFERNT (2026-06-03, nur historisch)
@@ -288,6 +293,22 @@ points = max(0, round(BASE * MAJOR_BONUS * win_quality * anti_farm_modifier))
 5. `incrementAntiFarmCap()` (nur casual)
 
 Hook ist non-fatal: bei Fehler → Log, kein Match-Result-Failure.
+
+---
+
+## Liechtenstein (`lib/liechtenstein.ts`) — 2026-06-08
+
+Pre-randomised Swiss-style schedule. All rounds generated upfront (like Round Robin), configurable round count (3–6, like Swiss), no adaptive balancing, rematches excluded via underlying Round-Robin algorithm.
+
+```typescript
+export function generateLiechtensteinSchedule(
+  tournamentId: string,
+  participantIds: string[],
+  rounds: number,
+): LiechtensteinMatchInput[]
+```
+
+Algorithm: shuffle `participantIds` randomly → `RoundRobin(shuffled, 1, true)` → take first `rounds` rounds. Throws 400 if `rounds > maxRounds` (n−1 for even n, n for odd n). `phase: null`, `next_match_id: null` (same as Round Robin). Standings shown same as Swiss.
 
 ---
 

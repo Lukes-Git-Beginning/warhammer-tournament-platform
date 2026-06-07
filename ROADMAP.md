@@ -229,8 +229,32 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 - [x] **Generalprobe abgeschlossen** — ✅ done (2026-06-06)
 - [x] **ELO-System entfernt** (placement-basiert, faction-blind, zu wenig Datenmasse für kleine Szene) — ✅ done (2026-06-07, Migration `remove_elo`)
 - [x] **Win-Rate-Tab** auf dynamische MatchGame-Quelle umgestellt (war: `LeaderboardEntry`, jetzt: `computeSeasonLeaderboard`) — ✅ done (2026-06-07)
-- [ ] **Handover-PR** feat/launch-v1 → main erstellen (PR-Body-Entwurf in `.claude/pr-body.md`, braucht noch Session-5-Abschnitt)
+- [x] **Handover-PR** feat/launch-v1 → main — **ausstehend** (PR-Body-Entwurf in `.claude/pr-body.md`, erst nach Generalprobe-Phase 2 erstellen)
 - [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant, dynamisch aus MatchGame berechenbar; nur noch `total_points` für All-Time-Tab nötig
+
+### 5.4 Session 2026-06-07/08 — BPT-Generalprobe + Feature-Welle
+
+| Item | Status |
+|---|---|
+| **Liechtenstein-Format** — Pre-randomised Swiss, alle Runden vorab generiert, kein Balancing, Rematches via RR-Algorithmus ausgeschlossen. `lib/liechtenstein.ts`, `LIECHTENSTEIN` in TournamentFormat-Enum, vollständig in Dispatcher/Standings/Playoffs/Finalize verdrahtet | ✅ done |
+| **Map-Images** — 86 Maps mit Imgur-URLs aus TT Map Notes.xlsx extrahiert (Python, openpyxl); `seed.ts` auf `MAP_DATA[]` mit `image_url` umgestellt. Blasphemous Snowfield als lokales Asset in `public/maps/`. Itza ohne Bild (Legacy-Map, nicht im Spreadsheet) | ✅ done |
+| **Bracket-Kandidaten-Labels** — Statt „BYE" in zukünftigen Runden: „Grombrindal / Louen" (feeder-Spieler). `SVGBracket` baut `slotLabels`-Map, `MatchNode` empfängt `p1SlotLabel`/`p2SlotLabel` | ✅ done |
+| **Map-Thumbnail + Lightbox in GameTile** — Mini-Bild unter Mapname (`object-contain`, proportional skaliert), Klick öffnet Vollbild-Overlay (`fixed inset-0 z-50`), Escape/Backdrop/×-Button schließt | ✅ done |
+| **Discord-Timestamp-Button** — `⏱ Discord`-Button neben Turnierdatum in `TournamentDetail`; kopiert `<t:UNIX:F>` in Clipboard. `toDiscordTimestamp()` in `lib/timezone.ts` | ✅ done |
+| **Fraktionen alphabetisch** — `getFactions()` in `api.ts` sortiert jetzt an der Quelle via `.sort((a,b) => a.faction.name.localeCompare(b.faction.name))`. Galt für alle Consumer gleichzeitig | ✅ done |
+| **BPT Blind-Pick — mehrere Bugs gefixt** — (1) `game.decision.blindPick` existiert nicht; korrektes Feld ist `game.blindPick` (top-level auf `GameDto`). (2) `decisionComplete` warf JS-loose-equality-Fallstrick: `undefined == null === true`. (3) `isPlayer1` in `BlindPickPhase` nutzte Coin-Flip-Reihenfolge (`topPlayerId`) statt Match-Reihenfolge (`matchPlayer1Id`) → Backend gibt `matchPlayer1Id` jetzt zurück. (4) `lockBlindPick` schluckte Fehler still; jetzt mit Error-Display + Query-Invalidation nach Erfolg. (5) `MatchDecisionPage.resolvePhase` erkannte BPT-Blind-Pick-Phase nicht wenn `blindPick === null` (vor erstem Lock) | ✅ done |
+| **Blind-Pick Auto-Resolve Cron** — `lib/blind-pick-auto-resolve.ts`: findet Blind-Picks wo ein Spieler > 2 min gewartet hat, assigned zufällige Fraktion (exkl. bereits gewählter Fraktion des Partners), emittiert Socket-Event. `cron.ts` registriert Job `*/1 * * * *`. Frontend: `BlindPickCountdown`-Komponente zeigt `Auto-pick in 1:47`-Countdown ab `firstLockedAt` | ✅ done |
+| **Bracket Auto-Fit** — Removed `, 1`-Cap in `BracketView.ts:centerView()` und Reset-Button; kleines 8-Spieler-Bracket füllt jetzt den Container statt bei 100% zu stoppen | ✅ done |
+| **MyMatchSection: nur bei bekannten Gegnern** — Guard `m.player1Id !== null && m.player2Id !== null` verhindert frühe GameTile-Anzeige vor SF-Ergebnis in SE | ✅ done |
+| **Third-Place-Match-Option** — `has_third_place_match Boolean` auf Tournament; `PLAYOFF_THIRD_PLACE` in `MatchPhase`-Enum. SE: via `generateSingleElim(opts.hasThirdPlace)`; Playoffs: `advance-playoffs` erstellt 3rd-Place-Match gleichzeitig mit GF, mit bereits gefüllten SF-Verlierern + retroaktives `loser_next_match_id`-Update auf SFs. UI: Checkbox im Create-Form, „3rd Place"-Badge im `MatchNode` | ✅ done |
+| **MatchDecisionPage** — 5s-Refetch-Interval (`refetchInterval: 5000`) damit Cron-Updates ohne Socket ankommen. `← Back to tournament`-Link oben links | ✅ done |
+| **BPT-Generalprobe Phase 2** — Einzelne Runde + Blind-Pick von Ende zu Ende getestet; zahlreiche Bugs gefunden und gefixt (s.o.) | ✅ done (partiell — Playoffs noch nicht getestet) |
+
+**Offen vor Handover-PR:**
+- [ ] **Duplicate Map-Records bereinigen** — 4 Map-Paare mit alter + neuer Slug-Variante (z.B. `bleakspire-labor-camp` + `bleakspire-labour-camp`); neue Slug-Variante hat Bild, alte hatte null → alte bekamen Bild per Patch, neue soft-deleted. Seed.ts hat kanonische Namen. Cleanup optional, funktioniert korrekt
+- [ ] **Itza** — Legacy-Map ohne Imgur-Bild, nicht im Community-Spreadsheet; entweder Bild beschaffen oder soft-deleten
+- [ ] **Onboarding-Tour-Stops** — Texte + Stops veraltet (Library-Refs, alte Branding); Dateien: `OnboardingStage3Tour.tsx` + i18n `common.json`
+- [ ] **Handover-PR** — `gh pr create --title "feat: v1 launch" --body "$(cat .claude/pr-body.md)" --base main` (PR-Body ergänzen um Session 2026-06-07/08)
 
 ---
 
