@@ -334,19 +334,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       const totalWins = recentMatches.filter((m) => m.winner_id === id).length;
       const totalLosses = recentMatches.filter((m) => m.winner_id !== null && m.winner_id !== id).length;
 
-      // ELO history from TournamentResults (approximate via placement/points over time)
-      const eloHistory = await fastify.prisma.tournamentResult.findMany({
-        where: { user_id: id, season_id: resolvedSeasonId ?? undefined },
-        orderBy: { created_at: 'asc' },
-        select: { created_at: true, elo_change: true },
-      });
-
-      let runningRating = 1200;
-      const eloHistoryPoints = eloHistory.map((r) => {
-        runningRating += r.elo_change;
-        return { played_at: r.created_at.toISOString(), rating: runningRating };
-      });
-
       const matchHistory = recentMatches.map((m) => {
         const isPlayer1 = m.player1_id === id;
         const opponentUser = isPlayer1 ? m.player2 : m.player1;
@@ -371,7 +358,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         total_wins: totalWins,
         total_losses: totalLosses,
         win_rate: totalWins + totalLosses > 0 ? totalWins / (totalWins + totalLosses) : 0,
-        elo_history: eloHistoryPoints,
       };
     },
   );
@@ -586,7 +572,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
             is_active: activeSeason.is_active,
           },
           total_points: entry.total_points,
-          elo_rating: entry.elo_rating,
           games_played: entry.games_played,
           wins: entry.wins,
           losses: entry.losses,
@@ -610,7 +595,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       select: {
         placement: true,
         points_earned: true,
-        elo_change: true,
         created_at: true,
         tournament: { select: { slug: true, name: true, start_date: true } },
         season: { select: { name: true } },
@@ -657,7 +641,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         season_name: r.season?.name ?? null,
         placement: r.placement,
         points_earned: r.points_earned,
-        elo_change: r.elo_change,
         created_at: r.created_at.toISOString(),
       })),
       recent_matches: recentMatches.map((m) => {

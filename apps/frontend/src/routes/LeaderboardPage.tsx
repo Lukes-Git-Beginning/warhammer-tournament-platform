@@ -12,7 +12,6 @@ import {
   type ExtendedLeaderboardEntry,
 } from '@/lib/api.js';
 import type { LeaderboardEntryDto, DynamicLeaderboardEntryDto } from '@rizzotto/types';
-import { EloRatingDisplay } from '../components/meta/EloRatingDisplay.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 
@@ -370,7 +369,6 @@ function ModeTab({ mode }: ModeTabProps) {
                   <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
                   <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
                   <th className="px-4 py-3 text-right font-medium text-stone-400">Win Rate</th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400">ELO</th>
                   <th className="px-4 py-3 text-center font-medium text-stone-400">W / L</th>
                   <th className="px-4 py-3 text-right font-medium text-stone-400">Games</th>
                 </tr>
@@ -405,9 +403,6 @@ function ModeTab({ mode }: ModeTabProps) {
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400">
                         {rateVal != null ? `${(rateVal * 100).toFixed(1)}%` : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <EloRatingDisplay rating={entry.elo_rating} size="sm" />
                       </td>
                       <td className="px-4 py-3 text-center text-stone-300">
                         <span className="text-emerald-400">{entry.wins}</span>
@@ -561,9 +556,6 @@ function LeaderboardTable({
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-right text-stone-200">{entry.total_points}</td>
-                  <td className="px-4 py-3 text-right">
-                    <EloRatingDisplay rating={entry.elo_rating} size="sm" />
-                  </td>
                   <td className="px-4 py-3 text-center text-stone-300">
                     <span className="text-emerald-400">{entry.wins}</span>
                     <span className="text-stone-600"> / </span>

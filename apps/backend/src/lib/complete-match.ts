@@ -312,7 +312,7 @@ export async function completeMatch(
       for (const e of entries) {
         await tx.leaderboardEntry.upsert({
           where: { user_id_season_id: { user_id: e.userId, season_id: seasonId } },
-          create: { user_id: e.userId, season_id: seasonId, games_played: 1, wins: e.isWinner ? 1 : 0, losses: e.isWinner ? 0 : 1, total_points: e.points, elo_rating: 1200 },
+          create: { user_id: e.userId, season_id: seasonId, games_played: 1, wins: e.isWinner ? 1 : 0, losses: e.isWinner ? 0 : 1, total_points: e.points },
           update: { games_played: { increment: 1 }, wins: e.isWinner ? { increment: 1 } : undefined, losses: !e.isWinner ? { increment: 1 } : undefined, total_points: { increment: e.points } },
         });
       }

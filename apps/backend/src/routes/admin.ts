@@ -31,9 +31,6 @@ const FactionWinRatesQuerySchema = z.object({
   period: z.enum(['last_30d', 'last_90d', 'season']).optional(),
 });
 
-const EloDistributionQuerySchema = z.object({
-  season: z.string().uuid().optional(),
-});
 
 const DropoffFunnelQuerySchema = z.object({
   tournament_id: z.string().uuid().optional(),
@@ -374,75 +371,6 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         return results.sort((a, b) => b.win_rate - a.win_rate);
       },
       { ttlSeconds: 120 },
-    );
-  });
-
-  // -------------------------------------------------------------------------
-  // GET /api/admin/stats/elo-distribution
-  // -------------------------------------------------------------------------
-
-  fastify.get('/api/admin/stats/elo-distribution', async (request, reply) => {
-    const parsed = EloDistributionQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
-    }
-    const { season: seasonId } = parsed.data;
-
-    let resolvedSeasonId: string | null = null;
-    if (seasonId) {
-      const s = await fastify.prisma.season.findUnique({ where: { id: seasonId }, select: { id: true } });
-      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
-      resolvedSeasonId = s.id;
-    } else {
-      const s = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
-      resolvedSeasonId = s?.id ?? null;
-    }
-
-    if (!resolvedSeasonId) {
-      return reply.code(404).send({ error: 'NotFound', message: 'No active season', statusCode: 404 });
-    }
-
-    return cached(
-      fastify.redis,
-      cacheKey('admin:elo-distribution', { seasonId: resolvedSeasonId }),
-      async () => {
-        const entries = await fastify.prisma.leaderboardEntry.findMany({
-          where: { season_id: resolvedSeasonId! },
-          select: { elo_rating: true },
-        });
-
-        if (entries.length === 0) {
-          return { buckets: [], median: null, p1: null, p99: null, total: 0 };
-        }
-
-        const ratings = entries.map((e) => e.elo_rating).sort((a, b) => a - b);
-        const total = ratings.length;
-
-        // Build 50-point buckets
-        const BUCKET_SIZE = 50;
-        const minRating = Math.floor(ratings[0]! / BUCKET_SIZE) * BUCKET_SIZE;
-        const maxRating = Math.ceil(ratings[ratings.length - 1]! / BUCKET_SIZE) * BUCKET_SIZE;
-
-        const bucketsMap = new Map<number, number>();
-        for (let start = minRating; start < maxRating; start += BUCKET_SIZE) {
-          bucketsMap.set(start, 0);
-        }
-        for (const r of ratings) {
-          const bucketStart = Math.floor(r / BUCKET_SIZE) * BUCKET_SIZE;
-          bucketsMap.set(bucketStart, (bucketsMap.get(bucketStart) ?? 0) + 1);
-        }
-
-        const buckets = Array.from(bucketsMap.entries())
-          .sort(([a], [b]) => a - b)
-          .map(([start, count]) => ({ start, end: start + BUCKET_SIZE, count }));
-
-        const median = ratings[Math.floor(total / 2)]!;
-        const p1 = ratings[Math.floor(total * 0.01)]!;
-        const p99 = ratings[Math.floor(total * 0.99)]!;
-
-        return { buckets, median, p1, p99, total };
-      },
-      { ttlSeconds: 300 },
     );
   });
 

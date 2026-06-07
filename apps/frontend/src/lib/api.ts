@@ -821,7 +821,6 @@ export interface ExtendedLeaderboardEntry {
   rank: number;
   user: { id: string; username: string; avatar_url: string | null; role: string };
   total_points: number;
-  elo_rating: number;
   games_played: number;
   wins: number;
   losses: number;
@@ -854,11 +853,6 @@ export function getLeaderboardByMode(opts: {
 // User Stats (personal)
 // ---------------------------------------------------------------------------
 
-export interface EloHistoryEntry {
-  date: string;
-  elo: number;
-}
-
 export interface UserStatsResponse {
   user_id: string;
   season?: string;
@@ -866,7 +860,6 @@ export interface UserStatsResponse {
   total_losses: number;
   win_rate: number;
   win_rate_trend?: number;
-  elo_history: EloHistoryEntry[];
 }
 
 export function getUserStats(userId: string, season?: string): Promise<UserStatsResponse> {

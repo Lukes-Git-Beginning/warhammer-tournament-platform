@@ -95,15 +95,6 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
               return rateB - rateA || b.totalGames - a.totalGames;
             });
 
-          const playerIds = qualified.map((e) => e.playerId);
-          const eloEntries = playerIds.length > 0
-            ? await fastify.prisma.leaderboardEntry.findMany({
-                where: { season_id: resolvedSeasonId, user_id: { in: playerIds } },
-                select: { user_id: true, elo_rating: true },
-              })
-            : [];
-          const eloMap = new Map(eloEntries.map((e) => [e.user_id, e.elo_rating]));
-
           const total = qualified.length;
           const pageSlice = qualified.slice((page - 1) * pageSize, page * pageSize);
 
@@ -120,7 +111,6 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
               rank: (page - 1) * pageSize + idx + 1,
               user: { id: e.playerId, username: e.displayName, avatar_url: e.avatarUrl },
               total_points: Math.round(e.totalFinalPoints),
-              elo_rating: eloMap.get(e.playerId) ?? 1000,
               games_played: e.totalGames,
               wins: e.wins,
               losses: e.losses,
@@ -152,7 +142,6 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         const grouped = await fastify.prisma.leaderboardEntry.groupBy({
           by: ['user_id'],
           _sum: { total_points: true, games_played: true, wins: true, losses: true },
-          _max: { elo_rating: true },
           _count: { season_id: true },
           orderBy: { _sum: { total_points: 'desc' } },
         });
@@ -176,7 +165,6 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
                 ? { id: user.id, username: user.username, avatar_url: user.avatar_url }
                 : { id: g.user_id, username: 'Unknown', avatar_url: null },
               total_points: g._sum.total_points ?? 0,
-              elo_rating: g._max.elo_rating ?? 1200,
               games_played: g._sum.games_played ?? 0,
               wins: g._sum.wins ?? 0,
               losses: g._sum.losses ?? 0,

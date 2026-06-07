@@ -137,9 +137,9 @@ describe('computeSeasonLeaderboard — round robin', () => {
     const board = await computeSeasonLeaderboard(prisma, undefined, seasonRR);
     const byId = new Map(board.map((e) => [e.playerId, e]));
 
-    expect(byId.get(A)).toMatchObject({ wins: 2, losses: 1, totalMatches: 3 });
-    expect(byId.get(B)).toMatchObject({ wins: 1, losses: 1, totalMatches: 2 });
-    expect(byId.get(C)).toMatchObject({ wins: 1, losses: 2, totalMatches: 3 });
+    expect(byId.get(A)).toMatchObject({ wins: 2, losses: 1, totalGames: 3 });
+    expect(byId.get(B)).toMatchObject({ wins: 1, losses: 1, totalGames: 2 });
+    expect(byId.get(C)).toMatchObject({ wins: 1, losses: 2, totalGames: 3 });
   });
 
   it('all modifiers are 1 (totals < 20), so final == raw points', async () => {
@@ -172,7 +172,7 @@ describe('computeSeasonLeaderboard — anti-farm', () => {
     const board = await computeSeasonLeaderboard(prisma, undefined, seasonAF);
     const dEntry = board.find((e) => e.playerId === D)!;
 
-    expect(dEntry).toMatchObject({ wins: 20, losses: 0, totalMatches: 20 });
+    expect(dEntry).toMatchObject({ wins: 20, losses: 0, totalGames: 20 });
     // 8 of 20 wins are zeroed → final strictly below raw.
     expect(dEntry.totalFinalPoints).toBeLessThan(dEntry.totalRawPoints);
 

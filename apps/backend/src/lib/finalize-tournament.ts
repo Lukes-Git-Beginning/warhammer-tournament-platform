@@ -1,6 +1,5 @@
 import type { PrismaClient } from '@rizzotto/db';
 import { calculateTournamentPoints } from './tournament-utils.js';
-import { computeEloDeltas } from './elo.js';
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -330,10 +329,6 @@ export async function finalizeTournament(
   });
   const seasonId = activeSeason?.id ?? null;
 
-  // ---------------------------------------------------------------------------
-  // ELO computation (before transaction — reads current ratings from DB)
-  // ---------------------------------------------------------------------------
-
   // Build list of userIds from finalized placements
   const finalizedUserIds = [...placements.keys()];
 
@@ -343,27 +338,7 @@ export async function finalizeTournament(
   // finalizeTournament is fully idempotent regardless of how many times it runs.
   // -------------------------------------------------------------------------
 
-  // 1. Existing LeaderboardEntry ratings (for ELO base before this tournament)
-  const existingEntries =
-    seasonId && finalizedUserIds.length > 0
-      ? await prisma.leaderboardEntry.findMany({
-          where: { season_id: seasonId, user_id: { in: finalizedUserIds } },
-          select: { user_id: true, elo_rating: true },
-        })
-      : [];
-  const currentRatingMap = new Map<string, number>(
-    existingEntries.map((e) => [e.user_id, e.elo_rating]),
-  );
-
-  const eloInputs = finalizedUserIds.map((userId) => ({
-    userId,
-    currentRating: currentRatingMap.get(userId) ?? 1200,
-    placement: placements.get(userId)!,
-  }));
-  const eloResults = computeEloDeltas(eloInputs, { isMajor: tournament.is_major });
-  const eloByUserId = new Map(eloResults.map((r) => [r.userId, r]));
-
-  // 2. Season-total points: sum of ALL TournamentResults in the season for each
+  // 1. Season-total points: sum of ALL TournamentResults in the season for each
   //    player, replacing this tournament's old value with the newly computed one.
   const priorSeasonResults =
     seasonId && finalizedUserIds.length > 0
@@ -425,9 +400,6 @@ export async function finalizeTournament(
         isMajor: tournament.is_major,
       });
 
-      const elo = eloByUserId.get(userId);
-      const eloChange = elo?.delta ?? 0;
-
       await tx.tournamentResult.upsert({
         where: { tournament_id_user_id: { tournament_id: tournamentId, user_id: userId } },
         create: {
@@ -436,13 +408,11 @@ export async function finalizeTournament(
           season_id: seasonId,
           placement,
           points_earned: points,
-          elo_change: eloChange,
         },
         update: {
           season_id: seasonId,
           placement,
           points_earned: points,
-          elo_change: eloChange,
         },
       });
 
@@ -450,7 +420,6 @@ export async function finalizeTournament(
         const totalPoints = (priorPointsMap.get(userId) ?? 0) + points;
         const totalWins = seasonWins.get(userId) ?? 0;
         const totalLosses = seasonLosses.get(userId) ?? 0;
-        const newEloRating = elo?.newRating ?? (currentRatingMap.get(userId) ?? 1200);
 
         await tx.leaderboardEntry.upsert({
           where: { user_id_season_id: { user_id: userId, season_id: seasonId } },
@@ -461,14 +430,12 @@ export async function finalizeTournament(
             games_played: totalWins + totalLosses,
             wins: totalWins,
             losses: totalLosses,
-            elo_rating: newEloRating,
           },
           update: {
             total_points: totalPoints,
             games_played: totalWins + totalLosses,
             wins: totalWins,
             losses: totalLosses,
-            elo_rating: newEloRating,
           },
         });
       }

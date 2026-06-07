@@ -291,7 +291,6 @@ export async function resolveMatchResult(
               wins: p.isWinner ? 1 : 0,
               losses: !p.isWinner && !p.isDraw ? 1 : 0,
               total_points: p.points,
-              elo_rating: 1200,
             },
             update: {
               games_played: { increment: 1 },

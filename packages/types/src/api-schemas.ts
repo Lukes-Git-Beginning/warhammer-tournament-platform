@@ -97,7 +97,6 @@ export const LeaderboardEntryDtoSchema = z.object({
   rank: z.number().int(),
   user: z.object({ id: z.string().uuid(), username: z.string(), avatar_url: z.string().url().nullable() }),
   total_points: z.number(),
-  elo_rating: z.number().int(),
   games_played: z.number().int(),
   wins: z.number().int(),
   losses: z.number().int(),
@@ -231,7 +230,6 @@ export const UserProfileResponseSchema = z.object({
     .object({
       season: SeasonSummarySchema,
       total_points: z.number(),
-      elo_rating: z.number().int(),
       games_played: z.number().int(),
       wins: z.number().int(),
       losses: z.number().int(),
@@ -250,7 +248,6 @@ export const UserProfileResponseSchema = z.object({
       season_name: z.string().nullable(),
       placement: z.number().int(),
       points_earned: z.number(),
-      elo_change: z.number().int().nullable(),
       created_at: z.string().datetime(),
     }),
   ),
