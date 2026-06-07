@@ -448,8 +448,10 @@ function BlindPickPhase({
   currentUserId,
   factions,
 }: BlindPickPhaseProps) {
+  const queryClient = useQueryClient();
   const [selectedFactionId, setSelectedFactionId] = useState<string | null>(null);
   const [locking, setLocking] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
 
   const bp = decision.blindPick;
   const isPlayer1 = decision.topPlayerId === currentUserId;
@@ -459,10 +461,13 @@ function BlindPickPhase({
   async function handleLockIn() {
     if (!selectedFactionId) return;
     setLocking(true);
+    setLockError(null);
     try {
       await lockBlindPick(matchId, selectedFactionId);
-    } catch {
-      // socket will sync
+      // Immediately refetch so the UI updates even if the socket misses the event
+      await queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
+    } catch (err) {
+      setLockError(err instanceof Error ? err.message : 'Lock failed — please try again.');
     } finally {
       setLocking(false);
     }
@@ -590,6 +595,9 @@ function BlindPickPhase({
           >
             {locking ? 'Locking…' : 'Lock In'}
           </Button>
+          {lockError && (
+            <p className="text-sm text-red-400 text-center">{lockError}</p>
+          )}
         </>
       )}
     </div>
