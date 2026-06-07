@@ -364,7 +364,11 @@ export function getFactions(seasonId?: string): Promise<FactionListResponse> {
   const params = new URLSearchParams();
   if (seasonId) params.set('seasonId', seasonId);
   const qs = params.toString();
-  return apiFetch<FactionListResponse>(`/api/factions${qs ? `?${qs}` : ''}`);
+  return apiFetch<FactionListResponse>(`/api/factions${qs ? `?${qs}` : ''}`)
+    .then((res) => ({
+      ...res,
+      data: [...res.data].sort((a, b) => a.faction.name.localeCompare(b.faction.name)),
+    }));
 }
 
 export function getFaction(id: string, seasonId?: string): Promise<FactionDetailResponse> {
