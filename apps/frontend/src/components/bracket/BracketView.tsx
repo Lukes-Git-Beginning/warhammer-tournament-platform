@@ -77,7 +77,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     const PAD = 20;
     const svgW = layout.width + PAD * 2;
     const svgH = layout.height + PAD * 2;
-    const fitted = Math.min(containerW / svgW, containerH / svgH, 1);
+    const fitted = Math.min(containerW / svgW, containerH / svgH);
     transformRef.current.centerView(fitted, 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout?.width, layout?.height]);
@@ -336,7 +336,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                     const PAD = 20;
                     const svgW = layout.width + PAD * 2;
                     const svgH = layout.height + PAD * 2;
-                    const fitted = Math.min(containerW / svgW, containerH / svgH, 1);
+                    const fitted = Math.min(containerW / svgW, containerH / svgH);
                     transformRef.current.centerView(fitted, 200);
                   }}
                   aria-label="Reset zoom"
