@@ -345,57 +345,101 @@ export function TournamentCreateForm() {
           Match Mechanics
         </legend>
 
-        {/* Rounds count */}
-        <div>
-          <Label htmlFor="tcf-rounds">Swiss Rounds</Label>
-          <div className="flex items-center gap-3 mt-1">
-            <input
-              id="tcf-rounds"
-              type="range"
-              name="rounds_count"
-              min={3}
-              max={6}
-              step={1}
-              value={form.rounds_count ?? 5}
-              onChange={handleChange}
-              className="w-full accent-rizzotto-gold-400"
-            />
-            <span className="w-6 text-center font-semibold text-rizzotto-stone-200 tabular-nums">
-              {form.rounds_count ?? 5}
-            </span>
-          </div>
-          <FieldHint>Number of Swiss rounds (3–6). Default: 5.</FieldHint>
-        </div>
-
-        {/* Playoff format */}
-        <div>
-          <Label htmlFor="tcf-playoff">Playoff Format</Label>
-          <div className="flex gap-3 mt-1 flex-wrap">
-            {(['NONE', 'TOP4', 'TOP8'] as const).map((opt) => (
-              <label key={opt} className="flex items-center gap-2 cursor-pointer">
+        {(form.format === 'SWISS' || form.format === 'ROUND_ROBIN') ? (
+          <>
+            {/* Rounds count — only for Swiss; Round Robin rounds are determined by participant count */}
+            {form.format === 'SWISS' && <div>
+              <Label htmlFor="tcf-rounds">Swiss Rounds</Label>
+              <div className="flex items-center gap-3 mt-1">
                 <input
-                  type="radio"
-                  name="playoff_format"
-                  value={opt}
-                  checked={(form.playoff_format ?? 'NONE') === opt}
+                  id="tcf-rounds"
+                  type="range"
+                  name="rounds_count"
+                  min={3}
+                  max={6}
+                  step={1}
+                  value={form.rounds_count ?? 5}
                   onChange={handleChange}
-                  className="accent-rizzotto-gold-400"
+                  className="w-full accent-rizzotto-gold-400"
                 />
-                <span className="text-sm text-rizzotto-stone-300">{opt}</span>
-              </label>
-            ))}
-          </div>
-          {form.playoff_format === 'TOP8' && (
-            <FieldHint>TOP8 requires ≥16 participants at playoff start. Auto-falls back to TOP4 if below threshold.</FieldHint>
-          )}
-        </div>
+                <span className="w-6 text-center font-semibold text-rizzotto-stone-200 tabular-nums">
+                  {form.rounds_count ?? 5}
+                </span>
+              </div>
+              <FieldHint>Number of Swiss rounds (3–6). Default: 5.</FieldHint>
+            </div>}
 
-        {/* Match formats */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {/* Playoff format */}
+            <div>
+              <Label htmlFor="tcf-playoff">Playoff Format</Label>
+              <div className="flex gap-3 mt-1 flex-wrap">
+                {(['NONE', 'TOP4', 'TOP8'] as const).map((opt) => (
+                  <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="playoff_format"
+                      value={opt}
+                      checked={(form.playoff_format ?? 'NONE') === opt}
+                      onChange={handleChange}
+                      className="accent-rizzotto-gold-400"
+                    />
+                    <span className="text-sm text-rizzotto-stone-300">{opt}</span>
+                  </label>
+                ))}
+              </div>
+              {form.playoff_format === 'TOP8' && (
+                <FieldHint>TOP8 requires ≥16 participants at playoff start. Auto-falls back to TOP4 if below threshold.</FieldHint>
+              )}
+            </div>
+
+            {/* Match formats */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <Label htmlFor="tcf-swiss-fmt">{form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : 'Swiss Format'}</Label>
+                <Select
+                  id="tcf-swiss-fmt"
+                  name="swiss_match_format"
+                  value={form.swiss_match_format ?? 'BO1'}
+                  onChange={handleChange}
+                >
+                  <option value="BO1">Best of 1</option>
+                  <option value="BO3">Best of 3</option>
+                  <option value="BO5">Best of 5</option>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="tcf-playoff-fmt">Playoffs Format</Label>
+                <Select
+                  id="tcf-playoff-fmt"
+                  name="playoff_match_format"
+                  value={form.playoff_match_format ?? 'BO1'}
+                  onChange={handleChange}
+                >
+                  <option value="BO1">Best of 1</option>
+                  <option value="BO3">Best of 3</option>
+                  <option value="BO5">Best of 5</option>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="tcf-finale-fmt">Finale Format</Label>
+                <Select
+                  id="tcf-finale-fmt"
+                  name="finale_match_format"
+                  value={form.finale_match_format ?? 'BO1'}
+                  onChange={handleChange}
+                >
+                  <option value="BO1">Best of 1</option>
+                  <option value="BO3">Best of 3</option>
+                  <option value="BO5">Best of 5</option>
+                </Select>
+              </div>
+            </div>
+          </>
+        ) : (
           <div>
-            <Label htmlFor="tcf-swiss-fmt">Swiss Format</Label>
+            <Label htmlFor="tcf-elim-fmt">Match Format</Label>
             <Select
-              id="tcf-swiss-fmt"
+              id="tcf-elim-fmt"
               name="swiss_match_format"
               value={form.swiss_match_format ?? 'BO1'}
               onChange={handleChange}
@@ -405,33 +449,7 @@ export function TournamentCreateForm() {
               <option value="BO5">Best of 5</option>
             </Select>
           </div>
-          <div>
-            <Label htmlFor="tcf-playoff-fmt">Playoffs Format</Label>
-            <Select
-              id="tcf-playoff-fmt"
-              name="playoff_match_format"
-              value={form.playoff_match_format ?? 'BO1'}
-              onChange={handleChange}
-            >
-              <option value="BO1">Best of 1</option>
-              <option value="BO3">Best of 3</option>
-              <option value="BO5">Best of 5</option>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="tcf-finale-fmt">Finale Format</Label>
-            <Select
-              id="tcf-finale-fmt"
-              name="finale_match_format"
-              value={form.finale_match_format ?? 'BO1'}
-              onChange={handleChange}
-            >
-              <option value="BO1">Best of 1</option>
-              <option value="BO3">Best of 3</option>
-              <option value="BO5">Best of 5</option>
-            </Select>
-          </div>
-        </div>
+        )}
       </fieldset>
 
       {/* ─── Map Pool ──────────────────────────────────────────────────── */}
@@ -743,49 +761,6 @@ export function TournamentCreateForm() {
         )}
       </fieldset>
 
-      {/* ─── Draft ─────────────────────────────────────────────────────── */}
-      <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
-        <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
-          {t('tournament.form.draft_section')}
-        </legend>
-        <label className="flex cursor-pointer items-center gap-3">
-          <input
-            type="checkbox"
-            name="draft_enabled"
-            checked={form.draft_enabled ?? false}
-            onChange={handleChange}
-            className="h-4 w-4 rounded border-rizzotto-iron-600 bg-rizzotto-iron-800 text-rizzotto-gold-500 focus:ring-rizzotto-gold-500"
-          />
-          <span className="text-sm text-rizzotto-stone-300">
-            {t('tournament.form.draft_enable')}
-          </span>
-        </label>
-
-        {form.draft_enabled && (
-          <div>
-            <Label htmlFor="tcf-preset" required>
-              {t('tournament.form.draft_preset')}
-            </Label>
-            <Select
-              id="tcf-preset"
-              name="draft_preset_id"
-              value={form.draft_preset_id ?? ''}
-              onChange={handleChange}
-            >
-              <option value="">— {t('tournament.form.draft_preset_placeholder')} —</option>
-              {draftPresets?.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.name} ({preset.turns.length} {t('tournament.form.turns')},{' '}
-                  {preset.turn_seconds}s {t('tournament.form.per_turn')})
-                </option>
-              ))}
-            </Select>
-            {form.draft_enabled && !form.draft_preset_id && (
-              <FieldHint>{t('tournament.form.draft_preset_required')}</FieldHint>
-            )}
-          </div>
-        )}
-      </fieldset>
 
       <Button
         type="submit"

@@ -55,9 +55,7 @@ export function Header() {
       >
         {t('header.factions')}
       </Link>
-      <Link to="/presets" className={NAV_LINK_CLASS} activeProps={NAV_LINK_ACTIVE_PROPS}>
-        {t('header.drafts')}
-      </Link>
+
       {canCreate && (
         <Link
           to="/tournaments/create"

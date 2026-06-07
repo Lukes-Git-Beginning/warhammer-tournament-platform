@@ -142,8 +142,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         })),
       };
 
-      // Augment with Swiss standings if applicable
-      if (tournament.format === TournamentFormat.SWISS) {
+      // Augment with standings for Swiss and Round Robin
+      if (tournament.format === TournamentFormat.SWISS || tournament.format === TournamentFormat.ROUND_ROBIN) {
         const participants = await fastify.prisma.tournamentParticipant.findMany({
           where: {
             tournament_id: tournament.id,
@@ -692,8 +692,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: 'Forbidden', message: 'Only the organizer can start playoffs', statusCode: 403 });
       }
 
-      if (tournament.format !== TournamentFormat.SWISS) {
-        return reply.code(400).send({ error: 'BadRequest', message: 'Playoffs can only be started for Swiss tournaments', statusCode: 400 });
+      if (tournament.format !== TournamentFormat.SWISS && tournament.format !== TournamentFormat.ROUND_ROBIN) {
+        return reply.code(400).send({ error: 'BadRequest', message: 'Playoffs can only be started for Swiss or Round Robin tournaments', statusCode: 400 });
       }
 
       if (tournament.status !== TournamentStatus.ONGOING) {
@@ -722,27 +722,40 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       const participantIds = participants.map((p) => p.user_id);
-      const recommendedRounds = recommendNumberOfRounds(participantIds.length);
       const currentRound = existingMatches.length > 0 ? Math.max(...existingMatches.map((m) => m.round)) : 0;
 
-      // Guard: all Swiss rounds must be complete
-      if (currentRound < recommendedRounds) {
-        return reply.code(400).send({
-          error: 'BadRequest',
-          message: `Swiss phase not complete — ${currentRound}/${recommendedRounds} rounds played`,
-          statusCode: 400,
-        });
-      }
-
-      const incomplete = existingMatches.filter(
-        (m) => m.round === currentRound && m.status !== 'COMPLETED' && m.status !== 'BYE',
-      );
-      if (incomplete.length > 0) {
-        return reply.code(400).send({
-          error: 'BadRequest',
-          message: `${incomplete.length} match(es) in round ${currentRound} not yet completed`,
-          statusCode: 400,
-        });
+      if (tournament.format === TournamentFormat.ROUND_ROBIN) {
+        // For Round Robin all rounds are pre-generated — every non-playoff match must be complete
+        const incompleteRR = existingMatches.filter(
+          (m) => m.phase === null && m.status !== 'COMPLETED' && m.status !== 'BYE',
+        );
+        if (incompleteRR.length > 0) {
+          return reply.code(400).send({
+            error: 'BadRequest',
+            message: `Round Robin phase not complete — ${incompleteRR.length} match(es) remaining`,
+            statusCode: 400,
+          });
+        }
+      } else {
+        // Swiss: must have played the recommended number of rounds
+        const recommendedRounds = recommendNumberOfRounds(participantIds.length);
+        if (currentRound < recommendedRounds) {
+          return reply.code(400).send({
+            error: 'BadRequest',
+            message: `Swiss phase not complete — ${currentRound}/${recommendedRounds} rounds played`,
+            statusCode: 400,
+          });
+        }
+        const incomplete = existingMatches.filter(
+          (m) => m.round === currentRound && m.status !== 'COMPLETED' && m.status !== 'BYE',
+        );
+        if (incomplete.length > 0) {
+          return reply.code(400).send({
+            error: 'BadRequest',
+            message: `${incomplete.length} match(es) in round ${currentRound} not yet completed`,
+            statusCode: 400,
+          });
+        }
       }
 
       // Compute final Swiss standings

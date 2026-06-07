@@ -118,31 +118,31 @@ const factionDetailRoute = createRoute({
 const draftLobbyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/drafts/$id',
-  component: DraftLobbyPage,
+  component: () => { window.location.replace('/'); return null; },
 });
 
 const draftSpectatorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/drafts/$id/spectate',
-  component: DraftSpectatorPage,
+  component: () => { window.location.replace('/'); return null; },
 });
 
 const presetListRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/presets',
-  component: PresetListPage,
+  component: () => { window.location.replace('/'); return null; },
 });
 
 const presetNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/presets/new',
-  component: PresetEditorPage,
+  component: () => { window.location.replace('/'); return null; },
 });
 
 const presetEditRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/presets/$id/edit',
-  component: PresetEditorPage,
+  component: () => { window.location.replace('/'); return null; },
 });
 
 const adminRoute = createRoute({
