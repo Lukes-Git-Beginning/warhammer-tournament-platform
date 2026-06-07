@@ -6,7 +6,6 @@ import { OnboardingProgressBar } from './OnboardingProgressBar';
 import { OnboardingStage1Welcome } from './OnboardingStage1Welcome';
 import { OnboardingStage2Prefs } from './OnboardingStage2Prefs';
 import { OnboardingStage3Tour } from './OnboardingStage3Tour';
-import { OnboardingStage5Done } from './OnboardingStage5Done';
 
 export function OnboardingOverlay() {
   const {
@@ -32,10 +31,6 @@ export function OnboardingOverlay() {
 
   if (!isOpen || !user) return null;
 
-  function handleEndTour() {
-    void complete();
-  }
-
   return (
     <div data-testid="onboarding-overlay">
       {/* Progress bar — always rendered, fixed top */}
@@ -43,28 +38,26 @@ export function OnboardingOverlay() {
         <OnboardingProgressBar current={stage} />
       </div>
 
-      {/* Global End-tour link (not on final stage) */}
-      {stage !== 4 && (
-        <div className="fixed top-4 right-3 z-[59] sm:top-5 sm:right-6">
-          <button
-            type="button"
-            onClick={handleEndTour}
-            disabled={isCompleting}
-            className={cn(
-              'font-display text-[11px] uppercase tracking-[0.18em]',
-              'text-rizzotto-stone-400 hover:text-rizzotto-gold-400',
-              'transition-colors duration-base ease-burn',
-              'disabled:opacity-50',
-            )}
-          >
-            {isCompleting ? 'Sealing…' : 'End tour'}
-          </button>
-        </div>
-      )}
+      {/* Skip / End tour link */}
+      <div className="fixed top-4 right-3 z-[59] sm:top-5 sm:right-6">
+        <button
+          type="button"
+          onClick={() => void complete()}
+          disabled={isCompleting}
+          className={cn(
+            'font-display text-[11px] uppercase tracking-[0.18em]',
+            'text-rizzotto-stone-400 hover:text-rizzotto-gold-400',
+            'transition-colors duration-base ease-burn',
+            'disabled:opacity-50',
+          )}
+        >
+          {isCompleting ? 'Sealing…' : 'End tour'}
+        </button>
+      </div>
 
       {/* Stage content */}
       {isTour ? (
-        <OnboardingStage3Tour onAdvance={() => advance(4)} />
+        <OnboardingStage3Tour onAdvance={() => void complete()} />
       ) : (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-rizzotto-iron-950/97 backdrop-blur-sm">
           <div className="flex min-h-screen w-full items-center justify-center px-4 py-16 sm:py-20">
@@ -84,12 +77,6 @@ export function OnboardingOverlay() {
                 {stage === 0 && <OnboardingStage1Welcome onAdvance={() => advance(1)} />}
                 {stage === 1 && (
                   <OnboardingStage2Prefs user={user} onAdvance={() => advance(2)} />
-                )}
-                {stage === 4 && (
-                  <OnboardingStage5Done
-                    onComplete={() => void complete()}
-                    pending={isCompleting}
-                  />
                 )}
               </motion.div>
             </AnimatePresence>

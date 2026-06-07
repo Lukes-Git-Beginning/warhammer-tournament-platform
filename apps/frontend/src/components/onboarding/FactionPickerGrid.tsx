@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { getFactions } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FactionBadge } from '@/components/meta/FactionBadge';
 import { cn } from '@/lib/utils';
 
 interface FactionPickerGridProps {
@@ -22,9 +23,9 @@ export function FactionPickerGrid({
 
   if (isLoading || !data) {
     return (
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
         {Array.from({ length: 12 }).map((_, i) => (
-          <Skeleton key={i} className="h-12 w-full rounded-sm" />
+          <Skeleton key={i} className="h-24 w-full rounded-sm" />
         ))}
       </div>
     );
@@ -32,7 +33,7 @@ export function FactionPickerGrid({
 
   const factions = [...data.data]
     .map((row) => row.faction)
-    .sort((a, b) => a.display_order - b.display_order);
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   function toggle(id: string) {
     if (selected.includes(id)) {
@@ -45,7 +46,7 @@ export function FactionPickerGrid({
 
   return (
     <div>
-      <div className="grid max-h-[36vh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="grid max-h-[52vh] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4 lg:grid-cols-6">
         {factions.map((f) => {
           const active = selected.includes(f.id);
           const disabled = !active && selected.length >= maxSelections;
@@ -57,28 +58,26 @@ export function FactionPickerGrid({
               disabled={disabled}
               data-selected={active}
               className={cn(
-                'group relative flex h-12 items-center gap-2 rounded-sm border border-rizzotto-iron-600 bg-rizzotto-iron-900 px-3 text-left transition-[border-color,background-color,color] duration-base ease-burn',
+                'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center transition-[border-color,background-color,color] duration-base ease-burn',
+                'border-rizzotto-iron-600 bg-rizzotto-iron-900',
                 'hover:border-rizzotto-gold-500/60 hover:bg-rizzotto-iron-800',
-                active && 'border-rizzotto-gold-500 bg-rizzotto-iron-800 text-rizzotto-gold-300',
+                active && 'border-rizzotto-gold-500 bg-rizzotto-iron-800',
                 disabled && 'cursor-not-allowed opacity-40 hover:border-rizzotto-iron-600 hover:bg-rizzotto-iron-900',
               )}
             >
-              <span
-                aria-hidden="true"
-                className="h-6 w-1 shrink-0 rounded-sm"
-                style={{ backgroundColor: f.color_hex }}
+              <FactionBadge
+                size="lg"
+                colorHex={f.color_hex}
+                initials={f.initials}
+                name={f.name}
+                iconUrl={f.icon_url}
               />
-              {f.icon_url ? (
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm bg-white/15 p-0.5">
-                  <img
-                    src={f.icon_url}
-                    alt=""
-                    aria-hidden="true"
-                    className="h-5 w-5 object-contain"
-                  />
-                </span>
-              ) : null}
-              <span className="truncate font-display text-[12px] uppercase tracking-wide">
+              <span
+                className={cn(
+                  'line-clamp-2 font-display text-[10px] uppercase leading-tight tracking-wide',
+                  active ? 'text-rizzotto-gold-300' : 'text-rizzotto-stone-300',
+                )}
+              >
                 {f.name}
               </span>
             </button>
