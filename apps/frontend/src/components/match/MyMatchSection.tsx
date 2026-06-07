@@ -33,6 +33,8 @@ export function MyMatchSection({ currentUserId, matches, playerNames, tournament
   const myMatch = matches.find(
     (m) =>
       (m.status === 'PENDING' || m.status === 'ONGOING') &&
+      m.player1Id !== null &&
+      m.player2Id !== null &&
       (m.player1Id === currentUserId || m.player2Id === currentUserId),
   );
 
