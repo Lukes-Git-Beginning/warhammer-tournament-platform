@@ -825,8 +825,6 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Only generate the first playoff round — subsequent rounds are advanced
         // one at a time via POST /advance-playoffs once each round completes.
-        const thirdPlaceId = tournament.has_third_place_match ? randomUUID() : null;
-
         const playoffMatches = playoffResult.matches
           .filter((pm: PlayoffMatch) => pm.round === 1)
           .map((pm: PlayoffMatch) => ({
@@ -838,34 +836,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             player2_id: pm.player2_id || null,
             status: 'PENDING' as MatchStatus,
             next_match_id: null,
-            // For TOP4 with third place: SF losers flow into the third-place match
-            loser_next_match_id:
-              thirdPlaceId && playoffResult.format === 'TOP4' ? thirdPlaceId : null,
             phase: phaseMap[pm.round] ?? null,
           }));
 
-        // For TOP4 with third place: pre-create the third-place match now (round = SF+1)
-        // so SF matches can reference it via loser_next_match_id.
-        // For TOP8 the SFs don't exist yet — the third-place is created by advance-playoffs.
-        const extraMatches =
-          thirdPlaceId && playoffResult.format === 'TOP4'
-            ? [{
-                id: thirdPlaceId,
-                tournament_id: id,
-                round: playoffRoundOffset + 2, // same round as the (future) Final
-                match_number: 2,
-                player1_id: null,
-                player2_id: null,
-                status: 'PENDING' as MatchStatus,
-                next_match_id: null,
-                loser_next_match_id: null,
-                phase: 'PLAYOFF_THIRD_PLACE' as const,
-              }]
-            : [];
-
         await fastify.prisma.$transaction(async (tx) => {
           await tx.match.createMany({
-            data: [...playoffMatches, ...extraMatches].map((pm) => ({
+            data: playoffMatches.map((pm) => ({
               id: pm.id,
               tournament_id: pm.tournament_id,
               round: pm.round,
@@ -874,7 +850,6 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
               player2_id: pm.player2_id,
               status: pm.status,
               next_match_id: pm.next_match_id,
-              loser_next_match_id: pm.loser_next_match_id ?? null,
               phase: pm.phase,
             })),
           });
@@ -979,55 +954,55 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         ? 'PLAYOFF_SF'
         : 'PLAYOFF_FINAL';
 
-      // For TOP8 with third place: create the third-place match when advancing to SFs.
-      // (For TOP4 it was pre-created at start-playoffs time.)
-      const advThirdPlaceId =
-        tournament.has_third_place_match && nextPhase === 'PLAYOFF_SF' ? randomUUID() : null;
-
-      // Pair winners: match 1+2 → next match 1, match 3+4 → next match 2, etc.
-      type NextMatch = {
-        id: string; tournament_id: string; round: number; match_number: number;
-        player1_id: string | null; player2_id: string | null;
-        status: MatchStatus; next_match_id: null; loser_next_match_id: string | null;
-        phase: 'PLAYOFF_SF' | 'PLAYOFF_FINAL';
-      };
-      const nextMatches: NextMatch[] = [];
-      for (let i = 0; i < currentRoundMatches.length; i += 2) {
-        const m1 = currentRoundMatches[i];
-        const m2 = currentRoundMatches[i + 1];
-        if (!m1) continue;
-        nextMatches.push({
+      // Pair winners into next round matches (GF or SFs).
+      const nextMatches = currentRoundMatches
+        .reduce<{ m1: typeof currentRoundMatches[0]; m2?: typeof currentRoundMatches[0] }[]>(
+          (pairs, m, i) => {
+            if (i % 2 === 0) pairs.push({ m1: m });
+            else pairs[pairs.length - 1]!.m2 = m;
+            return pairs;
+          },
+          [],
+        )
+        .map(({ m1, m2 }, i) => ({
           id: randomUUID(),
           tournament_id: id,
           round: currentRound + 1,
-          match_number: Math.floor(i / 2) + 1,
+          match_number: i + 1,
           player1_id: m1.winner_id ?? null,
           player2_id: m2?.winner_id ?? null,
           status: 'PENDING' as MatchStatus,
-          next_match_id: null,
-          loser_next_match_id: advThirdPlaceId,
+          next_match_id: null as string | null,
           phase: nextPhase,
-        });
-      }
+        }));
 
-      const advExtraMatches = advThirdPlaceId
-        ? [{
-            id: advThirdPlaceId,
-            tournament_id: id,
-            round: currentRound + 2, // same round as the (future) Final
-            match_number: 2,
-            player1_id: null as string | null,
-            player2_id: null as string | null,
-            status: 'PENDING' as MatchStatus,
-            next_match_id: null as string | null,
-            loser_next_match_id: null as string | null,
-            phase: 'PLAYOFF_THIRD_PLACE' as const,
-          }]
-        : [];
+      // When advancing to the Grand Final: also create the third-place match with
+      // the SF losers already filled in — exactly analogous to the GF being created
+      // with the SF winners. Then wire loser_next_match_id on the SF rows.
+      const thirdPlaceMatch =
+        tournament.has_third_place_match && nextPhase === 'PLAYOFF_FINAL'
+          ? (() => {
+              const sf1 = currentRoundMatches[0];
+              const sf2 = currentRoundMatches[1];
+              const loser = (m: typeof sf1) =>
+                m ? (m.player1_id === m.winner_id ? m.player2_id : m.player1_id) : null;
+              return {
+                id: randomUUID(),
+                tournament_id: id,
+                round: currentRound + 1,
+                match_number: 2,
+                player1_id: loser(sf1),
+                player2_id: loser(sf2),
+                status: 'PENDING' as MatchStatus,
+                next_match_id: null as string | null,
+                phase: 'PLAYOFF_THIRD_PLACE' as const,
+              };
+            })()
+          : null;
 
       await fastify.prisma.$transaction(async (tx) => {
         await tx.match.createMany({
-          data: [...nextMatches, ...advExtraMatches].map((m) => ({
+          data: [...nextMatches, ...(thirdPlaceMatch ? [thirdPlaceMatch] : [])].map((m) => ({
             id: m.id,
             tournament_id: m.tournament_id,
             round: m.round,
@@ -1036,10 +1011,18 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             player2_id: m.player2_id,
             status: m.status,
             next_match_id: m.next_match_id,
-            loser_next_match_id: m.loser_next_match_id,
-            phase: m.phase,
+            phase: m.phase as import('@rizzotto/db').MatchPhase | null,
           })),
         });
+
+        // Wire loser connectors on the SFs so the SVG bracket draws the dashed lines.
+        if (thirdPlaceMatch) {
+          await tx.match.updateMany({
+            where: { id: { in: currentRoundMatches.map((m) => m.id) } },
+            data: { loser_next_match_id: thirdPlaceMatch.id },
+          });
+        }
+
         await tx.auditLog.create({
           data: {
             entity_type: 'Tournament',
