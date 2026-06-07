@@ -390,10 +390,10 @@ export function GameTile({
           onClick={() => setMapLightbox(false)}
         >
           <div
-            className="relative flex flex-col items-center gap-3 max-w-3xl w-full"
+            className="relative flex flex-col items-center gap-2 w-full h-full"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between w-full px-1">
+            <div className="flex items-center justify-between w-full px-1 shrink-0">
               <span className="text-white font-semibold">{pickedMap.name}</span>
               <button
                 type="button"
@@ -407,7 +407,7 @@ export function GameTile({
             <img
               src={pickedMap.image_url}
               alt={pickedMap.name}
-              className="max-h-[80vh] w-full object-contain rounded-lg shadow-2xl"
+              className="w-full h-full object-contain"
             />
           </div>
         </div>
