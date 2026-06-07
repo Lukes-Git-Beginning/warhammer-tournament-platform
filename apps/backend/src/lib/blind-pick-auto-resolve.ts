@@ -38,7 +38,9 @@ export async function autoResolveStaleBlindPicks(fastify: FastifyInstance): Prom
   let resolved = 0;
 
   for (const pick of stale) {
-    const randomFaction = allFactions[Math.floor(Math.random() * allFactions.length)];
+    const lockedFactionId = pick.player1_faction_id ?? pick.player2_faction_id;
+    const pool = allFactions.filter((f) => f.id !== lockedFactionId);
+    const randomFaction = pool[Math.floor(Math.random() * pool.length)];
     if (!randomFaction) continue;
 
     try {
