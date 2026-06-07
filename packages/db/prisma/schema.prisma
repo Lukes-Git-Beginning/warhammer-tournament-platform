@@ -34,6 +34,7 @@ enum TournamentFormat {
   DOUBLE_ELIMINATION
   ROUND_ROBIN
   DOUBLE_ROUND_ROBIN
+  LIECHTENSTEIN
 }
 
 enum TournamentMode {

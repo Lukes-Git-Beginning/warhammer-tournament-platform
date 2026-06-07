@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +18,7 @@ import {
 } from '@/lib/api';
 import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth';
-import { formatInUserTimezone } from '@/lib/timezone';
+import { formatInUserTimezone, toDiscordTimestamp } from '@/lib/timezone';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { BracketView } from '@/components/bracket/BracketView';
 import { SwissStandings } from '@/components/bracket/SwissStandings';
@@ -29,12 +30,33 @@ import { ArmyListUploader } from '@/components/tournament/ArmyListUploader';
 import { MyMatchSection } from '@/components/match/MyMatchSection';
 import type { ParticipantStatus } from '@/lib/api';
 
+function DiscordTimestampButton({ isoString }: { isoString: string }) {
+  const [copied, setCopied] = useState(false);
+  function handleCopy() {
+    void navigator.clipboard.writeText(toDiscordTimestamp(isoString)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title="Copy as Discord timestamp — auto-adjusts to each user's timezone"
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[#5865F2] border border-[#5865F2]/40 hover:bg-[#5865F2]/10 transition-colors shrink-0"
+    >
+      {copied ? '✓ Kopiert' : '⏱ Discord'}
+    </button>
+  );
+}
+
 // Format labels are now handled via i18n — see t('tournament.format.*')
 const FORMAT_KEY_MAP: Record<string, string> = {
   SINGLE_ELIMINATION: 'tournament.format.single_elim',
   SWISS: 'tournament.format.swiss',
   ROUND_ROBIN: 'tournament.format.round_robin',
   DOUBLE_ELIMINATION: 'tournament.format.double_elim',
+  LIECHTENSTEIN: 'tournament.format.liechtenstein',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -486,9 +508,10 @@ export function TournamentDetail() {
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-8">
         <div className="space-y-2 text-sm">
-          <div>
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-stone-500">{t('tournament.detail.start')}</span>{' '}
             <span className="text-stone-200">{startDate}</span>
+            <DiscordTimestampButton isoString={tournament.start_date} />
           </div>
           {tournament.max_participants && (
             <div>
@@ -591,6 +614,7 @@ export function TournamentDetail() {
             participantsData.data.map((p) => [p.user.id, p.user.username]),
           )}
           tournamentSlug={tournament.slug}
+          tournamentMode={tournament.mode}
         />
         </div>
       )}

@@ -17,6 +17,7 @@ const FORMAT_LABELS: Record<string, string> = {
   SINGLE_ELIMINATION: 'Single Elim.',
   SWISS: 'Swiss',
   ROUND_ROBIN: 'Round Robin',
+  LIECHTENSTEIN: 'Liechtenstein',
 };
 
 const STATUS_COLORS: Record<string, string> = {

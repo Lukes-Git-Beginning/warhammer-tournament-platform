@@ -366,6 +366,7 @@ export const TournamentFormatSchema = z.enum([
   'DOUBLE_ELIMINATION',
   'ROUND_ROBIN',
   'DOUBLE_ROUND_ROBIN',
+  'LIECHTENSTEIN',
 ]);
 export type TournamentFormat = z.infer<typeof TournamentFormatSchema>;
 

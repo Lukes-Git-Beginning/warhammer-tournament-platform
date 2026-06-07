@@ -4,6 +4,7 @@ import { MatchStatus, TournamentFormat, TournamentMode, TournamentStatus } from 
 import type { BracketResponse, SwissStandingEntry } from '@rizzotto/types';
 import { generateSingleElim, generateDoubleElim } from '../lib/bracket.js';
 import { generateRoundRobin } from '../lib/round-robin.js';
+import { generateLiechtensteinSchedule } from '../lib/liechtenstein.js';
 import {
   generateSwissRound,
   computeSwissStandings,
@@ -143,7 +144,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       };
 
       // Augment with standings for Swiss and Round Robin
-      if (tournament.format === TournamentFormat.SWISS || tournament.format === TournamentFormat.ROUND_ROBIN) {
+      if (tournament.format === TournamentFormat.SWISS || tournament.format === TournamentFormat.ROUND_ROBIN || tournament.format === TournamentFormat.LIECHTENSTEIN) {
         const participants = await fastify.prisma.tournamentParticipant.findMany({
           where: {
             tournament_id: tournament.id,
@@ -242,6 +243,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           status: true,
           format: true,
           organizer_id: true,
+          rounds_count: true,
         },
       });
 
@@ -335,6 +337,23 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             receivedBye: false,
           }));
           bracketMatches = generateSwissRound(tournament.id, swissPlayers, 1);
+          break;
+        }
+
+        case TournamentFormat.LIECHTENSTEIN: {
+          try {
+            bracketMatches = generateLiechtensteinSchedule(
+              tournament.id,
+              participantIds,
+              tournament.rounds_count ?? 5,
+            );
+          } catch (err) {
+            return reply.code(400).send({
+              error: 'BadRequest',
+              message: err instanceof Error ? err.message : 'Liechtenstein-Scheduling fehlgeschlagen',
+              statusCode: 400,
+            });
+          }
           break;
         }
 
@@ -692,8 +711,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: 'Forbidden', message: 'Only the organizer can start playoffs', statusCode: 403 });
       }
 
-      if (tournament.format !== TournamentFormat.SWISS && tournament.format !== TournamentFormat.ROUND_ROBIN) {
-        return reply.code(400).send({ error: 'BadRequest', message: 'Playoffs can only be started for Swiss or Round Robin tournaments', statusCode: 400 });
+      if (
+        tournament.format !== TournamentFormat.SWISS &&
+        tournament.format !== TournamentFormat.ROUND_ROBIN &&
+        tournament.format !== TournamentFormat.LIECHTENSTEIN
+      ) {
+        return reply.code(400).send({ error: 'BadRequest', message: 'Playoffs can only be started for Swiss, Round Robin, or Liechtenstein tournaments', statusCode: 400 });
       }
 
       if (tournament.status !== TournamentStatus.ONGOING) {

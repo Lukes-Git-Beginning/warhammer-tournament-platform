@@ -1,5 +1,9 @@
 # Rizzotto (vormals TWW3 Tournament Platform)
 
+## Language
+
+All communication, UI text, code comments, and responses for this project must be in **English**. This overrides the global German language rule.
+
 ## Projekt-Übersicht
 
 **Rizzotto** — Discord-Auth-basierte Tournament-Plattform für Total War: Warhammer. Spieler authentifizieren sich per Discord-OAuth2, erstellen Turniere, spielen Swiss- oder Bracket-Runden und verfolgen Draft-Picks in Echtzeit. Branding & Design-System wurde 2026-05-13 unter `docs/design/` etabliert (15 Topic-Files, Souls-like/Grimdark-Aesthetik). Rizzotto ist die visuelle Marke (Domain: rizzotto.gg); das Khazalid-Lexikon (Karaz Ankor, Roll of Honour, Conclave) bleibt als Atmospheric-Layer im UI erhalten.

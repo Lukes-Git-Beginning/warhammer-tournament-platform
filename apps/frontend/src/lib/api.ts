@@ -58,7 +58,7 @@ export interface Tournament {
   slug: string;
   name: string;
   description: string | null;
-  format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION';
+  format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN';
   mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT';
   status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
   start_date: string;
@@ -123,6 +123,7 @@ export interface MatchDecisionState {
   activePool: string[];
   pickedMapId: string | null;
   decidedAt: string | null;
+  tournamentMode?: string | null;
   blindPick?: {
     player1Locked: boolean;
     player2Locked: boolean;
@@ -134,7 +135,7 @@ export interface MatchDecisionState {
 
 export interface TournamentCreate {
   name: string;
-  format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN';
+  format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN';
   mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT';
   start_date: string;
   timezone: string;

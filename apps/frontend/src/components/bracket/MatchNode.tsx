@@ -10,6 +10,10 @@ interface MatchNodeProps {
   player2Faction?: FactionDto | null;
   showFaction?: boolean;
   onClick?: () => void;
+  /** Label shown in slot 1 when player is not yet determined (e.g. "Grombrindal / Louen") */
+  p1SlotLabel?: string | null;
+  /** Label shown in slot 2 when player is not yet determined */
+  p2SlotLabel?: string | null;
 }
 
 /** Tiny avatar with initials fallback, sized for the cramped match node rows. */
@@ -72,6 +76,8 @@ export function MatchNode({
   player2Faction,
   showFaction = false,
   onClick,
+  p1SlotLabel,
+  p2SlotLabel,
 }: MatchNodeProps) {
   const isBye = match.status === 'BYE';
   const isOngoing = match.status === 'ONGOING';
@@ -106,10 +112,18 @@ export function MatchNode({
         {match.player1Id && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
-            p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'
+            p1Winner
+              ? 'text-rizzotto-gold-500 font-semibold'
+              : match.player1Id
+                ? 'text-stone-300'
+                : 'text-stone-500 italic'
           }`}
         >
-          {match.player1Id ? (player1Name ?? match.player1Id) : 'BYE'}
+          {match.player1Id
+            ? (player1Name ?? match.player1Id)
+            : isBye
+              ? 'BYE'
+              : (p1SlotLabel ?? 'TBD')}
         </span>
         {showFaction && match.player1Id && <FactionIndicator faction={player1Faction} />}
         {score1 && (
@@ -126,10 +140,18 @@ export function MatchNode({
         {match.player2Id && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
-            p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'
+            p2Winner
+              ? 'text-rizzotto-gold-500 font-semibold'
+              : match.player2Id
+                ? 'text-stone-300'
+                : 'text-stone-500 italic'
           }`}
         >
-          {match.player2Id ? (player2Name ?? match.player2Id) : 'BYE'}
+          {match.player2Id
+            ? (player2Name ?? match.player2Id)
+            : isBye
+              ? 'BYE'
+              : (p2SlotLabel ?? 'TBD')}
         </span>
         {showFaction && match.player2Id && <FactionIndicator faction={player2Faction} />}
         {score2 && (

@@ -186,7 +186,8 @@
       "single_elim": "Single Elimination",
       "swiss": "Swiss",
       "round_robin": "Round Robin",
-      "double_elim": "Double Elimination"
+      "double_elim": "Double Elimination",
+      "liechtenstein": "Liechtenstein"
     },
     "detail": {
       "not_found": "Turnier nicht gefunden oder nicht erreichbar.",

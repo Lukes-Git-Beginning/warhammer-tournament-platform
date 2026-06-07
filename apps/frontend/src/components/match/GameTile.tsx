@@ -34,6 +34,8 @@ interface Props {
   maps?: MapDto[];
   /** Faction id → full DTO lookup */
   factions?: Record<string, FactionDto>;
+  /** Tournament mode — used to require blind pick for BPT */
+  tournamentMode?: string;
 }
 
 export function GameTile({
@@ -51,6 +53,7 @@ export function GameTile({
   isParticipant,
   maps = [],
   factions = {},
+  tournamentMode,
 }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -58,6 +61,16 @@ export function GameTile({
   const [selectedWinnerId, setSelectedWinnerId] = useState<string | null>(null);
   const [replayFile, setReplayFile] = useState<File | null>(null);
   const [replayError, setReplayError] = useState<string | null>(null);
+  const [mapLightbox, setMapLightbox] = useState(false);
+
+  const pickedMap = maps.find((m) => m.id === game.decision?.pickedMapId) ?? null;
+
+  useEffect(() => {
+    if (!mapLightbox) return;
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setMapLightbox(false); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mapLightbox]);
 
   const startDecisionMutation = useMutation({
     mutationFn: () => startMatchDecision(matchId, game.gameNumber),
@@ -94,9 +107,14 @@ export function GameTile({
   const myId = isPlayer1 ? player1Id : isPlayer2 ? player2Id : null;
   const opponentId = isPlayer1 ? player2Id : isPlayer2 ? player1Id : null;
 
+  // BPT requires a blind faction pick after the map is decided.
+  // game.blindPick (top-level) reflects the MatchBlindPick DB row; it is null
+  // both before the first lock AND for non-BPT modes. We use tournamentMode to
+  // distinguish the two cases.
+  const needsBlindPick = tournamentMode === 'BPT';
   const decisionComplete = Boolean(
     game.decision?.pickedMapId &&
-      (game.decision.blindPick == null || game.decision.blindPick.revealedAt),
+      (!needsBlindPick || game.blindPick?.revealedAt),
   );
 
   const isReporter = game.reportedWinnerId !== null && game.reporterId === currentUserId;
@@ -146,14 +164,27 @@ export function GameTile({
                 {game.winnerId === player1Id ? player1Name : player2Name}
               </span>
             </p>
-            {game.decision?.pickedMapId && (
-              <p className="text-xs text-rizzotto-stone-500 text-center">
-                Map:{' '}
-                <span className="text-rizzotto-stone-300">
-                  {maps.find((m) => m.id === game.decision!.pickedMapId)?.name
-                    ?? game.decision.pickedMapId}
-                </span>
-              </p>
+            {pickedMap && (
+              <div className="flex flex-col items-center gap-1 w-full">
+                <p className="text-xs text-rizzotto-stone-500 text-center">
+                  Map: <span className="text-rizzotto-stone-300">{pickedMap.name}</span>
+                </p>
+                {pickedMap.image_url && (
+                  <button
+                    type="button"
+                    onClick={() => setMapLightbox(true)}
+                    className="w-full mt-1 overflow-hidden rounded border border-rizzotto-iron-600 hover:border-rizzotto-gold-500 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-rizzotto-gold-400"
+                    title="View map"
+                  >
+                    <img
+                      src={pickedMap.image_url}
+                      alt={pickedMap.name}
+                      className="w-full h-20 object-cover"
+                      loading="lazy"
+                    />
+                  </button>
+                )}
+              </div>
             )}
             {game.replayUrl && (
               <a
@@ -219,7 +250,9 @@ export function GameTile({
                     params={{ matchId }}
                     className="text-sm text-rizzotto-gold-400 hover:underline"
                   >
-                    Go to map selection →
+                    {game.decision?.pickedMapId && needsBlindPick
+                      ? 'Go to faction selection →'
+                      : 'Go to map selection →'}
                   </Link>
                 </div>
               )}
@@ -232,13 +265,27 @@ export function GameTile({
               {/* Player info + Map (3-column layout) */}
               <div className="flex items-start justify-between gap-3">
                 <PlayerInfo name={player1Name} avatarUrl={player1AvatarUrl} faction={p1Faction} />
-                {game.decision?.pickedMapId ? (
+                {pickedMap ? (
                   <div className="flex-1 flex flex-col items-center gap-1 min-w-0">
                     <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider">Battlefield</span>
-                    <p className="text-sm font-semibold text-rizzotto-stone-100 text-center">
-                      {maps.find((m) => m.id === game.decision!.pickedMapId)?.name
-                        ?? game.decision.pickedMapId}
+                    <p className="text-sm font-semibold text-rizzotto-stone-100 text-center leading-tight">
+                      {pickedMap.name}
                     </p>
+                    {pickedMap.image_url && (
+                      <button
+                        type="button"
+                        onClick={() => setMapLightbox(true)}
+                        className="w-full mt-1 overflow-hidden rounded border border-rizzotto-iron-600 hover:border-rizzotto-gold-500 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-rizzotto-gold-400"
+                        title="View map"
+                      >
+                        <img
+                          src={pickedMap.image_url}
+                          alt={pickedMap.name}
+                          className="w-full h-20 object-cover"
+                          loading="lazy"
+                        />
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="flex-1" />
@@ -334,6 +381,36 @@ export function GameTile({
             </div>
           )}
         </>
+      )}
+
+      {/* Map lightbox */}
+      {mapLightbox && pickedMap?.image_url && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setMapLightbox(false)}
+        >
+          <div
+            className="relative flex flex-col items-center gap-3 max-w-3xl w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between w-full px-1">
+              <span className="text-white font-semibold">{pickedMap.name}</span>
+              <button
+                type="button"
+                onClick={() => setMapLightbox(false)}
+                className="text-white/60 hover:text-white text-xl leading-none transition-colors"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <img
+              src={pickedMap.image_url}
+              alt={pickedMap.name}
+              className="max-h-[80vh] w-full object-contain rounded-lg shadow-2xl"
+            />
+          </div>
+        </div>
       )}
     </div>
   );

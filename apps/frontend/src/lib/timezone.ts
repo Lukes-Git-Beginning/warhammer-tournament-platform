@@ -41,6 +41,16 @@ export function formatInUserTimezone(
 }
 
 /**
+ * Returns a Discord timestamp tag, e.g. <t:1234567890:F>.
+ * Paste into Discord — it renders in each user's local timezone automatically.
+ * Styles: F = full date+time, R = relative, D = date only, t = time only.
+ */
+export function toDiscordTimestamp(isoString: string, style: 'F' | 'R' | 'D' | 't' = 'F'): string {
+  const unix = Math.floor(new Date(isoString).getTime() / 1000);
+  return `<t:${unix}:${style}>`;
+}
+
+/**
  * Returns relative time string like "vor 3 Stunden" or "in 2 Tagen".
  */
 export function formatRelative(isoString: string): string {

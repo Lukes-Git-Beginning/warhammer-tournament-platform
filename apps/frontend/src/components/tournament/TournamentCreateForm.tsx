@@ -13,7 +13,7 @@ import { Label, FieldError, FieldHint } from '@/components/ui/label';
 const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
-  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN']),
+  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN']),
   mode: z.enum(['BPT', 'SFT', 'SLT']).default('BPT'),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
@@ -58,7 +58,7 @@ function formatToMaxGames(fmt?: string): number {
 
 function buildRoundKeys(form: Partial<FormData>): { key: string; label: string; maxGames: number }[] {
   const keys: { key: string; label: string; maxGames: number }[] = [];
-  if (form.format !== 'SWISS') return keys;
+  if (form.format !== 'SWISS' && form.format !== 'LIECHTENSTEIN') return keys;
   const rounds = form.rounds_count ?? 5;
   const swissGames = formatToMaxGames(form.swiss_match_format);
   const playoffGames = formatToMaxGames(form.playoff_match_format);
@@ -248,6 +248,7 @@ export function TournamentCreateForm() {
             <option value="DOUBLE_ELIMINATION">{t('tournament.format.double_elim')}</option>
             <option value="SWISS">{t('tournament.format.swiss')}</option>
             <option value="ROUND_ROBIN">{t('tournament.format.round_robin')}</option>
+            <option value="LIECHTENSTEIN">{t('tournament.format.liechtenstein')}</option>
           </Select>
         </div>
 
@@ -345,11 +346,11 @@ export function TournamentCreateForm() {
           Match Mechanics
         </legend>
 
-        {(form.format === 'SWISS' || form.format === 'ROUND_ROBIN') ? (
+        {(form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN') ? (
           <>
-            {/* Rounds count — only for Swiss; Round Robin rounds are determined by participant count */}
-            {form.format === 'SWISS' && <div>
-              <Label htmlFor="tcf-rounds">Swiss Rounds</Label>
+            {/* Rounds count — for Swiss and Liechtenstein; Round Robin rounds are determined by participant count */}
+            {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN') && <div>
+              <Label htmlFor="tcf-rounds">{form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : 'Swiss Rounds'}</Label>
               <div className="flex items-center gap-3 mt-1">
                 <input
                   id="tcf-rounds"
@@ -366,7 +367,7 @@ export function TournamentCreateForm() {
                   {form.rounds_count ?? 5}
                 </span>
               </div>
-              <FieldHint>Number of Swiss rounds (3–6). Default: 5.</FieldHint>
+              <FieldHint>Number of rounds (3–6). All rounds pre-generated randomly at start. Default: 5.</FieldHint>
             </div>}
 
             {/* Playoff format */}
@@ -395,7 +396,7 @@ export function TournamentCreateForm() {
             {/* Match formats */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
-                <Label htmlFor="tcf-swiss-fmt">{form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : 'Swiss Format'}</Label>
+                <Label htmlFor="tcf-swiss-fmt">{form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Format' : 'Swiss Format'}</Label>
                 <Select
                   id="tcf-swiss-fmt"
                   name="swiss_match_format"

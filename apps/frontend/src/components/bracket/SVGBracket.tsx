@@ -1,4 +1,4 @@
-import type { BracketResponse, FactionDto } from '@rizzotto/types';
+import type { BracketNode, BracketResponse, FactionDto } from '@rizzotto/types';
 import { computeBracketLayout, MATCH_WIDTH, MATCH_HEIGHT, ROUND_GAP } from './computeBracketLayout';
 import { MatchNode } from './MatchNode';
 
@@ -15,9 +15,33 @@ interface SVGBracketProps {
   onMatchClick?: (matchId: string) => void;
 }
 
+/** Returns "A / B" (or "A", or "M3") for an undecided winner slot coming from a feeder match. */
+function makeSlotLabel(feeder: BracketNode, players?: Map<string, BracketPlayerInfo>): string {
+  const p1 = feeder.player1Id ? (players?.get(feeder.player1Id)?.name ?? null) : null;
+  const p2 = feeder.player2Id ? (players?.get(feeder.player2Id)?.name ?? null) : null;
+  if (p1 && p2) return `${p1} / ${p2}`;
+  if (p1) return p1;
+  if (p2) return p2;
+  return `M${feeder.matchNumber}`;
+}
+
 export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchClick }: SVGBracketProps) {
   const isSft = tournamentMode === 'SFT';
   const layout = computeBracketLayout(data.matches);
+
+  // For each match, find the two feeder matches (sorted by matchNumber) so we can
+  // show "Grombrindal / Louen" instead of "BYE" in undecided future-round slots.
+  const slotLabels = new Map<string, { p1: string | null; p2: string | null }>();
+  for (const target of data.matches) {
+    if (target.player1Id !== null && target.player2Id !== null) continue;
+    const feeders = data.matches
+      .filter((f) => f.nextMatchId === target.matchId)
+      .sort((a, b) => a.matchNumber - b.matchNumber);
+    slotLabels.set(target.matchId, {
+      p1: target.player1Id === null ? (feeders[0] ? makeSlotLabel(feeders[0], players) : null) : null,
+      p2: target.player2Id === null ? (feeders[1] ? makeSlotLabel(feeders[1], players) : null) : null,
+    });
+  }
 
   // Add padding so connectors and labels don't clip
   const PAD = 20;
@@ -92,6 +116,7 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
         const f2 = m.player2FactionId ? factionMap?.get(m.player2FactionId) : undefined;
         // Show faction logo for SFT (fixed faction per event) or BPT Bo1 (single game → faction is unambiguous).
         const showFaction = isSft || m.matchFormat === 'BO1';
+        const labels = slotLabels.get(m.matchId);
 
         return (
           <foreignObject
@@ -114,6 +139,8 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
                 player2Faction={f2}
                 showFaction={showFaction}
                 onClick={onMatchClick ? () => onMatchClick(m.matchId) : undefined}
+                p1SlotLabel={labels?.p1}
+                p2SlotLabel={labels?.p2}
               />
             </div>
           </foreignObject>

@@ -68,7 +68,12 @@ type BlindPickRow = {
 
 type MapDecisionModeLiteral = 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
 
-function serializeDecisionState(matchId: string, decision: DecisionRow, blindPick: BlindPickRow) {
+function serializeDecisionState(
+  matchId: string,
+  decision: DecisionRow,
+  blindPick: BlindPickRow,
+  tournamentMode: string | null = null,
+) {
   return {
     matchId,
     mode: decision.mode as MapDecisionModeLiteral,
@@ -80,6 +85,7 @@ function serializeDecisionState(matchId: string, decision: DecisionRow, blindPic
     activePool: (decision.active_pool as string[]) ?? [],
     pickedMapId: decision.picked_map_id,
     decidedAt: decision.decided_at?.toISOString() ?? null,
+    tournamentMode,
     blindPick: blindPick
       ? {
           player1Locked: Boolean(blindPick.player1_locked_at),
@@ -195,6 +201,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: matchId, deleted_at: null },
         select: {
           id: true,
+          tournament: { select: { mode: true } },
           games: {
             where: { map_decision: { isNot: null } },
             orderBy: { game_number: 'desc' },
@@ -221,7 +228,9 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      return reply.code(200).send(serializeDecisionState(matchId, game.map_decision, game.blind_pick));
+      return reply.code(200).send(
+        serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament.mode),
+      );
     },
   );
 

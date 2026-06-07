@@ -21,13 +21,15 @@ interface Props {
   playerNames: Record<string, string>;
   /** Tournament slug — used to load the map pool for name resolution */
   tournamentSlug: string;
+  /** Tournament mode (e.g. 'BPT') — forwarded to GameTile for blind-pick logic */
+  tournamentMode?: string;
 }
 
 /**
  * Shows the current user's active match tile(s) above the Bracket.
  * Only renders when the user has a PENDING or ONGOING match in the tournament.
  */
-export function MyMatchSection({ currentUserId, matches, playerNames, tournamentSlug }: Props) {
+export function MyMatchSection({ currentUserId, matches, playerNames, tournamentSlug, tournamentMode }: Props) {
   const myMatch = matches.find(
     (m) =>
       (m.status === 'PENDING' || m.status === 'ONGOING') &&
@@ -42,6 +44,7 @@ export function MyMatchSection({ currentUserId, matches, playerNames, tournament
       currentUserId={currentUserId}
       playerNames={playerNames}
       tournamentSlug={tournamentSlug}
+      tournamentMode={tournamentMode}
     />
   );
 }
@@ -51,11 +54,13 @@ function MyMatchInner({
   currentUserId,
   playerNames,
   tournamentSlug,
+  tournamentMode,
 }: {
   match: BracketNode;
   currentUserId: string;
   playerNames: Record<string, string>;
   tournamentSlug: string;
+  tournamentMode?: string;
 }) {
   useMatchDecisionSocket(match.matchId);
   const queryClient = useQueryClient();
@@ -131,6 +136,7 @@ function MyMatchInner({
               isParticipant={true}
               maps={maps}
               factions={factions}
+              tournamentMode={tournamentMode}
             />
           ))}
           {(() => {

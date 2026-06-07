@@ -551,27 +551,31 @@ function BlindPickPhase({
             Choose your faction. Your pick will be revealed only after both players lock in.
           </p>
 
-          <div className="grid grid-cols-4 gap-2 max-w-md w-full">
+          <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-6">
             {factions.map(({ faction }) => (
               <button
                 key={faction.id}
                 type="button"
                 onClick={() => setSelectedFactionId(faction.id)}
                 className={[
-                  'flex flex-col items-center gap-1.5 rounded-md border p-2 transition-all',
+                  'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center',
+                  'transition-[border-color,background-color] duration-150',
                   selectedFactionId === faction.id
-                    ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/10'
-                    : 'border-rizzotto-iron-700 bg-rizzotto-iron-900 hover:border-rizzotto-iron-500',
+                    ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800'
+                    : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60 hover:bg-rizzotto-iron-800',
                 ].join(' ')}
               >
                 <FactionBadge
                   colorHex={faction.color_hex}
                   initials={faction.initials}
                   name={faction.name}
-                  size="sm"
+                  size="lg"
                   iconUrl={faction.icon_url}
                 />
-                <span className="text-[10px] text-rizzotto-stone-400 text-center leading-tight">
+                <span className={[
+                  'line-clamp-2 font-display text-[10px] uppercase leading-tight tracking-wide',
+                  selectedFactionId === faction.id ? 'text-rizzotto-gold-300' : 'text-rizzotto-stone-300',
+                ].join(' ')}>
                   {faction.name}
                 </span>
               </button>
@@ -613,6 +617,8 @@ function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
     // Map decided — check blind pick
     if (d.blindPick?.revealedAt) return 'ready';
     if (d.blindPick != null) return 'blind_pick';
+    // blindPick is null: BPT requires a blind pick even before the first lock
+    if (d.tournamentMode === 'BPT') return 'blind_pick';
     return 'ready';
   }
   if (RANDOM_MODES.has(d.mode)) return 'map_random';
