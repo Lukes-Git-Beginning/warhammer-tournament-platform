@@ -306,6 +306,49 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true };
   });
 
+  // Dev-only: directly issue JWT cookie for any userId by discord_id or userId.
+  // Guarded by NODE_ENV=production — returns 403 in production. Enables multi-user
+  // Generalprobe (simulating different players in separate browser windows).
+  fastify.post('/auth/dev-login', async (request, reply) => {
+    if (process.env.NODE_ENV === 'production') {
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: 'Dev-login endpoint is not available in production',
+        statusCode: 403,
+      });
+    }
+
+    const body = request.body as { discordId?: string } | undefined;
+    if (!body?.discordId || typeof body.discordId !== 'string') {
+      return reply.code(400).send({
+        error: 'BadRequest',
+        message: 'discordId is required',
+        statusCode: 400,
+      });
+    }
+
+    const user = await fastify.prisma.user.findUnique({
+      where: { discord_id: body.discordId, deleted_at: null },
+      select: { id: true, discord_id: true, username: true, role: true },
+    });
+    if (!user) {
+      return reply.code(404).send({
+        error: 'NotFound',
+        message: `User with discordId "${body.discordId}" not found`,
+        statusCode: 404,
+      });
+    }
+
+    const payload: JwtPayload = {
+      sub: user.id,
+      discord_id: user.discord_id,
+      username: user.username,
+      role: user.role as Role,
+    };
+    fastify.signAuthCookie(reply, payload);
+    return { ok: true, user };
+  });
+
   // Test-only: directly issue JWT cookie for a given userId.
   // Guarded by NODE_ENV=test — returns 403 in dev/prod.
   fastify.post('/auth/test-login', async (request, reply) => {
