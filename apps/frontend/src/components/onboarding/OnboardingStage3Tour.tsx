@@ -88,7 +88,7 @@ export function OnboardingStage3Tour({ onAdvance }: OnboardingStage3TourProps) {
   );
 
   return (
-    <div className="pointer-events-none" data-testid="onboarding-stage-2">
+    <div className="pointer-events-none" data-testid="onboarding-stage-3">
       <OnboardingSpotlight
         stopKey={stop.id}
         targetSelector={stop.selector}

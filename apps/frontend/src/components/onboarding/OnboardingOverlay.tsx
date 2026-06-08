@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useOnboarding } from '@/lib/onboarding';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,7 @@ export function OnboardingOverlay() {
     isCompleting,
   } = useOnboarding();
   const reduced = useReducedMotion();
+  const { t } = useTranslation('common');
 
   // Lock body scroll while overlay is open (fullscreen stages only)
   const isTour = stage === 2;
@@ -51,7 +53,7 @@ export function OnboardingOverlay() {
             'disabled:opacity-50',
           )}
         >
-          {isCompleting ? 'Sealing…' : 'End tour'}
+          {isCompleting ? t('onboarding.overlay.sealing') : t('onboarding.overlay.skip_label')}
         </button>
       </div>
 

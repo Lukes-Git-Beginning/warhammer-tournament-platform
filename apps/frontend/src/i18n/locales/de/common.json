@@ -345,6 +345,10 @@
       "cta": "Zum Profil",
       "cta_loading": "Profil wird geladen…"
     },
+    "overlay": {
+      "sealing": "Versiegelt…",
+      "skip_label": "Tour beenden"
+    },
     "tour": {
       "btn_back": "Zurück",
       "btn_next": "Weiter",

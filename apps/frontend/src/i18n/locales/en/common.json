@@ -345,6 +345,10 @@
       "cta": "Go to Profile",
       "cta_loading": "Loading profile…"
     },
+    "overlay": {
+      "sealing": "Sealing…",
+      "skip_label": "End tour"
+    },
     "tour": {
       "btn_back": "Back",
       "btn_next": "Next",
