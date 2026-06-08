@@ -277,6 +277,9 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 - [ ] **SFT-Generalprobe mit Playoffs** — §5.4-Playoff-Phase noch nicht durchgetestet
 - [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant zu MatchGame-Level-Aggregation
 
+**Offen nach §5.6 (Session 2026-06-09):**
+- [ ] **Admin: Discord-/Steam-ID-Anzeige — Security Review durch Luke** — IDs werden im Admin-Panel angezeigt (ADMIN-only Endpoint, JWT-geschützt). Alex' Wunsch: re-auth mit Discord bevor sensible IDs sichtbar werden (ähnlich „Confirm identity"-Flow). Discord-E-Mail ist bereits im `User`-Model gespeichert (`DISCORD_SCOPES=identify email`) und könnte ebenfalls angezeigt werden; Steam-E-Mail ist technisch nicht verfügbar (Steam-API gibt keine E-Mails zurück). Luke soll entscheiden: reicht der bestehende ADMIN-Guard, oder braucht es einen separaten Confirm-Step in der UI?
+
 ---
 
 ## 6. DOUBLE_ELIMINATION — ✅ done (2026-06-03)
