@@ -67,33 +67,59 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
       .flatMap((m) => [m.player1Id, m.player2Id].filter((id): id is string => id !== null)) ?? [],
   );
 
-  // Re-sort Swiss standings by playoff result once playoff matches are complete.
-  // Without this, players are ordered by Swiss score — 3rd-place participants with
-  // a better Swiss record would appear above the Grand Finalists.
+  // Re-sort Swiss standings by playoff result so Grand Finalists always appear at
+  // ranks 1–2 regardless of their Swiss score. Handles three distinct states:
+  //   A) GF/TP matches don't exist yet → derive participants from completed SF results
+  //   B) GF/TP matches exist but not completed → group participants together at top
+  //   C) GF/TP matches completed → winner before loser
   const sortedStandings = useMemo(() => {
     const base = data?.swiss?.standings;
     if (!base || !data) return base;
 
     const gfMatch = data.matches.find((m) => m.phase === 'PLAYOFF_FINAL');
     const tpMatch = data.matches.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
-    if (!gfMatch && !tpMatch) return base;
+    const sfMatches = data.matches.filter((m) => m.phase === 'PLAYOFF_SF');
+    const completedSFs = sfMatches.filter((m) => m.status === 'COMPLETED' && m.winnerId);
 
-    // Build ordered playoff participant list: winner before loser when match is done.
+    // No playoff activity at all → keep Swiss order
+    if (!gfMatch && !tpMatch && completedSFs.length === 0) return base;
+
     const playoffOrder: string[] = [];
-    const push = (match: typeof gfMatch) => {
-      if (!match) return;
-      if (match.status === 'COMPLETED' && match.winnerId) {
-        const loser = match.player1Id === match.winnerId ? match.player2Id : match.player1Id;
-        if (match.winnerId) playoffOrder.push(match.winnerId);
-        if (loser) playoffOrder.push(loser);
-      } else {
-        if (match.player1Id) playoffOrder.push(match.player1Id);
-        if (match.player2Id) playoffOrder.push(match.player2Id);
-      }
+    const seen = new Set<string>();
+    const add = (id: string | null) => {
+      if (id && !seen.has(id)) { seen.add(id); playoffOrder.push(id); }
     };
-    push(gfMatch);
-    push(tpMatch);
 
+    // Ranks 1–2: Grand Final participants
+    if (gfMatch?.status === 'COMPLETED' && gfMatch.winnerId) {
+      const loser = gfMatch.player1Id === gfMatch.winnerId ? gfMatch.player2Id : gfMatch.player1Id;
+      add(gfMatch.winnerId);
+      add(loser);
+    } else if (gfMatch) {
+      add(gfMatch.player1Id);
+      add(gfMatch.player2Id);
+    } else {
+      // GF match not created yet — SF winners are the future GF participants
+      completedSFs.forEach((sf) => add(sf.winnerId));
+    }
+
+    // Ranks 3–4: 3rd-place participants
+    if (tpMatch?.status === 'COMPLETED' && tpMatch.winnerId) {
+      const loser = tpMatch.player1Id === tpMatch.winnerId ? tpMatch.player2Id : tpMatch.player1Id;
+      add(tpMatch.winnerId);
+      add(loser);
+    } else if (tpMatch) {
+      add(tpMatch.player1Id);
+      add(tpMatch.player2Id);
+    } else if (completedSFs.length > 0) {
+      // TP match not created yet — SF losers are the future 3rd-place participants
+      completedSFs.forEach((sf) => {
+        const loser = sf.player1Id === sf.winnerId ? sf.player2Id : sf.player1Id;
+        add(loser);
+      });
+    }
+
+    if (playoffOrder.length === 0) return base;
     const orderedSet = new Set(playoffOrder);
     const top = playoffOrder
       .map((id) => base.find((s) => s.userId === id))
