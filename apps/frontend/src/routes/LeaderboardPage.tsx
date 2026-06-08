@@ -512,9 +512,6 @@ function LeaderboardTable({
               <th className="px-4 py-3 text-right font-medium text-stone-400">
                 {t('leaderboard.columns.points')}
               </th>
-              <th className="px-4 py-3 text-right font-medium text-stone-400">
-                {t('leaderboard.columns.elo')}
-              </th>
               <th className="px-4 py-3 text-center font-medium text-stone-400">
                 {t('leaderboard.columns.wl')}
               </th>

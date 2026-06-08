@@ -75,7 +75,7 @@ function FactionBreakdown({ data }: { data: H2HResponse }) {
 
   if (faction_breakdown.length === 0) {
     return (
-      <p className="text-sm text-stone-500 italic">Keine Fraktionsdaten vorhanden.</p>
+      <p className="text-sm text-stone-500 italic">No faction data available.</p>
     );
   }
 
@@ -84,7 +84,7 @@ function FactionBreakdown({ data }: { data: H2HResponse }) {
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-stone-800 bg-stone-900/60">
-            <th className="px-4 py-3 text-left font-medium text-stone-400">Fraktion</th>
+            <th className="px-4 py-3 text-left font-medium text-stone-400">Faction</th>
             <th className="px-4 py-3 text-center font-medium text-stone-400">
               {player_a.username}
             </th>

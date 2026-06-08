@@ -15,7 +15,7 @@ function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
 
 function TrendSparkline({ trend }: { trend: SnapshotTrendEntry[] }) {
   if (trend.length === 0) {
-    return <p className="text-sm text-stone-600">Keine Trend-Daten vorhanden.</p>;
+    return <p className="text-sm text-stone-600">No trend data available.</p>;
   }
 
   const maxMatches = Math.max(...trend.map((t) => t.matches_played), 1);
@@ -34,7 +34,7 @@ function TrendSparkline({ trend }: { trend: SnapshotTrendEntry[] }) {
                 style={{ width: `${barWidth}%` }}
               />
             </div>
-            <span className="w-12 text-right text-stone-400">{entry.matches_played} Sp.</span>
+            <span className="w-12 text-right text-stone-400">{entry.matches_played} g.</span>
             <span className="w-10 text-right text-stone-400">{wr !== null ? `${wr}%` : '—'}</span>
           </div>
         );
@@ -54,7 +54,7 @@ export function FactionDetailPage() {
   if (isLoading) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-10">
-        <div className="py-8 text-center text-stone-400 text-sm">Wird geladen…</div>
+        <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>
       </main>
     );
   }
@@ -84,11 +84,6 @@ export function FactionDetailPage() {
         />
         <div>
           <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">{faction.name}</h1>
-          <div className="flex gap-3 text-sm text-stone-500 mt-1">
-            <span>{faction.race}</span>
-            <span>·</span>
-            <span>{faction.category}</span>
-          </div>
         </div>
       </div>
 
@@ -117,13 +112,13 @@ export function FactionDetailPage() {
         </div>
       ) : (
         <div className="rounded-md border border-stone-800 bg-stone-900/40 p-4 text-stone-500 text-sm mb-10">
-          Noch keine Statistiken für diese Fraktion vorhanden.
+          No statistics available for this faction yet.
         </div>
       )}
 
       {/* Trend */}
       <section className="rounded-md border border-stone-800 bg-stone-900/40 p-5">
-        <h2 className="font-display text-lg font-semibold text-stone-100 mb-4">30-Tage-Trend</h2>
+        <h2 className="font-display text-lg font-semibold text-stone-100 mb-4">30-Day Trend</h2>
         <TrendSparkline trend={trend} />
       </section>
     </main>
