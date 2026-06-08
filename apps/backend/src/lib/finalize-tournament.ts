@@ -41,27 +41,34 @@ export function computeSingleElimPlacements(matches: MatchLike[]): Map<string, n
 
   if (completedMatches.length === 0) return placements;
 
-  const totalRounds = Math.max(...completedMatches.map((m) => m.round));
-
+  // Handle the third-place match first and exclude it from round-based logic.
+  // It shares the same round number as the Grand Final, so it must be separated
+  // explicitly to avoid overwriting the 1st/2nd place assignments.
   for (const match of completedMatches) {
-    if (match.status === 'BYE') {
-      // BYE receiver is the non-null player — they advance without a loser
-      const receiver = match.player1_id ?? match.player2_id;
-      if (receiver && !placements.has(receiver)) {
-        // BYE receivers get no permanent placement here; they continue in bracket
-      }
-      continue;
-    }
+    if (match.phase !== 'PLAYOFF_THIRD_PLACE') continue;
+    if (!match.winner_id) continue;
+    const loser = match.player1_id === match.winner_id ? match.player2_id : match.player1_id;
+    placements.set(match.winner_id, 3);
+    if (loser) placements.set(loser, 4);
+  }
+
+  const bracketMatches = completedMatches.filter(
+    (m) => m.phase !== 'PLAYOFF_THIRD_PLACE',
+  );
+  if (bracketMatches.length === 0) return placements;
+
+  const totalRounds = Math.max(...bracketMatches.map((m) => m.round));
+
+  for (const match of bracketMatches) {
+    if (match.status === 'BYE') continue;
 
     const { round, winner_id, player1_id, player2_id } = match;
     if (!winner_id) continue;
 
-    // Determine loser
-    const loser =
-      player1_id === winner_id ? player2_id : player1_id;
+    const loser = player1_id === winner_id ? player2_id : player1_id;
 
     if (round === totalRounds) {
-      // Final: winner gets 1, loser gets 2
+      // Grand Final: winner gets 1, loser gets 2
       placements.set(winner_id, 1);
       if (loser) placements.set(loser, 2);
     } else {
