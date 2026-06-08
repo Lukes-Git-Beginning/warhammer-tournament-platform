@@ -47,6 +47,8 @@ export function UserBanTab() {
             <thead>
               <tr className="border-b border-stone-800 bg-stone-900/60">
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Member</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Discord ID</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Steam ID</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Role</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Joined</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Status</th>
@@ -71,6 +73,10 @@ export function UserBanTab() {
                       )}
                       <span className="text-stone-200">{user.username}</span>
                     </span>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-stone-400 select-all">{user.discord_id}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-stone-400 select-all">
+                    {user.steam_id ?? <span className="text-stone-600 not-italic">—</span>}
                   </td>
                   <td className="px-4 py-3 text-stone-400">{user.role}</td>
                   <td className="px-4 py-3 text-stone-500 text-xs">
@@ -100,7 +106,7 @@ export function UserBanTab() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-stone-500">No members found.</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-stone-500">No members found.</td>
                 </tr>
               )}
             </tbody>

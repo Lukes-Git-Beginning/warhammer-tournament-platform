@@ -249,6 +249,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
             role: true,
             created_at: true,
             deleted_at: true,
+            steam_link: { select: { steam_id: true } },
           },
           orderBy: { username: 'asc' },
           skip,
@@ -266,6 +267,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         users: users.map((u) => ({
           id: u.id,
           discord_id: u.discord_id,
+          steam_id: u.steam_link?.steam_id ?? null,
           username: u.username,
           email: u.email,
           avatar_url: u.avatar_url,

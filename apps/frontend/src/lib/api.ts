@@ -538,6 +538,7 @@ export interface AdminUser {
   id: string;
   username: string;
   discord_id: string;
+  steam_id: string | null;
   avatar_url: string | null;
   role: string;
   is_banned: boolean;
