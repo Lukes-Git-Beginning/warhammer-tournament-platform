@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { registerForTournament, withdrawFromTournament, getFactions } from '@/lib/api';
 import type { Tournament, ParticipantStatus } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { FactionBadge } from '@/components/meta/FactionBadge';
+import { cn } from '@/lib/utils';
 
 export interface RegisterButtonProps {
   tournament: Tournament;
@@ -34,7 +36,7 @@ function FactionSelectGrid({
   const hasRestriction = allowedFactionIds != null && allowedFactionIds.length > 0;
 
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
       {factions.map((f) => {
         const isSelected = selected === f.id;
         const isDisabled = hasRestriction && !allowedFactionIds!.includes(f.id);
@@ -45,24 +47,26 @@ function FactionSelectGrid({
             onClick={() => !isDisabled && onSelect(f.id)}
             disabled={isDisabled}
             title={isDisabled ? 'Not permitted in this tournament' : undefined}
-            className={[
-              'flex flex-col items-center gap-1.5 rounded-md border p-2 transition-colors text-left',
+            className={cn(
+              'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center transition-[border-color,background-color] duration-base ease-burn',
               isDisabled
-                ? 'border-rizzotto-iron-800 bg-rizzotto-iron-900/30 opacity-35 cursor-not-allowed'
+                ? 'cursor-not-allowed opacity-40 border-rizzotto-iron-700 bg-rizzotto-iron-900'
                 : isSelected
-                  ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/10'
-                  : 'border-rizzotto-iron-700 bg-rizzotto-iron-900/60 hover:border-rizzotto-iron-500',
-            ].join(' ')}
-          >
-            {f.icon_url ? (
-              <img src={f.icon_url} alt={f.name} className="w-8 h-8 object-contain" />
-            ) : (
-              <div
-                className="w-8 h-8 rounded-full"
-                style={{ backgroundColor: f.color_hex ?? '#555' }}
-              />
+                  ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800'
+                  : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60 hover:bg-rizzotto-iron-800',
             )}
-            <span className="text-[11px] text-center leading-tight text-rizzotto-stone-300 line-clamp-2">
+          >
+            <FactionBadge
+              size="lg"
+              colorHex={f.color_hex}
+              initials={f.initials}
+              name={f.name}
+              iconUrl={f.icon_url}
+            />
+            <span className={cn(
+              'line-clamp-2 font-display text-[10px] uppercase leading-tight tracking-wide',
+              isSelected ? 'text-rizzotto-gold-300' : 'text-rizzotto-stone-300',
+            )}>
               {f.name}
             </span>
           </button>
