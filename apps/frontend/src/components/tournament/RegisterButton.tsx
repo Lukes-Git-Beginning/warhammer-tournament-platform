@@ -15,9 +15,11 @@ export interface RegisterButtonProps {
 function FactionSelectGrid({
   selected,
   onSelect,
+  allowedFactionIds,
 }: {
   selected: string;
   onSelect: (id: string) => void;
+  allowedFactionIds?: string[];
 }) {
   const { data } = useQuery({
     queryKey: ['factions'],
@@ -28,20 +30,28 @@ function FactionSelectGrid({
     .map((e) => e.faction)
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // Empty allowlist means all factions are permitted
+  const hasRestriction = allowedFactionIds != null && allowedFactionIds.length > 0;
+
   return (
     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
       {factions.map((f) => {
         const isSelected = selected === f.id;
+        const isDisabled = hasRestriction && !allowedFactionIds!.includes(f.id);
         return (
           <button
             key={f.id}
             type="button"
-            onClick={() => onSelect(f.id)}
+            onClick={() => !isDisabled && onSelect(f.id)}
+            disabled={isDisabled}
+            title={isDisabled ? 'Not permitted in this tournament' : undefined}
             className={[
               'flex flex-col items-center gap-1.5 rounded-md border p-2 transition-colors text-left',
-              isSelected
-                ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/10'
-                : 'border-rizzotto-iron-700 bg-rizzotto-iron-900/60 hover:border-rizzotto-iron-500',
+              isDisabled
+                ? 'border-rizzotto-iron-800 bg-rizzotto-iron-900/30 opacity-35 cursor-not-allowed'
+                : isSelected
+                  ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/10'
+                  : 'border-rizzotto-iron-700 bg-rizzotto-iron-900/60 hover:border-rizzotto-iron-500',
             ].join(' ')}
           >
             {f.icon_url ? (
@@ -154,7 +164,11 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
           <p className="text-sm font-semibold text-rizzotto-stone-200 mb-1">Choose your faction</p>
           <p className="text-xs text-rizzotto-stone-500">SFT — Single Faction Tournament. Your faction is locked for the entire event.</p>
         </div>
-        <FactionSelectGrid selected={selectedFaction} onSelect={setSelectedFaction} />
+        <FactionSelectGrid
+          selected={selectedFaction}
+          onSelect={setSelectedFaction}
+          allowedFactionIds={tournament.faction_allowlist}
+        />
         {register.isError && (
           <p className="text-xs text-rizzotto-danger">{(register.error as Error).message}</p>
         )}
