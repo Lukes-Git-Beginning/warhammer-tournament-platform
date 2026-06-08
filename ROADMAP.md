@@ -293,6 +293,7 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 **Offen (post-v1 oder Luke):**
 - [ ] **Admin: Discord/Steam ID re-auth** — Luke entscheidet: ADMIN-Guard reicht oder separater Discord-Confirm-Step? (Details im PR-Body)
 - [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant zu MatchGame-Aggregation
+- [ ] **post-v1: Discord-Check-in-Reminder** — Cron-Job bei T-60min schickt DM via Bot an alle `REGISTERED`-Teilnehmer. Voraussetzungen: `DISCORD_BOT_TOKEN` gesetzt (Luke), Bot Mitglied im Community-Server (`discord.gg/NbuHNYP9`). `discord_id` auf User-Model vorhanden. ~2-3h Arbeit. Einschränkung: DM nur wenn User Mitglied im selben Server → kein Problem da Teilnehmer aus diesem Server kommen.
 
 ---
 
