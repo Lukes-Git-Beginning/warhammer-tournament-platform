@@ -76,6 +76,8 @@ export interface Tournament {
   participantCount?: number;
   created_at: string;
   is_major?: boolean;
+  visibility?: 'PUBLIC' | 'PRIVATE';
+  counts_for_leaderboard?: boolean;
   // Welle 2 fields
   rounds_count?: number | null;
   playoff_format?: 'NONE' | 'TOP4' | 'TOP8' | null;
@@ -163,7 +165,6 @@ export interface TournamentCreate {
 }
 
 // Mirror of backend PatchTournamentSchema (apps/backend/src/routes/tournaments.ts).
-// All fields optional; `format` and `mode` are immutable post-create.
 export interface TournamentPatchInput {
   name?: string;
   description?: string | null;
@@ -177,14 +178,23 @@ export interface TournamentPatchInput {
   status?: Tournament['status'];
   draft_enabled?: boolean;
   draft_preset_id?: string | null;
+  // draft-only (backend enforces, frontend disables after DRAFT)
+  format?: Tournament['format'];
+  mode?: 'BPT' | 'SFT' | 'SLT';
+  faction_pool?: string[];
+  // until-ongoing fields
   rounds_count?: number;
   playoff_format?: 'NONE' | 'TOP4' | 'TOP8';
+  has_third_place_match?: boolean;
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
   finale_match_format?: 'BO1' | 'BO3' | 'BO5';
   map_decision_mode?: MapDecisionMode;
   map_preset_config?: MapPresetConfig | null;
   map_pool?: string[];
+  // always-editable metadata
+  is_major?: boolean;
+  counts_for_leaderboard?: boolean;
 }
 
 export interface TournamentPatchResponse {

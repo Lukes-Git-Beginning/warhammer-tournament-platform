@@ -82,6 +82,12 @@ const PatchTournamentSchema = z.object({
   map_pool: z.array(z.string().min(1)).min(3).max(36).optional(),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   is_major: z.boolean().optional(),
+  // Fields added for full edit-form support
+  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN']).optional(),
+  mode: z.enum(['BPT', 'SFT', 'SLT']).optional(),
+  has_third_place_match: z.boolean().optional(),
+  counts_for_leaderboard: z.boolean().optional(),
+  faction_pool: z.array(z.string().min(1)).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
 
 // ---------------------------------------------------------------------------
@@ -571,6 +577,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           organizer_id: true,
           status: true,
+          format: true,
+          mode: true,
           name: true,
           description: true,
           rules: true,
@@ -581,6 +589,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           max_participants: true,
           visibility: true,
           map_preset_config: true,
+          has_third_place_match: true,
+          counts_for_leaderboard: true,
         },
       });
 
@@ -614,7 +624,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { status: newStatus, map_pool: newMapPool, ...rest } = parsed.data;
+      const { status: newStatus, map_pool: newMapPool, faction_pool: newFactionPool, ...rest } = parsed.data;
 
       // Validate map_pool change: only allowed before tournament starts (DRAFT or ANNOUNCED)
       if (newMapPool !== undefined) {
@@ -638,6 +648,28 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(422).send({
             error: 'UnprocessableEntity',
             message: `Map IDs not found in master pool: ${missing.join(', ')}`,
+            statusCode: 422,
+          });
+        }
+      }
+
+      // Validate draft-only fields: format, mode, visibility, faction_pool
+      // These can only be changed while the tournament is still in DRAFT.
+      if (tournament.status !== 'DRAFT') {
+        const draftOnlyAttempted = (['format', 'mode', 'visibility'] as const).filter(
+          (f) => rest[f] !== undefined,
+        );
+        if (draftOnlyAttempted.length > 0) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: `${draftOnlyAttempted.map((f) => `"${f}"`).join(', ')} can only be changed while the tournament is in draft`,
+            statusCode: 422,
+          });
+        }
+        if (newFactionPool !== undefined) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: '"faction_pool" can only be changed while the tournament is in draft',
             statusCode: 422,
           });
         }
@@ -701,8 +733,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         ...(newStatus !== undefined ? { status: newStatus } : {}),
       };
 
-      // map_pool is a relation — exclude it from the scalar updateData loop
-      const RELATION_FIELDS = new Set(['map_pool']);
+      // map_pool and faction_pool are relations — exclude from the scalar updateData loop
+      const RELATION_FIELDS = new Set(['map_pool', 'faction_pool']);
 
       for (const [key, value] of Object.entries(fieldMap)) {
         if (value !== undefined && !RELATION_FIELDS.has(key)) {
@@ -754,6 +786,22 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
             data: newMapPool.map((mapId) => ({
               tournament_id: tournament.id,
               map_id: mapId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      // Update faction allowlist (replace all rows)
+      if (newFactionPool !== undefined) {
+        await fastify.prisma.tournamentFactionAllowlist.deleteMany({
+          where: { tournament_id: tournament.id },
+        });
+        if (newFactionPool.length > 0) {
+          await fastify.prisma.tournamentFactionAllowlist.createMany({
+            data: newFactionPool.map((factionId) => ({
+              tournament_id: tournament.id,
+              faction_id: factionId,
             })),
             skipDuplicates: true,
           });
