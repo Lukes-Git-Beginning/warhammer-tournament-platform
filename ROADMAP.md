@@ -293,6 +293,7 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 **Offen (post-v1 oder Luke):**
 - [ ] **Admin: Discord/Steam ID re-auth** — Luke entscheidet: ADMIN-Guard reicht oder separater Discord-Confirm-Step? (Details im PR-Body)
 - [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant zu MatchGame-Aggregation
+- [ ] **post-v1: Mirror-Vermeidung im Swiss/Liechtenstein-Pairing** — Soft-Tiebreaker: Mirror (gleiche `faction_id` auf beiden Seiten) wird vermieden wenn ein gleichwertiges Pairing (gleiche Punktdifferenz) verfügbar ist. Nie größere Punktdifferenz für Mirror-Vermeidung akzeptieren. Prio-Reihenfolge: (1) Score-Delta minimieren → (2) Rematch vermeiden → (3) Mirror vermeiden. Betrifft `lib/swiss.ts` + `lib/liechtenstein.ts`. Nur aktiv wenn `faction_id` vorhanden (SFT/2FT/3FT), OPEN-Mode ignoriert.
 - [ ] **post-v1: Discord-Check-in-Reminder** — Cron-Job bei T-60min schickt DM via Bot an alle `REGISTERED`-Teilnehmer. Voraussetzungen: `DISCORD_BOT_TOKEN` gesetzt (Luke), Bot Mitglied im Community-Server (`discord.gg/NbuHNYP9`). `discord_id` auf User-Model vorhanden. ~2-3h Arbeit. Einschränkung: DM nur wenn User Mitglied im selben Server → kein Problem da Teilnehmer aus diesem Server kommen.
 
 ---
