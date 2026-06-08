@@ -61,7 +61,7 @@ const CreateTournamentSchema = z.object({
 
 const PatchTournamentSchema = z.object({
   name: z.string().min(3).max(120).optional(),
-  description: z.string().max(2000).optional(),
+  description: z.string().max(2000).optional().nullable(),
   rules: z.string().max(20000).optional(),
   discord_link: z.string().url().optional().nullable(),
   start_date: z.string().datetime().optional(),

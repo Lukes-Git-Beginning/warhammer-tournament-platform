@@ -189,8 +189,9 @@ function buildPatchBody(
   // Until-ongoing fields
   const descNorm = form.description.trim() || null;
   if (descNorm !== (current.description ?? null)) body.description = descNorm;
-  const rulesNorm = form.rules.trim() || null;
-  if (rulesNorm !== (current.rules ?? null)) body.rules = rulesNorm;
+  // rules is non-nullable in the DB (@default("")), so clear with '' not null
+  const rulesNorm = form.rules.trim();
+  if (rulesNorm !== (current.rules ?? '')) body.rules = rulesNorm;
 
   const startIso = localInputToIso(form.start_date);
   if (startIso !== current.start_date) body.start_date = startIso;
