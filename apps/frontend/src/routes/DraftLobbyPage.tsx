@@ -16,7 +16,7 @@ export function DraftLobbyPage() {
   if (isLoading) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-10 text-stone-400">
-        Lade Draft…
+        Loading draft…
       </main>
     );
   }

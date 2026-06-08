@@ -47,13 +47,13 @@ export function CategoryLimitsEditor({ limits, onChange }: CategoryLimitsEditorP
           onClick={addLimit}
           className="text-xs rounded border border-stone-600 px-2.5 py-1 text-stone-300 hover:border-stone-400 hover:text-stone-100 transition-colors"
         >
-          + Neuer Limit
+          + New Limit
         </button>
       </div>
 
       {limits.length === 0 && (
         <p className="text-xs text-stone-500 italic">
-          Keine Kategorie-Limits definiert — alle Fraktionen unter &quot;default&quot; verfügbar.
+          No category limits defined — all factions available under &quot;default&quot;.
         </p>
       )}
 
@@ -65,7 +65,7 @@ export function CategoryLimitsEditor({ limits, onChange }: CategoryLimitsEditorP
               {/* Name */}
               <input
                 type="text"
-                placeholder="Kategorie-Name"
+                placeholder="Category name"
                 value={limit.category_name}
                 onChange={(e) => updateLimit(i, { category_name: e.target.value })}
                 className="flex-1 rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 placeholder-stone-500 focus:border-rizzotto-gold-500 focus:outline-none"
@@ -108,17 +108,17 @@ export function CategoryLimitsEditor({ limits, onChange }: CategoryLimitsEditorP
               onClick={() => removeLimit(i)}
               className="text-xs text-red-500 hover:text-red-400 transition-colors shrink-0"
             >
-              Entfernen
+              Remove
             </button>
           </div>
 
           {/* Faction picker */}
           <div>
             <p className="text-[11px] text-stone-500 mb-2">
-              Fraktionen ({limit.factions.length} ausgewählt)
+              Factions ({limit.factions.length} selected)
             </p>
             {allFactions.length === 0 ? (
-              <p className="text-xs text-stone-600 italic">Lade Fraktionen…</p>
+              <p className="text-xs text-stone-600 italic">Loading factions…</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {allFactions.map(({ faction }) => {

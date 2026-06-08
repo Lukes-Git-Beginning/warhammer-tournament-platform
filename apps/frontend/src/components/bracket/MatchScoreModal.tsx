@@ -203,9 +203,9 @@ export function MatchScoreModal({
           <fieldset className="mb-4">
             <legend className="text-xs text-stone-400 mb-2">Score</legend>
             <div className="flex items-center justify-center gap-6">
-              <ScoreCounter label={player1Name ?? 'Spieler 1'} value={p1Score} onChange={setP1Score} />
+              <ScoreCounter label={player1Name ?? 'Player 1'} value={p1Score} onChange={setP1Score} />
               <span className="text-stone-600 text-lg font-bold">:</span>
-              <ScoreCounter label={player2Name ?? 'Spieler 2'} value={p2Score} onChange={setP2Score} />
+              <ScoreCounter label={player2Name ?? 'Player 2'} value={p2Score} onChange={setP2Score} />
             </div>
           </fieldset>
         )}

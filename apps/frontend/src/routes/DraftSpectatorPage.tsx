@@ -13,7 +13,7 @@ export function DraftSpectatorPage() {
   });
 
   if (isLoading) {
-    return <main className="mx-auto max-w-7xl px-4 py-10 text-stone-400">Lade Draft…</main>;
+    return <main className="mx-auto max-w-7xl px-4 py-10 text-stone-400">Loading draft…</main>;
   }
 
   if (error || !data) {

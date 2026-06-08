@@ -77,12 +77,12 @@ export function ImportLogTable() {
       </div>
 
       {isLoading && (
-        <div className="py-8 text-center text-stone-400 text-sm">Wird geladen…</div>
+        <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>
       )}
 
       {error && (
         <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
-          Fehler beim Laden des Import-Logs.
+          Failed to load import log.
         </div>
       )}
 

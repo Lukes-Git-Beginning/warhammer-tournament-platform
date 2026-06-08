@@ -211,7 +211,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
       {/* DE completion banner — shown when all matches are done */}
       {isDE && allDone && (
         <div className="mb-4 rounded border border-rizzotto-gold-500/60 bg-rizzotto-gold-500/10 px-4 py-3 text-sm font-medium text-rizzotto-gold-400">
-          Grand Final abgeschlossen — Turnier entschieden
+          Grand Final concluded — tournament decided
         </div>
       )}
 
