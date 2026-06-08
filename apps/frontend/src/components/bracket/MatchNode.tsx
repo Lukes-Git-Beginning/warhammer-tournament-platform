@@ -110,6 +110,11 @@ export function MatchNode({
       } relative`}
       onClick={onClick}
     >
+      {isGrandFinal && (
+        <div className="absolute top-0 right-0 bg-rizzotto-gold-500/20 text-rizzotto-gold-400 text-[8px] font-bold uppercase tracking-wider px-1 rounded-bl border-l border-b border-rizzotto-gold-500/40">
+          Grand Final
+        </div>
+      )}
       {isThirdPlace && (
         <div className="absolute top-0 right-0 bg-amber-950/90 text-orange-600 text-[8px] font-bold uppercase tracking-wider px-1 rounded-bl">
           3rd Place
