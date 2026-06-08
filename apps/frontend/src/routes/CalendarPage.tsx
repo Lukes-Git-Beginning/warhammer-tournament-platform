@@ -20,11 +20,11 @@ const ALL_STATUSES: TournamentStatus[] = [
 ];
 
 const STATUS_LABELS: Record<TournamentStatus, string> = {
-  DRAFT: 'Entwurf',
-  OPEN_REGISTRATION: 'Anmeldung offen',
-  REGISTRATION_CLOSED: 'Anmeldung geschlossen',
-  ONGOING: 'Laufend',
-  COMPLETED: 'Abgeschlossen',
+  DRAFT: 'Draft',
+  OPEN_REGISTRATION: 'Registration Open',
+  REGISTRATION_CLOSED: 'Registration Closed',
+  ONGOING: 'Ongoing',
+  COMPLETED: 'Completed',
 };
 
 // ---------------------------------------------------------------------------
@@ -100,10 +100,10 @@ export function CalendarPage() {
       {/* Page header */}
       <div className="mb-8">
         <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
-          Turnierkalender
+          Tournament Calendar
         </h1>
         <p className="mt-2 text-sm text-rizzotto-stone-400">
-          Alle Muster auf einen Blick — vergangen, laufend und kommend.
+          All musters at a glance — past, ongoing, and upcoming.
         </p>
       </div>
 

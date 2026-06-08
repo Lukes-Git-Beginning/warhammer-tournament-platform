@@ -92,7 +92,7 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus }: 
                     disabled={dropMutation.isPending}
                     className="ml-2 rounded border border-red-900 px-2 py-0.5 text-xs text-red-500 hover:border-red-600 hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => {
-                      if (confirm(`${p.user.username} aus dem Turnier droppen? Offene Matches werden für den Gegner gewertet.`)) {
+                      if (confirm(`Drop ${p.user.username} from the tournament? Any open matches will be awarded to their opponent.`)) {
                         dropMutation.mutate(p.user.id);
                       }
                     }}

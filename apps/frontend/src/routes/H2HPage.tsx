@@ -57,7 +57,7 @@ function SummaryBlock({ data }: { data: H2HResponse }) {
       {/* Meta row */}
       <div className="flex items-center justify-center gap-6 text-sm text-stone-400 border-t border-stone-800 pt-4">
         <span>
-          <span className="font-semibold text-stone-200">{summary.total}</span> Spiele
+          <span className="font-semibold text-stone-200">{summary.total}</span> games
         </span>
         <span>
           Win-Rate {player_a.username}:{' '}
@@ -213,8 +213,8 @@ export function H2HPage() {
         <PageShell variant="wide">
           <EmptyState
             variant="sigil"
-            title="Spieler nicht gefunden"
-            body="Einer oder beide Spieler existieren nicht."
+            title="Player not found"
+            body="One or both players do not exist."
           />
         </PageShell>
       );
@@ -223,8 +223,8 @@ export function H2HPage() {
       <PageShell variant="wide">
         <EmptyState
           variant="compact"
-          title="Fehler beim Laden"
-          body="Die H2H-Daten konnten nicht geladen werden."
+          title="Failed to load"
+          body="Could not load head-to-head data."
         />
       </PageShell>
     );
@@ -245,8 +245,8 @@ export function H2HPage() {
         </div>
         <EmptyState
           variant="sigil"
-          title="Noch kein direktes Duell"
-          body="Diese zwei Spieler sind noch nicht aufeinandergetroffen."
+          title="No head-to-head yet"
+          body="These two players have not faced each other yet."
         />
       </PageShell>
     );

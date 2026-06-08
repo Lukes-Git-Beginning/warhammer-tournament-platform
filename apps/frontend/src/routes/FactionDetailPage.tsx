@@ -63,7 +63,7 @@ export function FactionDetailPage() {
     return (
       <main className="mx-auto max-w-4xl px-4 py-10">
         <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
-          Fraktion konnte nicht geladen werden.
+          Failed to load faction.
         </div>
       </main>
     );
@@ -95,15 +95,15 @@ export function FactionDetailPage() {
       {/* Stat Cards */}
       {stats ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5 mb-10">
-          <StatCard label="Spiele" value={stats.matches_played} />
-          <StatCard label="Siege" value={<span className="text-emerald-400">{stats.wins}</span>} />
+          <StatCard label="Games" value={stats.matches_played} />
+          <StatCard label="Wins" value={<span className="text-emerald-400">{stats.wins}</span>} />
           <StatCard
-            label="Niederlagen"
+            label="Losses"
             value={<span className="text-red-400">{stats.losses}</span>}
           />
-          <StatCard label="Unentschieden" value={stats.draws} />
+          <StatCard label="Draws" value={stats.draws} />
           <StatCard
-            label="Winrate"
+            label="Win Rate"
             value={
               stats.win_rate !== null ? (
                 <span className={stats.win_rate >= 0.5 ? 'text-emerald-400' : 'text-red-400'}>

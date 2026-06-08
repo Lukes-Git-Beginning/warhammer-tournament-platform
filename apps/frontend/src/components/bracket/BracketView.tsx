@@ -283,14 +283,14 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           <button
             type="button"
             onClick={() => {
-              if (confirm('Turnier abschließen? Platzierungen und ELO werden berechnet. Diese Aktion kann nicht rückgängig gemacht werden.')) {
+              if (confirm('Finalise tournament? Placements will be calculated. This cannot be undone.')) {
                 doComplete();
               }
             }}
             disabled={isCompleting}
             className="rounded border border-rizzotto-gold-500/60 px-4 py-2 text-sm font-medium text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isCompleting ? 'Abschließen…' : 'Complete Tournament'}
+            {isCompleting ? 'Finalising…' : 'Complete Tournament'}
           </button>
         </div>
       )}

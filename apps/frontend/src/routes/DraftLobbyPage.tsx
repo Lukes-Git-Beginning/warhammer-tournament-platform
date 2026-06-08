@@ -25,7 +25,7 @@ export function DraftLobbyPage() {
     return (
       <main className="mx-auto max-w-4xl px-4 py-10">
         <div className="rounded-md border border-red-900 bg-red-950/40 p-6 text-red-300 text-sm">
-          Draft nicht gefunden oder nicht zugänglich.
+          Draft not found or not accessible.
         </div>
       </main>
     );

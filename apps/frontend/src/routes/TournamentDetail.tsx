@@ -353,12 +353,12 @@ export function TournamentDetail() {
               disabled={completeMutation.isPending}
               className="rounded border border-rizzotto-gold-500 px-4 py-1.5 text-sm text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => {
-                if (confirm(`Turnier "${tournament.name}" abschließen? Platzierungen und ELO werden berechnet. Diese Aktion kann nicht rückgängig gemacht werden.`)) {
+                if (confirm(`Finalise "${tournament.name}"? Placements will be calculated. This cannot be undone.`)) {
                   completeMutation.mutate();
                 }
               }}
             >
-              {completeMutation.isPending ? 'Abschließen…' : 'Turnier abschließen'}
+              {completeMutation.isPending ? 'Finalising…' : 'Finalise Tournament'}
             </button>
           )}
           {tournament.status === 'ONGOING' && (
@@ -444,14 +444,14 @@ export function TournamentDetail() {
                 className="rounded border border-red-800 px-4 py-1.5 text-sm text-red-400 hover:border-red-600 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => {
                   const warning = openMatch
-                    ? `Du hast ein offenes Match gegen ${opponentName ?? 'deinen Gegner'}. Wenn du droppst, gewinnt dieser das Match automatisch. Noch nicht abgeschlossene Spiele werden nicht gewertet. Trotzdem droppen?`
-                    : 'Möchtest du wirklich aus dem Turnier droppen? Deine bisherigen Ergebnisse bleiben erhalten.';
+                    ? `You have an open match against ${opponentName ?? 'your opponent'}. If you drop, they win the match automatically. Drop anyway?`
+                    : 'Drop from this tournament? Your existing results will be kept.';
                   if (confirm(warning)) {
                     selfDropMutation.mutate(user.id);
                   }
                 }}
               >
-                {selfDropMutation.isPending ? 'Droppe…' : 'Aus Turnier droppen'}
+                {selfDropMutation.isPending ? 'Dropping…' : 'Drop from Tournament'}
               </button>
             );
           })()}

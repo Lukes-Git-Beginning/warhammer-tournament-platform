@@ -29,7 +29,7 @@ function PresetCard({
                   : 'bg-stone-800 text-stone-400 border border-stone-700'
               }`}
             >
-              {preset.is_public ? 'Public' : 'Privat'}
+              {preset.is_public ? 'Public' : 'Private'}
             </span>
           </div>
           {preset.description && (
