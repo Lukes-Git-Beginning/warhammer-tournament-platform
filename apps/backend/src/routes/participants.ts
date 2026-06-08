@@ -348,6 +348,15 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      if (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') {
+        return reply.code(409).send({
+          error: 'Conflict',
+          code: 'TOURNAMENT_ALREADY_STARTED',
+          message: 'Tournament has already started — check-in is no longer available',
+          statusCode: 409,
+        });
+      }
+
       const now = new Date();
       const oneHourBefore = new Date(tournament.start_date.getTime() - 60 * 60 * 1000);
 

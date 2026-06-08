@@ -417,9 +417,9 @@ export function TournamentDetail() {
         </section>
       )}
 
-      {/* ─── Check-in (for registered participants) ─── */}
+      {/* ─── Check-in (for registered participants, pre-start only) ─── */}
       {user && participantStatus && (
-        tournament.status === 'REGISTRATION_CLOSED' || tournament.status === 'ONGOING' || tournament.status === 'OPEN_REGISTRATION'
+        tournament.status === 'REGISTRATION_CLOSED' || tournament.status === 'OPEN_REGISTRATION'
       ) && participantStatus !== 'WITHDREW' && participantStatus !== 'DISQUALIFIED' && (
         <section className="mb-6">
           <CheckInButton tournament={tournament} participantStatus={participantStatus} />
