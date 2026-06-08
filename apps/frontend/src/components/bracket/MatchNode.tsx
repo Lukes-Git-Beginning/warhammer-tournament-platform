@@ -105,7 +105,7 @@ export function MatchNode({
 
   return (
     <div
-      className={`w-full h-full ${borderStyle} ${isGrandFinal ? 'border-rizzotto-gold-500/70 bg-rizzotto-gold-500/5' : statusCls} rounded flex flex-col overflow-hidden ${
+      className={`w-full h-full ${isGrandFinal ? 'border-2' : borderStyle} ${isGrandFinal ? 'border-rizzotto-gold-500/70 bg-rizzotto-gold-500/5' : statusCls} rounded flex flex-col overflow-hidden ${
         onClick ? 'cursor-pointer hover:border-rizzotto-gold-500 transition-colors' : ''
       } relative`}
       onClick={onClick}
