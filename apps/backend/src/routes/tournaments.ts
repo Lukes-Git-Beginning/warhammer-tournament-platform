@@ -800,6 +800,15 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // When counts_for_leaderboard changes, re-stamp all existing MatchGame rows
+      // so the game-level flag stays consistent with the tournament setting.
+      if ('counts_for_leaderboard' in changedNew) {
+        await fastify.prisma.matchGame.updateMany({
+          where: { match: { tournament_id: tournament.id } },
+          data: { counts_for_leaderboard: changedNew.counts_for_leaderboard as boolean },
+        });
+      }
+
       // Update faction allowlist (replace all rows)
       if (newFactionPool !== undefined) {
         await fastify.prisma.tournamentFactionAllowlist.deleteMany({

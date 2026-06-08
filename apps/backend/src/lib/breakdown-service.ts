@@ -269,10 +269,10 @@ export async function playerFactionProficiency(
     where: {
       status: 'COMPLETED',
       winner_id: { not: null },
+      counts_for_leaderboard: true,
       match: {
         season_id: seasonId,
         deleted_at: null,
-        tournament: { counts_for_leaderboard: true },
         OR: [{ player1_id: playerId }, { player2_id: playerId }],
       },
     },

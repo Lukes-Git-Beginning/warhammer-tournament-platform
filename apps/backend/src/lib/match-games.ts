@@ -11,6 +11,7 @@ export async function ensureMatchGame(
   prisma: PrismaClient,
   matchId: string,
   gameNumber = 1,
+  countsForLeaderboard = true,
 ): Promise<string> {
   const existing = await prisma.matchGame.findUnique({
     where: { match_id_game_number: { match_id: matchId, game_number: gameNumber } },
@@ -19,7 +20,7 @@ export async function ensureMatchGame(
   if (existing) return existing.id;
 
   const created = await prisma.matchGame.create({
-    data: { match_id: matchId, game_number: gameNumber },
+    data: { match_id: matchId, game_number: gameNumber, counts_for_leaderboard: countsForLeaderboard },
     select: { id: true },
   });
   return created.id;
@@ -66,6 +67,7 @@ export async function finalizeGameResult(
           tournament: {
             select: {
               mode: true,
+              counts_for_leaderboard: true,
               swiss_match_format: true,
               playoff_match_format: true,
               finale_match_format: true,
@@ -195,7 +197,7 @@ export async function finalizeGameResult(
   } else {
     // Series continues — create next game row so the frontend can trigger the decision
     const nextGameNumber = game.game_number + 1;
-    await ensureMatchGame(fastify.prisma, game.match_id, nextGameNumber);
+    await ensureMatchGame(fastify.prisma, game.match_id, nextGameNumber, game.match.tournament.counts_for_leaderboard);
 
     if (fastify.io) {
       fastify.io.to(`match_decision_${game.match_id}`).emit('match.game.updated', {

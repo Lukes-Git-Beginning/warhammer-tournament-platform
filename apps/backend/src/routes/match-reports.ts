@@ -366,7 +366,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         const winnerId = result === 'PLAYER1_WIN' ? match.player1_id : result === 'PLAYER2_WIN' ? match.player2_id : null;
         await fastify.prisma.matchGame.upsert({
           where: { match_id_game_number: { match_id: matchId, game_number: 1 } },
-          create: { match_id: matchId, game_number: 1, status: 'COMPLETED', winner_id: winnerId, played_at: new Date() },
+          create: { match_id: matchId, game_number: 1, status: 'COMPLETED', winner_id: winnerId, played_at: new Date(), counts_for_leaderboard: match.tournament.counts_for_leaderboard },
           update: { status: 'COMPLETED', winner_id: winnerId, played_at: new Date() },
         });
         const game = await fastify.prisma.matchGame.findUniqueOrThrow({

@@ -34,13 +34,13 @@ const RATING_MODEL_TTL = 3600; // 1h fallback; primary refresh is event-driven i
 export function confirmedGameWhere(seasonId: string): Prisma.MatchGameWhereInput {
   return {
     winner_id: { not: null },
+    counts_for_leaderboard: true,
     match: {
       season_id: seasonId,
       status: 'COMPLETED',
       deleted_at: null,
       player1_id: { not: null },
       player2_id: { not: null },
-      tournament: { counts_for_leaderboard: true },
     },
   };
 }

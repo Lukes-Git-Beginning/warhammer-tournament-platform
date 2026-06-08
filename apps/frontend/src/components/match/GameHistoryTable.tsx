@@ -65,8 +65,9 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
           {games.map((g) => {
             const p1Won = g.winnerId === g.player1?.id;
             const p2Won = g.winnerId === g.player2?.id;
+            const unofficial = g.countsForLeaderboard === false;
             return (
-              <tr key={g.id} className="hover:bg-stone-800/30 transition-colors">
+              <tr key={g.id} className={`hover:bg-stone-800/30 transition-colors${unofficial ? ' opacity-40' : ''}`}>
                 {showTournament && g.tournament && (
                   <td className="px-3 py-2">
                     <Link

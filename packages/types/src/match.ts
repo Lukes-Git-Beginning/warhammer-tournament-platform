@@ -168,5 +168,6 @@ export interface GameHistoryEntry {
   player2FactionId: string | null;
   mapName: string | null;
   replayUrl: string | null;
+  countsForLeaderboard?: boolean;
   tournament?: GameHistoryTournament;
 }

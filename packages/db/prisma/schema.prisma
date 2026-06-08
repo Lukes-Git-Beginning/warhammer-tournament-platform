@@ -386,10 +386,11 @@ model MatchGame {
   reporter_id        String?     @db.Uuid
   reported_at        DateTime?
   confirmed_at       DateTime?   // set on opponent-confirm OR cron auto-confirm
-  replay_url         String?     // required on first report (anti-farming)
-  played_at          DateTime?
-  created_at         DateTime    @default(now())
-  updated_at         DateTime    @updatedAt
+  replay_url             String?     // required on first report (anti-farming)
+  played_at              DateTime?
+  counts_for_leaderboard Boolean     @default(true)
+  created_at             DateTime    @default(now())
+  updated_at             DateTime    @updatedAt
 
   match        Match             @relation(fields: [match_id], references: [id], onDelete: Cascade)
   map_decision MatchMapDecision?
