@@ -5,6 +5,7 @@ import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import type { FactionDto } from '@rizzotto/types';
 import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, getFactions, patchTournament } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
+import { sortStandingsByPlayoffResult, getFinalistIds } from '@/lib/bracketStandings';
 import { computeBracketLayout } from './computeBracketLayout';
 import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
@@ -60,73 +61,17 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     }
   }
 
-  // Players in the Grand Final match — used for the "→ Grand Final" divider in Standings.
-  const finalistIds = new Set(
-    data?.matches
-      .filter((m) => m.phase === 'PLAYOFF_FINAL')
-      .flatMap((m) => [m.player1Id, m.player2Id].filter((id): id is string => id !== null)) ?? [],
+  const finalistIds = useMemo(
+    () => getFinalistIds(data?.matches ?? []),
+    [data?.matches],
   );
 
-  // Re-sort Swiss standings by playoff result so Grand Finalists always appear at
-  // ranks 1–2 regardless of their Swiss score. Handles three distinct states:
-  //   A) GF/TP matches don't exist yet → derive participants from completed SF results
-  //   B) GF/TP matches exist but not completed → group participants together at top
-  //   C) GF/TP matches completed → winner before loser
-  const sortedStandings = useMemo(() => {
-    const base = data?.swiss?.standings;
-    if (!base || !data) return base;
-
-    const gfMatch = data.matches.find((m) => m.phase === 'PLAYOFF_FINAL');
-    const tpMatch = data.matches.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
-    const sfMatches = data.matches.filter((m) => m.phase === 'PLAYOFF_SF');
-    const completedSFs = sfMatches.filter((m) => m.status === 'COMPLETED' && m.winnerId);
-
-    // No playoff activity at all → keep Swiss order
-    if (!gfMatch && !tpMatch && completedSFs.length === 0) return base;
-
-    const playoffOrder: string[] = [];
-    const seen = new Set<string>();
-    const add = (id: string | null) => {
-      if (id && !seen.has(id)) { seen.add(id); playoffOrder.push(id); }
-    };
-
-    // Ranks 1–2: Grand Final participants
-    if (gfMatch?.status === 'COMPLETED' && gfMatch.winnerId) {
-      const loser = gfMatch.player1Id === gfMatch.winnerId ? gfMatch.player2Id : gfMatch.player1Id;
-      add(gfMatch.winnerId);
-      add(loser);
-    } else if (gfMatch) {
-      add(gfMatch.player1Id);
-      add(gfMatch.player2Id);
-    } else {
-      // GF match not created yet — SF winners are the future GF participants
-      completedSFs.forEach((sf) => add(sf.winnerId));
-    }
-
-    // Ranks 3–4: 3rd-place participants
-    if (tpMatch?.status === 'COMPLETED' && tpMatch.winnerId) {
-      const loser = tpMatch.player1Id === tpMatch.winnerId ? tpMatch.player2Id : tpMatch.player1Id;
-      add(tpMatch.winnerId);
-      add(loser);
-    } else if (tpMatch) {
-      add(tpMatch.player1Id);
-      add(tpMatch.player2Id);
-    } else if (completedSFs.length > 0) {
-      // TP match not created yet — SF losers are the future 3rd-place participants
-      completedSFs.forEach((sf) => {
-        const loser = sf.player1Id === sf.winnerId ? sf.player2Id : sf.player1Id;
-        add(loser);
-      });
-    }
-
-    if (playoffOrder.length === 0) return base;
-    const orderedSet = new Set(playoffOrder);
-    const top = playoffOrder
-      .map((id) => base.find((s) => s.userId === id))
-      .filter((s): s is NonNullable<typeof s> => s != null);
-    const rest = base.filter((s) => !orderedSet.has(s.userId));
-    return [...top, ...rest];
-  }, [data?.swiss?.standings, data?.matches]);
+  const sortedStandings = useMemo(
+    () => (data?.swiss?.standings && data?.matches
+      ? sortStandingsByPlayoffResult(data.swiss.standings, data.matches)
+      : data?.swiss?.standings),
+    [data?.swiss?.standings, data?.matches],
+  );
 
   // Auto-fit: center and scale the bracket to fill the container whenever
   // the layout dimensions change (initial load or new round added).

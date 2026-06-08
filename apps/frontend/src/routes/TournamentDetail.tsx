@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +20,7 @@ import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth';
 import { formatInUserTimezone, toDiscordTimestamp } from '@/lib/timezone';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
+import { sortStandingsByPlayoffResult, getFinalistIds } from '@/lib/bracketStandings';
 import { BracketView } from '@/components/bracket/BracketView';
 import { SwissStandings } from '@/components/bracket/SwissStandings';
 import { PageShell } from '@/components/layout/PageShell';
@@ -188,11 +189,15 @@ export function TournamentDetail() {
       standingsPlayerFactionMap.set(m.player2Id, m.player2FactionId);
     }
   }
-  const standingsFinalistIds = new Set(
-    (bracket?.matches ?? [])
-      .filter((m) => m.phase === 'PLAYOFF_FINAL')
-      .flatMap((m) => [m.player1Id, m.player2Id].filter((id): id is string => id !== null)),
+  const standingsFinalistIds = useMemo(
+    () => getFinalistIds(bracket?.matches ?? []),
+    [bracket?.matches],
   );
+  const sortedStandings = useMemo(() => {
+    const swiss = bracket?.swiss;
+    if (!swiss?.standings || !bracket?.matches) return swiss?.standings;
+    return sortStandingsByPlayoffResult(swiss.standings, bracket.matches);
+  }, [bracket?.swiss?.standings, bracket?.matches]);
 
   // Drive standings updates from socket events directly, not via BracketView
   useLiveBracket(tournament?.id ?? '');
@@ -576,7 +581,7 @@ export function TournamentDetail() {
           return (
             <section className="mb-4">
               <SwissStandings
-                standings={swiss.standings}
+                standings={sortedStandings ?? swiss.standings}
                 currentRound={swiss.currentRound}
                 recommendedRounds={swiss.recommendedRounds}
                 tournamentMode={tournament.mode}
