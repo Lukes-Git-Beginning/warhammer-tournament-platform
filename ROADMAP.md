@@ -250,11 +250,32 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 | **MatchDecisionPage** — 5s-Refetch-Interval (`refetchInterval: 5000`) damit Cron-Updates ohne Socket ankommen. `← Back to tournament`-Link oben links | ✅ done |
 | **BPT-Generalprobe Phase 2** — Einzelne Runde + Blind-Pick von Ende zu Ende getestet; zahlreiche Bugs gefunden und gefixt (s.o.) | ✅ done (partiell — Playoffs noch nicht getestet) |
 
-**Offen vor Handover-PR:**
-- [ ] **Duplicate Map-Records bereinigen** — 4 Map-Paare mit alter + neuer Slug-Variante (z.B. `bleakspire-labor-camp` + `bleakspire-labour-camp`); neue Slug-Variante hat Bild, alte hatte null → alte bekamen Bild per Patch, neue soft-deleted. Seed.ts hat kanonische Namen. Cleanup optional, funktioniert korrekt
-- [ ] **Itza** — Legacy-Map ohne Imgur-Bild, nicht im Community-Spreadsheet; entweder Bild beschaffen oder soft-deleten
-- [ ] **Onboarding-Tour-Stops** — Texte + Stops veraltet (Library-Refs, alte Branding); Dateien: `OnboardingStage3Tour.tsx` + i18n `common.json`
-- [ ] **Handover-PR** — `gh pr create --title "feat: v1 launch" --body "$(cat .claude/pr-body.md)" --base main` (PR-Body ergänzen um Session 2026-06-07/08)
+**Offen vor Handover-PR (Stand §5.4):**
+- [x] **Duplicate Map-Records bereinigen** — ✅ done (2026-06-08): Map-Pool auf kanonische 36 Maps zurückgebaut, `seed.ts` korrigiert, DB-Cleanup via `prisma/cleanup-maps.ts`. Korrekte In-Game-Namen laut Alex: Bleakspire Labor Camp, Glade of the Everqueen, Rifts at World's Edge, Skjalandir's Cave, Battle for Itza.
+- [x] **Itza** — ✅ done: Kein Bild verfügbar, Map heißt korrekt „Battle for Itza", bleibt im Pool ohne Bild.
+- [x] **Onboarding-Tour-Stops** — ✅ done (2026-06-08): Hardcoded strings in `OnboardingOverlay.tsx` durch i18n ersetzt, `data-testid` off-by-one gefixt.
+- [ ] **Handover-PR** — PR-Body in `.claude/pr-body.md` aktualisiert (Session §5.4 + §5.5). `gh` CLI nicht installiert → PR manuell erstellen: `gh pr create --title "feat: v1 launch" --body "$(cat .claude/pr-body.md)" --base main` oder via GitHub Web UI.
+
+### 5.5 Session 2026-06-08 — Edit-View, counts_for_leaderboard, SFT-Registration, Bracket-Polish
+
+| Item | Status |
+|---|---|
+| **Edit Tournament — vollständige Felder + Lifecycle-Locks** — Alle Felder aus Create-Form nun auch im Edit sichtbar; Felder je nach Turnierstatus gesperrt (Draft-only: Format/Mode/Visibility/Faction-Pool; Until-ONGOING: Mechanics/Map-Pool/Dates; Always: Name/Discord/is_major/counts_for_leaderboard). Timezone aus Edit-Form entfernt (auto per Browser). Status-Badge oben | ✅ done |
+| **Edit Tournament — GET lieferte fehlende Felder** — `rounds_count`, `has_third_place_match` und `map_pool`-Relation fehlten im GET-Select → Edit-Form zeigte immer Defaults | ✅ done |
+| **Edit PATCH — rules null-Fehler** — `rules` ist `String @default("")` (nicht nullable); Frontend sendete null statt `""` → 422. Fix: Normalisierung auf `""`, backend `description` auf `.nullable()` | ✅ done |
+| **PATCH akzeptiert nun format/mode/has_third_place_match/counts_for_leaderboard/faction_pool** — Backend `PatchTournamentSchema` erweitert; draft-only-Felder server-seitig validiert | ✅ done |
+| **counts_for_leaderboard auf MatchGame denormalisiert** — Migration `20260608000000_match_game_counts_for_leaderboard` schreibt Flag bei Game-Erstellung; retroaktives Re-Stamp wenn Tournament-Flag geändert wird; Filter-Sites (`rating-model-service`, `breakdown-service`) nutzen nun direktes Feld statt Tournament-Join | ✅ done |
+| **SFT-Registration: disallowed Factions grayed out** — `FactionSelectGrid` in `RegisterButton` respektiert `tournament.faction_allowlist`; nicht erlaubte Fraktionen sind disabled + halbtransparent | ✅ done |
+| **SFT-Registration: Faction-Picker nutzt FactionBadge** — Visuell konsistent mit Onboarding und Blind-Pick (selbe Logo-Größe, font-display, uppercase tracking) | ✅ done |
+| **Bracket-Polish** — Rote gestrichelte Loser-Connector-Linien entfernt; „3rd Place"-Badge bronze gefärbt; Grand-Final-Node: `border-2` Goldrahmen + „GRAND FINAL"-Badge in Gold | ✅ done |
+| **Deutsche UI-Strings** — 9 Dateien bereinigt: TournamentDetail, BracketView, ParticipantsList, CalendarPage, FactionDetailPage, H2HPage, DraftSpectatorPage, DraftLobbyPage, PresetListPage | ✅ done |
+| **Back-to-Tournament-Link** oben auf Edit-Page | ✅ done |
+| **Dev-Scripts** — `prisma/fill-registrations.ts` (nutzt bestehende User zuerst), `prisma/list-users.ts`, `prisma/fix-dummy-registrations.ts` | ✅ done |
+
+**Offen nach §5.5:**
+- [ ] **Handover-PR** — s.o., `gh` CLI fehlt
+- [ ] **SFT-Generalprobe mit Playoffs** — §5.4-Playoff-Phase noch nicht durchgetestet
+- [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant zu MatchGame-Level-Aggregation
 
 ---
 

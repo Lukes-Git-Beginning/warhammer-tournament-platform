@@ -4,6 +4,7 @@
 - Prisma 7 (`^7.8.0`) mit driver-adapter `PrismaPg` aus `@prisma/adapter-pg` — kein nativer Prisma-Connection-String-Modus.
 - 27 Models in `packages/db/prisma/schema.prisma` (nach Phase-2-Drop). Welle-2-Models: Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, AdminConfig. (`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` per `drop_welle2_mmr_deprecated` entfernt.)
 - **2026-06-07 Migration `remove_elo`**: `LeaderboardEntry.elo_rating` (Int) und `TournamentResult.elo_change` (Int) gedroppt. `LeaderboardEntry` hat jetzt nur noch: `total_points`, `games_played`, `wins`, `losses`.
+- **2026-06-08 Migration `match_game_counts_for_leaderboard`**: `MatchGame.counts_for_leaderboard Boolean @default(true)` hinzugefügt. Flag wird bei Game-Erstellung vom Tournament gestempelt; retroaktives Re-Stamp via PATCH. Filter-Sites nutzen jetzt das Game-Level-Feld statt Join auf Tournament. Backfill in Migration-SQL enthalten.
 - **Gotcha Advisory Lock**: Bei abgebrochenem `prisma migrate` hält die DB einen Lock. Fix: `docker exec tww3-postgres psql -U tww3 -d tww3 -c "SELECT pg_advisory_unlock_all();"` + danach pg_terminate_backend auf alle aktiven Connections.
 - **Gotcha:** `datasource.url` steht NICHT in `schema.prisma`, sondern in `prisma.config.ts` — `schema.prisma` enthält nur `provider = "postgresql"`.
 
@@ -155,10 +156,14 @@ Wenn Backend vom Host nach Postgres im Container über `127.0.0.1:5432` verbinde
 - Relationen: `leaderboard LeaderboardEntry[]`, `faction_stats FactionStats[]`, `matchup_stats MatchupStats[]`.
 
 ### LeaderboardEntry
-- `elo_rating Int @default(1200)` — Standard-ELO-Startwert.
+- ~~`elo_rating Int`~~ — **ENTFERNT** (Migration `remove_elo`, 2026-06-07).
 - `total_points Float` — für Ranglisten-Sortierung; Index `[season_id, total_points(sort: Desc)]`.
-- ~~`season_points Int`~~ — **ENTFERNT** (Migration `drop_welle2_mmr_deprecated`, Branch `chore/phase2-consolidation`). War Welle-2-MMR, abgelöst durch `total_points` (derive-on-read). Sortierung läuft über `total_points`.
+- `games_played`, `wins`, `losses` — post-v1 zu entfernen (redundant zu MatchGame-Aggregation, nur `total_points` wird dauerhaft gebraucht).
+- ~~`season_points Int`~~ — **ENTFERNT** (Migration `drop_welle2_mmr_deprecated`).
 - Unique-Constraint: `[user_id, season_id]`.
+
+### MatchGame
+- `counts_for_leaderboard Boolean @default(true)` — **Neu (2026-06-08)**. Wird bei Game-Erstellung aus `tournament.counts_for_leaderboard` gestempelt. Erlaubt direktes Filtern ohne Tournament-Join in Rating-Model, Breakdown, H2H. Änderung am Tournament-Flag per PATCH triggert `updateMany` auf alle Games des Turniers. Synthetic legacy rows (matches ohne Games) defaulten auf `true` im `/api/meta/games`-Response.
 
 ### ~~Welle-2-MMR-Models~~ — ENTFERNT (2026-06-03)
 `FactionMastery`, `FactionMatchupStat`, `AntiFarmCap` + `LeaderboardEntry.season_points` + Enum `StatsSource` wurden per Migration `drop_welle2_mmr_deprecated` (Branch `chore/phase2-consolidation`) gedroppt. Ersetzt durch die gefitteten Parameter in `lib/rating-model.ts` bzw. den player-spezifischen OpponentShare-Modifier in `lib/scoring-service.ts`; Faction-vs-Faction-Daten leben in `MatchupStats`.
@@ -301,6 +306,7 @@ Das Seed-Script liegt bei `packages/db/prisma/seed.ts` und wird via `tsx` ausgef
 | `20260607074927_remove_elo` | `LeaderboardEntry.elo_rating` + `TournamentResult.elo_change` gedroppt |
 | `20260607121006_add_liechtenstein_format` | `LIECHTENSTEIN` zu `TournamentFormat`-Enum |
 | `20260607173753_add_third_place_match` | `Tournament.has_third_place_match Boolean @default(false)` + `PLAYOFF_THIRD_PLACE` zu `MatchPhase` |
+| `20260608000000_match_game_counts_for_leaderboard` | `MatchGame.counts_for_leaderboard Boolean @default(true)` + Backfill aus Tournament via Match-JOIN |
 
 Migrations-Lock unter `packages/db/prisma/migrations/migration_lock.toml`.
 
