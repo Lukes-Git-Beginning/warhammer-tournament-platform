@@ -101,16 +101,17 @@ export function MatchNode({
       : (match.score ? (match.score.split('-')[1] ?? '') : '');
 
   const isThirdPlace = match.phase === 'PLAYOFF_THIRD_PLACE';
+  const isGrandFinal = match.phase === 'PLAYOFF_FINAL';
 
   return (
     <div
-      className={`w-full h-full ${borderStyle} ${statusCls} rounded flex flex-col overflow-hidden ${
+      className={`w-full h-full ${borderStyle} ${isGrandFinal ? 'border-rizzotto-gold-500/70 bg-rizzotto-gold-500/5' : statusCls} rounded flex flex-col overflow-hidden ${
         onClick ? 'cursor-pointer hover:border-rizzotto-gold-500 transition-colors' : ''
       } relative`}
       onClick={onClick}
     >
       {isThirdPlace && (
-        <div className="absolute top-0 right-0 bg-amber-800/80 text-amber-200 text-[8px] font-bold uppercase tracking-wider px-1 rounded-bl">
+        <div className="absolute top-0 right-0 bg-amber-950/90 text-orange-600 text-[8px] font-bold uppercase tracking-wider px-1 rounded-bl">
           3rd Place
         </div>
       )}
