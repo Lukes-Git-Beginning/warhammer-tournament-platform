@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
@@ -67,6 +67,41 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
       .flatMap((m) => [m.player1Id, m.player2Id].filter((id): id is string => id !== null)) ?? [],
   );
 
+  // Re-sort Swiss standings by playoff result once playoff matches are complete.
+  // Without this, players are ordered by Swiss score — 3rd-place participants with
+  // a better Swiss record would appear above the Grand Finalists.
+  const sortedStandings = useMemo(() => {
+    const base = data?.swiss?.standings;
+    if (!base || !data) return base;
+
+    const gfMatch = data.matches.find((m) => m.phase === 'PLAYOFF_FINAL');
+    const tpMatch = data.matches.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
+    if (!gfMatch && !tpMatch) return base;
+
+    // Build ordered playoff participant list: winner before loser when match is done.
+    const playoffOrder: string[] = [];
+    const push = (match: typeof gfMatch) => {
+      if (!match) return;
+      if (match.status === 'COMPLETED' && match.winnerId) {
+        const loser = match.player1Id === match.winnerId ? match.player2Id : match.player1Id;
+        if (match.winnerId) playoffOrder.push(match.winnerId);
+        if (loser) playoffOrder.push(loser);
+      } else {
+        if (match.player1Id) playoffOrder.push(match.player1Id);
+        if (match.player2Id) playoffOrder.push(match.player2Id);
+      }
+    };
+    push(gfMatch);
+    push(tpMatch);
+
+    const orderedSet = new Set(playoffOrder);
+    const top = playoffOrder
+      .map((id) => base.find((s) => s.userId === id))
+      .filter((s): s is NonNullable<typeof s> => s != null);
+    const rest = base.filter((s) => !orderedSet.has(s.userId));
+    return [...top, ...rest];
+  }, [data?.swiss?.standings, data?.matches]);
+
   // Auto-fit: center and scale the bracket to fill the container whenever
   // the layout dimensions change (initial load or new round added).
   const layout = data && data.matches.length > 0 ? computeBracketLayout(data.matches) : null;
@@ -131,7 +166,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   });
 
   if (isLoading) {
-    return <div className="text-stone-400 text-sm py-6">Bracket wird geladen…</div>;
+    return <div className="text-stone-400 text-sm py-6">Loading bracket…</div>;
   }
 
   if (error || !data) {
@@ -212,7 +247,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
       {/* Swiss Standings — suppressed when parent already renders them */}
       {swiss && !hideStandings && (
         <SwissStandings
-          standings={swiss.standings}
+          standings={sortedStandings ?? swiss.standings}
           currentRound={swiss.currentRound}
           recommendedRounds={swiss.recommendedRounds}
           factionMap={factionMap}
