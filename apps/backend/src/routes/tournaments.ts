@@ -506,7 +506,9 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         counts_for_leaderboard: true,
         is_major: true,
         organizer_id: true,
+        rounds_count: true,
         playoff_format: true,
+        has_third_place_match: true,
         swiss_match_format: true,
         playoff_match_format: true,
         finale_match_format: true,
@@ -519,6 +521,11 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           select: { participants: { where: { deleted_at: null } } },
         },
         faction_allowlist: { select: { faction_id: true } },
+        map_pool: {
+          select: {
+            map: { select: { id: true, slug: true, name: true, description: true, image_url: true } },
+          },
+        },
       },
     });
 
@@ -556,11 +563,12 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    const { _count, faction_allowlist, ...rest } = tournament;
+    const { _count, faction_allowlist, map_pool, ...rest } = tournament;
     return {
       ...rest,
       participantCount: _count.participants,
       faction_allowlist: faction_allowlist.map((fa) => fa.faction_id),
+      map_pool: map_pool.map((entry) => entry.map),
     };
   });
 
