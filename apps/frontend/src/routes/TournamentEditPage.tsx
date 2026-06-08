@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from '@tanstack/react-router';
+import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import {
@@ -418,6 +418,14 @@ export function TournamentEditPage() {
 
   return (
     <PageShell variant="narrow">
+      <Link
+        to="/tournaments/$slug"
+        params={{ slug }}
+        className="mb-6 inline-block text-xs text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors"
+      >
+        ← Back to tournament
+      </Link>
+
       <header className="mb-8">
         <div className="flex items-center gap-3 flex-wrap">
           <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
