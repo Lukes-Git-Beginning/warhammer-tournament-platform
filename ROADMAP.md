@@ -277,8 +277,22 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 - [ ] **SFT-Generalprobe mit Playoffs** — §5.4-Playoff-Phase noch nicht durchgetestet
 - [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant zu MatchGame-Level-Aggregation
 
-**Offen nach §5.6 (Session 2026-06-09):**
-- [ ] **Admin: Discord-/Steam-ID-Anzeige — Security Review durch Luke** — IDs werden im Admin-Panel angezeigt (ADMIN-only Endpoint, JWT-geschützt). Alex' Wunsch: re-auth mit Discord bevor sensible IDs sichtbar werden (ähnlich „Confirm identity"-Flow). Discord-E-Mail ist bereits im `User`-Model gespeichert (`DISCORD_SCOPES=identify email`) und könnte ebenfalls angezeigt werden; Steam-E-Mail ist technisch nicht verfügbar (Steam-API gibt keine E-Mails zurück). Luke soll entscheiden: reicht der bestehende ADMIN-Guard, oder braucht es einen separaten Confirm-Step in der UI?
+**§5.6 Session 2026-06-09 — Playoff-Standings, Check-in, Admin-IDs, German-Strings-Final:**
+
+| Item | Status |
+|---|---|
+| **Standings-Sort Root Cause** — `TournamentDetail` renderte `SwissStandings` eigenständig mit unsortierten Daten; `BracketView`-Fix griff nicht. Shared utility `lib/bracketStandings.ts` extrahiert (`sortStandingsByPlayoffResult`, `getFinalistIds`); beide Render-Stellen nutzen sie | ✅ done |
+| **SF-Fallback in Standings** — GF-/TP-Match noch nicht erstellt → SF-Gewinner/-Verlierer als Proxy; alle drei States (pre-GF, GF pending, GF done) korrekt | ✅ done |
+| **Check-in UI** — `CheckInButton` nicht mehr für `ONGOING`-Turniere angezeigt; `/checkin/self` lehnt Requests ab wenn Turnier bereits gestartet | ✅ done |
+| **Admin: Discord ID + Steam ID** — `GET /api/users` joined `steam_link`-Relation; Tabelle zeigt beide IDs monospace + select-all | ✅ done |
+| **Leaderboard Elo-Spalte** — verwaister `<th>` nach ELO-Removal entfernt; Columns wieder korrekt ausgerichtet | ✅ done |
+| **Faction-Strings + Tagline** — `FactionDetailPage` übersetzt; `race`/`category`-Tagline entfernt; `H2HPage` Faction-Header | ✅ done |
+| **Finaler German-Strings-Sweep** — Draft (DraftLobby, CategoryLimitsEditor, DraftLobbyPage, DraftSpectatorPage), Admin (StatsDashboard, PresetLibraryAdmin, ImportLogTable), Bracket (BracketView, MatchScoreModal), ArmyListList | ✅ done |
+| **Session-Archivierung** — Stop-Hook schreibt nach jedem Turn `~/.claude/session-archives/<id>.md` | ✅ done |
+
+**Offen (post-v1 oder Luke):**
+- [ ] **Admin: Discord/Steam ID re-auth** — Luke entscheidet: ADMIN-Guard reicht oder separater Discord-Confirm-Step? (Details im PR-Body)
+- [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant zu MatchGame-Aggregation
 
 ---
 
