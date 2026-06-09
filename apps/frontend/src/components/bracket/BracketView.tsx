@@ -85,7 +85,8 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     const svgH = layout.height + PAD * 2;
     const fitted = Math.min(containerW / svgW, containerH / svgH);
     transformRef.current.centerView(fitted, 0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Re-fit only when the bracket's dimensions change, not on every new
+    // layout object identity.
   }, [layout?.width, layout?.height]);
 
   useLiveBracket(tournamentId);
