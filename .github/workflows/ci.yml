@@ -3,7 +3,20 @@ name: CI
 on:
   push:
     branches: [main]
+    # Docs-only commits don't affect the build/test/deploy artifacts, so skip
+    # the full Postgres+Redis+Playwright run (and the downstream deploy) for
+    # them. '**.md' already covers ROADMAP.md, DEPLOYMENT.md and CLAUDE.md.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.knowledge/**'
+      - '.claude/**'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.knowledge/**'
+      - '.claude/**'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -15,6 +28,7 @@ permissions:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -90,8 +104,22 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
       - name: Install Playwright Chromium
-        run: pnpm --filter @rizzotto/e2e exec playwright install --with-deps chromium
+        # On a cache hit the browser binary (~120 MB) is restored, so only the
+        # OS-level libs need installing. On a miss, do the full download.
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            pnpm --filter @rizzotto/e2e exec playwright install-deps chromium
+          else
+            pnpm --filter @rizzotto/e2e exec playwright install --with-deps chromium
+          fi
 
       - name: E2E (Playwright)
         # Blocking pre-deploy gate. Visual-snapshot tests run unconditionally;

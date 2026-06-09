@@ -20,9 +20,16 @@ on:
 permissions:
   contents: read
 
+# Serialize manual triggers so two concurrent runs can't race on the snapshot
+# upload artifact.
+concurrency:
+  group: update-snapshots
+  cancel-in-progress: true
+
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
