@@ -15,7 +15,7 @@ function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
 
 function TrendSparkline({ trend }: { trend: SnapshotTrendEntry[] }) {
   if (trend.length === 0) {
-    return <p className="text-sm text-stone-600">Keine Trend-Daten vorhanden.</p>;
+    return <p className="text-sm text-stone-600">No trend data available.</p>;
   }
 
   const maxMatches = Math.max(...trend.map((t) => t.matches_played), 1);
@@ -34,7 +34,7 @@ function TrendSparkline({ trend }: { trend: SnapshotTrendEntry[] }) {
                 style={{ width: `${barWidth}%` }}
               />
             </div>
-            <span className="w-12 text-right text-stone-400">{entry.matches_played} Sp.</span>
+            <span className="w-12 text-right text-stone-400">{entry.matches_played} g.</span>
             <span className="w-10 text-right text-stone-400">{wr !== null ? `${wr}%` : '—'}</span>
           </div>
         );
@@ -54,7 +54,7 @@ export function FactionDetailPage() {
   if (isLoading) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-10">
-        <div className="py-8 text-center text-stone-400 text-sm">Wird geladen…</div>
+        <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>
       </main>
     );
   }
@@ -63,7 +63,7 @@ export function FactionDetailPage() {
     return (
       <main className="mx-auto max-w-4xl px-4 py-10">
         <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
-          Fraktion konnte nicht geladen werden.
+          Failed to load faction.
         </div>
       </main>
     );
@@ -84,26 +84,21 @@ export function FactionDetailPage() {
         />
         <div>
           <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">{faction.name}</h1>
-          <div className="flex gap-3 text-sm text-stone-500 mt-1">
-            <span>{faction.race}</span>
-            <span>·</span>
-            <span>{faction.category}</span>
-          </div>
         </div>
       </div>
 
       {/* Stat Cards */}
       {stats ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5 mb-10">
-          <StatCard label="Spiele" value={stats.matches_played} />
-          <StatCard label="Siege" value={<span className="text-emerald-400">{stats.wins}</span>} />
+          <StatCard label="Games" value={stats.matches_played} />
+          <StatCard label="Wins" value={<span className="text-emerald-400">{stats.wins}</span>} />
           <StatCard
-            label="Niederlagen"
+            label="Losses"
             value={<span className="text-red-400">{stats.losses}</span>}
           />
-          <StatCard label="Unentschieden" value={stats.draws} />
+          <StatCard label="Draws" value={stats.draws} />
           <StatCard
-            label="Winrate"
+            label="Win Rate"
             value={
               stats.win_rate !== null ? (
                 <span className={stats.win_rate >= 0.5 ? 'text-emerald-400' : 'text-red-400'}>
@@ -117,13 +112,13 @@ export function FactionDetailPage() {
         </div>
       ) : (
         <div className="rounded-md border border-stone-800 bg-stone-900/40 p-4 text-stone-500 text-sm mb-10">
-          Noch keine Statistiken für diese Fraktion vorhanden.
+          No statistics available for this faction yet.
         </div>
       )}
 
       {/* Trend */}
       <section className="rounded-md border border-stone-800 bg-stone-900/40 p-5">
-        <h2 className="font-display text-lg font-semibold text-stone-100 mb-4">30-Tage-Trend</h2>
+        <h2 className="font-display text-lg font-semibold text-stone-100 mb-4">30-Day Trend</h2>
         <TrendSparkline trend={trend} />
       </section>
     </main>

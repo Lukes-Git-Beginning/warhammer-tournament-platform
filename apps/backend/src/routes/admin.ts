@@ -26,14 +26,11 @@ const AuditLogQuerySchema = PaginationSchema.extend({
 
 const FactionWinRatesQuerySchema = z.object({
   season: z.string().uuid().optional(),
-  format: z.enum(['SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN']).optional(),
-  mode: z.enum(['OPEN', 'ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT']).optional(),
+  format: z.enum(['SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN']).optional(),
+  mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT']).optional(),
   period: z.enum(['last_30d', 'last_90d', 'season']).optional(),
 });
 
-const EloDistributionQuerySchema = z.object({
-  season: z.string().uuid().optional(),
-});
 
 const DropoffFunnelQuerySchema = z.object({
   tournament_id: z.string().uuid().optional(),
@@ -124,9 +121,9 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         entity_type: e.entity_type,
         entity_id: e.entity_id,
         action: e.action,
-        actor: e.actor
-          ? { id: e.actor.id, username: e.actor.username, avatar_url: e.actor.avatar_url }
-          : null,
+        actor_id: e.actor?.id ?? null,
+        actor_username: e.actor?.username ?? null,
+        actor_avatar_url: e.actor?.avatar_url ?? null,
         old_value: e.old_value,
         new_value: e.new_value,
         created_at: e.created_at.toISOString(),
@@ -176,11 +173,15 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         return {
-          users: { active: activeUsers },
+          activeUsers,
           tournaments: { total: totalTournaments, active: activeTournaments, completed: completedTournaments },
-          matches: { total: totalMatches },
-          top_factions: topFactions,
-          season: activeSeason ? { id: activeSeason.id, name: activeSeason.name } : null,
+          matchesPlayed: totalMatches,
+          currentSeason: activeSeason?.name ?? null,
+          topFactions: topFactions.map((f) => ({
+            faction_id: f.faction_id,
+            faction_name: f.name,
+            pick_count: f.matches_played,
+          })),
         };
       },
       { ttlSeconds: 60 },
@@ -374,75 +375,6 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // -------------------------------------------------------------------------
-  // GET /api/admin/stats/elo-distribution
-  // -------------------------------------------------------------------------
-
-  fastify.get('/api/admin/stats/elo-distribution', async (request, reply) => {
-    const parsed = EloDistributionQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
-    }
-    const { season: seasonId } = parsed.data;
-
-    let resolvedSeasonId: string | null = null;
-    if (seasonId) {
-      const s = await fastify.prisma.season.findUnique({ where: { id: seasonId }, select: { id: true } });
-      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
-      resolvedSeasonId = s.id;
-    } else {
-      const s = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
-      resolvedSeasonId = s?.id ?? null;
-    }
-
-    if (!resolvedSeasonId) {
-      return reply.code(404).send({ error: 'NotFound', message: 'No active season', statusCode: 404 });
-    }
-
-    return cached(
-      fastify.redis,
-      cacheKey('admin:elo-distribution', { seasonId: resolvedSeasonId }),
-      async () => {
-        const entries = await fastify.prisma.leaderboardEntry.findMany({
-          where: { season_id: resolvedSeasonId! },
-          select: { elo_rating: true },
-        });
-
-        if (entries.length === 0) {
-          return { buckets: [], median: null, p1: null, p99: null, total: 0 };
-        }
-
-        const ratings = entries.map((e) => e.elo_rating).sort((a, b) => a - b);
-        const total = ratings.length;
-
-        // Build 50-point buckets
-        const BUCKET_SIZE = 50;
-        const minRating = Math.floor(ratings[0]! / BUCKET_SIZE) * BUCKET_SIZE;
-        const maxRating = Math.ceil(ratings[ratings.length - 1]! / BUCKET_SIZE) * BUCKET_SIZE;
-
-        const bucketsMap = new Map<number, number>();
-        for (let start = minRating; start < maxRating; start += BUCKET_SIZE) {
-          bucketsMap.set(start, 0);
-        }
-        for (const r of ratings) {
-          const bucketStart = Math.floor(r / BUCKET_SIZE) * BUCKET_SIZE;
-          bucketsMap.set(bucketStart, (bucketsMap.get(bucketStart) ?? 0) + 1);
-        }
-
-        const buckets = Array.from(bucketsMap.entries())
-          .sort(([a], [b]) => a - b)
-          .map(([start, count]) => ({ start, end: start + BUCKET_SIZE, count }));
-
-        const median = ratings[Math.floor(total / 2)]!;
-        const p1 = ratings[Math.floor(total * 0.01)]!;
-        const p99 = ratings[Math.floor(total * 0.99)]!;
-
-        return { buckets, median, p1, p99, total };
-      },
-      { ttlSeconds: 300 },
-    );
-  });
-
-  // -------------------------------------------------------------------------
   // GET /api/admin/stats/dropoff-funnel
   // -------------------------------------------------------------------------
 
@@ -585,9 +517,9 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
             bans_top: true,
             bans_bottom: true,
             picked_map_id: true,
-            match: { select: { winner_id: true, status: true } },
+            game: { select: { match: { select: { winner_id: true, status: true } } } },
           },
-          where: { match: { status: 'COMPLETED', deleted_at: null } },
+          where: { game: { match: { status: 'COMPLETED', deleted_at: null } } },
         });
 
         const maps = await fastify.prisma.map.findMany({
@@ -609,7 +541,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
             const s = mapStats.get(d.picked_map_id);
             if (s) {
               s.picks++;
-              if (d.match.winner_id) s.wins++;
+              if (d.game.match.winner_id) s.wins++;
             }
           }
         }

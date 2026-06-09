@@ -58,8 +58,9 @@ export interface Tournament {
   slug: string;
   name: string;
   description: string | null;
-  format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION';
-  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'OPEN' | 'BPT' | 'SFT' | 'SLT';
+  format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN';
+  has_third_place_match?: boolean;
+  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT';
   status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
   start_date: string;
   timezone: string;
@@ -75,15 +76,22 @@ export interface Tournament {
   participantCount?: number;
   created_at: string;
   is_major?: boolean;
+  visibility?: 'PUBLIC' | 'PRIVATE';
+  counts_for_leaderboard?: boolean;
   // Welle 2 fields
   rounds_count?: number | null;
   playoff_format?: 'NONE' | 'TOP4' | 'TOP8' | null;
-  swiss_match_format?: 'BO1' | 'BO3' | null;
-  playoff_match_format?: 'BO3' | 'BO5' | null;
-  finale_match_format?: 'BO3' | 'BO5' | null;
-  map_decision_mode?: 'RANDOM' | 'PICK_BAN' | null;
+  swiss_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
+  playoff_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
+  finale_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
+  map_decision_mode?: MapDecisionMode | null;
+  map_preset_config?: MapPresetConfig | null;
   map_pool?: MapDto[];
+  faction_allowlist?: string[];
 }
+
+export type MapDecisionMode = 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
+export type MapPresetConfig = Record<string, string[] | string[][]>;
 
 export interface MapDto {
   id: string;
@@ -94,7 +102,7 @@ export interface MapDto {
   deleted_at?: string | null;
 }
 
-export type ParticipantStatus = 'REGISTERED' | 'CHECKED_IN' | 'WITHDRAWN' | 'DISQUALIFIED';
+export type ParticipantStatus = 'REGISTERED' | 'CHECKED_IN' | 'WITHDREW' | 'DISQUALIFIED';
 
 export interface TournamentArmyList {
   id: string;
@@ -109,18 +117,22 @@ export interface TournamentArmyList {
 
 export interface MatchDecisionState {
   matchId: string;
-  mode: 'RANDOM' | 'PICK_BAN';
+  mode: MapDecisionMode;
   topPlayerId: string;
   bottomPlayerId: string;
   seed: string;
   bansTop: string[];
   bansBottom: string[];
+  activePool: string[];
   pickedMapId: string | null;
   decidedAt: string | null;
+  tournamentMode?: string | null;
+  matchPlayer1Id?: string | null;
   blindPick?: {
     player1Locked: boolean;
     player2Locked: boolean;
     revealedAt: string | null;
+    firstLockedAt?: string | null;
     player1FactionId: string | null;
     player2FactionId: string | null;
   } | null;
@@ -128,8 +140,9 @@ export interface MatchDecisionState {
 
 export interface TournamentCreate {
   name: string;
-  format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN';
-  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'OPEN' | 'BPT' | 'SFT' | 'SLT';
+  format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN';
+  has_third_place_match?: boolean;
+  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT';
   start_date: string;
   timezone: string;
   max_participants?: number;
@@ -142,15 +155,16 @@ export interface TournamentCreate {
   // Welle 2 fields
   rounds_count?: number;
   playoff_format?: 'NONE' | 'TOP4' | 'TOP8';
-  swiss_match_format?: 'BO1' | 'BO3';
-  playoff_match_format?: 'BO3' | 'BO5';
-  finale_match_format?: 'BO3' | 'BO5';
-  map_decision_mode?: 'RANDOM' | 'PICK_BAN';
+  swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
+  playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
+  finale_match_format?: 'BO1' | 'BO3' | 'BO5';
+  map_decision_mode?: MapDecisionMode;
+  map_preset_config?: MapPresetConfig | null;
   map_pool?: string[];
+  faction_pool?: string[];
 }
 
 // Mirror of backend PatchTournamentSchema (apps/backend/src/routes/tournaments.ts).
-// All fields optional; `format` and `mode` are immutable post-create.
 export interface TournamentPatchInput {
   name?: string;
   description?: string | null;
@@ -164,13 +178,23 @@ export interface TournamentPatchInput {
   status?: Tournament['status'];
   draft_enabled?: boolean;
   draft_preset_id?: string | null;
+  // draft-only (backend enforces, frontend disables after DRAFT)
+  format?: Tournament['format'];
+  mode?: 'BPT' | 'SFT' | 'SLT';
+  faction_pool?: string[];
+  // until-ongoing fields
   rounds_count?: number;
   playoff_format?: 'NONE' | 'TOP4' | 'TOP8';
+  has_third_place_match?: boolean;
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
   finale_match_format?: 'BO1' | 'BO3' | 'BO5';
-  map_decision_mode?: 'RANDOM' | 'PICK_BAN';
+  map_decision_mode?: MapDecisionMode;
+  map_preset_config?: MapPresetConfig | null;
   map_pool?: string[];
+  // always-editable metadata
+  is_major?: boolean;
+  counts_for_leaderboard?: boolean;
 }
 
 export interface TournamentPatchResponse {
@@ -297,6 +321,12 @@ export function startTournament(id: string): Promise<{ ok: true }> {
   });
 }
 
+export function resetBracket(id: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/tournaments/${id}/bracket/reset`, {
+    method: 'POST',
+  });
+}
+
 export function deleteTournament(slug: string): Promise<void> {
   return apiFetch<void>(`/api/tournaments/${slug}`, { method: 'DELETE' });
 }
@@ -348,7 +378,11 @@ export function getFactions(seasonId?: string): Promise<FactionListResponse> {
   const params = new URLSearchParams();
   if (seasonId) params.set('seasonId', seasonId);
   const qs = params.toString();
-  return apiFetch<FactionListResponse>(`/api/factions${qs ? `?${qs}` : ''}`);
+  return apiFetch<FactionListResponse>(`/api/factions${qs ? `?${qs}` : ''}`)
+    .then((res) => ({
+      ...res,
+      data: [...res.data].sort((a, b) => a.faction.name.localeCompare(b.faction.name)),
+    }));
 }
 
 export function getFaction(id: string, seasonId?: string): Promise<FactionDetailResponse> {
@@ -378,6 +412,14 @@ export function startNextSwissRound(tournamentId: string): Promise<{ ok: true }>
   });
 }
 
+export function startPlayoffs(tournamentId: string): Promise<{ tournamentId: string; format: string; matches_created: number }> {
+  return apiFetch(`/api/tournaments/${tournamentId}/start-playoffs`, { method: 'POST' });
+}
+
+export function advancePlayoffs(tournamentId: string): Promise<{ phase: string; matches_created: number }> {
+  return apiFetch(`/api/tournaments/${tournamentId}/advance-playoffs`, { method: 'POST' });
+}
+
 export function reportMatchResult(
   matchId: string,
   body: {
@@ -385,10 +427,29 @@ export function reportMatchResult(
     score?: string;
     player1FactionId?: string;
     player2FactionId?: string;
+    map_id?: string;
   },
 ): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/matches/${matchId}/result`, {
     method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function overrideMatchResult(
+  matchId: string,
+  body: {
+    result: 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'DRAW' | 'DOUBLE_LOSS';
+    player1_score?: number;
+    player2_score?: number;
+    reason: string;
+    map_id?: string;
+    player1FactionId?: string;
+    player2FactionId?: string;
+  },
+): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/result`, {
+    method: 'PUT',
     body: JSON.stringify(body),
   });
 }
@@ -457,7 +518,7 @@ export interface AuditLogEntry {
   entity_type: string;
   entity_id: string;
   action: string;
-  actor_id: string;
+  actor_id: string | null;
   actor_username: string | null;
   actor_avatar_url: string | null;
   old_value: unknown;
@@ -477,9 +538,11 @@ export interface AdminUser {
   id: string;
   username: string;
   discord_id: string;
+  steam_id: string | null;
   avatar_url: string | null;
   role: string;
   is_banned: boolean;
+  created_at: string;
 }
 
 export function getAdminAuditLog(opts?: {
@@ -499,8 +562,9 @@ export function getAdminStats(): Promise<AdminStats> {
   return apiFetch('/api/admin/stats');
 }
 
-export function searchUsers(search: string): Promise<{ users: AdminUser[] }> {
-  const params = new URLSearchParams({ search });
+export function searchUsers(search?: string): Promise<{ users: AdminUser[]; total: number }> {
+  const params = new URLSearchParams();
+  if (search && search.length >= 2) params.set('search', search);
   return apiFetch(`/api/users?${params.toString()}`);
 }
 
@@ -547,27 +611,6 @@ export function getAdminFactionWinRates(opts?: {
   return apiFetch(`/api/admin/stats/faction-winrates${qs ? `?${qs}` : ''}`);
 }
 
-export interface EloDistributionBucket {
-  bucket: number;
-  count: number;
-}
-
-export interface EloDistributionResponse {
-  buckets: EloDistributionBucket[];
-  median: number;
-  p1: number;
-  p99: number;
-  total: number;
-}
-
-export function getAdminEloDistribution(opts?: {
-  season?: string;
-}): Promise<EloDistributionResponse> {
-  const params = new URLSearchParams();
-  if (opts?.season) params.set('season', opts.season);
-  const qs = params.toString();
-  return apiFetch(`/api/admin/stats/elo-distribution${qs ? `?${qs}` : ''}`);
-}
 
 export interface DropOffFunnelStage {
   label: string;
@@ -777,8 +820,7 @@ export interface ExtendedLeaderboardEntry {
   rank: number;
   user: { id: string; username: string; avatar_url: string | null; role: string };
   total_points: number;
-  elo_rating: number;
-  matches_played: number;
+  games_played: number;
   wins: number;
   losses: number;
   win_rate?: number;
@@ -810,11 +852,6 @@ export function getLeaderboardByMode(opts: {
 // User Stats (personal)
 // ---------------------------------------------------------------------------
 
-export interface EloHistoryEntry {
-  date: string;
-  elo: number;
-}
-
 export interface UserStatsResponse {
   user_id: string;
   season?: string;
@@ -822,7 +859,6 @@ export interface UserStatsResponse {
   total_losses: number;
   win_rate: number;
   win_rate_trend?: number;
-  elo_history: EloHistoryEntry[];
 }
 
 export function getUserStats(userId: string, season?: string): Promise<UserStatsResponse> {
@@ -903,8 +939,9 @@ export function getAntiFarmingBreakdown(
 // Match Decision
 // ---------------------------------------------------------------------------
 
-export function startMatchDecision(matchId: string): Promise<MatchDecisionState> {
-  return apiFetch<MatchDecisionState>(`/api/matches/${matchId}/decision/start`, {
+export function startMatchDecision(matchId: string, gameNumber = 1): Promise<MatchDecisionState> {
+  const params = gameNumber > 1 ? `?gameNumber=${gameNumber}` : '';
+  return apiFetch<MatchDecisionState>(`/api/matches/${matchId}/decision/start${params}`, {
     method: 'POST',
   });
 }
@@ -912,7 +949,7 @@ export function startMatchDecision(matchId: string): Promise<MatchDecisionState>
 export function banMap(matchId: string, mapId: string): Promise<MatchDecisionState> {
   return apiFetch<MatchDecisionState>(`/api/matches/${matchId}/decision/ban`, {
     method: 'POST',
-    body: JSON.stringify({ mapId }),
+    body: JSON.stringify({ map_id: mapId }),
   });
 }
 
@@ -923,14 +960,85 @@ export function randomPickMap(matchId: string): Promise<MatchDecisionState> {
 }
 
 export function lockBlindPick(matchId: string, factionId: string): Promise<{ ok: true }> {
-  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/blind-pick/lock`, {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/decision/blind-pick/lock`, {
     method: 'POST',
-    body: JSON.stringify({ factionId }),
+    body: JSON.stringify({ faction_id: factionId }),
   });
 }
 
 export function getMatchDecision(matchId: string): Promise<MatchDecisionState> {
   return apiFetch<MatchDecisionState>(`/api/matches/${matchId}/decision`);
+}
+
+export function forceResolveDecision(matchId: string): Promise<MatchDecisionState> {
+  return apiFetch<MatchDecisionState>(`/api/matches/${matchId}/decision/force-resolve`, {
+    method: 'POST',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Match Games
+// ---------------------------------------------------------------------------
+
+export interface GameDto {
+  id: string | null;
+  gameNumber: number;
+  status: string;
+  winnerId: string | null;
+  player1FactionId: string | null;
+  player2FactionId: string | null;
+  lobbyCode: string | null;
+  reportedWinnerId: string | null;
+  reporterId: string | null;
+  reportedAt: string | null;
+  confirmedAt: string | null;
+  replayUrl: string | null;
+  playedAt: string | null;
+  decision: MatchDecisionState | null;
+  blindPick: {
+    player1Locked: boolean;
+    player2Locked: boolean;
+    revealedAt: string | null;
+    player1FactionId: string | null;
+    player2FactionId: string | null;
+  } | null;
+}
+
+export function getMatchGames(matchId: string): Promise<{ games: GameDto[] }> {
+  return apiFetch<{ games: GameDto[] }>(`/api/matches/${matchId}/games`);
+}
+
+export function setLobbyCode(
+  matchId: string,
+  gameNumber: number,
+  lobbyCode: string | null,
+): Promise<{ ok: true; lobby_code: string | null }> {
+  return apiFetch(`/api/matches/${matchId}/games/${gameNumber}/lobby-code`, {
+    method: 'PATCH',
+    body: JSON.stringify({ lobby_code: lobbyCode }),
+  });
+}
+
+export async function reportGameResult(
+  matchId: string,
+  gameNumber: number,
+  winnerId: string,
+  replayFile?: File,
+): Promise<{ provisional?: boolean; confirmed?: boolean; disputed?: boolean; winnerId?: string; autoConfirmsAt?: string }> {
+  const form = new FormData();
+  form.append('winner_id', winnerId);
+  if (replayFile) form.append('replay', replayFile);
+
+  const res = await fetch(`/api/matches/${matchId}/games/${gameNumber}/result`, {
+    method: 'POST',
+    credentials: 'include',
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { message?: string };
+    throw new Error(body.message ?? res.statusText);
+  }
+  return res.json() as Promise<{ provisional?: boolean; confirmed?: boolean; disputed?: boolean; winnerId?: string; autoConfirmsAt?: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -1034,10 +1142,38 @@ export function getParticipants(slug: string): Promise<TournamentParticipantsRes
 
 export function registerForTournament(
   slug: string,
+  opts?: { factionId?: string },
 ): Promise<{ id: string; status: ParticipantStatus }> {
   return apiFetch<{ id: string; status: ParticipantStatus }>(
     `/api/tournaments/${slug}/register`,
-    // Empty JSON body — the route zod-parses request.body, a bodyless POST would 400.
-    { method: 'POST', body: JSON.stringify({}) },
+    { method: 'POST', body: JSON.stringify({ faction_id: opts?.factionId }) },
   );
+}
+
+export function withdrawFromTournament(slug: string): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/api/tournaments/${slug}/withdraw`, { method: 'POST' });
+}
+
+export function dropParticipant(
+  slug: string,
+  userId: string,
+): Promise<{ dropped: boolean; matchesForfeited: number; gamesVoided: number }> {
+  return apiFetch(`/api/tournaments/${slug}/participants/${userId}/drop`, { method: 'POST' });
+}
+
+// ---------------------------------------------------------------------------
+// Game History
+// ---------------------------------------------------------------------------
+
+export type { GameHistoryEntry } from '@rizzotto/types';
+import type { GameHistoryEntry } from '@rizzotto/types';
+
+export function getTournamentGames(slug: string): Promise<{ games: GameHistoryEntry[] }> {
+  return apiFetch<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }>(
+    `/api/meta/games?tournamentSlug=${encodeURIComponent(slug)}&limit=100`,
+  );
+}
+
+export function getMetaGames(page = 1, limit = 50): Promise<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }> {
+  return apiFetch<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }>(`/api/meta/games?page=${page}&limit=${limit}`);
 }

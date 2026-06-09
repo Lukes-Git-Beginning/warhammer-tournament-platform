@@ -57,7 +57,7 @@ function SummaryBlock({ data }: { data: H2HResponse }) {
       {/* Meta row */}
       <div className="flex items-center justify-center gap-6 text-sm text-stone-400 border-t border-stone-800 pt-4">
         <span>
-          <span className="font-semibold text-stone-200">{summary.total}</span> Spiele
+          <span className="font-semibold text-stone-200">{summary.total}</span> games
         </span>
         <span>
           Win-Rate {player_a.username}:{' '}
@@ -75,7 +75,7 @@ function FactionBreakdown({ data }: { data: H2HResponse }) {
 
   if (faction_breakdown.length === 0) {
     return (
-      <p className="text-sm text-stone-500 italic">Keine Fraktionsdaten vorhanden.</p>
+      <p className="text-sm text-stone-500 italic">No faction data available.</p>
     );
   }
 
@@ -84,7 +84,7 @@ function FactionBreakdown({ data }: { data: H2HResponse }) {
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-stone-800 bg-stone-900/60">
-            <th className="px-4 py-3 text-left font-medium text-stone-400">Fraktion</th>
+            <th className="px-4 py-3 text-left font-medium text-stone-400">Faction</th>
             <th className="px-4 py-3 text-center font-medium text-stone-400">
               {player_a.username}
             </th>
@@ -116,7 +116,7 @@ function RecentMatchesList({ data }: { data: H2HResponse }) {
 
   if (recent_matches.length === 0) {
     return (
-      <p className="text-sm text-stone-500 italic">Keine kürzlichen Duelle gefunden.</p>
+      <p className="text-sm text-stone-500 italic">No recent duels found.</p>
     );
   }
 
@@ -124,7 +124,7 @@ function RecentMatchesList({ data }: { data: H2HResponse }) {
     <div className="space-y-2">
       {recent_matches.map((m) => {
         const dateStr = m.played_at
-          ? new Date(m.played_at).toLocaleDateString('de-DE', {
+          ? new Date(m.played_at).toLocaleDateString('en-GB', {
               day: '2-digit',
               month: '2-digit',
               year: 'numeric',
@@ -133,11 +133,11 @@ function RecentMatchesList({ data }: { data: H2HResponse }) {
 
         const resultLabel =
           m.result === 'PLAYER1_WIN'
-            ? `${player_a.username} gewinnt`
+            ? `${player_a.username} wins`
             : m.result === 'PLAYER2_WIN'
-              ? `${player_b.username} gewinnt`
+              ? `${player_b.username} wins`
               : m.result === 'DRAW'
-                ? 'Unentschieden'
+                ? 'Draw'
                 : '—';
 
         const resultColor =
@@ -213,8 +213,8 @@ export function H2HPage() {
         <PageShell variant="wide">
           <EmptyState
             variant="sigil"
-            title="Spieler nicht gefunden"
-            body="Einer oder beide Spieler existieren nicht."
+            title="Player not found"
+            body="One or both players do not exist."
           />
         </PageShell>
       );
@@ -223,8 +223,8 @@ export function H2HPage() {
       <PageShell variant="wide">
         <EmptyState
           variant="compact"
-          title="Fehler beim Laden"
-          body="Die H2H-Daten konnten nicht geladen werden."
+          title="Failed to load"
+          body="Could not load head-to-head data."
         />
       </PageShell>
     );
@@ -245,8 +245,8 @@ export function H2HPage() {
         </div>
         <EmptyState
           variant="sigil"
-          title="Noch kein direktes Duell"
-          body="Diese zwei Spieler sind noch nicht aufeinandergetroffen."
+          title="No head-to-head yet"
+          body="These two players have not faced each other yet."
         />
       </PageShell>
     );
@@ -264,7 +264,7 @@ export function H2HPage() {
       {/* Summary */}
       <section>
         <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          Übersicht
+          Overview
         </h2>
         <SummaryBlock data={data} />
       </section>
@@ -272,7 +272,7 @@ export function H2HPage() {
       {/* Faction Breakdown */}
       <section>
         <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          Fraktions-Breakdown
+          Faction Breakdown
         </h2>
         <FactionBreakdown data={data} />
       </section>
@@ -280,7 +280,7 @@ export function H2HPage() {
       {/* Recent Matches */}
       <section>
         <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          Letzte Duelle
+          Recent Duels
         </h2>
         <RecentMatchesList data={data} />
       </section>

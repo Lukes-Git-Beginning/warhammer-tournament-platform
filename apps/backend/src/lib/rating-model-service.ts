@@ -26,9 +26,28 @@ import {
 const RATING_MODEL_TTL = 3600; // 1h fallback; primary refresh is event-driven invalidation
 
 /**
- * Prisma `where` for the matches that feed the dynamic leaderboard: confirmed,
- * decisive (has a winner), both factions known, on a leaderboard-counting
- * tournament, tagged to this season. Single source of truth for "what counts".
+ * Prisma `where` for MatchGame records that feed the leaderboard: decisive
+ * (has a winner), belonging to a completed, leaderboard-counting match of this
+ * season. Games are the statistical unit — one observation per Battle, not per
+ * Match series.
+ */
+export function confirmedGameWhere(seasonId: string): Prisma.MatchGameWhereInput {
+  return {
+    winner_id: { not: null },
+    counts_for_leaderboard: true,
+    match: {
+      season_id: seasonId,
+      status: 'COMPLETED',
+      deleted_at: null,
+      player1_id: { not: null },
+      player2_id: { not: null },
+    },
+  };
+}
+
+/**
+ * Prisma `where` for Match records (used by breakdown-service explainability
+ * helpers that still operate at match level).
  */
 export function confirmedMatchWhere(seasonId: string): Prisma.MatchWhereInput {
   return {
@@ -38,13 +57,16 @@ export function confirmedMatchWhere(seasonId: string): Prisma.MatchWhereInput {
     winner_id: { not: null },
     player1_id: { not: null },
     player2_id: { not: null },
-    player1_faction_id: { not: null },
-    player2_faction_id: { not: null },
     tournament: { counts_for_leaderboard: true },
   };
 }
 
-/** Load confirmed matches of a season as model observations (A = player1). */
+/**
+ * Load confirmed games of a season as model observations.
+ * Mirrors All-Games logic: load via Match (for correct season/leaderboard
+ * filtering), expand to individual MatchGame records where they exist, fall back
+ * to a synthetic single-game observation for matches that have no game records.
+ */
 export async function loadSeasonObservations(
   prisma: PrismaClient,
   seasonId: string,
@@ -57,16 +79,49 @@ export async function loadSeasonObservations(
       winner_id: true,
       player1_faction_id: true,
       player2_faction_id: true,
+      tournament_id: true,
+      games: {
+        select: {
+          winner_id: true,
+          player1_faction_id: true,
+          player2_faction_id: true,
+        },
+      },
     },
   });
 
-  return matches.map((m) => ({
-    playerAId: m.player1_id!,
-    playerBId: m.player2_id!,
-    factionXId: m.player1_faction_id!,
-    factionYId: m.player2_faction_id!,
-    aWon: m.winner_id === m.player1_id,
-  }));
+  // Load TournamentParticipant factions for SFT fallback (faction set at registration)
+  const tournamentIds = [...new Set(matches.map((m) => m.tournament_id))];
+  const participants = tournamentIds.length
+    ? await prisma.tournamentParticipant.findMany({
+        where: { tournament_id: { in: tournamentIds }, deleted_at: null },
+        select: { tournament_id: true, user_id: true, faction_id: true },
+      })
+    : [];
+  const pfMap = new Map(participants.map((p) => [`${p.tournament_id}:${p.user_id}`, p.faction_id]));
+  const pf = (tid: string, uid: string) => pfMap.get(`${tid}:${uid}`) ?? null;
+
+  return matches.flatMap((m): (MatchObservation | null)[] => {
+    const p1 = m.player1_id!;
+    const p2 = m.player2_id!;
+    const matchFX = m.player1_faction_id ?? pf(m.tournament_id, p1);
+    const matchFY = m.player2_faction_id ?? pf(m.tournament_id, p2);
+
+    const decisiveGames = m.games.filter((g) => g.winner_id !== null);
+
+    if (decisiveGames.length > 0) {
+      return decisiveGames.map((g): MatchObservation | null => {
+        const fX = g.player1_faction_id ?? matchFX;
+        const fY = g.player2_faction_id ?? matchFY;
+        if (!fX || !fY) return null;
+        return { playerAId: p1, playerBId: p2, factionXId: fX, factionYId: fY, aWon: g.winner_id === p1 };
+      });
+    }
+
+    // No game records — treat the match as a single synthetic game
+    if (!m.winner_id || !matchFX || !matchFY) return [null];
+    return [{ playerAId: p1, playerBId: p2, factionXId: matchFX, factionYId: matchFY, aWon: m.winner_id === p1 }];
+  }).filter((obs): obs is MatchObservation => obs !== null);
 }
 
 /** Reads rating-model lambdas/thresholds from AdminConfig (falls back to defaults). */

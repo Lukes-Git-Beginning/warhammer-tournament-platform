@@ -30,6 +30,7 @@ export interface SwissStanding {
   losses: number;
   draws: number;
   byes: number;
+  gamesLost: number;
   buchholz: number;
   solkoff: number;  // buchholz minus the highest and lowest single opponent score
   opponentsBeaten: string[];
@@ -44,6 +45,10 @@ export interface CompletedMatchRecord {
   player2_id: string | null;
   winner_id: string | null;
   status: string; // MatchStatus
+  /** Games won by player1 in this match (for BO3/BO5 game-loss tiebreaker) */
+  player1_game_wins?: number;
+  /** Games won by player2 in this match (for BO3/BO5 game-loss tiebreaker) */
+  player2_game_wins?: number;
 }
 
 // ---------- Core functions ----------
@@ -58,7 +63,24 @@ export function generateSwissRound(
   players: SwissPlayer[],
   round: number,
 ): SwissMatchInput[] {
-  const libPlayers = players.map((p) => ({
+  let activePlayers = players;
+  let byePlayer: SwissPlayer | null = null;
+
+  // With an odd number of players, explicitly assign the Bye to the player
+  // with the lowest score who hasn't received a Bye yet — so no top-scorer
+  // slides into the playoffs on a free win.
+  if (players.length % 2 === 1) {
+    const eligible = players.filter((p) => !p.receivedBye);
+    const pool = eligible.length > 0 ? eligible : players;
+    const minScore = Math.min(...pool.map((p) => p.score));
+    const tied = pool.filter((p) => p.score === minScore);
+    byePlayer = tied[Math.floor(Math.random() * tied.length)] ?? null;
+    if (byePlayer) {
+      activePlayers = players.filter((p) => p.userId !== byePlayer!.userId);
+    }
+  }
+
+  const libPlayers = activePlayers.map((p) => ({
     id: p.userId,
     score: p.score,
     avoid: p.avoid,
@@ -90,6 +112,21 @@ export function generateSwissRound(
     });
   });
 
+  // Append the explicit Bye match for the pre-selected player
+  if (byePlayer) {
+    result.push({
+      id: randomUUID(),
+      tournament_id: tournamentId,
+      round,
+      match_number: result.length + 1,
+      player1_id: byePlayer.userId,
+      player2_id: null,
+      status: 'BYE',
+      next_match_id: null,
+      winner_id: byePlayer.userId,
+    });
+  }
+
   result.sort((a, b) => a.round - b.round || a.match_number - b.match_number);
   return result;
 }
@@ -108,15 +145,14 @@ export function computeSwissStandings(
   // Initialize per-player record
   const recordMap = new Map<
     string,
-    { wins: number; losses: number; draws: number; byes: number; score: number; opponents: string[]; opponentsBeaten: string[] }
+    { wins: number; losses: number; draws: number; byes: number; score: number; gamesLost: number; opponents: string[]; opponentsBeaten: string[] }
   >();
 
   for (const id of participantIds) {
-    recordMap.set(id, { wins: 0, losses: 0, draws: 0, byes: 0, score: 0, opponents: [], opponentsBeaten: [] });
+    recordMap.set(id, { wins: 0, losses: 0, draws: 0, byes: 0, score: 0, gamesLost: 0, opponents: [], opponentsBeaten: [] });
   }
 
   for (const match of completedMatches) {
-    // Only process completed or BYE matches
     if (match.status !== 'COMPLETED' && match.status !== 'BYE') continue;
 
     const p1 = match.player1_id;
@@ -124,13 +160,11 @@ export function computeSwissStandings(
     const winner = match.winner_id;
 
     if (match.status === 'BYE') {
-      // Bye: one player gets free win
       const byePlayer = p1 ?? p2;
       if (byePlayer && recordMap.has(byePlayer)) {
         const r = recordMap.get(byePlayer)!;
         r.byes += 1;
         r.score += 1;
-        r.wins += 1;
       }
       continue;
     }
@@ -143,8 +177,13 @@ export function computeSwissStandings(
     if (r1) r1.opponents.push(p2);
     if (r2) r2.opponents.push(p1);
 
+    // Track games lost per player (opponent's game wins in this match)
+    const p1GameWins = match.player1_game_wins ?? (winner === p1 ? 1 : 0);
+    const p2GameWins = match.player2_game_wins ?? (winner === p2 ? 1 : 0);
+    if (r1) r1.gamesLost += p2GameWins;
+    if (r2) r2.gamesLost += p1GameWins;
+
     if (winner === null) {
-      // Draw
       if (r1) { r1.draws += 1; r1.score += 0.5; }
       if (r2) { r2.draws += 1; r2.score += 0.5; }
     } else if (winner === p1) {
@@ -156,8 +195,7 @@ export function computeSwissStandings(
     }
   }
 
-  // Compute Buchholz (sum of all opponent scores) and Solkoff (Buchholz minus
-  // the single highest and single lowest opponent score).
+  // Compute Buchholz and Solkoff
   const standings: SwissStanding[] = [];
   for (const [userId, rec] of recordMap) {
     const oppScores = rec.opponents.map((oppId) => recordMap.get(oppId)?.score ?? 0);
@@ -165,11 +203,9 @@ export function computeSwissStandings(
 
     let solkoff = buchholz;
     if (oppScores.length >= 3) {
-      // Remove the single highest and the single lowest opponent score
       const sorted = [...oppScores].sort((a, b) => a - b);
       solkoff = buchholz - sorted[0]! - sorted[sorted.length - 1]!;
     }
-    // With 0–2 opponents, solkoff === buchholz (not enough data to trim)
 
     standings.push({
       userId,
@@ -178,6 +214,7 @@ export function computeSwissStandings(
       losses: rec.losses,
       draws: rec.draws,
       byes: rec.byes,
+      gamesLost: rec.gamesLost,
       buchholz,
       solkoff,
       opponentsBeaten: rec.opponentsBeaten,
@@ -186,7 +223,7 @@ export function computeSwissStandings(
 
   standings.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
-    return b.buchholz - a.buchholz;
+    return a.gamesLost - b.gamesLost; // fewer games lost = better
   });
 
   return standings;
@@ -207,9 +244,10 @@ export function recommendNumberOfRounds(participantCount: number): number {
  *
  * Priority:
  *   1. score desc
- *   2. buchholz desc  (sum of all opponents' scores)
- *   3. solkoff desc   (buchholz minus highest + lowest opponent score)
- *   4. head-to-head   (direct match winner if exactly 2 players remain tied)
+ *   2. gamesLost asc  (fewer individual games lost = better)
+ *   3. buchholz desc  (sum of all opponents' scores)
+ *   4. solkoff desc   (buchholz minus highest + lowest opponent score)
+ *   5. head-to-head   (direct match winner if exactly 2 players remain tied)
  *
  * @param standings  Pre-computed standings (output of computeSwissStandings).
  * @param allMatches All completed matches for the tournament (used for H2H lookup).
@@ -237,15 +275,16 @@ export function sortSwissStandings(
   return [...standings].sort((a, b) => {
     // 1. score
     if (b.score !== a.score) return b.score - a.score;
-    // 2. buchholz
+    // 2. games lost asc (fewer = better)
+    if (a.gamesLost !== b.gamesLost) return a.gamesLost - b.gamesLost;
+    // 3. buchholz
     if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
-    // 3. solkoff
+    // 4. solkoff
     if (b.solkoff !== a.solkoff) return b.solkoff - a.solkoff;
-    // 4. head-to-head (only meaningful when exactly 2 players are compared here)
+    // 5. head-to-head (only meaningful when exactly 2 players are compared here)
     const winner = getH2HWinner(a.userId, b.userId);
-    if (winner === a.userId) return -1; // a wins → a ranks higher
-    if (winner === b.userId) return 1;  // b wins → b ranks higher
-    // Fully tied — preserve stable order (no swap)
+    if (winner === a.userId) return -1;
+    if (winner === b.userId) return 1;
     return 0;
   });
 }

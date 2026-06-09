@@ -77,12 +77,12 @@ export function ImportLogTable() {
       </div>
 
       {isLoading && (
-        <div className="py-8 text-center text-stone-400 text-sm">Wird geladen…</div>
+        <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>
       )}
 
       {error && (
         <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
-          Fehler beim Laden des Import-Logs.
+          Failed to load import log.
         </div>
       )}
 
@@ -108,7 +108,7 @@ export function ImportLogTable() {
                 {entries.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-8 text-center text-stone-500">
-                      Keine Einträge.
+                      No entries.
                     </td>
                   </tr>
                 )}
@@ -156,10 +156,10 @@ export function ImportLogTable() {
                 disabled={page <= 1}
                 className="rounded border border-stone-700 px-3 py-1.5 text-stone-300 hover:border-stone-500 hover:text-stone-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                ← Zurück
+                ← Back
               </button>
               <span className="text-stone-500">
-                Seite {page} / {totalPages}
+                Page {page} / {totalPages}
               </span>
               <button
                 type="button"
@@ -167,7 +167,7 @@ export function ImportLogTable() {
                 disabled={page >= totalPages}
                 className="rounded border border-stone-700 px-3 py-1.5 text-stone-300 hover:border-stone-500 hover:text-stone-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                Weiter →
+                Next →
               </button>
             </div>
           )}

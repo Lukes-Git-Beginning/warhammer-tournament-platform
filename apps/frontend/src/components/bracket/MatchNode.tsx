@@ -1,4 +1,4 @@
-import type { BracketNode } from '@rizzotto/types';
+import type { BracketNode, FactionDto } from '@rizzotto/types';
 
 interface MatchNodeProps {
   match: BracketNode;
@@ -6,7 +6,14 @@ interface MatchNodeProps {
   player2Name?: string;
   player1AvatarUrl?: string | null;
   player2AvatarUrl?: string | null;
+  player1Faction?: FactionDto | null;
+  player2Faction?: FactionDto | null;
+  showFaction?: boolean;
   onClick?: () => void;
+  /** Label shown in slot 1 when player is not yet determined (e.g. "Grombrindal / Louen") */
+  p1SlotLabel?: string | null;
+  /** Label shown in slot 2 when player is not yet determined */
+  p2SlotLabel?: string | null;
 }
 
 /** Tiny avatar with initials fallback, sized for the cramped match node rows. */
@@ -16,13 +23,37 @@ function PlayerAvatar({ name, avatarUrl }: { name?: string; avatarUrl?: string |
     <img
       src={avatarUrl}
       alt=""
-      className="mr-1.5 h-4 w-4 shrink-0 rounded-full object-cover"
+      className="mr-1 h-4 w-4 shrink-0 rounded-full object-cover"
       loading="lazy"
       draggable={false}
     />
   ) : (
-    <span className="mr-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-700 text-[8px] font-semibold text-stone-300">
+    <span className="mr-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-700 text-[8px] font-semibold text-stone-300">
       {name.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
+/** Tiny faction icon (16×16) for use inside the cramped bracket node rows. */
+function FactionIndicator({ faction }: { faction?: FactionDto | null }) {
+  if (!faction) return null;
+  return faction.icon_url ? (
+    <img
+      src={faction.icon_url}
+      alt=""
+      title={faction.name}
+      className="ml-2 h-4 w-4 shrink-0 rounded-sm object-contain"
+      style={{ backgroundColor: '#837a6f' }}
+      loading="lazy"
+      draggable={false}
+    />
+  ) : (
+    <span
+      title={faction.name}
+      className="ml-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-[7px] font-bold text-white"
+      style={{ backgroundColor: faction.color_hex }}
+    >
+      {faction.initials}
     </span>
   );
 }
@@ -41,7 +72,12 @@ export function MatchNode({
   player2Name,
   player1AvatarUrl,
   player2AvatarUrl,
+  player1Faction,
+  player2Faction,
+  showFaction = false,
   onClick,
+  p1SlotLabel,
+  p2SlotLabel,
 }: MatchNodeProps) {
   const isBye = match.status === 'BYE';
   const isOngoing = match.status === 'ONGOING';
@@ -54,27 +90,55 @@ export function MatchNode({
   const p1Winner = match.winnerId && match.winnerId === match.player1Id;
   const p2Winner = match.winnerId && match.winnerId === match.player2Id;
 
-  const scoreParts = match.score ? match.score.split('-') : [];
-  const score1 = scoreParts[0] ?? '';
-  const score2 = scoreParts[1] ?? '';
+  // Use game wins if available, fall back to legacy score string
+  const score1 =
+    match.player1GameWins > 0 || match.player2GameWins > 0
+      ? String(match.player1GameWins)
+      : (match.score ? (match.score.split('-')[0] ?? '') : '');
+  const score2 =
+    match.player1GameWins > 0 || match.player2GameWins > 0
+      ? String(match.player2GameWins)
+      : (match.score ? (match.score.split('-')[1] ?? '') : '');
+
+  const isThirdPlace = match.phase === 'PLAYOFF_THIRD_PLACE';
+  const isGrandFinal = match.phase === 'PLAYOFF_FINAL';
 
   return (
     <div
-      className={`w-full h-full ${borderStyle} ${statusCls} rounded flex flex-col overflow-hidden ${
+      className={`w-full h-full ${isGrandFinal ? 'border-2' : borderStyle} ${isGrandFinal ? 'border-rizzotto-gold-500/70 bg-rizzotto-gold-500/5' : statusCls} rounded flex flex-col overflow-hidden ${
         onClick ? 'cursor-pointer hover:border-rizzotto-gold-500 transition-colors' : ''
       } relative`}
       onClick={onClick}
     >
+      {isGrandFinal && (
+        <div className="absolute top-0 right-0 bg-rizzotto-gold-500/20 text-rizzotto-gold-400 text-[8px] font-bold uppercase tracking-wider px-1 rounded-bl border-l border-b border-rizzotto-gold-500/40">
+          Grand Final
+        </div>
+      )}
+      {isThirdPlace && (
+        <div className="absolute top-0 right-0 bg-amber-950/90 text-orange-600 text-[8px] font-bold uppercase tracking-wider px-1 rounded-bl">
+          3rd Place
+        </div>
+      )}
       {/* Player 1 row */}
       <div className="flex-1 flex items-center px-2 border-b border-stone-800">
-        {!isBye && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
+        {match.player1Id && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
-            p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'
+            p1Winner
+              ? 'text-rizzotto-gold-500 font-semibold'
+              : match.player1Id
+                ? 'text-stone-300'
+                : 'text-stone-500 italic'
           }`}
         >
-          {isBye ? 'BYE' : (player1Name ?? match.player1Id ?? '—')}
+          {match.player1Id
+            ? (player1Name ?? match.player1Id)
+            : isBye
+              ? 'BYE'
+              : (p1SlotLabel ?? 'TBD')}
         </span>
+        {showFaction && match.player1Id && <FactionIndicator faction={player1Faction} />}
         {score1 && (
           <span
             className={`text-xs ml-1 tabular-nums ${p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
@@ -86,14 +150,23 @@ export function MatchNode({
 
       {/* Player 2 row */}
       <div className="flex-1 flex items-center px-2">
-        {!isBye && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
+        {match.player2Id && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
-            p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-300'
+            p2Winner
+              ? 'text-rizzotto-gold-500 font-semibold'
+              : match.player2Id
+                ? 'text-stone-300'
+                : 'text-stone-500 italic'
           }`}
         >
-          {isBye ? 'BYE' : (player2Name ?? match.player2Id ?? '—')}
+          {match.player2Id
+            ? (player2Name ?? match.player2Id)
+            : isBye
+              ? 'BYE'
+              : (p2SlotLabel ?? 'TBD')}
         </span>
+        {showFaction && match.player2Id && <FactionIndicator faction={player2Faction} />}
         {score2 && (
           <span
             className={`text-xs ml-1 tabular-nums ${p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}

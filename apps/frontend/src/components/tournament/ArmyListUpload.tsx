@@ -81,22 +81,22 @@ export function ArmyListUpload({ factionId, tournamentId, onUploadComplete }: Ar
           disabled={upload.isPending}
           className="mt-3 rounded bg-rizzotto-gold-500/90 px-4 py-1.5 text-sm font-medium text-stone-950 hover:bg-rizzotto-gold-500 disabled:opacity-50"
         >
-          {upload.isPending ? 'Lädt hoch…' : 'Hochladen'}
+          {upload.isPending ? 'Uploading…' : 'Upload'}
         </button>
       )}
       {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
       {upload.data && (
         <div className="mt-3 rounded border border-stone-700 bg-stone-900 p-3 text-sm">
-          <p className="text-stone-300">Hochgeladen: {upload.data.file_name}</p>
+          <p className="text-stone-300">Uploaded: {upload.data.file_name}</p>
           {upload.data.parsed_data?.lord && (
             <p className="text-stone-400">Lord: {upload.data.parsed_data.lord}</p>
           )}
           {upload.data.parsed_data?.units && upload.data.parsed_data.units.length > 0 && (
-            <p className="text-stone-400">{upload.data.parsed_data.units.length} Units erkannt</p>
+            <p className="text-stone-400">{upload.data.parsed_data.units.length} units detected</p>
           )}
           {!upload.data.parsed_data && (
             <p className="text-stone-500 italic">
-              Datei hochgeladen — kein Parse möglich (PDF oder unstrukturiert).
+              File uploaded — no parse possible (PDF or unstructured).
             </p>
           )}
         </div>

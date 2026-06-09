@@ -33,7 +33,12 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
   const isCompleted = tournament.status === 'COMPLETED';
 
   return (
-    <Card variant="banner" interactive className="group flex h-full flex-col">
+    <Link
+      to="/tournaments/$slug"
+      params={{ slug: tournament.slug }}
+      className="block group"
+    >
+    <Card variant="banner" interactive className="flex h-full flex-col">
       <CardHeader>
         {isLive && (
           <Badge variant="forge" className="self-start">
@@ -85,14 +90,13 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
           <Clock className="size-3.5" strokeWidth={1.5} />
           {formatDate(tournament.start_date)}
         </time>
-        <Button asChild variant="etched" size="sm">
-          <Link to="/tournaments/$slug" params={{ slug: tournament.slug }}>
-            {t('musters.answer_call')}
-            <ArrowRight className="size-3.5" strokeWidth={1.5} />
-          </Link>
-        </Button>
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-rizzotto-stone-400 group-hover:text-rizzotto-gold-400 transition-colors">
+          {t('musters.answer_call')}
+          <ArrowRight className="size-3.5" strokeWidth={1.5} />
+        </span>
       </CardFooter>
     </Card>
+    </Link>
   );
 }
 

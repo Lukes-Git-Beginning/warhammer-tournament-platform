@@ -22,13 +22,13 @@ export function PresetLibraryAdmin() {
   });
 
   if (isLoading) {
-    return <div className="py-8 text-center text-stone-400 text-sm">Wird geladen…</div>;
+    return <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>;
   }
 
   if (error) {
     return (
       <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
-        Fehler beim Laden der Presets.
+        Failed to load presets.
       </div>
     );
   }
@@ -40,16 +40,16 @@ export function PresetLibraryAdmin() {
           <thead>
             <tr className="border-b border-stone-800 bg-stone-900/60">
               <th className="px-4 py-3 text-left font-medium text-stone-400">Name</th>
-              <th className="px-4 py-3 text-left font-medium text-stone-400">Erstellt von</th>
+              <th className="px-4 py-3 text-left font-medium text-stone-400">Created by</th>
               <th className="px-4 py-3 text-left font-medium text-stone-400">Status</th>
-              <th className="px-4 py-3 text-left font-medium text-stone-400">Aktion</th>
+              <th className="px-4 py-3 text-left font-medium text-stone-400">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-800/60">
             {presets.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-stone-500">
-                  Keine Presets vorhanden.
+                  No presets found.
                 </td>
               </tr>
             )}
@@ -62,11 +62,11 @@ export function PresetLibraryAdmin() {
                 <td className="px-4 py-3">
                   {preset.is_public ? (
                     <span className="rounded bg-emerald-900/40 px-2 py-0.5 text-xs font-medium text-emerald-300">
-                      Öffentlich
+                      Public
                     </span>
                   ) : (
                     <span className="rounded bg-stone-800 px-2 py-0.5 text-xs font-medium text-stone-400">
-                      Privat
+                      Private
                     </span>
                   )}
                 </td>
@@ -92,7 +92,7 @@ export function PresetLibraryAdmin() {
 
       {promoteMutation.error && (
         <p className="mt-3 text-sm text-red-400">
-          Fehler beim Promoten: {(promoteMutation.error as Error).message}
+          Failed to promote: {(promoteMutation.error as Error).message}
         </p>
       )}
     </div>

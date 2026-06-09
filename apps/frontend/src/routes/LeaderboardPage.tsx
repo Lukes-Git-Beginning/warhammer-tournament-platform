@@ -12,7 +12,6 @@ import {
   type ExtendedLeaderboardEntry,
 } from '@/lib/api.js';
 import type { LeaderboardEntryDto, DynamicLeaderboardEntryDto } from '@rizzotto/types';
-import { EloRatingDisplay } from '../components/meta/EloRatingDisplay.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 
@@ -158,7 +157,7 @@ function DynamicLeaderboardTable({
 
   return (
     <div data-testid="leaderboard-data-table">
-      <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-parchment-aged-texture bg-[length:512px_512px] bg-blend-overlay backdrop-blur-sm">
+      <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-stone-wall-texture bg-[length:512px_512px] bg-blend-soft-light backdrop-blur-sm">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
@@ -223,7 +222,7 @@ function DynamicLeaderboardTable({
                     <span className="text-stone-600"> / </span>
                     <span className="text-red-400">{entry.losses}</span>
                   </td>
-                  <td className="px-4 py-3 text-right text-stone-400">{entry.totalMatches}</td>
+                  <td className="px-4 py-3 text-right text-stone-400">{entry.totalGames}</td>
                 </tr>
               );
             })}
@@ -340,7 +339,7 @@ function ModeTab({ mode }: ModeTabProps) {
         </div>
 
         <span className="rounded border border-stone-700 bg-stone-900/60 px-2 py-1 text-xs text-stone-500">
-          Min 5 matches required
+          Min 5 games required
         </span>
       </div>
 
@@ -358,7 +357,6 @@ function ModeTab({ mode }: ModeTabProps) {
           title="No entries"
           body="No players qualify for this ranking yet."
           motto="In lapide sigillata."
-          mottoTitle="Karaz Ankor"
         />
       )}
 
@@ -371,7 +369,6 @@ function ModeTab({ mode }: ModeTabProps) {
                   <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
                   <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
                   <th className="px-4 py-3 text-right font-medium text-stone-400">Win Rate</th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400">ELO</th>
                   <th className="px-4 py-3 text-center font-medium text-stone-400">W / L</th>
                   <th className="px-4 py-3 text-right font-medium text-stone-400">Games</th>
                 </tr>
@@ -407,16 +404,13 @@ function ModeTab({ mode }: ModeTabProps) {
                       <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400">
                         {rateVal != null ? `${(rateVal * 100).toFixed(1)}%` : '—'}
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <EloRatingDisplay rating={entry.elo_rating} size="sm" />
-                      </td>
                       <td className="px-4 py-3 text-center text-stone-300">
                         <span className="text-emerald-400">{entry.wins}</span>
                         <span className="text-stone-600"> / </span>
                         <span className="text-red-400">{entry.losses}</span>
                       </td>
                       <td className="px-4 py-3 text-right text-stone-400">
-                        {entry.matches_played}
+                        {entry.games_played}
                       </td>
                     </tr>
                   );
@@ -505,7 +499,7 @@ function LeaderboardTable({
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-parchment-aged-texture bg-[length:512px_512px] bg-blend-overlay backdrop-blur-sm">
+      <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-stone-wall-texture bg-[length:512px_512px] bg-blend-soft-light backdrop-blur-sm">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
@@ -517,9 +511,6 @@ function LeaderboardTable({
               </th>
               <th className="px-4 py-3 text-right font-medium text-stone-400">
                 {t('leaderboard.columns.points')}
-              </th>
-              <th className="px-4 py-3 text-right font-medium text-stone-400">
-                {t('leaderboard.columns.elo')}
               </th>
               <th className="px-4 py-3 text-center font-medium text-stone-400">
                 {t('leaderboard.columns.wl')}
@@ -562,15 +553,12 @@ function LeaderboardTable({
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-right text-stone-200">{entry.total_points}</td>
-                  <td className="px-4 py-3 text-right">
-                    <EloRatingDisplay rating={entry.elo_rating} size="sm" />
-                  </td>
                   <td className="px-4 py-3 text-center text-stone-300">
                     <span className="text-emerald-400">{entry.wins}</span>
                     <span className="text-stone-600"> / </span>
                     <span className="text-red-400">{entry.losses}</span>
                   </td>
-                  <td className="px-4 py-3 text-right text-stone-400">{entry.matches_played}</td>
+                  <td className="px-4 py-3 text-right text-stone-400">{entry.games_played}</td>
                   {extraColumn === 'seasons_participated' && (
                     <td className="px-4 py-3 text-right text-stone-400">
                       {(entry as AllTimeEntry).seasons_participated}

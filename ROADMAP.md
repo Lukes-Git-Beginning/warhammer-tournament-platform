@@ -1,6 +1,6 @@
 # ROADMAP — Rizzotto
 
-> **Stand:** 2026-06-04 · **Phase:** Live (Beta) — auf dem Weg zu Launch v1 · **Domain:** rizzotto.gg (Prod-Betrieb: Luke)
+> **Stand:** 2026-06-09 · **Phase:** Live (Beta) — auf dem Weg zu Launch v1 · **Domain:** rizzotto.gg (Prod-Betrieb: Luke)
 >
 > Diese Roadmap ist die **SSOT** für _was läuft_, _was als nächstes drankommt_ und _was bewusst nicht gebaut wird_. Sub-Pläne (Detail-Plans für einzelne Tracks) liegen unter `~/.claude/plans/`, nicht im Repo. Historie und Welle-Specs siehe `docs/archive/`.
 
@@ -8,7 +8,7 @@
 
 ## TL;DR
 
-- **rizzotto.gg ist live seit 2026-05-19** auf Hetzner CX22, Caddy + Cloudflare-Origin-Cert. **Rollenmodell seit 2026-06-04:** Alex = Product Owner + lokale Entwicklung, Luke = Prod-Betrieb (Server, Cloudflare, Deploys); Handover künftig per Feature-Branch-PR.
+- **rizzotto.gg ist live seit 2026-05-19** auf Hetzner CX22, Caddy + Cloudflare-Origin-Cert. **Rollenmodell seit 2026-06-04:** Alex = Product Owner + lokale Entwicklung, Luke = Prod-Betrieb (Server, Cloudflare, Deploys). **Seit 2026-06-09:** Alex' Agent pusht direkt auf `main` und deployt selbst (Push→Auto-Deploy, `workflow_dispatch`-Fallback); Server/Cloudflare/Secrets bleiben bei Luke (s. §5 Arbeitsmodell).
 - **M1–M6 + Welle 2 + DOUBLE_ELIMINATION + Dynamic Weighted Leaderboard sind durch.**
 - **Zuletzt live (2026-06-04):** Die 13 Commits der Nacht-Session (Registration-UI, Lifecycle-Buttons, SE-Generator-Fix, Bracket-Polish, Faction-Select, Cast-Iron-Logo) sind deployed — nach CI-Fix (Visual-Baselines, §2.7). Live-Smoke grün; 1 staler Cloudflare-Cache-Eintrag (`rizzotto-wordmark.avif`) wartet auf Luke-Purge.
 - **Aktueller Fokus: M7 — Launch v1 „Match Hub" (§5, Alex-Spec 2026-06-04):** Match-Klärung (BPT-Pick, Map-Ban&Pick, 4 Map-Modi) lebt im Match-Panel statt in Discord-DMs — der intrinsische Mehrwert ggü. Totaltavern. Dazu: Decision-Flow-Reparatur (§2.7-Audit), SFT-Hidden-Fix, Withdraw, Bracket-Reset, Englisch-only. Danach gestufter Community-Launch (geschlossener Kreis → öffentlich).
@@ -141,8 +141,8 @@ Vier annotierte Screenshots von Alex (Stand 20.05.), gegen aktuellen Stand gepr�
 | 1   | ~~**DOUBLE_ELIMINATION wirft 501**~~ ✅ **gelöst (2026-06-03)** — Format end-to-end implementiert     | `apps/backend/src/routes/bracket.ts`                          | —                                    | s. §6                              |
 | 2   | ~~**Tournament-Edit/Delete-Buttons sind Stubs**~~ ✅ done — Lifecycle-UI gelandet (§2.1, `f4e3705`)          | `TournamentDetail.tsx`                                        | —                                    | §2.1                               |
 | 3   | **Scraper-Write-Path** wirft "not implemented"                                                               | `scraper/src/cli.ts:148,155`                                  | Mittel — Datenhebel ungenutzt        | M9 (§8.1)                          |
-| 9   | **`GET /api/matches/:id/decision` + `POST …/decision/random` fehlen im Backend** — Frontend (`api.ts`/`MatchDecisionPage`) ruft beide auf → Decision-UI de facto tot | `apps/backend/src/routes/match-decision.ts`                   | **Hoch — v1-Kernfeature**            | M7 (§5.1 #1)                       |
-| 10  | **SFT-Fraktions-Leak:** `faction` ist entgegen FieldHint sofort öffentlich (kein Hidden-until-Start)          | `apps/backend/src/routes/participants.ts` (GET participants) | Mittel — Counterpick-Schutz fehlt    | M7 (§5.1 #5)                       |
+| 9   | ~~**`GET /api/matches/:id/decision` + `POST …/decision/random` fehlen im Backend**~~ ✅ **done** — Endpoints implementiert (GET Zeile 185, POST random Zeile 623, blind-pick lock Zeile 676 in `match-decision.ts`); `BlindPickPhase`-UI in `MatchDecisionPage.tsx` fertig | `apps/backend/src/routes/match-decision.ts` | — | ✅ M7 |
+| 10  | ~~**SFT-Fraktions-Leak:** `faction` ist entgegen FieldHint sofort öffentlich~~ ✅ **done (2026-06-05)** — GET participants maskiert `faction: null` wenn mode=SFT und Status nicht ONGOING/COMPLETED | `apps/backend/src/routes/participants.ts` | — | M7 (§5.1 #5) |
 | 11  | **PICK_BAN nur bei Pool = 3 funktional** (kein expliziter Pick-Step); **RANDOM ohne Re-Pick-Schutz**          | `apps/backend/src/routes/match-decision.ts`                   | Mittel                               | M7 (§5.1 #3)                       |
 | 4   | `Tournament.poster_url` Upload-Flow fehlt                                                                    | `packages/db/prisma/schema.prisma:172`                        | Niedrig                              | M6 optional                        |
 | 5   | `SigillumSection`-Community-Links Platzhalter                                                                | `apps/frontend/src/components/landing/SigillumSection.tsx:93` | Niedrig                              | M6 — 🟡 deferred (echte URLs ausstehend) |
@@ -173,7 +173,7 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 
 **Ziel:** Alles, was zum Match zu klären ist, lebt **im Match-Panel auf der Turnierseite** — keine Discord-DMs, kein externes Draft-Tool. Das ist der intrinsische Mehrwert gegenüber dem Status quo der Szene (Totaltavern: Bracket auf TT, Draft auf aoe2cm, Matrix + Map-Bans per Discord-DM). **BPT + SFT decken 80–90 % der real gespielten Turniere ab** — sie sind der v1-Scope; das mit Abstand häufigste Format ist **Swiss SFT, 4–5 Runden + Top-4-Playoffs**.
 
-**Arbeitsmodell:** Alex entwickelt lokal auf `feat/launch-v1`; Handover = PR → Luke reviewt/merged → Auto-Deploy. Direkte `main`-Pushes nur noch für Docs.
+**Arbeitsmodell (seit 2026-06-09):** Alex' Coding-Agent pusht **direkt auf `main`** (kein PR/Review-Gate mehr) und löst den Deploy selbst aus — Push → CI → Auto-Deploy via `workflow_run`, plus `workflow_dispatch` als manueller Fallback, falls die Kette hängt. Pflicht-Gate vor jedem Push: `pnpm typecheck && pnpm lint && pnpm test && pnpm build` grün; bei UI-/Landing-Änderungen keine `*-win32.png`-Snapshots committen (Linux-Baselines via CI-Artifact). Prod-Betrieb (Server, SSH, Cloudflare, DNS, Secrets) bleibt bei Luke; Alex hat dafür weiterhin keinen Zugang. _(Vorheriges Modell bis 2026-06-08: Feature-Branch `feat/launch-v1` → PR → Luke-Merge.)_
 
 ### 5.1 Kern — Match-Klärung im Match-Panel
 
@@ -186,23 +186,115 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
    - d) **Random 3 aus dem Pool** — gleicher Ban→Pick-Ablauf wie c)
    - **Serien (Bo3/Bo5):** Der eingestellte Modus läuft **pro Game-Kachel** neu; innerhalb einer Serie keine Map-Wiederholung (gespielte Serien-Maps fliegen aus den Kandidaten)
 4. **BPT im Panel:** verdeckter Fraktions-Pick per Dropdown, beidseitiger Lock, simultaner Reveal. **Sequenz:** nach Map-Bekanntgabe bei Modi a/b, **vor** der Map-Phase bei Modi c/d. **Serien-Option (Host-Checkbox im Create-Form):** Blind-Pick gilt **pro Game** oder **einmal pro Serie** — Host entscheidet beim Erstellen
-5. **SFT fixen:** Fraktion wird bei Anmeldung gewählt, bleibt aber **hidden bis Turnierstart** (Anti-Counterpick) — Public-Serialisierung in `participants.ts` maskieren; löst den heute faktisch falschen FieldHint („revealed at tournament start") ein. Map-Phase immer nach Fraktions-Reveal
-6. **Mode-Cleanup:** `OPEN` **entfernen** (Begründung Alex: offenes Picking ohne Lock = endlose Counterpick-Spirale, mit Lock = First-Lock-Nachteil → BPT ist das einzig sinnvolle offene Picking, vgl. Ingame-Ladder). **SFT wird Default.** Migration bestehender OPEN-Turniere + Alt-Enum-Werte (`ONE_V_ONE`/`THREE_V_THREE`/`BLIND_PICK`) aufräumen
+5. ~~**SFT fixen:** Fraktion wird bei Anmeldung gewählt, bleibt aber **hidden bis Turnierstart**~~ ✅ **done (2026-06-05)** — `GET /api/tournaments/:slug/participants` gibt `faction: null` für alle Teilnehmer zurück, solange Status nicht `ONGOING` oder `COMPLETED`
+6. ~~**Mode-Cleanup:** `OPEN` **entfernen**~~ ✅ **done (2026-06-05)** — `OPEN` aus `TournamentMode`-Enum entfernt, BPT ist neuer Default; Migration `20260605000000_remove_open_mode` appliziert; Blind-Pick-Guard in `match-decision.ts` auf nur `BPT` reduziert
 
 ### 5.2 Begleiter — Organisator- & UX-Basics
 
-7. **Withdraw-UI** — Backend existiert (`POST /:slug/withdraw`), nur Frontend-Button + Bestätigung
-8. **Bracket-Reset** („falsch ausgelost"): Unique `(tournament_id, round, match_number)` vs. Soft-Delete → partieller Index oder Hard-Cleanup im `/start`
-9. **Englisch-only** (Stufe-1-Blocker): LanguageToggle raus, Default `en`, hardcoded DE-Strings → EN; i18n-Infra bleibt im Code. Dabei Texte fixen: Create-Aside (behauptet „mode sets the match size — 1v1 or team encounters" — falsch, Mode = Picking-Format) + „What is a tournament?"-Header neu
-10. **UI-Kleinkram:** Turnier-Kacheln überall voll klickbar (`TournamentsListing` + `ActiveMustersSection` haben noch „View Tournament"-Buttons), **Datum + Uhrzeit** auf Kacheln (`showTime: true`), **BO1** für `playoff_match_format`/`finale_match_format` zulassen (Enum kann es, Zod/UI sperren), Map-Pool **„Select All"** (36 Checkboxen einzeln ist unzumutbar)
+7. ~~**Withdraw-UI**~~ ✅ **done (2026-06-05)** — 2-Stufen-Confirm in `RegisterButton.tsx`; `withdrawFromTournament()` in `api.ts`; invalidiert tournament/participant-me/tournament-participants
+8. ~~**Bracket-Reset**~~ ✅ **done (2026-06-05)** — `POST /api/tournaments/:id/bracket/reset`: nullt Self-Referenz-FKs, `deleteMany` Matches (cascaded), setzt Status auf `REGISTRATION_CLOSED`. Frontend: oranges Reset-Button in Admin-Controls (nur bei ONGOING). Lösung für Unique-Constraint: Hard-Delete statt Soft-Delete + FK-Null-Pass vor Delete
+9. ~~**Englisch-only**~~ ✅ **done (2026-06-05)** — `LanguageToggle.tsx` gelöscht, Header bereinigt; alle DE-Strings in 13 Dateien → EN (bracket, draft, admin, tournament, calendar, H2H, preset-Bereiche)
+10. **UI-Kleinkram:** Map-Pool **„Select All"** (36 Checkboxen einzeln ist unzumutbar) — **offen**
+
+### 5.2b Session 2026-06-05 — M7-Begleit-Items + Bugfixes ✅
+
+| Item | Status |
+|---|---|
+| **Coin-Toss-Bug (Runde 2):** `decisionPreloaded=true` übersprang Animation auch bei frischer Navigation — Fix: `state: { freshDecision: true }` in GameTile navigate, `useRouterState` in MatchDecisionPage zum Auslesen, `decisionPreloaded` nur setzen wenn Flag fehlt | ✅ done |
+| **SFT Hidden-Fix** (§5.1 #5) — GET participants maskiert faction vor Turnierstart | ✅ done |
+| **Englisch-only** (§5.2 #9) — LanguageToggle raus, 13 Dateien DE→EN | ✅ done |
+| **Withdraw-UI** (§5.2 #7) — 2-Stufen-Confirm in RegisterButton | ✅ done |
+| **Bracket-Reset** (§5.2 #8) — Backend + Frontend | ✅ done |
+| **Mode-Cleanup** (§5.1 #6) — OPEN aus TournamentMode entfernt, BPT Default | ✅ done |
+| **Onboarding „Build Your First List"-Step entfernt** — Stage 3 aus OnboardingOverlay; Tour springt direkt zu „Done" | ✅ done |
+| **DB-Migration-Reset** — Migration-History-Inkonsistenz aus Session 04 bereinigt; migrate reset + seed + Drift-Migration `20260605054848_fix_enum_drift` | ✅ done |
+| **feat/launch-v1 gepusht** zu origin | ✅ done |
 
 ### 5.3 Generalprobe & gestufter Launch
 
-11. **Lokale Generalprobe:** Swiss SFT, 4–5 Runden + Top-4-Playoffs mit `db:seed:dummies` — kompletter Organisator-Durchlauf (Alex' manuelle Probeturniere sind die wirksamste QA der Plattform; der Swiss-Pfad hatte noch keinen Praxistest)
+11. **Lokale Generalprobe:** Swiss SFT, 4–5 Runden + Top-4-Playoffs mit `db:seed:dummies` — **abgeschlossen (2026-06-06), alle Runden + Playoffs gespielt.** Zahlreiche Bugs gefunden und gefixed (Faction-Latch, GL-Berechnung, All-Games-Architektur, Leaderboard-Pfade, Match/Game-Terminologie-Konvention).
 12. **Handover-PR** an Luke → Review/Merge → Auto-Deploy
 13. **Luke-Checkliste (extern):** Cloudflare Custom Purge `https://rizzotto.gg/img/rizzotto-wordmark.avif` · Hetzner-VM-Backup aktivieren (~1.68 €/mo) · `DISCORD_BOT_TOKEN` setzen · echte Community-Links (`SigillumSection`) · Caddyfile-Live-Sync (§2.3 #1)
 14. **Stufe 1 — geschlossener Kreis:** Prod-Generalprobe (Alex als ORGANIZER auf rizzotto.gg), dann erstes echtes Turnier (Swiss SFT) mit Discord-Kreis
 15. **Stufe 2 — öffentlich** (Reddit/Foren): erst nach 1–2 sauberen Stufe-1-Turnieren
+
+**Offene Items aus Generalprobe (vor Handover-PR abschließen):**
+- [x] Meta-Overview-Counter: aus All-Games-Quelle statt FactionStats — ✅ done (2026-06-06, direktes `prisma.match.count()`)
+- [x] Faction-Diversity-Metrik: Pielou's J — ✅ done (2026-06-06, `meta.ts` + `resolvers.ts`)
+- [x] Heatmap-Achsen: alphabetisch — ✅ done (2026-06-06, `name.localeCompare()`)
+- [x] Leaderboard: Faction-Filter entfernen, Null-Factions = neutrale Gewichtung — ✅ done (2026-06-06)
+- [x] Feature: Faction-Beschränkung bei Turniererstellung — ✅ done (2026-06-06, `TournamentFactionAllowlist`, Backend + Frontend-Fieldset)
+- [x] Leaderboard auf Game-Ebene (MatchGame) umgestellt — ✅ done (2026-06-06, `loadSeasonObservations` + `loadConfirmedGames` via Match-first + Game-Expansion; `totalMatches` → `totalGames` in DTO + UI)
+- [ ] **FactionStats-Drift bei Overrides:** Counter über-inkrementiert → mittelfristig Recalculate-Endpoint oder Event-Sourcing (post-v1)
+- [x] **Generalprobe abgeschlossen** — ✅ done (2026-06-06)
+- [x] **ELO-System entfernt** (placement-basiert, faction-blind, zu wenig Datenmasse für kleine Szene) — ✅ done (2026-06-07, Migration `remove_elo`)
+- [x] **Win-Rate-Tab** auf dynamische MatchGame-Quelle umgestellt (war: `LeaderboardEntry`, jetzt: `computeSeasonLeaderboard`) — ✅ done (2026-06-07)
+- [x] **Handover-PR** feat/launch-v1 → main — **ausstehend** (PR-Body-Entwurf in `.claude/pr-body.md`, erst nach Generalprobe-Phase 2 erstellen)
+- [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant, dynamisch aus MatchGame berechenbar; nur noch `total_points` für All-Time-Tab nötig
+
+### 5.4 Session 2026-06-07/08 — BPT-Generalprobe + Feature-Welle
+
+| Item | Status |
+|---|---|
+| **Liechtenstein-Format** — Pre-randomised Swiss, alle Runden vorab generiert, kein Balancing, Rematches via RR-Algorithmus ausgeschlossen. `lib/liechtenstein.ts`, `LIECHTENSTEIN` in TournamentFormat-Enum, vollständig in Dispatcher/Standings/Playoffs/Finalize verdrahtet | ✅ done |
+| **Map-Images** — 86 Maps mit Imgur-URLs aus TT Map Notes.xlsx extrahiert (Python, openpyxl); `seed.ts` auf `MAP_DATA[]` mit `image_url` umgestellt. Blasphemous Snowfield als lokales Asset in `public/maps/`. Itza ohne Bild (Legacy-Map, nicht im Spreadsheet) | ✅ done |
+| **Bracket-Kandidaten-Labels** — Statt „BYE" in zukünftigen Runden: „Grombrindal / Louen" (feeder-Spieler). `SVGBracket` baut `slotLabels`-Map, `MatchNode` empfängt `p1SlotLabel`/`p2SlotLabel` | ✅ done |
+| **Map-Thumbnail + Lightbox in GameTile** — Mini-Bild unter Mapname (`object-contain`, proportional skaliert), Klick öffnet Vollbild-Overlay (`fixed inset-0 z-50`), Escape/Backdrop/×-Button schließt | ✅ done |
+| **Discord-Timestamp-Button** — `⏱ Discord`-Button neben Turnierdatum in `TournamentDetail`; kopiert `<t:UNIX:F>` in Clipboard. `toDiscordTimestamp()` in `lib/timezone.ts` | ✅ done |
+| **Fraktionen alphabetisch** — `getFactions()` in `api.ts` sortiert jetzt an der Quelle via `.sort((a,b) => a.faction.name.localeCompare(b.faction.name))`. Galt für alle Consumer gleichzeitig | ✅ done |
+| **BPT Blind-Pick — mehrere Bugs gefixt** — (1) `game.decision.blindPick` existiert nicht; korrektes Feld ist `game.blindPick` (top-level auf `GameDto`). (2) `decisionComplete` warf JS-loose-equality-Fallstrick: `undefined == null === true`. (3) `isPlayer1` in `BlindPickPhase` nutzte Coin-Flip-Reihenfolge (`topPlayerId`) statt Match-Reihenfolge (`matchPlayer1Id`) → Backend gibt `matchPlayer1Id` jetzt zurück. (4) `lockBlindPick` schluckte Fehler still; jetzt mit Error-Display + Query-Invalidation nach Erfolg. (5) `MatchDecisionPage.resolvePhase` erkannte BPT-Blind-Pick-Phase nicht wenn `blindPick === null` (vor erstem Lock) | ✅ done |
+| **Blind-Pick Auto-Resolve Cron** — `lib/blind-pick-auto-resolve.ts`: findet Blind-Picks wo ein Spieler > 2 min gewartet hat, assigned zufällige Fraktion (exkl. bereits gewählter Fraktion des Partners), emittiert Socket-Event. `cron.ts` registriert Job `*/1 * * * *`. Frontend: `BlindPickCountdown`-Komponente zeigt `Auto-pick in 1:47`-Countdown ab `firstLockedAt` | ✅ done |
+| **Bracket Auto-Fit** — Removed `, 1`-Cap in `BracketView.ts:centerView()` und Reset-Button; kleines 8-Spieler-Bracket füllt jetzt den Container statt bei 100% zu stoppen | ✅ done |
+| **MyMatchSection: nur bei bekannten Gegnern** — Guard `m.player1Id !== null && m.player2Id !== null` verhindert frühe GameTile-Anzeige vor SF-Ergebnis in SE | ✅ done |
+| **Third-Place-Match-Option** — `has_third_place_match Boolean` auf Tournament; `PLAYOFF_THIRD_PLACE` in `MatchPhase`-Enum. SE: via `generateSingleElim(opts.hasThirdPlace)`; Playoffs: `advance-playoffs` erstellt 3rd-Place-Match gleichzeitig mit GF, mit bereits gefüllten SF-Verlierern + retroaktives `loser_next_match_id`-Update auf SFs. UI: Checkbox im Create-Form, „3rd Place"-Badge im `MatchNode` | ✅ done |
+| **MatchDecisionPage** — 5s-Refetch-Interval (`refetchInterval: 5000`) damit Cron-Updates ohne Socket ankommen. `← Back to tournament`-Link oben links | ✅ done |
+| **BPT-Generalprobe Phase 2** — Einzelne Runde + Blind-Pick von Ende zu Ende getestet; zahlreiche Bugs gefunden und gefixt (s.o.) | ✅ done (partiell — Playoffs noch nicht getestet) |
+
+**Offen vor Handover-PR (Stand §5.4):**
+- [x] **Duplicate Map-Records bereinigen** — ✅ done (2026-06-08): Map-Pool auf kanonische 36 Maps zurückgebaut, `seed.ts` korrigiert, DB-Cleanup via `prisma/cleanup-maps.ts`. Korrekte In-Game-Namen laut Alex: Bleakspire Labor Camp, Glade of the Everqueen, Rifts at World's Edge, Skjalandir's Cave, Battle for Itza.
+- [x] **Itza** — ✅ done: Kein Bild verfügbar, Map heißt korrekt „Battle for Itza", bleibt im Pool ohne Bild.
+- [x] **Onboarding-Tour-Stops** — ✅ done (2026-06-08): Hardcoded strings in `OnboardingOverlay.tsx` durch i18n ersetzt, `data-testid` off-by-one gefixt.
+- [ ] **Handover-PR** — PR-Body in `.claude/pr-body.md` aktualisiert (Session §5.4 + §5.5). `gh` CLI nicht installiert → PR manuell erstellen: `gh pr create --title "feat: v1 launch" --body "$(cat .claude/pr-body.md)" --base main` oder via GitHub Web UI.
+
+### 5.5 Session 2026-06-08 — Edit-View, counts_for_leaderboard, SFT-Registration, Bracket-Polish
+
+| Item | Status |
+|---|---|
+| **Edit Tournament — vollständige Felder + Lifecycle-Locks** — Alle Felder aus Create-Form nun auch im Edit sichtbar; Felder je nach Turnierstatus gesperrt (Draft-only: Format/Mode/Visibility/Faction-Pool; Until-ONGOING: Mechanics/Map-Pool/Dates; Always: Name/Discord/is_major/counts_for_leaderboard). Timezone aus Edit-Form entfernt (auto per Browser). Status-Badge oben | ✅ done |
+| **Edit Tournament — GET lieferte fehlende Felder** — `rounds_count`, `has_third_place_match` und `map_pool`-Relation fehlten im GET-Select → Edit-Form zeigte immer Defaults | ✅ done |
+| **Edit PATCH — rules null-Fehler** — `rules` ist `String @default("")` (nicht nullable); Frontend sendete null statt `""` → 422. Fix: Normalisierung auf `""`, backend `description` auf `.nullable()` | ✅ done |
+| **PATCH akzeptiert nun format/mode/has_third_place_match/counts_for_leaderboard/faction_pool** — Backend `PatchTournamentSchema` erweitert; draft-only-Felder server-seitig validiert | ✅ done |
+| **counts_for_leaderboard auf MatchGame denormalisiert** — Migration `20260608000000_match_game_counts_for_leaderboard` schreibt Flag bei Game-Erstellung; retroaktives Re-Stamp wenn Tournament-Flag geändert wird; Filter-Sites (`rating-model-service`, `breakdown-service`) nutzen nun direktes Feld statt Tournament-Join | ✅ done |
+| **SFT-Registration: disallowed Factions grayed out** — `FactionSelectGrid` in `RegisterButton` respektiert `tournament.faction_allowlist`; nicht erlaubte Fraktionen sind disabled + halbtransparent | ✅ done |
+| **SFT-Registration: Faction-Picker nutzt FactionBadge** — Visuell konsistent mit Onboarding und Blind-Pick (selbe Logo-Größe, font-display, uppercase tracking) | ✅ done |
+| **Bracket-Polish** — Rote gestrichelte Loser-Connector-Linien entfernt; „3rd Place"-Badge bronze gefärbt; Grand-Final-Node: `border-2` Goldrahmen + „GRAND FINAL"-Badge in Gold | ✅ done |
+| **Deutsche UI-Strings** — 9 Dateien bereinigt: TournamentDetail, BracketView, ParticipantsList, CalendarPage, FactionDetailPage, H2HPage, DraftSpectatorPage, DraftLobbyPage, PresetListPage | ✅ done |
+| **Back-to-Tournament-Link** oben auf Edit-Page | ✅ done |
+| **Dev-Scripts** — `prisma/fill-registrations.ts` (nutzt bestehende User zuerst), `prisma/list-users.ts`, `prisma/fix-dummy-registrations.ts` | ✅ done |
+
+**Offen nach §5.5:**
+- [ ] **Handover-PR** — s.o., `gh` CLI fehlt
+- [ ] **SFT-Generalprobe mit Playoffs** — §5.4-Playoff-Phase noch nicht durchgetestet
+- [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant zu MatchGame-Level-Aggregation
+
+**§5.6 Session 2026-06-09 — Playoff-Standings, Check-in, Admin-IDs, German-Strings-Final:**
+
+| Item | Status |
+|---|---|
+| **Standings-Sort Root Cause** — `TournamentDetail` renderte `SwissStandings` eigenständig mit unsortierten Daten; `BracketView`-Fix griff nicht. Shared utility `lib/bracketStandings.ts` extrahiert (`sortStandingsByPlayoffResult`, `getFinalistIds`); beide Render-Stellen nutzen sie | ✅ done |
+| **SF-Fallback in Standings** — GF-/TP-Match noch nicht erstellt → SF-Gewinner/-Verlierer als Proxy; alle drei States (pre-GF, GF pending, GF done) korrekt | ✅ done |
+| **Check-in UI** — `CheckInButton` nicht mehr für `ONGOING`-Turniere angezeigt; `/checkin/self` lehnt Requests ab wenn Turnier bereits gestartet | ✅ done |
+| **Admin: Discord ID + Steam ID** — `GET /api/users` joined `steam_link`-Relation; Tabelle zeigt beide IDs monospace + select-all | ✅ done |
+| **Leaderboard Elo-Spalte** — verwaister `<th>` nach ELO-Removal entfernt; Columns wieder korrekt ausgerichtet | ✅ done |
+| **Faction-Strings + Tagline** — `FactionDetailPage` übersetzt; `race`/`category`-Tagline entfernt; `H2HPage` Faction-Header | ✅ done |
+| **Finaler German-Strings-Sweep** — Draft (DraftLobby, CategoryLimitsEditor, DraftLobbyPage, DraftSpectatorPage), Admin (StatsDashboard, PresetLibraryAdmin, ImportLogTable), Bracket (BracketView, MatchScoreModal), ArmyListList | ✅ done |
+| **Session-Archivierung** — Stop-Hook schreibt nach jedem Turn `~/.claude/session-archives/<id>.md` | ✅ done |
+
+**Offen (post-v1 oder Luke):**
+- [ ] **Admin: Discord/Steam ID re-auth** — Luke entscheidet: ADMIN-Guard reicht oder separater Discord-Confirm-Step? (Details im PR-Body)
+- [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant zu MatchGame-Aggregation
+- [ ] **post-v1: Mirror-Vermeidung im Swiss/Liechtenstein-Pairing** — Soft-Tiebreaker: Mirror (gleiche `faction_id` auf beiden Seiten) wird vermieden wenn ein gleichwertiges Pairing (gleiche Punktdifferenz) verfügbar ist. Nie größere Punktdifferenz für Mirror-Vermeidung akzeptieren. Prio-Reihenfolge: (1) Score-Delta minimieren → (2) Rematch vermeiden → (3) Mirror vermeiden. Betrifft `lib/swiss.ts` + `lib/liechtenstein.ts`. Nur aktiv wenn `faction_id` vorhanden (SFT/2FT/3FT), OPEN-Mode ignoriert.
+- [ ] **post-v1: Discord-Check-in-Reminder** — Cron-Job bei T-60min schickt DM via Bot an alle `REGISTERED`-Teilnehmer. Voraussetzungen: `DISCORD_BOT_TOKEN` gesetzt (Luke), Bot Mitglied im Community-Server (`discord.gg/NbuHNYP9`). `discord_id` auf User-Model vorhanden. ~2-3h Arbeit. Einschränkung: DM nur wenn User Mitglied im selben Server → kein Problem da Teilnehmer aus diesem Server kommen.
 
 ---
 

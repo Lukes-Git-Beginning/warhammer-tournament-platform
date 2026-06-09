@@ -260,7 +260,7 @@ afterEach(async () => {
 // ---------------------------------------------------------------------------
 
 function makeToken(id: string, role: string) {
-  return app.jwt.sign({ sub: id, discord_id: `disc_${id}`, username: 'test', role });
+  return app.jwt.sign({ sub: id, username: 'test', role });
 }
 
 // ---------------------------------------------------------------------------

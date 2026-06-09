@@ -19,10 +19,10 @@ export function ArmyListList() {
     },
   });
 
-  if (isLoading) return <p className="text-stone-400">Lade Listen…</p>;
-  if (isError) return <p className="text-red-400">Fehler beim Laden.</p>;
+  if (isLoading) return <p className="text-stone-400">Loading lists…</p>;
+  if (isError) return <p className="text-red-400">Failed to load.</p>;
   if (!data?.lists || data.lists.length === 0) {
-    return <p className="text-stone-500 italic">Noch keine Army-Listen hochgeladen.</p>;
+    return <p className="text-stone-500 italic">No army lists uploaded yet.</p>;
   }
 
   return (

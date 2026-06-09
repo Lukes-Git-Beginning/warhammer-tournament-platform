@@ -73,7 +73,6 @@ export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 
 export const JwtPayloadSchema = z.object({
   sub: z.string().uuid(),
-  discord_id: z.string(),
   username: z.string(),
   role: RoleSchema,
 });
@@ -97,8 +96,7 @@ export const LeaderboardEntryDtoSchema = z.object({
   rank: z.number().int(),
   user: z.object({ id: z.string().uuid(), username: z.string(), avatar_url: z.string().url().nullable() }),
   total_points: z.number(),
-  elo_rating: z.number().int(),
-  matches_played: z.number().int(),
+  games_played: z.number().int(),
   wins: z.number().int(),
   losses: z.number().int(),
 });
@@ -133,7 +131,7 @@ export const DynamicLeaderboardEntryDtoSchema = z.object({
   avatarUrl: z.string().url().nullable(),
   totalFinalPoints: z.number(),
   totalRawPoints: z.number(),
-  totalMatches: z.number().int(),
+  totalGames: z.number().int(),
   wins: z.number().int(),
   losses: z.number().int(),
 });
@@ -231,14 +229,13 @@ export const UserProfileResponseSchema = z.object({
     .object({
       season: SeasonSummarySchema,
       total_points: z.number(),
-      elo_rating: z.number().int(),
-      matches_played: z.number().int(),
+      games_played: z.number().int(),
       wins: z.number().int(),
       losses: z.number().int(),
     })
     .nullable(),
   all_time: z.object({
-    matches_played: z.number().int(),
+    games_played: z.number().int(),
     wins: z.number().int(),
     losses: z.number().int(),
     tournaments_played: z.number().int(),
@@ -250,7 +247,6 @@ export const UserProfileResponseSchema = z.object({
       season_name: z.string().nullable(),
       placement: z.number().int(),
       points_earned: z.number(),
-      elo_change: z.number().int().nullable(),
       created_at: z.string().datetime(),
     }),
   ),
@@ -327,7 +323,7 @@ export const MetaOverviewResponseSchema = z.object({
   season: SeasonSummarySchema.nullable(),
   top_factions_by_winrate: z.array(FactionWithStatsDtoSchema),
   top_factions_by_pickrate: z.array(FactionWithStatsDtoSchema),
-  total_matches: z.number().int(),
+  total_games: z.number().int(),
   faction_diversity: z.number(),
 });
 export type MetaOverviewResponse = z.infer<typeof MetaOverviewResponseSchema>;
@@ -369,6 +365,7 @@ export const TournamentFormatSchema = z.enum([
   'DOUBLE_ELIMINATION',
   'ROUND_ROBIN',
   'DOUBLE_ROUND_ROBIN',
+  'LIECHTENSTEIN',
 ]);
 export type TournamentFormat = z.infer<typeof TournamentFormatSchema>;
 

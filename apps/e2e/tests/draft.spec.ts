@@ -63,82 +63,30 @@ test('GET /api/drafts/:id for unknown id returns 404', async ({ request }) => {
 });
 
 // ---------------------------------------------------------------------------
-// Frontend routing smoke — pages render without crashing
+// Frontend routing smoke — draft/preset UI is DISABLED for v1
 // ---------------------------------------------------------------------------
+// The draft system is out of scope for the v1 launch. Every draft/preset route
+// is stubbed in router.tsx with `window.location.replace('/')`, so visiting any
+// of them hard-redirects to the landing page. The backend endpoints above stay
+// live (hence the API smoke tests still pass); only the frontend UI is gated.
+// These tests assert that intended redirect rather than the removed page UI.
 
-test('/presets page loads with Preset Library heading', async ({ page }) => {
-  await page.goto('/presets');
-  // i18n: EN renders "Preset Library", DE renders "Preset-Bibliothek".
-  // Frontend defaults to EN in CI (no localStorage, fallbackLng=en).
-  await expect(
-    page.getByRole('heading', { name: /preset[\s-](library|bibliothek)/i }),
-  ).toBeVisible();
-});
+const DISABLED_DRAFT_ROUTES = [
+  '/presets',
+  '/presets/new',
+  '/presets/00000000-0000-0000-0000-000000000000/edit',
+  '/drafts/00000000-0000-0000-0000-000000000000',
+  '/drafts/00000000-0000-0000-0000-000000000000/spectate',
+];
 
-test('/presets page shows seed presets (Standard 1v1 or Captains)', async ({ page }) => {
-  await page.goto('/presets');
-  // At least one preset card should be visible after load
-  // (seed provides "Standard 1v1" and "Captain's Mode Classic")
-  await page
-    .waitForFunction(() => !document.querySelector('[class*="Wird geladen"]'), { timeout: 10_000 })
-    .catch(() => {
-      // Loading state may be absent if presets loaded instantly — that is fine
-    });
-  const cards = page.locator('h3').filter({ hasText: /1v1|Classic|Preset|Standard/i });
-  // Accept either visible cards or the empty-state message — both are valid renders
-  const cardCount = await cards.count();
-  const emptyState = page.getByText(/noch keine presets/i);
-  const emptyVisible = await emptyState.isVisible().catch(() => false);
-  expect(cardCount > 0 || emptyVisible).toBe(true);
-});
-
-test('/presets/new shows auth guard or editor heading', async ({ page }) => {
-  await page.goto('/presets/new');
-  // Unauthenticated → either redirect to /login or show the
-  // "Du benötigst die Organizer-Rolle" message
-  const url = page.url();
-  if (url.includes('/login')) {
-    expect(url).toContain('/login');
-  } else {
-    // The page might show a loading spinner, then an auth hint
-    const hint = page
-      .getByText(/organizer-rolle/i)
-      .or(page.getByText(/anmelden/i))
-      .or(page.getByText(/neuen preset erstellen/i));
-    // Give it a moment to settle after any loading
-    await page.waitForTimeout(500);
-    const hintVisible = await hint
-      .first()
-      .isVisible()
-      .catch(() => false);
-    // Accept: either a hint is visible OR the page rendered without a JS crash
-    // (heading "Neuen Preset erstellen" means auth somehow passed, which is also ok)
-    const anyHeading = await page.getByRole('heading').count();
-    expect(hintVisible || anyHeading > 0).toBe(true);
-  }
-});
-
-test('/drafts/some-id shows loading state or error boundary (not blank)', async ({ page }) => {
-  await page.goto('/drafts/00000000-0000-0000-0000-000000000000');
-  // Page must render something — either the loading text or the error message
-  const loading = page.getByText(/lade draft/i);
-  const errorMsg = page.getByText(/nicht gefunden/i);
-  // Wait for one of them (loading may be brief)
-  await expect(loading.or(errorMsg).first()).toBeVisible({ timeout: 8000 });
-});
-
-test('/drafts/some-id/spectate shows loading state or error boundary', async ({ page }) => {
-  await page.goto('/drafts/00000000-0000-0000-0000-000000000000/spectate');
-  const loading = page.getByText(/lade draft/i);
-  const errorMsg = page.getByText(/nicht gefunden|nicht erreichbar/i);
-  await expect(loading.or(errorMsg).first()).toBeVisible({ timeout: 8000 });
-});
-
-test('header contains Drafts navigation link pointing to /presets', async ({ page }) => {
-  await page.goto('/');
-  const draftsLink = page.locator('a[href="/presets"]');
-  await expect(draftsLink.first()).toBeVisible();
-});
+for (const route of DISABLED_DRAFT_ROUTES) {
+  test(`${route} redirects to the landing page (draft UI disabled for v1)`, async ({ page }) => {
+    await page.goto(route);
+    // window.location.replace('/') lands the user on the landing page.
+    await page.waitForURL((url) => url.pathname === '/');
+    await expect(page.getByRole('img', { name: /rizzotto's arena/i }).first()).toBeVisible();
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Full two-player draft flow — deferred to M5.2.2 (tournament-fixture helper)

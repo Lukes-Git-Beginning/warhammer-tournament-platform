@@ -70,7 +70,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
               avatarUrl: e.avatarUrl,
               totalFinalPoints: e.totalFinalPoints,
               totalRawPoints: e.totalRawPoints,
-              totalMatches: e.totalMatches,
+              totalGames: e.totalGames,
               wins: e.wins,
               losses: e.losses,
             })),
@@ -80,57 +80,23 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
           };
         }
 
-        type LeaderboardRow = {
-          id: string;
-          user_id: string;
-          season_id: string;
-          total_points: number;
-          elo_rating: number;
-          matches_played: number;
-          wins: number;
-          losses: number;
-          rank: bigint;
-          username: string;
-          avatar_url: string | null;
-        };
-
         // ---------------------------------------------------------------
-        // mode = 'winrate' — sort by wins/(wins+losses) desc, min 5 matches
+        // mode = 'winrate' — sort by wins/totalGames desc, min 5 games.
+        // Uses the same dynamic MatchGame source as rating_model so the
+        // filter is consistent with what the Season tab shows.
         // ---------------------------------------------------------------
         {
-          type WinrateRow = LeaderboardRow & { win_rate: number };
+          const all = await computeSeasonLeaderboard(fastify.prisma, fastify.redis, resolvedSeasonId);
+          const qualified = all
+            .filter((e) => e.totalGames >= MIN_MATCHES_FOR_RATE)
+            .sort((a, b) => {
+              const rateA = a.totalGames > 0 ? a.wins / a.totalGames : 0;
+              const rateB = b.totalGames > 0 ? b.wins / b.totalGames : 0;
+              return rateB - rateA || b.totalGames - a.totalGames;
+            });
 
-          const rows = await fastify.prisma.$queryRaw<WinrateRow[]>`
-            SELECT
-              le.id,
-              le.user_id,
-              le.season_id,
-              le.total_points,
-              le.elo_rating,
-              le.matches_played,
-              le.wins,
-              le.losses,
-              u.username,
-              u.avatar_url,
-              CAST(le.wins AS FLOAT) / NULLIF(le.matches_played, 0) AS win_rate,
-              RANK() OVER (
-                ORDER BY
-                  CAST(le.wins AS FLOAT) / NULLIF(le.matches_played, 0) DESC NULLS LAST,
-                  le.matches_played DESC
-              ) AS rank
-            FROM "LeaderboardEntry" le
-            INNER JOIN "User" u ON u.id = le.user_id
-            WHERE le.season_id = ${resolvedSeasonId}::uuid
-              AND le.matches_played >= ${MIN_MATCHES_FOR_RATE}
-            ORDER BY
-              CAST(le.wins AS FLOAT) / NULLIF(le.matches_played, 0) DESC NULLS LAST,
-              le.matches_played DESC
-            LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize};
-          `;
-
-          const total = await fastify.prisma.leaderboardEntry.count({
-            where: { season_id: resolvedSeasonId, matches_played: { gte: MIN_MATCHES_FOR_RATE } },
-          });
+          const total = qualified.length;
+          const pageSlice = qualified.slice((page - 1) * pageSize, page * pageSize);
 
           return {
             mode,
@@ -141,15 +107,14 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
               end_date: season!.end_date.toISOString(),
               is_active: season!.is_active,
             },
-            entries: rows.map((r) => ({
-              rank: Number(r.rank),
-              user: { id: r.user_id, username: r.username, avatar_url: r.avatar_url },
-              total_points: r.total_points,
-              elo_rating: r.elo_rating,
-              matches_played: r.matches_played,
-              wins: r.wins,
-              losses: r.losses,
-              win_rate: r.win_rate ?? 0,
+            entries: pageSlice.map((e, idx) => ({
+              rank: (page - 1) * pageSize + idx + 1,
+              user: { id: e.playerId, username: e.displayName, avatar_url: e.avatarUrl },
+              total_points: Math.round(e.totalFinalPoints),
+              games_played: e.totalGames,
+              wins: e.wins,
+              losses: e.losses,
+              win_rate: e.totalGames > 0 ? e.wins / e.totalGames : 0,
             })),
             total,
             page,
@@ -176,8 +141,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         // Aggregate per user across all seasons
         const grouped = await fastify.prisma.leaderboardEntry.groupBy({
           by: ['user_id'],
-          _sum: { total_points: true, matches_played: true, wins: true, losses: true },
-          _max: { elo_rating: true },
+          _sum: { total_points: true, games_played: true, wins: true, losses: true },
           _count: { season_id: true },
           orderBy: { _sum: { total_points: 'desc' } },
         });
@@ -201,8 +165,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
                 ? { id: user.id, username: user.username, avatar_url: user.avatar_url }
                 : { id: g.user_id, username: 'Unknown', avatar_url: null },
               total_points: g._sum.total_points ?? 0,
-              elo_rating: g._max.elo_rating ?? 1200,
-              matches_played: g._sum.matches_played ?? 0,
+              games_played: g._sum.games_played ?? 0,
               wins: g._sum.wins ?? 0,
               losses: g._sum.losses ?? 0,
               seasons_participated: g._count.season_id,

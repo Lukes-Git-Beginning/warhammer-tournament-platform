@@ -143,18 +143,65 @@ program
         return;
       }
 
-      // Real-write path is deferred — would need a target schema (ExternalTournament-Model
-      // doesn't exist). For now, dry-run is the supported mode.
-      logger.warn('Tournament write-path not implemented — use --dry-run for now');
+      const resolveFaction = async (name: string | undefined): Promise<string | null> => {
+        if (!name) return null;
+        const f = await prisma.faction.findFirst({ where: { name }, select: { id: true } });
+        return f?.id ?? null;
+      };
+
+      let recordsImported = 0;
+      const bar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
+      const totalMatches = tournaments.reduce((s, t) => s + t.matches.length, 0);
+      bar.start(totalMatches, 0);
+
+      for (const tournament of tournaments) {
+        for (const match of tournament.matches) {
+          bar.increment();
+          if (!match.winner_name) continue; // skip draws / no result
+
+          const [f1Id, f2Id] = await Promise.all([
+            resolveFaction(match.player1_faction),
+            resolveFaction(match.player2_faction),
+          ]);
+
+          await prisma.externalGame.upsert({
+            where: {
+              source_external_tournament_id_round_player1_name_player2_name: {
+                source: 'totaltavern',
+                external_tournament_id: parseInt(tournament.source_id, 10),
+                round: match.round ?? 0,
+                player1_name: match.player1_name,
+                player2_name: match.player2_name,
+              },
+            },
+            create: {
+              source: 'totaltavern',
+              external_tournament_id: parseInt(tournament.source_id, 10),
+              round: match.round ?? 0,
+              score: match.score ?? null,
+              player1_name: match.player1_name,
+              player2_name: match.player2_name,
+              player1_faction_name: match.player1_faction ?? null,
+              player2_faction_name: match.player2_faction ?? null,
+              winner_name: match.winner_name,
+              player1_faction_id: f1Id,
+              player2_faction_id: f2Id,
+            },
+            update: {
+              player1_faction_id: f1Id,
+              player2_faction_id: f2Id,
+            },
+          });
+          recordsImported++;
+        }
+      }
+      bar.stop();
+
       await prisma.importLog.update({
         where: { id: importLog.id },
-        data: {
-          status: 'partial',
-          records_imported: tournaments.length,
-          finished_at: new Date(),
-          error_message: 'write-path not implemented',
-        },
+        data: { status: 'success', records_imported: recordsImported, finished_at: new Date() },
       });
+      logger.info(`Tournaments import complete: ${recordsImported} games from ${tournaments.length} tournaments`);
     } catch (err) {
       const msg = (err as Error).message;
       await prisma.importLog.update({

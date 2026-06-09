@@ -97,7 +97,6 @@ describe('Discord OAuth callback', () => {
     });
     const token = app.jwt.sign({
       sub: created.id,
-      discord_id: created.discord_id,
       username: created.username,
       role: created.role,
     });

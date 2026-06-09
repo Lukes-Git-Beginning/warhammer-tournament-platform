@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useRouter } from '@tanstack/react-router';
+import { useParams, useRouter, useRouterState, Link } from '@tanstack/react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuthQuery } from '@/lib/auth';
 import {
   getMatchDecision,
+  forceResolveDecision,
   banMap,
   lockBlindPick,
   getFactions,
@@ -23,17 +24,61 @@ import type { ServerToClientEvents, FactionWithStatsDto } from '@rizzotto/types'
 interface CoinFlipPhaseProps {
   decision: MatchDecisionState;
   currentUserId: string;
+  topPlayerAvatar?: string | null;
+  bottomPlayerAvatar?: string | null;
+  topPlayerName?: string;
+  bottomPlayerName?: string;
+  /** Skip the spin animation — coin shows result immediately (returning to an existing decision). */
+  skipAnimation?: boolean;
 }
 
-function CoinFlipPhase({ decision, currentUserId }: CoinFlipPhaseProps) {
-  const [revealed, setRevealed] = useState(false);
+function CoinFace({
+  avatarUrl,
+  name,
+  winner,
+}: {
+  avatarUrl?: string | null;
+  name?: string;
+  winner: boolean;
+}) {
+  const initials = (name ?? '?').slice(0, 2).toUpperCase();
+  return (
+    <div
+      className={`absolute inset-0 rounded-full overflow-hidden flex items-center justify-center
+        ${winner ? 'border-2 border-rizzotto-gold-500 shadow-[0_0_16px_2px_rgba(212,175,55,0.35)]' : 'border-2 border-rizzotto-iron-500'}`}
+    >
+      {avatarUrl ? (
+        <img src={avatarUrl} alt={name ?? ''} className="h-full w-full object-cover" draggable={false} />
+      ) : (
+        <span className="font-display text-3xl font-bold text-rizzotto-gold-400 bg-rizzotto-iron-800 h-full w-full flex items-center justify-center">
+          {initials}
+        </span>
+      )}
+      {/* subtle vignette */}
+      <div className="absolute inset-0 rounded-full bg-gradient-to-b from-transparent to-rizzotto-iron-950/40 pointer-events-none" />
+    </div>
+  );
+}
+
+function CoinFlipPhase({
+  decision,
+  currentUserId,
+  topPlayerAvatar,
+  bottomPlayerAvatar,
+  topPlayerName,
+  bottomPlayerName,
+  skipAnimation = false,
+}: CoinFlipPhaseProps) {
+  // If we're returning to an existing decision, start revealed immediately.
+  const [revealed, setRevealed] = useState(skipAnimation);
   const isTop = decision.topPlayerId === currentUserId;
   const isBottom = decision.bottomPlayerId === currentUserId;
 
   useEffect(() => {
-    const timer = setTimeout(() => setRevealed(true), 1800);
+    if (skipAnimation) return;
+    const timer = setTimeout(() => setRevealed(true), 2200);
     return () => clearTimeout(timer);
-  }, []);
+  }, [skipAnimation]);
 
   return (
     <div className="flex flex-col items-center gap-8">
@@ -41,29 +86,36 @@ function CoinFlipPhase({ decision, currentUserId }: CoinFlipPhaseProps) {
         Coin Flip
       </h2>
 
-      <motion.div
-        animate={
-          revealed
-            ? { rotateY: 0, scale: 1 }
-            : { rotateY: [0, 180, 360, 540, 720], scale: [1, 1.1, 1, 1.1, 1] }
-        }
-        transition={revealed ? { duration: 0.3 } : { duration: 1.6, ease: 'easeOut' }}
-        className="relative h-28 w-28 rounded-full border-2 border-rizzotto-gold-500 bg-rizzotto-iron-900 flex items-center justify-center shadow-rizzotto-emboss"
-        style={{ perspective: 600 }}
-      >
-        {revealed ? (
-          <motion.span
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.15 }}
-            className="font-display text-4xl font-bold text-rizzotto-gold-400"
+      {/* 3D coin — front = topPlayer (winner), back = bottomPlayer */}
+      <div style={{ perspective: 800 }} className="h-28 w-28">
+        <motion.div
+          animate={{ rotateY: skipAnimation ? 0 : [0, 360, 720, 1080, 1440] }}
+          transition={skipAnimation ? { duration: 0 } : { duration: 2, ease: 'easeOut', times: [0, 0.25, 0.5, 0.75, 1] }}
+          className="relative h-28 w-28"
+          style={{ transformStyle: 'preserve-3d' }}
+        >
+          {/* Front face — topPlayer (winner, lands face-up) */}
+          <div style={{ backfaceVisibility: 'hidden' }} className="absolute inset-0">
+            <CoinFace
+              avatarUrl={topPlayerAvatar}
+              name={topPlayerName}
+              winner={true}
+            />
+          </div>
+
+          {/* Back face — bottomPlayer */}
+          <div
+            style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+            className="absolute inset-0"
           >
-            ⚔
-          </motion.span>
-        ) : (
-          <span className="h-12 w-12 rounded-full bg-rizzotto-gold-500/30 animate-pulse" />
-        )}
-      </motion.div>
+            <CoinFace
+              avatarUrl={bottomPlayerAvatar}
+              name={bottomPlayerName}
+              winner={false}
+            />
+          </div>
+        </motion.div>
+      </div>
 
       <AnimatePresence>
         {revealed && (
@@ -73,32 +125,46 @@ function CoinFlipPhase({ decision, currentUserId }: CoinFlipPhaseProps) {
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             className="w-full max-w-sm space-y-3"
           >
-            {/* Top player */}
+            {/* Top player (winner) */}
             <div
-              className={`flex items-center justify-between rounded-md border px-5 py-3 transition-colors ${
+              className={`flex items-center gap-3 rounded-md border px-4 py-3 transition-colors ${
                 decision.topPlayerId === currentUserId
                   ? 'border-rizzotto-gold-500/60 bg-rizzotto-gold-500/10'
                   : 'border-rizzotto-iron-600 bg-rizzotto-iron-900'
               }`}
             >
-              <span className="text-sm text-rizzotto-stone-300">
-                {isTop ? 'You' : 'Opponent'}
+              {topPlayerAvatar ? (
+                <img src={topPlayerAvatar} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" />
+              ) : (
+                <span className="h-7 w-7 rounded-full bg-rizzotto-iron-700 flex items-center justify-center text-xs font-bold text-rizzotto-stone-300 shrink-0">
+                  {(topPlayerName ?? '?').slice(0, 2).toUpperCase()}
+                </span>
+              )}
+              <span className="flex-1 text-sm text-rizzotto-stone-300">
+                {isTop ? 'You' : (topPlayerName ?? 'Opponent')}
               </span>
               <span className="font-display text-xs font-semibold tracking-widest text-rizzotto-gold-400 uppercase">
-                Top
+                ⚔ Top
               </span>
             </div>
 
             {/* Bottom player */}
             <div
-              className={`flex items-center justify-between rounded-md border px-5 py-3 transition-colors ${
+              className={`flex items-center gap-3 rounded-md border px-4 py-3 transition-colors ${
                 decision.bottomPlayerId === currentUserId
                   ? 'border-rizzotto-gold-500/60 bg-rizzotto-gold-500/10'
                   : 'border-rizzotto-iron-600 bg-rizzotto-iron-900'
               }`}
             >
-              <span className="text-sm text-rizzotto-stone-300">
-                {isBottom ? 'You' : 'Opponent'}
+              {bottomPlayerAvatar ? (
+                <img src={bottomPlayerAvatar} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" />
+              ) : (
+                <span className="h-7 w-7 rounded-full bg-rizzotto-iron-700 flex items-center justify-center text-xs font-bold text-rizzotto-stone-300 shrink-0">
+                  {(bottomPlayerName ?? '?').slice(0, 2).toUpperCase()}
+                </span>
+              )}
+              <span className="flex-1 text-sm text-rizzotto-stone-300">
+                {isBottom ? 'You' : (bottomPlayerName ?? 'Opponent')}
               </span>
               <span className="font-display text-xs font-semibold tracking-widest text-rizzotto-stone-400 uppercase">
                 Bottom
@@ -382,29 +448,38 @@ function BlindPickPhase({
   currentUserId,
   factions,
 }: BlindPickPhaseProps) {
+  const queryClient = useQueryClient();
   const [selectedFactionId, setSelectedFactionId] = useState<string | null>(null);
   const [locking, setLocking] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
 
   const bp = decision.blindPick;
-  const isPlayer1 = decision.topPlayerId === currentUserId;
-  const myLocked = isPlayer1 ? bp?.player1Locked : bp?.player2Locked;
+  // Use match player ordering (player1_id/player2_id) not coin-flip ordering
+  // (topPlayerId). The backend sets player1_locked_at for match.player1_id.
+  const isMatchPlayer1 = decision.matchPlayer1Id
+    ? decision.matchPlayer1Id === currentUserId
+    : decision.topPlayerId === currentUserId; // fallback for older responses
+  const myLocked = isMatchPlayer1 ? bp?.player1Locked : bp?.player2Locked;
   const revealed = bp?.revealedAt != null;
 
   async function handleLockIn() {
     if (!selectedFactionId) return;
     setLocking(true);
+    setLockError(null);
     try {
       await lockBlindPick(matchId, selectedFactionId);
-    } catch {
-      // socket will sync
+      // Immediately refetch so the UI updates even if the socket misses the event
+      await queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
+    } catch (err) {
+      setLockError(err instanceof Error ? err.message : 'Lock failed — please try again.');
     } finally {
       setLocking(false);
     }
   }
 
   if (revealed && bp) {
-    const myFactionId = isPlayer1 ? bp.player1FactionId : bp.player2FactionId;
-    const opponentFactionId = isPlayer1 ? bp.player2FactionId : bp.player1FactionId;
+    const myFactionId = isMatchPlayer1 ? bp.player1FactionId : bp.player2FactionId;
+    const opponentFactionId = isMatchPlayer1 ? bp.player2FactionId : bp.player1FactionId;
     const myEntry = factions.find((f) => f.faction.id === myFactionId);
     const opponentEntry = factions.find((f) => f.faction.id === opponentFactionId);
 
@@ -478,6 +553,7 @@ function BlindPickPhase({
           <p className="text-sm text-rizzotto-stone-400">
             Faction locked. Waiting for opponent…
           </p>
+          <BlindPickCountdown firstLockedAt={bp?.firstLockedAt ?? null} timeoutMs={2 * 60 * 1000} />
         </div>
       ) : (
         <>
@@ -485,27 +561,31 @@ function BlindPickPhase({
             Choose your faction. Your pick will be revealed only after both players lock in.
           </p>
 
-          <div className="grid grid-cols-4 gap-2 max-w-md w-full">
+          <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-6">
             {factions.map(({ faction }) => (
               <button
                 key={faction.id}
                 type="button"
                 onClick={() => setSelectedFactionId(faction.id)}
                 className={[
-                  'flex flex-col items-center gap-1.5 rounded-md border p-2 transition-all',
+                  'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center',
+                  'transition-[border-color,background-color] duration-150',
                   selectedFactionId === faction.id
-                    ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/10'
-                    : 'border-rizzotto-iron-700 bg-rizzotto-iron-900 hover:border-rizzotto-iron-500',
+                    ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800'
+                    : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60 hover:bg-rizzotto-iron-800',
                 ].join(' ')}
               >
                 <FactionBadge
                   colorHex={faction.color_hex}
                   initials={faction.initials}
                   name={faction.name}
-                  size="sm"
+                  size="lg"
                   iconUrl={faction.icon_url}
                 />
-                <span className="text-[10px] text-rizzotto-stone-400 text-center leading-tight">
+                <span className={[
+                  'line-clamp-2 font-display text-[10px] uppercase leading-tight tracking-wide',
+                  selectedFactionId === faction.id ? 'text-rizzotto-gold-300' : 'text-rizzotto-stone-300',
+                ].join(' ')}>
                   {faction.name}
                 </span>
               </button>
@@ -520,6 +600,9 @@ function BlindPickPhase({
           >
             {locking ? 'Locking…' : 'Lock In'}
           </Button>
+          {lockError && (
+            <p className="text-sm text-red-400 text-center">{lockError}</p>
+          )}
         </>
       )}
     </div>
@@ -538,16 +621,48 @@ type DecisionPhase =
   | 'blind_pick'
   | 'ready';
 
+function BlindPickCountdown({ firstLockedAt, timeoutMs }: { firstLockedAt: string | null; timeoutMs: number }) {
+  const [label, setLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!firstLockedAt) return;
+    const deadline = new Date(new Date(firstLockedAt).getTime() + timeoutMs);
+
+    function tick() {
+      const diff = deadline.getTime() - Date.now();
+      if (diff <= 0) {
+        setLabel('Auto-picking now…');
+        return;
+      }
+      const m = Math.floor(diff / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setLabel(`Auto-pick in ${m}:${s.toString().padStart(2, '0')}`);
+    }
+
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [firstLockedAt, timeoutMs]);
+
+  if (!label) return null;
+  return <p className="text-xs text-rizzotto-stone-500 font-mono">{label}</p>;
+}
+
+const RANDOM_MODES = new Set(['RANDOM', 'RANDOM_NO_REPEAT', 'HOST_PRESET']);
+const BAN_MODES = new Set(['PICK_BAN', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']);
+
 function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
   if (!d) return 'loading';
   if (d.pickedMapId) {
     // Map decided — check blind pick
     if (d.blindPick?.revealedAt) return 'ready';
     if (d.blindPick != null) return 'blind_pick';
+    // blindPick is null: BPT requires a blind pick even before the first lock
+    if (d.tournamentMode === 'BPT') return 'blind_pick';
     return 'ready';
   }
-  if (d.mode === 'RANDOM') return 'map_random';
-  if (d.mode === 'PICK_BAN') {
+  if (RANDOM_MODES.has(d.mode)) return 'map_random';
+  if (BAN_MODES.has(d.mode)) {
     // Show coin flip briefly first if neither ban has happened
     if (d.bansTop.length === 0 && d.bansBottom.length === 0) return 'coin_flip';
     return 'map_pick_ban';
@@ -558,23 +673,38 @@ function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
 export function MatchDecisionPage() {
   const { matchId } = useParams({ from: '/matches/$matchId/decision' });
   const router = useRouter();
+  const routerState = useRouterState();
   const { data: user } = useAuthQuery();
   const queryClient = useQueryClient();
 
+  // True when navigated here via "Choose Battlefield" — show coin-toss animation even though
+  // the decision already exists in the DB by the time the query resolves.
+  const isFreshDecision =
+    (routerState.location.state as { freshDecision?: boolean } | null)?.freshDecision === true;
+
   const [decision, setDecision] = useState<MatchDecisionState | null>(null);
+  // True when decision was already in the DB when the page loaded — skip the coin flip animation.
+  const [decisionPreloaded, setDecisionPreloaded] = useState(false);
   const [coinFlipDone, setCoinFlipDone] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Initial fetch
+  // Initial fetch — poll every 5s so the UI stays in sync even when the
+  // socket room event doesn't arrive (e.g. blind-pick auto-resolve by cron).
   const { data: initialDecision, isLoading } = useQuery({
     queryKey: ['match-decision', matchId],
     queryFn: () => getMatchDecision(matchId),
     retry: false,
+    refetchInterval: 5000,
   });
 
   useEffect(() => {
-    if (initialDecision) setDecision(initialDecision);
-  }, [initialDecision]);
+    if (initialDecision) {
+      setDecision(initialDecision);
+      if (!isFreshDecision) {
+        setDecisionPreloaded(true); // came from server, not a fresh toss on this page
+      }
+    }
+  }, [initialDecision, isFreshDecision]);
 
   // Factions for blind pick
   const { data: factionsData } = useQuery({
@@ -686,13 +816,37 @@ export function MatchDecisionPage() {
     enabled: true,
   });
 
-  const mapPool: MapDto[] = allMapsData?.data ?? [];
+  const allTournamentMaps: MapDto[] = allMapsData?.data ?? [];
+  // Für Modi mit active_pool (HOST_PRESET_PICK_BAN, RANDOM_PICK_BAN) nur die 3 aktiven Maps zeigen
+  const mapPool: MapDto[] =
+    decision && decision.activePool && decision.activePool.length > 0
+      ? allTournamentMaps.filter((m) => decision.activePool.includes(m.id))
+      : allTournamentMaps;
+
+  // Resolve player names + avatars for the coin flip
+  const topPlayer = decision
+    ? (matchDetail?.player1?.id === decision.topPlayerId ? matchDetail?.player1 : matchDetail?.player2)
+    : null;
+  const bottomPlayer = decision
+    ? (matchDetail?.player1?.id === decision.bottomPlayerId ? matchDetail?.player1 : matchDetail?.player2)
+    : null;
+
+  const isOrganizerOrAdmin =
+    user && (user.role === 'ORGANIZER' || user.role === 'MODERATOR' || user.role === 'ADMIN');
+
+  const forceResolveMutation = useMutation({
+    mutationFn: () => forceResolveDecision(matchId),
+    onSuccess: (data) => {
+      setDecision(data);
+      void queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
+    },
+  });
 
   // Phase transitions
   const rawPhase = resolvePhase(decision);
   let phase = rawPhase;
   if (rawPhase === 'coin_flip' && coinFlipDone) {
-    phase = decision?.mode === 'RANDOM' ? 'map_random' : 'map_pick_ban';
+    phase = RANDOM_MODES.has(decision?.mode ?? '') ? 'map_random' : 'map_pick_ban';
   }
 
   // Auto-advance from coin flip
@@ -716,7 +870,16 @@ export function MatchDecisionPage() {
 
   return (
     <PageShell variant="tight" spacing="base">
-      <div className="mb-8 text-center">
+      <div className="mb-8 text-center relative">
+        {matchDetail?.tournament_slug && (
+          <Link
+            to="/tournaments/$slug"
+            params={{ slug: matchDetail.tournament_slug }}
+            className="absolute left-0 top-1 text-sm text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors"
+          >
+            ← Back to tournament
+          </Link>
+        )}
         <h1 className="font-display text-2xl font-bold text-rizzotto-stone-100">
           Match Decision
         </h1>
@@ -735,7 +898,15 @@ export function MatchDecisionPage() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
             >
-              <CoinFlipPhase decision={decision} currentUserId={user.id} />
+              <CoinFlipPhase
+                decision={decision}
+                currentUserId={user.id}
+                topPlayerAvatar={topPlayer?.avatar_url ?? null}
+                bottomPlayerAvatar={bottomPlayer?.avatar_url ?? null}
+                topPlayerName={topPlayer?.username}
+                bottomPlayerName={bottomPlayer?.username}
+                skipAnimation={decisionPreloaded}
+              />
             </motion.div>
           )}
 
@@ -813,7 +984,7 @@ export function MatchDecisionPage() {
               <Button
                 variant="forge"
                 size="lg"
-                onClick={() => void router.navigate({ to: '/tournaments', search: { tab: 'upcoming', page: 1 } })}
+                onClick={() => void router.navigate({ to: '/tournaments/$slug', params: { slug: matchDetail?.tournament_slug ?? '' }, hash: 'my-match' })}
               >
                 Start Match
               </Button>
@@ -821,6 +992,19 @@ export function MatchDecisionPage() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Organizer/Admin escape hatch — force-pick a random map if a player is AFK */}
+      {isOrganizerOrAdmin && phase === 'map_pick_ban' && !decision.pickedMapId && (
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={() => forceResolveMutation.mutate()}
+            disabled={forceResolveMutation.isPending}
+            className="text-xs text-rizzotto-stone-600 hover:text-rizzotto-stone-400 transition-colors disabled:opacity-50"
+          >
+            {forceResolveMutation.isPending ? 'Picking…' : 'Organizer: Pick random map'}
+          </button>
+        </div>
+      )}
     </PageShell>
   );
 }

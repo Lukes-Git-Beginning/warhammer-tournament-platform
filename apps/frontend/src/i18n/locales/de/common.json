@@ -21,8 +21,8 @@
   },
   "brand": {
     "name": "RizzOtto's Arena",
-    "tagline": "Wo Listen geschmiedet werden",
-    "motto": "Where Lists Are Forged."
+    "tagline": "",
+    "motto": ""
   },
   "header": {
     "home": "Home",
@@ -38,8 +38,8 @@
     "admin": "Admin"
   },
   "hero": {
-    "tagline": "Wo Listen geschmiedet werden",
-    "cta_primary": "In den Kampf",
+    "tagline": "",
+    "cta_primary": "Anmelden",
     "cta_secondary": "Zum Leaderboard",
     "scroll_cue": "Mehr entdecken"
   },
@@ -186,7 +186,8 @@
       "single_elim": "Single Elimination",
       "swiss": "Swiss",
       "round_robin": "Round Robin",
-      "double_elim": "Double Elimination"
+      "double_elim": "Double Elimination",
+      "liechtenstein": "Liechtenstein"
     },
     "detail": {
       "not_found": "Turnier nicht gefunden oder nicht erreichbar.",
@@ -322,7 +323,7 @@
     "stage1": {
       "title": "Willkommen.",
       "body": "Dein Konto ist eingerichtet. Lass uns zuerst dein Profil fertigstellen.",
-      "cta": "Bibliothek öffnen"
+      "cta": "Die Werkstatt betreten"
     },
     "stage2": {
       "title": "Einstellungen",
@@ -343,6 +344,10 @@
       "body": "Dein Profil ist fertig. Betritt das Feld.",
       "cta": "Zum Profil",
       "cta_loading": "Profil wird geladen…"
+    },
+    "overlay": {
+      "sealing": "Versiegelt…",
+      "skip_label": "Tour beenden"
     },
     "tour": {
       "btn_back": "Zurück",
@@ -411,7 +416,7 @@
     "no_season_body": "Sobald die Community von RizzOtto's Arena eine Season eröffnet, erscheinen hier Fraktions- und Matchup-Statistiken.",
     "no_season_motto": "\"Tempus Expectandi\"",
     "no_season_motto_title": "A time of waiting",
-    "stat_total_matches": "Gesamt-Matches",
+    "stat_total_games": "Gesamt-Spiele",
     "stat_faction_diversity": "Fraktions-Vielfalt",
     "top_winrate": "Top-Winrate-Fraktionen",
     "most_picked": "Meistgespielte Fraktionen",

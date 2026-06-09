@@ -66,7 +66,7 @@ export function DraftLobby({ draft, viewer }: DraftLobbyProps) {
             <div className="grid grid-cols-2 gap-4">
               <div className="rounded-md border border-blue-800 bg-blue-950/30 p-3">
                 <h3 className="mb-2 text-xs font-bold text-blue-300 uppercase tracking-wide">
-                  Host Fraktionen
+                  Host Factions
                 </h3>
                 <div className="flex flex-wrap gap-1 text-xs text-stone-300">
                   {draft.final_host_factions.length > 0
@@ -76,7 +76,7 @@ export function DraftLobby({ draft, viewer }: DraftLobbyProps) {
               </div>
               <div className="rounded-md border border-red-800 bg-red-950/30 p-3">
                 <h3 className="mb-2 text-xs font-bold text-red-300 uppercase tracking-wide">
-                  Gast Fraktionen
+                  Guest Factions
                 </h3>
                 <div className="flex flex-wrap gap-1 text-xs text-stone-300">
                   {draft.final_guest_factions.length > 0
@@ -100,7 +100,7 @@ export function DraftLobby({ draft, viewer }: DraftLobbyProps) {
             />
           ) : (
             <div className="rounded-md border border-stone-800 bg-stone-900/40 p-8 text-center text-stone-500 text-sm">
-              Lade Fraktionen…
+              Loading factions…
             </div>
           )}
         </main>

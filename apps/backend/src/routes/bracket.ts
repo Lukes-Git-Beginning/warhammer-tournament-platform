@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
-import { MatchStatus, TournamentFormat, TournamentStatus } from '@rizzotto/db';
+import { MatchStatus, TournamentFormat, TournamentMode, TournamentStatus } from '@rizzotto/db';
 import type { BracketResponse, SwissStandingEntry } from '@rizzotto/types';
 import { generateSingleElim, generateDoubleElim } from '../lib/bracket.js';
 import { generateRoundRobin } from '../lib/round-robin.js';
+import { generateLiechtensteinSchedule } from '../lib/liechtenstein.js';
 import {
   generateSwissRound,
   computeSwissStandings,
@@ -31,7 +32,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, format: true },
+        select: { id: true, format: true, mode: true, swiss_match_format: true, playoff_match_format: true, finale_match_format: true },
       });
 
       if (!tournament) {
@@ -42,6 +43,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      const participantFactions = await fastify.prisma.tournamentParticipant.findMany({
+        where: { tournament_id: tournament.id, deleted_at: null },
+        select: { user_id: true, faction_id: true },
+      });
+      const factionByUser = new Map(participantFactions.map((p) => [p.user_id, p.faction_id]));
+
+      // factionFromGames is built after the matches query — see below.
       const matches = await fastify.prisma.match.findMany({
         where: { tournament_id: tournament.id, deleted_at: null },
         orderBy: [{ round: 'asc' }, { match_number: 'asc' }],
@@ -60,17 +68,44 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           next_match_id: true,
           loser_next_match_id: true,
           bracket_side: true,
+          phase: true,
           player1_faction_id: true,
           player2_faction_id: true,
           draft: { select: { id: true, status: true } },
+          games: {
+            select: {
+              winner_id: true,
+              status: true,
+              player1_faction_id: true,
+              player2_faction_id: true,
+              map_decision: { select: { picked_map_id: true } },
+            },
+          },
         },
       });
 
       const rounds = matches.length > 0 ? Math.max(...matches.map((m) => m.round)) : 0;
 
+      // Derive faction per player from completed game records (most authoritative source —
+      // set when the game result is reported, before TournamentParticipant is latched).
+      const factionFromGames = new Map<string, string>();
+      for (const m of matches) {
+        for (const g of m.games) {
+          if (g.status === 'COMPLETED') {
+            if (m.player1_id && g.player1_faction_id && !factionFromGames.has(m.player1_id)) {
+              factionFromGames.set(m.player1_id, g.player1_faction_id);
+            }
+            if (m.player2_id && g.player2_faction_id && !factionFromGames.has(m.player2_id)) {
+              factionFromGames.set(m.player2_id, g.player2_faction_id);
+            }
+          }
+        }
+      }
+
       const response: BracketResponse = {
         tournamentId: tournament.id,
         rounds,
+        mode: tournament.mode ?? undefined,
         matches: matches.map((m) => ({
           matchId: m.id,
           round: m.round,
@@ -86,15 +121,30 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           nextMatchId: m.next_match_id,
           loserNextMatchId: m.loser_next_match_id,
           bracketSide: m.bracket_side,
-          player1FactionId: m.player1_faction_id,
-          player2FactionId: m.player2_faction_id,
+          matchFormat: m.phase === 'PLAYOFF_FINAL'
+            ? tournament.finale_match_format
+            : m.phase?.startsWith('PLAYOFF')
+              ? tournament.playoff_match_format
+              : tournament.swiss_match_format,
+          // SFT: TournamentParticipant.faction_id is the committed faction — always authoritative.
+          // Other modes: per-match faction first, TournamentParticipant as fallback.
+          player1FactionId: tournament.mode === TournamentMode.SFT
+            ? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null)
+            : m.player1_faction_id ?? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null),
+          player2FactionId: tournament.mode === TournamentMode.SFT
+            ? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null)
+            : m.player2_faction_id ?? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null),
+          player1GameWins: m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length,
+          player2GameWins: m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length,
+          pickedMapId: m.games.find((g) => g.map_decision?.picked_map_id)?.map_decision?.picked_map_id ?? null,
           draft_id: m.draft?.id ?? null,
           draft_status: (m.draft?.status ?? null) as BracketResponse['matches'][number]['draft_status'],
+          phase: (m.phase ?? null) as BracketResponse['matches'][number]['phase'],
         })),
       };
 
-      // Augment with Swiss standings if applicable
-      if (tournament.format === TournamentFormat.SWISS) {
+      // Augment with standings for Swiss and Round Robin
+      if (tournament.format === TournamentFormat.SWISS || tournament.format === TournamentFormat.ROUND_ROBIN || tournament.format === TournamentFormat.LIECHTENSTEIN) {
         const participants = await fastify.prisma.tournamentParticipant.findMany({
           where: {
             tournament_id: tournament.id,
@@ -113,16 +163,32 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         );
 
         const completedMatches = matches
-          .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE')
+          .filter((m) =>
+            (m.status === 'COMPLETED' || m.status === 'BYE') &&
+            (m.phase === null || m.phase === 'SWISS'),
+          )
           .map((m) => ({
             round: m.round,
             player1_id: m.player1_id,
             player2_id: m.player2_id,
             winner_id: m.winner_id,
             status: m.status,
+            // Only provide game counts when MatchGame records exist; otherwise leave
+            // undefined so swiss.ts falls back to the winner-based heuristic (1/0).
+            // Only use actual game records when at least one is COMPLETED.
+            // PENDING records (created for map-tracking only) must not block the fallback.
+            player1_game_wins: m.games.some((g) => g.status === 'COMPLETED')
+              ? m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length
+              : undefined,
+            player2_game_wins: m.games.some((g) => g.status === 'COMPLETED')
+              ? m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length
+              : undefined,
           }));
 
-        const rawStandings = computeSwissStandings(participantIds, completedMatches);
+        const rawStandings = sortSwissStandings(
+          computeSwissStandings(participantIds, completedMatches),
+          completedMatches,
+        );
 
         const standings: SwissStandingEntry[] = rawStandings.map((s) => {
           const user = userMap.get(s.userId);
@@ -130,11 +196,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             userId: s.userId,
             username: user?.username ?? null,
             avatarUrl: user?.avatar_url ?? null,
+            factionId: factionByUser.get(s.userId) ?? factionFromGames.get(s.userId) ?? null,
             score: s.score,
             wins: s.wins,
             losses: s.losses,
             draws: s.draws,
             byes: s.byes,
+            gamesLost: s.gamesLost,
             buchholz: s.buchholz,
             solkoff: s.solkoff,
           };
@@ -175,6 +243,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           status: true,
           format: true,
           organizer_id: true,
+          rounds_count: true,
+          has_third_place_match: true,
         },
       });
 
@@ -237,11 +307,14 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         loser_next_match_id?: string | null;
         bracket_side?: 'WINNERS' | 'LOSERS' | 'GRAND_FINAL' | null;
         winner_id: string | null;
+        phase?: string | null;
       }>;
 
       switch (tournament.format) {
         case TournamentFormat.SINGLE_ELIMINATION: {
-          bracketMatches = generateSingleElim(tournament.id, participantIds);
+          bracketMatches = generateSingleElim(tournament.id, participantIds, {
+            hasThirdPlace: tournament.has_third_place_match,
+          });
           break;
         }
 
@@ -268,6 +341,23 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             receivedBye: false,
           }));
           bracketMatches = generateSwissRound(tournament.id, swissPlayers, 1);
+          break;
+        }
+
+        case TournamentFormat.LIECHTENSTEIN: {
+          try {
+            bracketMatches = generateLiechtensteinSchedule(
+              tournament.id,
+              participantIds,
+              tournament.rounds_count ?? 5,
+            );
+          } catch (err) {
+            return reply.code(400).send({
+              error: 'BadRequest',
+              message: err instanceof Error ? err.message : 'Liechtenstein-Scheduling fehlgeschlagen',
+              statusCode: 400,
+            });
+          }
           break;
         }
 
@@ -299,6 +389,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             loser_next_match_id: m.loser_next_match_id ?? null,
             bracket_side: m.bracket_side ?? null,
             winner_id: m.winner_id,
+            phase: (m.phase ?? (tournament.format === TournamentFormat.SWISS ? 'SWISS' : null)) as import('@rizzotto/db').MatchPhase | null,
           })),
         });
 
@@ -440,7 +531,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       if (targetRound > recommendedRounds) {
         return reply.code(400).send({
           error: 'BadRequest',
-          message: `All swiss rounds played (${recommendedRounds}); finalize tournament`,
+          message: `All ${recommendedRounds} Swiss rounds played; use start-playoffs or finalize the tournament`,
           statusCode: 400,
         });
       }
@@ -474,8 +565,6 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       const rawStandings = computeSwissStandings(participantIds, completedMatchRecords);
       const standings = sortSwissStandings(rawStandings, completedMatchRecords);
 
-      const isLastSwissRound = targetRound === recommendedRounds;
-
       // Build avoid maps: each player avoids all previous opponents
       const avoidMap = new Map<string, string[]>();
       for (const id of participantIds) avoidMap.set(id, []);
@@ -505,89 +594,6 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const newMatches = generateSwissRound(tournament.id, swissPlayers, targetRound);
 
-      // If this is the last Swiss round, generate playoff matches (if configured)
-      let playoffMatchesCreated = 0;
-      let playoffFallbackApplied: string | undefined;
-
-      const fullTournament = isLastSwissRound
-        ? await fastify.prisma.tournament.findFirst({
-            where: { id: tournament.id },
-            select: {
-              playoff_format: true,
-              playoff_match_format: true,
-              finale_match_format: true,
-            },
-          })
-        : null;
-
-      let playoffMatches: Array<{
-        id: string;
-        tournament_id: string;
-        round: number;
-        match_number: number;
-        player1_id: string | null;
-        player2_id: string | null;
-        status: MatchStatus;
-        next_match_id: string | null;
-        phase: 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL' | null;
-      }> = [];
-
-      if (isLastSwissRound && fullTournament && fullTournament.playoff_format !== 'NONE') {
-        try {
-          // For playoff generation: all participants are "checked in" if they participated
-          const checkedInSet = new Set(participantIds);
-
-          const playoffResult = generatePlayoffBracket({
-            tournament: {
-              playoff_format: fullTournament.playoff_format,
-              playoff_match_format: fullTournament.playoff_match_format,
-              finale_match_format: fullTournament.finale_match_format,
-            },
-            finalStandings: standings,
-            checkedInPlayerIds: checkedInSet,
-          });
-
-          if (playoffResult.fallbackApplied) {
-            playoffFallbackApplied = playoffResult.fallbackApplied;
-            request.log.info(
-              { tournamentId: tournament.id, fallback: playoffResult.fallbackApplied },
-              'Playoff fallback applied',
-            );
-          }
-
-          // Map PlayoffMatch descriptors to DB rows
-          // Swiss rounds are numbered 1..N; playoff rounds start at N+1
-          const playoffRoundOffset = targetRound;
-          const phaseMap: Record<number, 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL'> =
-            playoffResult.format === 'TOP8'
-              ? { 1: 'PLAYOFF_QF', 2: 'PLAYOFF_SF', 3: 'PLAYOFF_FINAL' }
-              : { 1: 'PLAYOFF_SF', 2: 'PLAYOFF_FINAL' };
-
-          playoffMatches = playoffResult.matches.map((pm: PlayoffMatch) => ({
-            id: randomUUID(),
-            tournament_id: tournament.id,
-            round: playoffRoundOffset + pm.round,
-            match_number: pm.bracket_position,
-            player1_id: pm.player1_id || null,
-            player2_id: pm.player2_id || null,
-            status: (pm.player1_id && pm.player2_id ? 'PENDING' : 'PENDING') as MatchStatus,
-            next_match_id: null,
-            phase: phaseMap[pm.round] ?? null,
-          }));
-
-          playoffMatchesCreated = playoffMatches.length;
-        } catch (err) {
-          if (err instanceof InsufficientPlayersError) {
-            request.log.warn(
-              { tournamentId: tournament.id, err: err.message },
-              'Insufficient players for playoff — skipping playoff generation',
-            );
-          } else {
-            throw err;
-          }
-        }
-      }
-
       await fastify.prisma.$transaction(async (tx) => {
         await tx.match.createMany({
           data: newMatches.map((m) => ({
@@ -604,35 +610,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           })),
         });
 
-        // Persist playoff matches
-        if (playoffMatches.length > 0) {
-          await tx.match.createMany({
-            data: playoffMatches.map((pm) => ({
-              id: pm.id,
-              tournament_id: pm.tournament_id,
-              round: pm.round,
-              match_number: pm.match_number,
-              player1_id: pm.player1_id,
-              player2_id: pm.player2_id,
-              status: pm.status,
-              next_match_id: pm.next_match_id,
-              phase: pm.phase,
-            })),
-          });
-        }
-
         await tx.auditLog.create({
           data: {
             entity_type: 'Tournament',
             entity_id: tournament.id,
             action: 'swiss_next_round',
             actor_id: request.user.sub,
-            new_value: {
-              round: targetRound,
-              matches_created: newMatches.length,
-              playoff_matches_created: playoffMatchesCreated,
-              playoff_fallback: playoffFallbackApplied ?? null,
-            },
+            new_value: { round: targetRound, matches_created: newMatches.length },
           },
         });
       });
@@ -686,11 +670,373 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         tournamentId: tournament.id,
         round: targetRound,
         matches_created: newMatches.length,
-        isLastRound: isLastSwissRound,
+        isLastRound: targetRound === recommendedRounds,
         recommendedRounds,
-        playoff_matches_created: playoffMatchesCreated,
-        playoff_fallback_applied: playoffFallbackApplied ?? null,
       });
+    },
+  );
+
+  /**
+   * POST /api/tournaments/:id/start-playoffs
+   * Auth required. Organizer or MOD/ADMIN only.
+   * Generates the playoff bracket from the final Swiss standings.
+   * Must be called after all Swiss rounds are completed.
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/api/tournaments/:id/start-playoffs',
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+      ],
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { id, deleted_at: null },
+        select: {
+          id: true,
+          format: true,
+          status: true,
+          organizer_id: true,
+          playoff_format: true,
+          playoff_match_format: true,
+          finale_match_format: true,
+          has_third_place_match: true,
+        },
+      });
+
+      if (!tournament) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      }
+
+      const actorRole = request.user.role;
+      if (actorRole === 'ORGANIZER' && tournament.organizer_id !== request.user.sub) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the organizer can start playoffs', statusCode: 403 });
+      }
+
+      if (
+        tournament.format !== TournamentFormat.SWISS &&
+        tournament.format !== TournamentFormat.ROUND_ROBIN &&
+        tournament.format !== TournamentFormat.LIECHTENSTEIN
+      ) {
+        return reply.code(400).send({ error: 'BadRequest', message: 'Playoffs can only be started for Swiss, Round Robin, or Liechtenstein tournaments', statusCode: 400 });
+      }
+
+      if (tournament.status !== TournamentStatus.ONGOING) {
+        return reply.code(400).send({ error: 'BadRequest', message: 'Tournament is not ONGOING', statusCode: 400 });
+      }
+
+      if (!tournament.playoff_format || tournament.playoff_format === 'NONE') {
+        return reply.code(400).send({ error: 'BadRequest', message: 'Tournament has no playoff format configured', statusCode: 400 });
+      }
+
+      // Load all existing matches
+      const existingMatches = await fastify.prisma.match.findMany({
+        where: { tournament_id: id, deleted_at: null },
+        select: { id: true, round: true, player1_id: true, player2_id: true, winner_id: true, status: true, phase: true },
+      });
+
+      // Guard: no playoff matches yet
+      const hasPlayoffs = existingMatches.some((m) => m.phase && m.phase !== 'SWISS');
+      if (hasPlayoffs) {
+        return reply.code(409).send({ error: 'Conflict', message: 'Playoffs have already been generated', statusCode: 409 });
+      }
+
+      const participants = await fastify.prisma.tournamentParticipant.findMany({
+        where: { tournament_id: id, status: { in: ['REGISTERED', 'CHECKED_IN'] }, deleted_at: null },
+        select: { user_id: true },
+      });
+
+      const participantIds = participants.map((p) => p.user_id);
+      const currentRound = existingMatches.length > 0 ? Math.max(...existingMatches.map((m) => m.round)) : 0;
+
+      if (tournament.format === TournamentFormat.ROUND_ROBIN) {
+        // For Round Robin all rounds are pre-generated — every non-playoff match must be complete
+        const incompleteRR = existingMatches.filter(
+          (m) => m.phase === null && m.status !== 'COMPLETED' && m.status !== 'BYE',
+        );
+        if (incompleteRR.length > 0) {
+          return reply.code(400).send({
+            error: 'BadRequest',
+            message: `Round Robin phase not complete — ${incompleteRR.length} match(es) remaining`,
+            statusCode: 400,
+          });
+        }
+      } else {
+        // Swiss: must have played the recommended number of rounds
+        const recommendedRounds = recommendNumberOfRounds(participantIds.length);
+        if (currentRound < recommendedRounds) {
+          return reply.code(400).send({
+            error: 'BadRequest',
+            message: `Swiss phase not complete — ${currentRound}/${recommendedRounds} rounds played`,
+            statusCode: 400,
+          });
+        }
+        const incomplete = existingMatches.filter(
+          (m) => m.round === currentRound && m.status !== 'COMPLETED' && m.status !== 'BYE',
+        );
+        if (incomplete.length > 0) {
+          return reply.code(400).send({
+            error: 'BadRequest',
+            message: `${incomplete.length} match(es) in round ${currentRound} not yet completed`,
+            statusCode: 400,
+          });
+        }
+      }
+
+      // Compute final Swiss standings
+      const completedMatchRecords = existingMatches
+        .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE')
+        .map((m) => ({
+          round: m.round,
+          player1_id: m.player1_id,
+          player2_id: m.player2_id,
+          winner_id: m.winner_id,
+          status: m.status,
+        }));
+
+      const rawStandings = computeSwissStandings(participantIds, completedMatchRecords);
+      const standings = sortSwissStandings(rawStandings, completedMatchRecords);
+
+      let playoffFallbackApplied: string | undefined;
+
+      try {
+        const playoffResult = generatePlayoffBracket({
+          tournament: {
+            playoff_format: tournament.playoff_format,
+            playoff_match_format: tournament.playoff_match_format,
+            finale_match_format: tournament.finale_match_format,
+          },
+          finalStandings: standings,
+          checkedInPlayerIds: new Set(participantIds),
+        });
+
+        if (playoffResult.fallbackApplied) {
+          playoffFallbackApplied = playoffResult.fallbackApplied;
+        }
+
+        const playoffRoundOffset = currentRound;
+        const phaseMap: Record<number, 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL'> =
+          playoffResult.format === 'TOP8'
+            ? { 1: 'PLAYOFF_QF', 2: 'PLAYOFF_SF', 3: 'PLAYOFF_FINAL' }
+            : { 1: 'PLAYOFF_SF', 2: 'PLAYOFF_FINAL' };
+
+        // Only generate the first playoff round — subsequent rounds are advanced
+        // one at a time via POST /advance-playoffs once each round completes.
+        const playoffMatches = playoffResult.matches
+          .filter((pm: PlayoffMatch) => pm.round === 1)
+          .map((pm: PlayoffMatch) => ({
+            id: randomUUID(),
+            tournament_id: id,
+            round: playoffRoundOffset + pm.round,
+            match_number: pm.bracket_position,
+            player1_id: pm.player1_id || null,
+            player2_id: pm.player2_id || null,
+            status: 'PENDING' as MatchStatus,
+            next_match_id: null,
+            phase: phaseMap[pm.round] ?? null,
+          }));
+
+        await fastify.prisma.$transaction(async (tx) => {
+          await tx.match.createMany({
+            data: playoffMatches.map((pm) => ({
+              id: pm.id,
+              tournament_id: pm.tournament_id,
+              round: pm.round,
+              match_number: pm.match_number,
+              player1_id: pm.player1_id,
+              player2_id: pm.player2_id,
+              status: pm.status,
+              next_match_id: pm.next_match_id,
+              phase: pm.phase,
+            })),
+          });
+
+          await tx.auditLog.create({
+            data: {
+              entity_type: 'Tournament',
+              entity_id: id,
+              action: 'start_playoffs',
+              actor_id: request.user.sub,
+              new_value: {
+                format: playoffResult.format,
+                matches_created: playoffMatches.length,
+                fallback: playoffFallbackApplied ?? null,
+              },
+            },
+          });
+        });
+
+        emitBracketUpdate(fastify.io, id);
+
+        return reply.code(200).send({
+          tournamentId: id,
+          format: playoffResult.format,
+          matches_created: playoffMatches.length,
+          fallback_applied: playoffFallbackApplied ?? null,
+        });
+      } catch (err) {
+        if (err instanceof InsufficientPlayersError) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: err.message,
+            statusCode: 422,
+          });
+        }
+        throw err;
+      }
+    },
+  );
+
+  /**
+   * POST /api/tournaments/:id/advance-playoffs
+   * Generate the next playoff round from the winners of the current one.
+   * Called after all QF matches are done (to create SF) or all SF are done (to create Final).
+   */
+  fastify.post(
+    '/api/tournaments/:id/advance-playoffs',
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+      ],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { id, deleted_at: null, status: 'ONGOING' },
+        select: { id: true, organizer_id: true, playoff_match_format: true, finale_match_format: true, has_third_place_match: true },
+      });
+      if (!tournament) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      }
+      if (request.user.role === 'ORGANIZER' && tournament.organizer_id !== request.user.sub) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
+      }
+
+      const allPlayoffMatches = await fastify.prisma.match.findMany({
+        where: {
+          tournament_id: id,
+          deleted_at: null,
+          phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL'] },
+        },
+        orderBy: [{ round: 'asc' }, { match_number: 'asc' }],
+      });
+
+      if (allPlayoffMatches.length === 0) {
+        return reply.code(409).send({ error: 'Conflict', message: 'No playoff matches — call start-playoffs first', statusCode: 409 });
+      }
+      if (allPlayoffMatches.some((m) => m.phase === 'PLAYOFF_FINAL')) {
+        return reply.code(409).send({ error: 'Conflict', message: 'Playoffs already fully generated', statusCode: 409 });
+      }
+
+      const currentRound = Math.max(...allPlayoffMatches.map((m) => m.round));
+      const currentRoundMatches = allPlayoffMatches
+        .filter((m) => m.round === currentRound)
+        .sort((a, b) => a.match_number - b.match_number);
+
+      const incomplete = currentRoundMatches.filter(
+        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT',
+      );
+      if (incomplete.length > 0) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: `${incomplete.length} match(es) in current playoff round not yet completed`,
+          statusCode: 422,
+        });
+      }
+
+      const currentPhases = new Set(currentRoundMatches.map((m) => m.phase));
+      const nextPhase: 'PLAYOFF_SF' | 'PLAYOFF_FINAL' = currentPhases.has('PLAYOFF_QF')
+        ? 'PLAYOFF_SF'
+        : 'PLAYOFF_FINAL';
+
+      // Pair winners into next round matches (GF or SFs).
+      const nextMatches = currentRoundMatches
+        .reduce<{ m1: typeof currentRoundMatches[0]; m2?: typeof currentRoundMatches[0] }[]>(
+          (pairs, m, i) => {
+            if (i % 2 === 0) pairs.push({ m1: m });
+            else pairs[pairs.length - 1]!.m2 = m;
+            return pairs;
+          },
+          [],
+        )
+        .map(({ m1, m2 }, i) => ({
+          id: randomUUID(),
+          tournament_id: id,
+          round: currentRound + 1,
+          match_number: i + 1,
+          player1_id: m1.winner_id ?? null,
+          player2_id: m2?.winner_id ?? null,
+          status: 'PENDING' as MatchStatus,
+          next_match_id: null as string | null,
+          phase: nextPhase,
+        }));
+
+      // When advancing to the Grand Final: also create the third-place match with
+      // the SF losers already filled in — exactly analogous to the GF being created
+      // with the SF winners. Then wire loser_next_match_id on the SF rows.
+      const thirdPlaceMatch =
+        tournament.has_third_place_match && nextPhase === 'PLAYOFF_FINAL'
+          ? (() => {
+              const sf1 = currentRoundMatches[0];
+              const sf2 = currentRoundMatches[1];
+              const loser = (m: typeof sf1) =>
+                m ? (m.player1_id === m.winner_id ? m.player2_id : m.player1_id) : null;
+              return {
+                id: randomUUID(),
+                tournament_id: id,
+                round: currentRound + 1,
+                match_number: 2,
+                player1_id: loser(sf1),
+                player2_id: loser(sf2),
+                status: 'PENDING' as MatchStatus,
+                next_match_id: null as string | null,
+                phase: 'PLAYOFF_THIRD_PLACE' as const,
+              };
+            })()
+          : null;
+
+      await fastify.prisma.$transaction(async (tx) => {
+        await tx.match.createMany({
+          data: [...nextMatches, ...(thirdPlaceMatch ? [thirdPlaceMatch] : [])].map((m) => ({
+            id: m.id,
+            tournament_id: m.tournament_id,
+            round: m.round,
+            match_number: m.match_number,
+            player1_id: m.player1_id,
+            player2_id: m.player2_id,
+            status: m.status,
+            next_match_id: m.next_match_id,
+            phase: m.phase as import('@rizzotto/db').MatchPhase | null,
+          })),
+        });
+
+        // Wire loser connectors on the SFs so the SVG bracket draws the dashed lines.
+        if (thirdPlaceMatch) {
+          await tx.match.updateMany({
+            where: { id: { in: currentRoundMatches.map((m) => m.id) } },
+            data: { loser_next_match_id: thirdPlaceMatch.id },
+          });
+        }
+
+        await tx.auditLog.create({
+          data: {
+            entity_type: 'Tournament',
+            entity_id: id,
+            action: 'advance_playoffs',
+            actor_id: request.user.sub,
+            new_value: { phase: nextPhase, matches_created: nextMatches.length },
+          },
+        });
+      });
+
+      emitBracketUpdate(fastify.io, id);
+
+      return reply.code(200).send({ phase: nextPhase, matches_created: nextMatches.length });
     },
   );
 
@@ -787,6 +1133,79 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         nextMatchId: nextMatch.id,
         slotFilled: slotToFill,
       });
+    },
+  );
+
+  /**
+   * POST /api/tournaments/:id/bracket/reset
+   * Deletes all matches (and cascaded sub-entities) and resets status to
+   * REGISTRATION_CLOSED so the organizer can re-start from scratch.
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/api/tournaments/:id/bracket/reset',
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+      ],
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { id, deleted_at: null },
+        select: { id: true, slug: true, status: true, organizer_id: true },
+      });
+
+      if (!tournament) {
+        return reply.code(404).send({
+          error: 'NotFound',
+          message: 'Tournament not found',
+          statusCode: 404,
+        });
+      }
+
+      const actorRole = request.user.role;
+      if (actorRole === 'ORGANIZER' && tournament.organizer_id !== request.user.sub) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Only the tournament organizer can reset this bracket',
+          statusCode: 403,
+        });
+      }
+
+      if (tournament.status !== TournamentStatus.ONGOING) {
+        return reply.code(400).send({
+          error: 'BadRequest',
+          message: 'Bracket can only be reset while tournament is ONGOING',
+          statusCode: 400,
+        });
+      }
+
+      await fastify.prisma.$transaction(async (tx) => {
+        // Null self-referencing FKs first to avoid NoAction constraint violations
+        await tx.match.updateMany({
+          where: { tournament_id: id },
+          data: { next_match_id: null, loser_next_match_id: null },
+        });
+
+        // Delete all matches — cascades MatchGame, MatchMapDecision, MatchBlindPick,
+        // Draft, DraftEvent, and MatchReport automatically
+        await tx.match.deleteMany({ where: { tournament_id: id } });
+
+        await tx.tournament.update({
+          where: { id },
+          data: { status: TournamentStatus.REGISTRATION_CLOSED },
+        });
+      });
+
+      emitBracketUpdate(fastify.io, id);
+      emitStatusChange(fastify.io, {
+        tournamentId: id,
+        status: TournamentStatus.REGISTRATION_CLOSED,
+      });
+
+      return reply.code(200).send({ ok: true });
     },
   );
 };

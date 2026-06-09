@@ -263,25 +263,34 @@ export async function playerFactionProficiency(
 ): Promise<PlayerFactionProficiencyEntry[]> {
   const model = await getRatingModel(prisma, redis, { seasonId });
 
-  const matches = await prisma.match.findMany({
+  // Game-level data: each individual battle (MatchGame) the player participated in.
+  // BYEs are automatically excluded — they have no MatchGame records.
+  const playerGames = await prisma.matchGame.findMany({
     where: {
-      ...confirmedMatchWhere(seasonId),
-      OR: [{ player1_id: playerId }, { player2_id: playerId }],
-    } as Prisma.MatchWhereInput,
+      status: 'COMPLETED',
+      winner_id: { not: null },
+      counts_for_leaderboard: true,
+      match: {
+        season_id: seasonId,
+        deleted_at: null,
+        OR: [{ player1_id: playerId }, { player2_id: playerId }],
+      },
+    },
     select: {
-      player1_id: true,
       winner_id: true,
       player1_faction_id: true,
       player2_faction_id: true,
+      match: { select: { player1_id: true } },
     },
   });
 
   // Tally games/wins/losses per faction the player actually used.
   const tally = new Map<string, { games: number; wins: number; losses: number }>();
-  for (const m of matches) {
-    const playerIsP1 = m.player1_id === playerId;
-    const faction = (playerIsP1 ? m.player1_faction_id : m.player2_faction_id)!;
-    const won = m.winner_id === playerId;
+  for (const g of playerGames) {
+    const playerIsP1 = g.match.player1_id === playerId;
+    const faction = playerIsP1 ? g.player1_faction_id : g.player2_faction_id;
+    if (!faction) continue;
+    const won = g.winner_id === playerId;
     let t = tally.get(faction);
     if (!t) {
       t = { games: 0, wins: 0, losses: 0 };

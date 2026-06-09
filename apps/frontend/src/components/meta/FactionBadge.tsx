@@ -7,9 +7,9 @@ interface FactionBadgeProps {
 }
 
 const SIZE_MAP = {
-  sm: { px: 24, textClass: 'text-xs' },
-  md: { px: 32, textClass: 'text-sm' },
-  lg: { px: 48, textClass: 'text-base' },
+  sm: { px: 30, textClass: 'text-xs' },
+  md: { px: 40, textClass: 'text-sm' },
+  lg: { px: 60, textClass: 'text-base' },
 } as const;
 
 export function FactionBadge({ colorHex, initials, name, size = 'md', iconUrl }: FactionBadgeProps) {
@@ -19,14 +19,12 @@ export function FactionBadge({ colorHex, initials, name, size = 'md', iconUrl }:
     return (
       <span
         title={name}
-        className="inline-flex items-center justify-center rounded-full overflow-hidden select-none shrink-0 ring-1"
+        className="inline-flex items-center justify-center overflow-hidden select-none shrink-0"
         style={{
           width: px,
           height: px,
           minWidth: px,
-          backgroundColor: colorHex,
-          // @ts-expect-error CSS custom property for ring color
-          '--tw-ring-color': colorHex,
+          backgroundColor: '#837a6f',
         }}
       >
         <img
@@ -36,7 +34,7 @@ export function FactionBadge({ colorHex, initials, name, size = 'md', iconUrl }:
           height={px}
           loading="lazy"
           decoding="async"
-          className="w-full h-full object-cover"
+          className="w-full h-full object-contain"
         />
       </span>
     );

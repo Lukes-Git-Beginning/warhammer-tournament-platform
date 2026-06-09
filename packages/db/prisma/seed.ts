@@ -90,9 +90,16 @@ async function seedFactions(): Promise<void> {
 }
 
 async function seedDefaultSeason(): Promise<void> {
-  const existing = await prisma.season.findFirst({ where: { is_active: true } });
-  if (existing) {
-    console.log(`  ✓ Active season already exists: "${existing.name}" (${existing.id})`);
+  const active = await prisma.season.findFirst({ where: { is_active: true } });
+  if (active) {
+    console.log(`  ✓ Active season already exists: "${active.name}" (${active.id})`);
+    return;
+  }
+  // Activate the most recent existing season instead of creating a duplicate
+  const latest = await prisma.season.findFirst({ orderBy: { start_date: 'desc' } });
+  if (latest) {
+    await prisma.season.update({ where: { id: latest.id }, data: { is_active: true } });
+    console.log(`  ✓ Activated existing season: "${latest.name}" (${latest.id})`);
     return;
   }
   const now = new Date();
@@ -219,60 +226,58 @@ function toSlug(name: string): string {
     .replace(/^-|-$/g, '');          // trim leading/trailing hyphens
 }
 
-const MAP_NAMES: string[] = [
-  'Jade Tomb',
-  'Rapturous Expanse',
-  'Chateau De Roquefort',
-  "Hashut's Oilfields",
-  'Norscan Rise',
-  'Bray Valley',
-  'Proving Grounds',
-  'Dustbowl',
-  'Whirling Maelstrom',
-  'Dunes of Khaine',
-  'Aracknarock Lair',
-  'Crystal Lake',
-  "The Changer's Madhouse",
-  'Rift at Worlds Edge',
-  'Imperial Road',
-  'Lost Temple of Sotek',
-  'Dried Floodplain',
-  'Bleakspire Labor Camp',
-  "Glinty Toof's Crag",
-  "Skjlanadir's Cave",
-  "Khsar's Cursed Oasis",
-  'Putrefying Carcass',
-  'Blazing Ramparts',
-  'Creeping Swamp',
-  'Imperial Ambush',
-  'Decrepit Moor',
-  'Haunted Vale',
-  'Bordeleaux Landing',
-  'Glades of the Everqueen',
-  'Eastern Isle Colony',
-  'Edge of the Darkwood',
-  'Altar of the Champion',
-  'Road to Talabheim',
-  'Itza',
-  'The Blood Grove',
-  'Celestial Lake',
+// Source: TT Map Notes.xlsx (community spreadsheet), imgur URLs extracted 2026-06-07.
+// Pool: original 36 maps from Alex. Names are the authoritative in-game names.
+const MAP_DATA: { name: string; image_url: string | null }[] = [
+  { name: 'Altar of the Champion',     image_url: 'https://i.imgur.com/yz5oLma.jpeg' },
+  { name: 'Aracknarock Lair',          image_url: 'https://i.imgur.com/saz9JBu.jpeg' },
+  { name: 'Battle for Itza',           image_url: null },
+  { name: 'Blazing Ramparts',          image_url: 'https://i.imgur.com/V7uKLph.jpeg' },
+  { name: 'Bleakspire Labor Camp',     image_url: 'https://i.imgur.com/Ej0FME2.jpeg' },
+  { name: 'Bordeleaux Landing',        image_url: 'https://i.imgur.com/Cyp0j7l.jpeg' },
+  { name: 'Bray Valley',               image_url: 'https://i.imgur.com/XJrDm83.jpeg' },
+  { name: 'Celestial Lake',            image_url: 'https://i.imgur.com/JlWAhw7.jpeg' },
+  { name: 'Chateau de Roquefort',      image_url: 'https://i.imgur.com/QKZ8pt5.jpeg' },
+  { name: 'Creeping Swamp',            image_url: 'https://i.imgur.com/oTLPL1o.jpeg' },
+  { name: 'Crystal Lake',              image_url: 'https://i.imgur.com/bcIE6QL.jpeg' },
+  { name: 'Decrepit Moor',             image_url: 'https://i.imgur.com/tdr9OGl.jpeg' },
+  { name: 'Dried Floodplain',          image_url: 'https://i.imgur.com/jbwS3io.jpeg' },
+  { name: 'Dunes of Khaine',           image_url: 'https://i.imgur.com/Cw07uU3.jpeg' },
+  { name: 'Dustbowl',                  image_url: 'https://i.imgur.com/fbeT1cA.jpeg' },
+  { name: 'Eastern Isle Colony',       image_url: 'https://i.imgur.com/XlbRBLa.jpeg' },
+  { name: 'Edge of the Darkwood',      image_url: 'https://i.imgur.com/TNMw7j1.jpeg' },
+  { name: 'Glade of the Everqueen',    image_url: 'https://i.imgur.com/LC6uWJ3.jpeg' },
+  { name: "Glinty Toof's Crag",        image_url: 'https://i.imgur.com/5wPEGhT.jpeg' },
+  { name: "Hashut's Oilfields",        image_url: 'https://i.imgur.com/3cNieCe.jpeg' },
+  { name: 'Haunted Vale',              image_url: 'https://i.imgur.com/0VnWsIb.jpeg' },
+  { name: 'Imperial Ambush',           image_url: 'https://i.imgur.com/aFXp5qw.jpeg' },
+  { name: 'Imperial Road',             image_url: 'https://i.imgur.com/wiMbaFw.jpeg' },
+  { name: 'Jade Tomb',                 image_url: 'https://i.imgur.com/x7PC3mz.jpeg' },
+  { name: "Khsar's Cursed Oasis",      image_url: 'https://i.imgur.com/0vLF5DV.jpeg' },
+  { name: 'Lost Temple of Sotek',      image_url: 'https://i.imgur.com/UpMzR5h.jpeg' },
+  { name: 'Norscan Rise',              image_url: 'https://i.imgur.com/olAbf3U.jpeg' },
+  { name: 'Proving Grounds',           image_url: 'https://i.imgur.com/dngqsiC.jpeg' },
+  { name: 'Putrefying Carcass',        image_url: 'https://i.imgur.com/XZ32CD1.jpeg' },
+  { name: 'Rapturous Expanse',         image_url: 'https://i.imgur.com/jU112ja.jpeg' },
+  { name: "Rifts at World's Edge",     image_url: 'https://i.imgur.com/USxlGQx.jpeg' },
+  { name: 'Road to Talabheim',         image_url: 'https://i.imgur.com/c7xXQvx.jpeg' },
+  { name: "Skjalandir's Cave",         image_url: 'https://i.imgur.com/NtZ1Rxn.jpeg' },
+  { name: "The Changer's Madhouse",    image_url: 'https://i.imgur.com/2QJZe1V.jpeg' },
+  { name: 'The Blood Grove',           image_url: 'https://i.imgur.com/Ju2vMRf.jpeg' },
+  { name: 'Whirling Maelstrom',        image_url: 'https://i.imgur.com/VvrCxyx.jpeg' },
 ];
 
 async function seedMaps(): Promise<void> {
-  for (const name of MAP_NAMES) {
+  for (const { name, image_url } of MAP_DATA) {
     const slug = toSlug(name);
     await prisma.map.upsert({
       where: { slug },
-      update: { name }, // keep name in sync; image_url left null until admin uploads
-      create: {
-        slug,
-        name,
-        image_url: null,
-      },
+      update: { name, image_url },
+      create: { slug, name, image_url },
     });
   }
   const total = await prisma.map.count({ where: { deleted_at: null } });
-  console.log(`  ✓ Maps: ${total} active in DB (upserted ${MAP_NAMES.length})`);
+  console.log(`  ✓ Maps: ${total} active in DB (upserted ${MAP_DATA.length})`);
 }
 
 // ---------------------------------------------------------------------------

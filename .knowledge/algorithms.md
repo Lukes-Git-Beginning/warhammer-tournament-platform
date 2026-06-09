@@ -1,14 +1,16 @@
-> Read-when: ELO-Formel anpassen, Bracket-Generierung, Swiss-Paarung, Tournament-Finalization, Faction-Snapshot/Cron.
+> Read-when: Bracket-Generierung, Swiss-Paarung, Tournament-Finalization, Faction-Snapshot/Cron.
 
 ## TL;DR
 
-- **ELO**: Multi-Player Performance-Rating (A2, zero-sum bei gleichen Ratings), K=32 normal / K=48 Major — `computeEloDeltas()`. Pflegt `LeaderboardEntry.elo_rating` (Legacy, finalizes Tournament).
+- **ELO — ENTFERNT (2026-06-07)**: `lib/elo.ts` + `computeEloDeltas()` gelöscht. `LeaderboardEntry.elo_rating` und `TournamentResult.elo_change` per Migration `remove_elo` gedroppt. Begründung: placement-basiert (ignoriert Games), faction-blind, braucht Datenmasse die eine kleine Szene nicht hat. Ersetzt durch das dynamische Rating-Modell (unten). `EloRatingDisplay`-Komponente ebenfalls gelöscht.
 - **MMR (Welle 2) — ENTFERNT (2026-06-03)**: `lib/mmr.ts`, die Tabellen `FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` und `LeaderboardEntry.season_points` wurden per Migration `drop_welle2_mmr_deprecated` (Branch `chore/phase2-consolidation`) gedroppt. Vollständig abgelöst vom dynamischen Rating-Modell (unten). Die MMR-Formel-Sektion weiter unten ist nur noch **historisch**.
 - **Dynamic Weighted Leaderboard (Alex-Spec, 2026-06)**: derive-on-read. L2-regularisierte Logistic Regression `fitRatingModel()` in `lib/rating-model.ts` fittet `PlayerFactionSkill(player,faction)` + antisymmetrischen `MatchupEffect(X,Y)`. Punkte rein abgeleitet via `lib/scoring-service.ts` + aggregiert in `lib/leaderboard-service.ts`. Nichts gespeichert, jeder Punkt rekonstruierbar (`lib/breakdown-service.ts`).
 - **Pairings** via `tournament-pairings` v2 — `SingleElimination`, `Swiss`, `RoundRobin` — alle drei Formate in je einer `lib/`-Datei.
-- **Swiss-Tiebreaker** (Welle 2): Buchholz → Solkoff → Head-to-Head (kein ELO) — `sortSwissStandings()`.
+- **Swiss-Tiebreaker** (Welle 2): Score → GL (Games Lost, aufsteigend) → Buchholz → Solkoff → H2H — `sortSwissStandings()`. **+2026-06-06:** GL-Tiebreaker war broken (PENDING MatchGame-Records blockierten Fallback) → gefixt in `bracket.ts` (nur COMPLETED Games zählen für GL).
+- **Swiss-Bye** (2026-06-06): Niedrigster Score ohne bisherige Bye bekommt die Freirunde; bei Gleichstand zufällig aus der Gruppe. Kein Doppel-Bye. `lib/swiss.ts`: `byePlayer` wird vor dem Blossom-Algorithmus explizit herausgefiltert.
+- **Mirror-Vermeidung (geplant, post-v1):** Soft-Tiebreaker in `lib/swiss.ts` + `lib/liechtenstein.ts`. Prio-Reihenfolge: (1) Score-Delta minimieren → (2) Rematch vermeiden → (3) Mirror vermeiden (gleiche `faction_id`). Mirror-Vermeidung greift **nur** wenn zwei Candidate-Pairings identisches Score-Delta haben — nie größere Punktdifferenz akzeptieren. Nur aktiv wenn `faction_id` vorhanden (SFT/2FT/3FT); OPEN-Mode fällt durch.
 - **Playoff-Generator** (Welle 2): `generatePlayoffBracket()` in `lib/playoff-generator.ts` — NONE/TOP4/TOP8 mit Auto-Fallback TOP8→TOP4 bei <16 checked-in.
-- `finalizeTournament()` schreibt Placements → ELO-Deltas → Tournament-Points → upsert `LeaderboardEntry` + `TournamentResult` in einer Transaktion.
+- `finalizeTournament()` schreibt Placements → Tournament-Points → upsert `LeaderboardEntry` + `TournamentResult` in einer Transaktion. (ELO-Deltas entfernt 2026-06-07.)
 
 ---
 
@@ -28,13 +30,19 @@ RawPoints(Sieger)    = 100 · (1 − ExpectedChanceToWin)         // kein Cap/Fl
 
 **Anti-Farming** (`scoring-service.ts`) — player-spezifisch, asymmetrisch, **nicht** auf Faktion/Matchup/Combo:
 ```
-OpponentShare    = matchesVsOpponent / playerTotalMatches
+OpponentShare    = gamesVsOpponent / playerTotalGames
 OpponentModifier = total<20 → 1 ; share≤0.05 → 1 ; share≥0.10 → 0 ; sonst (0.10−share)/0.05
 FinalPoints      = RawPoints · OpponentModifier ;  LeaderboardScore = Σ FinalPoints über Siege
 ```
 Dynamische Erholung: viele andere Gegner spielen senkt die Share → frühere Punkte kommen zurück.
 
 Tests: `test/{scoring-service,rating-model,leaderboard-service}.test.ts` (alle 8 Spec-Cases + Optimizer + DB-Integration inkl. Explainability-Invariante).
+
+**Game-Ebene (2026-06-06):** Leaderboard und Rating-Modell rechnen auf **MatchGame**-Ebene, nicht Match-Ebene. Jede Battle ist eine separate Observation. Laden via `confirmedMatchWhere()` auf Match → Expansion auf `MatchGame`-Records (`m.games`) → Fallback auf synthetisches Einzel-Game wenn `games.length === 0` (pre-GL-fix Daten). Faction-Fallback 3-stufig: `MatchGame.player1_faction_id` → `Match.player1_faction_id` → `TournamentParticipant.faction_id`. Null-Factions → p=0.5 neutral in Score-Berechnung; für Modell-Training übersprungen.
+
+**`confirmedGameWhere()`** in `rating-model-service.ts` existiert als Hilfs-Where für MatchGame-Queries, wird aber im Leaderboard nicht mehr als primärer Filter verwendet (Match-first-Ansatz). `confirmedMatchWhere()` bleibt für `breakdown-service.ts` (Explainability-Helpers bleiben auf Match-Ebene).
+
+**API-Shape:** `DynamicLeaderboardEntryDto.totalMatches` → **`totalGames`** (seit 2026-06-06, `packages/types/src/api-schemas.ts`).
 
 ---
 
@@ -96,8 +104,11 @@ Nutzt `SingleElimination` aus `tournament-pairings`. Funktion: `generateSingleEl
 export function generateSingleElim(
   tournamentId: string,
   participantIds: string[],
+  opts?: { hasThirdPlace?: boolean },
 ): BracketMatchInput[]
 ```
+
+**Third-place match (2026-06-08):** When `opts.hasThirdPlace` is true, the generator finds the two SF matches (those whose `next_match_id === finalId`), creates a third-place match at `round = finalRound, match_number = 2, phase = 'PLAYOFF_THIRD_PLACE'`, and sets `loser_next_match_id` on both SFs pointing to it. The `computeLinearLayout` algorithm naturally places it below the Final in the same column (fallbackY after Final's feeder-computed position). SVGBracket draws the dashed loser-connector lines.
 
 ---
 
@@ -243,6 +254,8 @@ export function generatePlayoffBracket(args: {
 
 Hook in `routes/bracket.ts:next-round` — nach letzter Swiss-Runde aufrufen.
 
+**Third-place in playoffs (2026-06-08):** When `tournament.has_third_place_match` is true, `advance-playoffs` creates the third-place match **alongside the Grand Final** in the same transaction — exactly analogous to the GF being created with SF winners. The two SF losers are filled in immediately as `player1_id`/`player2_id`. The SF rows are then retroactively updated with `loser_next_match_id` pointing to the third-place match (for SVG loser-connector lines). Phase: `PLAYOFF_THIRD_PLACE`.
+
 ---
 
 ## ~~MMR — 3-Faktor Win-Punkte-Formel (`lib/mmr.ts`)~~ — ENTFERNT (2026-06-03, nur historisch)
@@ -281,6 +294,22 @@ points = max(0, round(BASE * MAJOR_BONUS * win_quality * anti_farm_modifier))
 5. `incrementAntiFarmCap()` (nur casual)
 
 Hook ist non-fatal: bei Fehler → Log, kein Match-Result-Failure.
+
+---
+
+## Liechtenstein (`lib/liechtenstein.ts`) — 2026-06-08
+
+Pre-randomised Swiss-style schedule. All rounds generated upfront (like Round Robin), configurable round count (3–6, like Swiss), no adaptive balancing, rematches excluded via underlying Round-Robin algorithm.
+
+```typescript
+export function generateLiechtensteinSchedule(
+  tournamentId: string,
+  participantIds: string[],
+  rounds: number,
+): LiechtensteinMatchInput[]
+```
+
+Algorithm: shuffle `participantIds` randomly → `RoundRobin(shuffled, 1, true)` → take first `rounds` rounds. Throws 400 if `rounds > maxRounds` (n−1 for even n, n for odd n). `phase: null`, `next_match_id: null` (same as Round Robin). Standings shown same as Swiss.
 
 ---
 

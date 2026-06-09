@@ -34,10 +34,10 @@ enum TournamentFormat {
   DOUBLE_ELIMINATION
   ROUND_ROBIN
   DOUBLE_ROUND_ROBIN
+  LIECHTENSTEIN
 }
 
 enum TournamentMode {
-  OPEN // no restriction (new default, casual)
   ONE_V_ONE // legacy 1v1
   THREE_V_THREE // reserved for Phase 3
   BLIND_PICK // reserved for Phase 3
@@ -59,8 +59,12 @@ enum MatchFormat {
 }
 
 enum MapDecisionMode {
-  RANDOM
-  PICK_BAN
+  RANDOM               // legacy
+  PICK_BAN             // legacy
+  RANDOM_NO_REPEAT     // a: zufällig, kein Repeat im Match + turnierweit
+  HOST_PRESET          // b: Organizer legt Maps pro Runde in Reihenfolge fest
+  HOST_PRESET_PICK_BAN // c: Organizer legt 3 Maps pro Runde/Game fest, dann Ban→Pick
+  RANDOM_PICK_BAN      // d: Server zieht 3 Maps pro Game (No-Repeat), dann Ban→Pick
 }
 
 enum TournamentStatus {
@@ -111,6 +115,7 @@ enum MatchPhase {
   PLAYOFF_QF // Quarter-Final
   PLAYOFF_SF // Semi-Final
   PLAYOFF_FINAL // Grand Final
+  PLAYOFF_THIRD_PLACE // Third-place match (losers of semis)
 }
 
 enum FactionCategory {
@@ -174,6 +179,10 @@ model User {
   match_reports         MatchReport[]           @relation("MatchReportReporter")
   // Welle 2
   steam_link            SteamLink?
+  // External (TT archive)
+  external_games_as_p1  ExternalGame[]          @relation("ExternalGamePlayer1")
+  external_games_as_p2  ExternalGame[]          @relation("ExternalGamePlayer2")
+  external_games_won    ExternalGame[]          @relation("ExternalGameWinner")
 
   @@index([role])
   @@index([deleted_at])
@@ -204,6 +213,9 @@ model Faction {
   stats_snapshots            FactionStatsSnapshot[]
   matchups_as_a              MatchupStats[]               @relation("MatchupFactionA")
   matchups_as_b              MatchupStats[]               @relation("MatchupFactionB")
+  // External (TT archive)
+  external_games_as_f1       ExternalGame[]               @relation("ExternalGameFaction1")
+  external_games_as_f2       ExternalGame[]               @relation("ExternalGameFaction2")
 
   @@index([category])
 }
@@ -220,7 +232,7 @@ model Tournament {
   poster_url             String?
   organizer_id           String               @db.Uuid
   format                 TournamentFormat
-  mode                   TournamentMode       @default(OPEN)
+  mode                   TournamentMode       @default(BPT)
   status                 TournamentStatus     @default(DRAFT)
   visibility             TournamentVisibility @default(PUBLIC)
   max_participants       Int?
@@ -236,11 +248,14 @@ model Tournament {
   is_major               Boolean              @default(false)
   // Welle 2 — Tournament-Mechanik
   rounds_count           Int                  @default(5) // 3–6 via constraint
+  has_third_place_match  Boolean              @default(false)
   playoff_format         PlayoffFormat        @default(NONE)
   swiss_match_format     MatchFormat          @default(BO1)
-  playoff_match_format   MatchFormat          @default(BO3)
-  finale_match_format    MatchFormat          @default(BO3)
+  playoff_match_format   MatchFormat          @default(BO1) // Bo3/Bo5 re-enable with series support
+  finale_match_format    MatchFormat          @default(BO1)
   map_decision_mode      MapDecisionMode      @default(PICK_BAN)
+  map_preset_config      Json?                // HOST_PRESET / HOST_PRESET_PICK_BAN: runden-spez. Map-Konfiguration
+  random_map_pool_played String[]             @default([]) // RANDOM_NO_REPEAT / RANDOM_PICK_BAN: turnierweit gespielte Maps
   created_at             DateTime             @default(now())
   updated_at             DateTime             @updatedAt
   deleted_at             DateTime?
@@ -345,8 +360,7 @@ model Match {
   player2_faction  Faction?          @relation("MatchPlayer2Faction", fields: [player2_faction_id], references: [id])
   draft            Draft?
   reports          MatchReport[]
-  map_decision     MatchMapDecision?
-  blind_pick       MatchBlindPick?
+  games            MatchGame[]
 
   @@unique([tournament_id, round, match_number])
   @@index([tournament_id, status])
@@ -356,37 +370,63 @@ model Match {
   @@index([deleted_at])
 }
 
-// Welle 2: Map decision (coin-flip, pick/ban) per match game.
+// M7: MatchGame — one row per Battle in a Match (Bo1=1 game, Bo3=up to 3, Bo5=up to 5).
+// v1: always game_number=1 (Bo1 only). Schema is series-ready for Bo3/Bo5.
+model MatchGame {
+  id                 String      @id @default(uuid()) @db.Uuid
+  match_id           String      @db.Uuid
+  game_number        Int         @default(1)
+  status             MatchStatus @default(PENDING)
+  winner_id          String?     @db.Uuid
+  player1_faction_id String?     // auto-resolved from BlindPick/SFT on finalization
+  player2_faction_id String?
+  lobby_code         String?     // optional ingame lobby code
+  // Provisional-result flow (30-min auto-confirm)
+  reported_winner_id String?     @db.Uuid
+  reporter_id        String?     @db.Uuid
+  reported_at        DateTime?
+  confirmed_at       DateTime?   // set on opponent-confirm OR cron auto-confirm
+  replay_url             String?     // required on first report (anti-farming)
+  played_at              DateTime?
+  counts_for_leaderboard Boolean     @default(true)
+  created_at             DateTime    @default(now())
+  updated_at             DateTime    @updatedAt
+
+  match        Match             @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  map_decision MatchMapDecision?
+  blind_pick   MatchBlindPick?
+
+  @@unique([match_id, game_number])
+  @@index([match_id])
+  @@index([reported_at]) // cron scan for auto-confirm
+}
+
+// Welle 2: Map decision (coin-flip, pick/ban) per game.
 model MatchMapDecision {
-  match_id         String          @id @db.Uuid
-  game_index       Int             @default(0) // Bo3/Bo5: Game 1=0, Game 2=1, …
+  game_id          String          @id @db.Uuid
   mode             MapDecisionMode
   coin_flip_seed   String
   top_player_id    String          @db.Uuid
   bottom_player_id String          @db.Uuid
   bans_top         String[] // Map IDs banned by top player
   bans_bottom      String[] // Map IDs banned by bottom player
+  active_pool      String[]        @default([]) // HOST_PRESET_PICK_BAN / RANDOM_PICK_BAN: aktive 3 Maps für dieses Game
   picked_map_id    String? // final picked Map ID
   decided_at       DateTime?
 
-  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
-
-  @@index([match_id])
+  game MatchGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
 }
 
-// Welle 2: Blind faction pick per match game (BPT mode).
+// Welle 2: Blind faction pick per game (BPT mode).
 model MatchBlindPick {
-  match_id           String    @id @db.Uuid
-  game_index         Int       @default(0)
+  game_id            String    @id @db.Uuid
   player1_faction_id String?
   player2_faction_id String?
   player1_locked_at  DateTime?
   player2_locked_at  DateTime?
   revealed_at        DateTime?
 
-  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
-
-  @@index([match_id])
+  game MatchGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
 }
 
 // Q4: Dual-submit match reports. Each player submits their own report; agreement
@@ -467,14 +507,13 @@ model Season {
 }
 
 model LeaderboardEntry {
-  id             String   @id @default(uuid()) @db.Uuid
-  user_id        String   @db.Uuid
-  season_id      String   @db.Uuid
-  total_points   Float    @default(0)
-  elo_rating     Int      @default(1200)
-  matches_played Int      @default(0)
-  wins           Int      @default(0)
-  losses         Int      @default(0)
+  id           String   @id @default(uuid()) @db.Uuid
+  user_id      String   @db.Uuid
+  season_id    String   @db.Uuid
+  total_points Float    @default(0)
+  games_played Int      @default(0)
+  wins         Int      @default(0)
+  losses       Int      @default(0)
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 
@@ -492,7 +531,6 @@ model TournamentResult {
   season_id     String?  @db.Uuid // null if tournament not counted for leaderboard
   placement     Int
   points_earned Float    @default(0)
-  elo_change    Int      @default(0)
   created_at    DateTime @default(now())
 
   tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
@@ -763,6 +801,47 @@ model ImportLog {
   finished_at      DateTime?
 
   @@index([source, started_at])
+}
+
+// -----------------------------------------------------------------------------
+// External Game Archive (TT scrape — player-name strings + best-effort FK resolve)
+// Resolved FKs (player1_id etc.) start as null and are populated on user
+// registration via the auth callback reconciliation hook.
+// -----------------------------------------------------------------------------
+
+model ExternalGame {
+  id                     String   @id @default(uuid()) @db.Uuid
+  source                 String   @default("totaltavern")
+  external_tournament_id Int
+  round                  Int      @default(0)
+  score                  String?
+
+  // Raw strings — always populated
+  player1_name           String
+  player2_name           String
+  player1_faction_name   String?
+  player2_faction_name   String?
+  winner_name            String?  // null = Draw / no result
+
+  // Resolved FKs — nullable, populated on user registration
+  player1_id             String?  @db.Uuid
+  player2_id             String?  @db.Uuid
+  winner_id              String?  @db.Uuid
+  player1_faction_id     String?
+  player2_faction_id     String?
+
+  scraped_at             DateTime @default(now())
+
+  player1         User?    @relation("ExternalGamePlayer1",   fields: [player1_id],        references: [id])
+  player2         User?    @relation("ExternalGamePlayer2",   fields: [player2_id],        references: [id])
+  winner          User?    @relation("ExternalGameWinner",    fields: [winner_id],          references: [id])
+  player1_faction Faction? @relation("ExternalGameFaction1", fields: [player1_faction_id], references: [id])
+  player2_faction Faction? @relation("ExternalGameFaction2", fields: [player2_faction_id], references: [id])
+
+  @@unique([source, external_tournament_id, round, player1_name, player2_name])
+  @@index([player1_id])
+  @@index([player2_id])
+  @@index([player1_faction_id, player2_faction_id])
 }
 
 // -----------------------------------------------------------------------------

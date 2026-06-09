@@ -8,8 +8,7 @@ interface ModelMatchupHeatmapProps {
 }
 
 export function ModelMatchupHeatmap({ entries, factions }: ModelMatchupHeatmapProps) {
-  // Sort factions by display_order for consistent axis ordering
-  const sorted = [...factions].sort((a, b) => a.display_order - b.display_order);
+  const sorted = [...factions].sort((a, b) => a.name.localeCompare(b.name));
 
   // Build lookup map: "factionA|factionB" → entry (stored directionally)
   const entryMap = new Map<string, FactionMatchupMatrixEntryDto>();

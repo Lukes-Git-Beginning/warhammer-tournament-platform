@@ -2,6 +2,8 @@ import fp from 'fastify-plugin';
 import cron from 'node-cron';
 import { takeFactionsSnapshot } from '../lib/faction-snapshot.js';
 import { notifyCheckInReminder } from '../lib/discord-notify.js';
+import { autoConfirmExpiredGameResults } from '../lib/match-games.js';
+import { autoResolveStaleBlindPicks } from '../lib/blind-pick-auto-resolve.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -137,11 +139,51 @@ export default fp(
       { timezone: 'UTC' },
     );
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask]);
+    // -----------------------------------------------------------------------
+    // Auto-confirm provisional game results — every minute
+    // -----------------------------------------------------------------------
+    const gameConfirmTask = cron.schedule(
+      '*/1 * * * *',
+      async () => {
+        try {
+          const count = await autoConfirmExpiredGameResults(fastify);
+          if (count > 0) {
+            fastify.log.info({ count }, 'Auto-confirmed expired game results');
+          }
+        } catch (err) {
+          fastify.log.error({ err }, 'Auto-confirm cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    // -----------------------------------------------------------------------
+    // Auto-resolve stale blind picks — every minute
+    // If one player locked their faction but the opponent hasn't responded
+    // within 2 minutes, a random faction is assigned and the pick is revealed.
+    // -----------------------------------------------------------------------
+    const blindPickTask = cron.schedule(
+      '*/1 * * * *',
+      async () => {
+        try {
+          const count = await autoResolveStaleBlindPicks(fastify);
+          if (count > 0) {
+            fastify.log.info({ count }, 'Auto-resolved stale blind picks');
+          }
+        } catch (err) {
+          fastify.log.error({ err }, 'Blind-pick auto-resolve cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
       checkinTask.stop();
+      gameConfirmTask.stop();
+      blindPickTask.stop();
     });
   },
   { name: 'cron', dependencies: ['db'] },

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '@/components/layout/Header';
 import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 import { useRequireSteamLink } from '@/lib/auth';
+import { DevLoginPanel } from '@/components/dev/DevLoginPanel';
 
 function RootLayout() {
   const { t } = useTranslation();
@@ -38,6 +39,7 @@ function RootLayout() {
         <Outlet />
       </div>
       <OnboardingOverlay />
+      {import.meta.env.DEV && <DevLoginPanel />}
     </div>
   );
 }

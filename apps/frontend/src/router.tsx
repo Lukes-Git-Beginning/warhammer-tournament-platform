@@ -3,6 +3,7 @@ import { rootRoute } from './routes/__root';
 import { IndexPage } from './routes/IndexPage';
 import { LoginPage } from './routes/LoginPage';
 import { TournamentDetail } from './routes/TournamentDetail';
+import { TournamentGamesPage } from './routes/TournamentGamesPage';
 import { TournamentEditPage } from './routes/TournamentEditPage';
 import { TournamentsListing } from './routes/TournamentsListing';
 import { CreateTournamentPage } from './routes/CreateTournamentPage';
@@ -66,6 +67,12 @@ const tournamentDetailRoute = createRoute({
   component: TournamentDetail,
 });
 
+const tournamentGamesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/tournaments/$slug/games',
+  component: TournamentGamesPage,
+});
+
 const tournamentEditRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tournaments/$slug/edit',
@@ -111,31 +118,31 @@ const factionDetailRoute = createRoute({
 const draftLobbyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/drafts/$id',
-  component: DraftLobbyPage,
+  component: () => { window.location.replace('/'); return null; },
 });
 
 const draftSpectatorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/drafts/$id/spectate',
-  component: DraftSpectatorPage,
+  component: () => { window.location.replace('/'); return null; },
 });
 
 const presetListRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/presets',
-  component: PresetListPage,
+  component: () => { window.location.replace('/'); return null; },
 });
 
 const presetNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/presets/new',
-  component: PresetEditorPage,
+  component: () => { window.location.replace('/'); return null; },
 });
 
 const presetEditRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/presets/$id/edit',
-  component: PresetEditorPage,
+  component: () => { window.location.replace('/'); return null; },
 });
 
 const adminRoute = createRoute({
@@ -172,6 +179,7 @@ const routeTree = rootRoute.addChildren([
   createTournamentRoute,
   calendarRoute,
   tournamentDetailRoute,
+  tournamentGamesRoute,
   tournamentEditRoute,
   leaderboardRoute,
   userProfileRoute,

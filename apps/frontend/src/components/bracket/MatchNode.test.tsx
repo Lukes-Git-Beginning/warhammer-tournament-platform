@@ -24,6 +24,8 @@ function makeMatch(overrides: Partial<BracketNode> = {}): BracketNode {
     bracketSide: null,
     player1FactionId: null,
     player2FactionId: null,
+    player1GameWins: 0,
+    player2GameWins: 0,
     ...overrides,
   };
 }

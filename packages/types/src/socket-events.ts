@@ -2,6 +2,7 @@
 // Populated in M1.3+. M1.1 stub establishes the shape.
 
 import type { PublicDraftState } from './draft.js';
+import type { Role } from './api-schemas.js';
 
 export type TournamentStatusLiteral =
   | 'DRAFT'
@@ -99,7 +100,7 @@ export interface ServerToClientEvents {
   // Welle 2 — Match-Decision flow
   'match.decision.started': (payload: {
     matchId: string;
-    mode: 'RANDOM' | 'PICK_BAN';
+    mode: 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
     topPlayerId: string;
     bottomPlayerId: string;
     seed: string;
@@ -125,11 +126,23 @@ export interface ServerToClientEvents {
     player1FactionId: string | null; // null until reveal
     player2FactionId: string | null;
   }) => void;
+  'match.game.updated': (payload: {
+    matchId: string;
+    gameNumber: number;
+    status: string;
+    winnerId: string | null;
+    lobbyCode: string | null;
+    reportedWinnerId: string | null;
+    reportedAt: string | null;
+    confirmedAt: string | null;
+  }) => void;
 }
 
 export interface ClientToServerEvents {
   join_tournament: (tournamentId: string) => void;
   leave_tournament: (tournamentId: string) => void;
+  join_match_decision: (matchId: string) => void;
+  leave_match_decision: (matchId: string) => void;
   // M4 Draft events
   join_draft: (draftId: string) => void;
   leave_draft: (draftId: string) => void;
@@ -144,4 +157,5 @@ export interface InterServerEvents {
 export interface SocketData {
   userId: string;
   username: string;
+  role: Role;
 }

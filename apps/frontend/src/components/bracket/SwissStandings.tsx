@@ -1,10 +1,20 @@
 import { Link } from '@tanstack/react-router';
-import type { SwissMeta } from '@rizzotto/types';
+import type { FactionDto, SwissMeta } from '@rizzotto/types';
+import { FactionBadge } from '@/components/meta/FactionBadge';
 
 interface SwissStandingsProps {
   standings: SwissMeta['standings'];
   currentRound: number;
   recommendedRounds: number;
+  factionMap?: Map<string, FactionDto>;
+  /** userId → factionId, derived from bracket matches as fallback */
+  playerFactionMap?: Map<string, string>;
+  /** Tournament mode — Faction column shown only for SFT (and future 2FT/3FT) */
+  tournamentMode?: string;
+  /** Playoff format — controls first-divider position */
+  playoffFormat?: 'NONE' | 'TOP4' | 'TOP8' | null;
+  /** Players who have advanced to the Grand Final (from PLAYOFF_FINAL match) */
+  finalistIds?: Set<string>;
 }
 
 function Avatar({ url, username }: { url: string | null; username: string }) {
@@ -24,16 +34,50 @@ function Avatar({ url, username }: { url: string | null; username: string }) {
   );
 }
 
+const FACTION_MODES = new Set(['SFT', '2FT', 'DFT', '3FT', 'TFT']);
+
+function Divider({ label, colSpan }: { label: string; colSpan: number }) {
+  return (
+    <tr>
+      <td
+        colSpan={colSpan}
+        className="px-4 py-1.5 bg-rizzotto-gold-500/5 border-y border-rizzotto-gold-500/20"
+      >
+        <span className="text-[10px] text-rizzotto-gold-500/70 uppercase tracking-widest font-semibold">
+          ↑ {label}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
 export function SwissStandings({
   standings,
   currentRound,
   recommendedRounds,
+  factionMap,
+  playerFactionMap,
+  tournamentMode,
+  playoffFormat,
+  finalistIds,
 }: SwissStandingsProps) {
+  const showFactionColumn = tournamentMode ? FACTION_MODES.has(tournamentMode) : false;
+  const colCount = 5 + (showFactionColumn ? 1 : 0) + 1; // # + Player + [Faction] + Score + W/L/B + GL + BH
+
+  // Cap displayed round at the Swiss phase — don't count playoff rounds.
+  const displayRound = Math.min(currentRound, recommendedRounds);
+
+  // Divider thresholds: how many players advance to playoffs and to finals.
+  const playoffCutoff = playoffFormat === 'TOP8' ? 8 : playoffFormat === 'TOP4' ? 4 : 0;
+  const playoffLabel = playoffFormat === 'TOP8' ? 'Advance to Quarterfinals' : 'Advance to Semifinals';
+  const showPlayoffDivider = playoffCutoff > 0 && currentRound >= recommendedRounds;
+  const showFinalsDivider = finalistIds && finalistIds.size > 0;
+
   return (
     <div className="mb-6 rounded-md border border-stone-800 bg-stone-900/40 overflow-hidden">
       <div className="px-4 py-3 border-b border-stone-800 bg-stone-900/60">
         <h3 className="font-display text-base font-semibold text-rizzotto-gold-500">
-          Standings (Runde {currentRound}/{recommendedRounds})
+          Standings (Round {displayRound}/{recommendedRounds})
         </h3>
       </div>
       <div className="overflow-x-auto">
@@ -41,38 +85,82 @@ export function SwissStandings({
           <thead>
             <tr className="border-b border-stone-800">
               <th className="px-4 py-2 text-left font-medium text-stone-400">#</th>
-              <th className="px-4 py-2 text-left font-medium text-stone-400">Spieler</th>
-              <th className="px-4 py-2 text-right font-medium text-stone-400">Punkte</th>
+              <th className="px-4 py-2 text-left font-medium text-stone-400">Player</th>
+              {showFactionColumn && <th className="px-4 py-2 text-left font-medium text-stone-400">Faction</th>}
+              <th className="px-4 py-2 text-right font-medium text-stone-400">Score</th>
               <th className="px-4 py-2 text-center font-medium text-stone-400">W / L / B</th>
+              <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Games Lost">GL</th>
+              <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Buchholz">BH</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-800/60">
             {standings.map((entry, idx) => {
+              const rank = idx + 1;
               const displayName = entry.username ?? entry.userId;
+              const factionId = entry.factionId ?? playerFactionMap?.get(entry.userId);
+              const faction = factionId ? factionMap?.get(factionId) : undefined;
+              const isFinalist = finalistIds?.has(entry.userId);
+
               return (
-                <tr key={entry.userId} className="hover:bg-stone-800/30 transition-colors">
-                  <td className="px-4 py-2 text-stone-500">{idx + 1}</td>
-                  <td className="px-4 py-2">
-                    <Link
-                      to="/users/$id"
-                      params={{ id: entry.userId }}
-                      className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
-                    >
-                      <Avatar url={entry.avatarUrl} username={displayName} />
-                      <span className="text-stone-200">{displayName}</span>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2 text-right font-semibold text-stone-100">
-                    {entry.score}
-                  </td>
-                  <td className="px-4 py-2 text-center text-stone-300">
-                    <span className="text-emerald-400">{entry.wins}</span>
-                    <span className="text-stone-600"> / </span>
-                    <span className="text-red-400">{entry.losses}</span>
-                    <span className="text-stone-600"> / </span>
-                    <span className="text-stone-400">{entry.byes}</span>
-                  </td>
-                </tr>
+                <>
+                  {/* Finals divider: between finalists and the rest (after last finalist row) */}
+                  {showFinalsDivider && rank === 3 && (
+                    <Divider label="Advance to Grand Final" colSpan={colCount} />
+                  )}
+                  {/* Playoffs divider: between playoff qualifiers and the rest */}
+                  {showPlayoffDivider && !showFinalsDivider && rank === playoffCutoff + 1 && (
+                    <Divider label={playoffLabel} colSpan={colCount} />
+                  )}
+                  {showPlayoffDivider && showFinalsDivider && rank === playoffCutoff + 1 && (
+                    <Divider label={playoffLabel} colSpan={colCount} />
+                  )}
+                  <tr
+                    key={entry.userId}
+                    className={`hover:bg-stone-800/30 transition-colors ${isFinalist ? 'bg-rizzotto-gold-500/5' : ''}`}
+                  >
+                    <td className="px-4 py-2 text-stone-500">{rank}</td>
+                    <td className="px-4 py-2">
+                      <Link
+                        to="/users/$id"
+                        params={{ id: entry.userId }}
+                        className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
+                      >
+                        <Avatar url={entry.avatarUrl} username={displayName} />
+                        <span className="text-stone-200">{displayName}</span>
+                      </Link>
+                    </td>
+                    {showFactionColumn && (
+                      <td className="px-4 py-2">
+                        {faction ? (
+                          <div className="flex items-center gap-2">
+                            <FactionBadge
+                              size="sm"
+                              colorHex={faction.color_hex}
+                              initials={faction.initials}
+                              name={faction.name}
+                              iconUrl={faction.icon_url}
+                            />
+                            <span className="text-xs text-stone-300">{faction.name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-stone-600">—</span>
+                        )}
+                      </td>
+                    )}
+                    <td className="px-4 py-2 text-right font-semibold text-stone-100">
+                      {entry.score}
+                    </td>
+                    <td className="px-4 py-2 text-center text-stone-300">
+                      <span className="text-emerald-400">{entry.wins}</span>
+                      <span className="text-stone-600"> / </span>
+                      <span className="text-red-400">{entry.losses}</span>
+                      <span className="text-stone-600"> / </span>
+                      <span className="text-stone-400">{entry.byes}</span>
+                    </td>
+                    <td className="px-4 py-2 text-right text-stone-400 tabular-nums">{entry.gamesLost}</td>
+                    <td className="px-4 py-2 text-right text-stone-500 tabular-nums text-xs">{entry.buchholz.toFixed(1)}</td>
+                  </tr>
+                </>
               );
             })}
           </tbody>

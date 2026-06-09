@@ -6,7 +6,6 @@ import { StatsDashboard } from '@/components/admin/StatsDashboard.js';
 import { UserBanTab } from '@/components/admin/UserBanTab.js';
 import { PresetLibraryAdmin } from '@/components/admin/PresetLibraryAdmin.js';
 import { FactionWinRatesChart } from '@/components/admin/FactionWinRatesChart.js';
-import { EloDistributionChart } from '@/components/admin/EloDistributionChart.js';
 import { DropOffFunnelChart } from '@/components/admin/DropOffFunnelChart.js';
 import { PickBanStatsChart } from '@/components/admin/PickBanStatsChart.js';
 import { MapPoolEditor } from '@/components/admin/MapPoolEditor.js';
@@ -45,7 +44,6 @@ function StatsTab() {
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
       <FactionWinRatesChart />
-      <EloDistributionChart />
       <DropOffFunnelChart />
       <PickBanStatsChart />
     </div>

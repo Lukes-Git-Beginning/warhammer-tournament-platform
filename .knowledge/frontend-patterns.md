@@ -5,6 +5,7 @@
 - Vite 6 + React 19 + TanStack Router (code-based) + TanStack Query 5 + Tailwind 4 CSS-first.
 - Alle API-Calls laufen über `apiFetch<T>()` aus `src/lib/api.ts` — kein direktes `fetch()` in Komponenten.
 - Routes werden manuell in `src/router.tsx` registriert; kein File-based Routing.
+- **`src/lib/bracketStandings.ts`** (2026-06-09): Shared utility für Playoff-Standings-Sortierung. Exports: `sortStandingsByPlayoffResult(standings, matches)` + `getFinalistIds(matches)`. Beide kennen den SF-Fallback (wenn GF/TP-Match noch nicht existiert). Wird in **beiden** Render-Stellen genutzt: `TournamentDetail.tsx` (~line 191) und `BracketView.tsx` (~line 64). **Gotcha:** `SwissStandings` wird in `TournamentDetail` eigenständig gerendert — bei Standings-Änderungen immer beide Stellen prüfen.
 
 ---
 

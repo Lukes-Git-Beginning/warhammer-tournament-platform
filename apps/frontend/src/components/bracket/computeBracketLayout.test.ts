@@ -33,6 +33,8 @@ function makeMatch(
     bracketSide,
     player1FactionId: null,
     player2FactionId: null,
+    player1GameWins: 0,
+    player2GameWins: 0,
   };
 }
 

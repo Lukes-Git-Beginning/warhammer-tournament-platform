@@ -16,6 +16,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "tsx prisma/seed.ts",
     "seed:dummies": "tsx prisma/seed-dummies.ts",
+    "seed:sft-fix": "tsx prisma/seed-sft-faction-fix.ts",
+    "db:reset-playoffs": "tsx prisma/seed-reset-playoffs.ts",
     "clean": "rm -rf dist .turbo node_modules/.prisma generated"
   },
   "dependencies": {

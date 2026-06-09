@@ -63,46 +63,30 @@ export function HeroSection() {
           />
         </motion.div>
 
-        {/* Tagline */}
-        <motion.p
-          initial={reduced ? { opacity: 0 } : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={
-            reduced
-              ? { duration: 0.24 }
-              : { duration: 0.6, ease: [0.4, 0, 0.2, 1], delay: 1.0 }
-          }
-          className="mt-6 font-display italic text-rizzotto-stone-200"
-          style={{
-            fontSize: 'clamp(1.125rem, 2.4vw, 1.625rem)',
-            textShadow: '0 2px 12px rgba(0,0,0,0.7)',
-          }}
-        >
-          {t('hero.tagline')}
-        </motion.p>
-
-        {/* CTAs */}
+        {/* CTAs — sign-in button only shown to guests; leaderboard always visible */}
         <motion.div
           initial="hidden"
           animate="visible"
           variants={{
             hidden: {},
             visible: {
-              transition: { staggerChildren: 0.08, delayChildren: reduced ? 0 : 1.2 },
+              transition: { staggerChildren: 0.08, delayChildren: reduced ? 0 : 1.0 },
             },
           }}
           className="mt-10 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center"
         >
-          <motion.div
-            variants={{
-              hidden: reduced ? { opacity: 0 } : { opacity: 0, y: 8 },
-              visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
-            }}
-          >
-            <Button asChild variant="forge" size="lg">
-              <Link to={user ? '/tournaments' : '/login'}>{t('hero.cta_primary')}</Link>
-            </Button>
-          </motion.div>
+          {!user && (
+            <motion.div
+              variants={{
+                hidden: reduced ? { opacity: 0 } : { opacity: 0, y: 8 },
+                visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+              }}
+            >
+              <Button asChild variant="forge" size="lg">
+                <Link to="/login">{t('hero.cta_primary')}</Link>
+              </Button>
+            </motion.div>
+          )}
           <motion.div
             variants={{
               hidden: reduced ? { opacity: 0 } : { opacity: 0, y: 8 },

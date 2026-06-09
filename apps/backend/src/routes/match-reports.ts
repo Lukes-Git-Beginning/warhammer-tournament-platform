@@ -15,6 +15,7 @@ import {
   type MatchReportingState,
 } from '@rizzotto/types';
 import { resolveMatchResult, disputeMatch } from '../lib/match-result-service.js';
+import { ensureMatchGame } from '../lib/match-games.js';
 import { tournamentRoom } from '../lib/emit.js';
 import { notifyDispute } from '../lib/discord-notify.js';
 import { invalidate } from '../lib/cache.js';
@@ -288,7 +289,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { result, player1_points, player2_points, reason } = parsed.data;
+      const { result, player1_points, player2_points, player1_score, player2_score, reason, map_id, player1FactionId, player2FactionId } = parsed.data;
 
       // Load match
       const match = await fastify.prisma.match.findFirst({
@@ -328,11 +329,12 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Cannot override already-completed matches (unless ADMIN)
-      if (match.status === 'COMPLETED' && user.role !== 'ADMIN') {
+      // Cannot override already-completed matches unless ADMIN or the tournament's own organizer
+      const isOwnOrganizer = match.tournament.organizer_id === user.sub;
+      if (match.status === 'COMPLETED' && user.role !== 'ADMIN' && !isOwnOrganizer) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: 'Match is already COMPLETED — only ADMIN can re-override',
+          message: 'Match is already COMPLETED — only the tournament organizer or an admin can re-override',
           statusCode: 422,
         });
       }
@@ -345,11 +347,50 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
           override: true,
           player1_points: player1_points ?? undefined,
           player2_points: player2_points ?? undefined,
+          player1FactionId: player1FactionId ?? undefined,
+          player2FactionId: player2FactionId ?? undefined,
           actorId: user.sub,
           reason,
         },
         fastify.io,
       );
+
+      if (player1_score != null || player2_score != null) {
+        await fastify.prisma.match.update({
+          where: { id: matchId },
+          data: { score: `${player1_score ?? 0}-${player2_score ?? 0}` },
+        });
+      }
+
+      if (map_id && match.player1_id && match.player2_id) {
+        const winnerId = result === 'PLAYER1_WIN' ? match.player1_id : result === 'PLAYER2_WIN' ? match.player2_id : null;
+        await fastify.prisma.matchGame.upsert({
+          where: { match_id_game_number: { match_id: matchId, game_number: 1 } },
+          create: { match_id: matchId, game_number: 1, status: 'COMPLETED', winner_id: winnerId, played_at: new Date(), counts_for_leaderboard: match.tournament.counts_for_leaderboard },
+          update: { status: 'COMPLETED', winner_id: winnerId, played_at: new Date() },
+        });
+        const game = await fastify.prisma.matchGame.findUniqueOrThrow({
+          where: { match_id_game_number: { match_id: matchId, game_number: 1 } },
+          select: { id: true },
+        });
+        await fastify.prisma.matchMapDecision.upsert({
+          where: { game_id: game.id },
+          create: {
+            game_id: game.id,
+            mode: 'HOST_PRESET',
+            coin_flip_seed: 'manual',
+            top_player_id: match.player1_id,
+            bottom_player_id: match.player2_id,
+            bans_top: [],
+            bans_bottom: [],
+            active_pool: [],
+            picked_map_id: map_id,
+            decided_at: new Date(),
+          },
+          update: { picked_map_id: map_id },
+        });
+      }
+
       await invalidateScoringCaches(fastify.redis);
 
       // Reload reports to build response

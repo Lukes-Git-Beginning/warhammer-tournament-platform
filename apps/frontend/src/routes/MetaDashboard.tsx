@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getMetaOverview, getMatchupHeatmap, getMatchupMatrix, getFactions } from '@/lib/api';
+import { getMetaOverview, getMatchupHeatmap, getMatchupMatrix, getFactions, getMetaGames } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { MatchupHeatmap } from '@/components/meta/MatchupHeatmap';
 import { ModelMatchupHeatmap } from '@/components/meta/ModelMatchupHeatmap';
+import { GameHistoryTable } from '@/components/match/GameHistoryTable';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { FactionWithStatsDto } from '@rizzotto/types';
@@ -67,6 +69,13 @@ export function MetaDashboard() {
 
   const seasonId = overview?.season?.id;
 
+  const [gamesPage, setGamesPage] = useState(1);
+  const GAMES_PAGE_SIZE = 50;
+  const { data: gamesData } = useQuery({
+    queryKey: ['meta-games', gamesPage],
+    queryFn: () => getMetaGames(gamesPage, GAMES_PAGE_SIZE),
+  });
+
   const {
     data: matrixData,
     isLoading: matrixLoading,
@@ -128,8 +137,8 @@ export function MetaDashboard() {
         <>
           <div className="grid grid-cols-2 gap-4 mb-10 sm:grid-cols-4">
             <StatCard
-              label={t('meta_page.stat_total_matches')}
-              value={overview.total_matches}
+              label={t('meta_page.stat_total_games')}
+              value={overview.total_games}
             />
             <StatCard
               label={t('meta_page.stat_faction_diversity')}
@@ -242,6 +251,43 @@ export function MetaDashboard() {
           </section>
         </>
       )}
+
+      {/* ─── Global Game History ─── */}
+      <section className="mt-10">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500">
+            All Games
+            {gamesData && <span className="ml-2 text-sm font-normal text-stone-500">({gamesData.total} total)</span>}
+          </h2>
+          {gamesData && gamesData.total > GAMES_PAGE_SIZE && (
+            <div className="flex items-center gap-3 text-sm">
+              <button
+                onClick={() => setGamesPage((p) => Math.max(1, p - 1))}
+                disabled={gamesPage === 1}
+                className="px-3 py-1 rounded border border-stone-700 text-stone-400 hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Prev
+              </button>
+              <span className="text-stone-500">
+                {gamesPage} / {Math.ceil(gamesData.total / GAMES_PAGE_SIZE)}
+              </span>
+              <button
+                onClick={() => setGamesPage((p) => p + 1)}
+                disabled={gamesPage >= Math.ceil(gamesData.total / GAMES_PAGE_SIZE)}
+                className="px-3 py-1 rounded border border-stone-700 text-stone-400 hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                Next →
+              </button>
+            </div>
+          )}
+        </div>
+        {gamesData && <GameHistoryTable games={gamesData.games} showTournament />}
+        {!gamesData && (
+          <div className="flex justify-center py-6">
+            <span className="h-5 w-5 rounded-full border-2 border-rizzotto-gold-400 border-t-transparent animate-spin" />
+          </div>
+        )}
+      </section>
     </PageShell>
   );
 }

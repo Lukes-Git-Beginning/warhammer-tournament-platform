@@ -90,7 +90,7 @@ export function FactionGrid({
             }}
             disabled={!isInteractive}
             className={`relative flex flex-col items-center gap-1 rounded-md border-2 p-2 text-center transition-all duration-150 ${STATUS_CLASSES[status]}`}
-            title={`${f.name}${status === 'banned' ? ' (Gebannt)' : status === 'banned-for-you' ? ' (Für dich gebannt)' : ''}`}
+            title={`${f.name}${status === 'banned' ? ' (Banned)' : status === 'banned-for-you' ? ' (Banned for you)' : ''}`}
             style={
               status === 'available' || status === 'picked-host' || status === 'picked-guest'
                 ? { borderColor: f.color_hex }

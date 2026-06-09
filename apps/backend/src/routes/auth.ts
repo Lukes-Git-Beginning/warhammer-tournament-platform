@@ -95,16 +95,33 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         },
         select: {
           id: true,
-          discord_id: true,
           username: true,
           role: true,
           steam_link: { select: { steam_id: true } },
         },
       });
 
+      // Link historical TT game records where player name matches this user's
+      // display name. Only updates rows where the FK is still null, so re-logins
+      // are no-ops. Fire-and-forget failures are acceptable — records stay
+      // unresolved and can be reconciled on the next login.
+      void fastify.prisma.$transaction([
+        fastify.prisma.externalGame.updateMany({
+          where: { player1_name: user.username, player1_id: null },
+          data: { player1_id: user.id },
+        }),
+        fastify.prisma.externalGame.updateMany({
+          where: { player2_name: user.username, player2_id: null },
+          data: { player2_id: user.id },
+        }),
+        fastify.prisma.externalGame.updateMany({
+          where: { winner_name: user.username, winner_id: null },
+          data: { winner_id: user.id },
+        }),
+      ]);
+
       const payload: JwtPayload = {
         sub: user.id,
-        discord_id: user.discord_id,
         username: user.username,
         role: user.role as Role,
       };
@@ -287,6 +304,50 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true };
   });
 
+  // Dev-only: directly issue a JWT cookie for any user by discord_id. Enables the
+  // local DevLoginPanel multi-user dress rehearsal (separate browser windows).
+  // Strict allowlist — only available when NODE_ENV is exactly "development".
+  // Returns 403 in production, staging, test, or when NODE_ENV is unset, so it can
+  // never be used as an authentication bypass in a deployed environment.
+  fastify.post('/auth/dev-login', async (request, reply) => {
+    if (process.env.NODE_ENV !== 'development') {
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: 'Dev-login endpoint is only available in local development',
+        statusCode: 403,
+      });
+    }
+
+    const body = request.body as { discordId?: string } | undefined;
+    if (!body?.discordId || typeof body.discordId !== 'string') {
+      return reply.code(400).send({
+        error: 'BadRequest',
+        message: 'discordId is required',
+        statusCode: 400,
+      });
+    }
+
+    const user = await fastify.prisma.user.findUnique({
+      where: { discord_id: body.discordId, deleted_at: null },
+      select: { id: true, username: true, role: true },
+    });
+    if (!user) {
+      return reply.code(404).send({
+        error: 'NotFound',
+        message: `User with discordId "${body.discordId}" not found`,
+        statusCode: 404,
+      });
+    }
+
+    const payload: JwtPayload = {
+      sub: user.id,
+      username: user.username,
+      role: user.role as Role,
+    };
+    fastify.signAuthCookie(reply, payload);
+    return { ok: true, user };
+  });
+
   // Test-only: directly issue JWT cookie for a given userId.
   // Guarded by NODE_ENV=test — returns 403 in dev/prod.
   fastify.post('/auth/test-login', async (request, reply) => {
@@ -309,7 +370,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const user = await fastify.prisma.user.findUnique({
       where: { id: body.userId, deleted_at: null },
-      select: { id: true, discord_id: true, username: true, role: true },
+      select: { id: true, username: true, role: true },
     });
     if (!user) {
       return reply.code(404).send({
@@ -321,7 +382,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const payload: JwtPayload = {
       sub: user.id,
-      discord_id: user.discord_id,
       username: user.username,
       role: user.role as Role,
     };

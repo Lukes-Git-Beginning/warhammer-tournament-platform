@@ -1,18 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-} from 'recharts';
 import { getUserProfile, getUserStats } from '@/lib/api.js';
-import type { EloHistoryEntry } from '@/lib/api.js';
 import { PlayerFactionProficiencyCard } from '../components/meta/PlayerFactionProficiencyCard.js';
 import { useAuthQuery } from '@/lib/auth.js';
 import { useOnboarding } from '@/lib/onboarding.js';
@@ -20,7 +9,6 @@ import { formatInUserTimezone } from '@/lib/timezone.js';
 import { Button } from '@/components/ui/button.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 import { PageShell } from '@/components/layout/PageShell.js';
-import { EloRatingDisplay } from '../components/meta/EloRatingDisplay.js';
 import { ArmyListList } from '../components/tournament/ArmyListList.js';
 import { ArmyListUpload } from '../components/tournament/ArmyListUpload.js';
 
@@ -59,12 +47,6 @@ function Avatar({
   );
 }
 
-function EloDeltaCell({ delta }: { delta: number | null }) {
-  if (delta == null) return <span className="text-stone-500 text-sm">—</span>;
-  if (delta > 0) return <span className="text-sm font-semibold text-emerald-400">▲ +{delta}</span>;
-  if (delta < 0) return <span className="text-sm font-semibold text-red-400">▼ {delta}</span>;
-  return <span className="text-sm text-stone-500">— 0</span>;
-}
 
 function StatCard({
   label,
@@ -123,65 +105,6 @@ function WinLossCard({
   );
 }
 
-function EloHistoryCard({ history }: { history: EloHistoryEntry[] }) {
-  if (history.length === 0) {
-    return (
-      <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
-        <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">ELO History</p>
-        <p className="text-sm text-stone-600">No ELO history yet.</p>
-      </div>
-    );
-  }
-
-  const values = history.map((h) => h.elo);
-  const minElo = Math.min(...values);
-  const maxElo = Math.max(...values);
-
-  const chartData = history.map((h) => ({
-    date: h.date.slice(0, 10),
-    elo: h.elo,
-  }));
-
-  return (
-    <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
-      <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">ELO History (90d)</p>
-      <div className="flex gap-4 text-xs text-stone-400 mb-2">
-        <span>
-          Min: <span className="text-red-400 font-semibold">{minElo}</span>
-        </span>
-        <span>
-          Max: <span className="text-emerald-400 font-semibold">{maxElo}</span>
-        </span>
-      </div>
-      <ResponsiveContainer width="100%" height={120}>
-        <LineChart data={chartData} margin={{ left: -16, right: 8, top: 4, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#292524" />
-          <XAxis dataKey="date" tick={{ fill: '#78716c', fontSize: 9 }} hide />
-          <YAxis domain={['auto', 'auto']} tick={{ fill: '#78716c', fontSize: 9 }} />
-          <Tooltip
-            formatter={(v) => [v, 'ELO']}
-            contentStyle={{
-              background: '#1c1917',
-              border: '1px solid #44403c',
-              borderRadius: 6,
-              fontSize: 11,
-            }}
-          />
-          <ReferenceLine y={minElo} stroke="#ef4444" strokeDasharray="3 2" strokeOpacity={0.4} />
-          <ReferenceLine y={maxElo} stroke="#34d399" strokeDasharray="3 2" strokeOpacity={0.4} />
-          <Line
-            type="monotone"
-            dataKey="elo"
-            stroke="#d4a853"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 4, fill: '#d4a853' }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
 
 
 interface StatsSectionProps {
@@ -224,7 +147,6 @@ function StatsSection({ userId }: StatsSectionProps) {
         winRate={data.win_rate}
         trend={data.win_rate_trend}
       />
-      <EloHistoryCard history={data.elo_history} />
       <PlayerFactionProficiencyCard userId={userId} />
     </div>
   );
@@ -301,12 +223,9 @@ export function UserProfilePage() {
                 label={t('user_profile.stats.points')}
                 value={current_season.total_points}
               />
-              <StatCard label={t('user_profile.stats.elo')}>
-                <EloRatingDisplay rating={current_season.elo_rating} />
-              </StatCard>
               <StatCard
                 label={t('user_profile.stats.games')}
-                value={current_season.matches_played}
+                value={current_season.games_played}
               />
               <StatCard label={t('user_profile.stats.wins')} value={current_season.wins} />
               <StatCard label={t('user_profile.stats.losses')} value={current_season.losses} />
@@ -327,7 +246,7 @@ export function UserProfilePage() {
           {t('user_profile.all_time')}
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <StatCard label={t('user_profile.stats.games')} value={all_time.matches_played} />
+          <StatCard label={t('user_profile.stats.games')} value={all_time.games_played} />
           <StatCard label={t('user_profile.stats.wins')} value={all_time.wins} />
           <StatCard label={t('user_profile.stats.losses')} value={all_time.losses} />
           <StatCard
@@ -373,9 +292,6 @@ export function UserProfilePage() {
                     {t('leaderboard.columns.points')}
                   </th>
                   <th className="px-4 py-3 text-right font-medium text-stone-400">
-                    {t('leaderboard.columns.elo')}
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400">
                     {t('common.date')}
                   </th>
                 </tr>
@@ -395,9 +311,6 @@ export function UserProfilePage() {
                     <td className="px-4 py-3 text-stone-400">{r.season_name ?? '—'}</td>
                     <td className="px-4 py-3 text-center text-stone-200">#{r.placement}</td>
                     <td className="px-4 py-3 text-right text-stone-200">{r.points_earned}</td>
-                    <td className="px-4 py-3 text-right">
-                      <EloDeltaCell delta={r.elo_change} />
-                    </td>
                     <td className="px-4 py-3 text-right text-stone-500">
                       {formatInUserTimezone(r.created_at)}
                     </td>

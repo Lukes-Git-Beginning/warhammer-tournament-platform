@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -5,21 +6,50 @@ import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
 import {
   deleteTournament,
+  dropParticipant,
   getBracket,
+  getFactions,
   getParticipantMe,
+  getParticipants,
   getTournament,
   patchTournament,
+  resetBracket,
   startTournament,
 } from '@/lib/api';
+import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth';
-import { formatInUserTimezone } from '@/lib/timezone';
+import { formatInUserTimezone, toDiscordTimestamp } from '@/lib/timezone';
+import { useLiveBracket } from '@/hooks/useLiveBracket';
+import { sortStandingsByPlayoffResult, getFinalistIds } from '@/lib/bracketStandings';
 import { BracketView } from '@/components/bracket/BracketView';
+import { SwissStandings } from '@/components/bracket/SwissStandings';
 import { PageShell } from '@/components/layout/PageShell';
 import { CheckInButton } from '@/components/tournament/CheckInButton';
 import { RegisterButton } from '@/components/tournament/RegisterButton';
 import { ParticipantsList } from '@/components/tournament/ParticipantsList';
 import { ArmyListUploader } from '@/components/tournament/ArmyListUploader';
+import { MyMatchSection } from '@/components/match/MyMatchSection';
 import type { ParticipantStatus } from '@/lib/api';
+
+function DiscordTimestampButton({ isoString }: { isoString: string }) {
+  const [copied, setCopied] = useState(false);
+  function handleCopy() {
+    void navigator.clipboard.writeText(toDiscordTimestamp(isoString)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title="Copy as Discord timestamp — auto-adjusts to each user's timezone"
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[#5865F2] border border-[#5865F2]/40 hover:bg-[#5865F2]/10 transition-colors shrink-0"
+    >
+      {copied ? '✓ Kopiert' : '⏱ Discord'}
+    </button>
+  );
+}
 
 // Format labels are now handled via i18n — see t('tournament.format.*')
 const FORMAT_KEY_MAP: Record<string, string> = {
@@ -27,6 +57,7 @@ const FORMAT_KEY_MAP: Record<string, string> = {
   SWISS: 'tournament.format.swiss',
   ROUND_ROBIN: 'tournament.format.round_robin',
   DOUBLE_ELIMINATION: 'tournament.format.double_elim',
+  LIECHTENSTEIN: 'tournament.format.liechtenstein',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -106,11 +137,76 @@ export function TournamentDetail() {
     },
   });
 
+  const resetBracketMutation = useMutation({
+    mutationFn: (id: string) => resetBracket(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: () => patchTournament(slug, { status: 'COMPLETED' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+    },
+  });
+
+  const selfDropMutation = useMutation({
+    mutationFn: (userId: string) => dropParticipant(slug, userId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['participant-me', slug] });
+    },
+  });
+
   const { data: bracket } = useQuery({
     queryKey: ['bracket', slug],
     queryFn: () => getBracket(slug),
     enabled: !!tournament && (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED'),
     refetchInterval: 15000,
+    staleTime: 0,
+  });
+
+  // Shared cache with BracketView — faction data for SwissStandings faction column.
+  const { data: factionsData } = useQuery({
+    queryKey: ['factions'],
+    queryFn: () => getFactions(),
+    staleTime: 60 * 60_000,
+  });
+  const standingsFactionMap = new Map<string, FactionDto>(
+    (factionsData?.data ?? []).map((f) => [f.faction.id, f.faction]),
+  );
+  const standingsPlayerFactionMap = new Map<string, string>();
+  for (const m of bracket?.matches ?? []) {
+    if (m.player1Id && m.player1FactionId && !standingsPlayerFactionMap.has(m.player1Id)) {
+      standingsPlayerFactionMap.set(m.player1Id, m.player1FactionId);
+    }
+    if (m.player2Id && m.player2FactionId && !standingsPlayerFactionMap.has(m.player2Id)) {
+      standingsPlayerFactionMap.set(m.player2Id, m.player2FactionId);
+    }
+  }
+  const standingsFinalistIds = useMemo(
+    () => getFinalistIds(bracket?.matches ?? []),
+    [bracket?.matches],
+  );
+  const sortedStandings = useMemo(() => {
+    const swiss = bracket?.swiss;
+    if (!swiss?.standings || !bracket?.matches) return swiss?.standings;
+    return sortStandingsByPlayoffResult(swiss.standings, bracket.matches);
+  }, [bracket?.swiss?.standings, bracket?.matches]);
+
+  // Drive standings updates from socket events directly, not via BracketView
+  useLiveBracket(tournament?.id ?? '');
+
+  // Participants — shared cache with BracketView and ParticipantsList
+  const { data: participantsData } = useQuery({
+    queryKey: ['tournament-participants', slug],
+    queryFn: () => getParticipants(slug),
+    enabled: !!tournament && tournament.status !== 'DRAFT',
   });
 
   // Fetch participant status for current user from the new endpoint
@@ -256,6 +352,38 @@ export function TournamentDetail() {
               {(startMutation.error as Error).message}
             </span>
           )}
+          {tournament.status === 'ONGOING' && (
+            <button
+              type="button"
+              disabled={completeMutation.isPending}
+              className="rounded border border-rizzotto-gold-500 px-4 py-1.5 text-sm text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => {
+                if (confirm(`Finalise "${tournament.name}"? Placements will be calculated. This cannot be undone.`)) {
+                  completeMutation.mutate();
+                }
+              }}
+            >
+              {completeMutation.isPending ? 'Finalising…' : 'Finalise Tournament'}
+            </button>
+          )}
+          {tournament.status === 'ONGOING' && (
+            <button
+              type="button"
+              disabled={resetBracketMutation.isPending}
+              className="rounded border border-orange-900 px-4 py-1.5 text-sm text-orange-400 hover:border-orange-600 hover:text-orange-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => {
+                if (
+                  confirm(
+                    `Reset bracket for "${tournament.name}"? All match results will be deleted and status returns to REGISTRATION_CLOSED.`,
+                  )
+                ) {
+                  resetBracketMutation.mutate(tournament.id);
+                }
+              }}
+            >
+              {resetBracketMutation.isPending ? 'Resetting…' : 'Reset Bracket'}
+            </button>
+          )}
           <button
             type="button"
             disabled={deleteMutation.isPending}
@@ -270,6 +398,11 @@ export function TournamentDetail() {
           >
             {t('tournament.detail.delete')}
           </button>
+          {resetBracketMutation.isError && (
+            <span className="self-center text-xs text-rizzotto-danger">
+              {(resetBracketMutation.error as Error).message}
+            </span>
+          )}
         </div>
       )}
 
@@ -284,12 +417,54 @@ export function TournamentDetail() {
         </section>
       )}
 
-      {/* ─── Check-in (for registered participants) ─── */}
+      {/* ─── Check-in (for registered participants, pre-start only) ─── */}
       {user && participantStatus && (
-        tournament.status === 'REGISTRATION_CLOSED' || tournament.status === 'ONGOING' || tournament.status === 'OPEN_REGISTRATION'
-      ) && participantStatus !== 'WITHDRAWN' && participantStatus !== 'DISQUALIFIED' && (
+        tournament.status === 'REGISTRATION_CLOSED' || tournament.status === 'OPEN_REGISTRATION'
+      ) && participantStatus !== 'WITHDREW' && participantStatus !== 'DISQUALIFIED' && (
         <section className="mb-6">
           <CheckInButton tournament={tournament} participantStatus={participantStatus} />
+        </section>
+      )}
+
+      {/* ─── Self-Drop (active participants during ONGOING) ─── */}
+      {user && tournament.status === 'ONGOING' &&
+        (participantStatus === 'REGISTERED' || participantStatus === 'CHECKED_IN') && (
+        <section className="mb-6">
+          {(() => {
+            const openMatch = (bracket?.matches ?? []).find(
+              (m) =>
+                (m.status === 'PENDING' || m.status === 'ONGOING') &&
+                (m.player1Id === user.id || m.player2Id === user.id),
+            );
+            const opponentId = openMatch
+              ? (openMatch.player1Id === user.id ? openMatch.player2Id : openMatch.player1Id)
+              : null;
+            const opponentName = opponentId
+              ? participantsData?.data.find((p) => p.user.id === opponentId)?.user.username
+              : null;
+            return (
+              <button
+                type="button"
+                disabled={selfDropMutation.isPending}
+                className="rounded border border-red-800 px-4 py-1.5 text-sm text-red-400 hover:border-red-600 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => {
+                  const warning = openMatch
+                    ? `You have an open match against ${opponentName ?? 'your opponent'}. If you drop, they win the match automatically. Drop anyway?`
+                    : 'Drop from this tournament? Your existing results will be kept.';
+                  if (confirm(warning)) {
+                    selfDropMutation.mutate(user.id);
+                  }
+                }}
+              >
+                {selfDropMutation.isPending ? 'Dropping…' : 'Drop from Tournament'}
+              </button>
+            );
+          })()}
+          {selfDropMutation.isError && (
+            <p className="mt-2 text-xs text-rizzotto-danger">
+              {(selfDropMutation.error as Error).message}
+            </p>
+          )}
         </section>
       )}
 
@@ -338,13 +513,10 @@ export function TournamentDetail() {
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-8">
         <div className="space-y-2 text-sm">
-          <div>
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-stone-500">{t('tournament.detail.start')}</span>{' '}
             <span className="text-stone-200">{startDate}</span>
-          </div>
-          <div>
-            <span className="text-stone-500">{t('tournament.detail.timezone')}</span>{' '}
-            <span className="text-stone-200">{tournament.timezone}</span>
+            <DiscordTimestampButton isoString={tournament.start_date} />
           </div>
           {tournament.max_participants && (
             <div>
@@ -379,9 +551,6 @@ export function TournamentDetail() {
         </div>
       </div>
 
-      {/* ─── Participant roster ─── */}
-      {tournament.status !== 'DRAFT' && <ParticipantsList slug={tournament.slug} />}
-
       {tournament.description && (
         <section className="mb-8">
           <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-3">
@@ -404,7 +573,58 @@ export function TournamentDetail() {
         </section>
       )}
 
-      {/* Bracket breaks out of the narrow page container — it needs width. */}
+      {/* ─── Participants or Standings ─── */}
+      {tournament.status !== 'DRAFT' && (() => {
+        const swiss = bracket?.swiss;
+        const hasStandings = swiss && swiss.standings.length > 0;
+        if (hasStandings) {
+          return (
+            <section className="mb-4">
+              <SwissStandings
+                standings={sortedStandings ?? swiss.standings}
+                currentRound={swiss.currentRound}
+                recommendedRounds={swiss.recommendedRounds}
+                tournamentMode={tournament.mode}
+                factionMap={standingsFactionMap}
+                playerFactionMap={standingsPlayerFactionMap}
+                playoffFormat={tournament.playoff_format ?? undefined}
+                finalistIds={standingsFinalistIds}
+              />
+            </section>
+          );
+        }
+        return <ParticipantsList slug={tournament.slug} canManage={!!canManage} tournamentStatus={tournament.status} />;
+      })()}
+
+      {/* ─── Game History link — below standings/participants ─── */}
+      {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
+        <div className="mb-6 flex justify-end">
+          <Link
+            to="/tournaments/$slug/games"
+            params={{ slug: tournament.slug }}
+            className="text-xs text-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors"
+          >
+            All games →
+          </Link>
+        </div>
+      )}
+
+      {/* ─── My Match (GameTiles) — only shown to participants during ongoing ─── */}
+      {user && tournament.status === 'ONGOING' && bracket && participantsData && (
+        <div id="my-match">
+        <MyMatchSection
+          currentUserId={user.id}
+          matches={bracket.matches}
+          playerNames={Object.fromEntries(
+            participantsData.data.map((p) => [p.user.id, p.user.username]),
+          )}
+          tournamentSlug={tournament.slug}
+          tournamentMode={tournament.mode}
+        />
+        </div>
+      )}
+
+      {/* ─── Bracket ─── */}
       {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
         <section className="relative left-1/2 w-[min(94vw,1600px)] -translate-x-1/2">
           <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-3">
@@ -414,6 +634,8 @@ export function TournamentDetail() {
             slug={tournament.slug}
             tournamentId={tournament.id}
             canManage={!!canManage}
+            hideStandings
+            playoffFormat={tournament.playoff_format ?? 'NONE'}
           />
         </section>
       )}

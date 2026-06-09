@@ -35,6 +35,9 @@ export const OverrideMatchResultSchema = z.object({
   player1_score: z.number().int().min(0).max(10000).nullable().optional(),
   player2_score: z.number().int().min(0).max(10000).nullable().optional(),
   reason: z.string().min(1).max(2000),
+  map_id: z.string().min(1).optional(),
+  player1FactionId: z.string().min(1).optional(),
+  player2FactionId: z.string().min(1).optional(),
 });
 export type OverrideMatchResultPayload = z.infer<typeof OverrideMatchResultSchema>;
 
@@ -133,3 +136,38 @@ export const MatchDetailDtoSchema = z.object({
   player2_faction: MatchFactionRefSchema.nullable(),
 });
 export type MatchDetailDto = z.infer<typeof MatchDetailDtoSchema>;
+
+// ---------------------------------------------------------------------------
+// Game History — one row per MatchGame (or synthetic row for legacy matches)
+// ---------------------------------------------------------------------------
+
+export interface GameHistoryPlayer {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+}
+
+export interface GameHistoryTournament {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface GameHistoryEntry {
+  /** MatchGame.id for real records; Match.id for synthetic legacy rows */
+  id: string;
+  gameNumber: number;
+  matchId: string;
+  round: number;
+  matchNumber: number;
+  playedAt: string | null;
+  player1: GameHistoryPlayer | null;
+  player2: GameHistoryPlayer | null;
+  winnerId: string | null;
+  player1FactionId: string | null;
+  player2FactionId: string | null;
+  mapName: string | null;
+  replayUrl: string | null;
+  countsForLeaderboard?: boolean;
+  tournament?: GameHistoryTournament;
+}

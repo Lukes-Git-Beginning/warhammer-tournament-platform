@@ -1,6 +1,5 @@
 import type { PrismaClient } from '@rizzotto/db';
 import { calculateTournamentPoints } from './tournament-utils.js';
-import { computeEloDeltas } from './elo.js';
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -30,6 +29,7 @@ type MatchLike = {
   player2_id: string | null;
   status: string;
   bracket_side: string | null;
+  phase?: string | null;
 };
 
 export function computeSingleElimPlacements(matches: MatchLike[]): Map<string, number> {
@@ -41,27 +41,34 @@ export function computeSingleElimPlacements(matches: MatchLike[]): Map<string, n
 
   if (completedMatches.length === 0) return placements;
 
-  const totalRounds = Math.max(...completedMatches.map((m) => m.round));
-
+  // Handle the third-place match first and exclude it from round-based logic.
+  // It shares the same round number as the Grand Final, so it must be separated
+  // explicitly to avoid overwriting the 1st/2nd place assignments.
   for (const match of completedMatches) {
-    if (match.status === 'BYE') {
-      // BYE receiver is the non-null player — they advance without a loser
-      const receiver = match.player1_id ?? match.player2_id;
-      if (receiver && !placements.has(receiver)) {
-        // BYE receivers get no permanent placement here; they continue in bracket
-      }
-      continue;
-    }
+    if (match.phase !== 'PLAYOFF_THIRD_PLACE') continue;
+    if (!match.winner_id) continue;
+    const loser = match.player1_id === match.winner_id ? match.player2_id : match.player1_id;
+    placements.set(match.winner_id, 3);
+    if (loser) placements.set(loser, 4);
+  }
+
+  const bracketMatches = completedMatches.filter(
+    (m) => m.phase !== 'PLAYOFF_THIRD_PLACE',
+  );
+  if (bracketMatches.length === 0) return placements;
+
+  const totalRounds = Math.max(...bracketMatches.map((m) => m.round));
+
+  for (const match of bracketMatches) {
+    if (match.status === 'BYE') continue;
 
     const { round, winner_id, player1_id, player2_id } = match;
     if (!winner_id) continue;
 
-    // Determine loser
-    const loser =
-      player1_id === winner_id ? player2_id : player1_id;
+    const loser = player1_id === winner_id ? player2_id : player1_id;
 
     if (round === totalRounds) {
-      // Final: winner gets 1, loser gets 2
+      // Grand Final: winner gets 1, loser gets 2
       placements.set(winner_id, 1);
       if (loser) placements.set(loser, 2);
     } else {
@@ -144,30 +151,42 @@ export function computeRankedPlacements(
 ): Map<string, number> {
   const wins = new Map<string, number>();
   const losses = new Map<string, number>();
+  const opponents = new Map<string, string[]>();
 
   for (const id of participantIds) {
     wins.set(id, 0);
     losses.set(id, 0);
+    opponents.set(id, []);
   }
 
   for (const match of matches) {
     if (match.status !== 'COMPLETED') continue;
-    if (!match.winner_id) continue;
+    if (!match.winner_id || !match.player1_id || !match.player2_id) continue;
 
     const { winner_id, player1_id, player2_id } = match;
     wins.set(winner_id, (wins.get(winner_id) ?? 0) + 1);
 
     const loser = player1_id === winner_id ? player2_id : player1_id;
-    if (loser) {
-      losses.set(loser, (losses.get(loser) ?? 0) + 1);
-    }
+    if (loser) losses.set(loser, (losses.get(loser) ?? 0) + 1);
+
+    opponents.get(player1_id)?.push(player2_id);
+    opponents.get(player2_id)?.push(player1_id);
   }
 
-  // Sort: wins desc, losses asc
+  // Buchholz: sum of each opponent's wins
+  const buchholz = new Map<string, number>();
+  for (const id of participantIds) {
+    const bh = (opponents.get(id) ?? []).reduce((s, opp) => s + (wins.get(opp) ?? 0), 0);
+    buchholz.set(id, bh);
+  }
+
+  // Sort: wins desc → losses asc → buchholz desc
   const sorted = [...participantIds].sort((a, b) => {
     const wDiff = (wins.get(b) ?? 0) - (wins.get(a) ?? 0);
     if (wDiff !== 0) return wDiff;
-    return (losses.get(a) ?? 0) - (losses.get(b) ?? 0);
+    const lDiff = (losses.get(a) ?? 0) - (losses.get(b) ?? 0);
+    if (lDiff !== 0) return lDiff;
+    return (buchholz.get(b) ?? 0) - (buchholz.get(a) ?? 0);
   });
 
   const placements = new Map<string, number>();
@@ -177,13 +196,14 @@ export function computeRankedPlacements(
     const id = sorted[i]!;
     const w = wins.get(id) ?? 0;
     const l = losses.get(id) ?? 0;
+    const bh = buchholz.get(id) ?? 0;
 
-    // Find all tied players
     let j = i;
     while (
       j < sorted.length &&
       (wins.get(sorted[j]!) ?? 0) === w &&
-      (losses.get(sorted[j]!) ?? 0) === l
+      (losses.get(sorted[j]!) ?? 0) === l &&
+      (buchholz.get(sorted[j]!) ?? 0) === bh
     ) {
       placements.set(sorted[j]!, currentPlacement);
       j++;
@@ -197,6 +217,56 @@ export function computeRankedPlacements(
 }
 
 // ---------------------------------------------------------------------------
+// Swiss + Playoff placement computation
+// ---------------------------------------------------------------------------
+
+/**
+ * Handles the combined Swiss+Playoff case (TOP4 / TOP8):
+ * - Playoff participants get placements 1–N from the playoff bracket
+ *   (using computeSingleElimPlacements on the playoff matches only).
+ * - Non-playoff participants are ranked after that by Swiss performance
+ *   (wins/losses/Buchholz from Swiss matches only).
+ * Falls back to computeRankedPlacements when no playoff matches exist.
+ */
+function computeSwissPlayoffPlacements(
+  participantIds: string[],
+  matches: MatchLike[],
+): Map<string, number> {
+  const swissMatches = matches.filter(
+    (m) => m.phase === null || m.phase === undefined || m.phase === 'SWISS',
+  );
+  const playoffMatches = matches.filter(
+    (m) => m.phase && m.phase.startsWith('PLAYOFF'),
+  );
+
+  if (playoffMatches.length === 0) {
+    return computeRankedPlacements(participantIds, swissMatches);
+  }
+
+  // Playoff placements (1-4 for TOP4, 1-8 for TOP8) via single-elim logic.
+  const playoffPlacements = computeSingleElimPlacements(playoffMatches);
+
+  // All player IDs that appeared in any playoff match.
+  const playoffPlayerIds = new Set<string>();
+  for (const m of playoffMatches) {
+    if (m.player1_id) playoffPlayerIds.add(m.player1_id);
+    if (m.player2_id) playoffPlayerIds.add(m.player2_id);
+  }
+
+  // Non-playoff players ranked by Swiss performance only.
+  const nonPlayoffIds = participantIds.filter((id) => !playoffPlayerIds.has(id));
+  const swissRankings = computeRankedPlacements(nonPlayoffIds, swissMatches);
+
+  // Offset non-playoff placements so they start after all playoff slots.
+  const playoffSlots = playoffPlayerIds.size;
+  const result = new Map<string, number>(playoffPlacements);
+  for (const [id, rank] of swissRankings) {
+    result.set(id, playoffSlots + rank);
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Main finalize function
 // ---------------------------------------------------------------------------
 
@@ -204,6 +274,7 @@ const RANKED_FORMATS = new Set([
   'SWISS',
   'ROUND_ROBIN',
   'DOUBLE_ROUND_ROBIN',
+  'LIECHTENSTEIN',
 ]);
 
 export async function finalizeTournament(
@@ -233,6 +304,7 @@ export async function finalizeTournament(
         player2_id: true,
         status: true,
         bracket_side: true,
+        phase: true,
       },
     }),
     prisma.tournamentParticipant.findMany({
@@ -251,7 +323,7 @@ export async function finalizeTournament(
   // Compute placements
   let placements: Map<string, number>;
   if (RANKED_FORMATS.has(tournament.format)) {
-    placements = computeRankedPlacements(participantIds, matches as MatchLike[]);
+    placements = computeSwissPlayoffPlacements(participantIds, matches as MatchLike[]);
   } else if (tournament.format === 'DOUBLE_ELIMINATION') {
     placements = computeDoubleElimPlacements(matches as MatchLike[]);
   } else {
@@ -265,59 +337,66 @@ export async function finalizeTournament(
   });
   const seasonId = activeSeason?.id ?? null;
 
-  // Per-user stats for leaderboard
-  const userWins = new Map<string, number>();
-  const userLosses = new Map<string, number>();
-  const userMatchesPlayed = new Map<string, number>();
-
-  for (const match of matches) {
-    if (match.status !== 'COMPLETED') continue;
-    if (!match.winner_id) continue;
-
-    const { winner_id, player1_id, player2_id } = match;
-    userWins.set(winner_id, (userWins.get(winner_id) ?? 0) + 1);
-    userMatchesPlayed.set(winner_id, (userMatchesPlayed.get(winner_id) ?? 0) + 1);
-
-    const loser = player1_id === winner_id ? player2_id : player1_id;
-    if (loser) {
-      userLosses.set(loser, (userLosses.get(loser) ?? 0) + 1);
-      userMatchesPlayed.set(loser, (userMatchesPlayed.get(loser) ?? 0) + 1);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // ELO computation (before transaction — reads current ratings from DB)
-  // ---------------------------------------------------------------------------
-
   // Build list of userIds from finalized placements
   const finalizedUserIds = [...placements.keys()];
 
-  // Load existing LeaderboardEntry ratings for the active season (default 1200)
-  const existingEntries =
+  // -------------------------------------------------------------------------
+  // Season-level pre-computation (outside transaction for performance).
+  // All values are SET on LeaderboardEntry — never incremented — so
+  // finalizeTournament is fully idempotent regardless of how many times it runs.
+  // -------------------------------------------------------------------------
+
+  // 1. Season-total points: sum of ALL TournamentResults in the season for each
+  //    player, replacing this tournament's old value with the newly computed one.
+  const priorSeasonResults =
     seasonId && finalizedUserIds.length > 0
-      ? await prisma.leaderboardEntry.findMany({
+      ? await prisma.tournamentResult.findMany({
           where: {
             season_id: seasonId,
             user_id: { in: finalizedUserIds },
+            tournament_id: { not: tournamentId }, // exclude current — will be added fresh
           },
-          select: { user_id: true, elo_rating: true },
+          select: { user_id: true, points_earned: true },
+        })
+      : [];
+  const priorPointsMap = new Map<string, number>();
+  for (const r of priorSeasonResults) {
+    priorPointsMap.set(r.user_id, (priorPointsMap.get(r.user_id) ?? 0) + r.points_earned);
+  }
+
+  // 3. Season-total W/L at game level across ALL season tournaments.
+  //    BYEs have no MatchGame records → automatically excluded.
+  const allSeasonGames =
+    seasonId && finalizedUserIds.length > 0
+      ? await prisma.matchGame.findMany({
+          where: {
+            status: 'COMPLETED',
+            winner_id: { not: null },
+            match: {
+              season_id: seasonId,
+              deleted_at: null,
+              tournament: { counts_for_leaderboard: true },
+              OR: [
+                { player1_id: { in: finalizedUserIds } },
+                { player2_id: { in: finalizedUserIds } },
+              ],
+            },
+          },
+          select: {
+            winner_id: true,
+            match: { select: { player1_id: true, player2_id: true } },
+          },
         })
       : [];
 
-  const currentRatingMap = new Map<string, number>(
-    existingEntries.map((e) => [e.user_id, e.elo_rating]),
-  );
-
-  const eloInputs = finalizedUserIds.map((userId) => ({
-    userId,
-    currentRating: currentRatingMap.get(userId) ?? 1200,
-    placement: placements.get(userId)!,
-  }));
-
-  const eloResults = computeEloDeltas(eloInputs, { isMajor: tournament.is_major });
-
-  // Index by userId for O(1) lookup inside transaction
-  const eloByUserId = new Map(eloResults.map((r) => [r.userId, r]));
+  const seasonWins = new Map<string, number>();
+  const seasonLosses = new Map<string, number>();
+  for (const g of allSeasonGames) {
+    if (!g.winner_id) continue;
+    const loser = g.winner_id === g.match.player1_id ? g.match.player2_id : g.match.player1_id;
+    seasonWins.set(g.winner_id, (seasonWins.get(g.winner_id) ?? 0) + 1);
+    if (loser) seasonLosses.set(loser, (seasonLosses.get(loser) ?? 0) + 1);
+  }
 
   // ---------------------------------------------------------------------------
 
@@ -329,9 +408,6 @@ export async function finalizeTournament(
         isMajor: tournament.is_major,
       });
 
-      const elo = eloByUserId.get(userId);
-      const eloChange = elo?.delta ?? 0;
-
       await tx.tournamentResult.upsert({
         where: { tournament_id_user_id: { tournament_id: tournamentId, user_id: userId } },
         create: {
@@ -340,39 +416,34 @@ export async function finalizeTournament(
           season_id: seasonId,
           placement,
           points_earned: points,
-          elo_change: eloChange,
         },
         update: {
           season_id: seasonId,
           placement,
           points_earned: points,
-          elo_change: eloChange,
         },
       });
 
       if (seasonId && tournament.counts_for_leaderboard) {
-        const w = userWins.get(userId) ?? 0;
-        const l = userLosses.get(userId) ?? 0;
-        const mp = userMatchesPlayed.get(userId) ?? 0;
-        const newEloRating = elo?.newRating ?? (currentRatingMap.get(userId) ?? 1200);
+        const totalPoints = (priorPointsMap.get(userId) ?? 0) + points;
+        const totalWins = seasonWins.get(userId) ?? 0;
+        const totalLosses = seasonLosses.get(userId) ?? 0;
 
         await tx.leaderboardEntry.upsert({
           where: { user_id_season_id: { user_id: userId, season_id: seasonId } },
           create: {
             user_id: userId,
             season_id: seasonId,
-            total_points: points,
-            matches_played: mp,
-            wins: w,
-            losses: l,
-            elo_rating: newEloRating,
+            total_points: totalPoints,
+            games_played: totalWins + totalLosses,
+            wins: totalWins,
+            losses: totalLosses,
           },
           update: {
-            total_points: { increment: points },
-            matches_played: { increment: mp },
-            wins: { increment: w },
-            losses: { increment: l },
-            elo_rating: newEloRating,
+            total_points: totalPoints,
+            games_played: totalWins + totalLosses,
+            wins: totalWins,
+            losses: totalLosses,
           },
         });
       }

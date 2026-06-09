@@ -2,7 +2,10 @@
 
 **TL;DR:**
 - Prisma 7 (`^7.8.0`) mit driver-adapter `PrismaPg` aus `@prisma/adapter-pg` — kein nativer Prisma-Connection-String-Modus.
-- 27 Models in `packages/db/prisma/schema.prisma` (nach Phase-2-Drop). Welle-2-Models: Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, AdminConfig. (`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` per `drop_welle2_mmr_deprecated` entfernt — Branch `chore/phase2-consolidation`.)
+- 27 Models in `packages/db/prisma/schema.prisma` (nach Phase-2-Drop). Welle-2-Models: Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, AdminConfig. (`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` per `drop_welle2_mmr_deprecated` entfernt.)
+- **2026-06-07 Migration `remove_elo`**: `LeaderboardEntry.elo_rating` (Int) und `TournamentResult.elo_change` (Int) gedroppt. `LeaderboardEntry` hat jetzt nur noch: `total_points`, `games_played`, `wins`, `losses`.
+- **2026-06-08 Migration `match_game_counts_for_leaderboard`**: `MatchGame.counts_for_leaderboard Boolean @default(true)` hinzugefügt. Flag wird bei Game-Erstellung vom Tournament gestempelt; retroaktives Re-Stamp via PATCH. Filter-Sites nutzen jetzt das Game-Level-Feld statt Join auf Tournament. Backfill in Migration-SQL enthalten.
+- **Gotcha Advisory Lock**: Bei abgebrochenem `prisma migrate` hält die DB einen Lock. Fix: `docker exec tww3-postgres psql -U tww3 -d tww3 -c "SELECT pg_advisory_unlock_all();"` + danach pg_terminate_backend auf alle aktiven Connections.
 - **Gotcha:** `datasource.url` steht NICHT in `schema.prisma`, sondern in `prisma.config.ts` — `schema.prisma` enthält nur `provider = "postgresql"`.
 
 ---
@@ -153,10 +156,14 @@ Wenn Backend vom Host nach Postgres im Container über `127.0.0.1:5432` verbinde
 - Relationen: `leaderboard LeaderboardEntry[]`, `faction_stats FactionStats[]`, `matchup_stats MatchupStats[]`.
 
 ### LeaderboardEntry
-- `elo_rating Int @default(1200)` — Standard-ELO-Startwert.
+- ~~`elo_rating Int`~~ — **ENTFERNT** (Migration `remove_elo`, 2026-06-07).
 - `total_points Float` — für Ranglisten-Sortierung; Index `[season_id, total_points(sort: Desc)]`.
-- ~~`season_points Int`~~ — **ENTFERNT** (Migration `drop_welle2_mmr_deprecated`, Branch `chore/phase2-consolidation`). War Welle-2-MMR, abgelöst durch `total_points` (derive-on-read). Sortierung läuft über `total_points`.
+- `games_played`, `wins`, `losses` — post-v1 zu entfernen (redundant zu MatchGame-Aggregation, nur `total_points` wird dauerhaft gebraucht).
+- ~~`season_points Int`~~ — **ENTFERNT** (Migration `drop_welle2_mmr_deprecated`).
 - Unique-Constraint: `[user_id, season_id]`.
+
+### MatchGame
+- `counts_for_leaderboard Boolean @default(true)` — **Neu (2026-06-08)**. Wird bei Game-Erstellung aus `tournament.counts_for_leaderboard` gestempelt. Erlaubt direktes Filtern ohne Tournament-Join in Rating-Model, Breakdown, H2H. Änderung am Tournament-Flag per PATCH triggert `updateMany` auf alle Games des Turniers. Synthetic legacy rows (matches ohne Games) defaulten auf `true` im `/api/meta/games`-Response.
 
 ### ~~Welle-2-MMR-Models~~ — ENTFERNT (2026-06-03)
 `FactionMastery`, `FactionMatchupStat`, `AntiFarmCap` + `LeaderboardEntry.season_points` + Enum `StatsSource` wurden per Migration `drop_welle2_mmr_deprecated` (Branch `chore/phase2-consolidation`) gedroppt. Ersetzt durch die gefitteten Parameter in `lib/rating-model.ts` bzw. den player-spezifischen OpponentShare-Modifier in `lib/scoring-service.ts`; Faction-vs-Faction-Daten leben in `MatchupStats`.
@@ -194,17 +201,17 @@ enum Role {
 }
 
 enum TournamentFormat {
-  SWISS | SINGLE_ELIMINATION | DOUBLE_ELIMINATION | ROUND_ROBIN | DOUBLE_ROUND_ROBIN
+  SWISS | SINGLE_ELIMINATION | DOUBLE_ELIMINATION | ROUND_ROBIN | DOUBLE_ROUND_ROBIN | LIECHTENSTEIN
 }
 
 enum TournamentMode {
-  OPEN           // Default (Welle 2) — keine Restriktion, Casual
+  // OPEN entfernt (2026-06-05) — Migration 20260605000000_remove_open_mode
   ONE_V_ONE      // legacy 1v1
   THREE_V_THREE  // reserviert Phase 3
   BLIND_PICK     // legacy reserved
-  BPT            // Welle 2 — Blind Pick Tournament (per-match blind faction pick)
-  SFT            // Welle 2 — Single Faction Tournament (faction pre-pick at registration)
-  SLT            // Welle 2 — Single List Tournament (army-list pre-upload at registration)
+  BPT            // Default — Blind Pick Tournament (per-match blind faction pick)
+  SFT            // Single Faction Tournament (faction pre-pick at registration, hidden until ONGOING)
+  SLT            // Single List Tournament (army-list pre-upload at registration)
 }
 
 enum PlayoffFormat {
@@ -220,7 +227,7 @@ enum MapDecisionMode {
 }
 
 enum MatchPhase {
-  GROUP_STAGE | SWISS | PLAYOFF_QF | PLAYOFF_SF | PLAYOFF_FINAL  // Welle 2 — Discriminator für Match.phase
+  GROUP_STAGE | SWISS | PLAYOFF_QF | PLAYOFF_SF | PLAYOFF_FINAL | PLAYOFF_THIRD_PLACE  // Welle 2 — Discriminator für Match.phase
 }
 
 // enum StatsSource — ENTFERNT (drop_welle2_mmr_deprecated); war nur FactionMatchupStat-Herkunft
@@ -291,6 +298,15 @@ Das Seed-Script liegt bei `packages/db/prisma/seed.ts` und wird via `tsx` ausgef
 | `20260519131859_welle2_d_integration_fields` | **Welle 2 (Plan D)** — `MatchPhase` enum + `Match.phase` nullable für Playoff-Discriminator; `LeaderboardEntry.season_points Int @default(0)` + compound DESC-Index für 3-Modi-Leaderboard |
 | `20260601220129_dynamic_leaderboard_match_fields` | **Dynamic Leaderboard (Alex-Spec)** — `Match.season_id` (FK Season, ON DELETE SET NULL) + `played_at` + `ruleset`, Index `[season_id, status]`; **Backfill** bestehender COMPLETED-Matches (`played_at`←`updated_at`, `season_id`←Season-Datumsbereich) |
 | `20260603000000_drop_welle2_mmr_deprecated` | **Phase-2-Cleanup** (Branch `chore/phase2-consolidation`) — DROP `FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` + Spalte `LeaderboardEntry.season_points` (+Index) + Enum `StatsSource`. ⚠️ **Irreversibel** — Prod-Drop läuft beim Auto-Deploy nach `main`-Merge |
+| `20260604000000_m7_match_game` | **M7** — `MatchGame`-Model + zugehörige Relations (Lobby-Code, Replay-URL, Winner, Status, FactionIDs); `MatchGame`-Status-Enum; `Match.reporterId`, `Match.confirmedAt` |
+| `20260605000000_remove_open_mode` | **M7 Mode-Cleanup** — `OPEN` aus `TournamentMode`-Enum entfernt; bestehende OPEN-Rows per `UPDATE … SET mode='BPT'` migriert; Default von `OPEN` auf `BPT` geändert. **Muss vor dem nächsten Prod-Deploy via `pnpm db:migrate:deploy` appliziert werden** |
+| `20260605054848_fix_enum_drift` | Auto-Drift-Fix — fehlende Column-Defaults (`MatchGame.id`, `MatchGame.updated_at`, `Tournament.finale_match_format`, `Tournament.playoff_match_format`) aus Migration-History-Inkonsistenz |
+| `20260605095428_map_decision_modes` | Neue MapDecisionMode-Werte: `RANDOM_NO_REPEAT`, `HOST_PRESET`, `HOST_PRESET_PICK_BAN`, `RANDOM_PICK_BAN` |
+| `20260606000000_external_game_archive` | `MatchGame.external_archive_url` für Replay-Links |
+| `20260607074927_remove_elo` | `LeaderboardEntry.elo_rating` + `TournamentResult.elo_change` gedroppt |
+| `20260607121006_add_liechtenstein_format` | `LIECHTENSTEIN` zu `TournamentFormat`-Enum |
+| `20260607173753_add_third_place_match` | `Tournament.has_third_place_match Boolean @default(false)` + `PLAYOFF_THIRD_PLACE` zu `MatchPhase` |
+| `20260608000000_match_game_counts_for_leaderboard` | `MatchGame.counts_for_leaderboard Boolean @default(true)` + Backfill aus Tournament via Match-JOIN |
 
 Migrations-Lock unter `packages/db/prisma/migrations/migration_lock.toml`.
 

@@ -214,9 +214,9 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [fastify.authenticate, fastify.requireRole('ADMIN')] },
     async (request, reply) => {
       const SearchQuerySchema = z.object({
-        search: z.string().min(2).max(50),
+        search: z.string().max(50).optional(),
         page: z.coerce.number().int().min(1).default(1),
-        limit: z.coerce.number().int().min(1).max(100).default(20),
+        limit: z.coerce.number().int().min(1).max(100).default(50),
       });
 
       const parsed = SearchQuerySchema.safeParse(request.query);
@@ -231,14 +231,14 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       const { search, page, limit } = parsed.data;
       const skip = (page - 1) * limit;
 
+      const searchFilter = search && search.length >= 2
+        ? { OR: [{ username: { contains: search, mode: 'insensitive' as const } }, { discord_id: search }] }
+        : {};
+
       const [users, total] = await Promise.all([
         fastify.prisma.user.findMany({
           where: {
-            deleted_at: null,
-            OR: [
-              { username: { contains: search, mode: 'insensitive' } },
-              { discord_id: search },
-            ],
+            ...searchFilter,
           },
           select: {
             id: true,
@@ -249,6 +249,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
             role: true,
             created_at: true,
             deleted_at: true,
+            steam_link: { select: { steam_id: true } },
           },
           orderBy: { username: 'asc' },
           skip,
@@ -257,19 +258,22 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.user.count({
           where: {
             deleted_at: null,
-            OR: [
-              { username: { contains: search, mode: 'insensitive' } },
-              { discord_id: search },
-            ],
+            ...searchFilter,
           },
         }),
       ]);
 
       return {
         users: users.map((u) => ({
-          ...u,
+          id: u.id,
+          discord_id: u.discord_id,
+          steam_id: u.steam_link?.steam_id ?? null,
+          username: u.username,
+          email: u.email,
+          avatar_url: u.avatar_url,
+          role: u.role,
           created_at: u.created_at.toISOString(),
-          deleted_at: u.deleted_at?.toISOString() ?? null,
+          is_banned: u.deleted_at !== null,
         })),
         total,
         page,
@@ -320,26 +324,17 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           player2: { select: { id: true, username: true } },
           player1_faction: { select: { id: true, name: true } },
           player2_faction: { select: { id: true, name: true } },
-          map_decision: { select: { picked_map_id: true } },
+          games: {
+            where: { game_number: 1 },
+            select: { map_decision: { select: { picked_map_id: true } } },
+            take: 1,
+          },
         },
       });
 
       // Total wins/losses
       const totalWins = recentMatches.filter((m) => m.winner_id === id).length;
       const totalLosses = recentMatches.filter((m) => m.winner_id !== null && m.winner_id !== id).length;
-
-      // ELO history from TournamentResults (approximate via placement/points over time)
-      const eloHistory = await fastify.prisma.tournamentResult.findMany({
-        where: { user_id: id, season_id: resolvedSeasonId ?? undefined },
-        orderBy: { created_at: 'asc' },
-        select: { created_at: true, elo_change: true },
-      });
-
-      let runningRating = 1200;
-      const eloHistoryPoints = eloHistory.map((r) => {
-        runningRating += r.elo_change;
-        return { played_at: r.created_at.toISOString(), rating: runningRating };
-      });
 
       const matchHistory = recentMatches.map((m) => {
         const isPlayer1 = m.player1_id === id;
@@ -354,7 +349,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           opponent_score: won ? 0 : 1,
           my_faction: myFaction ? { id: myFaction.id, name: myFaction.name } : null,
           opponent_faction: opponentFaction ? { id: opponentFaction.id, name: opponentFaction.name } : null,
-          map_id: m.map_decision?.picked_map_id ?? null,
+          map_id: m.games[0]?.map_decision?.picked_map_id ?? null,
           played_at: m.updated_at.toISOString(),
           won,
         };
@@ -365,7 +360,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         total_wins: totalWins,
         total_losses: totalLosses,
         win_rate: totalWins + totalLosses > 0 ? totalWins / (totalWins + totalLosses) : 0,
-        elo_history: eloHistoryPoints,
       };
     },
   );
@@ -580,8 +574,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
             is_active: activeSeason.is_active,
           },
           total_points: entry.total_points,
-          elo_rating: entry.elo_rating,
-          matches_played: entry.matches_played,
+          games_played: entry.games_played,
           wins: entry.wins,
           losses: entry.losses,
         };
@@ -591,7 +584,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     // All-time stats
     const allTimeAgg = await fastify.prisma.leaderboardEntry.aggregate({
       where: { user_id: id },
-      _sum: { matches_played: true, wins: true, losses: true, total_points: true },
+      _sum: { games_played: true, wins: true, losses: true, total_points: true },
       _count: { season_id: true },
     });
     const tournamentsPlayed = await fastify.prisma.tournamentResult.count({ where: { user_id: id } });
@@ -604,7 +597,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       select: {
         placement: true,
         points_earned: true,
-        elo_change: true,
         created_at: true,
         tournament: { select: { slug: true, name: true, start_date: true } },
         season: { select: { name: true } },
@@ -636,7 +628,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       },
       current_season: currentSeasonEntry,
       all_time: {
-        matches_played: allTimeAgg._sum.matches_played ?? 0,
+        games_played: allTimeAgg._sum.games_played ?? 0,
         wins: allTimeAgg._sum.wins ?? 0,
         losses: allTimeAgg._sum.losses ?? 0,
         tournaments_played: tournamentsPlayed,
@@ -651,7 +643,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         season_name: r.season?.name ?? null,
         placement: r.placement,
         points_earned: r.points_earned,
-        elo_change: r.elo_change,
         created_at: r.created_at.toISOString(),
       })),
       recent_matches: recentMatches.map((m) => {

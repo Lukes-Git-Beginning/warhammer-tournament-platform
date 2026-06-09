@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import type { Prisma } from '@rizzotto/db';
 import { z } from 'zod';
 import ical from 'ical-generator';
 import { generateSlug, validateStatusTransition, TournamentStatus } from '../lib/tournament-utils.js';
@@ -32,8 +33,8 @@ const ListQuerySchema = z.object({
 
 const CreateTournamentSchema = z.object({
   name: z.string().min(3).max(120),
-  format: z.enum(['SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN']),
-  mode: z.enum(['OPEN', 'ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT']).optional(),
+  format: z.enum(['SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN']),
+  mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT']).optional(),
   start_date: z.string().datetime(),
   timezone: z.string().min(1).max(64),
   max_participants: z.number().int().min(2).max(512).optional(),
@@ -52,13 +53,15 @@ const CreateTournamentSchema = z.object({
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
-  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN']).optional(),
+  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).optional(),
   map_pool: z.array(z.string().min(1)).min(3).max(36).optional(),
+  map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
+  faction_pool: z.array(z.string().min(1)).max(24).optional(),
 });
 
 const PatchTournamentSchema = z.object({
   name: z.string().min(3).max(120).optional(),
-  description: z.string().max(2000).optional(),
+  description: z.string().max(2000).optional().nullable(),
   rules: z.string().max(20000).optional(),
   discord_link: z.string().url().optional().nullable(),
   start_date: z.string().datetime().optional(),
@@ -75,9 +78,16 @@ const PatchTournamentSchema = z.object({
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
-  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN']).optional(),
+  map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).optional(),
   map_pool: z.array(z.string().min(1)).min(3).max(36).optional(),
+  map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   is_major: z.boolean().optional(),
+  // Fields added for full edit-form support
+  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN']).optional(),
+  mode: z.enum(['BPT', 'SFT', 'SLT']).optional(),
+  has_third_place_match: z.boolean().optional(),
+  counts_for_leaderboard: z.boolean().optional(),
+  faction_pool: z.array(z.string().min(1)).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
 
 // ---------------------------------------------------------------------------
@@ -271,6 +281,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           playoff_match_format: data.playoff_match_format,
           finale_match_format: data.finale_match_format,
           map_decision_mode: data.map_decision_mode,
+          map_preset_config: data.map_preset_config != null ? (data.map_preset_config as Prisma.InputJsonValue) : undefined,
         },
         select: {
           id: true,
@@ -287,6 +298,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           playoff_match_format: true,
           finale_match_format: true,
           map_decision_mode: true,
+          map_preset_config: true,
           created_at: true,
         },
       });
@@ -297,6 +309,17 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           data: data.map_pool.map((mapId) => ({
             tournament_id: tournament.id,
             map_id: mapId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      // Persist faction allowlist (empty = all factions allowed)
+      if (data.faction_pool && data.faction_pool.length > 0) {
+        await fastify.prisma.tournamentFactionAllowlist.createMany({
+          data: data.faction_pool.map((factionId) => ({
+            tournament_id: tournament.id,
+            faction_id: factionId,
           })),
           skipDuplicates: true,
         });
@@ -483,11 +506,25 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         counts_for_leaderboard: true,
         is_major: true,
         organizer_id: true,
+        rounds_count: true,
+        playoff_format: true,
+        has_third_place_match: true,
+        swiss_match_format: true,
+        playoff_match_format: true,
+        finale_match_format: true,
+        map_decision_mode: true,
+        map_preset_config: true,
         created_at: true,
         updated_at: true,
         organizer: { select: { id: true, username: true, avatar_url: true } },
         _count: {
           select: { participants: { where: { deleted_at: null } } },
+        },
+        faction_allowlist: { select: { faction_id: true } },
+        map_pool: {
+          select: {
+            map: { select: { id: true, slug: true, name: true, description: true, image_url: true } },
+          },
         },
       },
     });
@@ -526,8 +563,13 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    const { _count, ...rest } = tournament;
-    return { ...rest, participantCount: _count.participants };
+    const { _count, faction_allowlist, map_pool, ...rest } = tournament;
+    return {
+      ...rest,
+      participantCount: _count.participants,
+      faction_allowlist: faction_allowlist.map((fa) => fa.faction_id),
+      map_pool: map_pool.map((entry) => entry.map),
+    };
   });
 
   // PATCH /api/tournaments/:slug
@@ -543,6 +585,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           organizer_id: true,
           status: true,
+          format: true,
+          mode: true,
           name: true,
           description: true,
           rules: true,
@@ -552,6 +596,9 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           registration_deadline: true,
           max_participants: true,
           visibility: true,
+          map_preset_config: true,
+          has_third_place_match: true,
+          counts_for_leaderboard: true,
         },
       });
 
@@ -585,7 +632,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { status: newStatus, map_pool: newMapPool, ...rest } = parsed.data;
+      const { status: newStatus, map_pool: newMapPool, faction_pool: newFactionPool, ...rest } = parsed.data;
 
       // Validate map_pool change: only allowed before tournament starts (DRAFT or ANNOUNCED)
       if (newMapPool !== undefined) {
@@ -609,6 +656,28 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(422).send({
             error: 'UnprocessableEntity',
             message: `Map IDs not found in master pool: ${missing.join(', ')}`,
+            statusCode: 422,
+          });
+        }
+      }
+
+      // Validate draft-only fields: format, mode, visibility, faction_pool
+      // These can only be changed while the tournament is still in DRAFT.
+      if (tournament.status !== 'DRAFT') {
+        const draftOnlyAttempted = (['format', 'mode', 'visibility'] as const).filter(
+          (f) => rest[f] !== undefined,
+        );
+        if (draftOnlyAttempted.length > 0) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: `${draftOnlyAttempted.map((f) => `"${f}"`).join(', ')} can only be changed while the tournament is in draft`,
+            statusCode: 422,
+          });
+        }
+        if (newFactionPool !== undefined) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: '"faction_pool" can only be changed while the tournament is in draft',
             statusCode: 422,
           });
         }
@@ -672,8 +741,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         ...(newStatus !== undefined ? { status: newStatus } : {}),
       };
 
-      // map_pool is a relation — exclude it from the scalar updateData loop
-      const RELATION_FIELDS = new Set(['map_pool']);
+      // map_pool and faction_pool are relations — exclude from the scalar updateData loop
+      const RELATION_FIELDS = new Set(['map_pool', 'faction_pool']);
 
       for (const [key, value] of Object.entries(fieldMap)) {
         if (value !== undefined && !RELATION_FIELDS.has(key)) {
@@ -725,6 +794,31 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
             data: newMapPool.map((mapId) => ({
               tournament_id: tournament.id,
               map_id: mapId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      // When counts_for_leaderboard changes, re-stamp all existing MatchGame rows
+      // so the game-level flag stays consistent with the tournament setting.
+      if ('counts_for_leaderboard' in changedNew) {
+        await fastify.prisma.matchGame.updateMany({
+          where: { match: { tournament_id: tournament.id } },
+          data: { counts_for_leaderboard: changedNew.counts_for_leaderboard as boolean },
+        });
+      }
+
+      // Update faction allowlist (replace all rows)
+      if (newFactionPool !== undefined) {
+        await fastify.prisma.tournamentFactionAllowlist.deleteMany({
+          where: { tournament_id: tournament.id },
+        });
+        if (newFactionPool.length > 0) {
+          await fastify.prisma.tournamentFactionAllowlist.createMany({
+            data: newFactionPool.map((factionId) => ({
+              tournament_id: tournament.id,
+              faction_id: factionId,
             })),
             skipDuplicates: true,
           });

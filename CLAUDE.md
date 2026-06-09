@@ -1,8 +1,12 @@
 # Rizzotto (vormals TWW3 Tournament Platform)
 
+## Language
+
+Code, UI text, code comments, commit messages, and identifiers for this project are **English** (the product and codebase are English-only). Communication with the user — chat responses, explanations, questions — stays **German** per the global language rule.
+
 ## Projekt-Übersicht
 
-**Rizzotto** — *Where Lists Are Forged.* Discord-Auth-basierte Tournament-Plattform für Warhammer: The Old World. Spieler authentifizieren sich per Discord-OAuth2, erstellen Turniere, spielen Swiss- oder Bracket-Runden und verfolgen Draft-Picks in Echtzeit. Branding & Design-System wurde 2026-05-13 unter `docs/design/` etabliert (15 Topic-Files, Souls-like/Grimdark-Aesthetik). Rizzotto ist die visuelle Marke (Domain: rizzotto.gg); das Khazalid-Lexikon (Karaz Ankor, Roll of Honour, Conclave) bleibt als Atmospheric-Layer im UI erhalten.
+**Rizzotto** — Discord-Auth-basierte Tournament-Plattform für Total War: Warhammer. Spieler authentifizieren sich per Discord-OAuth2, erstellen Turniere, spielen Swiss- oder Bracket-Runden und verfolgen Draft-Picks in Echtzeit. Branding & Design-System wurde 2026-05-13 unter `docs/design/` etabliert (15 Topic-Files, Souls-like/Grimdark-Aesthetik). Rizzotto ist die visuelle Marke (Domain: rizzotto.gg); das Khazalid-Lexikon (Karaz Ankor, Roll of Honour, Conclave) bleibt als Atmospheric-Layer im UI erhalten.
 Stack: Fastify 5 + Prisma 7 (driver-adapter) + Socket.IO 4 + Vite 6 + React 19 + TanStack Router/Query + Tailwind CSS 4 + shadcn/ui + motion. Monorepo mit pnpm 9 + Turborepo 2.
 Stand: Milestone 5 vollständig abgeschlossen (2026-05-13), Production-Launch-Ready. Workspace-Namen wurden auf `@rizzotto/*` umgestellt (Rename erfolgt in feat/rizzotto-rebrand).
 
@@ -115,6 +119,7 @@ Wenn sich folgende Bereiche ändern, das entsprechende Hub-File mitpflegen:
 |------------------------------------------------|------------------------------------------------------------|
 | `ROADMAP.md`                                   | Zentrale SSOT — Stand, offene Items, Milestones, Out-of-Scope |
 | `DEPLOYMENT.md`                                | Production-Setup, Env-Vars, Deploy-Prozess                 |
+| `docs/ONBOARDING.md`                           | Lokales Setup auf frischem (Windows-)PC — Tooling, Code, `.env`, Claude-Config |
 | `docs/design/README.md`                        | Design-System-Index (15 Topic-Files)                       |
 | `docs/archive/`                                | Historische Plan-/Spec-Dateien (Welle-2-Pläne, alte Specs) |
 
