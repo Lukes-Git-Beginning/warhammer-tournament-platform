@@ -116,7 +116,7 @@ describe('GET /api/admin/audit-log', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json<{
-      entries: Array<{ id: string; entity_type: string; action: string; actor: { id: string } | null }>;
+      entries: Array<{ id: string; entity_type: string; action: string; actor_id: string | null }>;
       total: number;
       page: number;
       pageSize: number;
@@ -125,10 +125,10 @@ describe('GET /api/admin/audit-log', () => {
     expect(body.pageSize).toBe(10);
     expect(body.total).toBeGreaterThanOrEqual(2);
     expect(body.entries.length).toBeGreaterThanOrEqual(2);
-    // entries include actor relation
-    const withActor = body.entries.filter((e) => e.actor !== null);
+    // entries carry the actor as a flattened actor_id field
+    const withActor = body.entries.filter((e) => e.actor_id !== null);
     expect(withActor.length).toBeGreaterThan(0);
-    expect(withActor[0].actor!.id).toBe(ADMIN_ID);
+    expect(withActor[0].actor_id).toBe(ADMIN_ID);
   });
 
   it('filters by entity_type query param', async () => {
@@ -167,18 +167,18 @@ describe('GET /api/admin/stats', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json<{
-      users: { active: number };
+      activeUsers: number;
       tournaments: { total: number; active: number; completed: number };
-      matches: { total: number };
-      top_factions: unknown[];
-      season: unknown;
+      matchesPlayed: number;
+      currentSeason: string | null;
+      topFactions: unknown[];
     }>();
-    expect(typeof body.users.active).toBe('number');
+    expect(typeof body.activeUsers).toBe('number');
     expect(typeof body.tournaments.total).toBe('number');
     expect(typeof body.tournaments.active).toBe('number');
     expect(typeof body.tournaments.completed).toBe('number');
-    expect(typeof body.matches.total).toBe('number');
-    expect(Array.isArray(body.top_factions)).toBe(true);
+    expect(typeof body.matchesPlayed).toBe('number');
+    expect(Array.isArray(body.topFactions)).toBe(true);
   });
 
   it('returns 401 without token', async () => {
