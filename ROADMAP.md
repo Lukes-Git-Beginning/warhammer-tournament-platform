@@ -1,6 +1,6 @@
 # ROADMAP — Rizzotto
 
-> **Stand:** 2026-06-05 · **Phase:** Live (Beta) — auf dem Weg zu Launch v1 · **Domain:** rizzotto.gg (Prod-Betrieb: Luke)
+> **Stand:** 2026-06-09 · **Phase:** Live (Beta) — auf dem Weg zu Launch v1 · **Domain:** rizzotto.gg (Prod-Betrieb: Luke)
 >
 > Diese Roadmap ist die **SSOT** für _was läuft_, _was als nächstes drankommt_ und _was bewusst nicht gebaut wird_. Sub-Pläne (Detail-Plans für einzelne Tracks) liegen unter `~/.claude/plans/`, nicht im Repo. Historie und Welle-Specs siehe `docs/archive/`.
 
@@ -8,7 +8,7 @@
 
 ## TL;DR
 
-- **rizzotto.gg ist live seit 2026-05-19** auf Hetzner CX22, Caddy + Cloudflare-Origin-Cert. **Rollenmodell seit 2026-06-04:** Alex = Product Owner + lokale Entwicklung, Luke = Prod-Betrieb (Server, Cloudflare, Deploys); Handover künftig per Feature-Branch-PR.
+- **rizzotto.gg ist live seit 2026-05-19** auf Hetzner CX22, Caddy + Cloudflare-Origin-Cert. **Rollenmodell seit 2026-06-04:** Alex = Product Owner + lokale Entwicklung, Luke = Prod-Betrieb (Server, Cloudflare, Deploys). **Seit 2026-06-09:** Alex' Agent pusht direkt auf `main` und deployt selbst (Push→Auto-Deploy, `workflow_dispatch`-Fallback); Server/Cloudflare/Secrets bleiben bei Luke (s. §5 Arbeitsmodell).
 - **M1–M6 + Welle 2 + DOUBLE_ELIMINATION + Dynamic Weighted Leaderboard sind durch.**
 - **Zuletzt live (2026-06-04):** Die 13 Commits der Nacht-Session (Registration-UI, Lifecycle-Buttons, SE-Generator-Fix, Bracket-Polish, Faction-Select, Cast-Iron-Logo) sind deployed — nach CI-Fix (Visual-Baselines, §2.7). Live-Smoke grün; 1 staler Cloudflare-Cache-Eintrag (`rizzotto-wordmark.avif`) wartet auf Luke-Purge.
 - **Aktueller Fokus: M7 — Launch v1 „Match Hub" (§5, Alex-Spec 2026-06-04):** Match-Klärung (BPT-Pick, Map-Ban&Pick, 4 Map-Modi) lebt im Match-Panel statt in Discord-DMs — der intrinsische Mehrwert ggü. Totaltavern. Dazu: Decision-Flow-Reparatur (§2.7-Audit), SFT-Hidden-Fix, Withdraw, Bracket-Reset, Englisch-only. Danach gestufter Community-Launch (geschlossener Kreis → öffentlich).
@@ -173,7 +173,7 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 
 **Ziel:** Alles, was zum Match zu klären ist, lebt **im Match-Panel auf der Turnierseite** — keine Discord-DMs, kein externes Draft-Tool. Das ist der intrinsische Mehrwert gegenüber dem Status quo der Szene (Totaltavern: Bracket auf TT, Draft auf aoe2cm, Matrix + Map-Bans per Discord-DM). **BPT + SFT decken 80–90 % der real gespielten Turniere ab** — sie sind der v1-Scope; das mit Abstand häufigste Format ist **Swiss SFT, 4–5 Runden + Top-4-Playoffs**.
 
-**Arbeitsmodell:** Alex entwickelt lokal auf `feat/launch-v1`; Handover = PR → Luke reviewt/merged → Auto-Deploy. Direkte `main`-Pushes nur noch für Docs.
+**Arbeitsmodell (seit 2026-06-09):** Alex' Coding-Agent pusht **direkt auf `main`** (kein PR/Review-Gate mehr) und löst den Deploy selbst aus — Push → CI → Auto-Deploy via `workflow_run`, plus `workflow_dispatch` als manueller Fallback, falls die Kette hängt. Pflicht-Gate vor jedem Push: `pnpm typecheck && pnpm lint && pnpm test && pnpm build` grün; bei UI-/Landing-Änderungen keine `*-win32.png`-Snapshots committen (Linux-Baselines via CI-Artifact). Prod-Betrieb (Server, SSH, Cloudflare, DNS, Secrets) bleibt bei Luke; Alex hat dafür weiterhin keinen Zugang. _(Vorheriges Modell bis 2026-06-08: Feature-Branch `feat/launch-v1` → PR → Luke-Merge.)_
 
 ### 5.1 Kern — Match-Klärung im Match-Panel
 
