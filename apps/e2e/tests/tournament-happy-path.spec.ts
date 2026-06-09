@@ -180,11 +180,13 @@ test.describe('Tournament Happy Path — 16-Player Single Elimination', () => {
 
         // Champion (won all rounds) should appear in leaderboard with wins > 0
         const top = lb.entries[0] as {
-          totalMatches: number;
+          totalGames: number;
           wins: number;
           rank: number;
         };
-        expect(top.totalMatches).toBeGreaterThanOrEqual(1);
+        // Default leaderboard mode is 'rating_model'; its entries are game-level
+        // since ELO removal and expose totalGames (not the old totalMatches).
+        expect(top.totalGames).toBeGreaterThanOrEqual(1);
         expect(top.wins).toBeGreaterThanOrEqual(1);
         expect(top.rank).toBe(1);
       }

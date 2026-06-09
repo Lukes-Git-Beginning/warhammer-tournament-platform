@@ -336,7 +336,7 @@ test.describe('Welle-D: Match-Decision-Flow', () => {
 // Test 4: Auto-Playoff generation after last Swiss round
 // ---------------------------------------------------------------------------
 
-test.describe('Welle-D: Auto-Playoff Generation after Swiss', () => {
+test.describe('Welle-D: Deferred Playoff Generation after Swiss', () => {
   const userIds: string[] = [];
 
   test.beforeAll(async () => {
@@ -347,7 +347,7 @@ test.describe('Welle-D: Auto-Playoff Generation after Swiss', () => {
     await cleanupTestData(userIds);
   });
 
-  test('generates TOP4 playoff matches after last Swiss round with 4 players', async () => {
+  test('creates TOP4 semifinals via start-playoffs after the last Swiss round', async () => {
     const [organizer] = await createTestUsers(1, {
       role: 'ORGANIZER',
       usernamePrefix: 'welle-d-org4',
@@ -423,25 +423,38 @@ test.describe('Welle-D: Auto-Playoff Generation after Swiss', () => {
 
       const r2NextRes = await orgCtx.post(`${BACKEND}/api/tournaments/${tournament.id}/next-round`);
       expect(r2NextRes.ok()).toBe(true);
-      const r2Body = (await r2NextRes.json()) as {
-        isLastRound: boolean;
-        playoff_matches_created: number;
-      };
-      // Round 3 is the last Swiss round → playoff matches are generated together with it
+      const r2Body = (await r2NextRes.json()) as { isLastRound: boolean };
+      // Round 3 is the last Swiss round; next-round only reports this — it no
+      // longer auto-generates the playoff bracket (deferred to start-playoffs).
       expect(r2Body.isLastRound).toBe(true);
 
       // Play round 3 (last Swiss round)
       await playRound(3);
 
-      // Verify playoff matches were created
-      const playoffMatches = await prisma.match.findMany({
+      // Deferred generation: playoffs are NOT auto-created with the last Swiss
+      // round. The organizer triggers them explicitly via start-playoffs.
+      const autoCreated = await prisma.match.findMany({
         where: {
           tournament_id: tournament.id,
-          phase: { in: ['PLAYOFF_SF', 'PLAYOFF_FINAL'] },
+          phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL'] },
         },
       });
-      // TOP4 = 2 SFs + 1 Final = 3 playoff matches
-      expect(playoffMatches.length).toBe(3);
+      expect(autoCreated.length).toBe(0);
+
+      // Trigger playoff generation. start-playoffs creates only the FIRST playoff
+      // round (TOP4 → 2 semifinals); the final is generated later via
+      // advance-playoffs once both SFs complete.
+      const startPlayoffsRes = await orgCtx.post(
+        `${BACKEND}/api/tournaments/${tournament.id}/start-playoffs`,
+      );
+      expect(startPlayoffsRes.ok()).toBe(true);
+      const startPlayoffsBody = (await startPlayoffsRes.json()) as { matches_created: number };
+      expect(startPlayoffsBody.matches_created).toBe(2);
+
+      const sfMatches = await prisma.match.findMany({
+        where: { tournament_id: tournament.id, phase: 'PLAYOFF_SF' },
+      });
+      expect(sfMatches.length).toBe(2);
     } finally {
       await orgCtx.dispose();
     }

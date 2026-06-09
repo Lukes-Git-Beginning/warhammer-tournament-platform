@@ -9,7 +9,10 @@ test('health endpoint returns ok', async ({ request }) => {
 
 test('frontend loads with Rizzotto branding', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText(/where lists are forged/i).first()).toBeVisible();
+  // The rebrand replaced the "Where Lists Are Forged" text tagline with the
+  // RizzOtto's Arena wordmark image (alt="RizzOtto's Arena"), rendered in the
+  // header lockup and the hero section.
+  await expect(page.getByRole('img', { name: /rizzotto's arena/i }).first()).toBeVisible();
 });
 
 test('login page shows Discord button', async ({ page }) => {
