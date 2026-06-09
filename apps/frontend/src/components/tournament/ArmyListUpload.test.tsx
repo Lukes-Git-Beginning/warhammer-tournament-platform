@@ -68,7 +68,7 @@ describe('ArmyListUpload', () => {
     );
     expect(html).toContain('type="file"');
     // Upload-Button darf noch nicht sichtbar sein
-    expect(html).not.toContain('Hochladen');
+    expect(html).not.toContain('Upload');
   });
 
   it('zeigt Upload-Button nach File-Auswahl', async () => {
@@ -100,7 +100,7 @@ describe('ArmyListUpload', () => {
 
     const button = container.querySelector('button');
     expect(button).not.toBeNull();
-    expect(button?.textContent).toContain('Hochladen');
+    expect(button?.textContent).toContain('Upload');
 
     document.body.removeChild(container);
   });

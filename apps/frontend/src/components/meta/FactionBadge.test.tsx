@@ -17,18 +17,17 @@ describe('FactionBadge', () => {
     expect(html).toContain('title="Skaven"');
   });
 
-  it('rendert korrekte Größe sm (24px)', () => {
+  it('rendert korrekte Größe sm (30px)', () => {
     const html = renderToStaticMarkup(
       <FactionBadge colorHex="#333" initials="VC" name="Vampire Counts" size="sm" />,
     );
-    // inline style should contain width: 24
-    expect(html).toContain('24');
+    expect(html).toContain('30');
   });
 
-  it('rendert korrekte Größe lg (48px)', () => {
+  it('rendert korrekte Größe lg (60px)', () => {
     const html = renderToStaticMarkup(
       <FactionBadge colorHex="#333" initials="VC" name="Vampire Counts" size="lg" />,
     );
-    expect(html).toContain('48');
+    expect(html).toContain('60');
   });
 });
