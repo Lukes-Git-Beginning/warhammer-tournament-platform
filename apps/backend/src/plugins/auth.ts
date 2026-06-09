@@ -1,7 +1,7 @@
 import fp from 'fastify-plugin';
 import fastifyCookie from '@fastify/cookie';
 import fastifyJwt from '@fastify/jwt';
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyReply } from 'fastify';
 import type { JwtPayload, Role } from '@rizzotto/types';
 import { cached } from '../lib/cache.js';
 

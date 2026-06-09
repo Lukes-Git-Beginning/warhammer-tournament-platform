@@ -513,7 +513,7 @@ export class DraftService {
     actor: 'host' | 'guest',
     factionId: string,
     ctx: ApplyContext,
-    expectedTurnIndex: number,
+    _expectedTurnIndex: number,
   ): Promise<void> {
     const action = turn.action;
 
@@ -541,7 +541,7 @@ export class DraftService {
     actor: 'host' | 'guest',
     factionId: string,
     ctx: ApplyContext,
-    expectedTurnIndex: number,
+    _expectedTurnIndex: number,
   ): Promise<void> {
     // Validate
     const perspective: 'host' | 'guest' = turn.as_opponent

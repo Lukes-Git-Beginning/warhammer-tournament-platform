@@ -127,7 +127,7 @@ const draftPresetRoutes: FastifyPluginAsync = async (fastify) => {
   // -------------------------------------------------------------------------
   // GET /api/draft-presets  — public + own
   // -------------------------------------------------------------------------
-  fastify.get('/api/draft-presets', async (request, reply) => {
+  fastify.get('/api/draft-presets', async (request, _reply) => {
     // Optional auth: try to verify, don't fail if missing
     let userId: string | null = null;
     try {

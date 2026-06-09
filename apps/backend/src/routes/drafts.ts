@@ -90,7 +90,7 @@ const draftRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // Determine which turn indices have been revealed by a subsequent reveal event
-    const revealEventTurnIndices = new Set<number>();
+    const _revealEventTurnIndices = new Set<number>();
     // If a reveal_picks / reveal_bans / reveal_all event exists, all prior hidden picks/bans are revealed
     let hasRevealPicks = false;
     let hasRevealBans = false;

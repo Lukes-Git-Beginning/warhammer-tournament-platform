@@ -15,7 +15,6 @@ import {
   type MatchReportingState,
 } from '@rizzotto/types';
 import { resolveMatchResult, disputeMatch } from '../lib/match-result-service.js';
-import { ensureMatchGame } from '../lib/match-games.js';
 import { tournamentRoom } from '../lib/emit.js';
 import { notifyDispute } from '../lib/discord-notify.js';
 import { invalidate } from '../lib/cache.js';

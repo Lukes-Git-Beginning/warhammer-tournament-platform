@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { emitStatusChange } from '../lib/emit.js';
 import { InvalidActionError } from '../lib/draft-service.js';
 import { completeMatch } from '../lib/complete-match.js';
-import { ensureMatchGame } from '../lib/match-games.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas

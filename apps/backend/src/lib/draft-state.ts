@@ -94,7 +94,7 @@ function picksInCategory(state: DraftState, side: Side, cat: CategoryLimit): num
   return state.picks[side].filter((f) => cat.factions.includes(f)).length;
 }
 
-function bansInCategory(state: DraftState, opponentSide: Side, cat: CategoryLimit): number {
+function _bansInCategory(state: DraftState, opponentSide: Side, cat: CategoryLimit): number {
   // exclusive_bans[opponentSide] contains factions banned FOR that side.
   return state.exclusive_bans[opponentSide].filter((f) => cat.factions.includes(f)).length
     + state.bans.filter((f) => cat.factions.includes(f)).length;
@@ -120,7 +120,7 @@ export function getAvailableFactions(
   ctx: ApplyContext,
   perspective: Side,
 ): string[] {
-  const { allFactions, categoryLimits } = ctx;
+  const { allFactions } = ctx;
 
   if (allFactions.length === 0) return [];
 
