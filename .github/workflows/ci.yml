@@ -72,6 +72,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # Detect whether this push touches anything beyond migration SQL.
+      # If not, we skip the slow steps (lint, typecheck, unit tests, build, E2E)
+      # that add no value for a data-only change — migrations still run.
+      - name: Detect code changes
+        id: detect
+        run: |
+          changed=$(git diff --name-only HEAD~1 HEAD)
+          echo "$changed"
+          if echo "$changed" | grep -qvE '^packages/db/prisma/migrations/'; then
+            echo "code=true" >> $GITHUB_OUTPUT
+          else
+            echo "code=false" >> $GITHUB_OUTPUT
+          fi
 
       - uses: pnpm/action-setup@v4
 
@@ -93,18 +109,23 @@ jobs:
         run: pnpm db:seed
 
       - name: Lint
+        if: steps.detect.outputs.code == 'true'
         run: pnpm lint
 
       - name: Typecheck
+        if: steps.detect.outputs.code == 'true'
         run: pnpm typecheck
 
       - name: Test
+        if: steps.detect.outputs.code == 'true'
         run: pnpm test
 
       - name: Build
+        if: steps.detect.outputs.code == 'true'
         run: pnpm build
 
       - name: Cache Playwright browsers
+        if: steps.detect.outputs.code == 'true'
         id: pw-cache
         uses: actions/cache@v4
         with:
@@ -112,8 +133,7 @@ jobs:
           key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright Chromium
-        # On a cache hit the browser binary (~120 MB) is restored, so only the
-        # OS-level libs need installing. On a miss, do the full download.
+        if: steps.detect.outputs.code == 'true'
         run: |
           if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
             pnpm --filter @rizzotto/e2e exec playwright install-deps chromium
@@ -122,17 +142,14 @@ jobs:
           fi
 
       - name: E2E (Playwright)
-        # Blocking pre-deploy gate. Visual-snapshot tests run unconditionally;
-        # Linux baseline PNGs are committed (PR #9, a31cf49). Volatile sections
-        # (leaderboard table, Roll of Honour list) are masked via data-testid
-        # locators in tests/visual/landing-overhaul.spec.ts.
+        if: steps.detect.outputs.code == 'true'
         run: pnpm --filter @rizzotto/e2e test:e2e
         env:
           NODE_ENV: test
           CI: "true"
 
       - name: Upload Playwright report on failure
-        if: failure()
+        if: failure() && steps.detect.outputs.code == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
