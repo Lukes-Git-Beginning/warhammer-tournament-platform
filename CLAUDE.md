@@ -2,7 +2,7 @@
 
 ## Language
 
-All communication, UI text, code comments, and responses for this project must be in **English**. This overrides the global German language rule.
+Code, UI text, code comments, commit messages, and identifiers for this project are **English** (the product and codebase are English-only). Communication with the user — chat responses, explanations, questions — stays **German** per the global language rule.
 
 ## Projekt-Übersicht
 
@@ -119,6 +119,7 @@ Wenn sich folgende Bereiche ändern, das entsprechende Hub-File mitpflegen:
 |------------------------------------------------|------------------------------------------------------------|
 | `ROADMAP.md`                                   | Zentrale SSOT — Stand, offene Items, Milestones, Out-of-Scope |
 | `DEPLOYMENT.md`                                | Production-Setup, Env-Vars, Deploy-Prozess                 |
+| `docs/ONBOARDING.md`                           | Lokales Setup auf frischem (Windows-)PC — Tooling, Code, `.env`, Claude-Config |
 | `docs/design/README.md`                        | Design-System-Index (15 Topic-Files)                       |
 | `docs/archive/`                                | Historische Plan-/Spec-Dateien (Welle-2-Pläne, alte Specs) |
 
