@@ -2,6 +2,7 @@
 // Populated in M1.3+. M1.1 stub establishes the shape.
 
 import type { PublicDraftState } from './draft.js';
+import type { Role } from './api-schemas.js';
 
 export type TournamentStatusLiteral =
   | 'DRAFT'
@@ -156,4 +157,5 @@ export interface InterServerEvents {
 export interface SocketData {
   userId: string;
   username: string;
+  role: Role;
 }

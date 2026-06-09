@@ -73,7 +73,6 @@ export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 
 export const JwtPayloadSchema = z.object({
   sub: z.string().uuid(),
-  discord_id: z.string(),
   username: z.string(),
   role: RoleSchema,
 });

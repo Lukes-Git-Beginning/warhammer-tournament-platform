@@ -161,7 +161,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true },
+        select: { id: true, status: true },
       });
 
       if (!tournament) {
@@ -169,6 +169,18 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           error: 'NotFound',
           message: `Tournament "${slug}" not found`,
           statusCode: 404,
+        });
+      }
+
+      // Self-withdraw is only allowed before the tournament starts. Once it is
+      // ONGOING/COMPLETED, a player must be dropped by an organizer (which
+      // forfeits open matches and keeps the bracket consistent).
+      if (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message:
+            'Cannot withdraw once the tournament has started — contact an organizer to be dropped',
+          statusCode: 422,
         });
       }
 

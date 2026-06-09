@@ -10,7 +10,15 @@ import { PrismaClient } from '../generated/prisma/client.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
 
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error('DATABASE_URL not set');
+// Safety guard — mutates dummy data, must never touch a non-local database.
+if (!/localhost|127\.0\.0\.1/.test(connectionString)) {
+  console.error('fix-dummy-registrations: DATABASE_URL does not look local — refusing to run.');
+  process.exit(1);
+}
+
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 const SLUG = 'test-sft-swiss';
 
 async function main(): Promise<void> {

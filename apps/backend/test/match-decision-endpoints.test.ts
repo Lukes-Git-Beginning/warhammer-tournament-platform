@@ -41,7 +41,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 function cookieFor(userId: string, role = 'USER') {
-  const token = app.jwt.sign({ sub: userId, discord_id: `disc_${userId}`, username: 'test', role });
+  const token = app.jwt.sign({ sub: userId, username: 'test', role });
   const cookieName = process.env.JWT_COOKIE_NAME ?? 'auth_token';
   return { [cookieName]: token };
 }
@@ -53,6 +53,7 @@ function cookieFor(userId: string, role = 'USER') {
 let player1: TestUser;
 let player2: TestUser;
 let organizer: TestUser;
+let stranger: TestUser;
 let tournamentId: string;
 let tournamentSlug: string;
 let matchId: string;
@@ -64,6 +65,7 @@ beforeEach(async () => {
   organizer = await createTestUser({ username: 'DecisionOrg' });
   player1 = await createTestUser({ username: 'DecisionP1' });
   player2 = await createTestUser({ username: 'DecisionP2' });
+  stranger = await createTestUser({ username: 'DecisionStranger' });
 
   tournamentId = randomUUID();
   tournamentSlug = `test-decision-${tournamentId.slice(0, 8)}`;
@@ -104,7 +106,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await cleanupTournament(tournamentId);
-  await cleanupUsers([organizer.id, player1.id, player2.id]);
+  await cleanupUsers([organizer.id, player1.id, player2.id, stranger.id]);
 });
 
 // ---------------------------------------------------------------------------
@@ -265,6 +267,25 @@ describe('POST /api/matches/:id/decision/random', () => {
     expect(Array.isArray(body.bansTop)).toBe(true);
     expect(body.blindPick).toBeNull();
   });
+
+  it('returns 403 for a non-participant (IDOR guard)', async () => {
+    if (mapIds.length === 0) return;
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/matches/${matchId}/decision/start`,
+      cookies: cookieFor(player1.id),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/matches/${matchId}/decision/random`,
+      cookies: cookieFor(stranger.id),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('Forbidden');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -287,5 +308,30 @@ describe('POST /api/matches/:id/decision/start — response shape', () => {
     expect(Array.isArray(body.bansBottom)).toBe(true);
     expect('decidedAt' in body).toBe(true);
     expect(body.blindPick).toBeNull();
+  });
+
+  it('returns 403 when a non-participant tries to start the decision flow (IDOR guard)', async () => {
+    if (mapIds.length === 0) return;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/matches/${matchId}/decision/start`,
+      cookies: cookieFor(stranger.id),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('Forbidden');
+  });
+
+  it('allows staff (ADMIN role) to start the decision flow', async () => {
+    if (mapIds.length === 0) return;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/matches/${matchId}/decision/start`,
+      cookies: cookieFor(stranger.id, 'ADMIN'),
+    });
+
+    expect(res.statusCode).toBe(201);
   });
 });

@@ -23,6 +23,11 @@ coverage/
 prisma/migrations/dev/
 packages/db/generated/
 
+# Stray local artefacts (never commit)
+cookies.txt
+packages/db/cookies.txt
+packages/db/prisma/list-users.ts
+
 # TypeScript build info
 *.tsbuildinfo
 

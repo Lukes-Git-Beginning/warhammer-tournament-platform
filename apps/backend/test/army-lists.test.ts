@@ -67,7 +67,7 @@ beforeEach(async () => {
 // ---------------------------------------------------------------------------
 
 function cookieFor(id: string, role = 'USER') {
-  const token = app.jwt.sign({ sub: id, discord_id: `disc_${id}`, username: 'test', role });
+  const token = app.jwt.sign({ sub: id, username: 'test', role });
   const cookieName = process.env.JWT_COOKIE_NAME ?? 'auth_token';
   return `${cookieName}=${token}`;
 }

@@ -14,6 +14,13 @@ dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_URL not set');
 
+// Safety guard — this dev helper writes dummy data and must never touch a
+// non-local database (mirrors seed-dummies.ts).
+if (!/localhost|127\.0\.0\.1/.test(connectionString)) {
+  console.error('fill-registrations: DATABASE_URL does not look local — refusing to run.');
+  process.exit(1);
+}
+
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 

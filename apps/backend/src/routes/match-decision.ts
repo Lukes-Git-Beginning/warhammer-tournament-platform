@@ -288,6 +288,23 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      // Authorization — only the two match participants or staff may start a
+      // decision flow (prevents a third party from triggering the coin flip /
+      // map draw on someone else's match).
+      const actorId = request.user.sub;
+      const isParticipant = actorId === match.player1_id || actorId === match.player2_id;
+      const isStaff =
+        request.user.role === 'ORGANIZER' ||
+        request.user.role === 'MODERATOR' ||
+        request.user.role === 'ADMIN';
+      if (!isParticipant && !isStaff) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'You are not a participant of this match',
+          statusCode: 403,
+        });
+      }
+
       // Validate status — decision can be started from PENDING or ONGOING
       if (match.status !== 'PENDING' && match.status !== 'ONGOING') {
         return reply.code(422).send({
@@ -647,6 +664,8 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: matchId, deleted_at: null },
         select: {
           id: true,
+          player1_id: true,
+          player2_id: true,
           games: {
             where: { map_decision: { isNot: null }, status: { not: 'COMPLETED' } },
             orderBy: { game_number: 'desc' },
@@ -661,6 +680,21 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           error: 'NotFound',
           message: 'Match not found',
           statusCode: 404,
+        });
+      }
+
+      // Authorization — only participants or staff may confirm the decision state.
+      const actorId = request.user.sub;
+      const isParticipant = actorId === match.player1_id || actorId === match.player2_id;
+      const isStaff =
+        request.user.role === 'ORGANIZER' ||
+        request.user.role === 'MODERATOR' ||
+        request.user.role === 'ADMIN';
+      if (!isParticipant && !isStaff) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'You are not a participant of this match',
+          statusCode: 403,
         });
       }
 

@@ -95,7 +95,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         },
         select: {
           id: true,
-          discord_id: true,
           username: true,
           role: true,
           steam_link: { select: { steam_id: true } },
@@ -123,7 +122,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       const payload: JwtPayload = {
         sub: user.id,
-        discord_id: user.discord_id,
         username: user.username,
         role: user.role as Role,
       };
@@ -306,14 +304,16 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true };
   });
 
-  // Dev-only: directly issue JWT cookie for any userId by discord_id or userId.
-  // Guarded by NODE_ENV=production — returns 403 in production. Enables multi-user
-  // Generalprobe (simulating different players in separate browser windows).
+  // Dev-only: directly issue a JWT cookie for any user by discord_id. Enables the
+  // local DevLoginPanel multi-user dress rehearsal (separate browser windows).
+  // Strict allowlist — only available when NODE_ENV is exactly "development".
+  // Returns 403 in production, staging, test, or when NODE_ENV is unset, so it can
+  // never be used as an authentication bypass in a deployed environment.
   fastify.post('/auth/dev-login', async (request, reply) => {
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV !== 'development') {
       return reply.code(403).send({
         error: 'Forbidden',
-        message: 'Dev-login endpoint is not available in production',
+        message: 'Dev-login endpoint is only available in local development',
         statusCode: 403,
       });
     }
@@ -329,7 +329,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const user = await fastify.prisma.user.findUnique({
       where: { discord_id: body.discordId, deleted_at: null },
-      select: { id: true, discord_id: true, username: true, role: true },
+      select: { id: true, username: true, role: true },
     });
     if (!user) {
       return reply.code(404).send({
@@ -341,7 +341,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const payload: JwtPayload = {
       sub: user.id,
-      discord_id: user.discord_id,
       username: user.username,
       role: user.role as Role,
     };
@@ -371,7 +370,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const user = await fastify.prisma.user.findUnique({
       where: { id: body.userId, deleted_at: null },
-      select: { id: true, discord_id: true, username: true, role: true },
+      select: { id: true, username: true, role: true },
     });
     if (!user) {
       return reply.code(404).send({
@@ -383,7 +382,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const payload: JwtPayload = {
       sub: user.id,
-      discord_id: user.discord_id,
       username: user.username,
       role: user.role as Role,
     };

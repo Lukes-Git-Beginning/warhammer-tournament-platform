@@ -91,8 +91,8 @@ export async function finalizeGameResult(
 
   // Faction auto-resolve (no manual input):
   // Priority: BPT blind-pick revealed > SFT participant faction > existing match faction
-  let p1FactionId: string | null = null;
-  let p2FactionId: string | null = null;
+  let p1FactionId: string | null;
+  let p2FactionId: string | null;
 
   const mode = game.match.tournament.mode;
   if (mode === 'BPT' && game.blind_pick?.revealed_at) {

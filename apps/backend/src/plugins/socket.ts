@@ -46,6 +46,7 @@ export default fp(
         const payload = fastify.jwt.verify<JwtPayload>(token);
         socket.data.userId = payload.sub;
         socket.data.username = payload.username;
+        socket.data.role = payload.role;
         return next();
       } catch (err) {
         fastify.log.debug({ err }, 'socket auth failed');
@@ -61,22 +62,71 @@ export default fp(
         'socket connected',
       );
 
-      socket.on('join_tournament', (id) => {
+      socket.on('join_tournament', async (id) => {
         if (typeof id !== 'string' || !uuidRe.test(id)) {
           fastify.log.warn({ sid: socket.id, id }, 'join_tournament: invalid UUID, ignoring');
           return;
         }
-        void socket.join(`tournament_${id}`);
+        // PRIVATE tournaments: only organizer or MODERATOR/ADMIN may receive
+        // live bracket/result events (mirrors the REST visibility gate).
+        try {
+          const tournament = await fastify.prisma.tournament.findFirst({
+            where: { id, deleted_at: null },
+            select: { visibility: true, organizer_id: true },
+          });
+          if (!tournament) return;
+          if (tournament.visibility === 'PRIVATE') {
+            const isAllowed =
+              socket.data.userId === tournament.organizer_id ||
+              socket.data.role === 'MODERATOR' ||
+              socket.data.role === 'ADMIN';
+            if (!isAllowed) {
+              fastify.log.warn(
+                { sid: socket.id, userId: socket.data.userId, id },
+                'join_tournament: denied (private tournament)',
+              );
+              return;
+            }
+          }
+          void socket.join(`tournament_${id}`);
+        } catch (err) {
+          fastify.log.error({ err, id }, 'join_tournament failed');
+        }
       });
 
       socket.on('leave_tournament', (id) => void socket.leave(`tournament_${id}`));
 
-      socket.on('join_match_decision', (matchId) => {
+      socket.on('join_match_decision', async (matchId) => {
         if (typeof matchId !== 'string' || !uuidRe.test(matchId)) {
           fastify.log.warn({ sid: socket.id, matchId }, 'join_match_decision: invalid UUID, ignoring');
           return;
         }
-        void socket.join(`match_decision_${matchId}`);
+        // Only the two match participants or staff may receive live decision /
+        // blind-pick events (prevents third parties reading ban/lock timing).
+        try {
+          const match = await fastify.prisma.match.findFirst({
+            where: { id: matchId, deleted_at: null },
+            select: { player1_id: true, player2_id: true },
+          });
+          if (!match) return;
+          const isParticipant =
+            socket.data.userId === match.player1_id ||
+            socket.data.userId === match.player2_id;
+          const isStaff =
+            socket.data.role === 'ORGANIZER' ||
+            socket.data.role === 'MODERATOR' ||
+            socket.data.role === 'ADMIN';
+          if (!isParticipant && !isStaff) {
+            fastify.log.warn(
+              { sid: socket.id, userId: socket.data.userId, matchId },
+              'join_match_decision: denied (not a participant)',
+            );
+            return;
+          }
+          void socket.join(`match_decision_${matchId}`);
+        } catch (err) {
+          fastify.log.error({ err, matchId }, 'join_match_decision failed');
+        }
       });
 
       socket.on('leave_match_decision', (matchId) => void socket.leave(`match_decision_${matchId}`));
@@ -182,5 +232,5 @@ export default fp(
       await io.close();
     });
   },
-  { name: 'socket', dependencies: ['auth', 'redis', 'draft'] },
+  { name: 'socket', dependencies: ['db', 'auth', 'redis', 'draft'] },
 );

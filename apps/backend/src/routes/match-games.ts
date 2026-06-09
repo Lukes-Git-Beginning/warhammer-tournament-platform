@@ -47,7 +47,7 @@ function serializeGame(game: {
     player1_faction_id: string | null;
     player2_faction_id: string | null;
   } | null;
-}, includeLobbyCodes: boolean) {
+}, includeSensitive: boolean) {
   return {
     id: game.id,
     gameNumber: game.game_number,
@@ -55,9 +55,10 @@ function serializeGame(game: {
     winnerId: game.winner_id,
     player1FactionId: game.player1_faction_id,
     player2FactionId: game.player2_faction_id,
-    lobbyCode: includeLobbyCodes ? game.lobby_code : null,
+    lobbyCode: includeSensitive ? game.lobby_code : null,
     reportedWinnerId: game.reported_winner_id,
-    reporterId: game.reporter_id,
+    // reporter_id is an internal user UUID — only exposed to participants/staff
+    reporterId: includeSensitive ? game.reporter_id : null,
     reportedAt: game.reported_at?.toISOString() ?? null,
     confirmedAt: game.confirmed_at?.toISOString() ?? null,
     replayUrl: game.replay_url,

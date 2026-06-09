@@ -110,7 +110,7 @@ async function createMatch(opts: {
 }
 
 function makeToken(userId: string, role: string = 'USER'): string {
-  return app.jwt.sign({ sub: userId, discord_id: `disc_${userId}`, username: 'test', role });
+  return app.jwt.sign({ sub: userId, username: 'test', role });
 }
 
 async function getH2H(a: string, b: string, token: string, query: string = '') {
