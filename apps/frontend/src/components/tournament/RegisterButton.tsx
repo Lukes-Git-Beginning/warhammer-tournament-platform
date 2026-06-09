@@ -83,7 +83,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
   const [pickingFaction, setPickingFaction] = useState(false);
   const [selectedFaction, setSelectedFaction] = useState('');
 
-  const isSFT = tournament.mode === 'SFT';
+  const needsFactionPick = tournament.mode === 'SFT' || tournament.mode === 'BPT';
 
   const register = useMutation({
     mutationFn: (factionId?: string) =>
@@ -161,12 +161,16 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
     );
   }
 
-  if (isSFT && pickingFaction) {
+  if (needsFactionPick && pickingFaction) {
     return (
       <div className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4 space-y-4">
         <div>
           <p className="text-sm font-semibold text-rizzotto-stone-200 mb-1">Choose your faction</p>
-          <p className="text-xs text-rizzotto-stone-500">SFT — Single Faction Tournament. Your faction is locked for the entire event.</p>
+          <p className="text-xs text-rizzotto-stone-500">
+            {tournament.mode === 'SFT'
+              ? 'SFT — Single Faction Tournament. Your faction is locked for the entire event.'
+              : 'BPT — Blind Pick Tournament. Your faction is kept secret until the tournament begins.'}
+          </p>
         </div>
         <FactionSelectGrid
           selected={selectedFaction}
@@ -200,7 +204,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
         size="md"
         disabled={register.isPending}
         onClick={() => {
-          if (isSFT) {
+          if (needsFactionPick) {
             setPickingFaction(true);
           } else {
             register.mutate(undefined);

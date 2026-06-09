@@ -245,6 +245,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           organizer_id: true,
           rounds_count: true,
           has_third_place_match: true,
+          start_date: true,
         },
       });
 
@@ -276,25 +277,35 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const participants = await fastify.prisma.tournamentParticipant.findMany({
+      const allEligible = await fastify.prisma.tournamentParticipant.findMany({
         where: {
           tournament_id: tournament.id,
           status: { in: ['REGISTERED', 'CHECKED_IN'] },
           deleted_at: null,
         },
         orderBy: { registered_at: 'asc' },
-        select: { user_id: true },
+        select: { user_id: true, status: true, faction_id: true },
       });
+
+      const now = new Date();
+      const checkInWindowOpen =
+        now >= new Date(tournament.start_date.getTime() - 60 * 60 * 1000);
+      const checkedIn = allEligible.filter((p) => p.status === 'CHECKED_IN');
+      const participants =
+        checkInWindowOpen && checkedIn.length > 0 ? checkedIn : allEligible;
 
       if (participants.length < 2) {
         return reply.code(400).send({
           error: 'BadRequest',
-          message: 'Mindestens 2 Teilnehmer erforderlich',
+          message: 'At least 2 participants required',
           statusCode: 400,
         });
       }
 
       const participantIds = participants.map((p) => p.user_id);
+      const factionById = new Map<string, string | null>(
+        allEligible.map((p) => [p.user_id, p.faction_id]),
+      );
       let bracketMatches: Array<{
         id: string;
         tournament_id: string;
@@ -339,6 +350,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             score: 0,
             avoid: [] as string[],
             receivedBye: false,
+            factionId: factionById.get(userId) ?? null,
           }));
           bracketMatches = generateSwissRound(tournament.id, swissPlayers, 1);
           break;
@@ -350,6 +362,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
               tournament.id,
               participantIds,
               tournament.rounds_count ?? 5,
+              { factionById },
             );
           } catch (err) {
             return reply.code(400).send({
@@ -521,10 +534,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           status: { in: ['REGISTERED', 'CHECKED_IN'] },
           deleted_at: null,
         },
-        select: { user_id: true },
+        select: { user_id: true, faction_id: true },
       });
 
       const participantIds = participants.map((p) => p.user_id);
+      const factionById = new Map<string, string | null>(
+        participants.map((p) => [p.user_id, p.faction_id]),
+      );
       const targetRound = currentRound + 1;
       const recommendedRounds = recommendNumberOfRounds(participantIds.length);
 
@@ -590,6 +606,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         score: s.score,
         avoid: avoidMap.get(s.userId) ?? [],
         receivedBye: byeMap.get(s.userId) ?? false,
+        factionId: factionById.get(s.userId) ?? null,
       }));
 
       const newMatches = generateSwissRound(tournament.id, swissPlayers, targetRound);

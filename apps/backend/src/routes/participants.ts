@@ -526,7 +526,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     const started = tournament.status === 'ONGOING' || tournament.status === 'COMPLETED';
-    const maskFactions = tournament.mode === 'SFT' && !started;
+    const maskFactions = (tournament.mode === 'SFT' || tournament.mode === 'BPT') && !started;
 
     const data = maskFactions
       ? participants.map((p) => ({ ...p, faction: null }))

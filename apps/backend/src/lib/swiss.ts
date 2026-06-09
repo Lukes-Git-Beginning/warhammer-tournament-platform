@@ -9,6 +9,7 @@ export interface SwissPlayer {
   score: number;
   avoid: string[];
   receivedBye: boolean;
+  factionId?: string | null;
 }
 
 export interface SwissMatchInput {
@@ -87,11 +88,11 @@ export function generateSwissRound(
     receivedBye: p.receivedBye,
   }));
 
-  const libMatches = SwissPair(libPlayers, round, false, false);
+  const rawMatches = SwissPair(libPlayers, round, false, false);
 
   const result: SwissMatchInput[] = [];
 
-  libMatches.forEach((m, idx) => {
+  rawMatches.forEach((m, idx) => {
     const p1 = typeof m.player1 === 'string' ? m.player1 : null;
     const p2 = typeof m.player2 === 'string' ? m.player2 : null;
 
@@ -111,6 +112,8 @@ export function generateSwissRound(
       winner_id,
     });
   });
+
+  tryAvoidMirrors(result, activePlayers);
 
   // Append the explicit Bye match for the pre-selected player
   if (byePlayer) {
@@ -227,6 +230,68 @@ export function computeSwissStandings(
   });
 
   return standings;
+}
+
+/**
+ * Post-processing: for each mirror pair (same faction), try a local swap with
+ * another pair in the same round. A swap is accepted only when neither pair's
+ * individual score delta increases.
+ *
+ * Mutates `matches` in-place; returns void.
+ */
+function tryAvoidMirrors(matches: SwissMatchInput[], players: SwissPlayer[]): void {
+  const factionById = new Map<string, string>();
+  for (const p of players) {
+    if (p.factionId) factionById.set(p.userId, p.factionId);
+  }
+  if (factionById.size === 0) return;
+
+  const scoreById = new Map(players.map((p) => [p.userId, p.score]));
+  const pending = matches.filter((m) => m.status === 'PENDING');
+
+  for (const m1 of pending) {
+    if (!m1.player1_id || !m1.player2_id) continue;
+
+    const fa = factionById.get(m1.player1_id);
+    const fb = factionById.get(m1.player2_id);
+    if (!fa || !fb || fa !== fb) continue;
+
+    const sa = scoreById.get(m1.player1_id) ?? 0;
+    const sb = scoreById.get(m1.player2_id) ?? 0;
+    const delta1 = Math.abs(sa - sb);
+
+    const start = pending.indexOf(m1) + 1;
+    for (let j = start; j < pending.length; j++) {
+      const m2 = pending[j];
+      if (!m2 || !m2.player1_id || !m2.player2_id) continue;
+
+      const sc = scoreById.get(m2.player1_id) ?? 0;
+      const sd = scoreById.get(m2.player2_id) ?? 0;
+      const delta2 = Math.abs(sc - sd);
+
+      // Try (A,C) + (B,D): swap player2 of m1 with player1 of m2
+      if (
+        Math.abs(sa - sc) <= delta1 &&
+        Math.abs(sb - sd) <= delta2 &&
+        factionById.get(m1.player1_id) !== factionById.get(m2.player1_id)
+      ) {
+        const tmp = m1.player2_id;
+        m1.player2_id = m2.player1_id;
+        m2.player1_id = tmp;
+        break;
+      // Try (A,D) + (B,C): swap player2 of m1 with player2 of m2
+      } else if (
+        Math.abs(sa - sd) <= delta1 &&
+        Math.abs(sb - sc) <= delta2 &&
+        factionById.get(m1.player1_id) !== factionById.get(m2.player2_id)
+      ) {
+        const tmp = m1.player2_id;
+        m1.player2_id = m2.player2_id;
+        m2.player2_id = tmp;
+        break;
+      }
+    }
+  }
 }
 
 /**

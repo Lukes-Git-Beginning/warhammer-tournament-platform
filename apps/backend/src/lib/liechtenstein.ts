@@ -29,6 +29,7 @@ export function generateLiechtensteinSchedule(
   tournamentId: string,
   participantIds: string[],
   rounds: number,
+  options?: { factionById?: Map<string, string | null> },
 ): LiechtensteinMatchInput[] {
   const n = participantIds.length;
   const maxRounds = n % 2 === 0 ? n - 1 : n;
@@ -41,8 +42,15 @@ export function generateLiechtensteinSchedule(
   // Randomise player order so pairings are not predictable
   const shuffled = [...participantIds].sort(() => Math.random() - 0.5);
 
+  // Interleave factions so same-faction players are spread apart in the schedule
+  const factionById = options?.factionById;
+  const arranged =
+    factionById && factionById.size > 0
+      ? interleaveFactions(shuffled, factionById)
+      : shuffled;
+
   // Full round-robin schedule (guarantees unique pairings per round)
-  const allRounds = RoundRobin(shuffled, 1, true);
+  const allRounds = RoundRobin(arranged, 1, true);
 
   // Group by round, keep only the first `rounds` rounds
   const byRound = new Map<number, typeof allRounds>();
@@ -80,5 +88,44 @@ export function generateLiechtensteinSchedule(
   }
 
   result.sort((a, b) => a.round - b.round || a.match_number - b.match_number);
+  return result;
+}
+
+/**
+ * Arrange participant IDs so same-faction players are spread apart.
+ * Uses a zipper interleave: group by faction, then pick one from each
+ * group in rotation — minimises mirror pairings in the round-robin schedule.
+ */
+function interleaveFactions(
+  ids: string[],
+  factionById: Map<string, string | null>,
+): string[] {
+  const groups = new Map<string, string[]>();
+  const noFaction: string[] = [];
+
+  for (const id of ids) {
+    const faction = factionById.get(id);
+    if (!faction) {
+      noFaction.push(id);
+    } else {
+      const group = groups.get(faction) ?? [];
+      group.push(id);
+      groups.set(faction, group);
+    }
+  }
+
+  if (groups.size <= 1) return ids;
+
+  const sortedGroups = [...groups.values()].sort((a, b) => b.length - a.length);
+  const result: string[] = [];
+  const maxLen = Math.max(...sortedGroups.map((g) => g.length));
+
+  for (let i = 0; i < maxLen; i++) {
+    for (const group of sortedGroups) {
+      if (i < group.length) result.push(group[i]!);
+    }
+  }
+
+  result.push(...noFaction);
   return result;
 }
