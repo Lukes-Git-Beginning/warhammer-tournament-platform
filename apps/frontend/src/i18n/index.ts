@@ -17,7 +17,7 @@ void i18n
       en: { common: en },
     },
     detection: {
-      order: ['localStorage', 'navigator', 'htmlTag'],
+      order: ['localStorage'],
       caches: ['localStorage'],
       lookupLocalStorage: 'rizzotto_locale',
     },
