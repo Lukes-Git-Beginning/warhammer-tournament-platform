@@ -1,13 +1,16 @@
 name: Deploy
 
-# Triggered after a successful CI run on main. Skips on any other branch
-# or any non-success conclusion. `workflow_dispatch` is the manual escape
-# hatch (Actions tab → Run workflow) for re-deploys without a new commit.
+# Triggers immediately on push to main — CI runs in parallel as a quality
+# signal but no longer gates the deploy. workflow_dispatch remains as a
+# manual re-deploy escape hatch.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.knowledge/**'
+      - '.claude/**'
   workflow_dispatch:
 
 concurrency:
@@ -20,10 +23,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     environment:
       name: production
       url: https://rizzotto.gg
