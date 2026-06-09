@@ -1,16 +1,14 @@
 name: Deploy
 
-# Triggers immediately on push to main — CI runs in parallel as a quality
-# signal but no longer gates the deploy. workflow_dispatch remains as a
-# manual re-deploy escape hatch.
+# Triggered after CI passes on main. By the time a push reaches main, CI
+# has already run on the feature branch — so this second run is fast (cached
+# deps, no surprises) and the gate adds real protection without meaningful delay.
+# workflow_dispatch is the manual escape hatch for re-deploys.
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.knowledge/**'
-      - '.claude/**'
   workflow_dispatch:
 
 concurrency:
@@ -23,7 +21,10 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     environment:
       name: production
       url: https://rizzotto.gg

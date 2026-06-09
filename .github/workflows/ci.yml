@@ -2,10 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
-    # Docs-only commits don't affect the build/test/deploy artifacts, so skip
-    # the full Postgres+Redis+Playwright run (and the downstream deploy) for
-    # them. '**.md' already covers ROADMAP.md, DEPLOYMENT.md and CLAUDE.md.
+    # Run on all branches so feature-branch work is verified before it ever
+    # reaches main. Deploy only triggers on main, so CI on a feature branch
+    # is purely a background quality check — work continues while it runs.
     paths-ignore:
       - '**.md'
       - 'docs/**'
