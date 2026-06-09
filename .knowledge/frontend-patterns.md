@@ -16,10 +16,23 @@ Datei: `apps/frontend/vite.config.ts`
 ```typescript
 plugins: [react(), tailwindcss()]   // @tailwindcss/vite ^4.0.0
 resolve.alias: { '@': path.resolve(__dirname, './src') }
-server.port: 5173
+server.port: FRONTEND_PORT  // read via loadEnv from repo root .env (default 5173)
 ```
 
-**Proxy-Regeln** (alle mit `changeOrigin: true` → `http://localhost:3000`):
+**Port-Konfiguration (2026-06-09):** Vite lädt kein `process.env` aus `.env`-Dateien in der Config — stattdessen `loadEnv(mode, repoRoot, '')` nutzen:
+
+```typescript
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, path.resolve(__dirname, '../../'), '');
+  const BACKEND_PORT = env.BACKEND_PORT ?? '3000';
+  const FRONTEND_PORT = Number(env.FRONTEND_PORT ?? 5173);
+  ...
+});
+```
+
+Für den Feature-Worktree (`C:\Users\Alex\warhammer-feature`) stehen `BACKEND_PORT=3001` und `FRONTEND_PORT=5174` in dessen Root-`.env`.
+
+**Proxy-Regeln** (alle mit `changeOrigin: true` → `http://localhost:${BACKEND_PORT}`):
 
 | Pfad         | WebSocket       |
 | ------------ | --------------- |
