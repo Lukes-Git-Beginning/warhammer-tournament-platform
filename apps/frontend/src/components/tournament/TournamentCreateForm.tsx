@@ -102,7 +102,7 @@ export function TournamentCreateForm() {
   const [factionPoolEnabled, setFactionPoolEnabled] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
-  const { data: draftPresets } = useQuery({
+  const { data: _draftPresets } = useQuery({
     queryKey: ['draft-presets'],
     queryFn: listDraftPresets,
   });

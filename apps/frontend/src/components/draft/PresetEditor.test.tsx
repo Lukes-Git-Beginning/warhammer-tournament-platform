@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -85,7 +85,6 @@ describe('PresetEditor', () => {
     });
 
     // Should have one more turn row — check by "Zug #" appearing in DOM
-    const turnsAfter = container.querySelectorAll('button').length;
     // At minimum the Delete button for the new turn should exist
     const deleteButtons = Array.from(container.querySelectorAll('button')).filter((b) =>
       b.textContent?.includes('Delete'),

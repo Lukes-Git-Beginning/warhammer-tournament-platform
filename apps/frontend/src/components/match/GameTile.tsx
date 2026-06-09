@@ -117,8 +117,8 @@ export function GameTile({
       (!needsBlindPick || game.blindPick?.revealedAt),
   );
 
-  const isReporter = game.reportedWinnerId !== null && game.reporterId === currentUserId;
-  const isOpponentReporter =
+  const _isReporter = game.reportedWinnerId !== null && game.reporterId === currentUserId;
+  const _isOpponentReporter =
     game.reportedWinnerId !== null && game.reporterId !== null && game.reporterId !== currentUserId;
 
   function handleWinnerSelect(winnerId: string) {
@@ -494,7 +494,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function ProvisionalPanel({
-  matchId,
+  matchId: _matchId,
   game,
   currentUserId,
   player1Id,

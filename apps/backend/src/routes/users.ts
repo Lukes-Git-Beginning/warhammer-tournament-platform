@@ -298,17 +298,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
       }
 
-      // Resolve season
-      let resolvedSeasonId: string | null;
-      if (seasonId) {
-        const s = await fastify.prisma.season.findUnique({ where: { id: seasonId }, select: { id: true } });
-        if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
-        resolvedSeasonId = s.id;
-      } else {
-        const s = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
-        resolvedSeasonId = s?.id ?? null;
-      }
-
       // Match history — last 20 completed matches
       const recentMatches = await fastify.prisma.match.findMany({
         where: {
