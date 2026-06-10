@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { formatInUserTimezone } from '@/lib/timezone';
+import { DiscordTimestampButton } from './DiscordTimestampButton';
 
 interface TournamentCardProps {
   tournament: {
@@ -30,7 +31,6 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function TournamentCard({ tournament }: TournamentCardProps) {
   const startDate = formatInUserTimezone(tournament.start_date, undefined, { showTime: false });
-
   const statusColor = STATUS_COLORS[tournament.status] ?? 'bg-stone-700 text-stone-300';
   const formatLabel = FORMAT_LABELS[tournament.format] ?? tournament.format;
 
@@ -51,12 +51,15 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
           {tournament.status}
         </span>
       </div>
-      <p className="mt-3 text-sm text-stone-400">Start: {startDate}</p>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <p className="text-sm text-stone-400">Start: {startDate}</p>
+        <DiscordTimestampButton isoString={tournament.start_date} />
+      </div>
       {tournament.organizer && (
-        <p className="mt-1 text-xs text-stone-500">von {tournament.organizer.username}</p>
+        <p className="mt-1 text-xs text-stone-500">by {tournament.organizer.username}</p>
       )}
       {tournament.participantCount !== undefined && (
-        <p className="mt-1 text-xs text-stone-500">{tournament.participantCount} Teilnehmer</p>
+        <p className="mt-1 text-xs text-stone-500">{tournament.participantCount} participants</p>
       )}
     </Link>
   );

@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { listTournaments, type Tournament } from '@/lib/api';
+import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton';
 
 type TournamentState = 'live' | 'upcoming' | 'completed';
 
@@ -86,13 +87,16 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
       </CardContent>
       <Separator engraved className="mx-6 my-2" />
       <CardFooter>
-        <time
-          dateTime={tournament.start_date}
-          className="inline-flex items-center gap-1.5 font-mono text-xs text-rizzotto-stone-400"
-        >
-          <Clock className="size-3.5" strokeWidth={1.5} />
-          {formatDate(tournament.start_date)}
-        </time>
+        <div className="flex items-center gap-2">
+          <time
+            dateTime={tournament.start_date}
+            className="inline-flex items-center gap-1.5 font-mono text-xs text-rizzotto-stone-400"
+          >
+            <Clock className="size-3.5" strokeWidth={1.5} />
+            {formatDate(tournament.start_date)}
+          </time>
+          <DiscordTimestampButton isoString={tournament.start_date} />
+        </div>
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-rizzotto-stone-400 group-hover:text-rizzotto-gold-400 transition-colors">
           {t('musters.answer_call')}
           <ArrowRight className="size-3.5" strokeWidth={1.5} />
