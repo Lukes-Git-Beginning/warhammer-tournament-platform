@@ -245,7 +245,7 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
             <DialogTrigger asChild>
               <Button size="lg">Post a Challenge</Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-rizzotto-iron-900 border-rizzotto-iron-700">
               <DialogHeader>
                 <DialogTitle>Schedule a match</DialogTitle>
               </DialogHeader>
