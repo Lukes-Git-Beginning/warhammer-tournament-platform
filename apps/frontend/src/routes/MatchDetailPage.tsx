@@ -548,7 +548,7 @@ export function MatchDetailPage() {
       {/* ------------------------------------------------------------------ */}
       {isOpenPlay && gamesData && (
         <div className="flex flex-col gap-3 mb-6">
-          {gamesData.games.map((game) => (
+          {[...gamesData.games].reverse().map((game) => (
             <GameTile
               key={game.gameNumber}
               matchId={matchId}
