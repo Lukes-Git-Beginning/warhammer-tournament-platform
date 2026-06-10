@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { useRequireAuth, useAuthQuery } from '../lib/auth';
 import {
   joinQueue,
@@ -7,18 +8,21 @@ import {
   setMyAvailability,
   getAvailabilityHeatmap,
   getScheduledMatchups,
+  createScheduledMatchup,
+  acceptScheduledMatchup,
+  cancelScheduledMatchup,
   type AvailabilitySlot,
   type AvailabilityContext,
   type HeatmapSlot,
+  type MatchFormat,
 } from '../lib/api';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Select } from '../components/ui/select';
 import { Button } from '../components/ui/button';
+import { Textarea } from '../components/ui/textarea';
 import { QueueStatusCard } from '../components/open-play/QueueStatusCard';
 import { WeekAvailabilityGrid } from '../components/open-play/WeekAvailabilityGrid';
 import { AvailabilityHeatmap } from '../components/open-play/AvailabilityHeatmap';
-import { ScheduledMatchupCard } from '../components/open-play/ScheduledMatchupCard';
-import { ScheduledMatchupForm } from '../components/open-play/ScheduledMatchupForm';
+import { ChallengeCalendar } from '../components/open-play/ChallengeCalendar';
 
 type Tab = 'queue' | 'availability' | 'challenges';
 
@@ -224,7 +228,19 @@ function AvailabilityTab({ currentUserId }: { currentUserId?: string }) {
 // ---------------------------------------------------------------------------
 
 function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [format, setFormat] = useState<MatchFormat>('BO3');
+  const [anonymous, setAnonymous] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [showNotes, setShowNotes] = useState(false);
+  const [notes, setNotes] = useState('');
+
+  const { data: heatmapData } = useQuery({
+    queryKey: ['availability-heatmap'],
+    queryFn: getAvailabilityHeatmap,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['scheduled-matchups'],
@@ -232,40 +248,126 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
     refetchInterval: 30_000,
   });
 
+  const matchmakingSlots: HeatmapSlot[] = (heatmapData?.slots ?? []).filter(
+    (s) => s.context === 'MATCHMAKING',
+  );
+
+  const create = useMutation({
+    mutationFn: () =>
+      createScheduledMatchup({
+        format,
+        proposed_at: selectedDate!.toISOString(),
+        notes: notes || undefined,
+        anonymous,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['scheduled-matchups'] });
+      setSelectedDate(null);
+      setShowNotes(false);
+      setNotes('');
+    },
+  });
+
+  const accept = useMutation({
+    mutationFn: acceptScheduledMatchup,
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['scheduled-matchups'] });
+      void navigate({ to: '/matches/$matchId', params: { matchId: result.match_id } });
+    },
+  });
+
+  const cancel = useMutation({
+    mutationFn: cancelScheduledMatchup,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['scheduled-matchups'] }),
+  });
+
   return (
-    <div className="space-y-6">
-      <div className="max-w-sm space-y-4">
-        <p className="text-sm text-stone-300">
-          Suggest a specific time to play and let others come to you. Your challenge is visible
-          to all players — whoever accepts gets matched with you, random map drawn and blind
-          faction pick applies.
-        </p>
-        {currentUserId && (
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="lg">Post a Challenge</Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-rizzotto-iron-900 border-rizzotto-iron-700">
-              <DialogHeader>
-                <DialogTitle>Schedule a match</DialogTitle>
-              </DialogHeader>
-              <ScheduledMatchupForm onSuccess={() => setDialogOpen(false)} />
-            </DialogContent>
-          </Dialog>
-        )}
+    <div className="space-y-4">
+      {/* Format + Anonymous — side by side */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-stone-400">Format</span>
+          <Select
+            value={format}
+            onChange={(e) => setFormat(e.target.value as MatchFormat)}
+            className="w-44"
+          >
+            <option value="BO1">BO1 (~30 min)</option>
+            <option value="BO3">BO3 (~90 min)</option>
+            <option value="BO5">BO5 (~150 min)</option>
+          </Select>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={anonymous}
+            onChange={(e) => setAnonymous(e.target.checked)}
+            className="h-4 w-4 rounded border-stone-600 bg-stone-800 text-amber-500"
+          />
+          <span className="text-sm text-stone-300">Anonymous</span>
+        </label>
       </div>
 
-      {isLoading && <p className="text-sm text-stone-400">Loading…</p>}
-
-      {!isLoading && !data?.matchups.length && (
-        <p className="text-sm text-stone-500">No open challenges yet. Be the first to post one!</p>
+      {/* Dual-purpose calendar: view open challenges + pick your slot */}
+      {isLoading ? (
+        <p className="text-sm text-stone-400">Loading…</p>
+      ) : (
+        <ChallengeCalendar
+          format={format}
+          slots={matchmakingSlots}
+          selected={selectedDate}
+          onSelect={setSelectedDate}
+          matchups={data?.matchups}
+          currentUserId={currentUserId}
+          onAccept={(id) => accept.mutate(id)}
+          onCancel={(id) => cancel.mutate(id)}
+        />
       )}
 
-      <div className="space-y-2">
-        {data?.matchups.map((m) => (
-          <ScheduledMatchupCard key={m.id} matchup={m} currentUserId={currentUserId} />
-        ))}
-      </div>
+      {/* Post button — only shown when logged in */}
+      {currentUserId && (
+        <div className="space-y-3">
+          {!showNotes ? (
+            <Button
+              size="lg"
+              onClick={() => setShowNotes(true)}
+              disabled={!selectedDate}
+            >
+              Post a Challenge
+            </Button>
+          ) : (
+            <div className="space-y-3 max-w-sm">
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional note — e.g. any faction welcome, looking for a close game"
+                maxLength={500}
+                rows={2}
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => create.mutate()}
+                  disabled={create.isPending}
+                >
+                  {create.isPending ? 'Posting…' : 'Confirm'}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => { setShowNotes(false); setNotes(''); }}
+                  className="text-sm text-stone-400 hover:text-stone-200 transition-colors px-2"
+                >
+                  Back
+                </button>
+              </div>
+              {create.error && (
+                <p className="text-xs text-red-400">{String(create.error)}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

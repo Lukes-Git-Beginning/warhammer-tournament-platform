@@ -1,8 +1,10 @@
-import { useRef, useEffect, useMemo } from 'react';
-import type { MatchFormat, HeatmapSlot } from '../../lib/api';
+import { Fragment, useRef, useEffect, useMemo } from 'react';
+import type { MatchFormat, HeatmapSlot, ScheduledMatchup } from '../../lib/api';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 
 const FORMAT_DURATION_H: Record<MatchFormat, number> = { BO1: 0.5, BO3: 1.5, BO5: 2.5 };
 const FORMAT_ROWS: Record<MatchFormat, number> = { BO1: 1, BO3: 2, BO5: 3 };
+const FORMAT_DURATION_LABEL: Record<MatchFormat, string> = { BO1: '~30 min', BO3: '~90 min', BO5: '~150 min' };
 
 const DISPLAY_HOURS = [
   ...Array.from({ length: 18 }, (_, i) => i + 6),
@@ -12,28 +14,89 @@ const ROW_H = 28;
 const VISIBLE_ROWS = 18;
 const START_HOUR = 8;
 
-// Heatmap background: dark stone → warm amber
 function heatmapBg(count: number, max: number): string {
   if (max === 0 || count === 0) return 'hsl(20,3%,13%)';
   const r = Math.min(count / max, 1);
   return `hsl(38,${(8 + 62 * r).toFixed(0)}%,${(13 + 45 * r).toFixed(0)}%)`;
 }
 
-interface ChallengeCalendarProps {
-  format: MatchFormat;
-  slots: HeatmapSlot[];   // community heatmap data (MATCHMAKING)
-  selected: Date | null;
-  onSelect: (date: Date) => void;
+function ChallengePopoverItem({
+  matchup,
+  isOwn,
+  onAccept,
+  onCancel,
+}: {
+  matchup: ScheduledMatchup;
+  isOwn: boolean;
+  onAccept: () => void;
+  onCancel: () => void;
+}) {
+  const d = new Date(matchup.proposed_at);
+  return (
+    <div className="p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold text-stone-100 text-sm">{matchup.format}</span>
+        <span className="text-xs text-stone-500">{FORMAT_DURATION_LABEL[matchup.format]}</span>
+      </div>
+      <p className="text-xs text-stone-400">
+        {d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+        at {d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+      </p>
+      {!matchup.anonymous && matchup.proposer && (
+        <p className="text-xs text-stone-400">
+          by <span className="text-stone-300">{matchup.proposer.username}</span>
+        </p>
+      )}
+      {matchup.notes && (
+        <p className="text-xs text-stone-500 italic truncate">{matchup.notes}</p>
+      )}
+      {isOwn ? (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-xs text-stone-400 hover:text-red-400 transition-colors"
+        >
+          Cancel challenge
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onAccept}
+          className="w-full rounded border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-400 hover:bg-amber-500/20 transition-colors"
+        >
+          Accept
+        </button>
+      )}
+    </div>
+  );
 }
 
-export function ChallengeCalendar({ format, slots, selected, onSelect }: ChallengeCalendarProps) {
+interface ChallengeCalendarProps {
+  format: MatchFormat;
+  slots: HeatmapSlot[];
+  selected: Date | null;
+  onSelect: (date: Date) => void;
+  matchups?: ScheduledMatchup[];
+  currentUserId?: string;
+  onAccept?: (id: string) => void;
+  onCancel?: (id: string) => void;
+}
+
+export function ChallengeCalendar({
+  format,
+  slots,
+  selected,
+  onSelect,
+  matchups = [],
+  currentUserId,
+  onAccept,
+  onCancel,
+}: ChallengeCalendarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const durationRows = FORMAT_ROWS[format];
 
-  // Aggregate heatmap slots into a lookup: "dayOfWeek:hour" → count
-  // For the 7-day forward view we match by hour (local) since heatmap is weekly recurring
   const heatLookup = useMemo(() => {
-    const m = new Map<number, number>(); // hour → total count across all days
+    const m = new Map<number, number>();
     for (const s of slots) m.set(s.hour_utc, (m.get(s.hour_utc) ?? 0) + s.count);
     return m;
   }, [slots]);
@@ -49,6 +112,22 @@ export function ChallengeCalendar({ format, slots, selected, onSelect }: Challen
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const matchupsByCell = useMemo(() => {
+    const m = new Map<string, ScheduledMatchup[]>();
+    for (const mu of matchups) {
+      const proposed = new Date(mu.proposed_at);
+      const dayIdx = days.findIndex((d) => {
+        const dd = new Date(d); dd.setHours(0, 0, 0, 0);
+        const pd = new Date(proposed); pd.setHours(0, 0, 0, 0);
+        return dd.getTime() === pd.getTime();
+      });
+      if (dayIdx === -1) continue;
+      const key = `${dayIdx}:${proposed.getHours()}`;
+      m.set(key, [...(m.get(key) ?? []), mu]);
+    }
+    return m;
+  }, [matchups, days]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -76,13 +155,9 @@ export function ChallengeCalendar({ format, slots, selected, onSelect }: Challen
     const past = isPast(day, hour);
     const role = selRole(day, hour);
     const heat = heatLookup.get(hour) ?? 0;
-
     if (past) return { background: 'hsl(20,3%,9%)', opacity: 0.5 };
-
-    // Selection overlays the heatmap
     if (role === 'start') return { background: 'rgba(56,189,248,0.85)', boxShadow: 'inset 0 0 0 2px rgba(186,230,253,0.8)' };
     if (role === 'span')  return { background: 'rgba(56,189,248,0.30)' };
-
     return { background: heatmapBg(heat, heatMax) };
   }
 
@@ -90,7 +165,7 @@ export function ChallengeCalendar({ format, slots, selected, onSelect }: Challen
 
   return (
     <div className="overflow-x-auto select-none" style={{ minWidth: 380 }}>
-      {/* Day headers with real dates */}
+      {/* Day headers */}
       <div className="grid" style={{ gridTemplateColumns: colTemplate }}>
         <div style={{ height: 40 }} />
         {days.map((d, i) => (
@@ -113,9 +188,8 @@ export function ChallengeCalendar({ format, slots, selected, onSelect }: Challen
       <div ref={scrollRef} className="overflow-y-auto" style={{ height: VISIBLE_ROWS * ROW_H }}>
         <div className="grid" style={{ gridTemplateColumns: colTemplate }}>
           {DISPLAY_HOURS.map((hour) => (
-            <>
+            <Fragment key={hour}>
               <div
-                key={`l-${hour}`}
                 style={{ height: ROW_H, background: 'hsl(20,3%,11%)' }}
                 className="flex items-center justify-end pr-2 text-xs text-stone-500 border-b border-stone-700/50"
               >
@@ -124,20 +198,67 @@ export function ChallengeCalendar({ format, slots, selected, onSelect }: Challen
               {days.map((day, di) => {
                 const past = isPast(day, hour);
                 const role = selRole(day, hour);
+                const cellMatchups = matchupsByCell.get(`${di}:${hour}`) ?? [];
+                const hasChallenges = cellMatchups.length > 0;
+
+                const style: React.CSSProperties = {
+                  height: ROW_H,
+                  position: 'relative',
+                  ...cellStyle(day, hour),
+                };
+                const cls = [
+                  'border-b border-r border-stone-700/20 transition-colors',
+                  past ? 'cursor-not-allowed' : 'cursor-pointer',
+                  !past && !role && !hasChallenges && 'hover:brightness-125',
+                ].filter(Boolean).join(' ');
+
+                if (hasChallenges) {
+                  return (
+                    <Popover key={`${di}-${hour}`}>
+                      <PopoverTrigger asChild>
+                        <div style={style} className={cls}>
+                          <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <span className="h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_5px_rgba(251,191,36,0.5)]" />
+                          </span>
+                        </div>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-64 p-0 bg-rizzotto-iron-900 border-rizzotto-iron-700"
+                        side="right"
+                        sideOffset={4}
+                      >
+                        <div className="divide-y divide-stone-700/60">
+                          {cellMatchups.map((mu) => (
+                            <ChallengePopoverItem
+                              key={mu.id}
+                              matchup={mu}
+                              isOwn={currentUserId != null && mu.proposer?.id === currentUserId}
+                              onAccept={() => onAccept?.(mu.id)}
+                              onCancel={() => onCancel?.(mu.id)}
+                            />
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  );
+                }
+
                 return (
                   <div
                     key={`${di}-${hour}`}
-                    style={{ height: ROW_H, ...cellStyle(day, hour) }}
-                    onClick={() => { if (!past) { const d = new Date(day); d.setHours(hour, 0, 0, 0); onSelect(d); } }}
-                    className={[
-                      'border-b border-r border-stone-700/20 transition-colors',
-                      past   ? 'cursor-not-allowed' : 'cursor-pointer',
-                      !past && !role && 'hover:brightness-125',
-                    ].filter(Boolean).join(' ')}
+                    style={style}
+                    onClick={() => {
+                      if (!past) {
+                        const d = new Date(day);
+                        d.setHours(hour, 0, 0, 0);
+                        onSelect(d);
+                      }
+                    }}
+                    className={cls}
                   />
                 );
               })}
-            </>
+            </Fragment>
           ))}
         </div>
       </div>
@@ -153,6 +274,10 @@ export function ChallengeCalendar({ format, slots, selected, onSelect }: Challen
             <span className="h-3 w-5 rounded-sm" style={{ background: 'rgba(56,189,248,0.85)' }} />
             Your slot
           </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+            Open challenge
+          </span>
         </div>
         {selected ? (
           <span className="text-stone-300">
@@ -163,7 +288,7 @@ export function ChallengeCalendar({ format, slots, selected, onSelect }: Challen
             {' '}· ~{FORMAT_DURATION_H[format] * 60} min
           </span>
         ) : (
-          <span>Click a slot to schedule</span>
+          <span>Click an empty slot to schedule your challenge, or click a dot to accept one</span>
         )}
       </div>
     </div>
