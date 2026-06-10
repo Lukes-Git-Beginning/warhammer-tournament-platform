@@ -234,7 +234,7 @@ export async function completeMatch(
       await checkAndPromoteBye(tx, match.next_match_id);
     }
 
-    if (isDE && match.loser_next_match_id && winnerId !== null && loserId !== null) {
+    if (match.loser_next_match_id && winnerId !== null && loserId !== null) {
       await advanceToSlot(tx, match.loser_next_match_id, loserId, src, 'loser');
       await checkAndPromoteBye(tx, match.loser_next_match_id);
     }

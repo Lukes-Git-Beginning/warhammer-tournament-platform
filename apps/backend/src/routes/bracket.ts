@@ -1059,9 +1059,11 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /api/tournaments/:id/add-third-place-match
-   * Retroactively creates the third-place (small final) match when it was skipped
-   * because has_third_place_match was false at the time advance-playoffs ran.
-   * Safe to call any time the Grand Final already exists but no TP match does.
+   * Retroactively creates (or repairs) the small final for both SE and
+   * Swiss+Playoff formats:
+   *   - SE: has_third_place_match was false at start → match was never created,
+   *     OR loser propagation bug left the match with null players.
+   *   - Playoff: has_third_place_match was false when advance-playoffs ran.
    */
   fastify.post(
     '/api/tournaments/:id/add-third-place-match',
@@ -1085,26 +1087,35 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
       }
 
-      const playoffMatches = await fastify.prisma.match.findMany({
-        where: { tournament_id: id, deleted_at: null, phase: { in: ['PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] } },
+      // Load all non-deleted matches for this tournament — works for both SE
+      // (phase=null matches) and Playoff (phase='PLAYOFF_*' matches).
+      const allMatches = await fastify.prisma.match.findMany({
+        where: { tournament_id: id, deleted_at: null },
         orderBy: [{ round: 'asc' }, { match_number: 'asc' }],
       });
 
-      const hasFinal = playoffMatches.some((m) => m.phase === 'PLAYOFF_FINAL');
-      if (!hasFinal) {
-        return reply.code(409).send({ error: 'Conflict', message: 'Grand Final not created yet — call advance-playoffs first', statusCode: 409 });
-      }
-      const alreadyExists = playoffMatches.some((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
-      if (alreadyExists) {
-        return reply.code(409).send({ error: 'Conflict', message: 'Third-place match already exists', statusCode: 409 });
+      // Existing third-place match (if any).
+      const existingTP = allMatches.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
+      if (existingTP && existingTP.player1_id !== null && existingTP.player2_id !== null) {
+        return reply.code(409).send({ error: 'Conflict', message: 'Third-place match already exists with players', statusCode: 409 });
       }
 
-      const sfMatches = playoffMatches
-        .filter((m) => m.phase === 'PLAYOFF_SF')
+      // Find the final: the match with no next_match_id that is NOT the TP match.
+      // For SE: phase=null; for Playoff: phase='PLAYOFF_FINAL'. Both have next_match_id=null.
+      const finalMatch = allMatches.find(
+        (m) => m.next_match_id === null && m.phase !== 'PLAYOFF_THIRD_PLACE',
+      );
+      if (!finalMatch) {
+        return reply.code(409).send({ error: 'Conflict', message: 'No final match found — start the bracket first', statusCode: 409 });
+      }
+
+      // Find the two matches feeding into the final (the semi-finals).
+      const sfMatches = allMatches
+        .filter((m) => m.next_match_id === finalMatch.id)
         .sort((a, b) => a.match_number - b.match_number);
 
       if (sfMatches.length < 2) {
-        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Expected 2 semifinal matches', statusCode: 422 });
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Expected 2 semifinal matches feeding into the final', statusCode: 422 });
       }
 
       const incomplete = sfMatches.filter(
@@ -1122,27 +1133,36 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       const sf2 = sfMatches[1]!;
       const loser = (m: typeof sf1) =>
         m.player1_id === m.winner_id ? m.player2_id : m.player1_id;
-
-      const gfRound = Math.max(...playoffMatches.map((m) => m.round));
-      const thirdPlaceId = randomUUID();
+      const p1 = loser(sf1);
+      const p2 = loser(sf2);
 
       await fastify.prisma.$transaction(async (tx) => {
-        await tx.match.create({
-          data: {
-            id: thirdPlaceId,
-            tournament_id: id,
-            round: gfRound,
-            match_number: 2,
-            player1_id: loser(sf1),
-            player2_id: loser(sf2),
-            status: 'PENDING',
-            phase: 'PLAYOFF_THIRD_PLACE',
-          },
-        });
-        await tx.match.updateMany({
-          where: { id: { in: [sf1.id, sf2.id] } },
-          data: { loser_next_match_id: thirdPlaceId },
-        });
+        if (existingTP) {
+          // State B: match exists but players are null — fill them in.
+          await tx.match.update({
+            where: { id: existingTP.id },
+            data: { player1_id: p1, player2_id: p2 },
+          });
+        } else {
+          // State A: match doesn't exist — create it.
+          const thirdPlaceId = randomUUID();
+          await tx.match.create({
+            data: {
+              id: thirdPlaceId,
+              tournament_id: id,
+              round: finalMatch.round,
+              match_number: 2,
+              player1_id: p1,
+              player2_id: p2,
+              status: 'PENDING',
+              phase: 'PLAYOFF_THIRD_PLACE',
+            },
+          });
+          await tx.match.updateMany({
+            where: { id: { in: [sf1.id, sf2.id] } },
+            data: { loser_next_match_id: thirdPlaceId },
+          });
+        }
         await tx.tournament.update({
           where: { id },
           data: { has_third_place_match: true },
@@ -1153,14 +1173,14 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             entity_id: id,
             action: 'add_third_place_match',
             actor_id: request.user.sub,
-            new_value: { match_id: thirdPlaceId },
+            new_value: { repaired: !!existingTP },
           },
         });
       });
 
       emitBracketUpdate(fastify.io, id);
 
-      return reply.code(201).send({ id: thirdPlaceId });
+      return reply.code(201).send({ repaired: !!existingTP });
     },
   );
 

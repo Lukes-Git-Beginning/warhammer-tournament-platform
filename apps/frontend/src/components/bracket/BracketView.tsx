@@ -211,8 +211,21 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   const showAdvanceToNextPlayoffRound =
     canManage && hasPlayoffMatches && lastPlayoffRoundDone && !hasFinalMatch;
 
+  // For SE: the final has phase=null; detect it as the non-TP match with no next pointer.
+  const seMatches = data.matches.filter((m) => !m.phase && !m.bracketSide);
+  const maxSERound = seMatches.length > 0 ? Math.max(...seMatches.map((m) => m.round)) : 0;
+  const seSFsDone =
+    maxSERound > 1 &&
+    seMatches
+      .filter((m) => m.round === maxSERound - 1)
+      .every((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT');
   const hasThirdPlaceMatch = playoffPhases.some((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
-  const showAddThirdPlaceButton = canManage && hasFinalMatch && !hasThirdPlaceMatch;
+  const thirdPlaceNode = playoffPhases.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
+  const thirdPlaceNeedsRepair = !!thirdPlaceNode && !thirdPlaceNode.player1Id && !thirdPlaceNode.player2Id;
+  const showAddThirdPlaceButton =
+    canManage &&
+    (hasFinalMatch || seSFsDone) &&
+    (!hasThirdPlaceMatch || thirdPlaceNeedsRepair);
 
   const isDE = data.matches.some((m) => m.bracketSide !== null);
   const allDone = data.matches.every(
@@ -307,7 +320,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
             disabled={isAddingThirdPlace}
             className="rounded border border-rizzotto-gold-500/60 px-4 py-2 text-sm font-medium text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isAddingThirdPlace ? 'Adding…' : 'Add Small Final'}
+            {isAddingThirdPlace ? 'Adding…' : thirdPlaceNeedsRepair ? 'Repair Small Final' : 'Add Small Final'}
           </button>
         </div>
       )}
