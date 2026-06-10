@@ -1,12 +1,9 @@
 import type { HeatmapSlot } from '../../lib/api';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const DISPLAY_HOURS = [
-  ...Array.from({ length: 18 }, (_, i) => i + 6),
-  ...Array.from({ length: 6 }, (_, i) => i),
-];
+const DISPLAY_HOURS = Array.from({ length: 24 }, (_, i) => i); // 0–23, full day
 const ROW_H = 28;
-const VISIBLE_ROWS = 18;
+const VISIBLE_ROWS = 16; // default view: 8am–11pm; scroll up for earlier hours
 const START_HOUR = 8;
 
 import { useRef, useEffect } from 'react';

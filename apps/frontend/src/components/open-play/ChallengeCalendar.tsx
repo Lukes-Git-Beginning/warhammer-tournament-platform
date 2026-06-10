@@ -6,12 +6,9 @@ const FORMAT_DURATION_H: Record<MatchFormat, number> = { BO1: 0.5, BO3: 1.5, BO5
 const FORMAT_ROWS: Record<MatchFormat, number> = { BO1: 1, BO3: 2, BO5: 3 };
 const FORMAT_DURATION_LABEL: Record<MatchFormat, string> = { BO1: '~30 min', BO3: '~90 min', BO5: '~150 min' };
 
-const DISPLAY_HOURS = [
-  ...Array.from({ length: 16 }, (_, i) => i + 8), // 8am–11pm
-  0,                                                 // midnight
-];
+const DISPLAY_HOURS = Array.from({ length: 24 }, (_, i) => i); // 0–23, full day
 const ROW_H = 28;
-const VISIBLE_ROWS = 17;
+const VISIBLE_ROWS = 16; // default view: 8am–11pm; scroll up for earlier hours
 const START_HOUR = 8;
 
 function heatmapBg(count: number, max: number): string {

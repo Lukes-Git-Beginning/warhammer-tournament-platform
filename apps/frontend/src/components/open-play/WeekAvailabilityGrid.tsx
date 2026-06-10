@@ -3,14 +3,9 @@ import type { AvailabilityContext, AvailabilitySlot } from '../../lib/api';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-// Display order: 8am–11pm then midnight
-const DISPLAY_HOURS = [
-  ...Array.from({ length: 16 }, (_, i) => i + 8), // 8am–11pm
-  0,                                                 // midnight
-];
-
+const DISPLAY_HOURS = Array.from({ length: 24 }, (_, i) => i); // 0–23, full day
 const ROW_H = 28;
-const VISIBLE_ROWS = 17;
+const VISIBLE_ROWS = 16; // default view: 8am–11pm; scroll up for earlier hours
 const START_HOUR = 8;
 
 // Slot colors
