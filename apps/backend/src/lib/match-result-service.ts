@@ -149,16 +149,16 @@ export async function resolveMatchResult(
     });
 
     // Latch faction onto TournamentParticipant if not yet set (SFT: faction locked at registration)
-    if (match.tournament.mode === 'SFT') {
+    if (match.tournament?.mode === 'SFT') {
       if (p1FactionId && match.player1_id) {
         await tx.tournamentParticipant.updateMany({
-          where: { tournament_id: match.tournament_id, user_id: match.player1_id, faction_id: null, deleted_at: null },
+          where: { tournament_id: match.tournament_id ?? undefined, user_id: match.player1_id, faction_id: null, deleted_at: null },
           data: { faction_id: p1FactionId },
         });
       }
       if (p2FactionId && match.player2_id) {
         await tx.tournamentParticipant.updateMany({
-          where: { tournament_id: match.tournament_id, user_id: match.player2_id, faction_id: null, deleted_at: null },
+          where: { tournament_id: match.tournament_id ?? undefined, user_id: match.player2_id, faction_id: null, deleted_at: null },
           data: { faction_id: p2FactionId },
         });
       }
@@ -249,7 +249,7 @@ export async function resolveMatchResult(
     }
 
     // 3. LeaderboardEntry updates (only when tournament counts for leaderboard)
-    if (match.tournament.counts_for_leaderboard) {
+    if (match.tournament?.counts_for_leaderboard ?? true) {
       if (activeSeason) {
         const seasonId = activeSeason.id;
         const players: Array<{
@@ -414,7 +414,7 @@ export async function resolveMatchResult(
   }
 
   // 5. Socket events (after transaction committed)
-  if (io) {
+  if (io && match.tournament_id) {
     io.to(tournamentRoom(match.tournament_id)).emit('match_completed', {
       tournamentId: match.tournament_id,
       matchId,

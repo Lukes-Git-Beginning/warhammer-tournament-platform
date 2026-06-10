@@ -237,7 +237,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(200).send(
-        serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament.mode, match.player1_id),
+        serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? 'BPT', match.player1_id),
       );
     },
   );
@@ -332,8 +332,8 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const mapPool = match.tournament.map_pool.map((p) => p.map_id);
-      const mode = match.tournament.map_decision_mode as MapDecisionModeLiteral;
+      const mapPool = (match.tournament?.map_pool ?? []).map((p) => p.map_id);
+      const mode = (match.tournament?.map_decision_mode ?? 'RANDOM') as MapDecisionModeLiteral;
 
       // Preset-only modes don't require a tournament map pool
       const needsPool = mode === 'RANDOM' || mode === 'RANDOM_NO_REPEAT' || mode === 'RANDOM_PICK_BAN' || mode === 'PICK_BAN';
@@ -364,13 +364,13 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
 
         case 'RANDOM_NO_REPEAT': {
           const playedInMatch = await getPlayedMapsInMatch(fastify.prisma, matchId, gameNumber);
-          const drawn = await drawMapsWithNoRepeat(fastify.prisma, match.tournament.id, mapPool, playedInMatch, 1);
+          const drawn = await drawMapsWithNoRepeat(fastify.prisma, match.tournament?.id ?? '', mapPool, playedInMatch, 1);
           pickedMapId = drawn[0] ?? null;
           break;
         }
 
         case 'HOST_PRESET': {
-          const preset = getPresetForRound(match.tournament.map_preset_config, match.phase, match.round);
+          const preset = getPresetForRound(match.tournament?.map_preset_config ?? null, match.phase, match.round);
           const mapForGame = preset?.[gameNumber - 1] as string | undefined;
           if (!mapForGame || typeof mapForGame !== 'string') {
             return reply.code(422).send({
@@ -384,7 +384,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         case 'HOST_PRESET_PICK_BAN': {
-          const preset = getPresetForRound(match.tournament.map_preset_config, match.phase, match.round);
+          const preset = getPresetForRound(match.tournament?.map_preset_config ?? null, match.phase, match.round);
           const gameSets = preset as unknown[] | null;
           const setForGame = gameSets?.[gameNumber - 1];
           if (!Array.isArray(setForGame) || setForGame.length !== 3) {
@@ -407,7 +407,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
             });
           }
           const playedInMatch = await getPlayedMapsInMatch(fastify.prisma, matchId, gameNumber);
-          activePool = await drawMapsWithNoRepeat(fastify.prisma, match.tournament.id, mapPool, playedInMatch, 3);
+          activePool = await drawMapsWithNoRepeat(fastify.prisma, match.tournament?.id ?? '', mapPool, playedInMatch, 3);
           break;
         }
 
@@ -547,7 +547,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       const poolMapIds =
         decisionActivePool.length > 0
           ? decisionActivePool
-          : match.tournament.map_pool.map((p) => p.map_id);
+          : (match.tournament?.map_pool ?? []).map((p) => p.map_id);
 
       // Validate map is in pool
       if (!poolMapIds.includes(map_id)) {
@@ -771,7 +771,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Validate tournament mode supports blind pick
-      const mode = match.tournament.mode as string;
+      const mode = match.tournament?.mode as string | undefined;
       if (mode !== 'BPT') {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
@@ -961,7 +961,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       const poolMapIds =
         decisionActivePool.length > 0
           ? decisionActivePool
-          : match.tournament.map_pool.map((p) => p.map_id);
+          : (match.tournament?.map_pool ?? []).map((p) => p.map_id);
       const allBanned = [
         ...(decision.bans_top as string[]),
         ...(decision.bans_bottom as string[]),

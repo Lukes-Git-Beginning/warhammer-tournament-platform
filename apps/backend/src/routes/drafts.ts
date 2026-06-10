@@ -212,7 +212,7 @@ const draftRoutes: FastifyPluginAsync = async (fastify) => {
       // ORGANIZER role: must be the tournament organizer
       const userRole = request.user.role;
       const isModOrAdmin = userRole === 'MODERATOR' || userRole === 'ADMIN';
-      const isOwnOrganizer = actorUserId === draft.match.tournament.organizer_id;
+      const isOwnOrganizer = actorUserId === draft.match.tournament?.organizer_id;
 
       if (!isModOrAdmin && !isOwnOrganizer) {
         return reply.code(403).send({

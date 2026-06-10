@@ -94,12 +94,12 @@ export async function finalizeGameResult(
   let p1FactionId: string | null;
   let p2FactionId: string | null;
 
-  const mode = game.match.tournament.mode;
+  const mode = game.match.tournament?.mode;
   if (mode === 'BPT' && game.blind_pick?.revealed_at) {
     p1FactionId = game.blind_pick.player1_faction_id ?? null;
     p2FactionId = game.blind_pick.player2_faction_id ?? null;
   } else if (mode === 'SFT') {
-    const participants = game.match.tournament.participants;
+    const participants = game.match.tournament?.participants ?? [];
     const p1Part = participants.find((p) => p.user_id === game.match.player1_id);
     const p2Part = participants.find((p) => p.user_id === game.match.player2_id);
     p1FactionId = p1Part?.faction?.id ?? game.match.player1_faction_id ?? null;
@@ -173,7 +173,9 @@ export async function finalizeGameResult(
   }
 
   // Series completion: count wins and decide whether to continue or complete
-  const format = resolveMatchFormat(game.match.tournament, game.match.phase ?? null);
+  const format = game.match.tournament
+    ? resolveMatchFormat(game.match.tournament, game.match.phase ?? null)
+    : 'BO1';
   const winsNeeded = format === 'BO5' ? 3 : format === 'BO3' ? 2 : 1;
 
   const completedGames = await fastify.prisma.matchGame.findMany({
@@ -197,7 +199,7 @@ export async function finalizeGameResult(
   } else {
     // Series continues — create next game row so the frontend can trigger the decision
     const nextGameNumber = game.game_number + 1;
-    await ensureMatchGame(fastify.prisma, game.match_id, nextGameNumber, game.match.tournament.counts_for_leaderboard);
+    await ensureMatchGame(fastify.prisma, game.match_id, nextGameNumber, game.match.tournament?.counts_for_leaderboard ?? true);
 
     if (fastify.io) {
       fastify.io.to(`match_decision_${game.match_id}`).emit('match.game.updated', {

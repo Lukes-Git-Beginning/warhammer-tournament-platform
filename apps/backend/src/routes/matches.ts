@@ -68,7 +68,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const user = request.user;
-      const isOrganizer = user.sub === match.tournament.organizer_id;
+      const isOrganizer = match.tournament ? user.sub === match.tournament.organizer_id : false;
       const isModOrAdmin = user.role === 'MODERATOR' || user.role === 'ADMIN';
       const isPlayer1 = match.player1_id !== null && user.sub === match.player1_id;
       const isPlayer2 = match.player2_id !== null && user.sub === match.player2_id;
@@ -102,7 +102,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         // Upsert MatchGame as COMPLETED so GL computation uses it correctly
         await fastify.prisma.matchGame.upsert({
           where: { match_id_game_number: { match_id: matchId, game_number: 1 } },
-          create: { match_id: matchId, game_number: 1, status: 'COMPLETED', winner_id: winnerId, played_at: new Date(), counts_for_leaderboard: match.tournament.counts_for_leaderboard },
+          create: { match_id: matchId, game_number: 1, status: 'COMPLETED', winner_id: winnerId, played_at: new Date(), counts_for_leaderboard: match.tournament?.counts_for_leaderboard ?? true },
           update: { status: 'COMPLETED', winner_id: winnerId, played_at: new Date() },
         });
         const game = await fastify.prisma.matchGame.findUniqueOrThrow({
@@ -169,6 +169,14 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           error: 'NotFound',
           message: `Match "${matchId}" not found`,
           statusCode: 404,
+        });
+      }
+
+      if (!match.tournament) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'Cannot start an open play match via this endpoint',
+          statusCode: 422,
         });
       }
 
@@ -333,8 +341,8 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.code(200).send({
       id: match.id,
-      tournament_id: match.tournament.id,
-      tournament_slug: match.tournament.slug,
+      tournament_id: match.tournament?.id ?? null,
+      tournament_slug: match.tournament?.slug ?? null,
       round: match.round,
       match_number: match.match_number,
       status: match.status,

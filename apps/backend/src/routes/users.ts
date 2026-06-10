@@ -343,7 +343,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         const opponentFaction = isPlayer1 ? m.player2_faction : m.player1_faction;
         const won = m.winner_id === id;
         return {
-          tournament_slug: m.tournament.slug,
+          tournament_slug: m.tournament?.slug ?? null,
           opponent_username: opponentUser?.username ?? null,
           my_score: won ? 1 : 0,
           opponent_score: won ? 0 : 1,
@@ -505,7 +505,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
             id: m.id,
             played_at: m.played_at?.toISOString() ?? null,
             result: m.result ?? null,
-            tournament_slug: m.tournament.slug ?? null,
+            tournament_slug: m.tournament?.slug ?? null,
             player_a_faction: aFaction ? { id: aFaction.id, name: aFaction.name } : null,
             player_b_faction: bFaction ? { id: bFaction.id, name: bFaction.name } : null,
           };
@@ -648,7 +648,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       recent_matches: recentMatches.map((m) => {
         const opponentUser = m.player1_id === id ? m.player2 : m.player1;
         return {
-          tournament: { slug: m.tournament.slug, name: m.tournament.name },
+          tournament: m.tournament ? { slug: m.tournament.slug, name: m.tournament.name } : null,
           round: m.round,
           opponent: opponentUser
             ? { id: opponentUser.id, username: opponentUser.username, avatar_url: opponentUser.avatar_url }

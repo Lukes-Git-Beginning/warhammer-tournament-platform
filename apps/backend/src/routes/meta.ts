@@ -243,7 +243,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     ]);
 
     // Load participant factions for the tournaments on this page (SFT fallback)
-    const tournamentIds = [...new Set(completedMatches.map((m) => m.tournament.id))];
+    const tournamentIds = [...new Set(completedMatches.map((m) => m.tournament?.id).filter(Boolean) as string[])];
     const participantsRaw = tournamentIds.length
       ? await fastify.prisma.tournamentParticipant.findMany({
           where: { tournament_id: { in: tournamentIds }, deleted_at: null },
@@ -266,14 +266,14 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           gameNumber: g.game_number,
           playedAt: (g.played_at ?? m.played_at)?.toISOString() ?? null,
           winnerId: g.winner_id ?? m.winner_id,
-          player1FactionId: g.player1_faction_id ?? m.player1_faction_id ?? pFaction(m.tournament.id, m.player1?.id),
-          player2FactionId: g.player2_faction_id ?? m.player2_faction_id ?? pFaction(m.tournament.id, m.player2?.id),
+          player1FactionId: g.player1_faction_id ?? m.player1_faction_id ?? pFaction(m.tournament?.id ?? '', m.player1?.id),
+          player2FactionId: g.player2_faction_id ?? m.player2_faction_id ?? pFaction(m.tournament?.id ?? '', m.player2?.id),
           mapPickedId: g.map_decision?.picked_map_id ?? null,
           replayUrl: g.replay_url,
           countsForLeaderboard: g.counts_for_leaderboard,
         }));
       }
-      return [{ ...base, id: m.id, gameNumber: 1, playedAt: m.played_at?.toISOString() ?? null, winnerId: m.winner_id, player1FactionId: m.player1_faction_id ?? pFaction(m.tournament.id, m.player1?.id), player2FactionId: m.player2_faction_id ?? pFaction(m.tournament.id, m.player2?.id), mapPickedId: null, replayUrl: null, countsForLeaderboard: true }];
+      return [{ ...base, id: m.id, gameNumber: 1, playedAt: m.played_at?.toISOString() ?? null, winnerId: m.winner_id, player1FactionId: m.player1_faction_id ?? pFaction(m.tournament?.id ?? '', m.player1?.id), player2FactionId: m.player2_faction_id ?? pFaction(m.tournament?.id ?? '', m.player2?.id), mapPickedId: null, replayUrl: null, countsForLeaderboard: true }];
     });
 
     rows.sort((a, b) => (b.playedAt ?? '').localeCompare(a.playedAt ?? ''));
