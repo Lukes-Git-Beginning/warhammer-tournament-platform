@@ -1177,3 +1177,92 @@ export function getTournamentGames(slug: string): Promise<{ games: GameHistoryEn
 export function getMetaGames(page = 1, limit = 50): Promise<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }> {
   return apiFetch<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }>(`/api/meta/games?page=${page}&limit=${limit}`);
 }
+
+// ---------------------------------------------------------------------------
+// M8 Open Play
+// ---------------------------------------------------------------------------
+
+export type AvailabilityContext = 'TOURNAMENT' | 'MATCHMAKING';
+export type MatchFormat = 'BO1' | 'BO3' | 'BO5';
+
+export interface AvailabilitySlot {
+  id?: string;
+  day_of_week: number;
+  hour_utc: number;
+  context: AvailabilityContext;
+}
+
+export interface HeatmapSlot {
+  day_of_week: number;
+  hour_utc: number;
+  context: AvailabilityContext;
+  count: number;
+}
+
+export interface ScheduledMatchup {
+  id: string;
+  format: MatchFormat;
+  proposed_at: string;
+  notes: string | null;
+  proposer: { id: string; username: string; avatar_url: string | null } | null;
+  anonymous: boolean;
+  created_at: string;
+  expires_at: string;
+}
+
+export function getAvailabilityHeatmap(): Promise<{ slots: HeatmapSlot[] }> {
+  return apiFetch<{ slots: HeatmapSlot[] }>('/api/availability/heatmap');
+}
+
+export function getMyAvailability(): Promise<{ slots: AvailabilitySlot[] }> {
+  return apiFetch<{ slots: AvailabilitySlot[] }>('/api/availability/me');
+}
+
+export function setMyAvailability(slots: Omit<AvailabilitySlot, 'id'>[]): Promise<{ slots: AvailabilitySlot[] }> {
+  return apiFetch<{ slots: AvailabilitySlot[] }>('/api/availability/slots', {
+    method: 'PUT',
+    body: JSON.stringify({ slots }),
+  });
+}
+
+export function getScheduledMatchups(params?: { format?: MatchFormat; page?: number }): Promise<{ matchups: ScheduledMatchup[]; total: number; page: number }> {
+  const q = new URLSearchParams();
+  if (params?.format) q.set('format', params.format);
+  if (params?.page) q.set('page', String(params.page));
+  return apiFetch<{ matchups: ScheduledMatchup[]; total: number; page: number }>(`/api/scheduled-matchups?${q.toString()}`);
+}
+
+export function createScheduledMatchup(data: {
+  format: MatchFormat;
+  proposed_at: string;
+  notes?: string;
+  anonymous?: boolean;
+}): Promise<{ id: string }> {
+  return apiFetch<{ id: string }>('/api/scheduled-matchups', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function acceptScheduledMatchup(id: string): Promise<{ match_id: string }> {
+  return apiFetch<{ match_id: string }>(`/api/scheduled-matchups/${id}/accept`, { method: 'POST' });
+}
+
+export function cancelScheduledMatchup(id: string): Promise<void> {
+  return apiFetch<void>(`/api/scheduled-matchups/${id}`, { method: 'DELETE' });
+}
+
+export function joinQueue(format: MatchFormat): Promise<{ matched: boolean; match_id?: string; position?: number }> {
+  return apiFetch<{ matched: boolean; match_id?: string; position?: number }>('/api/open-play/queue', {
+    method: 'POST',
+    body: JSON.stringify({ format }),
+  });
+}
+
+export function leaveQueue(format: MatchFormat): Promise<void> {
+  return apiFetch<void>(`/api/open-play/queue?format=${format}`, { method: 'DELETE' });
+}
+
+export function getQueueStatus(): Promise<{ queued: Array<{ format: string; position: number; total: number }> }> {
+  return apiFetch<{ queued: Array<{ format: string; position: number; total: number }> }>('/api/open-play/queue/status');
+}
