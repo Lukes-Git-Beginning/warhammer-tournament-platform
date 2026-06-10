@@ -103,7 +103,7 @@ function QueueTab() {
       )}
       {join.error && <p className="text-sm text-red-400">{String(join.error)}</p>}
       <p className="text-xs text-stone-500">
-        Results count towards the leaderboard when both players confirm and one uploads the replay.
+        Counts towards the leaderboard when a replay is submitted via the bot and the reported outcome goes uncontested.
       </p>
     </div>
   );
