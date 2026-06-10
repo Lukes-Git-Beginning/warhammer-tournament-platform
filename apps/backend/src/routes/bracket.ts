@@ -1058,6 +1058,113 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   /**
+   * POST /api/tournaments/:id/add-third-place-match
+   * Retroactively creates the third-place (small final) match when it was skipped
+   * because has_third_place_match was false at the time advance-playoffs ran.
+   * Safe to call any time the Grand Final already exists but no TP match does.
+   */
+  fastify.post(
+    '/api/tournaments/:id/add-third-place-match',
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+      ],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { id, deleted_at: null, status: 'ONGOING' },
+        select: { id: true, organizer_id: true },
+      });
+      if (!tournament) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      }
+      if (request.user.role === 'ORGANIZER' && tournament.organizer_id !== request.user.sub) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
+      }
+
+      const playoffMatches = await fastify.prisma.match.findMany({
+        where: { tournament_id: id, deleted_at: null, phase: { in: ['PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] } },
+        orderBy: [{ round: 'asc' }, { match_number: 'asc' }],
+      });
+
+      const hasFinal = playoffMatches.some((m) => m.phase === 'PLAYOFF_FINAL');
+      if (!hasFinal) {
+        return reply.code(409).send({ error: 'Conflict', message: 'Grand Final not created yet — call advance-playoffs first', statusCode: 409 });
+      }
+      const alreadyExists = playoffMatches.some((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
+      if (alreadyExists) {
+        return reply.code(409).send({ error: 'Conflict', message: 'Third-place match already exists', statusCode: 409 });
+      }
+
+      const sfMatches = playoffMatches
+        .filter((m) => m.phase === 'PLAYOFF_SF')
+        .sort((a, b) => a.match_number - b.match_number);
+
+      if (sfMatches.length < 2) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Expected 2 semifinal matches', statusCode: 422 });
+      }
+
+      const incomplete = sfMatches.filter(
+        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT',
+      );
+      if (incomplete.length > 0) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: `${incomplete.length} semifinal match(es) not yet completed`,
+          statusCode: 422,
+        });
+      }
+
+      const sf1 = sfMatches[0]!;
+      const sf2 = sfMatches[1]!;
+      const loser = (m: typeof sf1) =>
+        m.player1_id === m.winner_id ? m.player2_id : m.player1_id;
+
+      const gfRound = Math.max(...playoffMatches.map((m) => m.round));
+      const thirdPlaceId = randomUUID();
+
+      await fastify.prisma.$transaction(async (tx) => {
+        await tx.match.create({
+          data: {
+            id: thirdPlaceId,
+            tournament_id: id,
+            round: gfRound,
+            match_number: 2,
+            player1_id: loser(sf1),
+            player2_id: loser(sf2),
+            status: 'PENDING',
+            phase: 'PLAYOFF_THIRD_PLACE',
+          },
+        });
+        await tx.match.updateMany({
+          where: { id: { in: [sf1.id, sf2.id] } },
+          data: { loser_next_match_id: thirdPlaceId },
+        });
+        await tx.tournament.update({
+          where: { id },
+          data: { has_third_place_match: true },
+        });
+        await tx.auditLog.create({
+          data: {
+            entity_type: 'Tournament',
+            entity_id: id,
+            action: 'add_third_place_match',
+            actor_id: request.user.sub,
+            new_value: { match_id: thirdPlaceId },
+          },
+        });
+      });
+
+      emitBracketUpdate(fastify.io, id);
+
+      return reply.code(201).send({ id: thirdPlaceId });
+    },
+  );
+
+  /**
    * POST /api/tournaments/:id/playoff/propagate-winner
    * Internal-use endpoint: after a playoff match completes, propagate the winner
    * to the next bracket slot. Called by match-result route after COMPLETED.
