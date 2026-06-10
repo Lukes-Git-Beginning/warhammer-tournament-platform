@@ -36,8 +36,8 @@ function ChallengePopoverItem({
         <span className="text-xs text-stone-500">{FORMAT_DURATION_LABEL[matchup.format]}</span>
       </div>
       <p className="text-xs text-stone-400">
-        {d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
-        at {d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+        {d.toLocaleDateString('en-GB', { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+        at {d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
       </p>
       {!matchup.anonymous && matchup.proposer && (
         <p className="text-xs text-stone-400">
@@ -172,10 +172,10 @@ export function ChallengeCalendar({
             className="flex flex-col items-center justify-center border-b border-stone-700"
           >
             <span className="text-[11px] font-medium text-stone-400">
-              {d.toLocaleDateString(undefined, { weekday: 'short' })}
+              {d.toLocaleDateString('en-GB', { weekday: 'short' })}
             </span>
             <span className={`text-[11px] ${i === 0 ? 'text-amber-400' : 'text-stone-500'}`}>
-              {d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+              {d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
             </span>
           </div>
         ))}
@@ -279,7 +279,7 @@ export function ChallengeCalendar({
         {selected ? (
           <span className="text-stone-300">
             <span className="text-sky-400">
-              {selected.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}{' '}
+              {selected.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}{' '}
               {String(selected.getHours()).padStart(2, '0')}:00
             </span>
             {' '}· ~{FORMAT_DURATION_H[format] * 60} min
