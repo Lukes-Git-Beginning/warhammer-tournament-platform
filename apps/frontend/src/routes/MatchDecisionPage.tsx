@@ -984,7 +984,13 @@ export function MatchDecisionPage() {
               <Button
                 variant="forge"
                 size="lg"
-                onClick={() => void router.navigate({ to: '/tournaments/$slug', params: { slug: matchDetail?.tournament_slug ?? '' }, hash: 'my-match' })}
+                onClick={() => {
+                  if (matchDetail?.tournament_slug) {
+                    void router.navigate({ to: '/tournaments/$slug', params: { slug: matchDetail.tournament_slug }, hash: 'my-match' });
+                  } else {
+                    void router.navigate({ to: '/matches/$matchId', params: { matchId } });
+                  }
+                }}
               >
                 Start Match
               </Button>
