@@ -104,6 +104,10 @@ export async function finalizeGameResult(
     const p2Part = participants.find((p) => p.user_id === game.match.player2_id);
     p1FactionId = p1Part?.faction?.id ?? game.match.player1_faction_id ?? null;
     p2FactionId = p2Part?.faction?.id ?? game.match.player2_faction_id ?? null;
+  } else if (!game.match.tournament && game.blind_pick?.revealed_at) {
+    // Open Play: factions come from the blind pick
+    p1FactionId = game.blind_pick.player1_faction_id ?? null;
+    p2FactionId = game.blind_pick.player2_faction_id ?? null;
   } else {
     p1FactionId = game.match.player1_faction_id ?? null;
     p2FactionId = game.match.player2_faction_id ?? null;
@@ -173,9 +177,17 @@ export async function finalizeGameResult(
   }
 
   // Series completion: count wins and decide whether to continue or complete
-  const format = game.match.tournament
-    ? resolveMatchFormat(game.match.tournament, game.match.phase ?? null)
-    : 'BO1';
+  let format: 'BO1' | 'BO3' | 'BO5';
+  if (game.match.tournament) {
+    format = resolveMatchFormat(game.match.tournament, game.match.phase ?? null);
+  } else {
+    // Open Play: format comes from the ScheduledMatchup (queue matches default to BO1)
+    const matchup = await fastify.prisma.scheduledMatchup.findUnique({
+      where: { match_id: game.match_id },
+      select: { format: true },
+    });
+    format = (matchup?.format ?? 'BO1') as 'BO1' | 'BO3' | 'BO5';
+  }
   const winsNeeded = format === 'BO5' ? 3 : format === 'BO3' ? 2 : 1;
 
   const completedGames = await fastify.prisma.matchGame.findMany({

@@ -333,6 +333,12 @@ export function MatchDetailPage() {
 
   const phase = phaseLabel(match);
 
+  // Live per-game score for Open Play (computed client-side from games list)
+  const openPlayScore = isOpenPlay && gamesData ? {
+    p1: gamesData.games.filter((g) => g.status === 'COMPLETED' && g.winnerId === match.player1_id).length,
+    p2: gamesData.games.filter((g) => g.status === 'COMPLETED' && g.winnerId === match.player2_id).length,
+  } : null;
+
   return (
     <PageShell variant="tight" spacing="base">
       {/* ------------------------------------------------------------------ */}
@@ -369,31 +375,6 @@ export function MatchDetailPage() {
           #{matchId.slice(-8)}
         </p>
       </div>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* Open Play — GameTile section (map, blind pick, result reporting)    */}
-      {/* ------------------------------------------------------------------ */}
-      {isOpenPlay && gamesData && (
-        <div className="flex flex-col gap-3 mb-6">
-          {gamesData.games.map((game) => (
-            <GameTile
-              key={game.gameNumber}
-              matchId={matchId}
-              game={game}
-              currentUserId={user?.id ?? ''}
-              player1Id={match.player1_id}
-              player2Id={match.player2_id}
-              player1Name={match.player1?.username ?? 'Player 1'}
-              player2Name={match.player2?.username ?? 'Player 2'}
-              player1AvatarUrl={match.player1?.avatar_url ?? null}
-              player2AvatarUrl={match.player2?.avatar_url ?? null}
-              isParticipant={canReport}
-              maps={maps}
-              factions={factions}
-            />
-          ))}
-        </div>
-      )}
 
       {/* ------------------------------------------------------------------ */}
       {/* Decision Gate (tournament matches only)                             */}
@@ -462,11 +443,15 @@ export function MatchDetailPage() {
         {/* VS divider */}
         <div className="flex flex-col items-center gap-2 px-2">
           <span className="font-display text-xl font-bold text-rizzotto-stone-600">vs</span>
-          {match.score && (
+          {openPlayScore && (openPlayScore.p1 > 0 || openPlayScore.p2 > 0) ? (
+            <span className="text-2xl font-bold text-rizzotto-stone-100 font-display">
+              {openPlayScore.p1} – {openPlayScore.p2}
+            </span>
+          ) : match.score ? (
             <span className="text-sm font-bold text-rizzotto-stone-300 font-display">
               {match.score}
             </span>
-          )}
+          ) : null}
           {match.result && (
             <span className="text-[10px] text-rizzotto-stone-500 uppercase tracking-widest text-center">
               {resultLabel(match.result)}
@@ -546,6 +531,31 @@ export function MatchDetailPage() {
       {/* ------------------------------------------------------------------ */}
       {/* Post-decision summary (preserved from stub)                          */}
       {/* ------------------------------------------------------------------ */}
+      {/* ------------------------------------------------------------------ */}
+      {/* Open Play — GameTile section (map, blind pick, result reporting)    */}
+      {/* ------------------------------------------------------------------ */}
+      {isOpenPlay && gamesData && (
+        <div className="flex flex-col gap-3 mb-6">
+          {gamesData.games.map((game) => (
+            <GameTile
+              key={game.gameNumber}
+              matchId={matchId}
+              game={game}
+              currentUserId={user?.id ?? ''}
+              player1Id={match.player1_id}
+              player2Id={match.player2_id}
+              player1Name={match.player1?.username ?? 'Player 1'}
+              player2Name={match.player2?.username ?? 'Player 2'}
+              player1AvatarUrl={match.player1?.avatar_url ?? null}
+              player2AvatarUrl={match.player2?.avatar_url ?? null}
+              isParticipant={canReport}
+              maps={maps}
+              factions={factions}
+            />
+          ))}
+        </div>
+      )}
+
       {!isOpenPlay && decisionComplete && decision && (
         <div className="rounded-lg border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-6 space-y-3 mb-4">
           <h2 className="font-display text-base font-semibold text-rizzotto-gold-400">
