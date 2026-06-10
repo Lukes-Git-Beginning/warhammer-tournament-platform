@@ -68,15 +68,25 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
             const unofficial = g.countsForLeaderboard === false;
             return (
               <tr key={g.id} className={`hover:bg-stone-800/30 transition-colors${unofficial ? ' opacity-40' : ''}`}>
-                {showTournament && g.tournament && (
+                {showTournament && (
                   <td className="px-3 py-2">
-                    <Link
-                      to="/tournaments/$slug"
-                      params={{ slug: g.tournament.slug }}
-                      className="text-rizzotto-gold-400 hover:underline text-xs"
-                    >
-                      {g.tournament.name}
-                    </Link>
+                    {g.tournament ? (
+                      <Link
+                        to="/tournaments/$slug"
+                        params={{ slug: g.tournament.slug }}
+                        className="text-rizzotto-gold-400 hover:underline text-xs"
+                      >
+                        {g.tournament.name}
+                      </Link>
+                    ) : (
+                      <Link
+                        to="/matches/$matchId"
+                        params={{ matchId: g.matchId }}
+                        className="text-rizzotto-stone-400 hover:text-rizzotto-stone-200 hover:underline text-xs"
+                      >
+                        Challenge
+                      </Link>
+                    )}
                   </td>
                 )}
                 <td className="px-3 py-2 text-stone-500 text-xs whitespace-nowrap">
