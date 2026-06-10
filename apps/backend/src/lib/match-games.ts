@@ -209,9 +209,36 @@ export async function finalizeGameResult(
       skipStats: true, // stats already written per-game above
     });
   } else {
-    // Series continues — create next game row so the frontend can trigger the decision
+    // Series continues — create next game row
     const nextGameNumber = game.game_number + 1;
-    await ensureMatchGame(fastify.prisma, game.match_id, nextGameNumber, game.match.tournament?.counts_for_leaderboard ?? true);
+    const nextGameId = await ensureMatchGame(fastify.prisma, game.match_id, nextGameNumber, game.match.tournament?.counts_for_leaderboard ?? true);
+
+    // For Open Play (no tournament): auto-assign a random map + blind pick so
+    // players go straight to faction selection — no "Choose Battlefield" needed.
+    if (!game.match.tournament && game.match.player1_id && game.match.player2_id) {
+      const existing = await fastify.prisma.matchMapDecision.findUnique({ where: { game_id: nextGameId } });
+      if (!existing) {
+        const maps = await fastify.prisma.map.findMany({ where: { deleted_at: null }, select: { id: true } });
+        const randomMap = maps.length > 0 ? maps[Math.floor(Math.random() * maps.length)] : null;
+        if (randomMap) {
+          await fastify.prisma.matchMapDecision.create({
+            data: {
+              game_id: nextGameId,
+              mode: 'RANDOM',
+              coin_flip_seed: `open_play_${game.match_id}_g${nextGameNumber}`,
+              top_player_id: game.match.player1_id,
+              bottom_player_id: game.match.player2_id,
+              bans_top: [],
+              bans_bottom: [],
+              active_pool: [],
+              picked_map_id: randomMap.id,
+              decided_at: new Date(),
+            },
+          });
+        }
+        await fastify.prisma.matchBlindPick.create({ data: { game_id: nextGameId } });
+      }
+    }
 
     if (fastify.io) {
       fastify.io.to(`match_decision_${game.match_id}`).emit('match.game.updated', {
