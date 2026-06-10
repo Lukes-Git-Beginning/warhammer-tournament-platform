@@ -77,30 +77,21 @@ export function SigillumSection() {
           className="mt-8 flex items-center justify-center gap-6 text-rizzotto-stone-400"
         >
           <a
-            href="https://discord.gg/"
+            href="https://discord.gg/MX3cs6gA54"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-sm font-display tracking-wider uppercase hover:text-rizzotto-gold-400 transition-colors"
           >
-            Discord
+            RizzOttoverse
             <ExternalLink className="size-3.5" strokeWidth={1.5} />
           </a>
           <a
-            href="https://github.com/"
+            href="https://www.youtube.com/@RizzOttoGaming"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-sm font-display tracking-wider uppercase hover:text-rizzotto-gold-400 transition-colors"
           >
-            GitHub
-            <ExternalLink className="size-3.5" strokeWidth={1.5} />
-          </a>
-          <a
-            href="https://reddit.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm font-display tracking-wider uppercase hover:text-rizzotto-gold-400 transition-colors"
-          >
-            Reddit
+            YouTube
             <ExternalLink className="size-3.5" strokeWidth={1.5} />
           </a>
         </motion.div>
