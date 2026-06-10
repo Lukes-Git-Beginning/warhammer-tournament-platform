@@ -3,14 +3,14 @@ import type { AvailabilityContext, AvailabilitySlot } from '../../lib/api';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-// Display order starts at 6am, wraps through midnight: [6,7,...,23,0,1,2,3,4,5]
+// Display order: 8am–11pm then midnight
 const DISPLAY_HOURS = [
-  ...Array.from({ length: 18 }, (_, i) => i + 6),
-  ...Array.from({ length: 6 }, (_, i) => i),
+  ...Array.from({ length: 16 }, (_, i) => i + 8), // 8am–11pm
+  0,                                                 // midnight
 ];
 
 const ROW_H = 28;
-const VISIBLE_ROWS = 18;
+const VISIBLE_ROWS = 17;
 const START_HOUR = 8;
 
 // Slot colors
