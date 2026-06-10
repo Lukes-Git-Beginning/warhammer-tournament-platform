@@ -11,7 +11,6 @@ import {
   type AvailabilitySlot,
   type AvailabilityContext,
 } from '../lib/api';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Select } from '../components/ui/select';
 import { Button } from '../components/ui/button';
@@ -21,9 +20,18 @@ import { AvailabilityHeatmap } from '../components/open-play/AvailabilityHeatmap
 import { ScheduledMatchupCard } from '../components/open-play/ScheduledMatchupCard';
 import { ScheduledMatchupForm } from '../components/open-play/ScheduledMatchupForm';
 
+type Tab = 'queue' | 'availability' | 'challenges';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'queue', label: 'Queue' },
+  { id: 'availability', label: 'Availability' },
+  { id: 'challenges', label: 'Challenges' },
+];
+
 export function OpenPlayPage() {
   useRequireAuth();
   const { data: me } = useAuthQuery();
+  const [activeTab, setActiveTab] = useState<Tab>('queue');
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
@@ -36,25 +44,29 @@ export function OpenPlayPage() {
 
       <QueueStatusCard />
 
-      <Tabs defaultValue="queue">
-        <TabsList>
-          <TabsTrigger value="queue">Queue</TabsTrigger>
-          <TabsTrigger value="availability">Availability</TabsTrigger>
-          <TabsTrigger value="challenges">Challenges</TabsTrigger>
-        </TabsList>
+      {/* Tabs — same design as Leaderboard / Tournaments */}
+      <div className="flex gap-1 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-1 w-fit">
+        {TABS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveTab(id)}
+            className={`rounded px-4 py-1.5 text-sm font-medium transition-colors whitespace-nowrap ${
+              activeTab === id
+                ? 'bg-rizzotto-gold-500/20 text-rizzotto-gold-500'
+                : 'text-rizzotto-stone-400 hover:text-rizzotto-stone-200'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-        <TabsContent value="queue" className="pt-4">
-          <QueueTab />
-        </TabsContent>
-
-        <TabsContent value="availability" className="pt-4">
-          <AvailabilityTab currentUserId={me?.id} />
-        </TabsContent>
-
-        <TabsContent value="challenges" className="pt-4">
-          <ChallengesTab currentUserId={me?.id} />
-        </TabsContent>
-      </Tabs>
+      <div className="pt-2">
+        {activeTab === 'queue'        && <QueueTab />}
+        {activeTab === 'availability' && <AvailabilityTab currentUserId={me?.id} />}
+        {activeTab === 'challenges'   && <ChallengesTab currentUserId={me?.id} />}
+      </div>
     </main>
   );
 }
@@ -75,8 +87,9 @@ function QueueTab() {
   return (
     <div className="max-w-sm space-y-4">
       <p className="text-sm text-stone-300">
-        Join the live queue to be instantly matched with another player. When two players are in
-        the queue for the same format, a match is created and both receive a Discord DM.
+        Join the live queue to be instantly matched with another player. When two players queue
+        for the same format, a match is created with a random map and blind faction pick — both
+        receive a Discord DM.
       </p>
       <div className="flex gap-3">
         <Select value={format} onChange={(e) => setFormat(e.target.value as MatchFormat)} className="w-36">
@@ -91,20 +104,14 @@ function QueueTab() {
       {join.data?.matched && (
         <p className="text-sm text-green-400">
           Match found!{' '}
-          <a
-            href={`/matches/${join.data.match_id}`}
-            className="underline hover:text-green-300"
-          >
+          <a href={`/matches/${join.data.match_id}`} className="underline hover:text-green-300">
             Open match →
           </a>
         </p>
       )}
-      {join.error && (
-        <p className="text-sm text-red-400">{String(join.error)}</p>
-      )}
+      {join.error && <p className="text-sm text-red-400">{String(join.error)}</p>}
       <p className="text-xs text-stone-500">
-        Matches count towards the leaderboard when both players confirm the result and one player
-        uploads the replay.
+        Results count towards the leaderboard when both players confirm and one uploads the replay.
       </p>
     </div>
   );
@@ -115,7 +122,7 @@ function QueueTab() {
 // ---------------------------------------------------------------------------
 
 function AvailabilityTab({ currentUserId }: { currentUserId?: string }) {
-  const [context, setContext] = useState<AvailabilityContext>('MATCHMAKING');
+  const [editContext, setEditContext] = useState<AvailabilityContext>('MATCHMAKING');
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [localSlots, setLocalSlots] = useState<AvailabilitySlot[] | null>(null);
   const qc = useQueryClient();
@@ -134,7 +141,9 @@ function AvailabilityTab({ currentUserId }: { currentUserId?: string }) {
 
   const save = useMutation({
     mutationFn: (slots: AvailabilitySlot[]) =>
-      setMyAvailability(slots.map(({ day_of_week, hour_utc, context: ctx }) => ({ day_of_week, hour_utc, context: ctx }))),
+      setMyAvailability(
+        slots.map(({ day_of_week, hour_utc, context }) => ({ day_of_week, hour_utc, context })),
+      ),
     onSuccess: (data) => {
       qc.setQueryData(['availability-me', currentUserId], data);
       setLocalSlots(null);
@@ -147,32 +156,37 @@ function AvailabilityTab({ currentUserId }: { currentUserId?: string }) {
   if (isLoading) return <p className="text-sm text-stone-400">Loading…</p>;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 rounded border border-stone-700 p-0.5">
+        {/* Edit-mode selector — controls which context dragging affects */}
+        <div className="flex gap-1 rounded border border-stone-700 bg-stone-900 p-0.5">
           {(['MATCHMAKING', 'TOURNAMENT'] as AvailabilityContext[]).map((ctx) => (
             <button
               key={ctx}
               type="button"
-              onClick={() => setContext(ctx)}
+              onClick={() => setEditContext(ctx)}
               className={[
                 'rounded px-3 py-1 text-xs font-medium transition-colors',
-                context === ctx
-                  ? 'bg-amber-500/20 text-amber-400'
+                editContext === ctx
+                  ? ctx === 'MATCHMAKING'
+                    ? 'bg-amber-500/20 text-amber-400'
+                    : 'bg-sky-500/20 text-sky-400'
                   : 'text-stone-400 hover:text-stone-200',
               ].join(' ')}
             >
-              {ctx === 'MATCHMAKING' ? 'Matchmaking' : 'Tournaments'}
+              {ctx === 'MATCHMAKING' ? 'Edit Matchmaking' : 'Edit Tournaments'}
             </button>
           ))}
         </div>
+
         <button
           type="button"
           onClick={() => setShowHeatmap((v) => !v)}
           className="text-xs text-stone-400 hover:text-stone-200 underline"
         >
-          {showHeatmap ? 'Show my grid' : 'Show community heatmap'}
+          {showHeatmap ? 'My availability' : 'Community heatmap'}
         </button>
+
         {isDirty && (
           <Button size="sm" onClick={() => save.mutate(slots)} disabled={save.isPending}>
             {save.isPending ? 'Saving…' : 'Save'}
@@ -181,11 +195,11 @@ function AvailabilityTab({ currentUserId }: { currentUserId?: string }) {
       </div>
 
       {showHeatmap ? (
-        <AvailabilityHeatmap slots={heatmapData?.slots ?? []} context={context} />
+        <AvailabilityHeatmap slots={heatmapData?.slots ?? []} />
       ) : (
         <WeekAvailabilityGrid
           slots={slots}
-          context={context}
+          editContext={editContext}
           onChange={setLocalSlots}
         />
       )}
@@ -211,14 +225,13 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value as MatchFormat | 'ALL')} className="w-28">
-            <option value="ALL">All formats</option>
-            <option value="BO1">BO1</option>
-            <option value="BO3">BO3</option>
-            <option value="BO5">BO5</option>
-          </Select>
-        </div>
+        <Select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value as MatchFormat | 'ALL')} className="w-32">
+          <option value="ALL">All formats</option>
+          <option value="BO1">BO1</option>
+          <option value="BO3">BO3</option>
+          <option value="BO5">BO5</option>
+        </Select>
+
         {currentUserId && (
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
