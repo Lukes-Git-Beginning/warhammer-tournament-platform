@@ -232,6 +232,11 @@ export function MatchDetailPage() {
     queryKey: ['match', matchId],
     queryFn: () => getMatchDetail(matchId),
     retry: false,
+    // Open Play has no tournament socket room, so poll until the match settles
+    refetchInterval: (query) =>
+      query.state.data?.tournament_id || query.state.data?.status === 'COMPLETED'
+        ? false
+        : 5_000,
   });
 
   // Decision gate — keep existing behaviour
@@ -255,7 +260,7 @@ export function MatchDetailPage() {
     queryKey: ['match-games', matchId],
     queryFn: () => getMatchGames(matchId),
     enabled: isOpenPlay,
-    refetchInterval: 15_000,
+    refetchInterval: 5_000,
   });
 
   const { data: mapsData } = useQuery({
