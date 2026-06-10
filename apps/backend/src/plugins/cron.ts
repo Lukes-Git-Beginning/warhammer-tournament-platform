@@ -206,19 +206,16 @@ export default fp(
       async () => {
         if (!fastify.redis) return;
         try {
-          for (const format of ['BO1', 'BO3', 'BO5']) {
-            const key = `rizzotto:queue:open_play:${format}`;
-            const items = await fastify.redis.lrange(key, 0, -1);
-            const cutoff = new Date(Date.now() - 30 * 60 * 1000);
-            for (const userId of items) {
-              const user = await fastify.prisma.user.findUnique({
-                where: { id: userId },
-                select: { updated_at: true },
-              });
-              // If user record is very stale or doesn't exist, remove from queue
-              if (!user || user.updated_at < cutoff) {
-                await fastify.redis.lrem(key, 0, userId);
-              }
+          const key = 'rizzotto:queue:open_play';
+          const items = await fastify.redis.lrange(key, 0, -1);
+          const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+          for (const userId of items) {
+            const user = await fastify.prisma.user.findUnique({
+              where: { id: userId },
+              select: { updated_at: true },
+            });
+            if (!user || user.updated_at < cutoff) {
+              await fastify.redis.lrem(key, 0, userId);
             }
           }
         } catch (err) {

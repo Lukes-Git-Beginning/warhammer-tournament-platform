@@ -27,23 +27,10 @@ const commands = [
         name: 'queue',
         description: 'Join the Open Play queue',
         type: 1, // SUB_COMMAND
-        options: [
-          {
-            name: 'format',
-            description: 'Match format (default: BO3)',
-            type: 3, // STRING
-            required: false,
-            choices: [
-              { name: 'BO1 — Best of 1', value: 'BO1' },
-              { name: 'BO3 — Best of 3', value: 'BO3' },
-              { name: 'BO5 — Best of 5', value: 'BO5' },
-            ],
-          },
-        ],
       },
       {
         name: 'unqueue',
-        description: 'Leave all Open Play queues',
+        description: 'Leave the Open Play queue',
         type: 1, // SUB_COMMAND
       },
     ],

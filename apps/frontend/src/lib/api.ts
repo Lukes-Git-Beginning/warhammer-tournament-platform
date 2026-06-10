@@ -1252,17 +1252,16 @@ export function cancelScheduledMatchup(id: string): Promise<void> {
   return apiFetch<void>(`/api/scheduled-matchups/${id}`, { method: 'DELETE' });
 }
 
-export function joinQueue(format: MatchFormat): Promise<{ matched: boolean; match_id?: string; position?: number }> {
+export function joinQueue(): Promise<{ matched: boolean; match_id?: string; position?: number }> {
   return apiFetch<{ matched: boolean; match_id?: string; position?: number }>('/api/open-play/queue', {
     method: 'POST',
-    body: JSON.stringify({ format }),
   });
 }
 
-export function leaveQueue(format: MatchFormat): Promise<void> {
-  return apiFetch<void>(`/api/open-play/queue?format=${format}`, { method: 'DELETE' });
+export function leaveQueue(): Promise<void> {
+  return apiFetch<void>('/api/open-play/queue', { method: 'DELETE' });
 }
 
-export function getQueueStatus(): Promise<{ queued: Array<{ format: string; position: number; total: number }> }> {
-  return apiFetch<{ queued: Array<{ format: string; position: number; total: number }> }>('/api/open-play/queue/status');
+export function getQueueStatus(): Promise<{ inQueue: boolean; position: number | null; total: number }> {
+  return apiFetch<{ inQueue: boolean; position: number | null; total: number }>('/api/open-play/queue/status');
 }

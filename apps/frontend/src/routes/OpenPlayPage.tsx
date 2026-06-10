@@ -76,31 +76,23 @@ export function OpenPlayPage() {
 // ---------------------------------------------------------------------------
 
 function QueueTab() {
-  const [format, setFormat] = useState<MatchFormat>('BO3');
   const qc = useQueryClient();
 
   const join = useMutation({
-    mutationFn: () => joinQueue(format),
+    mutationFn: joinQueue,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['queue-status'] }),
   });
 
   return (
     <div className="max-w-sm space-y-4">
       <p className="text-sm text-stone-300">
-        Join the live queue to be instantly matched with another player. When two players queue
-        for the same format, a match is created with a random map and blind faction pick — both
-        receive a Discord DM.
+        Join the queue to be instantly matched with another available player. A random map is
+        drawn and both players pick their faction blind — you'll receive a Discord DM when your
+        match is found.
       </p>
-      <div className="flex gap-3">
-        <Select value={format} onChange={(e) => setFormat(e.target.value as MatchFormat)} className="w-36">
-          <option value="BO1">BO1</option>
-          <option value="BO3">BO3</option>
-          <option value="BO5">BO5</option>
-        </Select>
-        <Button onClick={() => join.mutate()} disabled={join.isPending}>
-          {join.isPending ? 'Joining...' : 'Join Queue'}
-        </Button>
-      </div>
+      <Button onClick={() => join.mutate()} disabled={join.isPending}>
+        {join.isPending ? 'Joining...' : 'Join Queue'}
+      </Button>
       {join.data?.matched && (
         <p className="text-sm text-green-400">
           Match found!{' '}
