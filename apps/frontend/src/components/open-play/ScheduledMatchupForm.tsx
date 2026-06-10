@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createScheduledMatchup, getAvailabilityHeatmap, type MatchFormat, type HeatmapSlot } from '../../lib/api';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { AvailabilityHeatmap } from './AvailabilityHeatmap';
+import { ChallengeCalendar } from './ChallengeCalendar';
 
 interface ScheduledMatchupFormProps {
   onSuccess?: () => void;
@@ -15,7 +15,7 @@ interface ScheduledMatchupFormProps {
 export function ScheduledMatchupForm({ onSuccess }: ScheduledMatchupFormProps) {
   const qc = useQueryClient();
   const [format, setFormat] = useState<MatchFormat>('BO3');
-  const [proposedAt, setProposedAt] = useState('');
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [notes, setNotes] = useState('');
   const [anonymous, setAnonymous] = useState(false);
 
@@ -33,7 +33,7 @@ export function ScheduledMatchupForm({ onSuccess }: ScheduledMatchupFormProps) {
     mutationFn: () =>
       createScheduledMatchup({
         format,
-        proposed_at: new Date(proposedAt).toISOString(),
+        proposed_at: selectedDate!.toISOString(),
         notes: notes || undefined,
         anonymous,
       }),
@@ -51,36 +51,25 @@ export function ScheduledMatchupForm({ onSuccess }: ScheduledMatchupFormProps) {
       }}
       className="space-y-5"
     >
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label>Format</Label>
-          <Select value={format} onChange={(e) => setFormat(e.target.value as MatchFormat)}>
-            <option value="BO1">BO1 — Best of 1</option>
-            <option value="BO3">BO3 — Best of 3</option>
-            <option value="BO5">BO5 — Best of 5</option>
-          </Select>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>Your proposed time</Label>
-          <Input
-            type="datetime-local"
-            value={proposedAt}
-            onChange={(e) => setProposedAt(e.target.value)}
-            required
-            min={new Date().toISOString().slice(0, 16)}
-          />
-        </div>
+      <div className="space-y-1.5">
+        <Label>Format</Label>
+        <Select value={format} onChange={(e) => setFormat(e.target.value as MatchFormat)} className="w-48">
+          <option value="BO1">BO1 — Best of 1 (~30 min)</option>
+          <option value="BO3">BO3 — Best of 3 (~90 min)</option>
+          <option value="BO5">BO5 — Best of 5 (~150 min)</option>
+        </Select>
       </div>
 
-      {/* Heatmap to help pick a popular time */}
+      {/* 7-day pick calendar */}
       <div className="space-y-1.5">
-        <p className="text-xs font-medium text-stone-400">
-          When are others usually free?
-        </p>
-        <p className="text-xs text-stone-500">
-          Pick a time that overlaps with community availability for a better chance of a match.
-        </p>
+        <Label>Pick a start time</Label>
+        <ChallengeCalendar format={format} selected={selectedDate} onSelect={setSelectedDate} />
+      </div>
+
+      {/* Community heatmap for reference */}
+      <div className="space-y-1">
+        <p className="text-xs font-medium text-stone-400">When are others usually free?</p>
+        <p className="text-xs text-stone-500">Use the heatmap above to pick a time with good overlap.</p>
         <AvailabilityHeatmap slots={matchmakingSlots} />
       </div>
 
@@ -109,7 +98,7 @@ export function ScheduledMatchupForm({ onSuccess }: ScheduledMatchupFormProps) {
         <p className="text-xs text-red-400">{String(create.error)}</p>
       )}
 
-      <Button type="submit" size="lg" disabled={create.isPending || !proposedAt} className="w-full">
+      <Button type="submit" size="lg" disabled={create.isPending || !selectedDate} className="w-full">
         {create.isPending ? 'Posting...' : 'Post Challenge'}
       </Button>
     </form>
