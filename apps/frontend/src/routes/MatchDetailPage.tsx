@@ -333,11 +333,18 @@ export function MatchDetailPage() {
 
   const phase = phaseLabel(match);
 
-  // Live per-game score for Open Play (computed client-side from games list)
-  const openPlayScore = isOpenPlay && gamesData ? {
-    p1: gamesData.games.filter((g) => g.status === 'COMPLETED' && g.winnerId === match.player1_id).length,
-    p2: gamesData.games.filter((g) => g.status === 'COMPLETED' && g.winnerId === match.player2_id).length,
-  } : null;
+  // Live per-game score for Open Play.
+  // Uses winnerId for confirmed games; falls back to reportedWinnerId while
+  // the result is in the 30-min provisional window (game not yet COMPLETED).
+  // DISPUTED games are excluded so a contested result never inflates the score.
+  const openPlayScore = isOpenPlay && gamesData ? (() => {
+    const effectiveWinner = (g: { winnerId: string | null; reportedWinnerId: string | null; status: string }) =>
+      g.winnerId ?? (g.status !== 'DISPUTED' ? g.reportedWinnerId : null);
+    return {
+      p1: gamesData.games.filter((g) => effectiveWinner(g) === match.player1_id).length,
+      p2: gamesData.games.filter((g) => effectiveWinner(g) === match.player2_id).length,
+    };
+  })() : null;
 
   return (
     <PageShell variant="tight" spacing="base">
