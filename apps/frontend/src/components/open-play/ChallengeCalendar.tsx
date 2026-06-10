@@ -1,4 +1,4 @@
-import { Fragment, useRef, useEffect, useMemo } from 'react';
+import { Fragment, useRef, useEffect, useMemo, useState } from 'react';
 import type { MatchFormat, HeatmapSlot, ScheduledMatchup } from '../../lib/api';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 
@@ -28,6 +28,7 @@ function ChallengePopoverItem({
   onAccept: () => void;
   onCancel: () => void;
 }) {
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const d = new Date(matchup.proposed_at);
   return (
     <div className="p-3 space-y-2">
@@ -48,13 +49,33 @@ function ChallengePopoverItem({
         <p className="text-xs text-stone-500 italic truncate">{matchup.notes}</p>
       )}
       {isOwn ? (
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-xs text-stone-400 hover:text-red-400 transition-colors"
-        >
-          Cancel challenge
-        </button>
+        confirmCancel ? (
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-xs text-stone-400">Remove this challenge?</span>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-xs text-red-400 hover:text-red-300 transition-colors font-medium"
+            >
+              Yes, cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmCancel(false)}
+              className="text-xs text-stone-500 hover:text-stone-300 transition-colors"
+            >
+              Keep
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmCancel(true)}
+            className="text-xs text-stone-500 hover:text-stone-400 transition-colors"
+          >
+            Cancel challenge
+          </button>
+        )
       ) : (
         <button
           type="button"

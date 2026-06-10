@@ -90,6 +90,26 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(200).send({ inQueue: true, position: pos + 1, total });
     },
   );
+
+  // GET /api/open-play/my-match — returns the user's active Open Play match, if any
+  fastify.get(
+    '/api/open-play/my-match',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const userId = request.user.sub;
+      const match = await fastify.prisma.match.findFirst({
+        where: {
+          type: 'OPEN_PLAY',
+          status: 'ONGOING',
+          deleted_at: null,
+          OR: [{ player1_id: userId }, { player2_id: userId }],
+        },
+        select: { id: true },
+        orderBy: { created_at: 'desc' },
+      });
+      return reply.code(200).send({ match_id: match?.id ?? null });
+    },
+  );
 };
 
 export default openPlayQueueRoutes;

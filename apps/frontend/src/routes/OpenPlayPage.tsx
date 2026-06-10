@@ -11,6 +11,7 @@ import {
   createScheduledMatchup,
   acceptScheduledMatchup,
   cancelScheduledMatchup,
+  getMyOpenPlayMatch,
   type AvailabilitySlot,
   type AvailabilityContext,
   type HeatmapSlot,
@@ -37,6 +38,13 @@ export function OpenPlayPage() {
   const { data: me } = useAuthQuery();
   const [activeTab, setActiveTab] = useState<Tab>('queue');
 
+  const { data: activeMatch } = useQuery({
+    queryKey: ['my-open-play-match'],
+    queryFn: getMyOpenPlayMatch,
+    enabled: !!me,
+    refetchInterval: 15_000,
+  });
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
       <div>
@@ -47,6 +55,23 @@ export function OpenPlayPage() {
       </div>
 
       <QueueStatusCard />
+
+      {/* Active match banner — shown when the user has an ongoing Open Play match */}
+      {activeMatch?.match_id && (
+        <a
+          href={`/matches/${activeMatch.match_id}`}
+          className="flex items-center justify-between rounded border border-rizzotto-gold-500/40 bg-rizzotto-gold-500/10 px-4 py-3 hover:bg-rizzotto-gold-500/15 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rizzotto-gold-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-rizzotto-gold-500" />
+            </span>
+            <span className="text-sm text-rizzotto-stone-200 font-medium">You have an active match</span>
+          </div>
+          <span className="text-xs text-rizzotto-gold-400">Open match →</span>
+        </a>
+      )}
 
       {/* Tabs — same design as Leaderboard / Tournaments */}
       <div className="flex gap-1 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-1 w-fit">
