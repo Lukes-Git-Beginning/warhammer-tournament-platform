@@ -7,7 +7,6 @@ import {
   setMyAvailability,
   getAvailabilityHeatmap,
   getScheduledMatchups,
-  type MatchFormat,
   type AvailabilitySlot,
   type AvailabilityContext,
   type HeatmapSlot,
@@ -102,7 +101,7 @@ function QueueTab() {
           drawn and both players pick their faction blind — you'll receive a Discord DM when your
           match is found.
         </p>
-        <Button onClick={() => join.mutate()} disabled={join.isPending}>
+        <Button size="lg" onClick={() => join.mutate()} disabled={join.isPending}>
           {join.isPending ? 'Joining...' : 'Join Queue'}
         </Button>
         {join.data?.matched && (
@@ -226,31 +225,27 @@ function AvailabilityTab({ currentUserId }: { currentUserId?: string }) {
 
 function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [formatFilter, setFormatFilter] = useState<MatchFormat | 'ALL'>('ALL');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['scheduled-matchups', formatFilter],
-    queryFn: () =>
-      getScheduledMatchups(formatFilter !== 'ALL' ? { format: formatFilter } : undefined),
+    queryKey: ['scheduled-matchups'],
+    queryFn: () => getScheduledMatchups(),
     refetchInterval: 30_000,
   });
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value as MatchFormat | 'ALL')} className="w-32">
-          <option value="ALL">All formats</option>
-          <option value="BO1">BO1</option>
-          <option value="BO3">BO3</option>
-          <option value="BO5">BO5</option>
-        </Select>
-
+    <div className="space-y-6">
+      <div className="max-w-sm space-y-4">
+        <p className="text-sm text-stone-300">
+          Suggest a specific time to play and let others come to you. Your challenge is visible
+          to all players — whoever accepts gets matched with you, random map drawn and blind
+          faction pick applies.
+        </p>
         {currentUserId && (
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm">Post a challenge</Button>
+              <Button size="lg">Post a Challenge</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Schedule a match</DialogTitle>
               </DialogHeader>
