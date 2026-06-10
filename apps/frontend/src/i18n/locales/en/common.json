@@ -74,20 +74,21 @@
   },
   "conclave": {
     "eyebrow": "How We Play",
-    "heading": "Profile",
+    "heading": "The Arena",
     "cta": "View Profile",
+    "coming_soon": "Coming to the Arena",
     "pillars": {
-      "swiss": {
-        "title": "Swiss Rounds",
-        "body": "Every player plays a fixed number of rounds, paired against opponents of equal standing. No one is eliminated; the standings decide."
+      "tournaments": {
+        "title": "Tournaments",
+        "body": "Swiss rounds, elimination brackets, and Liechtenstein — a pre-drawn schedule with unique pairings every round. Register with a locked faction, blind-pick, or draft live in Captain's Mode."
       },
-      "bracket": {
-        "title": "Brackets",
-        "body": "Single- and double-elimination brackets. Each match carves the bracket tree, until only one banner remains."
+      "honour": {
+        "title": "Roll of Honour",
+        "body": "Every result feeds a dynamically calculated ladder. Faction win-rates, head-to-head records, placement points across events — your rank is earned, not given."
       },
-      "draft": {
-        "title": "The Draft",
-        "body": "Live Captain's Mode draft. Players claim and forbid factions in real time — the draft is the first battle."
+      "ladder": {
+        "title": "The Ladder",
+        "body": "Step outside the tournament. Challenge any ranked opponent, log the result, and let every game count. Open play is coming to the Arena — and the Roll of Honour will remember."
       }
     }
   },

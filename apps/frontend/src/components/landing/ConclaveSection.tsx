@@ -1,11 +1,11 @@
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
-import { Swords, GitBranch, Users } from 'lucide-react';
+import { Trophy, Star, TrendingUp } from 'lucide-react';
 import { ArchHeader } from './ArchHeader';
 
 /**
  * Section 5 — The Conclave.
- * Three formats, three pillars, gothic-arch column headers.
+ * Three pillars: Tournaments, Roll of Honour, The Ladder (coming soon).
  */
 export function ConclaveSection() {
   const { t } = useTranslation();
@@ -13,22 +13,25 @@ export function ConclaveSection() {
 
   const pillars = [
     {
-      key: 'swiss',
-      icon: <Swords className="size-7" strokeWidth={1.25} />,
-      title: t('conclave.pillars.swiss.title'),
-      description: t('conclave.pillars.swiss.body'),
+      key: 'tournaments',
+      icon: <Trophy className="size-7" strokeWidth={1.25} />,
+      title: t('conclave.pillars.tournaments.title'),
+      description: t('conclave.pillars.tournaments.body'),
+      comingSoon: false,
     },
     {
-      key: 'bracket',
-      icon: <GitBranch className="size-7" strokeWidth={1.25} />,
-      title: t('conclave.pillars.bracket.title'),
-      description: t('conclave.pillars.bracket.body'),
+      key: 'honour',
+      icon: <Star className="size-7" strokeWidth={1.25} />,
+      title: t('conclave.pillars.honour.title'),
+      description: t('conclave.pillars.honour.body'),
+      comingSoon: false,
     },
     {
-      key: 'draft',
-      icon: <Users className="size-7" strokeWidth={1.25} />,
-      title: t('conclave.pillars.draft.title'),
-      description: t('conclave.pillars.draft.body'),
+      key: 'ladder',
+      icon: <TrendingUp className="size-7" strokeWidth={1.25} />,
+      title: t('conclave.pillars.ladder.title'),
+      description: t('conclave.pillars.ladder.body'),
+      comingSoon: true,
     },
   ];
 
@@ -65,9 +68,21 @@ export function ConclaveSection() {
                 hidden: reduced ? { opacity: 0 } : { opacity: 0, y: 24 },
                 visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } },
               }}
+              className={p.comingSoon ? 'opacity-50' : undefined}
             >
-              <ArchHeader icon={p.icon} title={p.title} />
-              <p className="mx-auto mt-6 max-w-xs text-center text-rizzotto-stone-300 leading-relaxed">
+              <ArchHeader
+                icon={p.icon}
+                title={p.title}
+                className={p.comingSoon ? 'text-rizzotto-stone-400' : undefined}
+              />
+              {p.comingSoon && (
+                <div className="mt-3 flex justify-center">
+                  <span className="inline-flex items-center gap-1.5 rounded-sm border border-rizzotto-gold-500/40 bg-rizzotto-gold-500/10 px-2.5 py-1 font-display text-[10px] uppercase tracking-[0.2em] text-rizzotto-gold-400">
+                    {t('conclave.coming_soon')}
+                  </span>
+                </div>
+              )}
+              <p className="mx-auto mt-4 max-w-xs text-center text-rizzotto-stone-300 leading-relaxed">
                 {p.description}
               </p>
             </motion.li>
