@@ -10,6 +10,7 @@ import {
   type MatchFormat,
   type AvailabilitySlot,
   type AvailabilityContext,
+  type HeatmapSlot,
 } from '../lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Select } from '../components/ui/select';
@@ -83,28 +84,48 @@ function QueueTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['queue-status'] }),
   });
 
+  const { data: heatmapData } = useQuery({
+    queryKey: ['availability-heatmap'],
+    queryFn: getAvailabilityHeatmap,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const matchmakingSlots: HeatmapSlot[] = (heatmapData?.slots ?? []).filter(
+    (s) => s.context === 'MATCHMAKING',
+  );
+
   return (
-    <div className="max-w-sm space-y-4">
-      <p className="text-sm text-stone-300">
-        Join the queue to be instantly matched with another available player. A random map is
-        drawn and both players pick their faction blind — you'll receive a Discord DM when your
-        match is found.
-      </p>
-      <Button onClick={() => join.mutate()} disabled={join.isPending}>
-        {join.isPending ? 'Joining...' : 'Join Queue'}
-      </Button>
-      {join.data?.matched && (
-        <p className="text-sm text-green-400">
-          Match found!{' '}
-          <a href={`/matches/${join.data.match_id}`} className="underline hover:text-green-300">
-            Open match →
-          </a>
+    <div className="space-y-6">
+      <div className="max-w-sm space-y-4">
+        <p className="text-sm text-stone-300">
+          Join the queue to be instantly matched with another available player. A random map is
+          drawn and both players pick their faction blind — you'll receive a Discord DM when your
+          match is found.
         </p>
-      )}
-      {join.error && <p className="text-sm text-red-400">{String(join.error)}</p>}
-      <p className="text-xs text-stone-500">
-        Counts towards the leaderboard when a replay is submitted via the bot and the reported outcome goes uncontested.
-      </p>
+        <Button onClick={() => join.mutate()} disabled={join.isPending}>
+          {join.isPending ? 'Joining...' : 'Join Queue'}
+        </Button>
+        {join.data?.matched && (
+          <p className="text-sm text-green-400">
+            Match found!{' '}
+            <a href={`/matches/${join.data.match_id}`} className="underline hover:text-green-300">
+              Open match →
+            </a>
+          </p>
+        )}
+        {join.error && <p className="text-sm text-red-400">{String(join.error)}</p>}
+        <p className="text-xs text-stone-500">
+          Counts towards the leaderboard when a replay is submitted via the bot and the reported outcome goes uncontested.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-stone-300">When are people usually around?</p>
+        <p className="text-xs text-stone-500">
+          Community matchmaking availability — brighter means more players have marked this time as free.
+        </p>
+        <AvailabilityHeatmap slots={matchmakingSlots} />
+      </div>
     </div>
   );
 }
