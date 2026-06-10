@@ -26,30 +26,12 @@ import { SwissStandings } from '@/components/bracket/SwissStandings';
 import { PageShell } from '@/components/layout/PageShell';
 import { CheckInButton } from '@/components/tournament/CheckInButton';
 import { RegisterButton } from '@/components/tournament/RegisterButton';
+import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton';
 import { ParticipantsList } from '@/components/tournament/ParticipantsList';
 import { ArmyListUploader } from '@/components/tournament/ArmyListUploader';
 import { MyMatchSection } from '@/components/match/MyMatchSection';
 import type { ParticipantStatus } from '@/lib/api';
 
-function DiscordTimestampButton({ isoString }: { isoString: string }) {
-  const [copied, setCopied] = useState(false);
-  function handleCopy() {
-    void navigator.clipboard.writeText(toDiscordTimestamp(isoString)).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      title="Copy as Discord timestamp — auto-adjusts to each user's timezone"
-      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[#5865F2] border border-[#5865F2]/40 hover:bg-[#5865F2]/10 transition-colors shrink-0"
-    >
-      {copied ? '✓ Kopiert' : '⏱ Discord'}
-    </button>
-  );
-}
 
 // Format labels are now handled via i18n — see t('tournament.format.*')
 const FORMAT_KEY_MAP: Record<string, string> = {
