@@ -107,11 +107,9 @@ export function GameTile({
   const myId = isPlayer1 ? player1Id : isPlayer2 ? player2Id : null;
   const opponentId = isPlayer1 ? player2Id : isPlayer2 ? player1Id : null;
 
-  // BPT requires a blind faction pick after the map is decided.
-  // game.blindPick (top-level) reflects the MatchBlindPick DB row; it is null
-  // both before the first lock AND for non-BPT modes. We use tournamentMode to
-  // distinguish the two cases.
-  const needsBlindPick = tournamentMode === 'BPT';
+  // Blind pick is required for BPT tournaments and for any match that has a
+  // MatchBlindPick row (Open Play matches always get one on creation).
+  const needsBlindPick = tournamentMode === 'BPT' || !!game.blindPick;
   const decisionComplete = Boolean(
     game.decision?.pickedMapId &&
       (!needsBlindPick || game.blindPick?.revealedAt),
