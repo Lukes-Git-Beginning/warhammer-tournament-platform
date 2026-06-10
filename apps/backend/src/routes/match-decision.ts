@@ -770,9 +770,10 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Validate tournament mode supports blind pick
+      // Blind pick is allowed for BPT tournaments and for Open Play matches
+      // (no tournament). Other tournament modes (SFT, etc.) do not use it.
       const mode = match.tournament?.mode as string | undefined;
-      if (mode !== 'BPT') {
+      if (match.tournament !== null && mode !== 'BPT') {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
           message: 'Blind pick is only available in BPT mode tournaments',

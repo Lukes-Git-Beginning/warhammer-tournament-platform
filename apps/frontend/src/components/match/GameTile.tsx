@@ -238,18 +238,41 @@ export function GameTile({
                 )
               ) : (
                 <div className="flex flex-col items-center gap-3">
-                  <p className="text-sm text-rizzotto-stone-400 text-center">
-                    {game.decision.mode === 'RANDOM'
-                      ? 'Drawing battlefield…'
-                      : 'Picking battlefield…'}
-                  </p>
+                  {/* Map is already decided — show it even before faction pick */}
+                  {game.decision.pickedMapId && pickedMap ? (
+                    <div className="flex flex-col items-center gap-1 w-full">
+                      <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider">Battlefield</span>
+                      <p className="text-sm font-semibold text-rizzotto-stone-100 text-center leading-tight">
+                        {pickedMap.name}
+                      </p>
+                      {pickedMap.image_url && (
+                        <button
+                          type="button"
+                          onClick={() => setMapLightbox(true)}
+                          className="w-full mt-1 overflow-hidden rounded border border-rizzotto-iron-600 hover:border-rizzotto-gold-500 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-rizzotto-gold-400"
+                          title="View map"
+                        >
+                          <img
+                            src={pickedMap.image_url}
+                            alt={pickedMap.name}
+                            className="w-full object-contain"
+                            loading="lazy"
+                          />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-rizzotto-stone-400 text-center">
+                      {game.decision.mode === 'RANDOM' ? 'Drawing battlefield…' : 'Picking battlefield…'}
+                    </p>
+                  )}
                   <Link
                     to="/matches/$matchId/decision"
                     params={{ matchId }}
                     className="text-sm text-rizzotto-gold-400 hover:underline"
                   >
                     {game.decision?.pickedMapId && needsBlindPick
-                      ? 'Go to faction selection →'
+                      ? 'Pick your faction →'
                       : 'Go to map selection →'}
                   </Link>
                 </div>
