@@ -5,7 +5,6 @@ import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Select } from '../ui/select';
 import { Textarea } from '../ui/textarea';
-import { AvailabilityHeatmap } from './AvailabilityHeatmap';
 import { ChallengeCalendar } from './ChallengeCalendar';
 
 interface ScheduledMatchupFormProps {
@@ -45,32 +44,29 @@ export function ScheduledMatchupForm({ onSuccess }: ScheduledMatchupFormProps) {
 
   return (
     <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        create.mutate();
-      }}
+      onSubmit={(e) => { e.preventDefault(); create.mutate(); }}
       className="space-y-5"
     >
       <div className="space-y-1.5">
         <Label>Format</Label>
-        <Select value={format} onChange={(e) => setFormat(e.target.value as MatchFormat)} className="w-48">
+        <Select value={format} onChange={(e) => setFormat(e.target.value as MatchFormat)} className="w-52">
           <option value="BO1">BO1 — Best of 1 (~30 min)</option>
           <option value="BO3">BO3 — Best of 3 (~90 min)</option>
           <option value="BO5">BO5 — Best of 5 (~150 min)</option>
         </Select>
       </div>
 
-      {/* 7-day pick calendar */}
       <div className="space-y-1.5">
-        <Label>Pick a start time</Label>
-        <ChallengeCalendar format={format} selected={selectedDate} onSelect={setSelectedDate} />
-      </div>
-
-      {/* Community heatmap for reference */}
-      <div className="space-y-1">
-        <p className="text-xs font-medium text-stone-400">When are others usually free?</p>
-        <p className="text-xs text-stone-500">Use the heatmap above to pick a time with good overlap.</p>
-        <AvailabilityHeatmap slots={matchmakingSlots} />
+        <Label>Pick a time</Label>
+        <p className="text-xs text-stone-500">
+          Warmer cells = more players have marked that time as free. Click to select your start time.
+        </p>
+        <ChallengeCalendar
+          format={format}
+          slots={matchmakingSlots}
+          selected={selectedDate}
+          onSelect={setSelectedDate}
+        />
       </div>
 
       <div className="space-y-1.5">
@@ -94,9 +90,7 @@ export function ScheduledMatchupForm({ onSuccess }: ScheduledMatchupFormProps) {
         <span className="text-sm text-stone-300">Post anonymously</span>
       </label>
 
-      {create.error && (
-        <p className="text-xs text-red-400">{String(create.error)}</p>
-      )}
+      {create.error && <p className="text-xs text-red-400">{String(create.error)}</p>}
 
       <Button type="submit" size="lg" disabled={create.isPending || !selectedDate} className="w-full">
         {create.isPending ? 'Posting...' : 'Post Challenge'}
