@@ -332,8 +332,18 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const mapPool = (match.tournament?.map_pool ?? []).map((p) => p.map_id);
+      let mapPool = (match.tournament?.map_pool ?? []).map((p) => p.map_id);
       const mode = (match.tournament?.map_decision_mode ?? 'RANDOM') as MapDecisionModeLiteral;
+
+      // For Open Play matches (no tournament) fall back to the global map pool,
+      // mirroring what createOpenPlayMatch does for game 1.
+      if (!match.tournament && mapPool.length === 0) {
+        const globalMaps = await fastify.prisma.map.findMany({
+          where: { deleted_at: null },
+          select: { id: true },
+        });
+        mapPool = globalMaps.map((m) => m.id);
+      }
 
       // Preset-only modes don't require a tournament map pool
       const needsPool = mode === 'RANDOM' || mode === 'RANDOM_NO_REPEAT' || mode === 'RANDOM_PICK_BAN' || mode === 'PICK_BAN';
