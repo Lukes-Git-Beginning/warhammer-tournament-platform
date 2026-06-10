@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { sendDm } from '../lib/discord-notify.js';
+import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 
 const QueueJoinSchema = z.object({
   format: z.enum(['BO1', 'BO3', 'BO5']),
@@ -54,29 +55,23 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       if (Array.isArray(result) && result.length === 2) {
         const [p1Id, p2Id] = result;
 
-        const match = await fastify.prisma.match.create({
-          data: {
-            type: 'OPEN_PLAY',
-            round: 0,
-            match_number: 0,
-            player1_id: p1Id,
-            player2_id: p2Id,
-            status: 'ONGOING',
-          },
-        });
+        const { matchId, mapName } = await createOpenPlayMatch(fastify.prisma, p1Id, p2Id);
 
         const [p1, p2] = await Promise.all([
           fastify.prisma.user.findUnique({ where: { id: p1Id }, select: { username: true, discord_id: true } }),
           fastify.prisma.user.findUnique({ where: { id: p2Id }, select: { username: true, discord_id: true } }),
         ]);
 
-        const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${match.id}`;
+        const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
+        const mapLine = mapName ? ` · Map: **${mapName}**` : '';
+        const dm = (opp: string) => `Match found! ${format} vs **${opp}**${mapLine} — pick your faction → ${matchUrl}`;
+
         await Promise.allSettled([
-          p1?.discord_id ? sendDm(p1.discord_id, `You've been matched! ${format} vs **${p2?.username ?? 'your opponent'}** → ${matchUrl}`) : Promise.resolve(),
-          p2?.discord_id ? sendDm(p2.discord_id, `You've been matched! ${format} vs **${p1?.username ?? 'your opponent'}** → ${matchUrl}`) : Promise.resolve(),
+          p1?.discord_id ? sendDm(p1.discord_id, dm(p2?.username ?? 'your opponent')) : Promise.resolve(),
+          p2?.discord_id ? sendDm(p2.discord_id, dm(p1?.username ?? 'your opponent')) : Promise.resolve(),
         ]);
 
-        return reply.code(200).send({ matched: true, match_id: match.id });
+        return reply.code(200).send({ matched: true, match_id: matchId });
       }
 
       return reply.code(200).send({ matched: false, position: await fastify.redis.llen(key) });

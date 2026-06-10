@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { sendDm } from '../lib/discord-notify.js';
+import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 
 const CreateMatchupSchema = z.object({
   format: z.enum(['BO1', 'BO3', 'BO5']),
@@ -124,24 +125,15 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Cannot accept your own matchup', statusCode: 422 });
       }
 
-      const match = await fastify.prisma.$transaction(async (tx) => {
-        const newMatch = await tx.match.create({
-          data: {
-            type: 'OPEN_PLAY',
-            round: 0,
-            match_number: 0,
-            player1_id: matchup.proposer_id,
-            player2_id: acceptorId,
-            status: 'ONGOING',
-          },
-        });
+      const { matchId, mapName } = await createOpenPlayMatch(
+        fastify.prisma,
+        matchup.proposer_id,
+        acceptorId,
+      );
 
-        await tx.scheduledMatchup.update({
-          where: { id },
-          data: { status: 'ACCEPTED', accepted_by_id: acceptorId, match_id: newMatch.id },
-        });
-
-        return newMatch;
+      await fastify.prisma.scheduledMatchup.update({
+        where: { id },
+        data: { status: 'ACCEPTED', accepted_by_id: acceptorId, match_id: matchId },
       });
 
       const acceptor = await fastify.prisma.user.findUnique({
@@ -149,9 +141,10 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
         select: { username: true, discord_id: true },
       });
 
-      const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${match.id}`;
+      const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
+      const mapLine = mapName ? ` · Map: **${mapName}**` : '';
       const dmText = (name: string) =>
-        `Your scheduled ${matchup.format} matchup has been accepted! Play vs **${name}** → ${matchUrl}`;
+        `Your scheduled ${matchup.format} matchup is on! vs **${name}**${mapLine} — pick your faction → ${matchUrl}`;
 
       await Promise.allSettled([
         sendDm(matchup.proposer.discord_id, dmText(acceptor?.username ?? 'your opponent')),
@@ -160,7 +153,7 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
           : Promise.resolve(),
       ]);
 
-      return reply.code(200).send({ match_id: match.id });
+      return reply.code(200).send({ match_id: matchId });
     },
   );
 
