@@ -31,14 +31,34 @@ interface SVGBracketProps {
   onMatchClick?: (matchId: string) => void;
 }
 
-/** Returns "A / B" (or "A", or "M3") for an undecided winner slot coming from a feeder match. */
-function makeSlotLabel(feeder: BracketNode, players?: Map<string, BracketPlayerInfo>): string {
-  const p1 = feeder.player1Id ? (players?.get(feeder.player1Id)?.name ?? null) : null;
-  const p2 = feeder.player2Id ? (players?.get(feeder.player2Id)?.name ?? null) : null;
-  if (p1 && p2) return `${p1} / ${p2}`;
-  if (p1) return p1;
-  if (p2) return p2;
-  return `M${feeder.matchNumber}`;
+/**
+ * Returns a slot label for an undecided bracket slot.
+ * - Completed feeder + loserSlot  → shows the loser's name (single name, confirmed)
+ * - Completed feeder + winnerSlot → shows the winner's name (single name, confirmed)
+ * - Pending feeder with 2 players → "P1 / P2" (exactly 2 candidates)
+ * - Pending feeder with 1 player  → that player's name
+ * - Pending feeder with 0 players → null → MatchNode shows "TBD"
+ */
+function makeSlotLabel(
+  feeder: BracketNode,
+  players?: Map<string, BracketPlayerInfo>,
+  isLoserSlot = false,
+): string | null {
+  const p1Name = feeder.player1Id ? (players?.get(feeder.player1Id)?.name ?? null) : null;
+  const p2Name = feeder.player2Id ? (players?.get(feeder.player2Id)?.name ?? null) : null;
+
+  if ((feeder.status === 'COMPLETED' || feeder.status === 'FORFEIT') && feeder.winnerId) {
+    if (isLoserSlot) {
+      const loserId = feeder.player1Id === feeder.winnerId ? feeder.player2Id : feeder.player1Id;
+      return loserId ? (players?.get(loserId)?.name ?? null) : null;
+    }
+    return players?.get(feeder.winnerId)?.name ?? null;
+  }
+
+  if (p1Name && p2Name) return `${p1Name} / ${p2Name}`;
+  if (p1Name) return p1Name;
+  if (p2Name) return p2Name;
+  return null; // feeder has no known players yet → show TBD
 }
 
 export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchClick }: SVGBracketProps) {
@@ -58,9 +78,14 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
         f.loserNextMatchId === target.matchId,
       )
       .sort((a, b) => a.matchNumber - b.matchNumber);
+    const isLoserFeeder = (f: BracketNode) => f.loserNextMatchId === target.matchId;
     slotLabels.set(target.matchId, {
-      p1: target.player1Id === null ? (feeders[0] ? makeSlotLabel(feeders[0], players) : null) : null,
-      p2: target.player2Id === null ? (feeders[1] ? makeSlotLabel(feeders[1], players) : null) : null,
+      p1: target.player1Id === null
+        ? (feeders[0] ? makeSlotLabel(feeders[0], players, isLoserFeeder(feeders[0])) : null)
+        : null,
+      p2: target.player2Id === null
+        ? (feeders[1] ? makeSlotLabel(feeders[1], players, isLoserFeeder(feeders[1])) : null)
+        : null,
     });
   }
 

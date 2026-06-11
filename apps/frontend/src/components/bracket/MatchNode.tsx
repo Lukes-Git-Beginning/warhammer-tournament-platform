@@ -134,9 +134,7 @@ export function MatchNode({
         >
           {match.player1Id
             ? (player1Name ?? match.player1Id)
-            : isBye
-              ? 'BYE'
-              : (p1SlotLabel ?? 'TBD')}
+            : (p1SlotLabel ?? (isBye ? 'BYE' : 'TBD'))}
         </span>
         {showFaction && match.player1Id && <FactionIndicator faction={player1Faction} />}
         {score1 && (
@@ -162,9 +160,7 @@ export function MatchNode({
         >
           {match.player2Id
             ? (player2Name ?? match.player2Id)
-            : isBye
-              ? 'BYE'
-              : (p2SlotLabel ?? 'TBD')}
+            : (p2SlotLabel ?? (isBye ? 'BYE' : 'TBD'))}
         </span>
         {showFaction && match.player2Id && <FactionIndicator faction={player2Faction} />}
         {score2 && (
