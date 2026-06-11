@@ -128,8 +128,7 @@ export function ChallengeCalendar({
       d.setDate(base.getDate() + i);
       return d;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // stable: only runs once on mount
 
   const matchupsByCell = useMemo(() => {
     const m = new Map<string, ScheduledMatchup[]>();

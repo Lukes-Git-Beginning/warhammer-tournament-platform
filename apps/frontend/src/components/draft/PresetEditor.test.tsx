@@ -54,14 +54,14 @@ describe('PresetEditor', () => {
     const onSave = vi.fn(async (_: CreateDraftPresetRequest) => {});
     const html = renderToStaticMarkup(<PresetEditor onSave={onSave} />);
     // Should render the basic form structure
-    expect(html).toContain('Grundeinstellungen');
-    expect(html).toContain('Preset speichern');
-    expect(html).toContain('+ Host-Zug');
-    expect(html).toContain('+ Guest-Zug');
-    expect(html).toContain('+ Admin-Reveal-Zug');
+    expect(html).toContain('Basic Settings');
+    expect(html).toContain('Save preset');
+    expect(html).toContain('+ Host Move');
+    expect(html).toContain('+ Guest Move');
+    expect(html).toContain('+ Admin Reveal Move');
   });
 
-  it('+ Host-Zug Button erhöht Turn-Count um 1', async () => {
+  it('+ Host Move Button erhöht Turn-Count um 1', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
 
@@ -75,9 +75,9 @@ describe('PresetEditor', () => {
     // Initially no turn rows
     const turnsBefore = container.querySelectorAll('[data-turn-item]').length;
 
-    // Click "+ Host-Zug"
+    // Click "+ Host Move"
     const buttons = Array.from(container.querySelectorAll('button'));
-    const hostButton = buttons.find((b) => b.textContent?.includes('+ Host-Zug'));
+    const hostButton = buttons.find((b) => b.textContent?.includes('+ Host Move'));
     expect(hostButton).toBeTruthy();
 
     await act(async () => {
@@ -86,16 +86,16 @@ describe('PresetEditor', () => {
 
     // Should have one more turn row — check by "Zug #" appearing in DOM
     const turnsAfter = container.querySelectorAll('button').length;
-    // At minimum the Löschen button for the new turn should exist
+    // At minimum the Delete button for the new turn should exist
     const deleteButtons = Array.from(container.querySelectorAll('button')).filter((b) =>
-      b.textContent?.includes('Löschen'),
+      b.textContent?.includes('Delete'),
     );
     expect(deleteButtons.length).toBe(turnsBefore + 1);
 
     document.body.removeChild(container);
   });
 
-  it('Löschen-Button entfernt den Zug aus der Liste', async () => {
+  it('Delete-Button entfernt den Zug aus der Liste', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
 
@@ -109,7 +109,7 @@ describe('PresetEditor', () => {
     // Add two turns
     const getHostBtn = () =>
       Array.from(container.querySelectorAll('button')).find((b) =>
-        b.textContent?.includes('+ Host-Zug'),
+        b.textContent?.includes('+ Host Move'),
       )!;
 
     await act(async () => { getHostBtn().click(); });
@@ -117,7 +117,7 @@ describe('PresetEditor', () => {
 
     const deleteBtns = () =>
       Array.from(container.querySelectorAll('button')).filter((b) =>
-        b.textContent?.includes('Löschen'),
+        b.textContent?.includes('Delete'),
       );
 
     expect(deleteBtns().length).toBe(2);

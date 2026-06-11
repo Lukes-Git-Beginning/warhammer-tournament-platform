@@ -27,16 +27,6 @@ function cellKey(row: number, col: number): string {
   return `${row},${col}`;
 }
 
-function allCells(): string[] {
-  const cells: string[] = [];
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 3; c++) {
-      cells.push(cellKey(r, c));
-    }
-  }
-  return cells;
-}
-
 // ---------------------------------------------------------------------------
 // Route plugin
 // ---------------------------------------------------------------------------

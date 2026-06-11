@@ -48,7 +48,7 @@ describe('StatsDashboard', () => {
     vi.mocked(getAdminStats).mockReturnValue(new Promise(() => {}));
 
     const html = renderWithQuery(<StatsDashboard />);
-    expect(html).toContain('Wird geladen');
+    expect(html).toContain('Loading…');
   });
 
   it('zeigt Fehlermeldung wenn Query fehlschlägt', () => {
@@ -132,6 +132,6 @@ describe('StatsDashboard Rendering (pre-hydrated QueryClient)', () => {
       </QueryClientProvider>,
     );
 
-    expect(html).toContain('Keine Daten');
+    expect(html).toContain('No data.');
   });
 });

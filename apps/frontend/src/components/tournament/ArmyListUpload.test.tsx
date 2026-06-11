@@ -100,7 +100,7 @@ describe('ArmyListUpload', () => {
 
     const button = container.querySelector('button');
     expect(button).not.toBeNull();
-    expect(button?.textContent).toContain('Hochladen');
+    expect(button?.textContent).toContain('Upload');
 
     document.body.removeChild(container);
   });

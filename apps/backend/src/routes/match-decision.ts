@@ -670,7 +670,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       let newBansTop = bansTop;
-      let newBansBottom = bansBottom;
+      const newBansBottom = bansBottom;
       let pickedMapId: string | null = null;
       let decidedAt: Date | null = null;
 

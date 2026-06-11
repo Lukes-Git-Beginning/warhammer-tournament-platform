@@ -72,8 +72,7 @@ export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled }:
     const onUp = () => { if (isDragging.current) applyDrag(); };
     window.addEventListener('mouseup', onUp);
     return () => window.removeEventListener('mouseup', onUp);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // onUp only references stable refs, no deps needed
 
   function highlightRect(anchor: Cell, current: Cell) {
     const rect = getRect(anchor, current);
