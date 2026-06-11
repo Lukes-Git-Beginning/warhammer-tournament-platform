@@ -666,14 +666,18 @@ function MatrixCountdown({ lastActionAt }: { lastActionAt: string }) {
   return <p className="text-xs text-rizzotto-stone-500 font-mono">{label}</p>;
 }
 
+type PlayerRef = { id: string; username: string; avatar_url?: string | null } | null | undefined;
+
 interface FactionMatrixPhaseProps {
   matchId: string;
   decision: MatchDecisionState;
   currentUserId: string;
   factions: FactionWithStatsDto[];
+  rowPlayer?: PlayerRef;
+  colPlayer?: PlayerRef;
 }
 
-function FactionMatrixPhase({ matchId, decision, currentUserId, factions }: FactionMatrixPhaseProps) {
+function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer }: FactionMatrixPhaseProps) {
   const queryClient = useQueryClient();
   const [selectedFactions, setSelectedFactions] = useState<string[]>([]);
   const [locking, setLocking] = useState(false);
@@ -792,6 +796,34 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions }: Fact
           <p className="mt-1 text-sm text-rizzotto-stone-400">{whoseTurnLabel} · {turnLabel}</p>
           {isMyTurn && mx.lastActionAt && <MatrixCountdown lastActionAt={mx.lastActionAt} />}
         </div>
+
+        {/* Player axis legend — rows = P1, cols = P2 */}
+        {(rowPlayer || colPlayer) && (
+          <div className="flex items-center justify-between w-full gap-4 text-xs text-rizzotto-stone-400">
+            <div className="flex items-center gap-1.5">
+              {rowPlayer?.avatar_url ? (
+                <img src={rowPlayer.avatar_url} alt="" className="h-5 w-5 rounded-full object-cover shrink-0" />
+              ) : (
+                <span className="h-5 w-5 rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-[9px] font-bold shrink-0">
+                  {(rowPlayer?.username ?? '?').slice(0, 2).toUpperCase()}
+                </span>
+              )}
+              <span>{rowPlayer?.id === currentUserId ? 'You' : (rowPlayer?.username ?? '—')}</span>
+              <span className="text-rizzotto-stone-600 text-[10px]">↕ rows</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-rizzotto-stone-600 text-[10px]">cols ↔</span>
+              <span>{colPlayer?.id === currentUserId ? 'You' : (colPlayer?.username ?? '—')}</span>
+              {colPlayer?.avatar_url ? (
+                <img src={colPlayer.avatar_url} alt="" className="h-5 w-5 rounded-full object-cover shrink-0" />
+              ) : (
+                <span className="h-5 w-5 rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-[9px] font-bold shrink-0">
+                  {(colPlayer?.username ?? '?').slice(0, 2).toUpperCase()}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-2">
           {[0, 1, 2].map((row) =>
@@ -1157,6 +1189,15 @@ export function MatchDecisionPage() {
     ? (matchDetail?.player1?.id === decision.bottomPlayerId ? matchDetail?.player1 : matchDetail?.player2)
     : null;
 
+  // For MATRIX: rows = match player1's factions, cols = match player2's factions
+  const matrixRowPlayerId = decision?.matchPlayer1Id ?? decision?.topPlayerId;
+  const matrixRowPlayer = matchDetail
+    ? (matchDetail.player1?.id === matrixRowPlayerId ? matchDetail.player1 : matchDetail.player2)
+    : null;
+  const matrixColPlayer = matchDetail
+    ? (matchDetail.player1?.id === matrixRowPlayerId ? matchDetail.player2 : matchDetail.player1)
+    : null;
+
   const isOrganizerOrAdmin =
     user && (user.role === 'ORGANIZER' || user.role === 'MODERATOR' || user.role === 'ADMIN');
 
@@ -1296,6 +1337,8 @@ export function MatchDecisionPage() {
                 decision={decision}
                 currentUserId={user.id}
                 factions={factions}
+                rowPlayer={matrixRowPlayer}
+                colPlayer={matrixColPlayer}
               />
             </motion.div>
           )}
