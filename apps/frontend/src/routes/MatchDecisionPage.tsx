@@ -816,7 +816,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
                   onMouseEnter={() => setHoveredCell(cell)}
                   onMouseLeave={() => setHoveredCell(null)}
                   className={[
-                    'relative flex flex-col gap-2 rounded border p-2 text-left',
+                    'relative flex flex-row rounded border overflow-hidden',
                     'transition-[border-color,background-color,opacity] duration-150',
                     isBanned
                       ? 'border-rizzotto-iron-700 bg-rizzotto-iron-900/40 opacity-40 cursor-default'
@@ -828,7 +828,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
                   ].join(' ')}
                 >
                   {isBanned && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden rounded">
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden rounded z-20">
                       <div className="absolute w-[141%] h-px bg-rizzotto-iron-500 rotate-45" />
                     </div>
                   )}
@@ -837,36 +837,37 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
                       <span className="font-display text-sm font-bold text-rizzotto-gold-400 tracking-widest uppercase">{actionLabel}</span>
                     </div>
                   )}
-                  {/* P1 row: avatar · name · faction logo · faction name */}
-                  <div className="flex items-center gap-1 min-w-0">
+                  {/* Left column — row player (P1) */}
+                  <div className="flex flex-col items-center gap-1.5 p-2 flex-1 min-w-0">
                     {rowPlayer?.avatar_url ? (
-                      <img src={rowPlayer.avatar_url} alt="" className="h-4 w-4 rounded-full object-cover shrink-0" />
+                      <img src={rowPlayer.avatar_url} alt="" className="rounded-full object-cover border border-rizzotto-iron-600 shrink-0" style={{ width: 60, height: 60 }} />
                     ) : (
-                      <span className="h-4 w-4 rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-[7px] font-bold shrink-0">
-                        {(rowPlayer?.username ?? '?').slice(0, 2).toUpperCase()}
+                      <span className="rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-xl font-semibold text-rizzotto-stone-300 select-none shrink-0" style={{ width: 60, height: 60 }}>
+                        {(rowPlayer?.username ?? '?').slice(0, 1).toUpperCase()}
                       </span>
                     )}
-                    <span className="text-[9px] text-rizzotto-stone-300 truncate shrink min-w-0">
+                    <span className="text-xs text-rizzotto-stone-300 text-center leading-tight break-words w-full">
                       {rowPlayer?.id === currentUserId ? 'You' : (rowPlayer?.username ?? '—')}
                     </span>
-                    {p1Entry && <FactionBadge colorHex={p1Entry.faction.color_hex} initials={p1Entry.faction.initials} name={p1Entry.faction.name} size="sm" iconUrl={p1Entry.faction.icon_url} />}
-                    <span className="text-[9px] text-rizzotto-stone-400 truncate shrink min-w-0">{p1Entry?.faction.name ?? '?'}</span>
+                    {p1Entry && <FactionBadge colorHex={p1Entry.faction.color_hex} initials={p1Entry.faction.initials} name={p1Entry.faction.name} size="lg" iconUrl={p1Entry.faction.icon_url} />}
+                    <span className="text-xs text-rizzotto-stone-400 text-center leading-tight break-words w-full">{p1Entry?.faction.name ?? '?'}</span>
                   </div>
-                  <span className="text-[8px] text-rizzotto-stone-600 self-center">vs</span>
-                  {/* P2 row: avatar · name · faction logo · faction name */}
-                  <div className="flex items-center gap-1 min-w-0">
+                  {/* Vertical divider */}
+                  <div className="w-px bg-rizzotto-iron-700 self-stretch" />
+                  {/* Right column — col player (P2) */}
+                  <div className="flex flex-col items-center gap-1.5 p-2 flex-1 min-w-0">
                     {colPlayer?.avatar_url ? (
-                      <img src={colPlayer.avatar_url} alt="" className="h-4 w-4 rounded-full object-cover shrink-0" />
+                      <img src={colPlayer.avatar_url} alt="" className="rounded-full object-cover border border-rizzotto-iron-600 shrink-0" style={{ width: 60, height: 60 }} />
                     ) : (
-                      <span className="h-4 w-4 rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-[7px] font-bold shrink-0">
-                        {(colPlayer?.username ?? '?').slice(0, 2).toUpperCase()}
+                      <span className="rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-xl font-semibold text-rizzotto-stone-300 select-none shrink-0" style={{ width: 60, height: 60 }}>
+                        {(colPlayer?.username ?? '?').slice(0, 1).toUpperCase()}
                       </span>
                     )}
-                    <span className="text-[9px] text-rizzotto-stone-300 truncate shrink min-w-0">
+                    <span className="text-xs text-rizzotto-stone-300 text-center leading-tight break-words w-full">
                       {colPlayer?.id === currentUserId ? 'You' : (colPlayer?.username ?? '—')}
                     </span>
-                    {p2Entry && <FactionBadge colorHex={p2Entry.faction.color_hex} initials={p2Entry.faction.initials} name={p2Entry.faction.name} size="sm" iconUrl={p2Entry.faction.icon_url} />}
-                    <span className="text-[9px] text-rizzotto-stone-400 truncate shrink min-w-0">{p2Entry?.faction.name ?? '?'}</span>
+                    {p2Entry && <FactionBadge colorHex={p2Entry.faction.color_hex} initials={p2Entry.faction.initials} name={p2Entry.faction.name} size="lg" iconUrl={p2Entry.faction.icon_url} />}
+                    <span className="text-xs text-rizzotto-stone-400 text-center leading-tight break-words w-full">{p2Entry?.faction.name ?? '?'}</span>
                   </div>
                 </button>
               );
@@ -885,6 +886,10 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
         Choose 3 factions secretly — the matchup grid is revealed only after both players lock in.
         ({selectedFactions.length}/3 selected)
       </p>
+      {/* Show countdown if opponent already locked — this player is being timed */}
+      {mx?.firstLockedAt && (
+        <BlindPickCountdown firstLockedAt={mx.firstLockedAt} timeoutMs={2 * 60 * 1000} />
+      )}
 
       <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-6">
         {factions.map(({ faction }) => {
