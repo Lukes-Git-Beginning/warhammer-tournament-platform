@@ -172,16 +172,20 @@ async function drawMapsWithNoRepeat(
   });
 }
 
-/** Maps a match phase to the canonical preset config key.
- * Named stages (SF, Final, 3rd place) use semantic keys; all other rounds
- * (Swiss, early elim / QF) fall back to swiss_N so the host can configure
- * them with numbered round presets. */
-function buildRoundKey(phase: string | null, round: number): string {
+/** Maps a match phase + bracket side to the canonical preset config key.
+ * Named stages (SF, Final, 3rd place) use semantic keys.
+ * DE matches use wb_round_N / lb_round_N with bracket-side-relative round numbers.
+ * Swiss / SE early rounds fall back to swiss_N. */
+function buildRoundKey(phase: string | null, bracketSide: string | null, round: number): string {
   switch (phase) {
     case 'PLAYOFF_SF': return 'playoff_sf';
     case 'PLAYOFF_FINAL': return 'playoff_final';
     case 'PLAYOFF_THIRD_PLACE': return 'playoff_third';
-    default: return `swiss_${round}`;
+    default:
+      if (bracketSide === 'WINNERS') return `wb_round_${round}`;
+      if (bracketSide === 'LOSERS') return `lb_round_${round}`;
+      if (bracketSide === 'GRAND_FINAL') return 'playoff_final';
+      return `swiss_${round}`;
   }
 }
 
@@ -189,9 +193,14 @@ function buildRoundKey(phase: string | null, round: number): string {
  * Liest den Preset-Eintrag für eine Runde aus map_preset_config.
  * Gibt ein Array von Maps zurück (HOST_PRESET: string[], HOST_PRESET_PICK_BAN: string[][]).
  */
-function getPresetForRound(config: unknown, phase: string | null, round: number): unknown[] | null {
+function getPresetForRound(
+  config: unknown,
+  phase: string | null,
+  bracketSide: string | null,
+  round: number,
+): unknown[] | null {
   if (!config || typeof config !== 'object') return null;
-  const key = buildRoundKey(phase, round);
+  const key = buildRoundKey(phase, bracketSide, round);
   const entry = (config as Record<string, unknown>)[key];
   if (!Array.isArray(entry)) return null;
   return entry;
@@ -272,6 +281,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           player2_id: true,
           round: true,
           phase: true,
+          bracket_side: true,
           tournament: {
             select: {
               id: true,
@@ -375,6 +385,16 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       let pickedMapId: string | null = null;
       let activePool: string[] = [];
 
+      // Normalize LB round to 1-indexed (LB rounds start at R_W+1 in the bracket generator).
+      let presetRound = match.round;
+      if (match.bracket_side === 'LOSERS' && match.tournament?.id) {
+        const { _min } = await fastify.prisma.match.aggregate({
+          where: { tournament_id: match.tournament.id, bracket_side: 'LOSERS', deleted_at: null },
+          _min: { round: true },
+        });
+        presetRound = match.round - (_min.round ?? match.round) + 1;
+      }
+
       switch (mode) {
         case 'RANDOM':
           pickedMapId = deterministicMapPick(mapPool, seed);
@@ -388,12 +408,12 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         case 'HOST_PRESET': {
-          const preset = getPresetForRound(match.tournament?.map_preset_config ?? null, match.phase, match.round);
+          const preset = getPresetForRound(match.tournament?.map_preset_config ?? null, match.phase, match.bracket_side, presetRound);
           const mapForGame = preset?.[gameNumber - 1] as string | undefined;
           if (!mapForGame || typeof mapForGame !== 'string') {
             return reply.code(422).send({
               error: 'UnprocessableEntity',
-              message: `No preset map configured for round ${match.round}, game ${gameNumber}`,
+              message: `No preset map configured for round ${presetRound}, game ${gameNumber}`,
               statusCode: 422,
             });
           }
@@ -402,13 +422,13 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         case 'HOST_PRESET_PICK_BAN': {
-          const preset = getPresetForRound(match.tournament?.map_preset_config ?? null, match.phase, match.round);
+          const preset = getPresetForRound(match.tournament?.map_preset_config ?? null, match.phase, match.bracket_side, presetRound);
           const gameSets = preset as unknown[] | null;
           const setForGame = gameSets?.[gameNumber - 1];
           if (!Array.isArray(setForGame) || setForGame.length !== 3) {
             return reply.code(422).send({
               error: 'UnprocessableEntity',
-              message: `No 3-map preset configured for round ${match.round}, game ${gameNumber}`,
+              message: `No 3-map preset configured for round ${presetRound}, game ${gameNumber}`,
               statusCode: 422,
             });
           }

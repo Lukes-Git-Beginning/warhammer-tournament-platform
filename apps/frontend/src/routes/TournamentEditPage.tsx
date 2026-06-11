@@ -96,15 +96,23 @@ function buildRoundKeys(form: Partial<EditFormData>): { key: string; label: stri
     }
   }
 
-  const isElim = form.format === 'SINGLE_ELIMINATION' || form.format === 'DOUBLE_ELIMINATION';
+  const isSE = form.format === 'SINGLE_ELIMINATION';
+  const isDE = form.format === 'DOUBLE_ELIMINATION';
 
-  if (isElim) {
+  if (isSE) {
     for (let i = 1; i <= 4; i++) {
       keys.push({ key: `swiss_${i}`, label: `Elim Round ${i}`, maxGames: swissGames });
     }
+  } else if (isDE) {
+    for (let i = 1; i <= 4; i++) {
+      keys.push({ key: `wb_round_${i}`, label: `WB Round ${i}`, maxGames: swissGames });
+    }
+    for (let i = 1; i <= 6; i++) {
+      keys.push({ key: `lb_round_${i}`, label: `LB Round ${i}`, maxGames: swissGames });
+    }
   }
 
-  const hasPlayoffs = isElim || form.playoff_format === 'TOP4' || form.playoff_format === 'TOP8';
+  const hasPlayoffs = isSE || isDE || form.playoff_format === 'TOP4' || form.playoff_format === 'TOP8';
 
   if (hasPlayoffs) {
     if (form.playoff_format === 'TOP8') {
@@ -112,7 +120,7 @@ function buildRoundKeys(form: Partial<EditFormData>): { key: string; label: stri
     }
     keys.push({ key: 'playoff_sf', label: 'Semifinals', maxGames: playoffGames });
     keys.push({ key: 'playoff_final', label: 'Grand Final', maxGames: finaleGames });
-    if (form.has_third_place_match && form.format !== 'DOUBLE_ELIMINATION') {
+    if (form.has_third_place_match && !isDE) {
       keys.push({ key: 'playoff_third', label: 'Small Final (3rd Place)', maxGames: playoffGames });
     }
   }
