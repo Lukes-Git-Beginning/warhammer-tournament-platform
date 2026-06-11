@@ -56,8 +56,8 @@ function makeSlotLabel(
   }
 
   if (p1Name && p2Name) return `${p1Name} / ${p2Name}`;
-  if (p1Name) return p1Name;
-  if (p2Name) return p2Name;
+  if (p1Name) return `${p1Name} / TBD`;
+  if (p2Name) return `${p2Name} / TBD`;
   return null; // feeder has no known players yet → show TBD
 }
 
