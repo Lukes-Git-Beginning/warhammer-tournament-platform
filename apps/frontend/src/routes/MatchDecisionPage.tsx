@@ -797,34 +797,6 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
           {isMyTurn && mx.lastActionAt && <MatrixCountdown lastActionAt={mx.lastActionAt} />}
         </div>
 
-        {/* Player axis legend — rows = P1, cols = P2 */}
-        {(rowPlayer || colPlayer) && (
-          <div className="flex items-center justify-between w-full gap-4 text-xs text-rizzotto-stone-400">
-            <div className="flex items-center gap-1.5">
-              {rowPlayer?.avatar_url ? (
-                <img src={rowPlayer.avatar_url} alt="" className="h-5 w-5 rounded-full object-cover shrink-0" />
-              ) : (
-                <span className="h-5 w-5 rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-[9px] font-bold shrink-0">
-                  {(rowPlayer?.username ?? '?').slice(0, 2).toUpperCase()}
-                </span>
-              )}
-              <span>{rowPlayer?.id === currentUserId ? 'You' : (rowPlayer?.username ?? '—')}</span>
-              <span className="text-rizzotto-stone-600 text-[10px]">↕ rows</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-rizzotto-stone-600 text-[10px]">cols ↔</span>
-              <span>{colPlayer?.id === currentUserId ? 'You' : (colPlayer?.username ?? '—')}</span>
-              {colPlayer?.avatar_url ? (
-                <img src={colPlayer.avatar_url} alt="" className="h-5 w-5 rounded-full object-cover shrink-0" />
-              ) : (
-                <span className="h-5 w-5 rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-[9px] font-bold shrink-0">
-                  {(colPlayer?.username ?? '?').slice(0, 2).toUpperCase()}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
         <div className="grid grid-cols-3 gap-2">
           {[0, 1, 2].map((row) =>
             [0, 1, 2].map((col) => {
@@ -844,7 +816,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
                   onMouseEnter={() => setHoveredCell(cell)}
                   onMouseLeave={() => setHoveredCell(null)}
                   className={[
-                    'relative flex flex-col items-center gap-1 rounded border p-3 text-center min-w-[80px]',
+                    'relative flex flex-col gap-2 rounded border p-2 text-left',
                     'transition-[border-color,background-color,opacity] duration-150',
                     isBanned
                       ? 'border-rizzotto-iron-700 bg-rizzotto-iron-900/40 opacity-40 cursor-default'
@@ -865,14 +837,36 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
                       <span className="font-display text-sm font-bold text-rizzotto-gold-400 tracking-widest uppercase">{actionLabel}</span>
                     </div>
                   )}
-                  <div className="flex flex-col items-center gap-0.5">
+                  {/* P1 row: avatar · name · faction logo · faction name */}
+                  <div className="flex items-center gap-1 min-w-0">
+                    {rowPlayer?.avatar_url ? (
+                      <img src={rowPlayer.avatar_url} alt="" className="h-4 w-4 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <span className="h-4 w-4 rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-[7px] font-bold shrink-0">
+                        {(rowPlayer?.username ?? '?').slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="text-[9px] text-rizzotto-stone-300 truncate shrink min-w-0">
+                      {rowPlayer?.id === currentUserId ? 'You' : (rowPlayer?.username ?? '—')}
+                    </span>
                     {p1Entry && <FactionBadge colorHex={p1Entry.faction.color_hex} initials={p1Entry.faction.initials} name={p1Entry.faction.name} size="sm" iconUrl={p1Entry.faction.icon_url} />}
-                    <span className="text-[9px] text-rizzotto-stone-400 uppercase tracking-wide">{p1Entry?.faction.initials ?? '?'}</span>
+                    <span className="text-[9px] text-rizzotto-stone-400 truncate shrink min-w-0">{p1Entry?.faction.name ?? '?'}</span>
                   </div>
-                  <span className="text-[8px] text-rizzotto-stone-600">vs</span>
-                  <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-[8px] text-rizzotto-stone-600 self-center">vs</span>
+                  {/* P2 row: avatar · name · faction logo · faction name */}
+                  <div className="flex items-center gap-1 min-w-0">
+                    {colPlayer?.avatar_url ? (
+                      <img src={colPlayer.avatar_url} alt="" className="h-4 w-4 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <span className="h-4 w-4 rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-[7px] font-bold shrink-0">
+                        {(colPlayer?.username ?? '?').slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="text-[9px] text-rizzotto-stone-300 truncate shrink min-w-0">
+                      {colPlayer?.id === currentUserId ? 'You' : (colPlayer?.username ?? '—')}
+                    </span>
                     {p2Entry && <FactionBadge colorHex={p2Entry.faction.color_hex} initials={p2Entry.faction.initials} name={p2Entry.faction.name} size="sm" iconUrl={p2Entry.faction.icon_url} />}
-                    <span className="text-[9px] text-rizzotto-stone-400 uppercase tracking-wide">{p2Entry?.faction.initials ?? '?'}</span>
+                    <span className="text-[9px] text-rizzotto-stone-400 truncate shrink min-w-0">{p2Entry?.faction.name ?? '?'}</span>
                   </div>
                 </button>
               );

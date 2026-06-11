@@ -112,7 +112,8 @@ export function GameTile({
   const needsBlindPick = tournamentMode === 'BPT' || !!game.blindPick;
   const decisionComplete = Boolean(
     game.decision?.pickedMapId &&
-      (!needsBlindPick || game.blindPick?.revealedAt),
+      (!needsBlindPick || game.blindPick?.revealedAt) &&
+      (tournamentMode !== 'MATRIX' || (game.player1FactionId != null && game.player2FactionId != null)),
   );
 
   const isReporter = game.reportedWinnerId !== null && game.reporterId === currentUserId;
@@ -271,9 +272,11 @@ export function GameTile({
                     params={{ matchId }}
                     className="text-sm text-rizzotto-gold-400 hover:underline"
                   >
-                    {game.decision?.pickedMapId && needsBlindPick
-                      ? 'Pick your faction →'
-                      : 'Go to map selection →'}
+                    {game.decision?.pickedMapId && tournamentMode === 'MATRIX'
+                      ? 'Continue faction picking →'
+                      : game.decision?.pickedMapId && needsBlindPick
+                        ? 'Pick your faction →'
+                        : 'Go to map selection →'}
                   </Link>
                 </div>
               )}
