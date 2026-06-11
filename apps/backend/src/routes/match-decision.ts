@@ -172,9 +172,15 @@ async function drawMapsWithNoRepeat(
   });
 }
 
-/** Baut den Round-Key für map_preset_config aus Phase und Runden-Nummer. */
+/** Maps a match phase to the canonical preset config key. */
 function buildRoundKey(phase: string | null, round: number): string {
-  return `${phase ?? 'swiss'}_${round}`;
+  switch (phase) {
+    case 'PLAYOFF_QF': return 'playoff_qf';
+    case 'PLAYOFF_SF': return 'playoff_sf';
+    case 'PLAYOFF_FINAL': return 'playoff_final';
+    case 'PLAYOFF_THIRD_PLACE': return 'playoff_third';
+    default: return `swiss_${round}`;
+  }
 }
 
 /**

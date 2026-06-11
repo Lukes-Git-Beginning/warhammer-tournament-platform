@@ -84,22 +84,32 @@ function formatToMaxGames(fmt?: string): number {
 
 function buildRoundKeys(form: Partial<EditFormData>): { key: string; label: string; maxGames: number }[] {
   const keys: { key: string; label: string; maxGames: number }[] = [];
-  if (form.format !== 'SWISS' && form.format !== 'LIECHTENSTEIN') return keys;
-  const rounds = form.rounds_count ?? 5;
   const swissGames = formatToMaxGames(form.swiss_match_format);
   const playoffGames = formatToMaxGames(form.playoff_match_format);
   const finaleGames = formatToMaxGames(form.finale_match_format);
-  for (let i = 1; i <= rounds; i++) {
-    keys.push({ key: `swiss_${i}`, label: `Swiss Round ${i}`, maxGames: swissGames });
+
+  if (form.format === 'SWISS' || form.format === 'LIECHTENSTEIN') {
+    const rounds = form.rounds_count ?? 5;
+    const roundLabel = form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Round' : 'Swiss Round';
+    for (let i = 1; i <= rounds; i++) {
+      keys.push({ key: `swiss_${i}`, label: `${roundLabel} ${i}`, maxGames: swissGames });
+    }
   }
-  if (form.playoff_format === 'TOP4') {
-    keys.push({ key: 'playoff_1', label: 'Semifinal', maxGames: playoffGames });
-    keys.push({ key: 'playoff_2', label: 'Final', maxGames: finaleGames });
-  } else if (form.playoff_format === 'TOP8') {
-    keys.push({ key: 'playoff_1', label: 'Quarterfinal', maxGames: playoffGames });
-    keys.push({ key: 'playoff_2', label: 'Semifinal', maxGames: playoffGames });
-    keys.push({ key: 'playoff_3', label: 'Final', maxGames: finaleGames });
+
+  const isElim = form.format === 'SINGLE_ELIMINATION' || form.format === 'DOUBLE_ELIMINATION';
+  const hasPlayoffs = isElim || form.playoff_format === 'TOP4' || form.playoff_format === 'TOP8';
+
+  if (hasPlayoffs) {
+    if (form.playoff_format === 'TOP8' || isElim) {
+      keys.push({ key: 'playoff_qf', label: isElim ? 'Quarterfinals (8+ players)' : 'Quarterfinals', maxGames: playoffGames });
+    }
+    keys.push({ key: 'playoff_sf', label: 'Semifinals', maxGames: playoffGames });
+    keys.push({ key: 'playoff_final', label: 'Grand Final', maxGames: finaleGames });
+    if (form.has_third_place_match && form.format !== 'DOUBLE_ELIMINATION') {
+      keys.push({ key: 'playoff_third', label: 'Small Final (3rd Place)', maxGames: playoffGames });
+    }
   }
+
   return keys;
 }
 
