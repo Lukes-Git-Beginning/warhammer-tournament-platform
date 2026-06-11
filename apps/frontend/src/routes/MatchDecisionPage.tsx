@@ -816,7 +816,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
                   onMouseEnter={() => setHoveredCell(cell)}
                   onMouseLeave={() => setHoveredCell(null)}
                   className={[
-                    'relative flex flex-row rounded border overflow-hidden',
+                    'relative aspect-square grid grid-cols-[1fr_auto_1fr] rounded border overflow-hidden',
                     'transition-[border-color,background-color,opacity] duration-150',
                     isBanned
                       ? 'border-rizzotto-iron-700 bg-rizzotto-iron-900/40 opacity-40 cursor-default'
@@ -837,37 +837,45 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
                       <span className="font-display text-sm font-bold text-rizzotto-gold-400 tracking-widest uppercase">{actionLabel}</span>
                     </div>
                   )}
-                  {/* Left column — row player (P1) */}
-                  <div className="flex flex-col items-center gap-1.5 p-2 flex-1 min-w-0">
+                  {/* Left column — row player (P1): grid rows keep items height-synced with P2 */}
+                  <div className="grid grid-rows-[60px_2rem_60px_2rem] gap-y-1.5 items-center justify-items-center p-2">
                     {rowPlayer?.avatar_url ? (
-                      <img src={rowPlayer.avatar_url} alt="" className="rounded-full object-cover border border-rizzotto-iron-600 shrink-0" style={{ width: 60, height: 60 }} />
+                      <img src={rowPlayer.avatar_url} alt="" className="rounded-full object-cover border border-rizzotto-iron-600" style={{ width: 60, height: 60 }} />
                     ) : (
-                      <span className="rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-xl font-semibold text-rizzotto-stone-300 select-none shrink-0" style={{ width: 60, height: 60 }}>
+                      <span className="rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-xl font-semibold text-rizzotto-stone-300 select-none" style={{ width: 60, height: 60 }}>
                         {(rowPlayer?.username ?? '?').slice(0, 1).toUpperCase()}
                       </span>
                     )}
-                    <span className="text-xs text-rizzotto-stone-300 text-center leading-tight break-words w-full">
+                    <span className="text-xs text-rizzotto-stone-300 text-center leading-tight line-clamp-2 w-full self-center">
                       {rowPlayer?.id === currentUserId ? 'You' : (rowPlayer?.username ?? '—')}
                     </span>
-                    {p1Entry && <FactionBadge colorHex={p1Entry.faction.color_hex} initials={p1Entry.faction.initials} name={p1Entry.faction.name} size="lg" iconUrl={p1Entry.faction.icon_url} />}
-                    <span className="text-xs text-rizzotto-stone-400 text-center leading-tight break-words w-full">{p1Entry?.faction.name ?? '?'}</span>
+                    {p1Entry
+                      ? <FactionBadge colorHex={p1Entry.faction.color_hex} initials={p1Entry.faction.initials} name={p1Entry.faction.name} size="lg" iconUrl={p1Entry.faction.icon_url} />
+                      : <span style={{ width: 60, height: 60 }} />}
+                    <span className="text-xs text-rizzotto-stone-400 text-center leading-tight line-clamp-2 w-full self-center">{p1Entry?.faction.name ?? '?'}</span>
                   </div>
-                  {/* Vertical divider */}
-                  <div className="w-px bg-rizzotto-iron-700 self-stretch" />
+                  {/* Vertical divider with "vs" in the middle */}
+                  <div className="flex flex-col items-center self-stretch py-2">
+                    <div className="flex-1 w-px bg-rizzotto-iron-500" />
+                    <span className="text-[9px] font-semibold text-rizzotto-stone-500 tracking-wide py-1 select-none">vs</span>
+                    <div className="flex-1 w-px bg-rizzotto-iron-500" />
+                  </div>
                   {/* Right column — col player (P2) */}
-                  <div className="flex flex-col items-center gap-1.5 p-2 flex-1 min-w-0">
+                  <div className="grid grid-rows-[60px_2rem_60px_2rem] gap-y-1.5 items-center justify-items-center p-2">
                     {colPlayer?.avatar_url ? (
-                      <img src={colPlayer.avatar_url} alt="" className="rounded-full object-cover border border-rizzotto-iron-600 shrink-0" style={{ width: 60, height: 60 }} />
+                      <img src={colPlayer.avatar_url} alt="" className="rounded-full object-cover border border-rizzotto-iron-600" style={{ width: 60, height: 60 }} />
                     ) : (
-                      <span className="rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-xl font-semibold text-rizzotto-stone-300 select-none shrink-0" style={{ width: 60, height: 60 }}>
+                      <span className="rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-xl font-semibold text-rizzotto-stone-300 select-none" style={{ width: 60, height: 60 }}>
                         {(colPlayer?.username ?? '?').slice(0, 1).toUpperCase()}
                       </span>
                     )}
-                    <span className="text-xs text-rizzotto-stone-300 text-center leading-tight break-words w-full">
+                    <span className="text-xs text-rizzotto-stone-300 text-center leading-tight line-clamp-2 w-full self-center">
                       {colPlayer?.id === currentUserId ? 'You' : (colPlayer?.username ?? '—')}
                     </span>
-                    {p2Entry && <FactionBadge colorHex={p2Entry.faction.color_hex} initials={p2Entry.faction.initials} name={p2Entry.faction.name} size="lg" iconUrl={p2Entry.faction.icon_url} />}
-                    <span className="text-xs text-rizzotto-stone-400 text-center leading-tight break-words w-full">{p2Entry?.faction.name ?? '?'}</span>
+                    {p2Entry
+                      ? <FactionBadge colorHex={p2Entry.faction.color_hex} initials={p2Entry.faction.initials} name={p2Entry.faction.name} size="lg" iconUrl={p2Entry.faction.icon_url} />
+                      : <span style={{ width: 60, height: 60 }} />}
+                    <span className="text-xs text-rizzotto-stone-400 text-center leading-tight line-clamp-2 w-full self-center">{p2Entry?.faction.name ?? '?'}</span>
                   </div>
                 </button>
               );
