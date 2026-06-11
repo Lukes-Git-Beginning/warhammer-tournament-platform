@@ -4,6 +4,7 @@ import { takeFactionsSnapshot } from '../lib/faction-snapshot.js';
 import { notifyCheckInReminder } from '../lib/discord-notify.js';
 import { autoConfirmExpiredGameResults } from '../lib/match-games.js';
 import { autoResolveStaleBlindPicks } from '../lib/blind-pick-auto-resolve.js';
+import { autoResolveStaleMatrixActions } from '../lib/matrix-auto-resolve.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -225,6 +226,21 @@ export default fp(
       { timezone: 'UTC' },
     );
 
+    // -----------------------------------------------------------------------
+    // Matrix auto-resolve — every 15 seconds via setInterval
+    // Ban/pick timeout is 15s, too short for node-cron (1-minute resolution).
+    // -----------------------------------------------------------------------
+    const matrixInterval = setInterval(async () => {
+      try {
+        const count = await autoResolveStaleMatrixActions(fastify);
+        if (count > 0) {
+          fastify.log.info({ count }, 'Matrix auto-resolve ran');
+        }
+      } catch (err) {
+        fastify.log.error({ err }, 'Matrix auto-resolve failed');
+      }
+    }, 15_000);
+
     fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask]);
 
     fastify.addHook('onClose', async () => {
@@ -234,6 +250,7 @@ export default fp(
       blindPickTask.stop();
       matchupExpiryTask.stop();
       queueCleanupTask.stop();
+      clearInterval(matrixInterval);
     });
   },
   { name: 'cron', dependencies: ['db'] },

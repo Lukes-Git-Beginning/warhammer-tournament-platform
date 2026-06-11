@@ -66,7 +66,7 @@ type EditFormData = {
   map_pool: string[];
   map_preset_config: MapPresetConfig | null;
   format: Tournament['format'];
-  mode: 'BPT' | 'SFT' | 'SLT';
+  mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
   faction_pool: string[];
   visibility: 'PUBLIC' | 'PRIVATE';
 };
@@ -177,7 +177,7 @@ function buildInitialForm(t: Tournament): EditFormData {
     map_pool: (t.map_pool ?? []).map((m) => m.id),
     map_preset_config: (t.map_preset_config as MapPresetConfig | null) ?? null,
     format: t.format,
-    mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT') ? t.mode : 'BPT',
+    mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX') ? t.mode : 'BPT',
     faction_pool: t.faction_allowlist ?? [],
     visibility: t.visibility ?? 'PUBLIC',
   };
@@ -509,6 +509,7 @@ export function TournamentEditPage() {
                   <option value="BPT">BPT — Blind Pick Tournament</option>
                   <option value="SFT">SFT — Single Faction Tournament</option>
                   <option value="SLT">SLT — Single List Tournament</option>
+                  <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
                 </Select>
               )}
             </div>

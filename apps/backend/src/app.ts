@@ -29,6 +29,7 @@ import tournamentLifecycleRoutes from './routes/tournament-lifecycle.js';
 import matchReportsRoutes from './routes/match-reports.js';
 import mapsRoutes from './routes/maps.js';
 import matchDecisionRoutes from './routes/match-decision.js';
+import factionMatrixRoutes from './routes/faction-matrix.js';
 import matchGamesRoutes from './routes/match-games.js';
 import tournamentArmyListsRoutes from './routes/tournament-army-lists.js';
 import openPlayQueueRoutes from './routes/open-play-queue.js';
@@ -113,6 +114,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(matchReportsRoutes);
   await app.register(mapsRoutes);
   await app.register(matchDecisionRoutes);
+  await app.register(factionMatrixRoutes);
   await app.register(matchGamesRoutes);
   await app.register(tournamentArmyListsRoutes);
   await app.register(openPlayQueueRoutes);

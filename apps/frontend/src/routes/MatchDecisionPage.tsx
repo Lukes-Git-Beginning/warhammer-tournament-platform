@@ -8,6 +8,8 @@ import {
   forceResolveDecision,
   banMap,
   lockBlindPick,
+  lockFactionMatrix,
+  banMatrixCell,
   getFactions,
 } from '@/lib/api';
 import type { MatchDecisionState, MapDto } from '@/lib/api';
@@ -642,6 +644,263 @@ function BlindPickPhase({
 }
 
 // ---------------------------------------------------------------------------
+// 3×3 Faction Matrix Phase
+// ---------------------------------------------------------------------------
+
+function MatrixCountdown({ lastActionAt }: { lastActionAt: string }) {
+  const [label, setLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    const deadline = new Date(new Date(lastActionAt).getTime() + 15_000);
+    function tick() {
+      const diff = deadline.getTime() - Date.now();
+      if (diff <= 0) { setLabel('Auto-banning now…'); return; }
+      setLabel(`Auto-ban in ${Math.ceil(diff / 1000)}s`);
+    }
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [lastActionAt]);
+
+  if (!label) return null;
+  return <p className="text-xs text-rizzotto-stone-500 font-mono">{label}</p>;
+}
+
+interface FactionMatrixPhaseProps {
+  matchId: string;
+  decision: MatchDecisionState;
+  currentUserId: string;
+  factions: FactionWithStatsDto[];
+}
+
+function FactionMatrixPhase({ matchId, decision, currentUserId, factions }: FactionMatrixPhaseProps) {
+  const queryClient = useQueryClient();
+  const [selectedFactions, setSelectedFactions] = useState<string[]>([]);
+  const [locking, setLocking] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
+  const [hoveredCell, setHoveredCell] = useState<string | null>(null);
+
+  const mx = decision.factionMatrix;
+  const isPlayer1 = decision.matchPlayer1Id
+    ? decision.matchPlayer1Id === currentUserId
+    : decision.topPlayerId === currentUserId;
+
+  const myLocked = isPlayer1 ? mx?.p1Locked : mx?.p2Locked;
+  const revealed = Boolean(mx?.revealedAt);
+  const decided = Boolean(mx?.decidedAt);
+  const bans = mx?.bans ?? [];
+
+  let subPhase: 'blind' | 'waiting' | 'ban' | 'complete';
+  if (decided) subPhase = 'complete';
+  else if (revealed) subPhase = 'ban';
+  else if (myLocked) subPhase = 'waiting';
+  else subPhase = 'blind';
+
+  const myTurn = (): boolean => {
+    if (!mx || !revealed || decided) return false;
+    const isPick = bans.length === 7;
+    if (isPick) return currentUserId === mx.bottomPlayerId;
+    return bans.length % 2 === 0 ? currentUserId === mx.topPlayerId : currentUserId === mx.bottomPlayerId;
+  };
+  const isMyTurn = myTurn();
+  const isPick = bans.length >= 7;
+
+  async function handleLock() {
+    if (selectedFactions.length !== 3) return;
+    setLocking(true);
+    setLockError(null);
+    try {
+      await lockFactionMatrix(matchId, selectedFactions);
+      await queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
+    } catch (err) {
+      setLockError(err instanceof Error ? err.message : 'Lock failed — try again.');
+    } finally {
+      setLocking(false);
+    }
+  }
+
+  async function handleCellAction(row: number, col: number) {
+    if (!isMyTurn) return;
+    const cell = `${row},${col}`;
+    if (bans.includes(cell)) return;
+    try {
+      await banMatrixCell(matchId, row, col);
+      await queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
+    } catch { /* ignore, socket will update */ }
+  }
+
+  function toggleFaction(id: string) {
+    setSelectedFactions((prev) => {
+      if (prev.includes(id)) return prev.filter((f) => f !== id);
+      if (prev.length >= 3) return prev;
+      return [...prev, id];
+    });
+  }
+
+  const p1Factions = mx?.p1Factions ?? [];
+  const p2Factions = mx?.p2Factions ?? [];
+
+  // Complete: show final matchup
+  if (subPhase === 'complete' && mx) {
+    const pickedRow = mx.pickedCell ? Number(mx.pickedCell.split(',')[0]) : null;
+    const pickedCol = mx.pickedCell ? Number(mx.pickedCell.split(',')[1]) : null;
+    const myFId = isPlayer1 ? (pickedRow !== null ? p1Factions[pickedRow] : null) : (pickedCol !== null ? p2Factions[pickedCol] : null);
+    const oppFId = isPlayer1 ? (pickedCol !== null ? p2Factions[pickedCol] : null) : (pickedRow !== null ? p1Factions[pickedRow] : null);
+    const myEntry = factions.find((f) => f.faction.id === myFId);
+    const oppEntry = factions.find((f) => f.faction.id === oppFId);
+    return (
+      <div className="flex flex-col items-center gap-6">
+        <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">Matchup Decided</h2>
+        <div className="flex gap-8">
+          <div className="flex flex-col items-center gap-3">
+            <span className="text-xs text-rizzotto-stone-500 uppercase tracking-widest">You</span>
+            {myEntry && <FactionBadge colorHex={myEntry.faction.color_hex} initials={myEntry.faction.initials} name={myEntry.faction.name} size="lg" iconUrl={myEntry.faction.icon_url} />}
+            <span className="text-sm font-semibold text-rizzotto-stone-200">{myEntry?.faction.name ?? '—'}</span>
+          </div>
+          <div className="flex items-center text-rizzotto-stone-600 font-display text-2xl">vs</div>
+          <div className="flex flex-col items-center gap-3">
+            <span className="text-xs text-rizzotto-stone-500 uppercase tracking-widest">Opponent</span>
+            {oppEntry && <FactionBadge colorHex={oppEntry.faction.color_hex} initials={oppEntry.faction.initials} name={oppEntry.faction.name} size="lg" iconUrl={oppEntry.faction.icon_url} />}
+            <span className="text-sm font-semibold text-rizzotto-stone-200">{oppEntry?.faction.name ?? '—'}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Waiting for opponent to lock
+  if (subPhase === 'waiting') {
+    return (
+      <div className="flex flex-col items-center gap-3 text-center">
+        <span className="h-8 w-8 rounded-full border-2 border-rizzotto-gold-400 border-t-transparent animate-spin" />
+        <p className="text-sm text-rizzotto-stone-400">Factions locked. Waiting for opponent…</p>
+        <BlindPickCountdown firstLockedAt={mx?.firstLockedAt ?? null} timeoutMs={2 * 60 * 1000} />
+      </div>
+    );
+  }
+
+  // Ban/pick grid
+  if (subPhase === 'ban' && mx) {
+    const bansLeft = 7 - bans.length;
+    const turnLabel = isPick ? 'Pick your matchup' : `${bansLeft} ban${bansLeft !== 1 ? 's' : ''} left`;
+    const whoseTurnLabel = isMyTurn ? 'Your turn' : "Opponent's turn";
+
+    return (
+      <div className="flex flex-col items-center gap-6">
+        <div className="text-center">
+          <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">3×3 Faction Matrix</h2>
+          <p className="mt-1 text-sm text-rizzotto-stone-400">{whoseTurnLabel} · {turnLabel}</p>
+          {isMyTurn && mx.lastActionAt && <MatrixCountdown lastActionAt={mx.lastActionAt} />}
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          {[0, 1, 2].map((row) =>
+            [0, 1, 2].map((col) => {
+              const cell = `${row},${col}`;
+              const isBanned = bans.includes(cell);
+              const p1Entry = factions.find((f) => f.faction.id === p1Factions[row]);
+              const p2Entry = factions.find((f) => f.faction.id === p2Factions[col]);
+              const isHovered = hoveredCell === cell && isMyTurn && !isBanned;
+              const actionLabel = isPick ? 'PICK' : 'BAN';
+
+              return (
+                <button
+                  key={cell}
+                  type="button"
+                  disabled={isBanned || !isMyTurn}
+                  onClick={() => void handleCellAction(row, col)}
+                  onMouseEnter={() => setHoveredCell(cell)}
+                  onMouseLeave={() => setHoveredCell(null)}
+                  className={[
+                    'relative flex flex-col items-center gap-1 rounded border p-3 text-center min-w-[80px]',
+                    'transition-[border-color,background-color,opacity] duration-150',
+                    isBanned
+                      ? 'border-rizzotto-iron-700 bg-rizzotto-iron-900/40 opacity-40 cursor-default'
+                      : isHovered
+                        ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800 cursor-pointer'
+                        : isMyTurn
+                          ? 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60 cursor-pointer'
+                          : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 cursor-default',
+                  ].join(' ')}
+                >
+                  {isBanned && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden rounded">
+                      <div className="absolute w-[141%] h-px bg-rizzotto-iron-500 rotate-45" />
+                    </div>
+                  )}
+                  {isHovered && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-rizzotto-iron-800/85 rounded z-10">
+                      <span className="font-display text-sm font-bold text-rizzotto-gold-400 tracking-widest uppercase">{actionLabel}</span>
+                    </div>
+                  )}
+                  <div className="flex flex-col items-center gap-0.5">
+                    {p1Entry && <FactionBadge colorHex={p1Entry.faction.color_hex} initials={p1Entry.faction.initials} name={p1Entry.faction.name} size="sm" iconUrl={p1Entry.faction.icon_url} />}
+                    <span className="text-[9px] text-rizzotto-stone-400 uppercase tracking-wide">{p1Entry?.faction.initials ?? '?'}</span>
+                  </div>
+                  <span className="text-[8px] text-rizzotto-stone-600">vs</span>
+                  <div className="flex flex-col items-center gap-0.5">
+                    {p2Entry && <FactionBadge colorHex={p2Entry.faction.color_hex} initials={p2Entry.faction.initials} name={p2Entry.faction.name} size="sm" iconUrl={p2Entry.faction.icon_url} />}
+                    <span className="text-[9px] text-rizzotto-stone-400 uppercase tracking-wide">{p2Entry?.faction.initials ?? '?'}</span>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Blind pick (default: subPhase === 'blind')
+  return (
+    <div className="flex flex-col items-center gap-6">
+      <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">Pick 3 Factions</h2>
+      <p className="text-sm text-rizzotto-stone-400 text-center max-w-sm">
+        Choose 3 factions secretly — the matchup grid is revealed only after both players lock in.
+        ({selectedFactions.length}/3 selected)
+      </p>
+
+      <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-6">
+        {factions.map(({ faction }) => {
+          const isSelected = selectedFactions.includes(faction.id);
+          const isDisabled = !isSelected && selectedFactions.length >= 3;
+          return (
+            <button
+              key={faction.id}
+              type="button"
+              onClick={() => toggleFaction(faction.id)}
+              disabled={isDisabled}
+              className={[
+                'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center',
+                'transition-[border-color,background-color,opacity] duration-150',
+                isSelected
+                  ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800'
+                  : isDisabled
+                    ? 'border-rizzotto-iron-700 bg-rizzotto-iron-900/40 opacity-40 cursor-default'
+                    : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60 hover:bg-rizzotto-iron-800',
+              ].join(' ')}
+            >
+              <FactionBadge colorHex={faction.color_hex} initials={faction.initials} name={faction.name} size="lg" iconUrl={faction.icon_url} />
+              <span className={[
+                'line-clamp-2 font-display text-[10px] uppercase leading-tight tracking-wide',
+                isSelected ? 'text-rizzotto-gold-300' : 'text-rizzotto-stone-300',
+              ].join(' ')}>
+                {faction.name}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <Button variant="forge" size="md" disabled={selectedFactions.length !== 3 || locking} onClick={handleLock}>
+        {locking ? 'Locking…' : 'Lock In (3 Factions)'}
+      </Button>
+      {lockError && <p className="text-sm text-red-400 text-center">{lockError}</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -651,6 +910,7 @@ type DecisionPhase =
   | 'map_random'
   | 'map_pick_ban'
   | 'blind_pick'
+  | 'faction_matrix'
   | 'ready';
 
 function BlindPickCountdown({ firstLockedAt, timeoutMs }: { firstLockedAt: string | null; timeoutMs: number }) {
@@ -686,6 +946,11 @@ const BAN_MODES = new Set(['PICK_BAN', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN'
 function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
   if (!d) return 'loading';
   if (d.pickedMapId) {
+    // MATRIX mode: faction pick/ban after map decision
+    if (d.tournamentMode === 'MATRIX') {
+      if (!d.factionMatrix?.decidedAt) return 'faction_matrix';
+      return 'ready';
+    }
     // Map decided — check blind pick
     if (d.blindPick?.revealedAt) return 'ready';
     if (d.blindPick != null) return 'blind_pick';
@@ -792,9 +1057,37 @@ export function MatchDecisionPage() {
       );
     };
 
+    const handleMatrixUpdate: ServerToClientEvents['match.matrix.update'] = (payload) => {
+      if (payload.matchId !== matchId) return;
+      setDecision((prev) =>
+        prev
+          ? {
+              ...prev,
+              factionMatrix: {
+                p1Locked: payload.p1Locked,
+                p2Locked: payload.p2Locked,
+                firstLockedAt: payload.firstLockedAt,
+                revealedAt: payload.revealedAt,
+                p1Factions: payload.p1Factions,
+                p2Factions: payload.p2Factions,
+                bans: payload.bans,
+                pickedCell: payload.pickedCell,
+                lastActionAt: payload.lastActionAt,
+                decidedAt: payload.decidedAt,
+                p1FactionId: payload.p1FactionId,
+                p2FactionId: payload.p2FactionId,
+                topPlayerId: payload.topPlayerId,
+                bottomPlayerId: payload.bottomPlayerId,
+              },
+            }
+          : prev,
+      );
+    };
+
     socket.on('match.decision.update', handleDecisionUpdate);
     socket.on('match.decision.complete', handleDecisionComplete);
     socket.on('match.blind-pick.update', handleBlindPickUpdate);
+    socket.on('match.matrix.update', handleMatrixUpdate);
 
     // Fallback polling when socket disconnected
     function startPolling() {
@@ -825,6 +1118,7 @@ export function MatchDecisionPage() {
       socket.off('match.decision.update', handleDecisionUpdate);
       socket.off('match.decision.complete', handleDecisionComplete);
       socket.off('match.blind-pick.update', handleBlindPickUpdate);
+      socket.off('match.matrix.update', handleMatrixUpdate);
       socket.off('disconnect', startPolling);
       socket.off('connect', stopPolling);
       stopPolling();
@@ -981,6 +1275,23 @@ export function MatchDecisionPage() {
               transition={{ duration: 0.4 }}
             >
               <BlindPickPhase
+                matchId={matchId}
+                decision={decision}
+                currentUserId={user.id}
+                factions={factions}
+              />
+            </motion.div>
+          )}
+
+          {phase === 'faction_matrix' && (
+            <motion.div
+              key="faction_matrix"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              <FactionMatrixPhase
                 matchId={matchId}
                 decision={decision}
                 currentUserId={user.id}

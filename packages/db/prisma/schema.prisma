@@ -44,6 +44,7 @@ enum TournamentMode {
   BPT // Blind Pick Tournament — every match has blind faction pick
   SFT // Single Faction Tournament — faction pre-pick at registration
   SLT // Single List Tournament — army list pre-upload at registration
+  MATRIX // 3×3 Faction Matrix — blind 3-pick per player, 7 bans + 1 pick
 }
 
 enum PlayoffFormat {
@@ -414,9 +415,10 @@ model MatchGame {
   created_at             DateTime    @default(now())
   updated_at             DateTime    @updatedAt
 
-  match        Match             @relation(fields: [match_id], references: [id], onDelete: Cascade)
-  map_decision MatchMapDecision?
-  blind_pick   MatchBlindPick?
+  match           Match                @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  map_decision    MatchMapDecision?
+  blind_pick      MatchBlindPick?
+  faction_matrix  MatchFactionMatrix?
 
   @@unique([match_id, game_number])
   @@index([match_id])
@@ -434,6 +436,26 @@ model MatchMapDecision {
   bans_bottom      String[] // Map IDs banned by bottom player
   active_pool      String[]        @default([]) // HOST_PRESET_PICK_BAN / RANDOM_PICK_BAN: aktive 3 Maps für dieses Game
   picked_map_id    String? // final picked Map ID
+  decided_at       DateTime?
+
+  game MatchGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
+}
+
+// MATRIX mode: 3×3 faction matrix per game.
+model MatchFactionMatrix {
+  game_id          String    @id @db.Uuid
+  coin_flip_seed   String    @default("")
+  top_player_id    String    @db.Uuid @default(dbgenerated("'00000000-0000-0000-0000-000000000000'::uuid"))
+  bottom_player_id String    @db.Uuid @default(dbgenerated("'00000000-0000-0000-0000-000000000000'::uuid"))
+  p1_factions      String[]  @default([]) // match.player1_id's 3 faction picks
+  p2_factions      String[]  @default([]) // match.player2_id's 3 faction picks
+  p1_locked_at     DateTime?
+  p2_locked_at     DateTime?
+  first_locked_at  DateTime? // timestamp of first lock — for blind-pick countdown
+  revealed_at      DateTime?
+  bans             String[]  @default([]) // "row,col" strings e.g. ["0,1","2,2"]
+  picked_cell      String?               // "row,col" of the final matchup
+  last_action_at   DateTime? // timestamp of last ban/pick — for 15s timeout
   decided_at       DateTime?
 
   game MatchGame @relation(fields: [game_id], references: [id], onDelete: Cascade)

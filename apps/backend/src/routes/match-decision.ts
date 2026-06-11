@@ -66,6 +66,21 @@ type BlindPickRow = {
   player2_faction_id: string | null;
 } | null;
 
+type FactionMatrixRow = {
+  p1_locked_at: Date | null;
+  p2_locked_at: Date | null;
+  first_locked_at: Date | null;
+  revealed_at: Date | null;
+  top_player_id: string;
+  bottom_player_id: string;
+  p1_factions: string[];
+  p2_factions: string[];
+  bans: unknown;
+  picked_cell: string | null;
+  last_action_at: Date | null;
+  decided_at: Date | null;
+} | null;
+
 type MapDecisionModeLiteral = 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
 
 function serializeDecisionState(
@@ -74,7 +89,30 @@ function serializeDecisionState(
   blindPick: BlindPickRow,
   tournamentMode: string | null = null,
   matchPlayer1Id: string | null = null,
+  factionMatrix: FactionMatrixRow = null,
 ) {
+  let serializedMatrix = null;
+  if (factionMatrix) {
+    const pickedRow = factionMatrix.picked_cell ? Number(factionMatrix.picked_cell.split(',')[0]) : null;
+    const pickedCol = factionMatrix.picked_cell ? Number(factionMatrix.picked_cell.split(',')[1]) : null;
+    serializedMatrix = {
+      p1Locked: Boolean(factionMatrix.p1_locked_at),
+      p2Locked: Boolean(factionMatrix.p2_locked_at),
+      firstLockedAt: factionMatrix.first_locked_at?.toISOString() ?? null,
+      revealedAt: factionMatrix.revealed_at?.toISOString() ?? null,
+      p1Factions: factionMatrix.revealed_at ? factionMatrix.p1_factions : [],
+      p2Factions: factionMatrix.revealed_at ? factionMatrix.p2_factions : [],
+      bans: (factionMatrix.bans as string[]) ?? [],
+      pickedCell: factionMatrix.picked_cell,
+      lastActionAt: factionMatrix.last_action_at?.toISOString() ?? null,
+      decidedAt: factionMatrix.decided_at?.toISOString() ?? null,
+      p1FactionId: factionMatrix.decided_at && pickedRow !== null ? (factionMatrix.p1_factions[pickedRow] ?? null) : null,
+      p2FactionId: factionMatrix.decided_at && pickedCol !== null ? (factionMatrix.p2_factions[pickedCol] ?? null) : null,
+      topPlayerId: factionMatrix.top_player_id,
+      bottomPlayerId: factionMatrix.bottom_player_id,
+    };
+  }
+
   return {
     matchId,
     mode: decision.mode as MapDecisionModeLiteral,
@@ -102,6 +140,7 @@ function serializeDecisionState(
           player2FactionId: blindPick.revealed_at ? (blindPick.player2_faction_id ?? null) : null,
         }
       : null,
+    factionMatrix: serializedMatrix,
   };
 }
 
@@ -230,7 +269,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           games: {
             where: { map_decision: { isNot: null } },
             orderBy: { game_number: 'desc' },
-            select: { map_decision: true, blind_pick: true },
+            select: { map_decision: true, blind_pick: true, faction_matrix: true },
             take: 1,
           },
         },
@@ -254,7 +293,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(200).send(
-        serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? 'BPT', match.player1_id),
+        serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? 'BPT', match.player1_id, game.faction_matrix ?? null),
       );
     },
   );

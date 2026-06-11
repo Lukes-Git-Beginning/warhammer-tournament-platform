@@ -60,7 +60,7 @@ export interface Tournament {
   description: string | null;
   format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT';
+  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
   status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
   start_date: string;
   timezone: string;
@@ -136,13 +136,29 @@ export interface MatchDecisionState {
     player1FactionId: string | null;
     player2FactionId: string | null;
   } | null;
+  factionMatrix?: {
+    p1Locked: boolean;
+    p2Locked: boolean;
+    firstLockedAt: string | null;
+    revealedAt: string | null;
+    p1Factions: string[];
+    p2Factions: string[];
+    bans: string[];
+    pickedCell: string | null;
+    lastActionAt: string | null;
+    decidedAt: string | null;
+    p1FactionId: string | null;
+    p2FactionId: string | null;
+    topPlayerId: string;
+    bottomPlayerId: string;
+  } | null;
 }
 
 export interface TournamentCreate {
   name: string;
   format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT';
+  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
   start_date: string;
   timezone: string;
   max_participants?: number;
@@ -180,7 +196,7 @@ export interface TournamentPatchInput {
   draft_preset_id?: string | null;
   // draft-only (backend enforces, frontend disables after DRAFT)
   format?: Tournament['format'];
-  mode?: 'BPT' | 'SFT' | 'SLT';
+  mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
   faction_pool?: string[];
   // until-ongoing fields
   rounds_count?: number;
@@ -963,6 +979,20 @@ export function lockBlindPick(matchId: string, factionId: string): Promise<{ ok:
   return apiFetch<{ ok: true }>(`/api/matches/${matchId}/decision/blind-pick/lock`, {
     method: 'POST',
     body: JSON.stringify({ faction_id: factionId }),
+  });
+}
+
+export function lockFactionMatrix(matchId: string, factions: string[]): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/matrix/lock`, {
+    method: 'POST',
+    body: JSON.stringify({ factions }),
+  });
+}
+
+export function banMatrixCell(matchId: string, row: number, col: number): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/matrix/ban`, {
+    method: 'POST',
+    body: JSON.stringify({ row, col }),
   });
 }
 

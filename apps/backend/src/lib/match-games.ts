@@ -57,6 +57,14 @@ export async function finalizeGameResult(
           player2_faction_id: true,
         },
       },
+      faction_matrix: {
+        select: {
+          decided_at: true,
+          picked_cell: true,
+          p1_factions: true,
+          p2_factions: true,
+        },
+      },
       match: {
         select: {
           player1_id: true,
@@ -104,6 +112,16 @@ export async function finalizeGameResult(
     const p2Part = participants.find((p) => p.user_id === game.match.player2_id);
     p1FactionId = p1Part?.faction?.id ?? game.match.player1_faction_id ?? null;
     p2FactionId = p2Part?.faction?.id ?? game.match.player2_faction_id ?? null;
+  } else if (mode === 'MATRIX') {
+    const matrix = game.faction_matrix;
+    if (matrix?.decided_at && matrix.picked_cell) {
+      const [row, col] = matrix.picked_cell.split(',').map(Number);
+      p1FactionId = matrix.p1_factions[row ?? 0] ?? null;
+      p2FactionId = matrix.p2_factions[col ?? 0] ?? null;
+    } else {
+      p1FactionId = null;
+      p2FactionId = null;
+    }
   } else if (!game.match.tournament && game.blind_pick?.revealed_at) {
     // Open Play: factions come from the blind pick
     p1FactionId = game.blind_pick.player1_faction_id ?? null;
