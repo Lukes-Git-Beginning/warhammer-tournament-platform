@@ -42,8 +42,11 @@ export function getEliminationPlacements(matches: BracketNode[]): EliminationPla
   }
 
   if (gf) {
-    if (gf.player1Id) gfParticipants.add(gf.player1Id);
-    if (gf.player2Id) gfParticipants.add(gf.player2Id);
+    // Only mark GF participants when both finalists are confirmed
+    if (gf.player1Id && gf.player2Id) {
+      gfParticipants.add(gf.player1Id);
+      gfParticipants.add(gf.player2Id);
+    }
 
     if (gf.status === 'COMPLETED' && gf.winnerId) {
       const loser = gf.player1Id === gf.winnerId ? gf.player2Id : gf.player1Id;
