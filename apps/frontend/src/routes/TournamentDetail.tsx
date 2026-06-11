@@ -23,6 +23,7 @@ import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { sortStandingsByPlayoffResult, getFinalistIds } from '@/lib/bracketStandings';
 import { BracketView } from '@/components/bracket/BracketView';
 import { SwissStandings } from '@/components/bracket/SwissStandings';
+import { EliminationStandings } from '@/components/bracket/EliminationStandings';
 import { PageShell } from '@/components/layout/PageShell';
 import { CheckInButton } from '@/components/tournament/CheckInButton';
 import { RegisterButton } from '@/components/tournament/RegisterButton';
@@ -559,6 +560,10 @@ export function TournamentDetail() {
       {tournament.status !== 'DRAFT' && (() => {
         const swiss = bracket?.swiss;
         const hasStandings = swiss && swiss.standings.length > 0;
+        const isElim =
+          tournament.format === 'SINGLE_ELIMINATION' ||
+          tournament.format === 'DOUBLE_ELIMINATION';
+
         if (hasStandings) {
           return (
             <section className="mb-4">
@@ -573,6 +578,17 @@ export function TournamentDetail() {
                 finalistIds={standingsFinalistIds}
               />
             </section>
+          );
+        }
+        if (isElim && bracket && participantsData) {
+          return (
+            <EliminationStandings
+              matches={bracket.matches}
+              participants={participantsData.data}
+              slug={tournament.slug}
+              canManage={!!canManage}
+              tournamentStatus={tournament.status}
+            />
           );
         }
         return <ParticipantsList slug={tournament.slug} canManage={!!canManage} tournamentStatus={tournament.status} />;

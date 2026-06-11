@@ -1,5 +1,66 @@
 import type { BracketNode, SwissMeta } from '@rizzotto/types';
 
+export interface EliminationPlacementData {
+  /** Explicit 1–4 placements derived from GF / TP match results. */
+  placements: Map<string, 1 | 2 | 3 | 4>;
+  /** Round number of each player's last completed match (for sorting unranked players). */
+  lastCompletedRound: Map<string, number>;
+  /** IDs of the two Grand Final participants (for GF section highlight). */
+  gfParticipants: Set<string>;
+}
+
+/**
+ * Derives placement data for single/double elimination brackets.
+ * Explicit ranks 1–4 come from GF and third-place match results.
+ * Remaining players are ordered by the round of their last completed match.
+ */
+export function getEliminationPlacements(matches: BracketNode[]): EliminationPlacementData {
+  const placements = new Map<string, 1 | 2 | 3 | 4>();
+  const gfParticipants = new Set<string>();
+
+  const gf = matches.find((m) => m.phase === 'PLAYOFF_FINAL');
+  const tp = matches.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
+
+  if (gf) {
+    if (gf.player1Id) gfParticipants.add(gf.player1Id);
+    if (gf.player2Id) gfParticipants.add(gf.player2Id);
+
+    if (gf.status === 'COMPLETED' && gf.winnerId) {
+      const loser = gf.player1Id === gf.winnerId ? gf.player2Id : gf.player1Id;
+      placements.set(gf.winnerId, 1);
+      if (loser) placements.set(loser, 2);
+    } else {
+      // GF participants are tentatively ranked 1 & 2 for display order
+      if (gf.player1Id) placements.set(gf.player1Id, 1);
+      if (gf.player2Id) placements.set(gf.player2Id, 2);
+    }
+  }
+
+  if (tp) {
+    if (tp.status === 'COMPLETED' && tp.winnerId) {
+      const loser = tp.player1Id === tp.winnerId ? tp.player2Id : tp.player1Id;
+      placements.set(tp.winnerId, 3);
+      if (loser) placements.set(loser, 4);
+    } else {
+      if (tp.player1Id) placements.set(tp.player1Id, 3);
+      if (tp.player2Id) placements.set(tp.player2Id, 4);
+    }
+  }
+
+  // For players not in top-4: track the round of their last completed match
+  const lastCompletedRound = new Map<string, number>();
+  for (const m of matches) {
+    if (m.status !== 'COMPLETED' && m.status !== 'FORFEIT') continue;
+    for (const pid of [m.player1Id, m.player2Id]) {
+      if (!pid || placements.has(pid)) continue;
+      const cur = lastCompletedRound.get(pid) ?? -1;
+      if (m.round > cur) lastCompletedRound.set(pid, m.round);
+    }
+  }
+
+  return { placements, lastCompletedRound, gfParticipants };
+}
+
 type Standing = SwissMeta['standings'][number];
 
 /**
