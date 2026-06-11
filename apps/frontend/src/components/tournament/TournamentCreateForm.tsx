@@ -136,6 +136,7 @@ export function TournamentCreateForm() {
       ...prev,
       [name]: newValue,
       ...(name === 'draft_enabled' && !checked ? { draft_preset_id: null } : {}),
+      ...(name === 'format' ? { finale_match_format: value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO1' } : {}),
     }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
   }

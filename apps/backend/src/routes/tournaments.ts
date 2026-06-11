@@ -279,7 +279,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           playoff_format: data.playoff_format,
           swiss_match_format: data.swiss_match_format,
           playoff_match_format: data.playoff_match_format,
-          finale_match_format: data.finale_match_format,
+          finale_match_format: data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' ? 'BO3' : undefined),
           map_decision_mode: data.map_decision_mode,
           map_preset_config: data.map_preset_config != null ? (data.map_preset_config as Prisma.InputJsonValue) : undefined,
         },
