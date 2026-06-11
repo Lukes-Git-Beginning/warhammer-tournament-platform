@@ -317,16 +317,20 @@ export function generateDoubleElim(
         r === R_W - 1 ? grandFinalId : (wbIds[r + 1]![Math.floor(i / 2)]! ?? null);
 
       // loser_next_match_id: which LB match receives this WB loser?
-      // WB round r (0-indexed) losers drop into LB round (2r) (0-indexed).
-      // Within that LB drop round, WB match i drops into LB match floor(i/2).
+      //
+      // WB R1 (r=0): losers fight each other in LB R1 (lbIds[0]).
+      //   Ratio 2:1 — two WB R1 matches share one LB R1 match → lbMatchIdx = floor(i/2).
+      //
+      // WB R2..WB SF (0 < r < R_W-1): losers each face one LB survivor in the next
+      //   "consol" round (lbIds[2r-1]). Ratio 1:1 → lbMatchIdx = i.
+      //
+      // WB Final (r = R_W-1): loser goes to LB Final (lbIds[R_L-1] = lbIds[2*r]).
+      //   Formula 2*r still happens to equal R_L-1 for the WB Final, so we keep it.
       let loser_next_match_id: string | null = null;
-      const lbDropRoundIdx = 2 * r; // 0-indexed LB round
+      const lbDropRoundIdx = r === 0 ? 0 : r < R_W - 1 ? 2 * r - 1 : 2 * r;
       if (lbDropRoundIdx < R_L) {
-        // Special case: WB R1 (r=0) losers play each other in LB R1.
-        // WB R1 M0 loser → LB R1 M0 player1, WB R1 M1 loser → LB R1 M0 player2
-        // WB R1 M2 loser → LB R1 M1 player1, WB R1 M3 loser → LB R1 M1 player2
-        // General: WB Rr Mi loser → LB drop-round floor(i/2), as player1 (even i) or player2 (odd i)
-        const lbMatchIdx = Math.floor(i / 2);
+        // WB R1 pairs two losers into one LB match (2:1); all other WB rounds are 1:1.
+        const lbMatchIdx = r === 0 ? Math.floor(i / 2) : i;
         if (lbMatchIdx < lbIds[lbDropRoundIdx]!.length) {
           loser_next_match_id = lbIds[lbDropRoundIdx]![lbMatchIdx]!;
         }
