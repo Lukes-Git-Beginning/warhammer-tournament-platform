@@ -230,7 +230,9 @@ Zusätzlich: Die `typecheck`-tsconfig schließt `test/**` aus. Nach Schema-/Cont
 
 ## Visual-Snapshots — Bootstrap + CI-Validierung
 
-Die 9 Visual-Specs (`visual/landing-overhaul.spec.ts`, landing/login/leaderboard × 3 Viewports) sind seit 2026-06-02 **aktiv in CI** (Linux-Baselines committed, `UPDATE_SNAPSHOTS`-Guard entfernt).
+**2026-06-10: `landing-overhaul.spec.ts` aus CI-`testIgnore` ausgeschlossen** — Linux-Baselines hatten sich nach Landing-Page-Änderungen über die 5%-Pixeldifferenz-Toleranz bewegt; stale Baselines wurden aus git entfernt. Bis neue Baselines via `update-snapshots.yml` generiert werden, läuft diese Spec nicht in CI. `overflow-forensik.spec.ts` und `empty-states.spec.ts` laufen weiterhin (kein Pixel-Vergleich).
+
+Die übrigen Visual-Specs (`visual/landing-overhaul.spec.ts`, landing/login/leaderboard × 3 Viewports) waren bis 2026-06-02 **aktiv in CI** (Linux-Baselines committed).
 
 - **Datengetriebene Regionen container-maskieren.** `leaderboard-mobile` driftete ~41% durch randomisierte Cross-Spec-Usernames. Fix: `data-testid="leaderboard-data-table"` + `data-testid="roll-of-honour-list"` + `mask: [...]` + `maskColor` im `toHaveScreenshot`. **Container-Level** (nicht Zeilen-Level), weil die Zeilenzahl zwischen Läufen variiert.
 - **Baselines neu erzeugen:** `gh workflow run update-snapshots.yml --ref <branch>` → `playwright --update-snapshots` auf ubuntu-latest → Artifact `e2e-snapshots` → `gh run download <id> -n e2e-snapshots` → die `*-chromium-linux.png` ins Snapshot-Verzeichnis committen.
