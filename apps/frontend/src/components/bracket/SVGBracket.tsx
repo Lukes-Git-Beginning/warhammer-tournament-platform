@@ -51,8 +51,12 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
   const slotLabels = new Map<string, { p1: string | null; p2: string | null }>();
   for (const target of data.matches) {
     if (target.player1Id !== null && target.player2Id !== null) continue;
+    // Include both winner-path feeders (nextMatchId) and loser-path feeders (loserNextMatchId)
     const feeders = data.matches
-      .filter((f) => resolveNextMatchId(f, data.matches) === target.matchId)
+      .filter((f) =>
+        resolveNextMatchId(f, data.matches) === target.matchId ||
+        f.loserNextMatchId === target.matchId,
+      )
       .sort((a, b) => a.matchNumber - b.matchNumber);
     slotLabels.set(target.matchId, {
       p1: target.player1Id === null ? (feeders[0] ? makeSlotLabel(feeders[0], players) : null) : null,
