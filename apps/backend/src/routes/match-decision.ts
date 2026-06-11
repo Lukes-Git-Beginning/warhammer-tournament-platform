@@ -172,10 +172,12 @@ async function drawMapsWithNoRepeat(
   });
 }
 
-/** Maps a match phase to the canonical preset config key. */
+/** Maps a match phase to the canonical preset config key.
+ * Named stages (SF, Final, 3rd place) use semantic keys; all other rounds
+ * (Swiss, early elim / QF) fall back to swiss_N so the host can configure
+ * them with numbered round presets. */
 function buildRoundKey(phase: string | null, round: number): string {
   switch (phase) {
-    case 'PLAYOFF_QF': return 'playoff_qf';
     case 'PLAYOFF_SF': return 'playoff_sf';
     case 'PLAYOFF_FINAL': return 'playoff_final';
     case 'PLAYOFF_THIRD_PLACE': return 'playoff_third';

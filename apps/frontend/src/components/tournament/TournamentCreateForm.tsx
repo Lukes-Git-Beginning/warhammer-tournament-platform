@@ -72,11 +72,20 @@ function buildRoundKeys(form: Partial<FormData>): { key: string; label: string; 
   }
 
   const isElim = form.format === 'SINGLE_ELIMINATION' || form.format === 'DOUBLE_ELIMINATION';
+
+  if (isElim) {
+    // Numbered elimination rounds (covers up to 16 players / 4 pre-SF rounds).
+    // Surplus presets are ignored at match time; SF and GF override by phase.
+    for (let i = 1; i <= 4; i++) {
+      keys.push({ key: `swiss_${i}`, label: `Elim Round ${i}`, maxGames: swissGames });
+    }
+  }
+
   const hasPlayoffs = isElim || form.playoff_format === 'TOP4' || form.playoff_format === 'TOP8';
 
   if (hasPlayoffs) {
-    if (form.playoff_format === 'TOP8' || isElim) {
-      keys.push({ key: 'playoff_qf', label: isElim ? 'Quarterfinals (8+ players)' : 'Quarterfinals', maxGames: playoffGames });
+    if (form.playoff_format === 'TOP8') {
+      keys.push({ key: 'playoff_qf', label: 'Quarterfinals', maxGames: playoffGames });
     }
     keys.push({ key: 'playoff_sf', label: 'Semifinals', maxGames: playoffGames });
     keys.push({ key: 'playoff_final', label: 'Grand Final', maxGames: finaleGames });
