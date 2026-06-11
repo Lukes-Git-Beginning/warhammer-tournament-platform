@@ -297,7 +297,7 @@ export function generateDoubleElim(
   }
 
   const grandFinalId = randomUUID();
-  const resetMatchId = randomUUID();
+  // No reset match — GF is Bo3 by default, so a single match suffices.
 
   // -------------------------------------------------------------------------
   // 2. Build match objects.
@@ -408,21 +408,6 @@ export function generateDoubleElim(
     id: grandFinalId,
     tournament_id: tournamentId,
     round: R_W + R_L + 1,
-    match_number: 1,
-    player1_id: null,
-    player2_id: null,
-    status: 'PENDING',
-    next_match_id: resetMatchId,
-    loser_next_match_id: null,
-    bracket_side: 'GRAND_FINAL',
-    winner_id: null,
-  });
-
-  // --- Reset Match (only activated if LB champion wins GF) ---
-  all.push({
-    id: resetMatchId,
-    tournament_id: tournamentId,
-    round: R_W + R_L + 2,
     match_number: 1,
     player1_id: null,
     player2_id: null,
