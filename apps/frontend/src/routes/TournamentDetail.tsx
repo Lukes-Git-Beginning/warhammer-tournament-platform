@@ -149,7 +149,11 @@ export function TournamentDetail() {
   const { data: bracket } = useQuery({
     queryKey: ['bracket', slug],
     queryFn: () => getBracket(slug),
-    enabled: !!tournament && (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED'),
+    enabled: !!tournament && (
+      tournament.status === 'ONGOING' ||
+      tournament.status === 'COMPLETED' ||
+      tournament.status === 'REGISTRATION_CLOSED'
+    ),
     refetchInterval: 15000,
     staleTime: 0,
   });
@@ -580,10 +584,10 @@ export function TournamentDetail() {
             </section>
           );
         }
-        if (isElim && bracket && participantsData) {
+        if (isElim && participantsData) {
           return (
             <EliminationStandings
-              matches={bracket.matches}
+              matches={bracket?.matches ?? []}
               participants={participantsData.data}
               slug={tournament.slug}
               canManage={!!canManage}

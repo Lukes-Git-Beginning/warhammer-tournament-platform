@@ -18,8 +18,28 @@ export function getEliminationPlacements(matches: BracketNode[]): EliminationPla
   const placements = new Map<string, 1 | 2 | 3 | 4>();
   const gfParticipants = new Set<string>();
 
-  const gf = matches.find((m) => m.phase === 'PLAYOFF_FINAL');
-  const tp = matches.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
+  // Primary: use phase labels when available
+  let gf = matches.find((m) => m.phase === 'PLAYOFF_FINAL');
+  let tp = matches.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
+
+  // Fallback: no phase labels (older tournaments) — derive from bracket structure.
+  // In SE the Grand Final is the match in the highest round with no nextMatchId.
+  // The third-place match shares the same round as the GF but has a different id.
+  if (!gf) {
+    const completed = matches.filter(
+      (m) => (m.status === 'COMPLETED' || m.status === 'PENDING' || m.status === 'ONGOING') &&
+             m.player1Id && m.player2Id,
+    );
+    const maxRound = Math.max(...completed.map((m) => m.round), -Infinity);
+    if (maxRound > -Infinity) {
+      const finalRoundMatches = completed.filter((m) => m.round === maxRound);
+      // The GF is the one without a loser next match (no consolation branch)
+      gf = finalRoundMatches.find((m) => !m.loserNextMatchId) ?? finalRoundMatches[0];
+      // Third-place is any other match in the same round
+      const tpCandidate = finalRoundMatches.find((m) => m.matchId !== gf?.matchId);
+      if (tpCandidate) tp = tpCandidate;
+    }
+  }
 
   if (gf) {
     if (gf.player1Id) gfParticipants.add(gf.player1Id);
@@ -30,7 +50,6 @@ export function getEliminationPlacements(matches: BracketNode[]): EliminationPla
       placements.set(gf.winnerId, 1);
       if (loser) placements.set(loser, 2);
     } else {
-      // GF participants are tentatively ranked 1 & 2 for display order
       if (gf.player1Id) placements.set(gf.player1Id, 1);
       if (gf.player2Id) placements.set(gf.player2Id, 2);
     }
