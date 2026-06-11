@@ -263,7 +263,7 @@ export function generateDoubleElim(
 ): DEBracketMatchInput[] {
   const S = nextPow2(Math.max(participantIds.length, 2));
   const R_W = Math.log2(S); // WB rounds
-  const R_L = 2 * R_W - 1; // LB rounds
+  const R_L = 2 * R_W - 2; // LB rounds (no phantom final round)
 
   // Distribute byes across the first round via standard bracket seed order so
   // every WB round-1 pairing gets at least one real player (no empty matches).
@@ -318,26 +318,15 @@ export function generateDoubleElim(
 
       // loser_next_match_id: which LB match receives this WB loser?
       //
-      // WB R1 (r=0): losers fight each other in LB R1 (lbIds[0]).
-      //   Ratio 2:1 — two WB R1 matches share one LB R1 match → lbMatchIdx = floor(i/2).
-      //
-      // WB R2..WB SF (0 < r < R_W-1): losers each face one LB survivor in the next
-      //   "consol" round (lbIds[2r-1]). Ratio 1:1 → lbMatchIdx = i.
-      //
-      // WB Final (r = R_W-1): loser goes to LB Final (lbIds[R_L-1] = lbIds[2*r]).
-      //   Formula 2*r still happens to equal R_L-1 for the WB Final, so we keep it.
+      // Unified formula (R_L = 2*R_W - 2, so lbIds has no phantom final round):
+      //   WB R1 (r=0): losers fight each other → lbIds[0], lbMatchIdx = floor(i/2) (2:1 ratio)
+      //   WB R2+ (r>0): each loser faces one LB survivor → lbIds[2r-1], lbMatchIdx = i (1:1)
+      //   WB Final (r=R_W-1): 2*(R_W-1)-1 = R_L-1 → last LB round, winner goes directly to GF
       let loser_next_match_id: string | null = null;
-      const lbDropRoundIdx = r === 0 ? 0 : r < R_W - 1 ? 2 * r - 1 : 2 * r;
-      if (lbDropRoundIdx < R_L) {
-        // WB R1 pairs two losers into one LB match (2:1); all other WB rounds are 1:1.
-        const lbMatchIdx = r === 0 ? Math.floor(i / 2) : i;
-        if (lbMatchIdx < lbIds[lbDropRoundIdx]!.length) {
-          loser_next_match_id = lbIds[lbDropRoundIdx]![lbMatchIdx]!;
-        }
-      } else {
-        // WB final loser drops directly into Grand Final as LB champion seed
-        // (handled separately — WB final loser actually goes to LB final, which IS lbIds[R_L-1][0])
-        loser_next_match_id = lbIds[R_L - 1]![0]!;
+      const lbDropRoundIdx = r === 0 ? 0 : 2 * r - 1;
+      const lbMatchIdx = r === 0 ? Math.floor(i / 2) : i;
+      if (lbDropRoundIdx < R_L && lbMatchIdx < lbIds[lbDropRoundIdx]!.length) {
+        loser_next_match_id = lbIds[lbDropRoundIdx]![lbMatchIdx]!;
       }
 
       // Players: only set for WB R1 from seeded list
