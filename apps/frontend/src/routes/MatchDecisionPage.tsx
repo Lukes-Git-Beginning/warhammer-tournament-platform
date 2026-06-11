@@ -816,7 +816,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
                   onMouseEnter={() => setHoveredCell(cell)}
                   onMouseLeave={() => setHoveredCell(null)}
                   className={[
-                    'relative aspect-square grid grid-cols-[1fr_auto_1fr] rounded border overflow-hidden',
+                    'relative grid grid-cols-[1fr_auto_1fr] rounded border overflow-hidden',
                     'transition-[border-color,background-color,opacity] duration-150',
                     isBanned
                       ? 'border-rizzotto-iron-700 bg-rizzotto-iron-900/40 opacity-40 cursor-default'
