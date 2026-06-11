@@ -26,7 +26,7 @@ vi.mock('@dnd-kit/sortable', () => ({
     transition: undefined,
     isDragging: false,
   })),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   arrayMove: vi.fn((arr: any[], from: number, to: number): any[] => {
     const result = [...arr];
     const [removed] = result.splice(from, 1);

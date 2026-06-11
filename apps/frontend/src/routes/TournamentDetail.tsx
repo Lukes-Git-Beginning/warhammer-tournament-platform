@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +18,7 @@ import {
 } from '@/lib/api';
 import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth';
-import { formatInUserTimezone, toDiscordTimestamp } from '@/lib/timezone';
+import { formatInUserTimezone } from '@/lib/timezone';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { sortStandingsByPlayoffResult, getFinalistIds } from '@/lib/bracketStandings';
 import { BracketView } from '@/components/bracket/BracketView';

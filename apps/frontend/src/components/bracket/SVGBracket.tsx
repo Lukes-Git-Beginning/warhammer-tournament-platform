@@ -102,7 +102,7 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
             height={MATCH_HEIGHT}
           >
             {/* xmlns required for foreignObject HTML content */}
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            { }
           <div {...({ xmlns: 'http://www.w3.org/1999/xhtml' } as any)} style={{ width: '100%', height: '100%' }}>
               <MatchNode
                 match={m}

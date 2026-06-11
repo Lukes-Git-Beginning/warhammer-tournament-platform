@@ -235,11 +235,13 @@ export function computeSwissStandings(
 /**
  * Post-processing: for each mirror pair (same faction), try a local swap with
  * another pair in the same round. A swap is accepted only when neither pair's
- * individual score delta increases.
+ * individual score delta increases, neither new pair is a rematch (avoid
+ * lists), and neither new pair is itself a mirror. Priority order per
+ * ROADMAP: score delta > rematch avoidance > mirror avoidance.
  *
- * Mutates `matches` in-place; returns void.
+ * Mutates `matches` in-place; returns void. Exported for direct unit testing.
  */
-function tryAvoidMirrors(matches: SwissMatchInput[], players: SwissPlayer[]): void {
+export function tryAvoidMirrors(matches: SwissMatchInput[], players: SwissPlayer[]): void {
   const factionById = new Map<string, string>();
   for (const p of players) {
     if (p.factionId) factionById.set(p.userId, p.factionId);
@@ -247,17 +249,25 @@ function tryAvoidMirrors(matches: SwissMatchInput[], players: SwissPlayer[]): vo
   if (factionById.size === 0) return;
 
   const scoreById = new Map(players.map((p) => [p.userId, p.score]));
+  const avoidById = new Map(players.map((p) => [p.userId, new Set(p.avoid)]));
   const pending = matches.filter((m) => m.status === 'PENDING');
+
+  const isRematch = (x: string, y: string) =>
+    (avoidById.get(x)?.has(y) ?? false) || (avoidById.get(y)?.has(x) ?? false);
+  const isMirror = (x: string, y: string) => {
+    const fx = factionById.get(x);
+    return fx !== undefined && fx === factionById.get(y);
+  };
 
   for (const m1 of pending) {
     if (!m1.player1_id || !m1.player2_id) continue;
 
-    const fa = factionById.get(m1.player1_id);
-    const fb = factionById.get(m1.player2_id);
-    if (!fa || !fb || fa !== fb) continue;
+    const a = m1.player1_id;
+    const b = m1.player2_id;
+    if (!isMirror(a, b)) continue;
 
-    const sa = scoreById.get(m1.player1_id) ?? 0;
-    const sb = scoreById.get(m1.player2_id) ?? 0;
+    const sa = scoreById.get(a) ?? 0;
+    const sb = scoreById.get(b) ?? 0;
     const delta1 = Math.abs(sa - sb);
 
     const start = pending.indexOf(m1) + 1;
@@ -265,29 +275,35 @@ function tryAvoidMirrors(matches: SwissMatchInput[], players: SwissPlayer[]): vo
       const m2 = pending[j];
       if (!m2 || !m2.player1_id || !m2.player2_id) continue;
 
-      const sc = scoreById.get(m2.player1_id) ?? 0;
-      const sd = scoreById.get(m2.player2_id) ?? 0;
+      const c = m2.player1_id;
+      const d = m2.player2_id;
+      const sc = scoreById.get(c) ?? 0;
+      const sd = scoreById.get(d) ?? 0;
       const delta2 = Math.abs(sc - sd);
 
       // Try (A,C) + (B,D): swap player2 of m1 with player1 of m2
       if (
         Math.abs(sa - sc) <= delta1 &&
         Math.abs(sb - sd) <= delta2 &&
-        factionById.get(m1.player1_id) !== factionById.get(m2.player1_id)
+        !isMirror(a, c) &&
+        !isMirror(b, d) &&
+        !isRematch(a, c) &&
+        !isRematch(b, d)
       ) {
-        const tmp = m1.player2_id;
-        m1.player2_id = m2.player1_id;
-        m2.player1_id = tmp;
+        m1.player2_id = c;
+        m2.player1_id = b;
         break;
       // Try (A,D) + (B,C): swap player2 of m1 with player2 of m2
       } else if (
         Math.abs(sa - sd) <= delta1 &&
         Math.abs(sb - sc) <= delta2 &&
-        factionById.get(m1.player1_id) !== factionById.get(m2.player2_id)
+        !isMirror(a, d) &&
+        !isMirror(b, c) &&
+        !isRematch(a, d) &&
+        !isRematch(b, c)
       ) {
-        const tmp = m1.player2_id;
-        m1.player2_id = m2.player2_id;
-        m2.player2_id = tmp;
+        m1.player2_id = d;
+        m2.player2_id = b;
         break;
       }
     }

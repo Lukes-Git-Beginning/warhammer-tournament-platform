@@ -6,7 +6,7 @@ export interface TurnEditorProps {
   categoryNames: string[];
   onChange: (turn: DraftTurn) => void;
   onDelete: () => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   dragHandleProps?: Record<string, any>;
 }
 

@@ -4,7 +4,9 @@ import {
   computeSwissStandings,
   recommendNumberOfRounds,
   sortSwissStandings,
+  tryAvoidMirrors,
   type SwissPlayer,
+  type SwissMatchInput,
   type CompletedMatchRecord,
 } from '../src/lib/swiss.js';
 
@@ -361,5 +363,121 @@ describe('sortSwissStandings — solkoff computed via computeSwissStandings', ()
     expect(topPlayer!.buchholz).toBeGreaterThanOrEqual(0);
     // solkoff ≤ buchholz (trimming can only reduce or keep equal)
     expect(topPlayer!.solkoff).toBeLessThanOrEqual(topPlayer!.buchholz);
+  });
+});
+
+// ---------- tryAvoidMirrors ----------
+
+describe('tryAvoidMirrors', () => {
+  function makeMatch(n: number, p1: string, p2: string): SwissMatchInput {
+    return {
+      id: `aaaaaaaa-0000-0000-0000-${String(n).padStart(12, '0')}`,
+      tournament_id: T_ID,
+      round: 2,
+      match_number: n,
+      player1_id: p1,
+      player2_id: p2,
+      status: 'PENDING',
+      next_match_id: null,
+      winner_id: null,
+    };
+  }
+
+  function withFactions(
+    ids: string[],
+    factions: (string | null)[],
+    scores?: number[],
+    avoid?: string[][],
+  ): SwissPlayer[] {
+    return ids.map((id, i) => ({
+      userId: id,
+      score: scores?.[i] ?? 0,
+      avoid: avoid?.[i] ?? [],
+      receivedBye: false,
+      factionId: factions[i] ?? null,
+    }));
+  }
+
+  it('resolves a mirror when an equal-score swap partner exists', () => {
+    const [a, b, c, d] = fakeIds(4) as [string, string, string, string];
+    // (A,B) is a mirror (both empire); (C,D) are different factions.
+    const players = withFactions([a, b, c, d], ['empire', 'empire', 'dwarfs', 'greenskins']);
+    const matches = [makeMatch(1, a, b), makeMatch(2, c, d)];
+
+    tryAvoidMirrors(matches, players);
+
+    const pairs = matches.map((m) => [m.player1_id, m.player2_id]);
+    for (const [p1, p2] of pairs) {
+      const f1 = players.find((p) => p.userId === p1)!.factionId;
+      const f2 = players.find((p) => p.userId === p2)!.factionId;
+      expect(f1).not.toBe(f2);
+    }
+  });
+
+  it('does not swap when it would create a rematch', () => {
+    const [a, b, c, d] = fakeIds(4) as [string, string, string, string];
+    // Only viable swaps pair A with C or D — but A already played both.
+    const players = withFactions(
+      [a, b, c, d],
+      ['empire', 'empire', 'dwarfs', 'greenskins'],
+      undefined,
+      [[c, d], [], [], []],
+    );
+    const matches = [makeMatch(1, a, b), makeMatch(2, c, d)];
+
+    tryAvoidMirrors(matches, players);
+
+    expect(matches[0]!.player1_id).toBe(a);
+    expect(matches[0]!.player2_id).toBe(b);
+    expect(matches[1]!.player1_id).toBe(c);
+    expect(matches[1]!.player2_id).toBe(d);
+  });
+
+  it('does not swap when the counterpart pair would become a mirror', () => {
+    const [a, b, c, d] = fakeIds(4) as [string, string, string, string];
+    // (A,B) mirror on empire. Swapping A↔C or A↔D would fix pair 1 but
+    // pair 2 would become (B, dwarfs?) — make both C and D empire-adjacent:
+    // C is dwarfs, D is empire → (A,C)+(B,D) makes (B,D) an empire mirror,
+    // (A,D) is itself a mirror. No valid swap exists.
+    const players = withFactions([a, b, c, d], ['empire', 'empire', 'dwarfs', 'empire']);
+    const matches = [makeMatch(1, a, b), makeMatch(2, c, d)];
+
+    tryAvoidMirrors(matches, players);
+
+    const mirrorCount = matches.filter((m) => {
+      const f1 = players.find((p) => p.userId === m.player1_id)!.factionId;
+      const f2 = players.find((p) => p.userId === m.player2_id)!.factionId;
+      return f1 === f2;
+    }).length;
+    // Started with 1 mirror — must not have grown.
+    expect(mirrorCount).toBeLessThanOrEqual(1);
+  });
+
+  it('does not swap when it would increase a score delta', () => {
+    const [a, b, c, d] = fakeIds(4) as [string, string, string, string];
+    // (A,B) mirror at score 3 each (delta 0); (C,D) at score 0 each.
+    // Any swap creates two pairs with delta 3 — must be rejected.
+    const players = withFactions(
+      [a, b, c, d],
+      ['empire', 'empire', 'dwarfs', 'greenskins'],
+      [3, 3, 0, 0],
+    );
+    const matches = [makeMatch(1, a, b), makeMatch(2, c, d)];
+
+    tryAvoidMirrors(matches, players);
+
+    expect(matches[0]!.player2_id).toBe(b);
+    expect(matches[1]!.player1_id).toBe(c);
+  });
+
+  it('no-op when no faction data is present', () => {
+    const [a, b, c, d] = fakeIds(4) as [string, string, string, string];
+    const players = withFactions([a, b, c, d], [null, null, null, null]);
+    const matches = [makeMatch(1, a, b), makeMatch(2, c, d)];
+
+    tryAvoidMirrors(matches, players);
+
+    expect(matches[0]!.player2_id).toBe(b);
+    expect(matches[1]!.player2_id).toBe(d);
   });
 });

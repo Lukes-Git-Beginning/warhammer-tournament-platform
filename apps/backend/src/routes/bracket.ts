@@ -1078,13 +1078,24 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { id, deleted_at: null, status: 'ONGOING' },
-        select: { id: true, organizer_id: true },
+        select: { id: true, organizer_id: true, format: true },
       });
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       }
       if (request.user.role === 'ORGANIZER' && tournament.organizer_id !== request.user.sub) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
+      }
+      // In DE the matches feeding the grand final are the WB and LB finals,
+      // whose loser_next_match_id pointers are part of the bracket chain —
+      // rewiring them here would corrupt it. Third place is decided by the
+      // lower bracket anyway.
+      if (tournament.format === 'DOUBLE_ELIMINATION') {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'Double elimination decides third place via the lower bracket — no small final needed',
+          statusCode: 422,
+        });
       }
 
       // Load all non-deleted matches for this tournament — works for both SE
@@ -1135,6 +1146,16 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         m.player1_id === m.winner_id ? m.player2_id : m.player1_id;
       const p1 = loser(sf1);
       const p2 = loser(sf2);
+
+      // A semifinal decided by bye has no loser — creating the match anyway
+      // would just reproduce the null-player state this endpoint repairs.
+      if (p1 === null || p2 === null) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'A semifinal had no loser (bye) — third place cannot be determined automatically',
+          statusCode: 422,
+        });
+      }
 
       await fastify.prisma.$transaction(async (tx) => {
         if (existingTP) {

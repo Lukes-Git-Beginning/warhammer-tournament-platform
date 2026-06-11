@@ -14,7 +14,7 @@ export function PresetEditorPage() {
   const { data: user, isLoading: authLoading } = useRequireAuth();
 
   // Try to get the $id param — undefined on /presets/new route
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const params = useParams({ strict: false }) as Record<string, any>;
   const presetId = (params['id'] as string | undefined) ?? null;
 
