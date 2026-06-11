@@ -49,9 +49,6 @@ export function getEliminationPlacements(matches: BracketNode[]): EliminationPla
       const loser = gf.player1Id === gf.winnerId ? gf.player2Id : gf.player1Id;
       placements.set(gf.winnerId, 1);
       if (loser) placements.set(loser, 2);
-    } else {
-      if (gf.player1Id) placements.set(gf.player1Id, 1);
-      if (gf.player2Id) placements.set(gf.player2Id, 2);
     }
   }
 
@@ -60,9 +57,6 @@ export function getEliminationPlacements(matches: BracketNode[]): EliminationPla
       const loser = tp.player1Id === tp.winnerId ? tp.player2Id : tp.player1Id;
       placements.set(tp.winnerId, 3);
       if (loser) placements.set(loser, 4);
-    } else {
-      if (tp.player1Id) placements.set(tp.player1Id, 3);
-      if (tp.player2Id) placements.set(tp.player2Id, 4);
     }
   }
 

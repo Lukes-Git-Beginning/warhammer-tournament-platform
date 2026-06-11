@@ -2,7 +2,8 @@
 
 **TL;DR:**
 - Prisma 7 (`^7.8.0`) mit driver-adapter `PrismaPg` aus `@prisma/adapter-pg` — kein nativer Prisma-Connection-String-Modus.
-- 27 Models in `packages/db/prisma/schema.prisma` (nach Phase-2-Drop). Welle-2-Models: Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, AdminConfig. (`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` per `drop_welle2_mmr_deprecated` entfernt.)
+- 28 Models in `packages/db/prisma/schema.prisma`. Welle-2-Models: Map, TournamentMapPool, MatchMapDecision, MatchBlindPick, TournamentArmyList, SteamLink, AdminConfig. (`FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` per `drop_welle2_mmr_deprecated` entfernt.)
+- **2026-06-11 Migration `matrix_faction_mode`**: `TournamentMode` Enum um `MATRIX` erweitert. Neues Model `MatchFactionMatrix` (FK auf `MatchGame.game_id`, Felder: `coin_flip_seed`, `top/bottom_player_id`, `p1/p2_factions String[]`, `p1/p2_locked_at`, `first_locked_at`, `revealed_at`, `bans String[]`, `picked_cell`, `last_action_at`, `decided_at`). `MatchGame` hat neue Relation `faction_matrix MatchFactionMatrix?`.
 - **2026-06-07 Migration `remove_elo`**: `LeaderboardEntry.elo_rating` (Int) und `TournamentResult.elo_change` (Int) gedroppt. `LeaderboardEntry` hat jetzt nur noch: `total_points`, `games_played`, `wins`, `losses`.
 - **2026-06-08 Migration `match_game_counts_for_leaderboard`**: `MatchGame.counts_for_leaderboard Boolean @default(true)` hinzugefügt. Flag wird bei Game-Erstellung vom Tournament gestempelt; retroaktives Re-Stamp via PATCH. Filter-Sites nutzen jetzt das Game-Level-Feld statt Join auf Tournament. Backfill in Migration-SQL enthalten.
 - **Gotcha Advisory Lock**: Bei abgebrochenem `prisma migrate` hält die DB einen Lock. Fix: `docker exec tww3-postgres psql -U tww3 -d tww3 -c "SELECT pg_advisory_unlock_all();"` + danach pg_terminate_backend auf alle aktiven Connections.

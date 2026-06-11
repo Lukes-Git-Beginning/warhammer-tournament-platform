@@ -403,10 +403,10 @@ function PickBanPhase({
 
               {/* Diagonal BANNED overlay */}
               {isBanned && (
-                <div className="absolute inset-0 overflow-hidden bg-rizzotto-iron-950/60 flex items-center justify-center">
+                <div className="absolute inset-0 z-20 overflow-hidden bg-rizzotto-iron-950/90 flex items-center justify-center">
                   <span
-                    className="font-display font-black tracking-widest text-rizzotto-blood-500 uppercase pointer-events-none select-none"
-                    style={{ transform: 'rotate(-35deg)', fontSize: '1rem', opacity: 0.95 }}
+                    className="font-display font-black tracking-widest text-red-400 uppercase pointer-events-none select-none"
+                    style={{ transform: 'rotate(-35deg)', fontSize: '1.15rem' }}
                   >
                     BANNED
                   </span>
