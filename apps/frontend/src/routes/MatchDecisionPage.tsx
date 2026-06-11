@@ -283,12 +283,13 @@ function PickBanPhase({
   matchId,
   onDecisionUpdate,
 }: PickBanPhaseProps) {
-  const [banning, setBanning] = useState(false);
+  const [acting, setActing] = useState(false);
+  const [hoveredMapId, setHoveredMapId] = useState<string | null>(null);
 
   const isTop = decision.topPlayerId === currentUserId;
   const isBottom = decision.bottomPlayerId === currentUserId;
 
-  // Whose turn is it?
+  // P1 (top, coin-flip winner) bans first, P2 (bottom) then picks from remaining two.
   const topBanCount = decision.bansTop.length;
   const bottomBanCount = decision.bansBottom.length;
   const isTopTurn = topBanCount === 0;
@@ -297,15 +298,15 @@ function PickBanPhase({
 
   const allBannedIds = [...decision.bansTop, ...decision.bansBottom];
 
-  async function handleBan(mapId: string) {
-    setBanning(true);
+  async function handleAction(mapId: string) {
+    setActing(true);
     try {
       const updated = await banMap(matchId, mapId);
       onDecisionUpdate(updated);
     } catch {
       // ignore — socket will sync
     } finally {
-      setBanning(false);
+      setActing(false);
     }
   }
 
@@ -314,9 +315,12 @@ function PickBanPhase({
       ? 'complete'
       : !isMyTurn
         ? 'waiting'
-        : 'banning';
+        : isTopTurn
+          ? 'banning'
+          : 'picking';
 
   const pickedMap = mapPool.find((m) => m.id === decision.pickedMapId);
+  const actionLabel = phase === 'banning' ? 'BAN' : 'PICK';
 
   return (
     <div className="flex flex-col items-center gap-6">
@@ -332,13 +336,16 @@ function PickBanPhase({
         {phase === 'waiting' && (
           <span className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-rizzotto-stone-500 animate-pulse" />
-            Waiting for opponent to ban a map…
+            {topBanCount === 0
+              ? 'Waiting for opponent to ban a map…'
+              : 'Waiting for opponent to pick the map…'}
           </span>
         )}
         {phase === 'banning' && (
-          <span className="text-rizzotto-stone-200">
-            Your turn — ban one map from the pool.
-          </span>
+          <span className="text-rizzotto-stone-200">Your turn — ban one map from the pool.</span>
+        )}
+        {phase === 'picking' && (
+          <span className="text-rizzotto-stone-200">Your turn — pick the map you want to play on.</span>
         )}
       </div>
 
@@ -347,14 +354,17 @@ function PickBanPhase({
         {mapPool.map((map) => {
           const isBanned = allBannedIds.includes(map.id);
           const isPicked = map.id === decision.pickedMapId;
-          const isClickable = phase === 'banning' && !isBanned && !banning;
+          const isClickable = (phase === 'banning' || phase === 'picking') && !isBanned && !acting;
+          const isHovered = hoveredMapId === map.id;
 
           return (
             <motion.button
               key={map.id}
               type="button"
               disabled={!isClickable}
-              onClick={() => isClickable && handleBan(map.id)}
+              onClick={() => isClickable && handleAction(map.id)}
+              onMouseEnter={() => setHoveredMapId(map.id)}
+              onMouseLeave={() => setHoveredMapId(null)}
               whileHover={isClickable ? { scale: 1.03, y: -2 } : {}}
               whileTap={isClickable ? { scale: 0.97 } : {}}
               className={[
@@ -388,13 +398,19 @@ function PickBanPhase({
                   {map.name}
                 </p>
               </div>
+
+              {/* Diagonal BANNED overlay */}
               {isBanned && (
-                <div className="absolute inset-0 flex items-center justify-center bg-rizzotto-iron-950/70">
-                  <span className="font-display text-xs font-bold tracking-widest text-rizzotto-blood-500 uppercase">
-                    Banned
+                <div className="absolute inset-0 overflow-hidden bg-rizzotto-iron-950/60 flex items-center justify-center">
+                  <span
+                    className="font-display font-black tracking-widest text-rizzotto-blood-500 uppercase pointer-events-none select-none"
+                    style={{ transform: 'rotate(-35deg)', fontSize: '1rem', opacity: 0.95 }}
+                  >
+                    BANNED
                   </span>
                 </div>
               )}
+
               {isPicked && (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -403,6 +419,22 @@ function PickBanPhase({
                 >
                   <span className="font-display text-xs font-bold tracking-widest text-rizzotto-gold-400 uppercase">
                     Picked
+                  </span>
+                </motion.div>
+              )}
+
+              {/* Hover action label — BAN (red) or PICK (gold) */}
+              {isClickable && isHovered && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.1 }}
+                  className="absolute inset-0 flex items-center justify-center bg-rizzotto-iron-900/75 z-20"
+                >
+                  <span className={`font-display text-sm font-black tracking-widest uppercase ${
+                    phase === 'banning' ? 'text-rizzotto-blood-400' : 'text-rizzotto-gold-400'
+                  }`}>
+                    {actionLabel}
                   </span>
                 </motion.div>
               )}
@@ -935,7 +967,7 @@ export function MatchDecisionPage() {
                 mapPool={mapPool}
                 currentUserId={user.id}
                 matchId={matchId}
-                onDecisionUpdate={setDecision}
+                onDecisionUpdate={(d) => setDecision((prev) => prev ? { ...prev, ...d } : d)}
               />
             </motion.div>
           )}

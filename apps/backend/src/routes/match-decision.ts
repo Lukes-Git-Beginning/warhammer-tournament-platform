@@ -581,15 +581,14 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Determine whose turn it is
-      // Top bans first (bans_top empty), then bottom (bans_bottom empty)
+      // Top bans first, then bottom PICKS from the remaining two.
       const isTopTurn = bansTop.length === 0;
       const isBottomTurn = bansTop.length === 1 && bansBottom.length === 0;
 
       if (!isTopTurn && !isBottomTurn) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: 'Both players have already banned',
+          message: 'Ban/pick phase is already complete',
           statusCode: 422,
         });
       }
@@ -598,28 +597,29 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       if (userId !== expectedPlayerId) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: "It is not your turn to ban",
+          message: isTopTurn ? 'It is not your turn to ban' : 'It is not your turn to pick',
           statusCode: 403,
         });
       }
 
-      // Apply ban
-      const newBansTop = isTopTurn ? [...bansTop, map_id] : bansTop;
-      const newBansBottom = !isTopTurn ? [...bansBottom, map_id] : bansBottom;
-
-      // After both bans, determine the remaining map
-      const newAllBanned = [...newBansTop, ...newBansBottom];
-      const remaining = poolMapIds.filter((id) => !newAllBanned.includes(id));
-
+      let newBansTop = bansTop;
+      let newBansBottom = bansBottom;
       let pickedMapId: string | null = null;
       let decidedAt: Date | null = null;
 
-      if (newBansTop.length >= 1 && newBansBottom.length >= 1 && remaining.length === 1) {
-        pickedMapId = remaining[0] ?? null;
-        decidedAt = new Date();
-      } else if (remaining.length === 0 && newBansTop.length >= 1 && newBansBottom.length >= 1) {
-        // Edge case: pool size = 2, both banned → pick first from pool as tiebreak
-        pickedMapId = poolMapIds[0] ?? null;
+      if (isTopTurn) {
+        // P1 bans one map
+        newBansTop = [...bansTop, map_id];
+      } else {
+        // P2 picks the map they want to play — must not be in bansTop
+        if (bansTop.includes(map_id)) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'That map has already been banned',
+            statusCode: 422,
+          });
+        }
+        pickedMapId = map_id;
         decidedAt = new Date();
       }
 

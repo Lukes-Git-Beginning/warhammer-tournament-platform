@@ -2,6 +2,22 @@ import type { BracketNode, BracketResponse, FactionDto } from '@rizzotto/types';
 import { computeBracketLayout, MATCH_WIDTH, MATCH_HEIGHT, ROUND_GAP } from './computeBracketLayout';
 import { MatchNode } from './MatchNode';
 
+// Playoff phases that feed into each other (used when next_match_id is null in the DB).
+const PHASE_FEEDS_INTO: Record<string, string> = {
+  PLAYOFF_QF: 'PLAYOFF_SF',
+  PLAYOFF_SF: 'PLAYOFF_FINAL',
+};
+
+function resolveNextMatchId(m: BracketNode, allMatches: BracketNode[]): string | null {
+  if (m.nextMatchId) return m.nextMatchId;
+  if (!m.phase || !PHASE_FEEDS_INTO[m.phase]) return null;
+  const targetPhase = PHASE_FEEDS_INTO[m.phase];
+  const next = allMatches.find(
+    (t) => t.phase === targetPhase && t.matchNumber === Math.ceil(m.matchNumber / 2),
+  );
+  return next?.matchId ?? null;
+}
+
 export interface BracketPlayerInfo {
   name: string;
   avatarUrl: string | null;
@@ -31,11 +47,12 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
 
   // For each match, find the two feeder matches (sorted by matchNumber) so we can
   // show "Grombrindal / Louen" instead of "BYE" in undecided future-round slots.
+  // Falls back to round/matchNumber arithmetic when next_match_id is null in the DB.
   const slotLabels = new Map<string, { p1: string | null; p2: string | null }>();
   for (const target of data.matches) {
     if (target.player1Id !== null && target.player2Id !== null) continue;
     const feeders = data.matches
-      .filter((f) => f.nextMatchId === target.matchId)
+      .filter((f) => resolveNextMatchId(f, data.matches) === target.matchId)
       .sort((a, b) => a.matchNumber - b.matchNumber);
     slotLabels.set(target.matchId, {
       p1: target.player1Id === null ? (feeders[0] ? makeSlotLabel(feeders[0], players) : null) : null,
@@ -57,9 +74,10 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
     >
       {/* Winner-progression connector lines (behind match nodes) */}
       {data.matches.map((m) => {
-        if (!m.nextMatchId) return null;
+        const effectiveNextId = resolveNextMatchId(m, data.matches);
+        if (!effectiveNextId) return null;
         const from = layout.positions.get(m.matchId);
-        const to = layout.positions.get(m.nextMatchId);
+        const to = layout.positions.get(effectiveNextId);
         if (!from || !to) return null;
 
         const startX = from.x + MATCH_WIDTH + PAD;
@@ -70,7 +88,7 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
 
         return (
           <path
-            key={`conn-${m.matchId}`}
+            key={`conn-${m.matchId}-${effectiveNextId}`}
             d={`M ${startX} ${startY} H ${midX} V ${endY} H ${endX}`}
             stroke="#3a3a3a"
             strokeWidth="2"
