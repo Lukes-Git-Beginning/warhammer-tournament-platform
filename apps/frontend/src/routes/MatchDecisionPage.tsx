@@ -797,9 +797,8 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
           {isMyTurn && mx.lastActionAt && <MatrixCountdown lastActionAt={mx.lastActionAt} />}
         </div>
 
-        <div className="w-full overflow-x-auto">
-          <div className="min-w-[660px] mx-auto">
-            <div className="grid grid-cols-3 gap-[3px] bg-rizzotto-stone-600 rounded overflow-hidden">
+        <div className="max-w-[660px] mx-auto">
+          <div className="grid grid-cols-3 gap-[3px] bg-rizzotto-stone-400 rounded overflow-hidden">
           {[0, 1, 2].map((row) =>
             [0, 1, 2].map((col) => {
               const cell = `${row},${col}`;
@@ -883,7 +882,6 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
               );
             })
           )}
-            </div>
           </div>
         </div>
       </div>
@@ -1247,7 +1245,7 @@ export function MatchDecisionPage() {
   }
 
   return (
-    <PageShell variant="tight" spacing="base">
+    <PageShell variant={decision.tournamentMode === 'MATRIX' ? 'wide' : 'tight'} spacing="base">
       <div className="mb-8 text-center relative">
         {matchDetail?.tournament_slug && (
           <Link

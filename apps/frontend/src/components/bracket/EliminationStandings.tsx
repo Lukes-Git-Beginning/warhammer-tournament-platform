@@ -185,7 +185,7 @@ export function EliminationStandings({
         {sorted.map((p, i) => (
           <Fragment key={p.id}>
             {renderRow(p)}
-            {i === gfDividerAfter && sorted.length > gfDividerAfter + 1 && (
+            {i === gfDividerAfter && gfParticipants.size === 2 && sorted.length > gfDividerAfter + 1 && (
               <Divider label="Grand Final" />
             )}
           </Fragment>
