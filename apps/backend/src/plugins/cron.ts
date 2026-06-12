@@ -12,12 +12,18 @@ declare module 'fastify' {
   }
 }
 
-// In-memory set to ensure check-in reminders are only sent once per tournament per day.
-// Resets on server restart (acceptable — worst case a duplicate DM).
 const remindedTournamentIds = new Set<string>();
 
 export default fp(
   async (fastify) => {
+    // Pre-populate from AuditLog so server restarts don't cause duplicate check-in DMs.
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const alreadySent = await fastify.prisma.auditLog.findMany({
+      where: { action: 'checkin_reminder_sent', created_at: { gte: todayStart } },
+      select: { entity_id: true },
+    });
+    alreadySent.forEach(({ entity_id }) => remindedTournamentIds.add(entity_id));
     // -----------------------------------------------------------------------
     // Daily faction stats snapshot — 00:05 UTC
     // -----------------------------------------------------------------------
@@ -82,7 +88,7 @@ export default fp(
                 .create({
                   data: {
                     entity_type: 'Tournament',
-                    entity_id: tournament.slug,
+                    entity_id: tournament.id,
                     action: 'checkin_reminder_sent',
                     actor_id: null,
                     new_value: { sent_at: now.toISOString() },
