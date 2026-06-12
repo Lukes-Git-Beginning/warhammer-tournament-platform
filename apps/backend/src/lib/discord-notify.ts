@@ -82,7 +82,7 @@ async function openDmChannel(discordUserId: string): Promise<string | null> {
   }
 }
 
-async function sendDm(discordUserId: string, content: string): Promise<void> {
+export async function sendDm(discordUserId: string, content: string): Promise<void> {
   const channelId = await openDmChannel(discordUserId);
   if (!channelId) return;
 

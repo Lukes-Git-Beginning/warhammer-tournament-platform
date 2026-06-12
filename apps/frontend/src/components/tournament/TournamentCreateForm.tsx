@@ -14,7 +14,7 @@ const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
   format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN']),
-  mode: z.enum(['BPT', 'SFT', 'SLT']).default('BPT'),
+  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX']).default('BPT'),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
   max_participants: z.coerce.number().int().positive().optional().or(z.literal('')),
@@ -31,7 +31,7 @@ const TournamentCreateSchema = z.object({
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).default('RANDOM_PICK_BAN'),
-  map_pool: z.array(z.string()).min(3).max(36).default([]),
+  map_pool: z.array(z.string()).min(1).max(36).default([]),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   faction_pool: z.array(z.string()).optional(),
 });
@@ -59,22 +59,49 @@ function formatToMaxGames(fmt?: string): number {
 
 function buildRoundKeys(form: Partial<FormData>): { key: string; label: string; maxGames: number }[] {
   const keys: { key: string; label: string; maxGames: number }[] = [];
-  if (form.format !== 'SWISS' && form.format !== 'LIECHTENSTEIN') return keys;
-  const rounds = form.rounds_count ?? 5;
   const swissGames = formatToMaxGames(form.swiss_match_format);
   const playoffGames = formatToMaxGames(form.playoff_match_format);
   const finaleGames = formatToMaxGames(form.finale_match_format);
-  for (let i = 1; i <= rounds; i++) {
-    keys.push({ key: `swiss_${i}`, label: `Swiss Round ${i}`, maxGames: swissGames });
+
+  if (form.format === 'SWISS' || form.format === 'LIECHTENSTEIN') {
+    const rounds = form.rounds_count ?? 5;
+    const roundLabel = form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Round' : 'Swiss Round';
+    for (let i = 1; i <= rounds; i++) {
+      keys.push({ key: `swiss_${i}`, label: `${roundLabel} ${i}`, maxGames: swissGames });
+    }
   }
-  if (form.playoff_format === 'TOP4') {
-    keys.push({ key: 'playoff_1', label: 'Semifinal', maxGames: playoffGames });
-    keys.push({ key: 'playoff_2', label: 'Final', maxGames: finaleGames });
-  } else if (form.playoff_format === 'TOP8') {
-    keys.push({ key: 'playoff_1', label: 'Quarterfinal', maxGames: playoffGames });
-    keys.push({ key: 'playoff_2', label: 'Semifinal', maxGames: playoffGames });
-    keys.push({ key: 'playoff_3', label: 'Final', maxGames: finaleGames });
+
+  const isSE = form.format === 'SINGLE_ELIMINATION';
+  const isDE = form.format === 'DOUBLE_ELIMINATION';
+
+  if (isSE) {
+    // 4 numbered elim rounds covers up to 64 players (SF + GF are named stages).
+    for (let i = 1; i <= 4; i++) {
+      keys.push({ key: `swiss_${i}`, label: `Elim Round ${i}`, maxGames: swissGames });
+    }
+  } else if (isDE) {
+    // WB rounds 1–4 (covers up to 64 players). LB rounds 1–6 (normalized from R_W+1).
+    for (let i = 1; i <= 4; i++) {
+      keys.push({ key: `wb_round_${i}`, label: `WB Round ${i}`, maxGames: swissGames });
+    }
+    for (let i = 1; i <= 6; i++) {
+      keys.push({ key: `lb_round_${i}`, label: `LB Round ${i}`, maxGames: swissGames });
+    }
   }
+
+  const hasPlayoffs = isSE || isDE || form.playoff_format === 'TOP4' || form.playoff_format === 'TOP8';
+
+  if (hasPlayoffs) {
+    if (form.playoff_format === 'TOP8') {
+      keys.push({ key: 'playoff_qf', label: 'Quarterfinals', maxGames: playoffGames });
+    }
+    keys.push({ key: 'playoff_sf', label: 'Semifinals', maxGames: playoffGames });
+    keys.push({ key: 'playoff_final', label: 'Grand Final', maxGames: finaleGames });
+    if (form.has_third_place_match && !isDE) {
+      keys.push({ key: 'playoff_third', label: 'Small Final (3rd Place)', maxGames: playoffGames });
+    }
+  }
+
   return keys;
 }
 
@@ -119,6 +146,16 @@ export function TournamentCreateForm() {
   });
   const allFactions = (factionsData?.data ?? []).map((f) => f.faction).sort((a, b) => a.name.localeCompare(b.name));
 
+  const BAN_MODES = new Set(['PICK_BAN', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']);
+  const maxFormatGames = Math.max(
+    formatToMaxGames(form.swiss_match_format),
+    formatToMaxGames(form.playoff_match_format),
+    formatToMaxGames(form.finale_match_format),
+  );
+  const minPool = BAN_MODES.has(form.map_decision_mode ?? 'RANDOM_PICK_BAN')
+    ? Math.max(3, maxFormatGames)
+    : Math.max(1, maxFormatGames);
+
   const mutation = useMutation({
     mutationFn: createTournament,
     onSuccess: async (tournament) => {
@@ -136,6 +173,7 @@ export function TournamentCreateForm() {
       ...prev,
       [name]: newValue,
       ...(name === 'draft_enabled' && !checked ? { draft_preset_id: null } : {}),
+      ...(name === 'format' ? { finale_match_format: value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO1' } : {}),
     }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
   }
@@ -156,6 +194,12 @@ export function TournamentCreateForm() {
         }
       }
       setErrors(fieldErrors);
+      return;
+    }
+
+    // Dynamic map pool minimum: must cover the largest match format selected.
+    if ((result.data.map_pool ?? []).length < minPool) {
+      setErrors((prev) => ({ ...prev, map_pool: `Select at least ${minPool} maps (your largest format needs ${maxFormatGames} games).` }));
       return;
     }
 
@@ -265,11 +309,13 @@ export function TournamentCreateForm() {
             <option value="BPT">BPT — Blind Pick Tournament</option>
             <option value="SFT">SFT — Single Faction Tournament</option>
             <option value="SLT">SLT — Single List Tournament</option>
+            <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
           </Select>
           <FieldHint>
             {(form.mode === 'BPT' || !form.mode) && 'Every match includes a blind faction pick phase.'}
             {form.mode === 'SFT' && 'Players pre-select a faction at registration; revealed at tournament start.'}
             {form.mode === 'SLT' && 'Players upload their army list at registration. Reveal after each completed match.'}
+            {form.mode === 'MATRIX' && 'Each match: both players pick 3 factions blindly, then ban from the 3×3 matchup grid.'}
           </FieldHint>
         </div>
       </div>
@@ -454,18 +500,46 @@ export function TournamentCreateForm() {
           </>
         ) : (
           <>
-            <div>
-              <Label htmlFor="tcf-elim-fmt">Match Format</Label>
-              <Select
-                id="tcf-elim-fmt"
-                name="swiss_match_format"
-                value={form.swiss_match_format ?? 'BO1'}
-                onChange={handleChange}
-              >
-                <option value="BO1">Best of 1</option>
-                <option value="BO3">Best of 3</option>
-                <option value="BO5">Best of 5</option>
-              </Select>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <Label htmlFor="tcf-elim-fmt">Match Format</Label>
+                <Select
+                  id="tcf-elim-fmt"
+                  name="swiss_match_format"
+                  value={form.swiss_match_format ?? 'BO1'}
+                  onChange={handleChange}
+                >
+                  <option value="BO1">Best of 1</option>
+                  <option value="BO3">Best of 3</option>
+                  <option value="BO5">Best of 5</option>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="tcf-elim-sf-fmt">Semis Format</Label>
+                <Select
+                  id="tcf-elim-sf-fmt"
+                  name="playoff_match_format"
+                  value={form.playoff_match_format ?? 'BO1'}
+                  onChange={handleChange}
+                >
+                  <option value="BO1">Best of 1</option>
+                  <option value="BO3">Best of 3</option>
+                  <option value="BO5">Best of 5</option>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="tcf-elim-gf-fmt">Grand Final Format</Label>
+                <Select
+                  id="tcf-elim-gf-fmt"
+                  name="finale_match_format"
+                  value={form.finale_match_format ?? 'BO1'}
+                  onChange={handleChange}
+                >
+                  <option value="BO1">Best of 1</option>
+                  <option value="BO3">Best of 3</option>
+                  <option value="BO5">Best of 5</option>
+                </Select>
+              </div>
             </div>
             {form.format === 'SINGLE_ELIMINATION' && (
               <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -537,7 +611,7 @@ export function TournamentCreateForm() {
                 {isPickBan ? 'Map preset per round & game (3 maps per game)' : 'Map preset per round (1 map per game)'}
               </p>
               {roundKeys.length === 0 && (
-                <p className="text-xs text-rizzotto-stone-500">Select format and round count first.</p>
+                <p className="text-xs text-rizzotto-stone-500">No configurable rounds for this format. Enable playoffs to configure map presets for bracket stages.</p>
               )}
               {roundKeys.map(({ key, label, maxGames }) => {
                 const entry = config[key];
@@ -632,7 +706,7 @@ export function TournamentCreateForm() {
             <Label>
               Map Selection{' '}
               <span className="text-rizzotto-stone-500 font-normal text-xs">
-                ({(form.map_pool ?? []).length}/{allMaps.length} selected, min 3)
+                ({(form.map_pool ?? []).length}/{allMaps.length} selected, min {minPool})
               </span>
             </Label>
             <button
@@ -698,7 +772,7 @@ export function TournamentCreateForm() {
         </div></>)}
         {(form.map_decision_mode === 'RANDOM_NO_REPEAT' || form.map_decision_mode === 'RANDOM_PICK_BAN') && (
           <FieldHint>
-            Minimum pool: For random modes the pool must contain at least as many maps as the maximum games in the match format (BO1=1, BO3=3, BO5=5).
+            Minimum pool: {minPool} map{minPool !== 1 ? 's' : ''} required for your current format and mode selection (BO1=1, BO3=3, BO5=5 — ban modes need at least 3).
           </FieldHint>
         )}
         {(form.map_pool ?? []).length < 3 && (form.map_pool ?? []).length > 0 && (

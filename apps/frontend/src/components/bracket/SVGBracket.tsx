@@ -2,6 +2,22 @@ import type { BracketNode, BracketResponse, FactionDto } from '@rizzotto/types';
 import { computeBracketLayout, MATCH_WIDTH, MATCH_HEIGHT, ROUND_GAP } from './computeBracketLayout';
 import { MatchNode } from './MatchNode';
 
+// Playoff phases that feed into each other (used when next_match_id is null in the DB).
+const PHASE_FEEDS_INTO: Record<string, string> = {
+  PLAYOFF_QF: 'PLAYOFF_SF',
+  PLAYOFF_SF: 'PLAYOFF_FINAL',
+};
+
+function resolveNextMatchId(m: BracketNode, allMatches: BracketNode[]): string | null {
+  if (m.nextMatchId) return m.nextMatchId;
+  if (!m.phase || !PHASE_FEEDS_INTO[m.phase]) return null;
+  const targetPhase = PHASE_FEEDS_INTO[m.phase];
+  const next = allMatches.find(
+    (t) => t.phase === targetPhase && t.matchNumber === Math.ceil(m.matchNumber / 2),
+  );
+  return next?.matchId ?? null;
+}
+
 export interface BracketPlayerInfo {
   name: string;
   avatarUrl: string | null;
@@ -15,14 +31,34 @@ interface SVGBracketProps {
   onMatchClick?: (matchId: string) => void;
 }
 
-/** Returns "A / B" (or "A", or "M3") for an undecided winner slot coming from a feeder match. */
-function makeSlotLabel(feeder: BracketNode, players?: Map<string, BracketPlayerInfo>): string {
-  const p1 = feeder.player1Id ? (players?.get(feeder.player1Id)?.name ?? null) : null;
-  const p2 = feeder.player2Id ? (players?.get(feeder.player2Id)?.name ?? null) : null;
-  if (p1 && p2) return `${p1} / ${p2}`;
-  if (p1) return p1;
-  if (p2) return p2;
-  return `M${feeder.matchNumber}`;
+/**
+ * Returns a slot label for an undecided bracket slot.
+ * - Completed feeder + loserSlot  → shows the loser's name (single name, confirmed)
+ * - Completed feeder + winnerSlot → shows the winner's name (single name, confirmed)
+ * - Pending feeder with 2 players → "P1 / P2" (exactly 2 candidates)
+ * - Pending feeder with 1 player  → that player's name
+ * - Pending feeder with 0 players → null → MatchNode shows "TBD"
+ */
+function makeSlotLabel(
+  feeder: BracketNode,
+  players?: Map<string, BracketPlayerInfo>,
+  isLoserSlot = false,
+): string | null {
+  const p1Name = feeder.player1Id ? (players?.get(feeder.player1Id)?.name ?? null) : null;
+  const p2Name = feeder.player2Id ? (players?.get(feeder.player2Id)?.name ?? null) : null;
+
+  if ((feeder.status === 'COMPLETED' || feeder.status === 'FORFEIT') && feeder.winnerId) {
+    if (isLoserSlot) {
+      const loserId = feeder.player1Id === feeder.winnerId ? feeder.player2Id : feeder.player1Id;
+      return loserId ? (players?.get(loserId)?.name ?? null) : null;
+    }
+    return players?.get(feeder.winnerId)?.name ?? null;
+  }
+
+  if (p1Name && p2Name) return `${p1Name} / ${p2Name}`;
+  if (p1Name) return `${p1Name} / TBD`;
+  if (p2Name) return `${p2Name} / TBD`;
+  return null; // feeder has no known players yet → show TBD
 }
 
 export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchClick }: SVGBracketProps) {
@@ -31,15 +67,25 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
 
   // For each match, find the two feeder matches (sorted by matchNumber) so we can
   // show "Grombrindal / Louen" instead of "BYE" in undecided future-round slots.
+  // Falls back to round/matchNumber arithmetic when next_match_id is null in the DB.
   const slotLabels = new Map<string, { p1: string | null; p2: string | null }>();
   for (const target of data.matches) {
     if (target.player1Id !== null && target.player2Id !== null) continue;
+    // Include both winner-path feeders (nextMatchId) and loser-path feeders (loserNextMatchId)
     const feeders = data.matches
-      .filter((f) => f.nextMatchId === target.matchId)
+      .filter((f) =>
+        resolveNextMatchId(f, data.matches) === target.matchId ||
+        f.loserNextMatchId === target.matchId,
+      )
       .sort((a, b) => a.matchNumber - b.matchNumber);
+    const isLoserFeeder = (f: BracketNode) => f.loserNextMatchId === target.matchId;
     slotLabels.set(target.matchId, {
-      p1: target.player1Id === null ? (feeders[0] ? makeSlotLabel(feeders[0], players) : null) : null,
-      p2: target.player2Id === null ? (feeders[1] ? makeSlotLabel(feeders[1], players) : null) : null,
+      p1: target.player1Id === null
+        ? (feeders[0] ? makeSlotLabel(feeders[0], players, isLoserFeeder(feeders[0])) : null)
+        : null,
+      p2: target.player2Id === null
+        ? (feeders[1] ? makeSlotLabel(feeders[1], players, isLoserFeeder(feeders[1])) : null)
+        : null,
     });
   }
 
@@ -57,9 +103,10 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
     >
       {/* Winner-progression connector lines (behind match nodes) */}
       {data.matches.map((m) => {
-        if (!m.nextMatchId) return null;
+        const effectiveNextId = resolveNextMatchId(m, data.matches);
+        if (!effectiveNextId) return null;
         const from = layout.positions.get(m.matchId);
-        const to = layout.positions.get(m.nextMatchId);
+        const to = layout.positions.get(effectiveNextId);
         if (!from || !to) return null;
 
         const startX = from.x + MATCH_WIDTH + PAD;
@@ -70,7 +117,7 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
 
         return (
           <path
-            key={`conn-${m.matchId}`}
+            key={`conn-${m.matchId}-${effectiveNextId}`}
             d={`M ${startX} ${startY} H ${midX} V ${endY} H ${endX}`}
             stroke="#3a3a3a"
             strokeWidth="2"

@@ -57,6 +57,14 @@ export async function finalizeGameResult(
           player2_faction_id: true,
         },
       },
+      faction_matrix: {
+        select: {
+          decided_at: true,
+          picked_cell: true,
+          p1_factions: true,
+          p2_factions: true,
+        },
+      },
       match: {
         select: {
           player1_id: true,
@@ -94,16 +102,30 @@ export async function finalizeGameResult(
   let p1FactionId: string | null;
   let p2FactionId: string | null;
 
-  const mode = game.match.tournament.mode;
+  const mode = game.match.tournament?.mode;
   if (mode === 'BPT' && game.blind_pick?.revealed_at) {
     p1FactionId = game.blind_pick.player1_faction_id ?? null;
     p2FactionId = game.blind_pick.player2_faction_id ?? null;
   } else if (mode === 'SFT') {
-    const participants = game.match.tournament.participants;
+    const participants = game.match.tournament?.participants ?? [];
     const p1Part = participants.find((p) => p.user_id === game.match.player1_id);
     const p2Part = participants.find((p) => p.user_id === game.match.player2_id);
     p1FactionId = p1Part?.faction?.id ?? game.match.player1_faction_id ?? null;
     p2FactionId = p2Part?.faction?.id ?? game.match.player2_faction_id ?? null;
+  } else if (mode === 'MATRIX') {
+    const matrix = game.faction_matrix;
+    if (matrix?.decided_at && matrix.picked_cell) {
+      const [row, col] = matrix.picked_cell.split(',').map(Number);
+      p1FactionId = matrix.p1_factions[row ?? 0] ?? null;
+      p2FactionId = matrix.p2_factions[col ?? 0] ?? null;
+    } else {
+      p1FactionId = null;
+      p2FactionId = null;
+    }
+  } else if (!game.match.tournament && game.blind_pick?.revealed_at) {
+    // Open Play: factions come from the blind pick
+    p1FactionId = game.blind_pick.player1_faction_id ?? null;
+    p2FactionId = game.blind_pick.player2_faction_id ?? null;
   } else {
     p1FactionId = game.match.player1_faction_id ?? null;
     p2FactionId = game.match.player2_faction_id ?? null;
@@ -173,7 +195,17 @@ export async function finalizeGameResult(
   }
 
   // Series completion: count wins and decide whether to continue or complete
-  const format = resolveMatchFormat(game.match.tournament, game.match.phase ?? null);
+  let format: 'BO1' | 'BO3' | 'BO5';
+  if (game.match.tournament) {
+    format = resolveMatchFormat(game.match.tournament, game.match.phase ?? null);
+  } else {
+    // Open Play: format comes from the ScheduledMatchup (queue matches default to BO1)
+    const matchup = await fastify.prisma.scheduledMatchup.findUnique({
+      where: { match_id: game.match_id },
+      select: { format: true },
+    });
+    format = (matchup?.format ?? 'BO1') as 'BO1' | 'BO3' | 'BO5';
+  }
   const winsNeeded = format === 'BO5' ? 3 : format === 'BO3' ? 2 : 1;
 
   const completedGames = await fastify.prisma.matchGame.findMany({
@@ -195,9 +227,36 @@ export async function finalizeGameResult(
       skipStats: true, // stats already written per-game above
     });
   } else {
-    // Series continues — create next game row so the frontend can trigger the decision
+    // Series continues — create next game row
     const nextGameNumber = game.game_number + 1;
-    await ensureMatchGame(fastify.prisma, game.match_id, nextGameNumber, game.match.tournament.counts_for_leaderboard);
+    const nextGameId = await ensureMatchGame(fastify.prisma, game.match_id, nextGameNumber, game.match.tournament?.counts_for_leaderboard ?? true);
+
+    // For Open Play (no tournament): auto-assign a random map + blind pick so
+    // players go straight to faction selection — no "Choose Battlefield" needed.
+    if (!game.match.tournament && game.match.player1_id && game.match.player2_id) {
+      const existing = await fastify.prisma.matchMapDecision.findUnique({ where: { game_id: nextGameId } });
+      if (!existing) {
+        const maps = await fastify.prisma.map.findMany({ where: { deleted_at: null }, select: { id: true } });
+        const randomMap = maps.length > 0 ? maps[Math.floor(Math.random() * maps.length)] : null;
+        if (randomMap) {
+          await fastify.prisma.matchMapDecision.create({
+            data: {
+              game_id: nextGameId,
+              mode: 'RANDOM',
+              coin_flip_seed: `open_play_${game.match_id}_g${nextGameNumber}`,
+              top_player_id: game.match.player1_id,
+              bottom_player_id: game.match.player2_id,
+              bans_top: [],
+              bans_bottom: [],
+              active_pool: [],
+              picked_map_id: randomMap.id,
+              decided_at: new Date(),
+            },
+          });
+        }
+        await fastify.prisma.matchBlindPick.create({ data: { game_id: nextGameId } });
+      }
+    }
 
     if (fastify.io) {
       fastify.io.to(`match_decision_${game.match_id}`).emit('match.game.updated', {

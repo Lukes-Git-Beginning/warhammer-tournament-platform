@@ -23,6 +23,7 @@ datasource db {
 
 enum Role {
   USER
+  HOST
   ORGANIZER
   MODERATOR
   ADMIN
@@ -44,6 +45,7 @@ enum TournamentMode {
   BPT // Blind Pick Tournament — every match has blind faction pick
   SFT // Single Faction Tournament — faction pre-pick at registration
   SLT // Single List Tournament — army list pre-upload at registration
+  MATRIX // 3×3 Faction Matrix — blind 3-pick per player, 7 bans + 1 pick
 }
 
 enum PlayoffFormat {
@@ -140,6 +142,23 @@ enum DraftStatus {
   CANCELLED
 }
 
+enum MatchType {
+  TOURNAMENT
+  OPEN_PLAY
+}
+
+enum AvailabilityContext {
+  TOURNAMENT
+  MATCHMAKING
+}
+
+enum ScheduledMatchupStatus {
+  OPEN
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
 // -----------------------------------------------------------------------------
 // Core: Users
 // -----------------------------------------------------------------------------
@@ -183,6 +202,10 @@ model User {
   external_games_as_p1  ExternalGame[]          @relation("ExternalGamePlayer1")
   external_games_as_p2  ExternalGame[]          @relation("ExternalGamePlayer2")
   external_games_won    ExternalGame[]          @relation("ExternalGameWinner")
+  // M8 Open Play
+  availability_slots    AvailabilitySlot[]
+  proposed_matchups     ScheduledMatchup[]      @relation("MatchupProposer")
+  accepted_matchups     ScheduledMatchup[]      @relation("MatchupAcceptor")
 
   @@index([role])
   @@index([deleted_at])
@@ -319,7 +342,8 @@ model TournamentParticipant {
 
 model Match {
   id                  String           @id @default(uuid()) @db.Uuid
-  tournament_id       String           @db.Uuid
+  tournament_id       String?          @db.Uuid
+  type                MatchType        @default(TOURNAMENT)
   round               Int
   match_number        Int
   player1_id          String?          @db.Uuid
@@ -347,7 +371,7 @@ model Match {
   updated_at          DateTime         @updatedAt
   deleted_at          DateTime?
 
-  tournament       Tournament        @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  tournament       Tournament?       @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
   season           Season?           @relation(fields: [season_id], references: [id])
   player1          User?             @relation("MatchPlayer1", fields: [player1_id], references: [id])
   player2          User?             @relation("MatchPlayer2", fields: [player2_id], references: [id])
@@ -392,9 +416,10 @@ model MatchGame {
   created_at             DateTime    @default(now())
   updated_at             DateTime    @updatedAt
 
-  match        Match             @relation(fields: [match_id], references: [id], onDelete: Cascade)
-  map_decision MatchMapDecision?
-  blind_pick   MatchBlindPick?
+  match           Match                @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  map_decision    MatchMapDecision?
+  blind_pick      MatchBlindPick?
+  faction_matrix  MatchFactionMatrix?
 
   @@unique([match_id, game_number])
   @@index([match_id])
@@ -412,6 +437,26 @@ model MatchMapDecision {
   bans_bottom      String[] // Map IDs banned by bottom player
   active_pool      String[]        @default([]) // HOST_PRESET_PICK_BAN / RANDOM_PICK_BAN: aktive 3 Maps für dieses Game
   picked_map_id    String? // final picked Map ID
+  decided_at       DateTime?
+
+  game MatchGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
+}
+
+// MATRIX mode: 3×3 faction matrix per game.
+model MatchFactionMatrix {
+  game_id          String    @id @db.Uuid
+  coin_flip_seed   String    @default("")
+  top_player_id    String    @db.Uuid @default(dbgenerated("'00000000-0000-0000-0000-000000000000'::uuid"))
+  bottom_player_id String    @db.Uuid @default(dbgenerated("'00000000-0000-0000-0000-000000000000'::uuid"))
+  p1_factions      String[]  @default([]) // match.player1_id's 3 faction picks
+  p2_factions      String[]  @default([]) // match.player2_id's 3 faction picks
+  p1_locked_at     DateTime?
+  p2_locked_at     DateTime?
+  first_locked_at  DateTime? // timestamp of first lock — for blind-pick countdown
+  revealed_at      DateTime?
+  bans             String[]  @default([]) // "row,col" strings e.g. ["0,1","2,2"]
+  picked_cell      String?               // "row,col" of the final matchup
+  last_action_at   DateTime? // timestamp of last ban/pick — for 15s timeout
   decided_at       DateTime?
 
   game MatchGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
@@ -854,4 +899,43 @@ model AdminConfig {
   value      Json
   updated_by String? // discord_id or null for system
   updated_at DateTime @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// M8 Open Play
+// -----------------------------------------------------------------------------
+
+model AvailabilitySlot {
+  id          String              @id @default(uuid()) @db.Uuid
+  user_id     String              @db.Uuid
+  day_of_week Int                 // 0=Mon..6=Sun
+  hour_utc    Int                 // 0..23
+  context     AvailabilityContext
+  created_at  DateTime            @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, day_of_week, hour_utc, context])
+  @@index([day_of_week, hour_utc, context])
+}
+
+model ScheduledMatchup {
+  id             String                 @id @default(uuid()) @db.Uuid
+  proposer_id    String                 @db.Uuid
+  format         MatchFormat
+  proposed_at    DateTime               // desired match time (stored as UTC)
+  notes          String?
+  anonymous      Boolean                @default(false)
+  status         ScheduledMatchupStatus @default(OPEN)
+  accepted_by_id String?                @db.Uuid
+  match_id       String?                @db.Uuid @unique
+  created_at     DateTime               @default(now())
+  expires_at     DateTime
+
+  proposer    User  @relation("MatchupProposer", fields: [proposer_id], references: [id])
+  accepted_by User? @relation("MatchupAcceptor", fields: [accepted_by_id], references: [id])
+
+  @@index([status, expires_at])
+  @@index([proposer_id])
+  @@index([proposed_at])
 }

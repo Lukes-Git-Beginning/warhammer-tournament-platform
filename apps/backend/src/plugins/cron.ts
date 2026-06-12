@@ -4,6 +4,7 @@ import { takeFactionsSnapshot } from '../lib/faction-snapshot.js';
 import { notifyCheckInReminder } from '../lib/discord-notify.js';
 import { autoConfirmExpiredGameResults } from '../lib/match-games.js';
 import { autoResolveStaleBlindPicks } from '../lib/blind-pick-auto-resolve.js';
+import { autoResolveStaleMatrixActions } from '../lib/matrix-auto-resolve.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -177,13 +178,79 @@ export default fp(
       { timezone: 'UTC' },
     );
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask]);
+    // -----------------------------------------------------------------------
+    // Expire open ScheduledMatchups past their expiry date — daily at 01:00 UTC
+    // -----------------------------------------------------------------------
+    const matchupExpiryTask = cron.schedule(
+      '0 1 * * *',
+      async () => {
+        try {
+          const { count } = await fastify.prisma.scheduledMatchup.updateMany({
+            where: { status: 'OPEN', expires_at: { lt: new Date() } },
+            data: { status: 'EXPIRED' },
+          });
+          if (count > 0) {
+            fastify.log.info({ count }, 'Expired stale scheduled matchups');
+          }
+        } catch (err) {
+          fastify.log.error({ err }, 'Matchup expiry cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    // -----------------------------------------------------------------------
+    // Queue cleanup — hourly: remove entries older than 30 minutes from Redis
+    // -----------------------------------------------------------------------
+    const queueCleanupTask = cron.schedule(
+      '0 * * * *',
+      async () => {
+        if (!fastify.redis) return;
+        try {
+          const key = 'rizzotto:queue:open_play';
+          const items = await fastify.redis.lrange(key, 0, -1);
+          const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+          for (const userId of items) {
+            const user = await fastify.prisma.user.findUnique({
+              where: { id: userId },
+              select: { updated_at: true },
+            });
+            if (!user || user.updated_at < cutoff) {
+              await fastify.redis.lrem(key, 0, userId);
+            }
+          }
+        } catch (err) {
+          fastify.log.error({ err }, 'Queue cleanup cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    // -----------------------------------------------------------------------
+    // Matrix auto-resolve — every 15 seconds via setInterval
+    // Ban/pick timeout is 15s, too short for node-cron (1-minute resolution).
+    // -----------------------------------------------------------------------
+    const matrixInterval = setInterval(async () => {
+      try {
+        const count = await autoResolveStaleMatrixActions(fastify);
+        if (count > 0) {
+          fastify.log.info({ count }, 'Matrix auto-resolve ran');
+        }
+      } catch (err) {
+        fastify.log.error({ err }, 'Matrix auto-resolve failed');
+      }
+    }, 15_000);
+
+    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
       checkinTask.stop();
       gameConfirmTask.stop();
       blindPickTask.stop();
+      matchupExpiryTask.stop();
+      queueCleanupTask.stop();
+      clearInterval(matrixInterval);
     });
   },
   { name: 'cron', dependencies: ['db'] },

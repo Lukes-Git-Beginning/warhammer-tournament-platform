@@ -205,26 +205,26 @@ export async function completeMatch(
 
     // In SFT tournaments: latch faction onto the participant record if not yet set.
     // This covers players who registered before the faction picker existed.
-    if (match.tournament.mode === 'SFT') {
+    if (match.tournament?.mode === 'SFT') {
       if (player1FactionId && match.player1_id) {
         await tx.tournamentParticipant.updateMany({
-          where: { tournament_id: match.tournament_id, user_id: match.player1_id, faction_id: null, deleted_at: null },
+          where: { tournament_id: match.tournament_id ?? undefined, user_id: match.player1_id, faction_id: null, deleted_at: null },
           data: { faction_id: player1FactionId },
         });
       }
       if (player2FactionId && match.player2_id) {
         await tx.tournamentParticipant.updateMany({
-          where: { tournament_id: match.tournament_id, user_id: match.player2_id, faction_id: null, deleted_at: null },
+          where: { tournament_id: match.tournament_id ?? undefined, user_id: match.player2_id, faction_id: null, deleted_at: null },
           data: { faction_id: player2FactionId },
         });
       }
     }
 
-    const isDE = match.tournament.format === 'DOUBLE_ELIMINATION';
+    const isDE = match.tournament?.format === 'DOUBLE_ELIMINATION';
     const isGFSource = isDE && match.bracket_side === 'GRAND_FINAL';
     const src: AdvanceSrc = {
       id: match.id,
-      tournamentFormat: match.tournament.format,
+      tournamentFormat: match.tournament?.format ?? 'SWISS',
       bracket_side: match.bracket_side,
       match_number: match.match_number,
     };
@@ -302,7 +302,7 @@ export async function completeMatch(
     }
 
     // LeaderboardEntry — mirrors resolveMatchResult so GameTile matches count on the leaderboard
-    if (activeSeason && match.tournament.counts_for_leaderboard) {
+    if (activeSeason && (match.tournament?.counts_for_leaderboard ?? true)) {
       const seasonId = activeSeason.id;
       const WIN_PTS = 3, LOSS_PTS = 0;
       const entries = [
@@ -345,13 +345,14 @@ export async function completeMatch(
     ]);
   }
 
-  emitMatchResult(fastify.io, {
-    tournamentId: match.tournament_id,
-    matchId,
-    winnerId,
-    score: score ?? null,
-    nextMatchId: match.next_match_id ?? null,
-  });
-
-  emitBracketUpdate(fastify.io, match.tournament_id);
+  if (match.tournament_id) {
+    emitMatchResult(fastify.io, {
+      tournamentId: match.tournament_id,
+      matchId,
+      winnerId,
+      score: score ?? null,
+      nextMatchId: match.next_match_id ?? null,
+    });
+    emitBracketUpdate(fastify.io, match.tournament_id);
+  }
 }

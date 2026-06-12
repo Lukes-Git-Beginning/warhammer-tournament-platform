@@ -136,6 +136,24 @@ export interface ServerToClientEvents {
     reportedAt: string | null;
     confirmedAt: string | null;
   }) => void;
+  // MATRIX mode — 3×3 faction matrix
+  'match.matrix.update': (payload: {
+    matchId: string;
+    p1Locked: boolean;
+    p2Locked: boolean;
+    firstLockedAt: string | null;
+    revealedAt: string | null;
+    p1Factions: string[];
+    p2Factions: string[];
+    bans: string[];
+    pickedCell: string | null;
+    lastActionAt: string | null;
+    decidedAt: string | null;
+    p1FactionId: string | null;
+    p2FactionId: string | null;
+    topPlayerId: string;
+    bottomPlayerId: string;
+  }) => void;
 }
 
 export interface ClientToServerEvents {

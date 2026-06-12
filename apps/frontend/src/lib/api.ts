@@ -60,7 +60,7 @@ export interface Tournament {
   description: string | null;
   format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT';
+  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
   status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
   start_date: string;
   timezone: string;
@@ -136,13 +136,29 @@ export interface MatchDecisionState {
     player1FactionId: string | null;
     player2FactionId: string | null;
   } | null;
+  factionMatrix?: {
+    p1Locked: boolean;
+    p2Locked: boolean;
+    firstLockedAt: string | null;
+    revealedAt: string | null;
+    p1Factions: string[];
+    p2Factions: string[];
+    bans: string[];
+    pickedCell: string | null;
+    lastActionAt: string | null;
+    decidedAt: string | null;
+    p1FactionId: string | null;
+    p2FactionId: string | null;
+    topPlayerId: string;
+    bottomPlayerId: string;
+  } | null;
 }
 
 export interface TournamentCreate {
   name: string;
   format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT';
+  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
   start_date: string;
   timezone: string;
   max_participants?: number;
@@ -180,7 +196,7 @@ export interface TournamentPatchInput {
   draft_preset_id?: string | null;
   // draft-only (backend enforces, frontend disables after DRAFT)
   format?: Tournament['format'];
-  mode?: 'BPT' | 'SFT' | 'SLT';
+  mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
   faction_pool?: string[];
   // until-ongoing fields
   rounds_count?: number;
@@ -583,6 +599,14 @@ export function unbanUser(userId: string): Promise<void> {
   return apiFetch(`/api/admin/users/${userId}/ban`, { method: 'DELETE' });
 }
 
+export function updateUserRole(userId: string, role: string): Promise<{ id: string; role: string }> {
+  return apiFetch(`/api/admin/users/${userId}/role`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Admin — Stats
 // ---------------------------------------------------------------------------
@@ -970,6 +994,20 @@ export function lockBlindPick(matchId: string, factionId: string): Promise<{ ok:
   });
 }
 
+export function lockFactionMatrix(matchId: string, factions: string[]): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/matrix/lock`, {
+    method: 'POST',
+    body: JSON.stringify({ factions }),
+  });
+}
+
+export function banMatrixCell(matchId: string, row: number, col: number): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/matrix/ban`, {
+    method: 'POST',
+    body: JSON.stringify({ row, col }),
+  });
+}
+
 export function getMatchDecision(matchId: string): Promise<MatchDecisionState> {
   return apiFetch<MatchDecisionState>(`/api/matches/${matchId}/decision`);
 }
@@ -1180,4 +1218,108 @@ export function getTournamentGames(slug: string): Promise<{ games: GameHistoryEn
 
 export function getMetaGames(page = 1, limit = 50): Promise<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }> {
   return apiFetch<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }>(`/api/meta/games?page=${page}&limit=${limit}`);
+}
+
+// ---------------------------------------------------------------------------
+// M8 Open Play
+// ---------------------------------------------------------------------------
+
+export type AvailabilityContext = 'TOURNAMENT' | 'MATCHMAKING';
+export type MatchFormat = 'BO1' | 'BO3' | 'BO5';
+
+export interface AvailabilitySlot {
+  id?: string;
+  day_of_week: number;
+  hour_utc: number;
+  context: AvailabilityContext;
+}
+
+export interface HeatmapSlot {
+  day_of_week: number;
+  hour_utc: number;
+  context: AvailabilityContext;
+  count: number;
+}
+
+export interface ScheduledMatchup {
+  id: string;
+  format: MatchFormat;
+  proposed_at: string;
+  notes: string | null;
+  proposer: { id: string; username: string; avatar_url: string | null } | null;
+  anonymous: boolean;
+  created_at: string;
+  expires_at: string;
+}
+
+export function getAvailabilityHeatmap(): Promise<{ slots: HeatmapSlot[] }> {
+  return apiFetch<{ slots: HeatmapSlot[] }>('/api/availability/heatmap');
+}
+
+export function getMyAvailability(): Promise<{ slots: AvailabilitySlot[] }> {
+  return apiFetch<{ slots: AvailabilitySlot[] }>('/api/availability/me');
+}
+
+export function setMyAvailability(slots: Omit<AvailabilitySlot, 'id'>[]): Promise<{ slots: AvailabilitySlot[] }> {
+  return apiFetch<{ slots: AvailabilitySlot[] }>('/api/availability/slots', {
+    method: 'PUT',
+    body: JSON.stringify({ slots }),
+  });
+}
+
+export function getScheduledMatchups(params?: { format?: MatchFormat; page?: number }): Promise<{ matchups: ScheduledMatchup[]; total: number; page: number }> {
+  const q = new URLSearchParams();
+  if (params?.format) q.set('format', params.format);
+  if (params?.page) q.set('page', String(params.page));
+  return apiFetch<{ matchups: ScheduledMatchup[]; total: number; page: number }>(`/api/scheduled-matchups?${q.toString()}`);
+}
+
+export function createScheduledMatchup(data: {
+  format: MatchFormat;
+  proposed_at: string;
+  notes?: string;
+  anonymous?: boolean;
+}): Promise<{ id: string }> {
+  return apiFetch<{ id: string }>('/api/scheduled-matchups', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function acceptScheduledMatchup(id: string): Promise<{ match_id: string }> {
+  return apiFetch<{ match_id: string }>(`/api/scheduled-matchups/${id}/accept`, { method: 'POST' });
+}
+
+export function cancelScheduledMatchup(id: string): Promise<void> {
+  return apiFetch<void>(`/api/scheduled-matchups/${id}`, { method: 'DELETE' });
+}
+
+export function joinQueue(): Promise<{ matched: boolean; match_id?: string; position?: number }> {
+  return apiFetch<{ matched: boolean; match_id?: string; position?: number }>('/api/open-play/queue', {
+    method: 'POST',
+  });
+}
+
+export function leaveQueue(): Promise<void> {
+  return apiFetch<void>('/api/open-play/queue', { method: 'DELETE' });
+}
+
+export function getQueueStatus(): Promise<{ inQueue: boolean; position: number | null; total: number }> {
+  return apiFetch<{ inQueue: boolean; position: number | null; total: number }>('/api/open-play/queue/status');
+}
+
+export function getMyOpenPlayMatch(): Promise<{ match_id: string | null }> {
+  return apiFetch<{ match_id: string | null }>('/api/open-play/my-match');
+}
+
+export function getEligibleOwners(): Promise<{ id: string; username: string; avatar_url: string | null; role: string }[]> {
+  return apiFetch('/api/users/eligible-owners');
+}
+
+export function transferTournamentOwner(slug: string, organizer_id: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/tournaments/${slug}/transfer-owner`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ organizer_id }),
+  });
 }

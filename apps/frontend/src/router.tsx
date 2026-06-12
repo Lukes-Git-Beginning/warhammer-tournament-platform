@@ -18,6 +18,7 @@ import { MatchDecisionPage } from './routes/MatchDecisionPage';
 import { MatchDetailPage } from './routes/MatchDetailPage';
 import { H2HPage } from './routes/H2HPage';
 import { CalendarPage } from './routes/CalendarPage';
+import { OpenPlayPage } from './routes/OpenPlayPage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -162,6 +163,12 @@ const matchDecisionRoute = createRoute({
   component: MatchDecisionPage,
 });
 
+const openPlayRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/open-play',
+  component: OpenPlayPage,
+});
+
 const matchDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/matches/$matchId',
@@ -192,6 +199,7 @@ const routeTree = rootRoute.addChildren([
   steamConnectRoute,
   matchDetailRoute,
   matchDecisionRoute,
+  openPlayRoute,
 ]);
 
 export const router = createRouter({ routeTree });

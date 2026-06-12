@@ -229,7 +229,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+        fastify.requireRole('HOST', 'MODERATOR', 'ADMIN'),
       ],
     },
     async (request, reply) => {
@@ -259,7 +259,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const actorRole = request.user.role;
       if (
-        actorRole === 'ORGANIZER' &&
+        actorRole === 'HOST' &&
         tournament.organizer_id !== request.user.sub
       ) {
         return reply.code(403).send({
@@ -456,7 +456,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+        fastify.requireRole('HOST', 'MODERATOR', 'ADMIN'),
       ],
     },
     async (request, reply) => {
@@ -482,7 +482,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const actorRole = request.user.role;
       if (
-        actorRole === 'ORGANIZER' &&
+        actorRole === 'HOST' &&
         tournament.organizer_id !== request.user.sub
       ) {
         return reply.code(403).send({
@@ -704,7 +704,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+        fastify.requireRole('HOST', 'MODERATOR', 'ADMIN'),
       ],
     },
     async (request, reply) => {
@@ -729,7 +729,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const actorRole = request.user.role;
-      if (actorRole === 'ORGANIZER' && tournament.organizer_id !== request.user.sub) {
+      if (actorRole === 'HOST' && tournament.organizer_id !== request.user.sub) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Only the organizer can start playoffs', statusCode: 403 });
       }
 
@@ -917,7 +917,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+        fastify.requireRole('HOST', 'MODERATOR', 'ADMIN'),
       ],
     },
     async (request, reply) => {
@@ -930,7 +930,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       }
-      if (request.user.role === 'ORGANIZER' && tournament.organizer_id !== request.user.sub) {
+      if (request.user.role === 'HOST' && tournament.organizer_id !== request.user.sub) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
       }
 
@@ -1196,7 +1196,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+        fastify.requireRole('HOST', 'MODERATOR', 'ADMIN'),
       ],
     },
     async (request, reply) => {
@@ -1290,7 +1290,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+        fastify.requireRole('HOST', 'MODERATOR', 'ADMIN'),
       ],
     },
     async (request, reply) => {
@@ -1310,7 +1310,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const actorRole = request.user.role;
-      if (actorRole === 'ORGANIZER' && tournament.organizer_id !== request.user.sub) {
+      if (actorRole === 'HOST' && tournament.organizer_id !== request.user.sub) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'Only the tournament organizer can reset this bracket',

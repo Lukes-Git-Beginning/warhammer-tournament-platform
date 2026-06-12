@@ -19,7 +19,7 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const canCreate =
-    user?.role === 'ORGANIZER' || user?.role === 'MODERATOR' || user?.role === 'ADMIN';
+    user?.role === 'HOST' || user?.role === 'MODERATOR' || user?.role === 'ADMIN';
 
   const navLinks = (
     <>
@@ -30,6 +30,13 @@ export function Header() {
         activeProps={NAV_LINK_ACTIVE_PROPS}
       >
         {t('header.tournaments')}
+      </Link>
+      <Link
+        to="/open-play"
+        className={NAV_LINK_CLASS}
+        activeProps={NAV_LINK_ACTIVE_PROPS}
+      >
+        Open Play
       </Link>
       <Link
         to="/leaderboard"

@@ -77,6 +77,10 @@ export function GameTile({
     onSuccess: () => {
       void navigate({ to: '/matches/$matchId/decision', params: { matchId }, state: { freshDecision: true } });
     },
+    onError: () => {
+      // Decision already started by the other player — navigate there anyway
+      void navigate({ to: '/matches/$matchId/decision', params: { matchId } });
+    },
   });
 
   const reportMutation = useMutation({
@@ -107,14 +111,13 @@ export function GameTile({
   const myId = isPlayer1 ? player1Id : isPlayer2 ? player2Id : null;
   const opponentId = isPlayer1 ? player2Id : isPlayer2 ? player1Id : null;
 
-  // BPT requires a blind faction pick after the map is decided.
-  // game.blindPick (top-level) reflects the MatchBlindPick DB row; it is null
-  // both before the first lock AND for non-BPT modes. We use tournamentMode to
-  // distinguish the two cases.
-  const needsBlindPick = tournamentMode === 'BPT';
+  // Blind pick is required for BPT tournaments and for any match that has a
+  // MatchBlindPick row (Open Play matches always get one on creation).
+  const needsBlindPick = tournamentMode === 'BPT' || !!game.blindPick;
   const decisionComplete = Boolean(
     game.decision?.pickedMapId &&
-      (!needsBlindPick || game.blindPick?.revealedAt),
+      (!needsBlindPick || game.blindPick?.revealedAt) &&
+      (tournamentMode !== 'MATRIX' || (game.player1FactionId != null && game.player2FactionId != null)),
   );
 
   const _isReporter = game.reportedWinnerId !== null && game.reporterId === currentUserId;
@@ -240,19 +243,44 @@ export function GameTile({
                 )
               ) : (
                 <div className="flex flex-col items-center gap-3">
-                  <p className="text-sm text-rizzotto-stone-400 text-center">
-                    {game.decision.mode === 'RANDOM'
-                      ? 'Drawing battlefield…'
-                      : 'Picking battlefield…'}
-                  </p>
+                  {/* Map is already decided — show it even before faction pick */}
+                  {game.decision.pickedMapId && pickedMap ? (
+                    <div className="flex flex-col items-center gap-1 w-full">
+                      <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider">Battlefield</span>
+                      <p className="text-sm font-semibold text-rizzotto-stone-100 text-center leading-tight">
+                        {pickedMap.name}
+                      </p>
+                      {pickedMap.image_url && (
+                        <button
+                          type="button"
+                          onClick={() => setMapLightbox(true)}
+                          className="w-full mt-1 overflow-hidden rounded border border-rizzotto-iron-600 hover:border-rizzotto-gold-500 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-rizzotto-gold-400"
+                          title="View map"
+                        >
+                          <img
+                            src={pickedMap.image_url}
+                            alt={pickedMap.name}
+                            className="w-full object-contain"
+                            loading="lazy"
+                          />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-rizzotto-stone-400 text-center">
+                      {game.decision.mode === 'RANDOM' ? 'Drawing battlefield…' : 'Picking battlefield…'}
+                    </p>
+                  )}
                   <Link
                     to="/matches/$matchId/decision"
                     params={{ matchId }}
                     className="text-sm text-rizzotto-gold-400 hover:underline"
                   >
-                    {game.decision?.pickedMapId && needsBlindPick
-                      ? 'Go to faction selection →'
-                      : 'Go to map selection →'}
+                    {game.decision?.pickedMapId && tournamentMode === 'MATRIX'
+                      ? 'Continue faction picking →'
+                      : game.decision?.pickedMapId && needsBlindPick
+                        ? 'Pick your faction →'
+                        : 'Go to map selection →'}
                   </Link>
                 </div>
               )}

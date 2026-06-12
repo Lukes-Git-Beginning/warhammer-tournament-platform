@@ -1,5 +1,6 @@
 import { HeroSection } from '@/components/landing/HeroSection';
 import { ActiveMustersSection } from '@/components/landing/ActiveMustersSection';
+import { OpenPlaySection } from '@/components/landing/OpenPlaySection';
 import { PersonalisedFactionBlock } from '@/components/landing/PersonalisedFactionBlock';
 import { RollOfHonourSection } from '@/components/landing/RollOfHonourSection';
 import { ConclaveSection } from '@/components/landing/ConclaveSection';
@@ -12,6 +13,7 @@ export function IndexPage() {
       <main id="main-content">
         <HeroSection />
         <ActiveMustersSection />
+        <OpenPlaySection />
         <PersonalisedFactionBlock />
         <RollOfHonourSection />
         <ConclaveSection />

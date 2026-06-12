@@ -211,39 +211,41 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
             await disputeMatch(
               fastify.prisma,
               matchId,
-              match.tournament_id,
+              match.tournament_id ?? '',
               userId,
               fastify.io,
             );
 
             // Notify organizer + moderators of the dispute via Discord DM (non-fatal)
-            try {
-              const tournamentForNotify = await fastify.prisma.tournament.findUnique({
-                where: { id: match.tournament_id },
-                select: { id: true, name: true, slug: true, start_date: true },
-              });
-              const reporterUser = await fastify.prisma.user.findUnique({
-                where: { id: userId },
-                select: { id: true, username: true, discord_id: true },
-              });
-              if (tournamentForNotify && reporterUser) {
-                await notifyDispute(
-                  { id: matchId, tournament: tournamentForNotify },
-                  { id: reporterUser.id, username: reporterUser.username, discord_id: reporterUser.discord_id },
-                ).catch((err) => {
-                  fastify.log.warn({ err, matchId }, 'notifyDispute failed (non-fatal)');
+            if (match.tournament_id) {
+              try {
+                const tournamentForNotify = await fastify.prisma.tournament.findUnique({
+                  where: { id: match.tournament_id },
+                  select: { id: true, name: true, slug: true, start_date: true },
                 });
+                const reporterUser = await fastify.prisma.user.findUnique({
+                  where: { id: userId },
+                  select: { id: true, username: true, discord_id: true },
+                });
+                if (tournamentForNotify && reporterUser) {
+                  await notifyDispute(
+                    { id: matchId, tournament: tournamentForNotify },
+                    { id: reporterUser.id, username: reporterUser.username, discord_id: reporterUser.discord_id },
+                  ).catch((err) => {
+                    fastify.log.warn({ err, matchId }, 'notifyDispute failed (non-fatal)');
+                  });
+                }
+              } catch (notifyErr) {
+                fastify.log.warn({ notifyErr, matchId }, 'Dispute notify error (non-fatal)');
               }
-            } catch (notifyErr) {
-              fastify.log.warn({ notifyErr, matchId }, 'Dispute notify error (non-fatal)');
             }
           }
           finalMatchStatus = 'DISPUTED';
         }
       }
 
-      // Emit match_reported event
-      if (fastify.io) {
+      // Emit match_reported event (tournament matches only)
+      if (fastify.io && match.tournament_id) {
         fastify.io.to(tournamentRoom(match.tournament_id)).emit('match_reported', {
           tournamentId: match.tournament_id,
           matchId,
@@ -271,7 +273,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+        fastify.requireRole('HOST', 'MODERATOR', 'ADMIN'),
       ],
     },
     async (request, reply) => {
@@ -319,8 +321,8 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // ORGANIZER must own the tournament
-      if (user.role === 'ORGANIZER' && match.tournament.organizer_id !== user.sub) {
+      // HOST must own the tournament (open play matches have no organizer)
+      if (user.role === 'HOST' && match.tournament?.organizer_id !== user.sub) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'You are not the organizer of this tournament',
@@ -329,7 +331,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Cannot override already-completed matches unless ADMIN or the tournament's own organizer
-      const isOwnOrganizer = match.tournament.organizer_id === user.sub;
+      const isOwnOrganizer = match.tournament?.organizer_id === user.sub;
       if (match.status === 'COMPLETED' && user.role !== 'ADMIN' && !isOwnOrganizer) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
@@ -365,7 +367,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         const winnerId = result === 'PLAYER1_WIN' ? match.player1_id : result === 'PLAYER2_WIN' ? match.player2_id : null;
         await fastify.prisma.matchGame.upsert({
           where: { match_id_game_number: { match_id: matchId, game_number: 1 } },
-          create: { match_id: matchId, game_number: 1, status: 'COMPLETED', winner_id: winnerId, played_at: new Date(), counts_for_leaderboard: match.tournament.counts_for_leaderboard },
+          create: { match_id: matchId, game_number: 1, status: 'COMPLETED', winner_id: winnerId, played_at: new Date(), counts_for_leaderboard: match.tournament?.counts_for_leaderboard ?? true },
           update: { status: 'COMPLETED', winner_id: winnerId, played_at: new Date() },
         });
         const game = await fastify.prisma.matchGame.findUniqueOrThrow({

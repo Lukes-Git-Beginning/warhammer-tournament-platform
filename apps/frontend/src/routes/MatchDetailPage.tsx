@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown } from '@/lib/api.js';
+import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, type GameDto, type MapDto } from '@/lib/api.js';
 import type { MatchDetailDto, MatchScoringBreakdownDto } from '@/lib/api.js';
+import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth.js';
 import { useLiveMatch } from '@/hooks/useLiveMatch.js';
+import { useMatchDecisionSocket } from '@/hooks/useMatchDecisionSocket.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { Button } from '@/components/ui/button.js';
 import { MatchScoreModal } from '@/components/bracket/MatchScoreModal.js';
+import { GameTile } from '@/components/match/GameTile.js';
 
 // ---------------------------------------------------------------------------
 // Status Badge
@@ -229,6 +232,11 @@ export function MatchDetailPage() {
     queryKey: ['match', matchId],
     queryFn: () => getMatchDetail(matchId),
     retry: false,
+    // Open Play has no tournament socket room, so poll until the match settles
+    refetchInterval: (query) =>
+      query.state.data?.tournament_id || query.state.data?.status === 'COMPLETED'
+        ? false
+        : 5_000,
   });
 
   // Decision gate — keep existing behaviour
@@ -246,8 +254,37 @@ export function MatchDetailPage() {
     retry: false,
   });
 
+  const isOpenPlay = !!match && !match.tournament_id;
+
+  const { data: gamesData } = useQuery({
+    queryKey: ['match-games', matchId],
+    queryFn: () => getMatchGames(matchId),
+    enabled: isOpenPlay,
+    refetchInterval: 5_000,
+  });
+
+  const { data: mapsData } = useQuery({
+    queryKey: ['maps'],
+    queryFn: getMaps,
+    staleTime: 60 * 60_000,
+    enabled: isOpenPlay,
+  });
+
+  const { data: factionsData } = useQuery({
+    queryKey: ['factions'],
+    queryFn: () => getFactions(),
+    staleTime: 60 * 60_000,
+    enabled: isOpenPlay,
+  });
+
+  const maps: MapDto[] = mapsData?.data ?? [];
+  const factions: Record<string, FactionDto> = Object.fromEntries(
+    (factionsData?.data ?? []).map((f) => [f.faction.id, f.faction]),
+  );
+
   // Live Socket updates — joins tournament room, invalidates match queries
   useLiveMatch(matchId, match?.tournament_id);
+  useMatchDecisionSocket(matchId);
 
   // ---------------------------------------------------------------------------
   // Loading / Error
@@ -285,7 +322,7 @@ export function MatchDetailPage() {
   const isPlayer1 = user?.id === match.player1_id;
   const isPlayer2 = user?.id === match.player2_id;
   const isPrivileged =
-    user?.role === 'ADMIN' || user?.role === 'MODERATOR' || user?.role === 'ORGANIZER';
+    user?.role === 'ADMIN' || user?.role === 'MODERATOR' || user?.role === 'HOST';
   const canReport = !!(user && (isPlayer1 || isPlayer2 || isPrivileged));
   const reportable = match.status === 'ONGOING' || match.status === 'PENDING';
 
@@ -301,23 +338,42 @@ export function MatchDetailPage() {
 
   const phase = phaseLabel(match);
 
+  // Live per-game score for Open Play.
+  // Uses winnerId for confirmed games; falls back to reportedWinnerId while
+  // the result is in the 30-min provisional window (game not yet COMPLETED).
+  // DISPUTED games are excluded so a contested result never inflates the score.
+  const openPlayScore = isOpenPlay && gamesData ? (() => {
+    const effectiveWinner = (g: { winnerId: string | null; reportedWinnerId: string | null; status: string }) =>
+      g.winnerId ?? (g.status !== 'DISPUTED' ? g.reportedWinnerId : null);
+    return {
+      p1: gamesData.games.filter((g) => effectiveWinner(g) === match.player1_id).length,
+      p2: gamesData.games.filter((g) => effectiveWinner(g) === match.player2_id).length,
+    };
+  })() : null;
+
   return (
     <PageShell variant="tight" spacing="base">
       {/* ------------------------------------------------------------------ */}
       {/* Header                                                               */}
       {/* ------------------------------------------------------------------ */}
       <div className="mb-6">
-        <Link
-          to="/tournaments/$slug"
-          params={{ slug: match.tournament_slug }}
-          className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors"
-        >
-          ← Back to Tournament
-        </Link>
+        {isOpenPlay ? (
+          <Link to="/open-play" className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors">
+            ← Open Play
+          </Link>
+        ) : (
+          <Link
+            to="/tournaments/$slug"
+            params={{ slug: match.tournament_slug }}
+            className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors"
+          >
+            ← Back to Tournament
+          </Link>
+        )}
 
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <h1 className="font-display text-2xl font-bold text-rizzotto-stone-100">
-            Round {match.round} · Match #{match.match_number}
+            {isOpenPlay ? 'Open Play Match' : `Round ${match.round} · Match #${match.match_number}`}
           </h1>
           {phase && (
             <span className="text-xs text-rizzotto-stone-500 uppercase tracking-widest font-semibold">
@@ -333,9 +389,9 @@ export function MatchDetailPage() {
       </div>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Decision Gate (preserved from stub)                                 */}
+      {/* Decision Gate (tournament matches only)                             */}
       {/* ------------------------------------------------------------------ */}
-      {!decisionComplete && decision !== undefined && (
+      {!isOpenPlay && !decisionComplete && decision !== undefined && (
         <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-6 mb-6 flex flex-col items-center gap-4 text-center">
           <p className="text-sm text-rizzotto-stone-300">
             This match requires a map &amp; faction decision before it can begin.
@@ -399,11 +455,15 @@ export function MatchDetailPage() {
         {/* VS divider */}
         <div className="flex flex-col items-center gap-2 px-2">
           <span className="font-display text-xl font-bold text-rizzotto-stone-600">vs</span>
-          {match.score && (
+          {openPlayScore && (openPlayScore.p1 > 0 || openPlayScore.p2 > 0) ? (
+            <span className="text-2xl font-bold text-rizzotto-stone-100 font-display">
+              {openPlayScore.p1} – {openPlayScore.p2}
+            </span>
+          ) : match.score ? (
             <span className="text-sm font-bold text-rizzotto-stone-300 font-display">
               {match.score}
             </span>
-          )}
+          ) : null}
           {match.result && (
             <span className="text-[10px] text-rizzotto-stone-500 uppercase tracking-widest text-center">
               {resultLabel(match.result)}
@@ -483,7 +543,32 @@ export function MatchDetailPage() {
       {/* ------------------------------------------------------------------ */}
       {/* Post-decision summary (preserved from stub)                          */}
       {/* ------------------------------------------------------------------ */}
-      {decisionComplete && decision && (
+      {/* ------------------------------------------------------------------ */}
+      {/* Open Play — GameTile section (map, blind pick, result reporting)    */}
+      {/* ------------------------------------------------------------------ */}
+      {isOpenPlay && gamesData && (
+        <div className="flex flex-col gap-3 mb-6">
+          {[...gamesData.games].reverse().map((game) => (
+            <GameTile
+              key={game.gameNumber}
+              matchId={matchId}
+              game={game}
+              currentUserId={user?.id ?? ''}
+              player1Id={match.player1_id}
+              player2Id={match.player2_id}
+              player1Name={match.player1?.username ?? 'Player 1'}
+              player2Name={match.player2?.username ?? 'Player 2'}
+              player1AvatarUrl={match.player1?.avatar_url ?? null}
+              player2AvatarUrl={match.player2?.avatar_url ?? null}
+              isParticipant={canReport}
+              maps={maps}
+              factions={factions}
+            />
+          ))}
+        </div>
+      )}
+
+      {!isOpenPlay && decisionComplete && decision && (
         <div className="rounded-lg border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-6 space-y-3 mb-4">
           <h2 className="font-display text-base font-semibold text-rizzotto-gold-400">
             Match Setup
@@ -518,7 +603,7 @@ export function MatchDetailPage() {
       {/* ------------------------------------------------------------------ */}
       {/* Result Reporting                                                     */}
       {/* ------------------------------------------------------------------ */}
-      {canReport && reportable && (
+      {!isOpenPlay && canReport && reportable && (
         <div className="mb-4 flex justify-end">
           <Button variant="forge" size="md" onClick={() => setShowScoreModal(true)}>
             Report Result

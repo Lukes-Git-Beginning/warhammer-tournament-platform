@@ -239,7 +239,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/tournaments/:slug/checkin
   fastify.post(
     '/api/tournaments/:slug/checkin',
-    { preHandler: [fastify.authenticate, fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN')] },
+    { preHandler: [fastify.authenticate, fastify.requireRole('HOST', 'MODERATOR', 'ADMIN')] },
     async (request, reply) => {
       const { slug } = request.params as { slug: string };
 
@@ -265,10 +265,10 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Organizer check: if role is ORGANIZER, must own the tournament
+      // Host check: if role is HOST, must own the tournament
       const user = request.user;
       if (
-        user.role === 'ORGANIZER' &&
+        user.role === 'HOST' &&
         user.sub !== tournament.organizer_id
       ) {
         return reply.code(403).send({
@@ -550,7 +550,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       const callerRole = request.user.role;
 
       const isSelf = callerId === userId;
-      const isStaff = callerRole === 'ORGANIZER' || callerRole === 'MODERATOR' || callerRole === 'ADMIN';
+      const isStaff = callerRole === 'HOST' || callerRole === 'MODERATOR' || callerRole === 'ADMIN';
 
       if (!isSelf && !isStaff) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not authorised to drop this participant', statusCode: 403 });
@@ -566,7 +566,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       if (tournament.status !== 'ONGOING') {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Can only drop participants from an ongoing tournament', statusCode: 422 });
       }
-      if (callerRole === 'ORGANIZER' && !isSelf && tournament.organizer_id !== callerId) {
+      if (callerRole === 'HOST' && !isSelf && tournament.organizer_id !== callerId) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
       }
 

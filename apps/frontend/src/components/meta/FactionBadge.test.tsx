@@ -30,4 +30,29 @@ describe('FactionBadge', () => {
     );
     expect(html).toContain('60');
   });
+
+  it('renders img with src when iconUrl is a path', () => {
+    const html = renderToStaticMarkup(
+      <FactionBadge colorHex="#c41e3a" initials="EG" name="Empire" iconUrl="/icons/factions/empire.png" />,
+    );
+    expect(html).toContain('<img');
+    expect(html).toContain('src="/icons/factions/empire.png"');
+    expect(html).not.toContain('EG');
+  });
+
+  it('renders initials fallback when iconUrl is null', () => {
+    const html = renderToStaticMarkup(
+      <FactionBadge colorHex="#c41e3a" initials="EG" name="Empire" iconUrl={null} />,
+    );
+    expect(html).not.toContain('<img');
+    expect(html).toContain('EG');
+  });
+
+  it('renders initials fallback when iconUrl is empty string', () => {
+    const html = renderToStaticMarkup(
+      <FactionBadge colorHex="#c41e3a" initials="EG" name="Empire" iconUrl="" />,
+    );
+    expect(html).not.toContain('<img');
+    expect(html).toContain('EG');
+  });
 });

@@ -163,7 +163,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         (currentUserId === match.player1_id || currentUserId === match.player2_id);
       const isStaff =
         currentUserId !== null &&
-        (currentUserId === match.tournament.organizer_id ||
+        (currentUserId === match.tournament?.organizer_id ||
           (request.user?.role === 'MODERATOR' || request.user?.role === 'ADMIN'));
       const includeLobbyCodes = isParticipant || isStaff;
 
@@ -231,7 +231,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = request.user.sub;
       const isParticipant = userId === match.player1_id || userId === match.player2_id;
       const isStaff =
-        userId === match.tournament.organizer_id ||
+        userId === match.tournament?.organizer_id ||
         request.user.role === 'MODERATOR' ||
         request.user.role === 'ADMIN';
 

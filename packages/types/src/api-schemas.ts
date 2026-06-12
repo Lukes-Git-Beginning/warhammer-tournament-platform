@@ -9,7 +9,7 @@ export const HealthResponseSchema = z.object({
 });
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 
-export const RoleSchema = z.enum(['USER', 'ORGANIZER', 'MODERATOR', 'ADMIN']);
+export const RoleSchema = z.enum(['USER', 'HOST', 'ORGANIZER', 'MODERATOR', 'ADMIN']);
 export type Role = z.infer<typeof RoleSchema>;
 
 export const UserPublicSchema = z.object({
@@ -277,7 +277,7 @@ export const FactionDtoSchema = z.object({
   category: z.string(),
   color_hex: z.string(),
   display_order: z.number().int(),
-  icon_url: z.string().url().nullable(),
+  icon_url: z.string().nullable(),
   initials: z.string().length(2),
 });
 export type FactionDto = z.infer<typeof FactionDtoSchema>;

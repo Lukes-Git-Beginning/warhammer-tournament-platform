@@ -263,7 +263,7 @@ export function generateDoubleElim(
 ): DEBracketMatchInput[] {
   const S = nextPow2(Math.max(participantIds.length, 2));
   const R_W = Math.log2(S); // WB rounds
-  const R_L = 2 * R_W - 1; // LB rounds
+  const R_L = 2 * R_W - 2; // LB rounds (no phantom final round)
 
   // Distribute byes across the first round via standard bracket seed order so
   // every WB round-1 pairing gets at least one real player (no empty matches).
@@ -297,7 +297,7 @@ export function generateDoubleElim(
   }
 
   const grandFinalId = randomUUID();
-  const resetMatchId = randomUUID();
+  // No reset match — GF is Bo3 by default, so a single match suffices.
 
   // -------------------------------------------------------------------------
   // 2. Build match objects.
@@ -317,23 +317,16 @@ export function generateDoubleElim(
         r === R_W - 1 ? grandFinalId : (wbIds[r + 1]![Math.floor(i / 2)]! ?? null);
 
       // loser_next_match_id: which LB match receives this WB loser?
-      // WB round r (0-indexed) losers drop into LB round (2r) (0-indexed).
-      // Within that LB drop round, WB match i drops into LB match floor(i/2).
+      //
+      // Unified formula (R_L = 2*R_W - 2, so lbIds has no phantom final round):
+      //   WB R1 (r=0): losers fight each other → lbIds[0], lbMatchIdx = floor(i/2) (2:1 ratio)
+      //   WB R2+ (r>0): each loser faces one LB survivor → lbIds[2r-1], lbMatchIdx = i (1:1)
+      //   WB Final (r=R_W-1): 2*(R_W-1)-1 = R_L-1 → last LB round, winner goes directly to GF
       let loser_next_match_id: string | null = null;
-      const lbDropRoundIdx = 2 * r; // 0-indexed LB round
-      if (lbDropRoundIdx < R_L) {
-        // Special case: WB R1 (r=0) losers play each other in LB R1.
-        // WB R1 M0 loser → LB R1 M0 player1, WB R1 M1 loser → LB R1 M0 player2
-        // WB R1 M2 loser → LB R1 M1 player1, WB R1 M3 loser → LB R1 M1 player2
-        // General: WB Rr Mi loser → LB drop-round floor(i/2), as player1 (even i) or player2 (odd i)
-        const lbMatchIdx = Math.floor(i / 2);
-        if (lbMatchIdx < lbIds[lbDropRoundIdx]!.length) {
-          loser_next_match_id = lbIds[lbDropRoundIdx]![lbMatchIdx]!;
-        }
-      } else {
-        // WB final loser drops directly into Grand Final as LB champion seed
-        // (handled separately — WB final loser actually goes to LB final, which IS lbIds[R_L-1][0])
-        loser_next_match_id = lbIds[R_L - 1]![0]!;
+      const lbDropRoundIdx = r === 0 ? 0 : 2 * r - 1;
+      const lbMatchIdx = r === 0 ? Math.floor(i / 2) : i;
+      if (lbDropRoundIdx < R_L && lbMatchIdx < lbIds[lbDropRoundIdx]!.length) {
+        loser_next_match_id = lbIds[lbDropRoundIdx]![lbMatchIdx]!;
       }
 
       // Players: only set for WB R1 from seeded list
@@ -368,6 +361,7 @@ export function generateDoubleElim(
         loser_next_match_id,
         bracket_side: 'WINNERS',
         winner_id,
+        ...(r === R_W - 1 && { phase: 'PLAYOFF_SF' }),
       });
     }
   }
@@ -405,6 +399,7 @@ export function generateDoubleElim(
         loser_next_match_id: null,
         bracket_side: 'LOSERS',
         winner_id: null,
+        ...(r === R_L - 1 && { phase: 'PLAYOFF_SF' }),
       });
     }
   }
@@ -419,25 +414,11 @@ export function generateDoubleElim(
     player1_id: null,
     player2_id: null,
     status: 'PENDING',
-    next_match_id: resetMatchId,
-    loser_next_match_id: null,
-    bracket_side: 'GRAND_FINAL',
-    winner_id: null,
-  });
-
-  // --- Reset Match (only activated if LB champion wins GF) ---
-  all.push({
-    id: resetMatchId,
-    tournament_id: tournamentId,
-    round: R_W + R_L + 2,
-    match_number: 1,
-    player1_id: null,
-    player2_id: null,
-    status: 'PENDING',
     next_match_id: null,
     loser_next_match_id: null,
     bracket_side: 'GRAND_FINAL',
     winner_id: null,
+    phase: 'PLAYOFF_FINAL',
   });
 
   // -------------------------------------------------------------------------

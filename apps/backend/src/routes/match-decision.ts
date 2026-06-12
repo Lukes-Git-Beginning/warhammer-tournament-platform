@@ -66,6 +66,21 @@ type BlindPickRow = {
   player2_faction_id: string | null;
 } | null;
 
+type FactionMatrixRow = {
+  p1_locked_at: Date | null;
+  p2_locked_at: Date | null;
+  first_locked_at: Date | null;
+  revealed_at: Date | null;
+  top_player_id: string;
+  bottom_player_id: string;
+  p1_factions: string[];
+  p2_factions: string[];
+  bans: unknown;
+  picked_cell: string | null;
+  last_action_at: Date | null;
+  decided_at: Date | null;
+} | null;
+
 type MapDecisionModeLiteral = 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
 
 function serializeDecisionState(
@@ -74,7 +89,30 @@ function serializeDecisionState(
   blindPick: BlindPickRow,
   tournamentMode: string | null = null,
   matchPlayer1Id: string | null = null,
+  factionMatrix: FactionMatrixRow = null,
 ) {
+  let serializedMatrix = null;
+  if (factionMatrix) {
+    const pickedRow = factionMatrix.picked_cell ? Number(factionMatrix.picked_cell.split(',')[0]) : null;
+    const pickedCol = factionMatrix.picked_cell ? Number(factionMatrix.picked_cell.split(',')[1]) : null;
+    serializedMatrix = {
+      p1Locked: Boolean(factionMatrix.p1_locked_at),
+      p2Locked: Boolean(factionMatrix.p2_locked_at),
+      firstLockedAt: factionMatrix.first_locked_at?.toISOString() ?? null,
+      revealedAt: factionMatrix.revealed_at?.toISOString() ?? null,
+      p1Factions: factionMatrix.revealed_at ? factionMatrix.p1_factions : [],
+      p2Factions: factionMatrix.revealed_at ? factionMatrix.p2_factions : [],
+      bans: (factionMatrix.bans as string[]) ?? [],
+      pickedCell: factionMatrix.picked_cell,
+      lastActionAt: factionMatrix.last_action_at?.toISOString() ?? null,
+      decidedAt: factionMatrix.decided_at?.toISOString() ?? null,
+      p1FactionId: factionMatrix.decided_at && pickedRow !== null ? (factionMatrix.p1_factions[pickedRow] ?? null) : null,
+      p2FactionId: factionMatrix.decided_at && pickedCol !== null ? (factionMatrix.p2_factions[pickedCol] ?? null) : null,
+      topPlayerId: factionMatrix.top_player_id,
+      bottomPlayerId: factionMatrix.bottom_player_id,
+    };
+  }
+
   return {
     matchId,
     mode: decision.mode as MapDecisionModeLiteral,
@@ -102,6 +140,7 @@ function serializeDecisionState(
           player2FactionId: blindPick.revealed_at ? (blindPick.player2_faction_id ?? null) : null,
         }
       : null,
+    factionMatrix: serializedMatrix,
   };
 }
 
@@ -172,18 +211,35 @@ async function drawMapsWithNoRepeat(
   });
 }
 
-/** Baut den Round-Key für map_preset_config aus Phase und Runden-Nummer. */
-function buildRoundKey(phase: string | null, round: number): string {
-  return `${phase ?? 'swiss'}_${round}`;
+/** Maps a match phase + bracket side to the canonical preset config key.
+ * Named stages (SF, Final, 3rd place) use semantic keys.
+ * DE matches use wb_round_N / lb_round_N with bracket-side-relative round numbers.
+ * Swiss / SE early rounds fall back to swiss_N. */
+function buildRoundKey(phase: string | null, bracketSide: string | null, round: number): string {
+  switch (phase) {
+    case 'PLAYOFF_SF': return 'playoff_sf';
+    case 'PLAYOFF_FINAL': return 'playoff_final';
+    case 'PLAYOFF_THIRD_PLACE': return 'playoff_third';
+    default:
+      if (bracketSide === 'WINNERS') return `wb_round_${round}`;
+      if (bracketSide === 'LOSERS') return `lb_round_${round}`;
+      if (bracketSide === 'GRAND_FINAL') return 'playoff_final';
+      return `swiss_${round}`;
+  }
 }
 
 /**
  * Liest den Preset-Eintrag für eine Runde aus map_preset_config.
  * Gibt ein Array von Maps zurück (HOST_PRESET: string[], HOST_PRESET_PICK_BAN: string[][]).
  */
-function getPresetForRound(config: unknown, phase: string | null, round: number): unknown[] | null {
+function getPresetForRound(
+  config: unknown,
+  phase: string | null,
+  bracketSide: string | null,
+  round: number,
+): unknown[] | null {
   if (!config || typeof config !== 'object') return null;
-  const key = buildRoundKey(phase, round);
+  const key = buildRoundKey(phase, bracketSide, round);
   const entry = (config as Record<string, unknown>)[key];
   if (!Array.isArray(entry)) return null;
   return entry;
@@ -213,7 +269,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           games: {
             where: { map_decision: { isNot: null } },
             orderBy: { game_number: 'desc' },
-            select: { map_decision: true, blind_pick: true },
+            select: { map_decision: true, blind_pick: true, faction_matrix: true },
             take: 1,
           },
         },
@@ -237,7 +293,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(200).send(
-        serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament.mode, match.player1_id),
+        serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? 'BPT', match.player1_id, game.faction_matrix ?? null),
       );
     },
   );
@@ -264,6 +320,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           player2_id: true,
           round: true,
           phase: true,
+          bracket_side: true,
           tournament: {
             select: {
               id: true,
@@ -294,7 +351,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       const actorId = request.user.sub;
       const isParticipant = actorId === match.player1_id || actorId === match.player2_id;
       const isStaff =
-        request.user.role === 'ORGANIZER' ||
+        request.user.role === 'HOST' ||
         request.user.role === 'MODERATOR' ||
         request.user.role === 'ADMIN';
       if (!isParticipant && !isStaff) {
@@ -332,8 +389,18 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const mapPool = match.tournament.map_pool.map((p) => p.map_id);
-      const mode = match.tournament.map_decision_mode as MapDecisionModeLiteral;
+      let mapPool = (match.tournament?.map_pool ?? []).map((p) => p.map_id);
+      const mode = (match.tournament?.map_decision_mode ?? 'RANDOM') as MapDecisionModeLiteral;
+
+      // For Open Play matches (no tournament) fall back to the global map pool,
+      // mirroring what createOpenPlayMatch does for game 1.
+      if (!match.tournament && mapPool.length === 0) {
+        const globalMaps = await fastify.prisma.map.findMany({
+          where: { deleted_at: null },
+          select: { id: true },
+        });
+        mapPool = globalMaps.map((m) => m.id);
+      }
 
       // Preset-only modes don't require a tournament map pool
       const needsPool = mode === 'RANDOM' || mode === 'RANDOM_NO_REPEAT' || mode === 'RANDOM_PICK_BAN' || mode === 'PICK_BAN';
@@ -357,6 +424,16 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       let pickedMapId: string | null = null;
       let activePool: string[] = [];
 
+      // Normalize LB round to 1-indexed (LB rounds start at R_W+1 in the bracket generator).
+      let presetRound = match.round;
+      if (match.bracket_side === 'LOSERS' && match.tournament?.id) {
+        const { _min } = await fastify.prisma.match.aggregate({
+          where: { tournament_id: match.tournament.id, bracket_side: 'LOSERS', deleted_at: null },
+          _min: { round: true },
+        });
+        presetRound = match.round - (_min.round ?? match.round) + 1;
+      }
+
       switch (mode) {
         case 'RANDOM':
           pickedMapId = deterministicMapPick(mapPool, seed);
@@ -364,18 +441,18 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
 
         case 'RANDOM_NO_REPEAT': {
           const playedInMatch = await getPlayedMapsInMatch(fastify.prisma, matchId, gameNumber);
-          const drawn = await drawMapsWithNoRepeat(fastify.prisma, match.tournament.id, mapPool, playedInMatch, 1);
+          const drawn = await drawMapsWithNoRepeat(fastify.prisma, match.tournament?.id ?? '', mapPool, playedInMatch, 1);
           pickedMapId = drawn[0] ?? null;
           break;
         }
 
         case 'HOST_PRESET': {
-          const preset = getPresetForRound(match.tournament.map_preset_config, match.phase, match.round);
+          const preset = getPresetForRound(match.tournament?.map_preset_config ?? null, match.phase, match.bracket_side, presetRound);
           const mapForGame = preset?.[gameNumber - 1] as string | undefined;
           if (!mapForGame || typeof mapForGame !== 'string') {
             return reply.code(422).send({
               error: 'UnprocessableEntity',
-              message: `No preset map configured for round ${match.round}, game ${gameNumber}`,
+              message: `No preset map configured for round ${presetRound}, game ${gameNumber}`,
               statusCode: 422,
             });
           }
@@ -384,13 +461,13 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         case 'HOST_PRESET_PICK_BAN': {
-          const preset = getPresetForRound(match.tournament.map_preset_config, match.phase, match.round);
+          const preset = getPresetForRound(match.tournament?.map_preset_config ?? null, match.phase, match.bracket_side, presetRound);
           const gameSets = preset as unknown[] | null;
           const setForGame = gameSets?.[gameNumber - 1];
           if (!Array.isArray(setForGame) || setForGame.length !== 3) {
             return reply.code(422).send({
               error: 'UnprocessableEntity',
-              message: `No 3-map preset configured for round ${match.round}, game ${gameNumber}`,
+              message: `No 3-map preset configured for round ${presetRound}, game ${gameNumber}`,
               statusCode: 422,
             });
           }
@@ -407,7 +484,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
             });
           }
           const playedInMatch = await getPlayedMapsInMatch(fastify.prisma, matchId, gameNumber);
-          activePool = await drawMapsWithNoRepeat(fastify.prisma, match.tournament.id, mapPool, playedInMatch, 3);
+          activePool = await drawMapsWithNoRepeat(fastify.prisma, match.tournament?.id ?? '', mapPool, playedInMatch, 3);
           break;
         }
 
@@ -547,7 +624,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       const poolMapIds =
         decisionActivePool.length > 0
           ? decisionActivePool
-          : match.tournament.map_pool.map((p) => p.map_id);
+          : (match.tournament?.map_pool ?? []).map((p) => p.map_id);
 
       // Validate map is in pool
       if (!poolMapIds.includes(map_id)) {
@@ -571,15 +648,14 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Determine whose turn it is
-      // Top bans first (bans_top empty), then bottom (bans_bottom empty)
+      // Top bans first, then bottom PICKS from the remaining two.
       const isTopTurn = bansTop.length === 0;
       const isBottomTurn = bansTop.length === 1 && bansBottom.length === 0;
 
       if (!isTopTurn && !isBottomTurn) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: 'Both players have already banned',
+          message: 'Ban/pick phase is already complete',
           statusCode: 422,
         });
       }
@@ -588,28 +664,29 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       if (userId !== expectedPlayerId) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: "It is not your turn to ban",
+          message: isTopTurn ? 'It is not your turn to ban' : 'It is not your turn to pick',
           statusCode: 403,
         });
       }
 
-      // Apply ban
-      const newBansTop = isTopTurn ? [...bansTop, map_id] : bansTop;
-      const newBansBottom = !isTopTurn ? [...bansBottom, map_id] : bansBottom;
-
-      // After both bans, determine the remaining map
-      const newAllBanned = [...newBansTop, ...newBansBottom];
-      const remaining = poolMapIds.filter((id) => !newAllBanned.includes(id));
-
+      let newBansTop = bansTop;
+      const newBansBottom = bansBottom;
       let pickedMapId: string | null = null;
       let decidedAt: Date | null = null;
 
-      if (newBansTop.length >= 1 && newBansBottom.length >= 1 && remaining.length === 1) {
-        pickedMapId = remaining[0] ?? null;
-        decidedAt = new Date();
-      } else if (remaining.length === 0 && newBansTop.length >= 1 && newBansBottom.length >= 1) {
-        // Edge case: pool size = 2, both banned → pick first from pool as tiebreak
-        pickedMapId = poolMapIds[0] ?? null;
+      if (isTopTurn) {
+        // P1 bans one map
+        newBansTop = [...bansTop, map_id];
+      } else {
+        // P2 picks the map they want to play — must not be in bansTop
+        if (bansTop.includes(map_id)) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'That map has already been banned',
+            statusCode: 422,
+          });
+        }
+        pickedMapId = map_id;
         decidedAt = new Date();
       }
 
@@ -687,7 +764,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       const actorId = request.user.sub;
       const isParticipant = actorId === match.player1_id || actorId === match.player2_id;
       const isStaff =
-        request.user.role === 'ORGANIZER' ||
+        request.user.role === 'HOST' ||
         request.user.role === 'MODERATOR' ||
         request.user.role === 'ADMIN';
       if (!isParticipant && !isStaff) {
@@ -770,9 +847,10 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Validate tournament mode supports blind pick
-      const mode = match.tournament.mode as string;
-      if (mode !== 'BPT') {
+      // Blind pick is allowed for BPT tournaments and for Open Play matches
+      // (no tournament). Other tournament modes (SFT, etc.) do not use it.
+      const mode = match.tournament?.mode as string | undefined;
+      if (match.tournament !== null && mode !== 'BPT') {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
           message: 'Blind pick is only available in BPT mode tournaments',
@@ -906,7 +984,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+        fastify.requireRole('HOST', 'MODERATOR', 'ADMIN'),
       ],
     },
     async (request, reply) => {
@@ -961,7 +1039,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       const poolMapIds =
         decisionActivePool.length > 0
           ? decisionActivePool
-          : match.tournament.map_pool.map((p) => p.map_id);
+          : (match.tournament?.map_pool ?? []).map((p) => p.map_id);
       const allBanned = [
         ...(decision.bans_top as string[]),
         ...(decision.bans_bottom as string[]),

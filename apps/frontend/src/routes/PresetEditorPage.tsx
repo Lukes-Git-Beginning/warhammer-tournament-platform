@@ -62,7 +62,7 @@ export function PresetEditorPage() {
   }
 
   const canCreate =
-    user.role === 'ORGANIZER' || user.role === 'MODERATOR' || user.role === 'ADMIN';
+    user.role === 'HOST' || user.role === 'MODERATOR' || user.role === 'ADMIN';
 
   if (!presetId && !canCreate) {
     return (

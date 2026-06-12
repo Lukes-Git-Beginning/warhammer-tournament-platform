@@ -181,7 +181,7 @@ const draftRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     '/api/drafts/:id/cancel',
     {
-      preHandler: [fastify.authenticate, fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN')],
+      preHandler: [fastify.authenticate, fastify.requireRole('HOST', 'MODERATOR', 'ADMIN')],
     },
     async (request, reply) => {
       const { id: draftId } = request.params as { id: string };
@@ -209,10 +209,10 @@ const draftRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // ORGANIZER role: must be the tournament organizer
+      // HOST role: must be the tournament organizer
       const userRole = request.user.role;
       const isModOrAdmin = userRole === 'MODERATOR' || userRole === 'ADMIN';
-      const isOwnOrganizer = actorUserId === draft.match.tournament.organizer_id;
+      const isOwnOrganizer = actorUserId === draft.match.tournament?.organizer_id;
 
       if (!isModOrAdmin && !isOwnOrganizer) {
         return reply.code(403).send({

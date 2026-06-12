@@ -23,6 +23,7 @@ import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { sortStandingsByPlayoffResult, getFinalistIds } from '@/lib/bracketStandings';
 import { BracketView } from '@/components/bracket/BracketView';
 import { SwissStandings } from '@/components/bracket/SwissStandings';
+import { EliminationStandings } from '@/components/bracket/EliminationStandings';
 import { PageShell } from '@/components/layout/PageShell';
 import { CheckInButton } from '@/components/tournament/CheckInButton';
 import { RegisterButton } from '@/components/tournament/RegisterButton';
@@ -148,7 +149,11 @@ export function TournamentDetail() {
   const { data: bracket } = useQuery({
     queryKey: ['bracket', slug],
     queryFn: () => getBracket(slug),
-    enabled: !!tournament && (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED'),
+    enabled: !!tournament && (
+      tournament.status === 'ONGOING' ||
+      tournament.status === 'COMPLETED' ||
+      tournament.status === 'REGISTRATION_CLOSED'
+    ),
     refetchInterval: 15000,
     staleTime: 0,
   });
@@ -229,7 +234,7 @@ export function TournamentDetail() {
   const canManage =
     user &&
     (user.role === 'MODERATOR' || user.role === 'ADMIN' ||
-      (user.role === 'ORGANIZER' && tournament.organizer?.id === user.id));
+      (user.role === 'HOST' && tournament.organizer?.id === user.id));
 
   // Derive participant status from the /participants/me endpoint
   const participantStatus: ParticipantStatus | null = participantData?.status ?? null;
@@ -559,6 +564,10 @@ export function TournamentDetail() {
       {tournament.status !== 'DRAFT' && (() => {
         const swiss = bracket?.swiss;
         const hasStandings = swiss && swiss.standings.length > 0;
+        const isElim =
+          tournament.format === 'SINGLE_ELIMINATION' ||
+          tournament.format === 'DOUBLE_ELIMINATION';
+
         if (hasStandings) {
           return (
             <section className="mb-4">
@@ -573,6 +582,17 @@ export function TournamentDetail() {
                 finalistIds={standingsFinalistIds}
               />
             </section>
+          );
+        }
+        if (isElim && participantsData) {
+          return (
+            <EliminationStandings
+              matches={bracket?.matches ?? []}
+              participants={participantsData.data}
+              slug={tournament.slug}
+              canManage={!!canManage}
+              tournamentStatus={tournament.status}
+            />
           );
         }
         return <ParticipantsList slug={tournament.slug} canManage={!!canManage} tournamentStatus={tournament.status} />;

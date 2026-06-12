@@ -1,0 +1,26 @@
+-- Heal faction icon_url values that were lost due to seed runs overwriting them.
+-- Only updates rows where icon_url IS NULL to avoid clobbering admin uploads.
+UPDATE "Faction" SET "icon_url" = '/icons/factions/empire.png'           WHERE "id" = 'empire'            AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/bretonnia.png'        WHERE "id" = 'bretonnia'         AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/kislev.png'           WHERE "id" = 'kislev'            AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/grand_cathay.png'     WHERE "id" = 'grand_cathay'      AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/dwarfs.png'           WHERE "id" = 'dwarfs'            AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/high_elves.png'       WHERE "id" = 'high_elves'        AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/lizardmen.png'        WHERE "id" = 'lizardmen'         AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/greenskins.png'       WHERE "id" = 'greenskins'        AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/dark_elves.png'       WHERE "id" = 'dark_elves'        AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/skaven.png'           WHERE "id" = 'skaven'            AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/norsca.png'           WHERE "id" = 'norsca'            AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/ogre_kingdoms.png'    WHERE "id" = 'ogre_kingdoms'     AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/beastmen.png'         WHERE "id" = 'beastmen'          AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/khorne.png'           WHERE "id" = 'khorne'            AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/nurgle.png'           WHERE "id" = 'nurgle'            AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/tzeentch.png'         WHERE "id" = 'tzeentch'          AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/slaanesh.png'         WHERE "id" = 'slaanesh'          AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/daemons_of_chaos.png' WHERE "id" = 'daemons_of_chaos'  AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/warriors_of_chaos.png' WHERE "id" = 'warriors_of_chaos' AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/chaos_dwarfs.png'     WHERE "id" = 'chaos_dwarfs'      AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/vampire_counts.png'   WHERE "id" = 'vampire_counts'    AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/vampire_coast.png'    WHERE "id" = 'vampire_coast'     AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/tomb_kings.png'       WHERE "id" = 'tomb_kings'        AND "icon_url" IS NULL;
+UPDATE "Faction" SET "icon_url" = '/icons/factions/wood_elves.png'       WHERE "id" = 'wood_elves'        AND "icon_url" IS NULL;

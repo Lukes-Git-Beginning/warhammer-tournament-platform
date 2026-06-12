@@ -91,7 +91,7 @@ export async function loadSeasonObservations(
   });
 
   // Load TournamentParticipant factions for SFT fallback (faction set at registration)
-  const tournamentIds = [...new Set(matches.map((m) => m.tournament_id))];
+  const tournamentIds = [...new Set(matches.map((m) => m.tournament_id).filter((id): id is string => id !== null))];
   const participants = tournamentIds.length
     ? await prisma.tournamentParticipant.findMany({
         where: { tournament_id: { in: tournamentIds }, deleted_at: null },
@@ -104,8 +104,8 @@ export async function loadSeasonObservations(
   return matches.flatMap((m): (MatchObservation | null)[] => {
     const p1 = m.player1_id!;
     const p2 = m.player2_id!;
-    const matchFX = m.player1_faction_id ?? pf(m.tournament_id, p1);
-    const matchFY = m.player2_faction_id ?? pf(m.tournament_id, p2);
+    const matchFX = m.player1_faction_id ?? (m.tournament_id ? pf(m.tournament_id, p1) : null);
+    const matchFY = m.player2_faction_id ?? (m.tournament_id ? pf(m.tournament_id, p2) : null);
 
     const decisiveGames = m.games.filter((g) => g.winner_id !== null);
 

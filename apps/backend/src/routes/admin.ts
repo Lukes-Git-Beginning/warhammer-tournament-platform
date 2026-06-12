@@ -253,6 +253,54 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return { id: unbanned.id, username: unbanned.username };
   });
 
+  // PATCH /api/admin/users/:id/role — change a user's role
+  fastify.patch<{ Params: { id: string }; Body: { role: string } }>(
+    '/api/admin/users/:id/role',
+    {
+      preHandler: [fastify.authenticate, fastify.requireRole('ADMIN')],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['role'],
+          properties: { role: { type: 'string', enum: ['USER', 'HOST', 'MODERATOR', 'ADMIN'] } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = request.params.id;
+      const newRole = request.body.role as 'USER' | 'HOST' | 'MODERATOR' | 'ADMIN';
+
+      const user = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, username: true, role: true },
+      });
+      if (!user) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
+      if (user.role === newRole) return reply.send({ id: user.id, role: user.role });
+
+      const updated = await fastify.prisma.$transaction(async (tx) => {
+        const u = await tx.user.update({
+          where: { id: userId },
+          data: { role: newRole },
+          select: { id: true, username: true, role: true },
+        });
+        await tx.auditLog.create({
+          data: {
+            entity_type: 'User',
+            entity_id: u.id,
+            action: 'ROLE_CHANGE',
+            actor_id: request.user.sub,
+            old_value: { role: user.role },
+            new_value: { role: newRole },
+          },
+        });
+        return u;
+      });
+
+      if (fastify.redis) await invalidate(fastify.redis, `user:role:${userId}`);
+      return { id: updated.id, username: updated.username, role: updated.role };
+    },
+  );
+
   // -------------------------------------------------------------------------
   // GET /api/admin/stats/faction-winrates
   // -------------------------------------------------------------------------
