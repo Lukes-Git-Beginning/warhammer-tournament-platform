@@ -797,8 +797,9 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
           {isMyTurn && mx.lastActionAt && <MatrixCountdown lastActionAt={mx.lastActionAt} />}
         </div>
 
-        <div className="max-w-[680px] w-full mx-auto">
-          <div className="grid grid-cols-3">
+        <div className="w-full overflow-x-auto">
+          <div className="min-w-[660px] mx-auto">
+            <div className="grid grid-cols-3 gap-[3px] bg-rizzotto-stone-600 rounded overflow-hidden">
           {[0, 1, 2].map((row) =>
             [0, 1, 2].map((col) => {
               const cell = `${row},${col}`;
@@ -818,16 +819,14 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
                   onMouseLeave={() => setHoveredCell(null)}
                   className={[
                     'relative grid grid-cols-[1fr_auto_1fr] overflow-hidden',
-                    col < 2 ? 'border-r' : '',
-                    row < 2 ? 'border-b' : '',
-                    'transition-[border-color,background-color,opacity] duration-150',
+                    'transition-[box-shadow,background-color,opacity] duration-150',
                     isBanned
-                      ? 'border-rizzotto-iron-700 bg-rizzotto-iron-900/40 opacity-40 cursor-default'
+                      ? 'bg-rizzotto-iron-900/40 opacity-40 cursor-default'
                       : isHovered
-                        ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800 cursor-pointer'
+                        ? 'bg-rizzotto-iron-800 cursor-pointer ring-1 ring-inset ring-rizzotto-gold-500/80'
                         : isMyTurn
-                          ? 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60 cursor-pointer'
-                          : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 cursor-default',
+                          ? 'bg-rizzotto-iron-900 cursor-pointer'
+                          : 'bg-rizzotto-iron-900 cursor-default',
                   ].join(' ')}
                 >
                   {isBanned && (
@@ -884,6 +883,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
               );
             })
           )}
+            </div>
           </div>
         </div>
       </div>
