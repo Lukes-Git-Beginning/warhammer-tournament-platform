@@ -567,7 +567,7 @@ export function TournamentEditPage() {
           {isAutoSwiss && (
             <div className="mt-3 rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-3 text-sm text-rizzotto-stone-300">
               <p className="font-semibold text-rizzotto-gold-400 mb-1">Auto Swiss</p>
-              <p>Mode (SFT), match format (BO1) and rounds are set automatically at tournament start based on check-in count. Check-in opens 1h before start time.</p>
+              <p>Mode (SFT), match format (BO1), map mode (Random Ban&Pick) and rounds are set automatically at tournament start based on check-in count. Check-in opens 1h before start time.</p>
             </div>
           )}
         </fieldset>
@@ -742,7 +742,7 @@ export function TournamentEditPage() {
                 </div>
               </div>
             </>
-          ) : (
+          ) : !isAutoSwiss ? (
             <>
               <div>
                 <Label htmlFor="tef-elim-fmt">Match Format</Label>
@@ -766,7 +766,7 @@ export function TournamentEditPage() {
                 </label>
               )}
             </>
-          )}
+          ) : null}
         </fieldset>
 
         {/* ── Map Pool ──────────────────────────────────────────────────── */}
@@ -776,7 +776,8 @@ export function TournamentEditPage() {
           </legend>
           {ongoingLocked && <LockNote>Locked — tournament is underway</LockNote>}
 
-          <div>
+          {/* Map decision mode — hidden for AUTO_SWISS (always Random Ban&Pick) */}
+          {!isAutoSwiss && <div>
             <Label>Map Decision Mode</Label>
             <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-2">
               {MAP_DECISION_MODES.map((opt) => {
@@ -809,7 +810,7 @@ export function TournamentEditPage() {
                 );
               })}
             </div>
-          </div>
+          </div>}
 
           {/* Preset configuration */}
           {(form.map_decision_mode === 'HOST_PRESET' || form.map_decision_mode === 'HOST_PRESET_PICK_BAN') && (

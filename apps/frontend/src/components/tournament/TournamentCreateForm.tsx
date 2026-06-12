@@ -330,7 +330,7 @@ export function TournamentCreateForm() {
       {form.format === 'AUTO_SWISS' && (
         <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">
           <p className="font-semibold text-rizzotto-gold-400">Auto Swiss — self-running tournament</p>
-          <p>Check-in opens automatically 1 hour before start. Rounds and playoff size are determined by how many players check in (4–7: 3R + Final, 8–15: 5R + Top 4, 16+: 4R + Top 8). Rounds advance automatically when all matches are complete. Mode: SFT · All matches: BO1.</p>
+          <p>Check-in opens automatically 1 hour before start. Rounds and playoff size are determined by how many players check in (4–7: 3R + Final, 8–15: 5R + Top 4, 16+: 4R + Top 8). Rounds advance automatically when all matches are complete. Mode: SFT · All matches: BO1 · Map: Random Ban&Pick.</p>
         </div>
       )}
 
@@ -512,7 +512,7 @@ export function TournamentCreateForm() {
               </div>
             </div>
           </>
-        ) : (
+        ) : form.format !== 'AUTO_SWISS' ? (
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
@@ -568,7 +568,7 @@ export function TournamentCreateForm() {
               </label>
             )}
           </>
-        )}
+        ) : null}
       </fieldset>
 
       {/* ─── Map Pool ──────────────────────────────────────────────────── */}
@@ -577,8 +577,8 @@ export function TournamentCreateForm() {
           Map Pool
         </legend>
 
-        {/* Map decision mode */}
-        <div>
+        {/* Map decision mode — hidden for AUTO_SWISS (always Random Ban&Pick) */}
+        {form.format !== 'AUTO_SWISS' && <div>
           <Label>Map Decision Mode</Label>
           <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-2">
             {MAP_DECISION_MODES.map((opt) => {
@@ -611,7 +611,7 @@ export function TournamentCreateForm() {
               );
             })}
           </div>
-        </div>
+        </div>}
 
         {/* Preset configuration for HOST_PRESET and HOST_PRESET_PICK_BAN */}
         {(form.map_decision_mode === 'HOST_PRESET' || form.map_decision_mode === 'HOST_PRESET_PICK_BAN') && (() => {

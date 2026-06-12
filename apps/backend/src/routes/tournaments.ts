@@ -285,7 +285,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           swiss_match_format: isAutoSwiss ? 'BO1' : data.swiss_match_format,
           playoff_match_format: isAutoSwiss ? 'BO1' : data.playoff_match_format,
           finale_match_format: isAutoSwiss ? 'BO1' : (data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' ? 'BO3' : undefined)),
-          map_decision_mode: isAutoSwiss ? 'RANDOM_NO_REPEAT' : data.map_decision_mode,
+          map_decision_mode: isAutoSwiss ? 'RANDOM_PICK_BAN' : data.map_decision_mode,
           map_preset_config: data.map_preset_config != null ? (data.map_preset_config as Prisma.InputJsonValue) : undefined,
         },
         select: {
