@@ -23,16 +23,12 @@ export function getEliminationPlacements(matches: BracketNode[]): EliminationPla
   let tp = matches.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
 
   // Fallback: no phase labels (older tournaments) — derive from bracket structure.
-  // In SE the Grand Final is the match in the highest round with no nextMatchId.
-  // The third-place match shares the same round as the GF but has a different id.
+  // Find the GF by the highest round across ALL matches (not just filled ones), so
+  // an SF match with both player IDs doesn't get mistaken for the GF.
   if (!gf) {
-    const completed = matches.filter(
-      (m) => (m.status === 'COMPLETED' || m.status === 'PENDING' || m.status === 'ONGOING') &&
-             m.player1Id && m.player2Id,
-    );
-    const maxRound = Math.max(...completed.map((m) => m.round), -Infinity);
+    const maxRound = Math.max(...matches.map((m) => m.round), -Infinity);
     if (maxRound > -Infinity) {
-      const finalRoundMatches = completed.filter((m) => m.round === maxRound);
+      const finalRoundMatches = matches.filter((m) => m.round === maxRound);
       // The GF is the one without a loser next match (no consolation branch)
       gf = finalRoundMatches.find((m) => !m.loserNextMatchId) ?? finalRoundMatches[0];
       // Third-place is any other match in the same round
