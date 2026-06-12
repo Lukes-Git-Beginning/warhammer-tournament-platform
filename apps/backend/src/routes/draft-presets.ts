@@ -239,11 +239,11 @@ const draftPresetRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // -------------------------------------------------------------------------
-  // POST /api/draft-presets  — ORGANIZER / MODERATOR / ADMIN
+  // POST /api/draft-presets  — HOST / MODERATOR / ADMIN
   // -------------------------------------------------------------------------
   fastify.post(
     '/api/draft-presets',
-    { preHandler: [fastify.authenticate, fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN')] },
+    { preHandler: [fastify.authenticate, fastify.requireRole('HOST', 'MODERATOR', 'ADMIN')] },
     async (request, reply) => {
       const parsed = CreateDraftPresetSchema.safeParse(request.body);
       if (!parsed.success) {

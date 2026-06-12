@@ -89,7 +89,7 @@ export function PresetListPage() {
   });
 
   const canCreate =
-    user?.role === 'ORGANIZER' || user?.role === 'MODERATOR' || user?.role === 'ADMIN';
+    user?.role === 'HOST' || user?.role === 'MODERATOR' || user?.role === 'ADMIN';
 
   function canEditPreset(preset: DraftPreset) {
     if (!user) return false;

@@ -88,7 +88,7 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const isParticipant = actorId === match.player1_id || actorId === match.player2_id;
-      const isStaff = ['ORGANIZER', 'MODERATOR', 'ADMIN'].includes(request.user.role);
+      const isStaff = ['HOST', 'MODERATOR', 'ADMIN'].includes(request.user.role);
       if (!isParticipant && !isStaff) {
         return reply.code(403).send({ error: 'Forbidden', message: 'You are not a participant of this match', statusCode: 403 });
       }
@@ -229,7 +229,7 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const isParticipant = actorId === match.player1_id || actorId === match.player2_id;
-      const isStaff = ['ORGANIZER', 'MODERATOR', 'ADMIN'].includes(request.user.role);
+      const isStaff = ['HOST', 'MODERATOR', 'ADMIN'].includes(request.user.role);
       if (!isParticipant && !isStaff) {
         return reply.code(403).send({ error: 'Forbidden', message: 'You are not a participant of this match', statusCode: 403 });
       }

@@ -234,7 +234,7 @@ export function TournamentDetail() {
   const canManage =
     user &&
     (user.role === 'MODERATOR' || user.role === 'ADMIN' ||
-      (user.role === 'ORGANIZER' && tournament.organizer?.id === user.id));
+      (user.role === 'HOST' && tournament.organizer?.id === user.id));
 
   // Derive participant status from the /participants/me endpoint
   const participantStatus: ParticipantStatus | null = participantData?.status ?? null;

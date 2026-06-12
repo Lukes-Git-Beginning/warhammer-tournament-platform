@@ -1299,3 +1299,15 @@ export function getQueueStatus(): Promise<{ inQueue: boolean; position: number |
 export function getMyOpenPlayMatch(): Promise<{ match_id: string | null }> {
   return apiFetch<{ match_id: string | null }>('/api/open-play/my-match');
 }
+
+export function getEligibleOwners(): Promise<{ id: string; username: string; avatar_url: string | null; role: string }[]> {
+  return apiFetch('/api/users/eligible-owners');
+}
+
+export function transferTournamentOwner(slug: string, organizer_id: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/tournaments/${slug}/transfer-owner`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ organizer_id }),
+  });
+}

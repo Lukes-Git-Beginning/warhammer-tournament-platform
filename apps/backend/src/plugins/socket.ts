@@ -113,7 +113,7 @@ export default fp(
             socket.data.userId === match.player1_id ||
             socket.data.userId === match.player2_id;
           const isStaff =
-            socket.data.role === 'ORGANIZER' ||
+            socket.data.role === 'HOST' ||
             socket.data.role === 'MODERATOR' ||
             socket.data.role === 'ADMIN';
           if (!isParticipant && !isStaff) {

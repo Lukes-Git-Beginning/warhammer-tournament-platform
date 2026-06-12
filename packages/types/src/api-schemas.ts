@@ -9,7 +9,7 @@ export const HealthResponseSchema = z.object({
 });
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 
-export const RoleSchema = z.enum(['USER', 'ORGANIZER', 'MODERATOR', 'ADMIN']);
+export const RoleSchema = z.enum(['USER', 'HOST', 'ORGANIZER', 'MODERATOR', 'ADMIN']);
 export type Role = z.infer<typeof RoleSchema>;
 
 export const UserPublicSchema = z.object({

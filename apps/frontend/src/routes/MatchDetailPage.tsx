@@ -322,7 +322,7 @@ export function MatchDetailPage() {
   const isPlayer1 = user?.id === match.player1_id;
   const isPlayer2 = user?.id === match.player2_id;
   const isPrivileged =
-    user?.role === 'ADMIN' || user?.role === 'MODERATOR' || user?.role === 'ORGANIZER';
+    user?.role === 'ADMIN' || user?.role === 'MODERATOR' || user?.role === 'HOST';
   const canReport = !!(user && (isPlayer1 || isPlayer2 || isPrivileged));
   const reportable = match.status === 'ONGOING' || match.status === 'PENDING';
 

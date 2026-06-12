@@ -274,7 +274,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+        fastify.requireRole('HOST', 'MODERATOR', 'ADMIN'),
       ],
     },
     async (request, reply) => {
@@ -322,8 +322,8 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // ORGANIZER must own the tournament (open play matches have no organizer)
-      if (user.role === 'ORGANIZER' && match.tournament?.organizer_id !== user.sub) {
+      // HOST must own the tournament (open play matches have no organizer)
+      if (user.role === 'HOST' && match.tournament?.organizer_id !== user.sub) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'You are not the organizer of this tournament',

@@ -1207,8 +1207,8 @@ export function MatchDecisionPage() {
     ? (matchDetail.player1?.id === matrixRowPlayerId ? matchDetail.player2 : matchDetail.player1)
     : null;
 
-  const isOrganizerOrAdmin =
-    user && (user.role === 'ORGANIZER' || user.role === 'MODERATOR' || user.role === 'ADMIN');
+  const isHostOrAdmin =
+    user && (user.role === 'HOST' || user.role === 'MODERATOR' || user.role === 'ADMIN');
 
   const forceResolveMutation = useMutation({
     mutationFn: () => forceResolveDecision(matchId),
@@ -1395,7 +1395,7 @@ export function MatchDecisionPage() {
       </div>
 
       {/* Organizer/Admin escape hatch — force-pick a random map if a player is AFK */}
-      {isOrganizerOrAdmin && phase === 'map_pick_ban' && !decision.pickedMapId && (
+      {isHostOrAdmin && phase === 'map_pick_ban' && !decision.pickedMapId && (
         <div className="mt-4 flex justify-center">
           <button
             onClick={() => forceResolveMutation.mutate()}

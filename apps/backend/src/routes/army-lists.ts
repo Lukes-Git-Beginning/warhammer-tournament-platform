@@ -212,7 +212,7 @@ const armyListsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // ACL: owner or privileged role
       const isOwner = list.user_id === request.user.sub;
-      const isPriv = ['ADMIN', 'ORGANIZER', 'MODERATOR'].includes(request.user.role);
+      const isPriv = ['ADMIN', 'HOST', 'MODERATOR'].includes(request.user.role);
       if (!isOwner && !isPriv) {
         return reply
           .code(403)

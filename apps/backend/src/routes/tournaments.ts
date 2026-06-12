@@ -185,7 +185,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/tournaments
   fastify.post(
     '/api/tournaments',
-    { preHandler: [fastify.authenticate, fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN')] },
+    { preHandler: [fastify.authenticate, fastify.requireRole('HOST', 'MODERATOR', 'ADMIN')] },
     async (request, reply) => {
       const parsed = CreateTournamentSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -976,6 +976,75 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       { ttlSeconds: 300 },
     );
   });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/users/eligible-owners — Admin: list HOST + ADMIN users for ownership transfer
+  // ---------------------------------------------------------------------------
+  fastify.get(
+    '/api/users/eligible-owners',
+    { preHandler: [fastify.authenticate, fastify.requireRole('ADMIN')] },
+    async (_request, reply) => {
+      const users = await fastify.prisma.user.findMany({
+        where: {
+          role: { in: ['HOST', 'ADMIN'] },
+          deleted_at: null,
+        },
+        select: { id: true, username: true, avatar_url: true, role: true },
+        orderBy: { username: 'asc' },
+      });
+      return reply.send(users);
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // PATCH /api/tournaments/:slug/transfer-owner — Admin: transfer tournament ownership
+  // ---------------------------------------------------------------------------
+  fastify.patch<{ Params: { slug: string }; Body: { organizer_id: string } }>(
+    '/api/tournaments/:slug/transfer-owner',
+    {
+      preHandler: [fastify.authenticate, fastify.requireRole('ADMIN')],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['organizer_id'],
+          properties: { organizer_id: { type: 'string', format: 'uuid' } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { slug } = request.params;
+      const { organizer_id } = request.body;
+
+      // Verify target user exists and is HOST or ADMIN
+      const targetUser = await fastify.prisma.user.findUnique({
+        where: { id: organizer_id },
+        select: { id: true, role: true, deleted_at: true },
+      });
+      if (!targetUser || targetUser.deleted_at) {
+        return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
+      }
+      if (targetUser.role !== 'HOST' && targetUser.role !== 'ADMIN') {
+        return reply.code(400).send({ error: 'BadRequest', message: 'New owner must be HOST or ADMIN', statusCode: 400 });
+      }
+
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { slug, deleted_at: null },
+        select: { id: true },
+      });
+      if (!tournament) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      }
+
+      await fastify.prisma.tournament.update({
+        where: { id: tournament.id },
+        data: { organizer_id },
+      });
+
+      await invalidate(fastify.redis, `tournament:${slug}`);
+
+      return reply.send({ ok: true });
+    },
+  );
 };
 
 export default tournamentRoutes;

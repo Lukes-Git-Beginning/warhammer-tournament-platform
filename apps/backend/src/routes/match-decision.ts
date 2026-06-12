@@ -351,7 +351,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       const actorId = request.user.sub;
       const isParticipant = actorId === match.player1_id || actorId === match.player2_id;
       const isStaff =
-        request.user.role === 'ORGANIZER' ||
+        request.user.role === 'HOST' ||
         request.user.role === 'MODERATOR' ||
         request.user.role === 'ADMIN';
       if (!isParticipant && !isStaff) {
@@ -764,7 +764,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       const actorId = request.user.sub;
       const isParticipant = actorId === match.player1_id || actorId === match.player2_id;
       const isStaff =
-        request.user.role === 'ORGANIZER' ||
+        request.user.role === 'HOST' ||
         request.user.role === 'MODERATOR' ||
         request.user.role === 'ADMIN';
       if (!isParticipant && !isStaff) {
@@ -984,7 +984,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+        fastify.requireRole('HOST', 'MODERATOR', 'ADMIN'),
       ],
     },
     async (request, reply) => {

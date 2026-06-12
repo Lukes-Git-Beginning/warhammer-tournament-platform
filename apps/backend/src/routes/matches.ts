@@ -139,7 +139,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch(
     '/api/matches/:id/start',
     {
-      preHandler: [fastify.authenticate, fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN')],
+      preHandler: [fastify.authenticate, fastify.requireRole('HOST', 'MODERATOR', 'ADMIN')],
     },
     async (request, reply) => {
       const { id: matchId } = request.params as { id: string };
@@ -180,7 +180,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // ORGANIZER can only start matches in their own tournament
+      // HOST can only start matches in their own tournament
       const isModOrAdmin = user.role === 'MODERATOR' || user.role === 'ADMIN';
       const isOwnOrganizer = user.sub === match.tournament.organizer_id;
 

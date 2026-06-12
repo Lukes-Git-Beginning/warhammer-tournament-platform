@@ -19,7 +19,7 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const canCreate =
-    user?.role === 'ORGANIZER' || user?.role === 'MODERATOR' || user?.role === 'ADMIN';
+    user?.role === 'HOST' || user?.role === 'MODERATOR' || user?.role === 'ADMIN';
 
   const navLinks = (
     <>

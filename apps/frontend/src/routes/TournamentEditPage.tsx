@@ -8,6 +8,8 @@ import {
   patchTournament,
   getMaps,
   getFactions,
+  getEligibleOwners,
+  transferTournamentOwner,
   type Tournament,
   type TournamentPatchInput,
   type MapDecisionMode,
@@ -281,6 +283,52 @@ function LockNote({ children }: { children: React.ReactNode }) {
 }
 
 // ---------------------------------------------------------------------------
+// Transfer Ownership (admin only)
+// ---------------------------------------------------------------------------
+
+function TransferOwnerSection({ slug, currentOwnerId }: { slug: string; currentOwnerId: string }) {
+  const queryClient = useQueryClient();
+  const { data: owners = [] } = useQuery({
+    queryKey: ['eligible-owners'],
+    queryFn: getEligibleOwners,
+  });
+  const [selectedId, setSelectedId] = useState(currentOwnerId);
+  const mutation = useMutation({
+    mutationFn: (id: string) => transferTournamentOwner(slug, id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['tournament', slug] }),
+  });
+
+  return (
+    <div className="border-t border-rizzotto-iron-600 pt-6 mt-6">
+      <h3 className="text-sm font-semibold text-rizzotto-stone-300 mb-3">Transfer Ownership</h3>
+      <div className="flex gap-3 items-center">
+        <select
+          value={selectedId}
+          onChange={(e) => setSelectedId(e.target.value)}
+          className="flex-1 bg-rizzotto-iron-800 border border-rizzotto-iron-600 rounded px-3 py-2 text-sm text-rizzotto-stone-200"
+        >
+          {owners.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.username} ({u.role})
+            </option>
+          ))}
+        </select>
+        <Button
+          variant="etched"
+          size="sm"
+          disabled={selectedId === currentOwnerId || mutation.isPending}
+          onClick={() => mutation.mutate(selectedId)}
+        >
+          {mutation.isPending ? 'Transferring…' : 'Transfer'}
+        </Button>
+      </div>
+      {mutation.isSuccess && <p className="text-xs text-green-400 mt-2">Ownership transferred.</p>}
+      {mutation.isError && <p className="text-xs text-red-400 mt-2">Transfer failed.</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -326,7 +374,7 @@ export function TournamentEditPage() {
     !!tournament &&
     (user.role === 'MODERATOR' ||
       user.role === 'ADMIN' ||
-      (user.role === 'ORGANIZER' && tournament.organizer?.id === user.id));
+      (user.role === 'HOST' && tournament.organizer?.id === user.id));
 
   useEffect(() => {
     if (!isLoading && tournament && user && !canManage) {
@@ -1081,6 +1129,11 @@ export function TournamentEditPage() {
             {t('common.cancel')}
           </Button>
         </div>
+
+        {/* ── Transfer Ownership (admin only) ───────────────────────────── */}
+        {user.role === 'ADMIN' && (
+          <TransferOwnerSection slug={tournament.slug} currentOwnerId={tournament.organizer?.id ?? ''} />
+        )}
       </form>
     </PageShell>
   );
