@@ -144,7 +144,7 @@ export function MatchNode({
         </div>
       )}
       {/* Player 1 row */}
-      <div className={`flex-1 flex items-center px-2 border-b border-stone-800 ${droppedPlayerId === match.player1Id ? 'opacity-50' : ''}`}>
+      <div className={`flex-1 flex items-center px-2 border-b border-stone-800`}>
         {match.player1Id && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
@@ -162,7 +162,7 @@ export function MatchNode({
             : (p1SlotLabel ?? (isBye ? 'BYE' : 'TBD'))}
         </span>
         {droppedPlayerId === match.player1Id && (
-          <span className="text-[9px] text-amber-600/70 uppercase tracking-wider ml-1">out</span>
+          <span className="text-[9px] text-red-400 uppercase tracking-wider ml-1 font-semibold">out</span>
         )}
         {showFaction && match.player1Id && <FactionIndicator faction={player1Faction} />}
         {score1 && droppedPlayerId !== match.player1Id && (
@@ -175,7 +175,7 @@ export function MatchNode({
       </div>
 
       {/* Player 2 row */}
-      <div className={`flex-1 flex items-center px-2 ${droppedPlayerId === match.player2Id ? 'opacity-50' : ''}`}>
+      <div className={`flex-1 flex items-center px-2`}>
         {match.player2Id && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
@@ -193,7 +193,7 @@ export function MatchNode({
             : (p2SlotLabel ?? (isBye ? 'BYE' : 'TBD'))}
         </span>
         {droppedPlayerId === match.player2Id && (
-          <span className="text-[9px] text-amber-600/70 uppercase tracking-wider ml-1">out</span>
+          <span className="text-[9px] text-red-400 uppercase tracking-wider ml-1 font-semibold">out</span>
         )}
         {showFaction && match.player2Id && <FactionIndicator faction={player2Faction} />}
         {score2 && droppedPlayerId !== match.player2Id && (
