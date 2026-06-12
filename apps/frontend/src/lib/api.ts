@@ -595,6 +595,14 @@ export function unbanUser(userId: string): Promise<void> {
   return apiFetch(`/api/admin/users/${userId}/ban`, { method: 'DELETE' });
 }
 
+export function updateUserRole(userId: string, role: string): Promise<{ id: string; role: string }> {
+  return apiFetch(`/api/admin/users/${userId}/role`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Admin — Stats
 // ---------------------------------------------------------------------------

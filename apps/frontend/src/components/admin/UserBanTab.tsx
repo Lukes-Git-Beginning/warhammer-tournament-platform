@@ -1,7 +1,34 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { searchUsers, type AdminUser } from '@/lib/api';
+import { Link } from '@tanstack/react-router';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { searchUsers, updateUserRole, type AdminUser } from '@/lib/api';
 import { UserBanModal } from './UserBanModal';
+
+const ASSIGNABLE_ROLES = ['USER', 'HOST', 'MODERATOR', 'ADMIN'] as const;
+
+function RoleSelect({ user, search }: { user: AdminUser; search: string }) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (role: string) => updateUserRole(user.id, role),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin-users', search] }),
+  });
+
+  return (
+    <select
+      value={user.role === 'ORGANIZER' ? 'ORGANIZER' : user.role}
+      disabled={mutation.isPending}
+      onChange={(e) => mutation.mutate(e.target.value)}
+      className="rounded border border-stone-700 bg-stone-900 px-2 py-0.5 text-xs text-stone-300 focus:border-rizzotto-gold-500 focus:outline-none disabled:opacity-50"
+    >
+      {user.role === 'ORGANIZER' && (
+        <option value="ORGANIZER" disabled>ORGANIZER (legacy)</option>
+      )}
+      {ASSIGNABLE_ROLES.map((r) => (
+        <option key={r} value={r}>{r}</option>
+      ))}
+    </select>
+  );
+}
 
 export function UserBanTab() {
   const [search, setSearch] = useState('');
@@ -13,9 +40,6 @@ export function UserBanTab() {
   });
 
   const users = data?.users ?? [];
-  const filtered = search.length >= 2
-    ? users
-    : users;
 
   return (
     <div>
@@ -56,29 +80,35 @@ export function UserBanTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-800/60">
-              {filtered.map((user) => (
+              {users.map((user) => (
                 <tr key={user.id} className="hover:bg-stone-800/30 transition-colors">
                   <td className="px-4 py-3">
-                    <span className="flex items-center gap-2">
+                    <Link
+                      to="/users/$id"
+                      params={{ id: user.id }}
+                      className="flex items-center gap-2 hover:underline decoration-rizzotto-stone-500"
+                    >
                       {user.avatar_url ? (
                         <img
                           src={user.avatar_url}
                           alt={user.username}
-                          className="h-7 w-7 rounded-full border border-stone-700 object-cover"
+                          className="h-7 w-7 rounded-full border border-stone-700 object-cover shrink-0"
                         />
                       ) : (
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-stone-700 text-xs font-medium text-stone-200">
+                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-700 text-xs font-medium text-stone-200">
                           {user.username[0]?.toUpperCase() ?? '?'}
                         </span>
                       )}
-                      <span className="text-stone-200">{user.username}</span>
-                    </span>
+                      <span className="text-rizzotto-stone-200">{user.username}</span>
+                    </Link>
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-stone-400 select-all">{user.discord_id}</td>
                   <td className="px-4 py-3 font-mono text-xs text-stone-400 select-all">
                     {user.steam_id ?? <span className="text-stone-600 not-italic">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-stone-400">{user.role}</td>
+                  <td className="px-4 py-3">
+                    <RoleSelect user={user} search={search} />
+                  </td>
                   <td className="px-4 py-3 text-stone-500 text-xs">
                     {new Date(user.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
@@ -104,7 +134,7 @@ export function UserBanTab() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {users.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-stone-500">No members found.</td>
                 </tr>
