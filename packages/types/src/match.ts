@@ -13,6 +13,8 @@ export const MatchStatusSchema = z.enum([
   'BYE',
   'FORFEIT',
   'DISPUTED',
+  'AWAITING_CONFIRMATION',
+  'CANCELLED',
 ]);
 export type MatchStatus = z.infer<typeof MatchStatusSchema>;
 

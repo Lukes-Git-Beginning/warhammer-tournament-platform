@@ -202,10 +202,32 @@ export async function notifyReplayReminder(winnerDiscordId: string, matchId: str
   if (!token) return;
 
   const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
-  await sendDm(
+  await sendDmWithComponents(
     winnerDiscordId,
     `✅ Result recorded! Upload your replay at ${matchUrl} to have this win count for the leaderboard.`,
+    [actionRow([button('Queue Again', `op_queue:${winnerDiscordId}`, BTN_SUCCESS)])],
   ).catch((e) => console.warn('[discord-notify] notifyReplayReminder error:', e));
+}
+
+export async function notifyMatchCancelledBothPlayers(
+  p1DiscordId: string,
+  p2DiscordId: string,
+): Promise<void> {
+  const token = getToken();
+  if (!token) return;
+
+  const msg = 'Match cancelled. No result recorded.';
+  const components = [actionRow([button('Queue Again', `op_queue:PLACEHOLDER`, BTN_SUCCESS)])];
+
+  await Promise.allSettled([
+    sendDmWithComponents(p1DiscordId, msg, [
+      actionRow([button('Queue Again', `op_queue:${p1DiscordId}`, BTN_SUCCESS)]),
+    ]),
+    sendDmWithComponents(p2DiscordId, msg, [
+      actionRow([button('Queue Again', `op_queue:${p2DiscordId}`, BTN_SUCCESS)]),
+    ]),
+  ]);
+  void components; // suppress unused warning
 }
 
 /**
