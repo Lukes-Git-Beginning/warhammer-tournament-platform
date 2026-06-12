@@ -96,6 +96,8 @@ enum MatchStatus {
   BYE // system-generated walkover (odd participant count)
   FORFEIT // organizer-triggered (no-show / DQ)
   DISPUTED // Q4: dual-submit conflict, awaiting organizer/admin override
+  AWAITING_CONFIRMATION // Discord flow: one player declared, waiting for opponent response
+  CANCELLED // Open Play no-contest: both players agreed to close without a result
 }
 
 enum MatchResultType {

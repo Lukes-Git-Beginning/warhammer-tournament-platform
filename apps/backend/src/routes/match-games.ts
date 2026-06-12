@@ -447,4 +447,71 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
   );
 };
 
+// ---------------------------------------------------------------------------
+// POST /api/matches/:matchId/replay
+// Open Play only: winner uploads a replay to activate leaderboard counting.
+// Match must be COMPLETED (resolved via Discord or website), counts_for_leaderboard
+// is currently false — this sets it to true.
+// ---------------------------------------------------------------------------
+
+const openPlayReplayRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.post<{ Params: { matchId: string } }>(
+    '/api/matches/:matchId/replay',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { matchId } = request.params;
+      const userId = request.user.sub;
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, type: 'OPEN_PLAY', deleted_at: null },
+        select: { id: true, status: true, winner_id: true, player1_id: true, player2_id: true },
+      });
+
+      if (!match) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      }
+      if (match.status !== 'COMPLETED') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not completed', statusCode: 422 });
+      }
+      if (match.winner_id !== userId) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the winner can upload a replay', statusCode: 403 });
+      }
+
+      const data = await request.file();
+      if (!data) {
+        return reply.code(400).send({ error: 'BadRequest', message: 'No file uploaded', statusCode: 400 });
+      }
+
+      const buffer = await data.toBuffer();
+      if (buffer.length === 0) {
+        return reply.code(400).send({ error: 'BadRequest', message: 'Replay file is empty', statusCode: 400 });
+      }
+
+      const ext = data.filename?.split('.').pop() ?? 'rec';
+      const filename = `${randomUUID()}.${ext}`;
+      const matchDir = join(REPLAY_DIR, matchId);
+      await mkdir(matchDir, { recursive: true });
+      await writeFile(join(matchDir, filename), buffer);
+
+      const replayUrl = `/uploads/replays/${matchId}/${filename}`;
+
+      await fastify.prisma.matchGame.updateMany({
+        where: { match_id: matchId },
+        data: { replay_url: replayUrl, counts_for_leaderboard: true },
+      });
+
+      // Invalidate leaderboard caches so the win appears immediately
+      if (fastify.redis) {
+        await Promise.all([
+          (await import('../lib/cache.js')).invalidate(fastify.redis, 'leaderboard:*'),
+          (await import('../lib/cache.js')).invalidate(fastify.redis, 'rating-model:*'),
+        ]);
+      }
+
+      return reply.code(200).send({ replayUrl });
+    },
+  );
+};
+
+export { openPlayReplayRoutes };
 export default matchGamesRoutes;
