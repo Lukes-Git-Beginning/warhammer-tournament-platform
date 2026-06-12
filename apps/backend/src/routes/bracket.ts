@@ -143,8 +143,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         })),
       };
 
-      // Augment with standings for Swiss and Round Robin
-      if (tournament.format === TournamentFormat.SWISS || tournament.format === TournamentFormat.ROUND_ROBIN || tournament.format === TournamentFormat.LIECHTENSTEIN) {
+      // Augment with standings for Swiss, Round Robin, and Auto Swiss
+      if (tournament.format === TournamentFormat.SWISS || tournament.format === TournamentFormat.ROUND_ROBIN || tournament.format === TournamentFormat.LIECHTENSTEIN || tournament.format === TournamentFormat.AUTO_SWISS) {
         const participants = await fastify.prisma.tournamentParticipant.findMany({
           where: {
             tournament_id: tournament.id,
