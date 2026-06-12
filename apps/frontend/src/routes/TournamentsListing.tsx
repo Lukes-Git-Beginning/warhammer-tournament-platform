@@ -3,6 +3,8 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, Clock, Crown, Users } from 'lucide-react';
 import { listTournaments, type Tournament } from '@/lib/api.js';
+import { formatInUserTimezone } from '@/lib/timezone.js';
+import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { Badge } from '@/components/ui/badge.js';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card.js';
@@ -14,22 +16,24 @@ type TournamentTab = 'upcoming' | 'live' | 'archive';
 
 const PAGE_SIZE = 12;
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
-}
+const FORMAT_LABELS: Record<string, string> = {
+  SINGLE_ELIMINATION: 'Single Elim.',
+  DOUBLE_ELIMINATION: 'Double Elim.',
+  SWISS: 'Swiss',
+  ROUND_ROBIN: 'Round Robin',
+  LIECHTENSTEIN: 'Liechtenstein',
+};
+
+const MODE_LABELS: Record<string, string> = {
+  SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix',
+  BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3',
+};
 
 function TournamentCard({ tournament }: { tournament: Tournament }) {
   const { t } = useTranslation();
   const isLive = tournament.status === 'ONGOING';
   const isCompleted = tournament.status === 'COMPLETED';
+  const startDate = formatInUserTimezone(tournament.start_date, tournament.timezone);
 
   return (
     <Link
@@ -71,8 +75,14 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
             </span>
           </span>
           <span className="font-mono text-xs uppercase tracking-wide">
-            {tournament.format.replace(/_/g, ' ')}
+            {FORMAT_LABELS[tournament.format] ?? tournament.format.replace(/_/g, ' ')}
+            {tournament.rounds_count ? ` · ${tournament.rounds_count}R` : ''}
           </span>
+          {tournament.mode && (
+            <span className="font-mono text-xs uppercase tracking-wide">
+              {MODE_LABELS[tournament.mode] ?? tournament.mode}
+            </span>
+          )}
         </div>
       </CardHeader>
       <CardContent className="flex-1">
@@ -82,13 +92,11 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
       </CardContent>
       <Separator engraved className="mx-6 my-2" />
       <CardFooter>
-        <time
-          dateTime={tournament.start_date}
-          className="inline-flex items-center gap-1.5 font-mono text-xs text-rizzotto-stone-400"
-        >
+        <span className="inline-flex items-center gap-1.5 font-mono text-xs text-rizzotto-stone-400">
           <Clock className="size-3.5" strokeWidth={1.5} />
-          {formatDate(tournament.start_date)}
-        </time>
+          {startDate}
+          <DiscordTimestampButton isoString={tournament.start_date} />
+        </span>
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-rizzotto-stone-400 group-hover:text-rizzotto-gold-400 transition-colors">
           {t('musters.answer_call')}
           <ArrowRight className="size-3.5" strokeWidth={1.5} />
