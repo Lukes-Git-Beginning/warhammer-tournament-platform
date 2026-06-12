@@ -102,12 +102,25 @@ export function MatchNode({
 
   const isThirdPlace = match.phase === 'PLAYOFF_THIRD_PLACE';
   const isGrandFinal = match.phase === 'PLAYOFF_FINAL';
+  const isSemiFinal  = match.phase === 'PLAYOFF_SF';
+
+  const outlineCls = isGrandFinal
+    ? 'border-2 border-rizzotto-gold-500/70 bg-rizzotto-gold-500/5'
+    : isSemiFinal
+      ? 'border-2 border-rizzotto-stone-400/60 bg-rizzotto-stone-400/5'
+      : `${borderStyle} ${statusCls}`;
+
+  const hoverCls = onClick
+    ? `cursor-pointer transition-colors ${
+        isGrandFinal ? 'hover:border-rizzotto-gold-500'
+        : isSemiFinal ? 'hover:border-rizzotto-stone-300'
+        : 'hover:border-stone-500'
+      }`
+    : '';
 
   return (
     <div
-      className={`w-full h-full ${isGrandFinal ? 'border-2' : borderStyle} ${isGrandFinal ? 'border-rizzotto-gold-500/70 bg-rizzotto-gold-500/5' : statusCls} rounded flex flex-col overflow-hidden ${
-        onClick ? 'cursor-pointer hover:border-rizzotto-gold-500 transition-colors' : ''
-      } relative`}
+      className={`w-full h-full ${outlineCls} rounded flex flex-col overflow-hidden ${hoverCls} relative`}
       onClick={onClick}
     >
       {isGrandFinal && (
@@ -115,8 +128,13 @@ export function MatchNode({
           Grand Final
         </div>
       )}
+      {isSemiFinal && (
+        <div className="absolute top-0 right-0 bg-rizzotto-stone-400/15 text-rizzotto-stone-300 text-[8px] font-bold uppercase tracking-wider px-1 rounded-bl border-l border-b border-rizzotto-stone-400/40">
+          Semi Final
+        </div>
+      )}
       {isThirdPlace && (
-        <div className="absolute top-0 right-0 bg-amber-950/90 text-orange-600 text-[8px] font-bold uppercase tracking-wider px-1 rounded-bl">
+        <div className="absolute top-0 right-0 bg-amber-950/90 text-orange-600 text-[8px] font-bold uppercase tracking-wider px-1 rounded-bl border-l border-b border-amber-700/40">
           3rd Place
         </div>
       )}
