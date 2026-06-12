@@ -256,7 +256,6 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [format, setFormat] = useState<MatchFormat>('BO3');
-  const [anonymous, setAnonymous] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState('');
@@ -283,7 +282,6 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
         format,
         proposed_at: selectedDate!.toISOString(),
         notes: notes || undefined,
-        anonymous,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['scheduled-matchups'] });
@@ -308,29 +306,17 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
 
   return (
     <div className="space-y-4">
-      {/* Format + Anonymous — side by side */}
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-stone-400">Format</span>
-          <Select
-            value={format}
-            onChange={(e) => setFormat(e.target.value as MatchFormat)}
-            className="w-44"
-          >
-            <option value="BO1">BO1 (~30 min)</option>
-            <option value="BO3">BO3 (~90 min)</option>
-            <option value="BO5">BO5 (~150 min)</option>
-          </Select>
-        </div>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={anonymous}
-            onChange={(e) => setAnonymous(e.target.checked)}
-            className="h-4 w-4 rounded border-stone-600 bg-stone-800 text-amber-500"
-          />
-          <span className="text-sm text-stone-300">Anonymous</span>
-        </label>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-stone-400">Format</span>
+        <Select
+          value={format}
+          onChange={(e) => setFormat(e.target.value as MatchFormat)}
+          className="w-44"
+        >
+          <option value="BO1">BO1 (~30 min)</option>
+          <option value="BO3">BO3 (~90 min)</option>
+          <option value="BO5">BO5 (~150 min)</option>
+        </Select>
       </div>
 
       {/* Dual-purpose calendar: view open challenges + pick your slot */}

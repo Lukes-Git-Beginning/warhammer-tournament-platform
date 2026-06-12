@@ -1,13 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { notifyMatchFoundWithButtons } from '../lib/discord-notify.js';
+import { notifyChallengeMatchFound } from '../lib/discord-notify.js';
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 
 const CreateMatchupSchema = z.object({
   format: z.enum(['BO1', 'BO3', 'BO5']),
   proposed_at: z.string().datetime(),
   notes: z.string().max(500).optional(),
-  anonymous: z.boolean().optional().default(false),
   expires_in_hours: z.number().int().min(1).max(168).optional().default(72),
 });
 
@@ -51,10 +50,7 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
         format: m.format,
         proposed_at: m.proposed_at.toISOString(),
         notes: m.notes ?? null,
-        proposer: m.anonymous
-          ? null
-          : { id: m.proposer.id, username: m.proposer.username, avatar_url: m.proposer.avatar_url },
-        anonymous: m.anonymous,
+        proposer: { id: m.proposer.id, username: m.proposer.username, avatar_url: m.proposer.avatar_url },
         created_at: m.created_at.toISOString(),
         expires_at: m.expires_at.toISOString(),
       })),
@@ -75,7 +71,7 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
       }
 
-      const { format, proposed_at, notes, anonymous, expires_in_hours } = parsed.data;
+      const { format, proposed_at, notes, expires_in_hours } = parsed.data;
       const proposedTime = new Date(proposed_at);
       const expiresAt = new Date(proposedTime.getTime() + expires_in_hours * 60 * 60 * 1000);
 
@@ -85,7 +81,6 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
           format,
           proposed_at: proposedTime,
           notes: notes ?? null,
-          anonymous,
           expires_at: expiresAt,
         },
         include: { proposer: { select: { id: true, username: true } } },
@@ -96,7 +91,6 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
         format: matchup.format,
         proposed_at: matchup.proposed_at.toISOString(),
         notes: matchup.notes ?? null,
-        anonymous: matchup.anonymous,
         expires_at: matchup.expires_at.toISOString(),
       });
     },
@@ -142,8 +136,9 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (acceptor?.discord_id) {
-        setImmediate(() => void notifyMatchFoundWithButtons(
+        setImmediate(() => void notifyChallengeMatchFound(
           matchId,
+          matchup.format,
           { discordId: matchup.proposer.discord_id, username: matchup.proposer.username },
           { discordId: acceptor.discord_id!, username: acceptor.username },
           mapName,

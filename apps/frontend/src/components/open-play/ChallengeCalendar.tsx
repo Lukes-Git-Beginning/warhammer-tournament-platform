@@ -40,7 +40,7 @@ function ChallengePopoverItem({
         {d.toLocaleDateString('en-GB', { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
         at {d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
       </p>
-      {!matchup.anonymous && matchup.proposer && (
+      {matchup.proposer && (
         <p className="text-xs text-stone-400">
           by <span className="text-stone-300">{matchup.proposer.username}</span>
         </p>

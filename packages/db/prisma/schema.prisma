@@ -927,7 +927,6 @@ model ScheduledMatchup {
   format         MatchFormat
   proposed_at    DateTime               // desired match time (stored as UTC)
   notes          String?
-  anonymous      Boolean                @default(false)
   status         ScheduledMatchupStatus @default(OPEN)
   accepted_by_id String?                @db.Uuid
   match_id       String?                @db.Uuid @unique

@@ -119,9 +119,7 @@ function ChallengeCard({ matchup, userId }: { matchup: ScheduledMatchup; userId?
             <span className="text-xs text-stone-500">{FORMAT_DURATION[matchup.format]}</span>
           </div>
           <CardTitle className="text-base line-clamp-1">
-            {matchup.anonymous || !matchup.proposer
-              ? 'Anonymous challenge'
-              : `${matchup.proposer.username}'s challenge`}
+            {matchup.proposer ? `${matchup.proposer.username}'s challenge` : 'Open challenge'}
           </CardTitle>
         </CardHeader>
 
