@@ -69,8 +69,10 @@ async function seedFactions(): Promise<void> {
     data: FACTIONS,
     skipDuplicates: true,
   });
-  // Refresh mutable fields on existing rows so the seed stays the source of truth
-  // for icon_url, color_hex, race, etc. as the metadata evolves.
+  // Refresh mutable metadata on existing rows. icon_url is intentionally excluded
+  // from the update — it is managed via admin sigil uploads and must not be
+  // clobbered on every seed run. The updateMany below heals rows where icon_url
+  // was lost (e.g. after migrate reset) without overwriting any uploaded value.
   let updated = 0;
   for (const f of FACTIONS) {
     await prisma.faction.update({
@@ -81,12 +83,17 @@ async function seedFactions(): Promise<void> {
         category: f.category,
         color_hex: f.color_hex,
         display_order: f.display_order,
-        icon_url: f.icon_url,
       },
     });
+    if (f.icon_url !== null) {
+      await prisma.faction.updateMany({
+        where: { id: f.id, icon_url: null },
+        data: { icon_url: f.icon_url },
+      });
+    }
     updated += 1;
   }
-  console.log(`  ✓ Factions: ${result.count} created, ${updated} synced (icon_url, colors)`);
+  console.log(`  ✓ Factions: ${result.count} created, ${updated} synced`);
 }
 
 async function seedDefaultSeason(): Promise<void> {
