@@ -361,6 +361,7 @@ export function generateDoubleElim(
         loser_next_match_id,
         bracket_side: 'WINNERS',
         winner_id,
+        ...(r === R_W - 1 && { phase: 'PLAYOFF_SF' }),
       });
     }
   }
@@ -398,6 +399,7 @@ export function generateDoubleElim(
         loser_next_match_id: null,
         bracket_side: 'LOSERS',
         winner_id: null,
+        ...(r === R_L - 1 && { phase: 'PLAYOFF_SF' }),
       });
     }
   }
@@ -416,6 +418,7 @@ export function generateDoubleElim(
     loser_next_match_id: null,
     bracket_side: 'GRAND_FINAL',
     winner_id: null,
+    phase: 'PLAYOFF_FINAL',
   });
 
   // -------------------------------------------------------------------------
