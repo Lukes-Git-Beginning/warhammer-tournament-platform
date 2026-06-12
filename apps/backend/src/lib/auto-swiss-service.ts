@@ -130,7 +130,7 @@ export async function advanceAutoSwissRound(prisma: PrismaClient, tournamentId: 
 
   const maxSwissRound = Math.max(...swissMatches.map((m) => m.round));
   const currentRoundMatches = swissMatches.filter((m) => m.round === maxSwissRound);
-  const incompleteSwiss = currentRoundMatches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE');
+  const incompleteSwiss = currentRoundMatches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT');
 
   if (incompleteSwiss.length > 0) return; // current round not done
 
@@ -176,7 +176,7 @@ async function generateNextSwissRound(
   const factionById = new Map(dbParticipants.map((p) => [p.user_id, p.faction_id ?? null]));
 
   const completed = swissMatches
-    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE')
+    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
 
   const rawStandings = computeSwissStandings(participantIds, completed);
@@ -272,7 +272,7 @@ async function startPlayoffs(
     swissMatches.flatMap((m) => [m.player1_id, m.player2_id].filter((id): id is string => id !== null)),
   )];
   const completed = swissMatches
-    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE')
+    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
   const rawStandings = computeSwissStandings(participantIds, completed);
   const standings = sortSwissStandings(rawStandings, completed);
@@ -408,8 +408,8 @@ export async function repairBrokenAutoSwiss(prisma: PrismaClient): Promise<void>
     const hasPlayoffs = matches.some((m) => m.phase?.startsWith('PLAYOFF'));
     if (hasPlayoffs) continue;
 
-    // Only repair if all matches are done (Swiss rounds complete)
-    const pending = matches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE');
+    // Only repair if all matches are done (Swiss rounds complete, including forfeit wins)
+    const pending = matches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT');
     if (pending.length > 0) continue;
 
     // All matches done, no playoffs — this is a stuck tournament
