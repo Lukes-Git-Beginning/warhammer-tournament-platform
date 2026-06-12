@@ -204,7 +204,7 @@ test.describe("Live Draft — 2 browser contexts, real Socket.IO", () => {
     // -----------------------------------------------------------------------
     // 1. Seed users
     // -----------------------------------------------------------------------
-    const [organizer] = await createTestUsers(1, { role: 'ORGANIZER', usernamePrefix: 'draft-org' });
+    const [organizer] = await createTestUsers(1, { role: 'HOST', usernamePrefix: 'draft-org' });
     if (!organizer) throw new Error('createTestUsers returned empty array');
     const players = await createTestUsers(2, { role: 'PLAYER', usernamePrefix: 'draft-p' });
     userIds.push(organizer.id, ...players.map((p) => p.id));

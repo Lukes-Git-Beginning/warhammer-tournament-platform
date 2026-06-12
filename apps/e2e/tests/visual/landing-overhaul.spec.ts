@@ -134,7 +134,7 @@ test.describe('/tournaments/create — organizer on desktop', () => {
   let organizerIds: string[] = [];
 
   test.beforeAll(async () => {
-    const [organizer] = await createTestUsers(1, { role: 'ORGANIZER', usernamePrefix: 'vis-org' });
+    const [organizer] = await createTestUsers(1, { role: 'HOST', usernamePrefix: 'vis-org' });
     organizerIds = [organizer!.id];
   });
 
@@ -143,7 +143,7 @@ test.describe('/tournaments/create — organizer on desktop', () => {
   });
 
   test('all form inputs visible in viewport (1440 px)', async ({ browser }) => {
-    const [orgUser] = await createTestUsers(1, { role: 'ORGANIZER', usernamePrefix: 'vis-org2' });
+    const [orgUser] = await createTestUsers(1, { role: 'HOST', usernamePrefix: 'vis-org2' });
     if (!orgUser) return;
     organizerIds.push(orgUser.id);
 

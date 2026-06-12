@@ -132,7 +132,7 @@ test.describe('Draft Reconnect Recovery — state rehydrates from Redis', () => 
     // ------------------------------------------------------------------
     // 1. Seed: organizer + 2 players
     // ------------------------------------------------------------------
-    const [organizer] = await createTestUsers(1, { role: 'ORGANIZER', usernamePrefix: 'rec-org' });
+    const [organizer] = await createTestUsers(1, { role: 'HOST', usernamePrefix: 'rec-org' });
     const players = await createTestUsers(2, { role: 'PLAYER', usernamePrefix: 'rec-p' });
 
     expect(organizer).toBeTruthy();

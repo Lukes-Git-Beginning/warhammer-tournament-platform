@@ -45,7 +45,7 @@ test.describe('Welle-D: Tournament Create — BPT with Map Pool', () => {
 
   test('creates tournament with BPT mode, 4 rounds, TOP4 playoff, and 5-map pool', async () => {
     const [organizer] = await createTestUsers(1, {
-      role: 'ORGANIZER',
+      role: 'HOST',
       usernamePrefix: 'welle-d-org1',
     });
     if (!organizer) throw new Error('No organizer created');
@@ -138,7 +138,7 @@ test.describe('Welle-D: Self-Check-in flow', () => {
 
   test('self-checkin returns 409 outside window, succeeds within T-60min window', async () => {
     const [organizer] = await createTestUsers(1, {
-      role: 'ORGANIZER',
+      role: 'HOST',
       usernamePrefix: 'welle-d-org2',
     });
     const players = await createTestUsers(2, { role: 'PLAYER', usernamePrefix: 'welle-d-player' });
@@ -245,7 +245,7 @@ test.describe('Welle-D: Match-Decision-Flow', () => {
 
   test('decision/start initializes coin-flip and returns TopPlayerId/BottomPlayerId', async () => {
     const [organizer] = await createTestUsers(1, {
-      role: 'ORGANIZER',
+      role: 'HOST',
       usernamePrefix: 'welle-d-org3',
     });
     const players = await createTestUsers(2, { role: 'PLAYER', usernamePrefix: 'welle-d-dec' });
@@ -349,7 +349,7 @@ test.describe('Welle-D: Deferred Playoff Generation after Swiss', () => {
 
   test('creates TOP4 semifinals via start-playoffs after the last Swiss round', async () => {
     const [organizer] = await createTestUsers(1, {
-      role: 'ORGANIZER',
+      role: 'HOST',
       usernamePrefix: 'welle-d-org4',
     });
     const players = await createTestUsers(4, { role: 'PLAYER', usernamePrefix: 'welle-d-playoff' });

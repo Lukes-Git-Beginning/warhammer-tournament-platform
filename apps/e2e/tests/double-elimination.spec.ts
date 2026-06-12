@@ -64,7 +64,7 @@ test.describe('Double Elimination — 8-player lifecycle + browser render', () =
     // 1. Seed users: 1 organizer + 8 players
     // -----------------------------------------------------------------------
     const [organizer] = await createTestUsers(1, {
-      role: 'ORGANIZER',
+      role: 'HOST',
       usernamePrefix: 'de-org',
     });
     if (!organizer) throw new Error('createTestUsers returned empty array');

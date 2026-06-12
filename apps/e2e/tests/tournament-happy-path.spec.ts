@@ -40,7 +40,7 @@ test.describe('Tournament Happy Path — 16-Player Single Elimination', () => {
     // 1. Seed: 1 organizer + 16 players
     // -----------------------------------------------------------------------
     const [organizer, ...rest] = await createTestUsers(1, {
-      role: 'ORGANIZER',
+      role: 'HOST',
       usernamePrefix: 'happy-org',
     });
     if (!organizer) throw new Error('createTestUsers returned empty array');

@@ -37,7 +37,7 @@ test.describe('Swiss Rematch Avoidance — 8 players, 3 rounds (ceil(log2(8)))',
     // 1. Create users
     // -----------------------------------------------------------------------
     const [organizer] = await createTestUsers(1, {
-      role: 'ORGANIZER',
+      role: 'HOST',
       usernamePrefix: 'swiss-org',
     });
     if (!organizer) throw new Error('createTestUsers returned empty array');

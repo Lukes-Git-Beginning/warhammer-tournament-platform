@@ -16,10 +16,10 @@ import { randomUUID } from 'node:crypto';
  * The DB schema has no PLAYER role; 'PLAYER' here is a semantic convenience
  * for tests that want to express "a tournament participant".
  */
-export type TestRole = 'USER' | 'PLAYER' | 'ORGANIZER' | 'MODERATOR' | 'ADMIN';
+export type TestRole = 'USER' | 'PLAYER' | 'HOST' | 'ORGANIZER' | 'MODERATOR' | 'ADMIN';
 
 /** Maps TestRole to the Prisma Role enum (no PLAYER in DB — maps to USER). */
-const toPrismaRole = (role: TestRole): 'USER' | 'ORGANIZER' | 'MODERATOR' | 'ADMIN' =>
+const toPrismaRole = (role: TestRole): 'USER' | 'HOST' | 'ORGANIZER' | 'MODERATOR' | 'ADMIN' =>
   role === 'PLAYER' ? 'USER' : role;
 
 export interface TestUser {

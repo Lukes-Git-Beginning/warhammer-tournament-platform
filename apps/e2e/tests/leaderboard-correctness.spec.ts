@@ -139,7 +139,7 @@ test.describe('Leaderboard Correctness — 3 tournaments, dynamic FinalPoints ra
     // 1. Create users
     // -----------------------------------------------------------------------
     const [organizer] = await createTestUsers(1, {
-      role: 'ORGANIZER',
+      role: 'HOST',
       usernamePrefix: 'lb-org',
     });
     if (!organizer) throw new Error('Failed to create organizer user');
