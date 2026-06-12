@@ -290,12 +290,16 @@ export function TournamentCreateForm() {
             value={form.format ?? 'SINGLE_ELIMINATION'}
             onChange={handleChange}
           >
-            <option value="AUTO_SWISS">Auto Swiss — self-running tournament</option>
-            <option value="SINGLE_ELIMINATION">{t('tournament.format.single_elim')}</option>
-            <option value="DOUBLE_ELIMINATION">{t('tournament.format.double_elim')}</option>
-            <option value="SWISS">{t('tournament.format.swiss')}</option>
-            <option value="ROUND_ROBIN">{t('tournament.format.round_robin')}</option>
-            <option value="LIECHTENSTEIN">{t('tournament.format.liechtenstein')}</option>
+            <optgroup label="── Standard ──">
+              <option value="SINGLE_ELIMINATION">{t('tournament.format.single_elim')}</option>
+              <option value="DOUBLE_ELIMINATION">{t('tournament.format.double_elim')}</option>
+              <option value="SWISS">{t('tournament.format.swiss')}</option>
+              <option value="ROUND_ROBIN">{t('tournament.format.round_robin')}</option>
+              <option value="LIECHTENSTEIN">{t('tournament.format.liechtenstein')}</option>
+            </optgroup>
+            <optgroup label="── Automated ──">
+              <option value="AUTO_SWISS">Auto Swiss — self-running</option>
+            </optgroup>
           </Select>
         </div>
 

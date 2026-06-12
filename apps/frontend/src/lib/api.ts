@@ -58,7 +58,7 @@ export interface Tournament {
   slug: string;
   name: string;
   description: string | null;
-  format: 'SINGLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN';
+  format: 'SINGLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN';
   has_third_place_match?: boolean;
   mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
   status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';

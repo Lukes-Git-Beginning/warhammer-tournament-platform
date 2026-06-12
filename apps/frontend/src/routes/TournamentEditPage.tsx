@@ -488,6 +488,7 @@ export function TournamentEditPage() {
   // ---------------------------------------------------------------------------
 
   const isSwissFamily = form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN';
+  const isAutoSwiss = form.format === 'AUTO_SWISS';
 
   return (
     <PageShell variant="narrow">
@@ -535,6 +536,7 @@ export function TournamentEditPage() {
                 </>
               ) : (
                 <Select id="tef-format" name="format" value={form.format} onChange={handleChange}>
+                  <option value="AUTO_SWISS">Auto Swiss — self-running</option>
                   <option value="SINGLE_ELIMINATION">{t('tournament.format.single_elim')}</option>
                   <option value="DOUBLE_ELIMINATION">{t('tournament.format.double_elim')}</option>
                   <option value="SWISS">{t('tournament.format.swiss')}</option>
@@ -543,7 +545,7 @@ export function TournamentEditPage() {
                 </Select>
               )}
             </div>
-            <div className="min-w-0">
+            {!isAutoSwiss && <div className="min-w-0">
               <Label htmlFor="tef-mode">{t('tournament.form.mode')}</Label>
               {draftLocked ? (
                 <>
@@ -560,8 +562,14 @@ export function TournamentEditPage() {
                   <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
                 </Select>
               )}
-            </div>
+            </div>}
           </div>
+          {isAutoSwiss && (
+            <div className="mt-3 rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-3 text-sm text-rizzotto-stone-300">
+              <p className="font-semibold text-rizzotto-gold-400 mb-1">Auto Swiss</p>
+              <p>Mode (SFT), match format (BO1) and rounds are set automatically at tournament start based on check-in count. Check-in opens 1h before start time.</p>
+            </div>
+          )}
         </fieldset>
 
         {/* ── Basic Info ────────────────────────────────────────────────── */}
