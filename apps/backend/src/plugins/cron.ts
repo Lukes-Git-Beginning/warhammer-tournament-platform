@@ -5,6 +5,7 @@ import { notifyCheckInReminder } from '../lib/discord-notify.js';
 import { autoConfirmExpiredGameResults } from '../lib/match-games.js';
 import { autoResolveStaleBlindPicks } from '../lib/blind-pick-auto-resolve.js';
 import { autoResolveStaleMatrixActions } from '../lib/matrix-auto-resolve.js';
+import { startAutoSwiss, advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -233,6 +234,73 @@ export default fp(
     );
 
     // -----------------------------------------------------------------------
+    // Auto Swiss — check-in opener + starter + round progression
+    // Runs every minute. Handles three phases:
+    //   1. OPEN_REGISTRATION → REGISTRATION_CLOSED (1h before start_date)
+    //   2. REGISTRATION_CLOSED → ONGOING at start_date (starts tournament + round 1)
+    //   3. ONGOING → advance rounds when current round is complete
+    // -----------------------------------------------------------------------
+    const autoSwissTask = cron.schedule('* * * * *', async () => {
+      const now = new Date();
+      const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+
+      try {
+        // Phase 1: open check-in 1h before start
+        const openingTournaments = await fastify.prisma.tournament.findMany({
+          where: {
+            format: 'AUTO_SWISS',
+            status: 'OPEN_REGISTRATION',
+            start_date: { gt: now, lte: oneHourFromNow },
+            deleted_at: null,
+          },
+          select: { id: true, name: true, slug: true, start_date: true },
+        });
+        for (const t of openingTournaments) {
+          await fastify.prisma.tournament.update({
+            where: { id: t.id },
+            data: { status: 'REGISTRATION_CLOSED' },
+          });
+          fastify.log.info({ tournamentId: t.id }, 'Auto Swiss: check-in opened');
+          // Reuse check-in reminder
+          if (!remindedTournamentIds.has(t.id)) {
+            remindedTournamentIds.add(t.id);
+            await notifyCheckInReminder(t).catch(() => {});
+          }
+        }
+
+        // Phase 2: start tournament at start_date
+        const startingTournaments = await fastify.prisma.tournament.findMany({
+          where: {
+            format: 'AUTO_SWISS',
+            status: 'REGISTRATION_CLOSED',
+            start_date: { lte: now },
+            deleted_at: null,
+          },
+          select: { id: true },
+        });
+        for (const t of startingTournaments) {
+          fastify.log.info({ tournamentId: t.id }, 'Auto Swiss: starting tournament');
+          await startAutoSwiss(fastify.prisma, t.id).catch((err) =>
+            fastify.log.error({ err, tournamentId: t.id }, 'Auto Swiss start failed'),
+          );
+        }
+
+        // Phase 3: advance rounds for ongoing tournaments
+        const ongoingTournaments = await fastify.prisma.tournament.findMany({
+          where: { format: 'AUTO_SWISS', status: 'ONGOING', deleted_at: null },
+          select: { id: true },
+        });
+        for (const t of ongoingTournaments) {
+          await advanceAutoSwissRound(fastify.prisma, t.id).catch((err) =>
+            fastify.log.error({ err, tournamentId: t.id }, 'Auto Swiss advance failed'),
+          );
+        }
+      } catch (err) {
+        fastify.log.error({ err }, 'autoSwissTask failed');
+      }
+    });
+
+    // -----------------------------------------------------------------------
     // Matrix auto-resolve — every 15 seconds via setInterval
     // Ban/pick timeout is 15s, too short for node-cron (1-minute resolution).
     // -----------------------------------------------------------------------
@@ -247,7 +315,7 @@ export default fp(
       }
     }, 15_000);
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask]);
+    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, autoSwissTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
@@ -256,6 +324,7 @@ export default fp(
       blindPickTask.stop();
       matchupExpiryTask.stop();
       queueCleanupTask.stop();
+      autoSwissTask.stop();
       clearInterval(matrixInterval);
     });
   },

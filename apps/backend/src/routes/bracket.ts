@@ -822,7 +822,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const playoffResult = generatePlayoffBracket({
           tournament: {
-            playoff_format: tournament.playoff_format,
+            playoff_format: tournament.playoff_format as 'NONE' | 'TOP4' | 'TOP8',
             playoff_match_format: tournament.playoff_match_format,
             finale_match_format: tournament.finale_match_format,
           },

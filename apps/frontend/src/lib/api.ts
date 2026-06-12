@@ -156,7 +156,7 @@ export interface MatchDecisionState {
 
 export interface TournamentCreate {
   name: string;
-  format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN';
+  format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN';
   has_third_place_match?: boolean;
   mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
   start_date: string;
