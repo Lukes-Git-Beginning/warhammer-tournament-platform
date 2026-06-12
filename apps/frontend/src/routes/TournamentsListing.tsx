@@ -17,6 +17,7 @@ type TournamentTab = 'upcoming' | 'live' | 'archive';
 const PAGE_SIZE = 12;
 
 const FORMAT_LABELS: Record<string, string> = {
+  AUTO_SWISS: 'Auto Swiss',
   SINGLE_ELIMINATION: 'Single Elim.',
   DOUBLE_ELIMINATION: 'Double Elim.',
   SWISS: 'Swiss',
@@ -76,7 +77,11 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
           </span>
           <span className="font-mono text-xs uppercase tracking-wide">
             {FORMAT_LABELS[tournament.format] ?? tournament.format.replace(/_/g, ' ')}
-            {tournament.rounds_count ? ` · ${tournament.rounds_count}R` : ''}
+            {tournament.format === 'AUTO_SWISS'
+              ? (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && tournament.rounds_count
+                ? ` · ${tournament.rounds_count}R`
+                : ' · TBD'
+              : tournament.rounds_count ? ` · ${tournament.rounds_count}R` : ''}
           </span>
           {tournament.mode && (
             <span className="font-mono text-xs uppercase tracking-wide">

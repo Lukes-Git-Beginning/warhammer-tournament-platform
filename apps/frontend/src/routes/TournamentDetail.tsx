@@ -512,16 +512,20 @@ export function TournamentDetail() {
             <div>
               <span className="text-stone-500">Format:</span>{' '}
               <span className="text-stone-200">
-                {({ SWISS: 'Swiss', SINGLE_ELIMINATION: 'Single Elimination', DOUBLE_ELIMINATION: 'Double Elimination', ROUND_ROBIN: 'Round Robin', LIECHTENSTEIN: 'Liechtenstein' } as Record<string, string>)[tournament.format] ?? tournament.format}
-                {tournament.rounds_count ? ` · ${tournament.rounds_count} Rounds` : ''}
+                {({ AUTO_SWISS: 'Auto Swiss', SWISS: 'Swiss', SINGLE_ELIMINATION: 'Single Elimination', DOUBLE_ELIMINATION: 'Double Elimination', ROUND_ROBIN: 'Round Robin', LIECHTENSTEIN: 'Liechtenstein' } as Record<string, string>)[tournament.format] ?? tournament.format}
+                {tournament.format !== 'AUTO_SWISS' && tournament.rounds_count ? ` · ${tournament.rounds_count} Rounds` : ''}
+                {tournament.format === 'AUTO_SWISS' && tournament.status === 'ONGOING' && tournament.rounds_count ? ` · ${tournament.rounds_count} Rounds` : ''}
+                {tournament.format === 'AUTO_SWISS' && tournament.status !== 'ONGOING' && tournament.status !== 'COMPLETED' ? ' · Rounds TBD' : ''}
               </span>
             </div>
           )}
-          {tournament.mode && (
+          {(tournament.mode || tournament.format === 'AUTO_SWISS') && (
             <div>
               <span className="text-stone-500">Mode:</span>{' '}
               <span className="text-stone-200">
-                {({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode] ?? tournament.mode}
+                {tournament.format === 'AUTO_SWISS'
+                  ? 'SFT'
+                  : (({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode ?? ''] ?? tournament.mode)}
               </span>
             </div>
           )}
