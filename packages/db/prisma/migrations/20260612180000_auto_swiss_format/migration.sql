@@ -1,0 +1,2 @@
+ALTER TYPE "TournamentFormat" ADD VALUE 'AUTO_SWISS';
+ALTER TYPE "PlayoffFormat" ADD VALUE 'TOP2';

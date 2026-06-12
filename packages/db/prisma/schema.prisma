@@ -31,6 +31,7 @@ enum Role {
 
 enum TournamentFormat {
   SWISS
+  AUTO_SWISS
   SINGLE_ELIMINATION
   DOUBLE_ELIMINATION
   ROUND_ROBIN
@@ -50,6 +51,7 @@ enum TournamentMode {
 
 enum PlayoffFormat {
   NONE
+  TOP2 // GF + 3rd place only (no SF), used by Auto Swiss with 4-7 players
   TOP4
   TOP8
 }
@@ -927,7 +929,6 @@ model ScheduledMatchup {
   format         MatchFormat
   proposed_at    DateTime               // desired match time (stored as UTC)
   notes          String?
-  anonymous      Boolean                @default(false)
   status         ScheduledMatchupStatus @default(OPEN)
   accepted_by_id String?                @db.Uuid
   match_id       String?                @db.Uuid @unique

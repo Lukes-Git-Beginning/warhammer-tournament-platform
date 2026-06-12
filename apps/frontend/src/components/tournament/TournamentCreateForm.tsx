@@ -13,7 +13,7 @@ import { Label, FieldError, FieldHint } from '@/components/ui/label';
 const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
-  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN']),
+  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'AUTO_SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN']),
   mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX']).default('BPT'),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
@@ -290,6 +290,7 @@ export function TournamentCreateForm() {
             value={form.format ?? 'SINGLE_ELIMINATION'}
             onChange={handleChange}
           >
+            <option value="AUTO_SWISS">Auto Swiss — self-running tournament</option>
             <option value="SINGLE_ELIMINATION">{t('tournament.format.single_elim')}</option>
             <option value="DOUBLE_ELIMINATION">{t('tournament.format.double_elim')}</option>
             <option value="SWISS">{t('tournament.format.swiss')}</option>
@@ -298,27 +299,36 @@ export function TournamentCreateForm() {
           </Select>
         </div>
 
-        <div className="min-w-0">
-          <Label htmlFor="tcf-mode">{t('tournament.form.mode')}</Label>
-          <Select
-            id="tcf-mode"
-            name="mode"
-            value={form.mode ?? 'BPT'}
-            onChange={handleChange}
-          >
-            <option value="BPT">BPT — Blind Pick Tournament</option>
-            <option value="SFT">SFT — Single Faction Tournament</option>
-            <option value="SLT">SLT — Single List Tournament</option>
-            <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
-          </Select>
-          <FieldHint>
-            {(form.mode === 'BPT' || !form.mode) && 'Every match includes a blind faction pick phase.'}
-            {form.mode === 'SFT' && 'Players pre-select a faction at registration; revealed at tournament start.'}
-            {form.mode === 'SLT' && 'Players upload their army list at registration. Reveal after each completed match.'}
-            {form.mode === 'MATRIX' && 'Each match: both players pick 3 factions blindly, then ban from the 3×3 matchup grid.'}
-          </FieldHint>
-        </div>
+        {form.format !== 'AUTO_SWISS' && (
+          <div className="min-w-0">
+            <Label htmlFor="tcf-mode">{t('tournament.form.mode')}</Label>
+            <Select
+              id="tcf-mode"
+              name="mode"
+              value={form.mode ?? 'BPT'}
+              onChange={handleChange}
+            >
+              <option value="BPT">BPT — Blind Pick Tournament</option>
+              <option value="SFT">SFT — Single Faction Tournament</option>
+              <option value="SLT">SLT — Single List Tournament</option>
+              <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
+            </Select>
+            <FieldHint>
+              {(form.mode === 'BPT' || !form.mode) && 'Every match includes a blind faction pick phase.'}
+              {form.mode === 'SFT' && 'Players pre-select a faction at registration; revealed at tournament start.'}
+              {form.mode === 'SLT' && 'Players upload their army list at registration. Reveal after each completed match.'}
+              {form.mode === 'MATRIX' && 'Each match: both players pick 3 factions blindly, then ban from the 3×3 matchup grid.'}
+            </FieldHint>
+          </div>
+        )}
       </div>
+
+      {form.format === 'AUTO_SWISS' && (
+        <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">
+          <p className="font-semibold text-rizzotto-gold-400">Auto Swiss — self-running tournament</p>
+          <p>Check-in opens automatically 1 hour before start. Rounds and playoff size are determined by how many players check in (4–7: 3R + Final, 8–15: 5R + Top 4, 16+: 4R + Top 8). Rounds advance automatically when all matches are complete. Mode: SFT · All matches: BO1.</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="min-w-0">

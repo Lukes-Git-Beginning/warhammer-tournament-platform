@@ -209,6 +209,35 @@ export async function notifyReplayReminder(winnerDiscordId: string, matchId: str
   ).catch((e) => console.warn('[discord-notify] notifyReplayReminder error:', e));
 }
 
+/**
+ * DM both players when a scheduled challenge match starts — no result buttons
+ * since BO3/BO5 matches are played out on the website.
+ */
+export async function notifyChallengeMatchFound(
+  matchId: string,
+  format: string,
+  proposer: { discordId: string; username: string },
+  acceptor: { discordId: string; username: string },
+  mapName: string | null,
+): Promise<void> {
+  const token = getToken();
+  if (!token) return;
+
+  const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
+  const mapLine = mapName ? ` · Map: **${mapName}**` : '';
+
+  await Promise.allSettled([
+    sendDm(
+      proposer.discordId,
+      `⚔️ Your **${format}** challenge was accepted by **${acceptor.username}**${mapLine} → ${matchUrl}`,
+    ),
+    sendDm(
+      acceptor.discordId,
+      `⚔️ You accepted **${proposer.username}**'s **${format}** challenge${mapLine} → ${matchUrl}`,
+    ),
+  ]);
+}
+
 export async function notifyMatchCancelledBothPlayers(
   p1DiscordId: string,
   p2DiscordId: string,
