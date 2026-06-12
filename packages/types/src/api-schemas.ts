@@ -277,7 +277,7 @@ export const FactionDtoSchema = z.object({
   category: z.string(),
   color_hex: z.string(),
   display_order: z.number().int(),
-  icon_url: z.string().url().nullable(),
+  icon_url: z.string().nullable(),
   initials: z.string().length(2),
 });
 export type FactionDto = z.infer<typeof FactionDtoSchema>;

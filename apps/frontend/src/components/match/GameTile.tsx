@@ -77,6 +77,10 @@ export function GameTile({
     onSuccess: () => {
       void navigate({ to: '/matches/$matchId/decision', params: { matchId }, state: { freshDecision: true } });
     },
+    onError: () => {
+      // Decision already started by the other player — navigate there anyway
+      void navigate({ to: '/matches/$matchId/decision', params: { matchId } });
+    },
   });
 
   const reportMutation = useMutation({

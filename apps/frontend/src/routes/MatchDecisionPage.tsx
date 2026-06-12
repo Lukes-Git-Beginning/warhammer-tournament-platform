@@ -797,7 +797,8 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
           {isMyTurn && mx.lastActionAt && <MatrixCountdown lastActionAt={mx.lastActionAt} />}
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="max-w-[680px] w-full mx-auto">
+          <div className="grid grid-cols-3">
           {[0, 1, 2].map((row) =>
             [0, 1, 2].map((col) => {
               const cell = `${row},${col}`;
@@ -816,7 +817,9 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
                   onMouseEnter={() => setHoveredCell(cell)}
                   onMouseLeave={() => setHoveredCell(null)}
                   className={[
-                    'relative grid grid-cols-[1fr_auto_1fr] rounded border overflow-hidden',
+                    'relative grid grid-cols-[1fr_auto_1fr] overflow-hidden',
+                    col < 2 ? 'border-r' : '',
+                    row < 2 ? 'border-b' : '',
                     'transition-[border-color,background-color,opacity] duration-150',
                     isBanned
                       ? 'border-rizzotto-iron-700 bg-rizzotto-iron-900/40 opacity-40 cursor-default'
@@ -881,6 +884,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
               );
             })
           )}
+          </div>
         </div>
       </div>
     );
