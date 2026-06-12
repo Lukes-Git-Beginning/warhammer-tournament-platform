@@ -255,12 +255,14 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      const isAutoSwiss = data.format === 'AUTO_SWISS';
+
       const tournament = await fastify.prisma.tournament.create({
         data: {
           slug,
           name: data.name,
           format: data.format,
-          mode: data.mode,
+          mode: isAutoSwiss ? 'SFT' : data.mode,
           status: TournamentStatus.DRAFT,
           visibility: data.visibility ?? 'PUBLIC',
           start_date: new Date(data.start_date),
@@ -278,12 +280,12 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           description: data.description,
           organizer_id: request.user.sub,
           // Welle 2
-          rounds_count: data.rounds_count,
-          playoff_format: data.playoff_format,
-          swiss_match_format: data.swiss_match_format,
-          playoff_match_format: data.playoff_match_format,
-          finale_match_format: data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' ? 'BO3' : undefined),
-          map_decision_mode: data.map_decision_mode,
+          rounds_count: isAutoSwiss ? undefined : data.rounds_count,
+          playoff_format: isAutoSwiss ? undefined : data.playoff_format,
+          swiss_match_format: isAutoSwiss ? 'BO1' : data.swiss_match_format,
+          playoff_match_format: isAutoSwiss ? 'BO1' : data.playoff_match_format,
+          finale_match_format: isAutoSwiss ? 'BO1' : (data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' ? 'BO3' : undefined)),
+          map_decision_mode: isAutoSwiss ? 'RANDOM_NO_REPEAT' : data.map_decision_mode,
           map_preset_config: data.map_preset_config != null ? (data.map_preset_config as Prisma.InputJsonValue) : undefined,
         },
         select: {

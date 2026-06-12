@@ -20,6 +20,7 @@ interface TournamentCardProps {
 }
 
 const FORMAT_LABELS: Record<string, string> = {
+  AUTO_SWISS: 'Auto Swiss',
   SINGLE_ELIMINATION: 'Single Elim.',
   DOUBLE_ELIMINATION: 'Double Elim.',
   SWISS: 'Swiss',
@@ -60,8 +61,12 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
   const statusColor = STATUS_COLORS[tournament.status] ?? 'bg-stone-700 text-stone-300';
   const statusLabel = STATUS_LABELS[tournament.status] ?? tournament.status;
   const formatLabel = FORMAT_LABELS[tournament.format] ?? tournament.format;
-  const modeLabel = tournament.mode ? (MODE_LABELS[tournament.mode] ?? tournament.mode) : null;
-  const roundsLabel = tournament.rounds_count ? `${tournament.rounds_count} Rounds` : null;
+  const isAutoSwiss = tournament.format === 'AUTO_SWISS';
+  const modeLabel = isAutoSwiss ? 'SFT' : (tournament.mode ? (MODE_LABELS[tournament.mode] ?? tournament.mode) : null);
+  const roundsStarted = tournament.status === 'ONGOING' || tournament.status === 'COMPLETED';
+  const roundsLabel = isAutoSwiss
+    ? (roundsStarted && tournament.rounds_count ? `${tournament.rounds_count} Rounds` : 'Rounds TBD')
+    : (tournament.rounds_count ? `${tournament.rounds_count} Rounds` : null);
 
   const bannedFactions = tournament.faction_allowlist && tournament.faction_allowlist.length > 0
     ? tournament.faction_allowlist
