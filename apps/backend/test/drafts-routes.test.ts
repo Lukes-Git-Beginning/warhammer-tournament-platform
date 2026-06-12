@@ -329,8 +329,8 @@ describe('POST /api/drafts/:id/cancel', () => {
 
   it('tournament organizer → 200', async () => {
     const draftId = await startTestDraft();
-    // ADMIN_ID is the organizer of TOURN_ID — use ORGANIZER role JWT
-    const token = makeToken(ADMIN_ID, 'ORGANIZER');
+    // ADMIN_ID is the organizer of TOURN_ID — use HOST role JWT
+    const token = makeToken(ADMIN_ID, 'HOST');
 
     const res = await app.inject({
       method: 'POST',
@@ -342,10 +342,10 @@ describe('POST /api/drafts/:id/cancel', () => {
     expect(res.json<{ status: string }>().status).toBe('CANCELLED');
   });
 
-  it('non-organizer ORGANIZER role → 403', async () => {
+  it('non-organizer HOST role → 403', async () => {
     const draftId = await startTestDraft();
     // USER_ID is not the organizer of this tournament
-    const token = makeToken(USER_ID, 'ORGANIZER');
+    const token = makeToken(USER_ID, 'HOST');
 
     const res = await app.inject({
       method: 'POST',

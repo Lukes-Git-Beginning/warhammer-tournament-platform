@@ -76,9 +76,9 @@ beforeEach(async () => {
   await prisma.user.createMany({
     data: [
       { id: USER_ID,      discord_id: 'dp_user',  username: 'DPUser',  email: null, role: 'USER' },
-      { id: ORGANIZER_ID, discord_id: 'dp_orga',  username: 'DPOrga',  email: null, role: 'ORGANIZER' },
+      { id: ORGANIZER_ID, discord_id: 'dp_orga',  username: 'DPOrga',  email: null, role: 'HOST' },
       { id: ADMIN_ID,     discord_id: 'dp_admin', username: 'DPAdmin', email: null, role: 'ADMIN' },
-      { id: OTHER_ID,     discord_id: 'dp_other', username: 'DPOther', email: null, role: 'ORGANIZER' },
+      { id: OTHER_ID,     discord_id: 'dp_other', username: 'DPOther', email: null, role: 'HOST' },
     ],
     skipDuplicates: true,
   });
@@ -157,7 +157,7 @@ describe('GET /api/draft-presets (authenticated)', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/draft-presets',
-      headers: { cookie: cookieFor(ORGANIZER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(ORGANIZER_ID, 'HOST') },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json<{ presets: { id: string; name: string }[] }>();
@@ -168,7 +168,7 @@ describe('GET /api/draft-presets (authenticated)', () => {
     const res2 = await app.inject({
       method: 'GET',
       url: '/api/draft-presets',
-      headers: { cookie: cookieFor(OTHER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(OTHER_ID, 'HOST') },
     });
     const body2 = res2.json<{ presets: { id: string }[] }>();
     const ids2 = body2.presets.map((p) => p.id);
@@ -221,7 +221,7 @@ describe('GET /api/draft-presets/:id', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/api/draft-presets/${PRESET_C}`,
-      headers: { cookie: cookieFor(OTHER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(OTHER_ID, 'HOST') },
     });
     expect(res.statusCode).toBe(404);
   });
@@ -268,7 +268,7 @@ describe('POST /api/draft-presets', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/draft-presets',
-      headers: { cookie: cookieFor(ORGANIZER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(ORGANIZER_ID, 'HOST') },
       payload: VALID_PRESET_BODY,
     });
     expect(res.statusCode).toBe(201);
@@ -289,7 +289,7 @@ describe('POST /api/draft-presets', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/draft-presets',
-      headers: { cookie: cookieFor(ORGANIZER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(ORGANIZER_ID, 'HOST') },
       payload: {
         ...VALID_PRESET_BODY,
         turns: [
@@ -309,7 +309,7 @@ describe('POST /api/draft-presets', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/draft-presets',
-      headers: { cookie: cookieFor(ORGANIZER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(ORGANIZER_ID, 'HOST') },
       payload: {
         ...VALID_PRESET_BODY,
         category_limits: [], // no custom categories defined
@@ -347,7 +347,7 @@ describe('PUT /api/draft-presets/:id', () => {
     const res = await app.inject({
       method: 'PUT',
       url: `/api/draft-presets/${PRESET_A}`,
-      headers: { cookie: cookieFor(OTHER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(OTHER_ID, 'HOST') },
       payload: { name: 'Changed by intruder' },
     });
     expect(res.statusCode).toBe(403);
@@ -370,7 +370,7 @@ describe('PUT /api/draft-presets/:id', () => {
     const res = await app.inject({
       method: 'PUT',
       url: `/api/draft-presets/${PRESET_A}`,
-      headers: { cookie: cookieFor(ORGANIZER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(ORGANIZER_ID, 'HOST') },
       payload: { name: 'Updated Name', turn_seconds: 45 },
     });
     expect(res.statusCode).toBe(200);
@@ -402,7 +402,7 @@ describe('DELETE /api/draft-presets/:id', () => {
     const res = await app.inject({
       method: 'DELETE',
       url: `/api/draft-presets/${PRESET_A}`,
-      headers: { cookie: cookieFor(ORGANIZER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(ORGANIZER_ID, 'HOST') },
     });
     expect(res.statusCode).toBe(204);
 
@@ -428,7 +428,7 @@ describe('DELETE /api/draft-presets/:id', () => {
     const res = await app.inject({
       method: 'DELETE',
       url: `/api/draft-presets/${PRESET_A}`,
-      headers: { cookie: cookieFor(OTHER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(OTHER_ID, 'HOST') },
     });
     expect(res.statusCode).toBe(403);
   });
@@ -467,7 +467,7 @@ describe('DELETE /api/draft-presets/:id', () => {
     const res = await app.inject({
       method: 'DELETE',
       url: `/api/draft-presets/${PRESET_A}`,
-      headers: { cookie: cookieFor(ORGANIZER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(ORGANIZER_ID, 'HOST') },
     });
     expect(res.statusCode).toBe(422);
     const body = res.json<{ error: string; message: string }>();

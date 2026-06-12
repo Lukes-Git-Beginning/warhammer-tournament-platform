@@ -82,7 +82,7 @@ beforeEach(async () => {
   // Seed users
   await prisma.user.createMany({
     data: [
-      { id: ORGANIZER_ID, discord_id: 'lk_organizer', username: 'LKOrganizer', email: null, role: 'ORGANIZER' },
+      { id: ORGANIZER_ID, discord_id: 'lk_organizer', username: 'LKOrganizer', email: null, role: 'HOST' },
       { id: PLAYER_ID,    discord_id: 'lk_player',    username: 'LKPlayer',    email: null, role: 'USER' },
       { id: ADMIN_ID,     discord_id: 'lk_admin',     username: 'LKAdmin',     email: null, role: 'ADMIN' },
       { id: OTHER_ID,     discord_id: 'lk_other',     username: 'LKOther',     email: null, role: 'USER' },
@@ -209,7 +209,7 @@ describe('POST /api/tournaments/:tournamentId/lock-lists', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/api/tournaments/${TOURNAMENT_ID}/lock-lists`,
-      headers: { cookie: cookieFor(ORGANIZER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(ORGANIZER_ID, 'HOST') },
     });
 
     expect(res.statusCode).toBe(200);
@@ -265,7 +265,7 @@ describe('POST /api/tournaments/:tournamentId/lock-lists', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/api/tournaments/${DRAFT_TOURNAMENT_ID}/lock-lists`,
-      headers: { cookie: cookieFor(ORGANIZER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(ORGANIZER_ID, 'HOST') },
     });
 
     expect(res.statusCode).toBe(400);
@@ -283,7 +283,7 @@ describe('POST /api/tournaments/:tournamentId/lock-lists', () => {
     await app.inject({
       method: 'POST',
       url: `/api/tournaments/${TOURNAMENT_ID}/lock-lists`,
-      headers: { cookie: cookieFor(ORGANIZER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(ORGANIZER_ID, 'HOST') },
     });
 
     // Player tries to upload an army list for this tournament
@@ -314,7 +314,7 @@ describe('POST /api/tournaments/:tournamentId/lock-lists', () => {
     await app.inject({
       method: 'POST',
       url: `/api/tournaments/${TOURNAMENT_ID}/lock-lists`,
-      headers: { cookie: cookieFor(ORGANIZER_ID, 'ORGANIZER') },
+      headers: { cookie: cookieFor(ORGANIZER_ID, 'HOST') },
     });
 
     // Admin uploads an army list — should succeed and log override

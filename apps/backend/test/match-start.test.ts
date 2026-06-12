@@ -129,7 +129,7 @@ beforeEach(async () => {
       { id: GUEST_ID,     discord_id: 'b85_guest',     username: 'B85Guest',    email: null },
       { id: ADMIN_ID,     discord_id: 'b85_admin',     username: 'B85Admin',    email: null, role: 'ADMIN' },
       { id: USER_ID,      discord_id: 'b85_user',      username: 'B85User',     email: null, role: 'USER' },
-      { id: OTHER_ORG_ID, discord_id: 'b85_other_org', username: 'B85OtherOrg', email: null, role: 'ORGANIZER' },
+      { id: OTHER_ORG_ID, discord_id: 'b85_other_org', username: 'B85OtherOrg', email: null, role: 'HOST' },
     ],
     skipDuplicates: true,
   });
@@ -282,7 +282,7 @@ describe('PATCH /api/matches/:id/start', () => {
 
   it('2. Organizer of a different tournament → 403', async () => {
     // OTHER_ORG_ID is organizer of TOURN_OTHER, not TOURN_NO_DRAFT
-    const token = makeToken(OTHER_ORG_ID, 'ORGANIZER');
+    const token = makeToken(OTHER_ORG_ID, 'HOST');
 
     const res = await app.inject({
       method: 'PATCH',

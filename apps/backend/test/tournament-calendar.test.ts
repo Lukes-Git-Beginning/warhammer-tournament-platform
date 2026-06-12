@@ -328,7 +328,7 @@ describe('PATCH /api/tournaments/:slug — is_major', () => {
     tournamentIds.push(id);
     tournamentSlugs.push(slug);
 
-    const token = makeToken(organizer.id, 'ORGANIZER');
+    const token = makeToken(organizer.id, 'HOST');
     const patchRes = await app.inject({
       method: 'PATCH',
       url: `/api/tournaments/${slug}`,
