@@ -246,7 +246,19 @@ export default fp(
 
       try {
         // Phase 1: open check-in 1h before start
-        const openingTournaments = await fastify.prisma.tournament.findMany({
+        // Emergency fix: reopen any AUTO_SWISS stuck in REGISTRATION_CLOSED before start_date
+        // (registration stays open until start_date — closing it early was a bug)
+        const stuckTournaments = await fastify.prisma.tournament.findMany({
+          where: { format: 'AUTO_SWISS', status: 'REGISTRATION_CLOSED', start_date: { gt: now }, deleted_at: null },
+          select: { id: true },
+        });
+        for (const t of stuckTournaments) {
+          await fastify.prisma.tournament.update({ where: { id: t.id }, data: { status: 'OPEN_REGISTRATION' } });
+          fastify.log.info({ tournamentId: t.id }, 'Auto Swiss: reopened registration (was closed early)');
+        }
+
+        // Check-in reminder at start_date - 1h (no status change — registration stays open)
+        const reminderTournaments = await fastify.prisma.tournament.findMany({
           where: {
             format: 'AUTO_SWISS',
             status: 'OPEN_REGISTRATION',
@@ -255,24 +267,22 @@ export default fp(
           },
           select: { id: true, name: true, slug: true, start_date: true },
         });
-        for (const t of openingTournaments) {
-          await fastify.prisma.tournament.update({
-            where: { id: t.id },
-            data: { status: 'REGISTRATION_CLOSED' },
-          });
-          fastify.log.info({ tournamentId: t.id }, 'Auto Swiss: check-in opened');
-          // Reuse check-in reminder
+        for (const t of reminderTournaments) {
           if (!remindedTournamentIds.has(t.id)) {
             remindedTournamentIds.add(t.id);
+            fastify.log.info({ tournamentId: t.id }, 'Auto Swiss: sending check-in reminder');
+            await fastify.prisma.auditLog.create({
+              data: { entity_type: 'Tournament', entity_id: t.id, action: 'checkin_reminder_sent', new_value: { sent_at: now.toISOString() } },
+            }).catch(() => {});
             await notifyCheckInReminder(t).catch(() => {});
           }
         }
 
-        // Phase 2: start tournament at start_date
+        // Phase 2: start tournament at start_date (registration was open until now)
         const startingTournaments = await fastify.prisma.tournament.findMany({
           where: {
             format: 'AUTO_SWISS',
-            status: 'REGISTRATION_CLOSED',
+            status: 'OPEN_REGISTRATION',
             start_date: { lte: now },
             deleted_at: null,
           },
