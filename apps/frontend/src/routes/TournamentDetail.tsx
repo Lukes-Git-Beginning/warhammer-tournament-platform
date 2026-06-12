@@ -498,6 +498,9 @@ export function TournamentDetail() {
         </section>
       )}
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Tournament meta info                                                */}
+      {/* ------------------------------------------------------------------ */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 mb-8">
         <div className="space-y-2 text-sm">
           <div className="flex items-center gap-2 flex-wrap">
@@ -505,16 +508,29 @@ export function TournamentDetail() {
             <span className="text-stone-200">{startDate}</span>
             <DiscordTimestampButton isoString={tournament.start_date} />
           </div>
+          {tournament.format && (
+            <div>
+              <span className="text-stone-500">Format:</span>{' '}
+              <span className="text-stone-200">
+                {({ SWISS: 'Swiss', SINGLE_ELIMINATION: 'Single Elimination', DOUBLE_ELIMINATION: 'Double Elimination', ROUND_ROBIN: 'Round Robin', LIECHTENSTEIN: 'Liechtenstein' } as Record<string, string>)[tournament.format] ?? tournament.format}
+                {tournament.rounds_count ? ` · ${tournament.rounds_count} Rounds` : ''}
+              </span>
+            </div>
+          )}
+          {tournament.mode && (
+            <div>
+              <span className="text-stone-500">Mode:</span>{' '}
+              <span className="text-stone-200">
+                {({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode] ?? tournament.mode}
+              </span>
+            </div>
+          )}
           {tournament.max_participants && (
             <div>
               <span className="text-stone-500">{t('tournament.detail.max_participants')}</span>{' '}
-              <span className="text-stone-200">{tournament.max_participants}</span>
-            </div>
-          )}
-          {tournament.participantCount !== undefined && (
-            <div>
-              <span className="text-stone-500">{t('tournament.detail.registered')}</span>{' '}
-              <span className="text-stone-200">{tournament.participantCount}</span>
+              <span className="text-stone-200">
+                {tournament.participantCount !== undefined ? `${tournament.participantCount} / ` : ''}{tournament.max_participants}
+              </span>
             </div>
           )}
           {tournament.organizer && (
@@ -537,6 +553,35 @@ export function TournamentDetail() {
           )}
         </div>
       </div>
+
+      {/* Faction allowlist (only shown if restrictions are set) */}
+      {tournament.faction_allowlist && tournament.faction_allowlist.length > 0 && (() => {
+        const factionMap = new Map((factionsData?.data ?? []).map((f) => [f.faction.id, f.faction]));
+        const allowedFactions = tournament.faction_allowlist
+          .map((id) => factionMap.get(id))
+          .filter((f): f is FactionDto => f !== undefined);
+        if (allowedFactions.length === 0) return null;
+        return (
+          <div className="mb-8">
+            <h2 className="font-display text-base font-semibold text-rizzotto-gold-400 mb-3">
+              Allowed Factions
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {allowedFactions.map((faction) => (
+                <div
+                  key={faction.id}
+                  className="flex items-center gap-1.5 rounded bg-stone-800 border border-stone-700 px-2 py-1"
+                >
+                  {faction.icon_url && (
+                    <img src={faction.icon_url} alt="" className="w-5 h-5 object-contain" />
+                  )}
+                  <span className="text-xs text-stone-200">{faction.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {tournament.description && (
         <section className="mb-8">

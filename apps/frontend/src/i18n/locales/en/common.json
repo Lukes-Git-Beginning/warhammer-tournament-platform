@@ -140,7 +140,7 @@
     "create": {
       "title": "Create Tournament",
       "subtitle": "Create a new tournament for the RizzOtto's Arena community.",
-      "role_warning": "You need the Organizer role to create tournaments. Contact an administrator to upgrade your role.",
+      "role_warning": "You need the Host role to create tournaments. Contact an administrator to upgrade your role.",
       "aside": {
         "heading": "What is a Tournament?",
         "body": "A tournament brings players together to compete. You define the format, mode, and rules — others sign up and play.",
@@ -212,7 +212,7 @@
       "timezone": "Timezone:",
       "max_participants": "Max. participants:",
       "registered": "Registered:",
-      "organizer": "Organizer:",
+      "organizer": "Host:",
       "discord_server": "Discord server"
     },
     "register": {
@@ -316,7 +316,7 @@
     "editor": {
       "create_title": "Create new preset",
       "edit_title": "Edit preset",
-      "permission_denied": "You need the Organizer role to create presets.",
+      "permission_denied": "You need the Host role to create presets.",
       "save_error": "Failed to save"
     }
   },

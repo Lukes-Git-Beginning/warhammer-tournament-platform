@@ -132,8 +132,8 @@ function buildRoundKeys(form: Partial<EditFormData>): { key: string; label: stri
 
 const MAP_DECISION_MODES = [
   { value: 'RANDOM_NO_REPEAT' as const, label: 'Random (No Repeat)', description: 'Server picks one random map. Already-played maps are excluded.' },
-  { value: 'HOST_PRESET' as const, label: 'Host Preset (1 Map)', description: 'Organizer sets one map per round in order. No player interaction needed.' },
-  { value: 'HOST_PRESET_PICK_BAN' as const, label: 'Host Preset Ban&Pick', description: 'Organizer defines 3 maps per round & game. Each player bans one.' },
+  { value: 'HOST_PRESET' as const, label: 'Host Preset (1 Map)', description: 'Host sets one map per round in order. No player interaction needed.' },
+  { value: 'HOST_PRESET_PICK_BAN' as const, label: 'Host Preset Ban&Pick', description: 'Host defines 3 maps per round & game. Each player bans one.' },
   { value: 'RANDOM_PICK_BAN' as const, label: 'Random Ban&Pick', description: 'Server draws 3 random maps per game. Each player bans one.' },
 ];
 
