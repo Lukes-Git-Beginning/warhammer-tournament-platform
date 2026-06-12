@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { sendDm } from '../lib/discord-notify.js';
+import { notifyMatchFoundWithButtons } from '../lib/discord-notify.js';
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 
 const CreateMatchupSchema = z.object({
@@ -141,17 +141,14 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
         select: { username: true, discord_id: true },
       });
 
-      const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
-      const mapLine = mapName ? ` · Map: **${mapName}**` : '';
-      const dmText = (name: string) =>
-        `Your scheduled ${matchup.format} matchup is on! vs **${name}**${mapLine} — pick your faction → ${matchUrl}`;
-
-      await Promise.allSettled([
-        sendDm(matchup.proposer.discord_id, dmText(acceptor?.username ?? 'your opponent')),
-        acceptor?.discord_id
-          ? sendDm(acceptor.discord_id, dmText(matchup.proposer.username))
-          : Promise.resolve(),
-      ]);
+      if (acceptor?.discord_id) {
+        setImmediate(() => void notifyMatchFoundWithButtons(
+          matchId,
+          { discordId: matchup.proposer.discord_id, username: matchup.proposer.username },
+          { discordId: acceptor.discord_id!, username: acceptor.username },
+          mapName,
+        ));
+      }
 
       return reply.code(200).send({ match_id: matchId });
     },

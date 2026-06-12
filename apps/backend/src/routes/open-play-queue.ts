@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { sendDm } from '../lib/discord-notify.js';
+import { notifyMatchFoundWithButtons } from '../lib/discord-notify.js';
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 
 const QUEUE_KEY = 'rizzotto:queue:open_play';
@@ -47,14 +47,14 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
           fastify.prisma.user.findUnique({ where: { id: p2Id }, select: { username: true, discord_id: true } }),
         ]);
 
-        const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
-        const mapLine = mapName ? ` · Map: **${mapName}**` : '';
-        const dm = (opp: string) => `Match found! Open Play vs **${opp}**${mapLine} — pick your faction → ${matchUrl}`;
-
-        await Promise.allSettled([
-          p1?.discord_id ? sendDm(p1.discord_id, dm(p2?.username ?? 'your opponent')) : Promise.resolve(),
-          p2?.discord_id ? sendDm(p2.discord_id, dm(p1?.username ?? 'your opponent')) : Promise.resolve(),
-        ]);
+        if (p1?.discord_id && p2?.discord_id) {
+          setImmediate(() => void notifyMatchFoundWithButtons(
+            matchId,
+            { discordId: p1.discord_id!, username: p1.username },
+            { discordId: p2.discord_id!, username: p2.username },
+            mapName,
+          ));
+        }
 
         return reply.code(200).send({ matched: true, match_id: matchId });
       }
