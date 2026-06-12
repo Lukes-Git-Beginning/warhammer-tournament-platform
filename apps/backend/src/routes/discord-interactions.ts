@@ -4,9 +4,26 @@ import {
   notifyResultPending,
   notifyCancelPending,
   notifyReplayReminder,
+  notifyMatchCancelledBothPlayers,
   notifyOpenPlayDispute,
+  notifyMatchFoundWithButtons,
 } from '../lib/discord-notify.js';
+import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 import { invalidate } from '../lib/cache.js';
+
+const QUEUE_KEY = 'rizzotto:queue:open_play';
+const MATCH_SCRIPT = `
+local queue = KEYS[1]
+local userId = ARGV[1]
+redis.call('RPUSH', queue, userId)
+local len = redis.call('LLEN', queue)
+if len >= 2 then
+  local p1 = redis.call('LPOP', queue)
+  local p2 = redis.call('LPOP', queue)
+  return {p1, p2}
+end
+return false
+`;
 
 const PING = 1;
 const MESSAGE_COMPONENT = 3;
@@ -197,7 +214,7 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
 
         const match = await fastify.prisma.match.findFirst({
           where: { id: matchId, type: 'OPEN_PLAY', deleted_at: null },
-          select: { id: true, status: true },
+          select: { id: true, status: true, player1_id: true, player2_id: true },
         });
         if (!match || match.status !== 'AWAITING_CONFIRMATION') {
           return reply.code(200).send(ephemeral('Nothing to accept right now.'));
@@ -211,7 +228,57 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
           });
         });
 
+        // Notify both players with Queue Again button
+        const [p1, p2] = await Promise.all([
+          match.player1_id ? fastify.prisma.user.findUnique({ where: { id: match.player1_id }, select: { discord_id: true } }) : null,
+          match.player2_id ? fastify.prisma.user.findUnique({ where: { id: match.player2_id }, select: { discord_id: true } }) : null,
+        ]);
+        if (p1?.discord_id && p2?.discord_id) {
+          setImmediate(() => void notifyMatchCancelledBothPlayers(p1.discord_id!, p2.discord_id!));
+        }
+
         return reply.code(200).send(ephemeral('Match cancelled. No result has been recorded.'));
+      }
+
+      // op_queue:<actorDiscordId> — Queue Again button
+      if (action === 'op_queue') {
+        const [, actorDiscordId] = parts;
+        if (actorDiscordId !== discordId) return reply.code(200).send(ephemeral('This button is not for you.'));
+        if (!fastify.redis) return reply.code(200).send(ephemeral('Queue service is temporarily unavailable.'));
+
+        const user = await fastify.prisma.user.findFirst({
+          where: { discord_id: discordId, deleted_at: null },
+          select: { id: true, username: true },
+        });
+        if (!user) return reply.code(200).send(ephemeral('You need to log in at rizzotto.gg first.'));
+
+        const existing = await fastify.redis.lpos(QUEUE_KEY, user.id);
+        if (existing !== null) return reply.code(200).send(ephemeral("You're already in the queue."));
+
+        const result = await fastify.redis.eval(MATCH_SCRIPT, 1, QUEUE_KEY, user.id) as [string, string] | false | null;
+
+        if (Array.isArray(result) && result.length === 2) {
+          const [p1Id, p2Id] = result;
+          const [p1, p2] = await Promise.all([
+            fastify.prisma.user.findUnique({ where: { id: p1Id }, select: { username: true, discord_id: true } }),
+            fastify.prisma.user.findUnique({ where: { id: p2Id }, select: { username: true, discord_id: true } }),
+          ]);
+          const { matchId, mapName } = await createOpenPlayMatch(fastify.prisma, p1Id, p2Id);
+          if (p1?.discord_id && p2?.discord_id) {
+            setImmediate(() => void notifyMatchFoundWithButtons(
+              matchId,
+              { discordId: p1.discord_id!, username: p1.username },
+              { discordId: p2.discord_id!, username: p2.username },
+              mapName,
+            ));
+          }
+          const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
+          const opponent = p1Id === user.id ? p2 : p1;
+          return reply.code(200).send(ephemeral(`Match found! vs **${opponent?.username ?? 'opponent'}** → ${matchUrl}`));
+        }
+
+        const position = await fastify.redis.llen(QUEUE_KEY);
+        return reply.code(200).send(ephemeral(`You're in the queue (position ${position}). You'll get a DM when a match is found.`));
       }
 
       // op_cancel_dispute:<matchId>:<opponentDiscordId>

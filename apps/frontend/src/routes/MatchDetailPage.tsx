@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useParams, Link } from '@tanstack/react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, type GameDto, type MapDto } from '@/lib/api.js';
+import { useParams, Link, useNavigate } from '@tanstack/react-router';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, joinQueue, type GameDto, type MapDto } from '@/lib/api.js';
 import type { MatchDetailDto, MatchScoringBreakdownDto } from '@/lib/api.js';
 import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth.js';
@@ -319,11 +319,24 @@ export function MatchDetailPage() {
   // Permission: can the current user report a result?
   // ---------------------------------------------------------------------------
 
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+
   const isPlayer1 = user?.id === match.player1_id;
   const isPlayer2 = user?.id === match.player2_id;
   const isPrivileged =
     user?.role === 'ADMIN' || user?.role === 'MODERATOR' || user?.role === 'HOST';
   const canReport = !!(user && (isPlayer1 || isPlayer2 || isPrivileged));
+
+  const queueAgain = useMutation({
+    mutationFn: joinQueue,
+    onSuccess: (data) => {
+      void qc.invalidateQueries({ queryKey: ['queue-status'] });
+      if (data.matched && data.match_id) {
+        void navigate({ to: '/matches/$matchId', params: { matchId: data.match_id } });
+      }
+    },
+  });
   const reportable = match.status === 'ONGOING' || match.status === 'PENDING';
 
   // ---------------------------------------------------------------------------
@@ -565,6 +578,26 @@ export function MatchDetailPage() {
               factions={factions}
             />
           ))}
+        </div>
+      )}
+
+      {isOpenPlay && (isPlayer1 || isPlayer2) && (match.status === 'COMPLETED' || match.status === 'CANCELLED') && (
+        <div className="flex flex-col items-center gap-2 py-4 mb-4 border border-rizzotto-iron-600 rounded-lg bg-rizzotto-iron-900/50">
+          <p className="text-sm text-rizzotto-stone-400">
+            {match.status === 'CANCELLED' ? 'Match cancelled.' : 'Match complete.'} Ready for another?
+          </p>
+          {queueAgain.data?.matched === false ? (
+            <p className="text-sm text-rizzotto-gold-400">You're in the queue — you'll get a DM when a match is found.</p>
+          ) : (
+            <Button
+              onClick={() => queueAgain.mutate()}
+              disabled={queueAgain.isPending}
+              variant="etched"
+              size="sm"
+            >
+              {queueAgain.isPending ? 'Joining queue…' : 'Queue Again'}
+            </Button>
+          )}
         </div>
       )}
 
