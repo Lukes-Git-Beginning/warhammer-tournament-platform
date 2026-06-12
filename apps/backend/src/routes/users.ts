@@ -282,13 +282,13 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // GET /api/users/:id/stats?season= — Personal Stats
+  // GET /api/users/:id/stats — Personal Stats. The former ?season= query param
+  // never filtered anything (the resolved id was unused); it is now ignored.
   fastify.get(
     '/api/users/:id/stats',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-      const { season: seasonId } = z.object({ season: z.string().uuid().optional() }).parse(request.query);
 
       const user = await fastify.prisma.user.findUnique({
         where: { id, deleted_at: null },

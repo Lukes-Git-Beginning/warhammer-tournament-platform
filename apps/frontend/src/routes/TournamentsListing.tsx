@@ -5,7 +5,6 @@ import { ArrowRight, Clock, Crown, Users } from 'lucide-react';
 import { listTournaments, type Tournament } from '@/lib/api.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { Badge } from '@/components/ui/badge.js';
-import { Button } from '@/components/ui/button.js';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 import { Separator } from '@/components/ui/separator.js';
