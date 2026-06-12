@@ -1402,7 +1402,7 @@ export function MatchDecisionPage() {
             disabled={forceResolveMutation.isPending}
             className="text-xs text-rizzotto-stone-600 hover:text-rizzotto-stone-400 transition-colors disabled:opacity-50"
           >
-            {forceResolveMutation.isPending ? 'Picking…' : 'Organizer: Pick random map'}
+            {forceResolveMutation.isPending ? 'Picking…' : 'Host: Pick random map'}
           </button>
         </div>
       )}

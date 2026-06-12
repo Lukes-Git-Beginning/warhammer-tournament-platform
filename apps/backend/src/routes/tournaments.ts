@@ -161,8 +161,10 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
               counts_for_leaderboard: true,
               is_major: true,
               created_at: true,
+              rounds_count: true,
               organizer: { select: { id: true, username: true, avatar_url: true } },
               _count: { select: { participants: { where: { deleted_at: null } } } },
+              faction_allowlist: { select: { faction: { select: { name: true } } } },
             },
             orderBy: { start_date: 'desc' },
             skip,
@@ -170,9 +172,10 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           }),
           fastify.prisma.tournament.count({ where }),
         ]);
-        const data = tournaments.map(({ _count, ...rest }) => ({
+        const data = tournaments.map(({ _count, faction_allowlist, ...rest }) => ({
           ...rest,
           participantCount: _count.participants,
+          faction_allowlist: faction_allowlist.map((fa) => fa.faction.name),
         }));
         return { data, total, page, pageSize };
       },

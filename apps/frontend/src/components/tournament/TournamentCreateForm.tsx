@@ -46,8 +46,8 @@ type MapDecisionModeOption = {
 
 const MAP_DECISION_MODES: MapDecisionModeOption[] = [
   { value: 'RANDOM_NO_REPEAT', label: 'Random (No Repeat)', description: 'Server picks one random map. Already-played maps are excluded.' },
-  { value: 'HOST_PRESET', label: 'Host Preset (1 Map)', description: 'Organizer sets one map per round in order. No player interaction needed.' },
-  { value: 'HOST_PRESET_PICK_BAN', label: 'Host Preset Ban&Pick', description: 'Organizer defines 3 maps per round & game. Each player bans one.' },
+  { value: 'HOST_PRESET', label: 'Host Preset (1 Map)', description: 'Host sets one map per round in order. No player interaction needed.' },
+  { value: 'HOST_PRESET_PICK_BAN', label: 'Host Preset Ban&Pick', description: 'Host defines 3 maps per round & game. Each player bans one.' },
   { value: 'RANDOM_PICK_BAN', label: 'Random Ban&Pick', description: 'Server draws 3 random maps per game. Each player bans one.' },
 ];
 
