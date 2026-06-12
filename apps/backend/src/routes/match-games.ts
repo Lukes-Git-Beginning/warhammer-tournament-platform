@@ -312,8 +312,10 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Parse multipart
+      // Parse multipart — buffer the file immediately before any DB work to
+      // prevent the stream from expiring mid-handler (busboy is consumed serially).
       const data = await request.file();
+      const buffer = data ? await data.toBuffer() : null;
       const winnerIdField = (data?.fields['winner_id'] as { value?: string } | undefined)?.value;
 
       if (!winnerIdField) {
@@ -365,7 +367,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       // -----------------------------------------------------------------------
       if (!existingGame.reported_at) {
         // Replay is required for first report
-        if (!data) {
+        if (!buffer) {
           return reply.code(400).send({
             error: 'BadRequest',
             message: 'A replay file is required when reporting a game result',
@@ -373,12 +375,11 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
 
-        const buffer = await data.toBuffer();
         if (buffer.length === 0) {
           return reply.code(400).send({ error: 'BadRequest', message: 'Replay file is empty', statusCode: 400 });
         }
 
-        const ext = data.filename?.split('.').pop() ?? 'rec';
+        const ext = data?.filename?.split('.').pop() ?? 'rec';
         const filename = `${randomUUID()}.${ext}`;
         const matchDir = join(REPLAY_DIR, matchId);
         await mkdir(matchDir, { recursive: true });

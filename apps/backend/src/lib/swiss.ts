@@ -35,6 +35,7 @@ export interface SwissStanding {
   buchholz: number;
   solkoff: number;  // buchholz minus the highest and lowest single opponent score
   opponentsBeaten: string[];
+  dropped: boolean;
 }
 
 // ---------- Helpers ----------
@@ -155,8 +156,11 @@ export function computeSwissStandings(
     recordMap.set(id, { wins: 0, losses: 0, draws: 0, byes: 0, score: 0, gamesLost: 0, opponents: [], opponentsBeaten: [] });
   }
 
+  // Track players who withdrew mid-tournament (lost a FORFEIT match)
+  const droppedPlayerIds = new Set<string>();
+
   for (const match of completedMatches) {
-    if (match.status !== 'COMPLETED' && match.status !== 'BYE') continue;
+    if (match.status !== 'COMPLETED' && match.status !== 'BYE' && match.status !== 'FORFEIT') continue;
 
     const p1 = match.player1_id;
     const p2 = match.player2_id;
@@ -168,6 +172,24 @@ export function computeSwissStandings(
         const r = recordMap.get(byePlayer)!;
         r.byes += 1;
         r.score += 1;
+      }
+      continue;
+    }
+
+    // FORFEIT: opponent dropped mid-tournament — treat as a bye for the winner.
+    // No BH contribution from the dropped player (they didn't play).
+    // The dropped player's own previous-round results are preserved but they
+    // are flagged so they sort to the bottom of standings.
+    if (match.status === 'FORFEIT') {
+      if (!p1 || !p2 || !winner) continue;
+      const dropped = winner === p1 ? p2 : p1;
+      droppedPlayerIds.add(dropped);
+      const rWinner = recordMap.get(winner);
+      if (rWinner) {
+        rWinner.byes += 1;
+        rWinner.score += 1;
+        // Deliberately do NOT push `dropped` into rWinner.opponents — FORFEIT
+        // is treated as a bye, so the dropped player contributes 0 BH.
       }
       continue;
     }
@@ -221,6 +243,7 @@ export function computeSwissStandings(
       buchholz,
       solkoff,
       opponentsBeaten: rec.opponentsBeaten,
+      dropped: droppedPlayerIds.has(userId),
     });
   }
 
@@ -354,6 +377,8 @@ export function sortSwissStandings(
   };
 
   return [...standings].sort((a, b) => {
+    // Dropped players always sort to the bottom
+    if (a.dropped !== b.dropped) return a.dropped ? 1 : -1;
     // 1. score
     if (b.score !== a.score) return b.score - a.score;
     // 2. games lost asc (fewer = better)

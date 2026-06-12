@@ -1,8 +1,11 @@
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyCors from '@fastify/cors';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyMultipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
 import dbPlugin from './plugins/db.js';
 import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
@@ -76,6 +79,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   await app.register(fastifyHelmet, { contentSecurityPolicy: false });
   await app.register(fastifyMultipart, { limits: { fileSize: 5 * 1024 * 1024 } }); // 5 MB
+  const __dirname = fileURLToPath(new URL('.', import.meta.url));
+  await app.register(fastifyStatic, {
+    root: join(__dirname, '..', '..', 'uploads'),
+    prefix: '/uploads/',
+    decorateReply: false,
+  });
   await app.register(fastifyCors, {
     origin: process.env.FRONTEND_URL ?? 'http://localhost:5173',
     credentials: true,

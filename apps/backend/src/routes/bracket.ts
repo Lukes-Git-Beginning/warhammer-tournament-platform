@@ -32,7 +32,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, format: true, mode: true, swiss_match_format: true, playoff_match_format: true, finale_match_format: true },
+        select: { id: true, format: true, mode: true, swiss_match_format: true, playoff_match_format: true, finale_match_format: true, rounds_count: true },
       });
 
       if (!tournament) {
@@ -148,7 +148,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         const participants = await fastify.prisma.tournamentParticipant.findMany({
           where: {
             tournament_id: tournament.id,
-            status: { in: ['REGISTERED', 'CHECKED_IN'] },
+            status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
             deleted_at: null,
           },
           select: {
@@ -164,7 +164,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
         const completedMatches = matches
           .filter((m) =>
-            (m.status === 'COMPLETED' || m.status === 'BYE') &&
+            (m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT') &&
             (m.phase === null || m.phase === 'SWISS'),
           )
           .map((m) => ({
@@ -205,11 +205,17 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             gamesLost: s.gamesLost,
             buchholz: s.buchholz,
             solkoff: s.solkoff,
+            dropped: s.dropped || undefined,
           };
         });
 
+        // For AUTO_SWISS, rounds_count is authoritative (set by autoSwissConfig).
+        // For manual SWISS, fall back to the recommendation formula.
+        const activeCount = participantIds.length - rawStandings.filter((s) => s.dropped).length;
+        const recommendedRounds = tournament.rounds_count ?? recommendNumberOfRounds(activeCount);
+
         response.swiss = {
-          recommendedRounds: recommendNumberOfRounds(participantIds.length),
+          recommendedRounds,
           currentRound: rounds,
           standings,
         };

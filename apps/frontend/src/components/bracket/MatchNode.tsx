@@ -80,7 +80,12 @@ export function MatchNode({
   p2SlotLabel,
 }: MatchNodeProps) {
   const isBye = match.status === 'BYE';
+  const isForfeit = match.status === 'FORFEIT';
   const isOngoing = match.status === 'ONGOING';
+  // In a FORFEIT match the non-winner is the dropped player
+  const droppedPlayerId = isForfeit && match.winnerId
+    ? (match.winnerId === match.player1Id ? match.player2Id : match.player1Id)
+    : null;
 
   const statusCls = statusColors[match.status] ?? 'border-stone-700 bg-stone-900/40';
 
@@ -139,23 +144,28 @@ export function MatchNode({
         </div>
       )}
       {/* Player 1 row */}
-      <div className="flex-1 flex items-center px-2 border-b border-stone-800">
+      <div className={`flex-1 flex items-center px-2 border-b border-stone-800 ${droppedPlayerId === match.player1Id ? 'opacity-50' : ''}`}>
         {match.player1Id && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
-            p1Winner
-              ? 'text-rizzotto-gold-500 font-semibold'
-              : match.player1Id
-                ? 'text-stone-300'
-                : 'text-stone-500 italic'
+            droppedPlayerId === match.player1Id
+              ? 'line-through text-stone-500'
+              : p1Winner
+                ? 'text-rizzotto-gold-500 font-semibold'
+                : match.player1Id
+                  ? 'text-stone-300'
+                  : 'text-stone-500 italic'
           }`}
         >
           {match.player1Id
             ? (player1Name ?? match.player1Id)
             : (p1SlotLabel ?? (isBye ? 'BYE' : 'TBD'))}
         </span>
+        {droppedPlayerId === match.player1Id && (
+          <span className="text-[9px] text-amber-600/70 uppercase tracking-wider ml-1">out</span>
+        )}
         {showFaction && match.player1Id && <FactionIndicator faction={player1Faction} />}
-        {score1 && (
+        {score1 && droppedPlayerId !== match.player1Id && (
           <span
             className={`text-xs ml-1 tabular-nums ${p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
           >
@@ -165,23 +175,28 @@ export function MatchNode({
       </div>
 
       {/* Player 2 row */}
-      <div className="flex-1 flex items-center px-2">
+      <div className={`flex-1 flex items-center px-2 ${droppedPlayerId === match.player2Id ? 'opacity-50' : ''}`}>
         {match.player2Id && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
-            p2Winner
-              ? 'text-rizzotto-gold-500 font-semibold'
-              : match.player2Id
-                ? 'text-stone-300'
-                : 'text-stone-500 italic'
+            droppedPlayerId === match.player2Id
+              ? 'line-through text-stone-500'
+              : p2Winner
+                ? 'text-rizzotto-gold-500 font-semibold'
+                : match.player2Id
+                  ? 'text-stone-300'
+                  : 'text-stone-500 italic'
           }`}
         >
           {match.player2Id
             ? (player2Name ?? match.player2Id)
             : (p2SlotLabel ?? (isBye ? 'BYE' : 'TBD'))}
         </span>
+        {droppedPlayerId === match.player2Id && (
+          <span className="text-[9px] text-amber-600/70 uppercase tracking-wider ml-1">out</span>
+        )}
         {showFaction && match.player2Id && <FactionIndicator faction={player2Faction} />}
-        {score2 && (
+        {score2 && droppedPlayerId !== match.player2Id && (
           <span
             className={`text-xs ml-1 tabular-nums ${p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
           >

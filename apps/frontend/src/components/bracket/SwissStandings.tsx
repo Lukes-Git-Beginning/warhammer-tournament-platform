@@ -72,6 +72,8 @@ export function SwissStandings({
   const playoffLabel = playoffFormat === 'TOP8' ? 'Advance to Quarterfinals' : 'Advance to Semifinals';
   const showPlayoffDivider = playoffCutoff > 0 && currentRound >= recommendedRounds;
   const showFinalsDivider = finalistIds && finalistIds.size > 0;
+  // Divider appears after the last confirmed finalist (dynamic, not hardcoded at rank 3)
+  const finalsDividerAfterRank = finalistIds?.size ?? 2;
 
   return (
     <div className="mb-6 rounded-md border border-stone-800 bg-stone-900/40 overflow-hidden">
@@ -100,25 +102,27 @@ export function SwissStandings({
               const factionId = entry.factionId ?? playerFactionMap?.get(entry.userId);
               const faction = factionId ? factionMap?.get(factionId) : undefined;
               const isFinalist = finalistIds?.has(entry.userId);
+              const isDropped = entry.dropped === true;
+
+              const medalLabel = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null;
 
               return (
                 <>
-                  {/* Finals divider: between finalists and the rest (after last finalist row) */}
-                  {showFinalsDivider && rank === 3 && (
+                  {/* Finals divider: after confirmed finalists (dynamic rank, not hardcoded at 3) */}
+                  {showFinalsDivider && rank === finalsDividerAfterRank + 1 && (
                     <Divider label="Advance to Grand Final" colSpan={colCount} />
                   )}
                   {/* Playoffs divider: between playoff qualifiers and the rest */}
-                  {showPlayoffDivider && !showFinalsDivider && rank === playoffCutoff + 1 && (
-                    <Divider label={playoffLabel} colSpan={colCount} />
-                  )}
-                  {showPlayoffDivider && showFinalsDivider && rank === playoffCutoff + 1 && (
+                  {showPlayoffDivider && rank === playoffCutoff + 1 && (
                     <Divider label={playoffLabel} colSpan={colCount} />
                   )}
                   <tr
                     key={entry.userId}
-                    className={`hover:bg-stone-800/30 transition-colors ${isFinalist ? 'bg-rizzotto-gold-500/5' : ''}`}
+                    className={`hover:bg-stone-800/30 transition-colors ${isFinalist ? 'bg-rizzotto-gold-500/5' : ''} ${isDropped ? 'opacity-50' : ''}`}
                   >
-                    <td className="px-4 py-2 text-stone-500">{rank}</td>
+                    <td className="px-4 py-2 text-stone-500">
+                      {medalLabel ?? rank}
+                    </td>
                     <td className="px-4 py-2">
                       <Link
                         to="/users/$id"
@@ -126,7 +130,12 @@ export function SwissStandings({
                         className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
                       >
                         <Avatar url={entry.avatarUrl} username={displayName} />
-                        <span className="text-stone-200">{displayName}</span>
+                        <span className={`${isDropped ? 'line-through text-stone-500' : 'text-stone-200'}`}>
+                          {displayName}
+                        </span>
+                        {isDropped && (
+                          <span className="text-[10px] text-amber-600/80 uppercase tracking-wider font-semibold">Withdrew</span>
+                        )}
                       </Link>
                     </td>
                     {showFactionColumn && (

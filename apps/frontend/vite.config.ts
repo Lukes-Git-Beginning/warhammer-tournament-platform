@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': { target: `http://localhost:${BACKEND_PORT}`, changeOrigin: true },
         '/auth': { target: `http://localhost:${BACKEND_PORT}`, changeOrigin: true },
+        '/uploads': { target: `http://localhost:${BACKEND_PORT}`, changeOrigin: true },
         '/socket.io': { target: `http://localhost:${BACKEND_PORT}`, changeOrigin: true, ws: true },
       },
     },

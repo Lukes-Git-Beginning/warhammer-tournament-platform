@@ -41,6 +41,8 @@ export interface SwissStandingEntry {
   gamesLost: number;
   buchholz: number;
   solkoff: number;
+  /** True when this player withdrew mid-tournament (FORFEIT loss) */
+  dropped?: boolean;
 }
 
 export interface SwissMeta {
