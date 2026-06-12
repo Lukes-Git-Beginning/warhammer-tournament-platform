@@ -2,6 +2,13 @@ import { Link } from '@tanstack/react-router';
 import type { FactionDto, SwissMeta } from '@rizzotto/types';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 
+const PLACEMENT_BADGE: Record<1 | 2 | 3 | 4, { label: string; className: string }> = {
+  1: { label: '1ST', className: 'text-rizzotto-gold-400 border-rizzotto-gold-500/50 bg-rizzotto-gold-500/10' },
+  2: { label: '2ND', className: 'text-stone-300 border-stone-500/40 bg-stone-700/20' },
+  3: { label: '3RD', className: 'text-orange-500 border-orange-700/40 bg-orange-950/30' },
+  4: { label: '4TH', className: 'text-stone-500 border-stone-700/40 bg-stone-900/20' },
+};
+
 interface SwissStandingsProps {
   standings: SwissMeta['standings'];
   currentRound: number;
@@ -104,7 +111,8 @@ export function SwissStandings({
               const isFinalist = finalistIds?.has(entry.userId);
               const isDropped = entry.dropped === true;
 
-              const medalLabel = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null;
+              const placementKey = (rank <= 4 && !isDropped ? rank : undefined) as 1 | 2 | 3 | 4 | undefined;
+              const badge = placementKey ? PLACEMENT_BADGE[placementKey] : null;
 
               return (
                 <>
@@ -121,7 +129,11 @@ export function SwissStandings({
                     className={`hover:bg-stone-800/30 transition-colors ${isFinalist ? 'bg-rizzotto-gold-500/5' : ''} ${isDropped ? 'opacity-50' : ''}`}
                   >
                     <td className="px-4 py-2 text-stone-500">
-                      {medalLabel ?? rank}
+                      {badge ? (
+                        <span className={`rounded border px-1.5 py-px text-[10px] font-bold uppercase tracking-wider ${badge.className}`}>
+                          {badge.label}
+                        </span>
+                      ) : rank}
                     </td>
                     <td className="px-4 py-2">
                       <Link

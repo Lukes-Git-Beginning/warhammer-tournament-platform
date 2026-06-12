@@ -405,13 +405,17 @@ export function UserProfilePage() {
                   return (
                     <tr key={i} className="hover:bg-stone-800/30 transition-colors">
                       <td className="px-4 py-3">
-                        <Link
-                          to="/tournaments/$slug"
-                          params={{ slug: m.tournament.slug }}
-                          className="text-stone-200 hover:text-rizzotto-gold-500 transition-colors"
-                        >
-                          {m.tournament.name}
-                        </Link>
+                        {m.tournament ? (
+                          <Link
+                            to="/tournaments/$slug"
+                            params={{ slug: m.tournament.slug }}
+                            className="text-stone-200 hover:text-rizzotto-gold-500 transition-colors"
+                          >
+                            {m.tournament.name}
+                          </Link>
+                        ) : (
+                          <span className="text-stone-500">—</span>
+                        )}
                         <span className="ml-1 text-stone-500 text-xs">R{m.round}</span>
                       </td>
                       <td className="px-4 py-3">
