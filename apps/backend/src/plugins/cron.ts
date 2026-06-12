@@ -5,7 +5,7 @@ import { notifyCheckInReminder } from '../lib/discord-notify.js';
 import { autoConfirmExpiredGameResults } from '../lib/match-games.js';
 import { autoResolveStaleBlindPicks } from '../lib/blind-pick-auto-resolve.js';
 import { autoResolveStaleMatrixActions } from '../lib/matrix-auto-resolve.js';
-import { startAutoSwiss, advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
+import { startAutoSwiss, advanceAutoSwissRound, repairBrokenAutoSwiss } from '../lib/auto-swiss-service.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -25,6 +25,16 @@ export default fp(
       select: { entity_id: true },
     });
     alreadySent.forEach(({ entity_id }) => remindedTournamentIds.add(entity_id));
+
+    // -----------------------------------------------------------------------
+    // Startup repair: fix ONGOING tournaments stuck due to wrong format at
+    // creation time (e.g. SINGLE_ELIMINATION instead of AUTO_SWISS).
+    // Idempotent — skips any tournament that already has playoff matches.
+    // -----------------------------------------------------------------------
+    await repairBrokenAutoSwiss(fastify.prisma).catch((err) =>
+      fastify.log.error({ err }, 'repairBrokenAutoSwiss startup check failed'),
+    );
+
     // -----------------------------------------------------------------------
     // Daily faction stats snapshot — 00:05 UTC
     // -----------------------------------------------------------------------
