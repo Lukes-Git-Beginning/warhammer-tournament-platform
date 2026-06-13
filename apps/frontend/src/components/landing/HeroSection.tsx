@@ -63,6 +63,20 @@ export function HeroSection() {
           />
         </motion.div>
 
+        {/* Caption */}
+        <motion.div
+          initial={reduced ? { opacity: 0 } : { opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={reduced ? { duration: 0.32 } : { duration: 0.8, ease: 'easeOut', delay: 0.7 }}
+          className="mt-4 flex items-center gap-3"
+        >
+          <span className="h-px w-12 bg-rizzotto-gold-500/30" />
+          <span className="font-display text-[11px] uppercase tracking-[0.3em] text-rizzotto-stone-400">
+            Open Beta Tournament
+          </span>
+          <span className="h-px w-12 bg-rizzotto-gold-500/30" />
+        </motion.div>
+
         {/* CTAs — sign-in button only shown to guests; leaderboard always visible */}
         <motion.div
           initial="hidden"
