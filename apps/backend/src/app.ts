@@ -1,5 +1,4 @@
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyCors from '@fastify/cors';
@@ -79,9 +78,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   await app.register(fastifyHelmet, { contentSecurityPolicy: false });
   await app.register(fastifyMultipart, { limits: { fileSize: 5 * 1024 * 1024 } }); // 5 MB
-  const __dirname = fileURLToPath(new URL('.', import.meta.url));
   await app.register(fastifyStatic, {
-    root: join(__dirname, '..', '..', 'uploads'),
+    root: join(process.cwd(), 'uploads'),
     prefix: '/uploads/',
     decorateReply: false,
   });
