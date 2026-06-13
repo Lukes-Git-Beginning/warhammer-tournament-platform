@@ -22,6 +22,8 @@ interface SwissStandingsProps {
   playoffFormat?: 'NONE' | 'TOP4' | 'TOP8' | null;
   /** Players who have advanced to the Grand Final (from PLAYOFF_FINAL match) */
   finalistIds?: Set<string>;
+  /** Players who have qualified for the Semifinals (QF winners — TOP8 only) */
+  semifinalistIds?: Set<string>;
 }
 
 function Avatar({ url, username }: { url: string | null; username: string }) {
@@ -67,6 +69,7 @@ export function SwissStandings({
   tournamentMode,
   playoffFormat,
   finalistIds,
+  semifinalistIds,
 }: SwissStandingsProps) {
   const showFactionColumn = tournamentMode ? FACTION_MODES.has(tournamentMode) : false;
   const colCount = 5 + (showFactionColumn ? 1 : 0) + 1; // # + Player + [Faction] + Score + W/L/B + GL + BH
@@ -74,12 +77,29 @@ export function SwissStandings({
   // Cap displayed round at the Swiss phase — don't count playoff rounds.
   const displayRound = Math.min(currentRound, recommendedRounds);
 
-  // Divider thresholds: how many players advance to playoffs and to finals.
+  // Divider thresholds — three possible dividers rendered from bottom to top:
+  //   1. "Advance to Quarterfinals" (TOP8 only, before any QF is played)
+  //   2. "Advance to Semifinals"   (TOP8: after QF winners known; TOP4: on playoff start)
+  //   3. "Advance to Grand Final"  (after SF winners known)
   const playoffCutoff = playoffFormat === 'TOP8' ? 8 : playoffFormat === 'TOP4' ? 4 : 0;
-  const playoffLabel = playoffFormat === 'TOP8' ? 'Advance to Quarterfinals' : 'Advance to Semifinals';
-  const showPlayoffDivider = playoffCutoff > 0 && currentRound >= recommendedRounds;
-  const showFinalsDivider = finalistIds && finalistIds.size > 0;
-  // Divider appears after the last confirmed finalist (dynamic, not hardcoded at rank 3)
+  const playoffsStarted = playoffCutoff > 0 && currentRound >= recommendedRounds;
+
+  const isTop8 = playoffFormat === 'TOP8';
+  const sfCount = semifinalistIds?.size ?? 0;
+
+  // QF divider: TOP8 only, shown until the first QF winner is known
+  const showQFDivider = isTop8 && playoffsStarted && sfCount === 0;
+
+  // SF divider:
+  //   TOP4 — shown once playoffs start (until SF winners emerge)
+  //   TOP8 — shown once ≥1 QF winner is known, dynamically tracks confirmed count
+  const showSFDivider = playoffsStarted && !isTop8
+    ? (finalistIds?.size ?? 0) === 0          // TOP4: until first SF winner
+    : isTop8 && sfCount > 0;                  // TOP8: as QF winners emerge
+  const sfDividerAfterRank = isTop8 ? sfCount : playoffCutoff;
+
+  // GF divider: once ≥1 SF winner is known
+  const showFinalsDivider = (finalistIds?.size ?? 0) > 0;
   const finalsDividerAfterRank = finalistIds?.size ?? 2;
 
   return (
@@ -116,13 +136,17 @@ export function SwissStandings({
 
               return (
                 <>
-                  {/* Finals divider: after confirmed finalists (dynamic rank, not hardcoded at 3) */}
+                  {/* GF divider: after confirmed finalists */}
                   {showFinalsDivider && rank === finalsDividerAfterRank + 1 && (
                     <Divider label="Advance to Grand Final" colSpan={colCount} />
                   )}
-                  {/* Playoffs divider: between playoff qualifiers and the rest */}
-                  {showPlayoffDivider && rank === playoffCutoff + 1 && (
-                    <Divider label={playoffLabel} colSpan={colCount} />
+                  {/* SF divider: after confirmed SF qualifiers */}
+                  {showSFDivider && rank === sfDividerAfterRank + 1 && (
+                    <Divider label="Advance to Semifinals" colSpan={colCount} />
+                  )}
+                  {/* QF divider: TOP8 only, before any QF is resolved */}
+                  {showQFDivider && rank === playoffCutoff + 1 && (
+                    <Divider label="Advance to Quarterfinals" colSpan={colCount} />
                   )}
                   <tr
                     key={entry.userId}

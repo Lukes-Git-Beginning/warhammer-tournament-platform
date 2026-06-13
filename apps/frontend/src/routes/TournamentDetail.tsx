@@ -20,7 +20,7 @@ import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
-import { sortStandingsByPlayoffResult, getFinalistIds } from '@/lib/bracketStandings';
+import { sortStandingsByPlayoffResult, getFinalistIds, getSemifinalistIds } from '@/lib/bracketStandings';
 import { BracketView } from '@/components/bracket/BracketView';
 import { SwissStandings } from '@/components/bracket/SwissStandings';
 import { EliminationStandings } from '@/components/bracket/EliminationStandings';
@@ -178,6 +178,10 @@ export function TournamentDetail() {
   }
   const standingsFinalistIds = useMemo(
     () => getFinalistIds(bracket?.matches ?? []),
+    [bracket?.matches],
+  );
+  const standingsSemifinalistIds = useMemo(
+    () => getSemifinalistIds(bracket?.matches ?? []),
     [bracket?.matches],
   );
   const sortedStandings = useMemo(() => {
@@ -629,6 +633,7 @@ export function TournamentDetail() {
                 playerFactionMap={standingsPlayerFactionMap}
                 playoffFormat={tournament.playoff_format ?? undefined}
                 finalistIds={standingsFinalistIds}
+                semifinalistIds={standingsSemifinalistIds}
               />
             </section>
           );

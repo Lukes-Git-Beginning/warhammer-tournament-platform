@@ -154,3 +154,24 @@ export function getFinalistIds(matches: BracketNode[]): Set<string> {
     .filter((id): id is string => id !== null);
   return new Set(sfWinners);
 }
+
+/**
+ * Returns the IDs of confirmed Semifinal qualifiers (QF winners).
+ * Only meaningful for TOP8 format — for TOP4 the SF field is seeded directly.
+ * Falls back to SF match participants when SF matches already exist.
+ */
+export function getSemifinalistIds(matches: BracketNode[]): Set<string> {
+  // If SF matches already have players seeded, use those
+  const sfPlayers = matches
+    .filter((m) => m.phase === 'PLAYOFF_SF')
+    .flatMap((m) => [m.player1Id, m.player2Id])
+    .filter((id): id is string => id !== null);
+  if (sfPlayers.length > 0) return new Set(sfPlayers);
+
+  // Otherwise derive from completed QF matches
+  const qfWinners = matches
+    .filter((m) => m.phase === 'PLAYOFF_QF' && m.status === 'COMPLETED' && m.winnerId)
+    .map((m) => m.winnerId)
+    .filter((id): id is string => id !== null);
+  return new Set(qfWinners);
+}
