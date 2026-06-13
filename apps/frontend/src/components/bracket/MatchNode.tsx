@@ -149,7 +149,7 @@ export function MatchNode({
         <span
           className={`flex-1 text-xs truncate ${
             droppedPlayerId === match.player1Id
-              ? 'line-through text-stone-500'
+              ? 'line-through text-stone-300'
               : p1Winner
                 ? 'text-rizzotto-gold-500 font-semibold'
                 : match.player1Id
@@ -180,7 +180,7 @@ export function MatchNode({
         <span
           className={`flex-1 text-xs truncate ${
             droppedPlayerId === match.player2Id
-              ? 'line-through text-stone-500'
+              ? 'line-through text-stone-300'
               : p2Winner
                 ? 'text-rizzotto-gold-500 font-semibold'
                 : match.player2Id
