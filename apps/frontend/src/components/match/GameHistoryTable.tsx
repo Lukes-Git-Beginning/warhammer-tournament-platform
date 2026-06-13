@@ -84,7 +84,7 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
                         params={{ matchId: g.matchId }}
                         className="text-rizzotto-stone-400 hover:text-rizzotto-stone-200 hover:underline text-xs"
                       >
-                        Challenge
+                        Ladder
                       </Link>
                     )}
                   </td>
