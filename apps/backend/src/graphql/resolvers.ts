@@ -117,19 +117,20 @@ export const resolvers = {
         }),
       ]);
 
-      // Normalised Shannon entropy — Hmax uses the full faction pool so unplayed
-      // factions reduce the score rather than being ignored.
+      // Coverage × Evenness — see meta.ts for full explanation.
       const played = allFactions.map((f) => f.stats?.matches_played ?? 0);
       const totalPlayed = played.reduce((s, v) => s + v, 0);
       let faction_diversity = 0;
       if (totalPlayed > 0) {
         const active = played.filter((v) => v > 0);
+        const coverage = active.length / allFactions.length;
         const H = -active.reduce((s, v) => {
           const p = v / totalPlayed;
           return s + p * Math.log(p);
         }, 0);
-        const Hmax = Math.log(allFactions.length);
-        faction_diversity = Hmax > 0 ? H / Hmax : 1;
+        const Hmax = Math.log(active.length);
+        const evenness = Hmax > 0 ? H / Hmax : 1;
+        faction_diversity = coverage * evenness;
       }
 
       const eligibleForWinrate = allFactions

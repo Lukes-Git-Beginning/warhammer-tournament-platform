@@ -313,9 +313,9 @@ describe('GET /api/meta/overview', () => {
     expect(typeof body.total_games).toBe('number');
     expect(body.total_games).toBeGreaterThanOrEqual(0);
 
-    // faction_diversity: H normalised against log(all 24 factions) so unplayed
-    // factions reduce the score. 5 played out of 24 → ~0.497.
-    expect(body.faction_diversity).toBeCloseTo(0.497, 2);
+    // faction_diversity: coverage (5/24) × Pielou's J over played factions.
+    // 5 played out of 24, near-even → ~0.204.
+    expect(body.faction_diversity).toBeCloseTo(0.204, 2);
   });
 
   it('6. filters top_by_winrate to min 10 matches', async () => {

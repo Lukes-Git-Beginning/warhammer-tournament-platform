@@ -72,20 +72,25 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         ]);
         const total_games = realGameCount + syntheticGameCount;
 
-        // Normalised Shannon entropy — Hmax uses the full faction pool (not just played
-        // factions) so unplayed factions reduce the score rather than being ignored.
-        // 1 = all factions played equally, 0 = one faction monopoly.
+        // Coverage × Evenness:
+        //   coverage = played_factions / total_factions  (penalises unplayed factions)
+        //   evenness = Pielou's J over played factions   (penalises imbalance)
+        //   diversity = coverage × evenness
+        // Result: 100% only when all factions are played equally; 50% coverage with
+        // perfect evenness → 50%; intuitive for users.
         const played = allFactions.map((f) => f.stats?.matches_played ?? 0);
         const totalPlayed = played.reduce((s, v) => s + v, 0);
         let faction_diversity = 0;
         if (totalPlayed > 0) {
           const active = played.filter((v) => v > 0);
+          const coverage = active.length / allFactions.length;
           const H = -active.reduce((s, v) => {
             const p = v / totalPlayed;
             return s + p * Math.log(p);
           }, 0);
-          const Hmax = Math.log(allFactions.length);
-          faction_diversity = Hmax > 0 ? H / Hmax : 1;
+          const Hmax = Math.log(active.length);
+          const evenness = Hmax > 0 ? H / Hmax : 1;
+          faction_diversity = coverage * evenness;
         }
 
         // top 5 by winrate — minimum 10 matches played
