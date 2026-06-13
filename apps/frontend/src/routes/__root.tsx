@@ -1,7 +1,6 @@
 import { Outlet, createRootRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Header } from '@/components/layout/Header';
-import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 import { useRequireSteamLink } from '@/lib/auth';
 import { DevLoginPanel } from '@/components/dev/DevLoginPanel';
 
@@ -38,8 +37,7 @@ function RootLayout() {
         <Header />
         <Outlet />
       </div>
-      <OnboardingOverlay />
-      {import.meta.env.DEV && <DevLoginPanel />}
+{import.meta.env.DEV && <DevLoginPanel />}
     </div>
   );
 }
