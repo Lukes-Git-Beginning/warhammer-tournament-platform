@@ -57,6 +57,7 @@ export function confirmedMatchWhere(seasonId: string): Prisma.MatchWhereInput {
     winner_id: { not: null },
     player1_id: { not: null },
     player2_id: { not: null },
+    counts_for_leaderboard: true,
     OR: [
       { tournament: { counts_for_leaderboard: true } },
       { type: 'OPEN_PLAY', games: { some: { counts_for_leaderboard: true } } },

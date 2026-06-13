@@ -217,6 +217,8 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         search: z.string().max(50).optional(),
         page: z.coerce.number().int().min(1).default(1),
         limit: z.coerce.number().int().min(1).max(100).default(50),
+        sortBy: z.enum(['username', 'created_at', 'role', 'is_banned']).default('username'),
+        sortDir: z.enum(['asc', 'desc']).default('asc'),
       });
 
       const parsed = SearchQuerySchema.safeParse(request.query);
@@ -228,12 +230,17 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { search, page, limit } = parsed.data;
+      const { search, page, limit, sortBy, sortDir } = parsed.data;
       const skip = (page - 1) * limit;
 
       const searchFilter = search && search.length >= 2
         ? { OR: [{ username: { contains: search, mode: 'insensitive' as const } }, { discord_id: search }] }
         : {};
+
+      // is_banned is derived from deleted_at (non-null = banned), sort by that column
+      const orderBy = sortBy === 'is_banned'
+        ? { deleted_at: sortDir }
+        : { [sortBy]: sortDir };
 
       const [users, total] = await Promise.all([
         fastify.prisma.user.findMany({
@@ -251,7 +258,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
             deleted_at: true,
             steam_link: { select: { steam_id: true } },
           },
-          orderBy: { username: 'asc' },
+          orderBy,
           skip,
           take: limit,
         }),

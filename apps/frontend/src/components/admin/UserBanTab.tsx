@@ -6,11 +6,11 @@ import { UserBanModal } from './UserBanModal';
 
 const ASSIGNABLE_ROLES = ['USER', 'HOST', 'MODERATOR', 'ADMIN'] as const;
 
-function RoleSelect({ user, search }: { user: AdminUser; search: string }) {
+function RoleSelect({ user }: { user: AdminUser }) {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: (role: string) => updateUserRole(user.id, role),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin-users', search] }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
   });
 
   return (
@@ -30,13 +30,47 @@ function RoleSelect({ user, search }: { user: AdminUser; search: string }) {
   );
 }
 
+type SortCol = 'username' | 'created_at' | 'role' | 'is_banned';
+
+function SortTh({
+  col, label, sortBy, sortDir, onSort,
+}: {
+  col: SortCol; label: string;
+  sortBy: SortCol; sortDir: 'asc' | 'desc';
+  onSort: (col: SortCol) => void;
+}) {
+  const active = sortBy === col;
+  return (
+    <th
+      className="px-4 py-3 text-left font-medium text-stone-400 cursor-pointer select-none hover:text-rizzotto-gold-400 transition-colors whitespace-nowrap"
+      onClick={() => onSort(col)}
+    >
+      {label}
+      <span className="ml-1 text-[10px]">
+        {active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+      </span>
+    </th>
+  );
+}
+
 export function UserBanTab() {
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [sortBy, setSortBy] = useState<SortCol>('username');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  function handleSort(col: SortCol) {
+    if (col === sortBy) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(col);
+      setSortDir('asc');
+    }
+  }
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['admin-users', search],
-    queryFn: () => searchUsers(search),
+    queryKey: ['admin-users', search, sortBy, sortDir],
+    queryFn: () => searchUsers(search, sortBy, sortDir),
   });
 
   const users = data?.users ?? [];
@@ -70,12 +104,12 @@ export function UserBanTab() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-stone-800 bg-stone-900/60">
-                <th className="px-4 py-3 text-left font-medium text-stone-400">Member</th>
+                <SortTh col="username" label="Member" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Discord ID</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Steam ID</th>
-                <th className="px-4 py-3 text-left font-medium text-stone-400">Role</th>
-                <th className="px-4 py-3 text-left font-medium text-stone-400">Joined</th>
-                <th className="px-4 py-3 text-left font-medium text-stone-400">Status</th>
+                <SortTh col="role" label="Role" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                <SortTh col="created_at" label="Joined" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                <SortTh col="is_banned" label="Status" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Action</th>
               </tr>
             </thead>
@@ -107,7 +141,7 @@ export function UserBanTab() {
                     {user.steam_id ?? <span className="text-stone-600 not-italic">—</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <RoleSelect user={user} search={search} />
+                    <RoleSelect user={user} />
                   </td>
                   <td className="px-4 py-3 text-stone-500 text-xs">
                     {new Date(user.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}

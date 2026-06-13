@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from '@tanstack/react-router';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, joinQueue, type GameDto, type MapDto } from '@/lib/api.js';
+import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, joinQueue, voidMatch, type GameDto, type MapDto } from '@/lib/api.js';
 import type { MatchDetailDto, MatchScoringBreakdownDto } from '@/lib/api.js';
 import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth.js';
@@ -296,6 +296,11 @@ export function MatchDetailPage() {
         void navigate({ to: '/matches/$matchId', params: { matchId: data.match_id } });
       }
     },
+  });
+
+  const voidMatchMutation = useMutation({
+    mutationFn: (isVoid: boolean) => voidMatch(matchId, isVoid),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['match', matchId] }),
   });
 
   // ---------------------------------------------------------------------------
@@ -643,6 +648,30 @@ export function MatchDetailPage() {
           </Button>
         </div>
       )}
+
+      {/* Void toggle — admin/mod/host only, tournament matches only */}
+      {!isOpenPlay && isPrivileged && match.status === 'COMPLETED' && (() => {
+        const isVoided = match.counts_for_leaderboard === false;
+        return (
+          <div className="mb-4 flex items-center justify-end gap-3">
+            {isVoided && (
+              <span className="text-xs text-amber-400 font-medium">⚠ Excluded from leaderboard</span>
+            )}
+            <button
+              type="button"
+              disabled={voidMatchMutation.isPending}
+              onClick={() => voidMatchMutation.mutate(!isVoided)}
+              className={`rounded border px-3 py-1 text-xs font-semibold transition-colors disabled:opacity-40 ${
+                isVoided
+                  ? 'border-emerald-700 text-emerald-300 hover:bg-emerald-900/20'
+                  : 'border-amber-700 text-amber-400 hover:bg-amber-900/20'
+              }`}
+            >
+              {isVoided ? 'Restore to Leaderboard' : 'Exclude from Leaderboard'}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* ------------------------------------------------------------------ */}
       {/* Scoring Breakdown                                                    */}

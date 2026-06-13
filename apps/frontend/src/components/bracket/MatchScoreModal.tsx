@@ -77,6 +77,7 @@ export function MatchScoreModal({
   const isBo1 = matchFormat === 'BO1';
 
   const [winnerId, setWinnerId] = useState<string>(initialWinnerId ?? '');
+  const [isDraw, setIsDraw] = useState(false);
   const [p1Score, setP1Score] = useState(initialP1Score);
   const [p2Score, setP2Score] = useState(initialP2Score);
   const [reason, setReason] = useState('');
@@ -106,6 +107,17 @@ export function MatchScoreModal({
 
   const mutation = useMutation({
     mutationFn: () => {
+      if (isDraw) {
+        return overrideMatchResult(matchId, {
+          result: 'DRAW',
+          player1_score: p1Score,
+          player2_score: p2Score,
+          reason: reason || undefined,
+          map_id: mapId || undefined,
+          player1FactionId: p1FactionId || undefined,
+          player2FactionId: p2FactionId || undefined,
+        });
+      }
       if (isCompleted) {
         const result =
           winnerId === player1Id ? 'PLAYER1_WIN'
@@ -138,7 +150,7 @@ export function MatchScoreModal({
     },
   });
 
-  const canSubmit = !!winnerId && (!isCompleted || reason.trim().length > 0);
+  const canSubmit = (!!winnerId || isDraw) && (!isCompleted || isDraw || reason.trim().length > 0);
 
   const scoreWinnerId =
     p1Score > p2Score ? player1Id
@@ -176,8 +188,8 @@ export function MatchScoreModal({
                   type="radio"
                   name="winner"
                   value={player1Id}
-                  checked={winnerId === player1Id}
-                  onChange={() => setWinnerId(player1Id)}
+                  checked={winnerId === player1Id && !isDraw}
+                  onChange={() => { setWinnerId(player1Id); setIsDraw(false); }}
                   className="accent-rizzotto-gold-500"
                 />
                 {player1Name ?? player1Id}
@@ -189,13 +201,25 @@ export function MatchScoreModal({
                   type="radio"
                   name="winner"
                   value={player2Id}
-                  checked={winnerId === player2Id}
-                  onChange={() => setWinnerId(player2Id)}
+                  checked={winnerId === player2Id && !isDraw}
+                  onChange={() => { setWinnerId(player2Id); setIsDraw(false); }}
                   className="accent-rizzotto-gold-500"
                 />
                 {player2Name ?? player2Id}
               </label>
             )}
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="radio"
+                name="winner"
+                value="draw"
+                checked={isDraw}
+                onChange={() => { setIsDraw(true); setWinnerId(''); }}
+                className="accent-amber-500"
+              />
+              <span className="text-amber-400 font-medium">Draw</span>
+              <span className="text-xs text-stone-500">(0.5 pts each — couldn't play)</span>
+            </label>
           </div>
         </fieldset>
 

@@ -462,7 +462,7 @@ export function overrideMatchResult(
     result: 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'DRAW' | 'DOUBLE_LOSS';
     player1_score?: number;
     player2_score?: number;
-    reason: string;
+    reason?: string;
     map_id?: string;
     player1FactionId?: string;
     player2FactionId?: string;
@@ -582,9 +582,15 @@ export function getAdminStats(): Promise<AdminStats> {
   return apiFetch('/api/admin/stats');
 }
 
-export function searchUsers(search?: string): Promise<{ users: AdminUser[]; total: number }> {
+export function searchUsers(
+  search?: string,
+  sortBy: 'username' | 'created_at' | 'role' | 'is_banned' = 'username',
+  sortDir: 'asc' | 'desc' = 'asc',
+): Promise<{ users: AdminUser[]; total: number }> {
   const params = new URLSearchParams();
   if (search && search.length >= 2) params.set('search', search);
+  params.set('sortBy', sortBy);
+  params.set('sortDir', sortDir);
   return apiFetch(`/api/users?${params.toString()}`);
 }
 
@@ -917,6 +923,13 @@ export function getMatchDetail(matchId: string): Promise<MatchDetailDtoFromTypes
 
 export function getMatchScoringBreakdown(matchId: string): Promise<MatchScoringBreakdownDto> {
   return apiFetch<MatchScoringBreakdownDto>(`/api/matches/${matchId}/scoring-breakdown`);
+}
+
+export function voidMatch(matchId: string, isVoid: boolean): Promise<{ matchId: string; void: boolean }> {
+  return apiFetch(`/api/matches/${matchId}/void`, {
+    method: 'PATCH',
+    body: JSON.stringify({ void: isVoid }),
+  });
 }
 
 /** @deprecated Use getMatchScoringBreakdown instead */

@@ -371,6 +371,7 @@ model Match {
   season_id           String?          @db.Uuid
   played_at           DateTime? // set when status flips to COMPLETED
   ruleset             String? // optional patch / ruleset identifier
+  counts_for_leaderboard Boolean          @default(true)
   created_at          DateTime         @default(now())
   updated_at          DateTime         @updatedAt
   deleted_at          DateTime?
