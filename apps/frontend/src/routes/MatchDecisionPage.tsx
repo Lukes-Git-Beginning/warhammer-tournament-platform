@@ -287,6 +287,14 @@ function PickBanPhase({
 }: PickBanPhaseProps) {
   const [acting, setActing] = useState(false);
   const [hoveredMapId, setHoveredMapId] = useState<string | null>(null);
+  const [mapPreview, setMapPreview] = useState<MapDto | null>(null);
+
+  useEffect(() => {
+    if (!mapPreview) return;
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setMapPreview(null); }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mapPreview]);
 
   const isTop = decision.topPlayerId === currentUserId;
   const isBottom = decision.bottomPlayerId === currentUserId;
@@ -360,87 +368,97 @@ function PickBanPhase({
           const isHovered = hoveredMapId === map.id;
 
           return (
-            <motion.button
-              key={map.id}
-              type="button"
-              disabled={!isClickable}
-              onClick={() => isClickable && handleAction(map.id)}
-              onMouseEnter={() => setHoveredMapId(map.id)}
-              onMouseLeave={() => setHoveredMapId(null)}
-              whileHover={isClickable ? { scale: 1.03, y: -2 } : {}}
-              whileTap={isClickable ? { scale: 0.97 } : {}}
-              className={[
-                'relative overflow-hidden rounded-md border aspect-[4/3] flex flex-col items-center justify-center text-center transition-all',
-                isBanned
-                  ? 'border-rizzotto-blood-500/40 bg-rizzotto-iron-900/60 grayscale'
-                  : isPicked
-                    ? 'border-rizzotto-gold-400 bg-rizzotto-gold-500/10 shadow-rizzotto-emboss'
-                    : isClickable
-                      ? 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-blood-500 cursor-pointer'
-                      : 'border-rizzotto-iron-700 bg-rizzotto-iron-900/80 cursor-default',
-              ].join(' ')}
-            >
-              {map.image_url && (
-                <img
-                  src={map.image_url}
-                  alt=""
-                  className="absolute inset-0 w-full h-full object-cover opacity-20"
-                />
-              )}
-              <div className="relative z-10 px-2">
-                <p
-                  className={`text-xs font-semibold leading-tight font-display ${
-                    isBanned
-                      ? 'text-rizzotto-stone-500'
-                      : isPicked
-                        ? 'text-rizzotto-gold-400'
-                        : 'text-rizzotto-stone-200'
-                  }`}
-                >
-                  {map.name}
-                </p>
-              </div>
-
-              {/* Diagonal BANNED overlay */}
-              {isBanned && (
-                <div className="absolute inset-0 z-20 overflow-hidden bg-rizzotto-iron-950/90 flex items-center justify-center">
-                  <span
-                    className="font-display font-black tracking-widest text-red-400 uppercase pointer-events-none select-none"
-                    style={{ transform: 'rotate(-35deg)', fontSize: '1.15rem' }}
+            <div key={map.id} className="flex flex-col gap-1">
+              <motion.button
+                type="button"
+                disabled={!isClickable}
+                onClick={() => isClickable && handleAction(map.id)}
+                onMouseEnter={() => setHoveredMapId(map.id)}
+                onMouseLeave={() => setHoveredMapId(null)}
+                whileHover={isClickable ? { scale: 1.03, y: -2 } : {}}
+                whileTap={isClickable ? { scale: 0.97 } : {}}
+                className={[
+                  'relative overflow-hidden rounded-md border aspect-[4/3] flex flex-col items-center justify-center text-center transition-all',
+                  isBanned
+                    ? 'border-rizzotto-blood-500/40 bg-rizzotto-iron-900/60 grayscale'
+                    : isPicked
+                      ? 'border-rizzotto-gold-400 bg-rizzotto-gold-500/10 shadow-rizzotto-emboss'
+                      : isClickable
+                        ? 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-blood-500 cursor-pointer'
+                        : 'border-rizzotto-iron-700 bg-rizzotto-iron-900/80 cursor-default',
+                ].join(' ')}
+              >
+                {map.image_url && (
+                  <img
+                    src={map.image_url}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover opacity-20"
+                  />
+                )}
+                <div className="relative z-10 px-2">
+                  <p
+                    className={`text-xs font-semibold leading-tight font-display ${
+                      isBanned
+                        ? 'text-rizzotto-stone-500'
+                        : isPicked
+                          ? 'text-rizzotto-gold-400'
+                          : 'text-rizzotto-stone-200'
+                    }`}
                   >
-                    BANNED
-                  </span>
+                    {map.name}
+                  </p>
                 </div>
-              )}
 
-              {isPicked && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="absolute inset-0 flex items-center justify-center bg-rizzotto-gold-500/10"
-                >
-                  <span className="font-display text-xs font-bold tracking-widest text-rizzotto-gold-400 uppercase">
-                    Picked
-                  </span>
-                </motion.div>
-              )}
+                {/* Diagonal BANNED overlay */}
+                {isBanned && (
+                  <div className="absolute inset-0 z-20 overflow-hidden bg-rizzotto-iron-950/90 flex items-center justify-center">
+                    <span
+                      className="font-display font-black tracking-widest text-red-400 uppercase pointer-events-none select-none"
+                      style={{ transform: 'rotate(-35deg)', fontSize: '1.15rem' }}
+                    >
+                      BANNED
+                    </span>
+                  </div>
+                )}
 
-              {/* Hover action label — BAN (red) or PICK (gold) */}
-              {isClickable && isHovered && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.1 }}
-                  className="absolute inset-0 flex items-center justify-center bg-rizzotto-iron-900/75 z-20"
+                {isPicked && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="absolute inset-0 flex items-center justify-center bg-rizzotto-gold-500/10"
+                  >
+                    <span className="font-display text-xs font-bold tracking-widest text-rizzotto-gold-400 uppercase">
+                      Picked
+                    </span>
+                  </motion.div>
+                )}
+
+                {/* Hover action label — BAN (red) or PICK (gold) */}
+                {isClickable && isHovered && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.1 }}
+                    className="absolute inset-0 flex items-center justify-center bg-rizzotto-iron-900/75 z-20"
+                  >
+                    <span className={`font-display text-sm font-black tracking-widest uppercase ${
+                      phase === 'banning' ? 'text-rizzotto-blood-400' : 'text-rizzotto-gold-400'
+                    }`}>
+                      {actionLabel}
+                    </span>
+                  </motion.div>
+                )}
+              </motion.button>
+              {map.image_url && (
+                <button
+                  type="button"
+                  onClick={() => setMapPreview(map)}
+                  className="text-[10px] text-stone-500 hover:text-rizzotto-gold-400 transition-colors leading-none py-0.5"
                 >
-                  <span className={`font-display text-sm font-black tracking-widest uppercase ${
-                    phase === 'banning' ? 'text-rizzotto-blood-400' : 'text-rizzotto-gold-400'
-                  }`}>
-                    {actionLabel}
-                  </span>
-                </motion.div>
+                  ⊕ View
+                </button>
               )}
-            </motion.button>
+            </div>
           );
         })}
       </div>
@@ -460,6 +478,32 @@ function PickBanPhase({
             {pickedMap.name}
           </p>
         </motion.div>
+      )}
+
+      {/* Map preview lightbox */}
+      {mapPreview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+          onClick={() => setMapPreview(null)}
+        >
+          <div className="flex flex-col items-center gap-3 max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+            <p className="font-display text-lg font-semibold text-rizzotto-gold-400 tracking-wider">
+              {mapPreview.name}
+            </p>
+            <img
+              src={mapPreview.image_url!}
+              alt={mapPreview.name}
+              className="max-h-[75vh] max-w-full w-full object-contain rounded-md border border-stone-700"
+            />
+            <button
+              type="button"
+              onClick={() => setMapPreview(null)}
+              className="text-xs text-stone-500 hover:text-stone-300 transition-colors"
+            >
+              Close (ESC)
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

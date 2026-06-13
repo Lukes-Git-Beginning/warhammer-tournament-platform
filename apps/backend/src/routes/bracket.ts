@@ -561,7 +561,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       // Verify all matches in current round are completed or BYE
       const currentRoundMatches = existingMatches.filter((m) => m.round === currentRound);
       const incomplete = currentRoundMatches.filter(
-        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE',
+        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT',
       );
 
       if (incomplete.length > 0) {
@@ -574,7 +574,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Compute standings from all completed matches
       const completedMatchRecords = existingMatches
-        .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE')
+        .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
         .map((m) => ({
           round: m.round,
           player1_id: m.player1_id,
