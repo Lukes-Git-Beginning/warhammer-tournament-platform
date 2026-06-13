@@ -437,9 +437,9 @@ describe('GraphQL — metaOverview query', () => {
     expect(typeof overview.totalMatches).toBe('number');
     expect(overview.totalMatches).toBeGreaterThanOrEqual(0);
 
-    // factionDiversity is Pielou's J (normalised Shannon entropy) over the 3 seeded
-    // factions with matches [20,12,10] → ~0.958.
-    expect(overview.factionDiversity).toBeCloseTo(0.958, 2);
+    // factionDiversity: H normalised against log(all 24 factions) so unplayed
+    // factions reduce the score. 3 played out of 24 → ~0.331.
+    expect(overview.factionDiversity).toBeCloseTo(0.331, 2);
 
     // All three have ≥10 matches → eligible for winrate top
     // dwarfs 8/10=0.80 is highest → should be first

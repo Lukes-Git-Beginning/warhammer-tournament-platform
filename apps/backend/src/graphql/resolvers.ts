@@ -117,7 +117,8 @@ export const resolvers = {
         }),
       ]);
 
-      // Pielou's J: normalised Shannon entropy — 1 = perfect balance, 0 = one faction monopoly
+      // Normalised Shannon entropy — Hmax uses the full faction pool so unplayed
+      // factions reduce the score rather than being ignored.
       const played = allFactions.map((f) => f.stats?.matches_played ?? 0);
       const totalPlayed = played.reduce((s, v) => s + v, 0);
       let faction_diversity = 0;
@@ -127,7 +128,7 @@ export const resolvers = {
           const p = v / totalPlayed;
           return s + p * Math.log(p);
         }, 0);
-        const Hmax = Math.log(active.length);
+        const Hmax = Math.log(allFactions.length);
         faction_diversity = Hmax > 0 ? H / Hmax : 1;
       }
 

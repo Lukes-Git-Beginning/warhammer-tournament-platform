@@ -313,9 +313,9 @@ describe('GET /api/meta/overview', () => {
     expect(typeof body.total_games).toBe('number');
     expect(body.total_games).toBeGreaterThanOrEqual(0);
 
-    // faction_diversity is Pielou's J (normalised Shannon entropy) over the 5 seeded
-    // factions with matches [20,10,12,15,18] → ~0.981 (near-even distribution).
-    expect(body.faction_diversity).toBeCloseTo(0.981, 2);
+    // faction_diversity: H normalised against log(all 24 factions) so unplayed
+    // factions reduce the score. 5 played out of 24 → ~0.497.
+    expect(body.faction_diversity).toBeCloseTo(0.497, 2);
   });
 
   it('6. filters top_by_winrate to min 10 matches', async () => {
