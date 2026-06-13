@@ -582,6 +582,32 @@ export function getAdminStats(): Promise<AdminStats> {
   return apiFetch('/api/admin/stats');
 }
 
+export interface AdminMatchRow {
+  id: string;
+  round: number;
+  matchNumber: number;
+  status: string;
+  result: string | null;
+  countsForLeaderboard: boolean;
+  playedAt: string | null;
+  tournament: { name: string; slug: string; format: string } | null;
+  player1: { id: string; username: string } | null;
+  player2: { id: string; username: string } | null;
+  winner:  { id: string; username: string } | null;
+  hasReplay: boolean;
+}
+
+export function getAdminMatches(
+  page: number,
+  filters: { voided?: boolean; tournamentSlug?: string; search?: string } = {},
+): Promise<{ matches: AdminMatchRow[]; total: number; page: number; limit: number }> {
+  const params = new URLSearchParams({ page: String(page), limit: '50' });
+  if (filters.voided !== undefined) params.set('voided', String(filters.voided));
+  if (filters.tournamentSlug) params.set('tournamentSlug', filters.tournamentSlug);
+  if (filters.search && filters.search.length >= 2) params.set('search', filters.search);
+  return apiFetch(`/api/admin/matches?${params.toString()}`);
+}
+
 export function searchUsers(
   search?: string,
   sortBy: 'username' | 'created_at' | 'role' | 'is_banned' = 'username',

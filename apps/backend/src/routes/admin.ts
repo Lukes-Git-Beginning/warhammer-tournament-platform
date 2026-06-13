@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { TournamentFormat } from '@rizzotto/db';
+import { TournamentFormat, Prisma } from '@rizzotto/db';
 import { ImportLogListResponseSchema } from '@rizzotto/types';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
@@ -1003,6 +1003,74 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       playoffFormat: playoff_format,
       updatedPhases,
       matchesGenerated: newPlayoffs.length,
+    });
+  });
+  // GET /api/admin/matches — paginated match list with leaderboard status
+  fastify.get('/api/admin/matches', async (request, reply) => {
+    const parsed = z.object({
+      page:           z.coerce.number().int().min(1).default(1),
+      limit:          z.coerce.number().int().min(1).max(100).default(50),
+      voided:         z.enum(['true', 'false']).optional(),
+      tournamentSlug: z.string().optional(),
+      search:         z.string().max(50).optional(),
+    }).safeParse(request.query);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    const { page, limit, voided, tournamentSlug, search } = parsed.data;
+    const skip = (page - 1) * limit;
+
+    const baseWhere: Prisma.MatchWhereInput = {
+      deleted_at: null,
+      status: { in: ['COMPLETED', 'FORFEIT', 'BYE'] },
+      ...(voided === 'true'  && { counts_for_leaderboard: false }),
+      ...(voided === 'false' && { counts_for_leaderboard: true  }),
+      ...(tournamentSlug     && { tournament: { slug: tournamentSlug } }),
+      ...(search && search.length >= 2 && {
+        OR: [
+          { player1: { username: { contains: search, mode: 'insensitive' } } },
+          { player2: { username: { contains: search, mode: 'insensitive' } } },
+        ],
+      }),
+    };
+
+    const [rows, total] = await Promise.all([
+      fastify.prisma.match.findMany({
+        where: baseWhere,
+        include: {
+          tournament: { select: { name: true, slug: true, format: true } },
+          player1:    { select: { id: true, username: true } },
+          player2:    { select: { id: true, username: true } },
+          winner:     { select: { id: true, username: true } },
+          games:      { select: { id: true, replay_url: true }, take: 1 },
+        },
+        orderBy: { played_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      fastify.prisma.match.count({ where: baseWhere }),
+    ]);
+
+    return reply.code(200).send({
+      matches: rows.map((m) => ({
+        id: m.id,
+        round: m.round,
+        matchNumber: m.match_number,
+        status: m.status,
+        result: m.result ?? null,
+        countsForLeaderboard: m.counts_for_leaderboard,
+        playedAt: m.played_at?.toISOString() ?? null,
+        tournament: m.tournament ? { name: m.tournament.name, slug: m.tournament.slug, format: m.tournament.format } : null,
+        player1: m.player1 ? { id: m.player1.id, username: m.player1.username } : null,
+        player2: m.player2 ? { id: m.player2.id, username: m.player2.username } : null,
+        winner:  m.winner  ? { id: m.winner.id,  username: m.winner.username  } : null,
+        hasReplay: m.games.some((g) => !!g.replay_url),
+      })),
+      total,
+      page,
+      limit,
     });
   });
 };
