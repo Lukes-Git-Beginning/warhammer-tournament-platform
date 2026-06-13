@@ -408,7 +408,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                   tournamentMode={data.mode}
                   onMatchClick={(matchId) => {
                     const m = data.matches.find((x) => x.matchId === matchId);
-                    if (canManage && m?.status !== 'BYE' && m?.status !== 'FORFEIT') {
+                    if (canManage && m?.status !== 'BYE') {
                       setSelectedMatchId(matchId);
                     }
                   }}

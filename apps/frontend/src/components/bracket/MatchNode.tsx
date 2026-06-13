@@ -95,13 +95,17 @@ export function MatchNode({
   const p1Winner = match.winnerId && match.winnerId === match.player1Id;
   const p2Winner = match.winnerId && match.winnerId === match.player2Id;
 
-  // Use game wins if available, fall back to legacy score string
-  const score1 =
-    match.player1GameWins > 0 || match.player2GameWins > 0
+  const isDraw = match.result === 'DRAW';
+
+  // Use game wins if available, fall back to legacy score string; Draw always shows ½
+  const score1 = isDraw
+    ? '½'
+    : match.player1GameWins > 0 || match.player2GameWins > 0
       ? String(match.player1GameWins)
       : (match.score ? (match.score.split('-')[0] ?? '') : '');
-  const score2 =
-    match.player1GameWins > 0 || match.player2GameWins > 0
+  const score2 = isDraw
+    ? '½'
+    : match.player1GameWins > 0 || match.player2GameWins > 0
       ? String(match.player2GameWins)
       : (match.score ? (match.score.split('-')[1] ?? '') : '');
 
@@ -167,7 +171,7 @@ export function MatchNode({
         {showFaction && match.player1Id && <FactionIndicator faction={player1Faction} />}
         {score1 && droppedPlayerId !== match.player1Id && (
           <span
-            className={`text-xs ml-1 tabular-nums ${p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
+            className={`text-xs ml-1 tabular-nums ${isDraw ? 'text-amber-400' : p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
           >
             {score1}
           </span>
@@ -198,7 +202,7 @@ export function MatchNode({
         {showFaction && match.player2Id && <FactionIndicator faction={player2Faction} />}
         {score2 && droppedPlayerId !== match.player2Id && (
           <span
-            className={`text-xs ml-1 tabular-nums ${p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
+            className={`text-xs ml-1 tabular-nums ${isDraw ? 'text-amber-400' : p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
           >
             {score2}
           </span>
