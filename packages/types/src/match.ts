@@ -130,6 +130,7 @@ export const MatchDetailDtoSchema = z.object({
   winner_id: z.string().uuid().nullable(),
   player1_faction_id: z.string().nullable(),
   player2_faction_id: z.string().nullable(),
+  counts_for_leaderboard: z.boolean(),
   // Enriched relations
   player1: MatchPlayerRefSchema.nullable(),
   player2: MatchPlayerRefSchema.nullable(),

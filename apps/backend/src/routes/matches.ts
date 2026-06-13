@@ -323,6 +323,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         score: true,
         player1_points: true,
         player2_points: true,
+        counts_for_leaderboard: true,
         tournament: { select: { id: true, slug: true } },
         player1: { select: { id: true, username: true, avatar_url: true } },
         player2: { select: { id: true, username: true, avatar_url: true } },
@@ -353,6 +354,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       score: match.score ?? null,
       player1_points: match.player1_points ?? null,
       player2_points: match.player2_points ?? null,
+      counts_for_leaderboard: match.counts_for_leaderboard,
       // Raw ID fields — backwards compatible
       player1_id: match.player1_id,
       player2_id: match.player2_id,
@@ -436,6 +438,42 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       status: draft?.status ?? null,
     });
   });
+  // PATCH /api/matches/:id/void — admin/mod/host can exclude a match from the leaderboard
+  fastify.patch(
+    '/api/matches/:id/void',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const parsed = z.object({ void: z.boolean() }).safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+      }
+
+      const match = await fastify.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true, tournament: { select: { organizer_id: true } } },
+      });
+      if (!match) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      }
+
+      const role = request.user?.role;
+      const userId = request.user?.sub;
+      const isAdminOrMod = role === 'ADMIN' || role === 'MODERATOR';
+      const isHost = userId && match.tournament?.organizer_id === userId;
+      if (!isAdminOrMod && !isHost) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+      }
+
+      await fastify.prisma.match.update({
+        where: { id: matchId },
+        data: { counts_for_leaderboard: !parsed.data.void },
+      });
+
+      // Leaderboard cache (60s TTL) will naturally expire; no manual invalidation needed.
+      return reply.code(200).send({ matchId, void: parsed.data.void });
+    },
+  );
 };
 
 export default matchRoutes;
