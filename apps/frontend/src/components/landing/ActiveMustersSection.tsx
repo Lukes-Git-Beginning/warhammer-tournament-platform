@@ -10,51 +10,49 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { listTournaments, type Tournament } from '@/lib/api';
+import { formatInUserTimezone } from '@/lib/timezone';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton';
 
-type TournamentState = 'live' | 'upcoming' | 'completed';
+const FORMAT_LABELS: Record<string, string> = {
+  AUTO_SWISS: 'Auto Swiss',
+  SINGLE_ELIMINATION: 'Single Elim.',
+  DOUBLE_ELIMINATION: 'Double Elim.',
+  SWISS: 'Swiss',
+  ROUND_ROBIN: 'Round Robin',
+  LIECHTENSTEIN: 'Liechtenstein',
+};
 
-function tournamentState(t: Tournament): TournamentState {
-  if (t.status === 'ONGOING') return 'live';
-  if (t.status === 'COMPLETED') return 'completed';
-  return 'upcoming';
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
-}
+const MODE_LABELS: Record<string, string> = {
+  SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix',
+  BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3',
+};
 
 function MusterCard({ tournament }: { tournament: Tournament }) {
   const { t } = useTranslation();
-  const state = tournamentState(tournament);
+  const isLive = tournament.status === 'ONGOING';
+  const isCompleted = tournament.status === 'COMPLETED';
+  const startDate = formatInUserTimezone(tournament.start_date, tournament.timezone);
+
   return (
     <Link
       to="/tournaments/$slug"
       params={{ slug: tournament.slug }}
       className="block group"
     >
-    <Card variant="banner" interactive className="h-full">
+    <Card variant="banner" interactive className="flex h-full flex-col">
       <CardHeader>
-        {state === 'live' && (
+        {isLive && (
           <Badge variant="forge" className="self-start">
-            <span className="size-1.5 rounded-full bg-rizzotto-forge-400 animate-rizzotto-pulse" />
+            <span className="size-1.5 animate-rizzotto-pulse rounded-full bg-rizzotto-forge-400" />
             {t('musters.status_live')}
           </Badge>
         )}
-        {state === 'upcoming' && (
+        {!isLive && !isCompleted && (
           <Badge variant="gold" className="self-start">
             {t('musters.status_upcoming')}
           </Badge>
         )}
-        {state === 'completed' && (
+        {isCompleted && (
           <Badge variant="default" className="self-start">
             {t('musters.status_completed')}
           </Badge>
@@ -73,30 +71,34 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
               {tournament.participantCount ?? '—'}
               {tournament.max_participants ? ` / ${tournament.max_participants}` : ''}
             </span>
-            <span className="text-xs uppercase tracking-wider">{t('musters.marshals')}</span>
           </span>
-          <span className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider">
-            <span className="font-mono">{tournament.format.replace(/_/g, ' ')}</span>
+          <span className="font-mono text-xs uppercase tracking-wide">
+            {FORMAT_LABELS[tournament.format] ?? tournament.format.replace(/_/g, ' ')}
+            {tournament.format === 'AUTO_SWISS'
+              ? (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && tournament.rounds_count
+                ? ` · ${tournament.rounds_count}R`
+                : ' · TBD'
+              : tournament.rounds_count ? ` · ${tournament.rounds_count}R` : ''}
           </span>
+          {tournament.mode && (
+            <span className="font-mono text-xs uppercase tracking-wide">
+              {MODE_LABELS[tournament.mode] ?? tournament.mode}
+            </span>
+          )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1">
         {tournament.description && (
-          <p className="line-clamp-2 text-sm text-rizzotto-stone-300">{tournament.description}</p>
+          <p className="line-clamp-3 text-sm text-rizzotto-stone-300">{tournament.description}</p>
         )}
       </CardContent>
       <Separator engraved className="mx-6 my-2" />
       <CardFooter>
-        <div className="flex items-center gap-2">
-          <time
-            dateTime={tournament.start_date}
-            className="inline-flex items-center gap-1.5 font-mono text-xs text-rizzotto-stone-400"
-          >
-            <Clock className="size-3.5" strokeWidth={1.5} />
-            {formatDate(tournament.start_date)}
-          </time>
+        <span className="inline-flex items-center gap-1.5 font-mono text-xs text-rizzotto-stone-400">
+          <Clock className="size-3.5" strokeWidth={1.5} />
+          {startDate}
           <DiscordTimestampButton isoString={tournament.start_date} />
-        </div>
+        </span>
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-rizzotto-stone-400 group-hover:text-rizzotto-gold-400 transition-colors">
           {t('musters.answer_call')}
           <ArrowRight className="size-3.5" strokeWidth={1.5} />
