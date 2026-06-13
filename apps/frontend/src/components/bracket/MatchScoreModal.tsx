@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions } from '@/lib/api';
+import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, dropParticipant } from '@/lib/api';
 import { useState } from 'react';
 
 interface MatchScoreModalProps {
@@ -75,6 +75,14 @@ export function MatchScoreModal({
   const queryClient = useQueryClient();
   const isCompleted = matchStatus === 'COMPLETED';
   const isBo1 = matchFormat === 'BO1';
+
+  const dropMutation = useMutation({
+    mutationFn: (userId: string) => dropParticipant(tournamentSlug!, userId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      onClose();
+    },
+  });
 
   const [winnerId, setWinnerId] = useState<string>(initialWinnerId ?? '');
   const [isDraw, setIsDraw] = useState(false);
@@ -183,30 +191,56 @@ export function MatchScoreModal({
           <legend className="text-xs text-stone-400 mb-2">Gewinner</legend>
           <div className="space-y-2">
             {player1Id && (
-              <label className="flex items-center gap-2 text-sm text-stone-200 cursor-pointer">
-                <input
-                  type="radio"
-                  name="winner"
-                  value={player1Id}
-                  checked={winnerId === player1Id && !isDraw}
-                  onChange={() => { setWinnerId(player1Id); setIsDraw(false); }}
-                  className="accent-rizzotto-gold-500"
-                />
-                {player1Name ?? player1Id}
-              </label>
+              <div className="flex items-center gap-2">
+                <label className="flex flex-1 items-center gap-2 text-sm text-stone-200 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="winner"
+                    value={player1Id}
+                    checked={winnerId === player1Id && !isDraw}
+                    onChange={() => { setWinnerId(player1Id); setIsDraw(false); }}
+                    className="accent-rizzotto-gold-500"
+                  />
+                  {player1Name ?? player1Id}
+                </label>
+                {tournamentSlug && (
+                  <button
+                    type="button"
+                    disabled={dropMutation.isPending}
+                    onClick={() => dropMutation.mutate(player1Id)}
+                    className="rounded border border-red-800 px-1.5 py-0.5 text-[10px] text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-40 shrink-0"
+                    title="Drop this player from the tournament"
+                  >
+                    Drop
+                  </button>
+                )}
+              </div>
             )}
             {player2Id && (
-              <label className="flex items-center gap-2 text-sm text-stone-200 cursor-pointer">
-                <input
-                  type="radio"
-                  name="winner"
-                  value={player2Id}
-                  checked={winnerId === player2Id && !isDraw}
-                  onChange={() => { setWinnerId(player2Id); setIsDraw(false); }}
-                  className="accent-rizzotto-gold-500"
-                />
-                {player2Name ?? player2Id}
-              </label>
+              <div className="flex items-center gap-2">
+                <label className="flex flex-1 items-center gap-2 text-sm text-stone-200 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="winner"
+                    value={player2Id}
+                    checked={winnerId === player2Id && !isDraw}
+                    onChange={() => { setWinnerId(player2Id); setIsDraw(false); }}
+                    className="accent-rizzotto-gold-500"
+                  />
+                  {player2Name ?? player2Id}
+                </label>
+                {tournamentSlug && (
+                  <button
+                    type="button"
+                    disabled={dropMutation.isPending}
+                    onClick={() => dropMutation.mutate(player2Id)}
+                    className="rounded border border-red-800 px-1.5 py-0.5 text-[10px] text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-40 shrink-0"
+                    title="Drop this player from the tournament"
+                  >
+                    Drop
+                  </button>
+                )}
+              </div>
             )}
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input
