@@ -217,6 +217,7 @@ function ScoringBreakdownWidget({ breakdown }: { breakdown: MatchScoringBreakdow
 export function MatchDetailPage() {
   const { matchId } = useParams({ from: '/matches/$matchId' });
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [showScoreModal, setShowScoreModal] = useState(false);
 
@@ -286,6 +287,17 @@ export function MatchDetailPage() {
   useLiveMatch(matchId, match?.tournament_id);
   useMatchDecisionSocket(matchId);
 
+  // Placed here (before early returns) to satisfy Rules of Hooks
+  const queueAgain = useMutation({
+    mutationFn: joinQueue,
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['queue-status'] });
+      if (data.matched && data.match_id) {
+        void navigate({ to: '/matches/$matchId', params: { matchId: data.match_id } });
+      }
+    },
+  });
+
   // ---------------------------------------------------------------------------
   // Loading / Error
   // ---------------------------------------------------------------------------
@@ -319,24 +331,12 @@ export function MatchDetailPage() {
   // Permission: can the current user report a result?
   // ---------------------------------------------------------------------------
 
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-
   const isPlayer1 = user?.id === match.player1_id;
   const isPlayer2 = user?.id === match.player2_id;
   const isPrivileged =
     user?.role === 'ADMIN' || user?.role === 'MODERATOR' || user?.role === 'HOST';
   const canReport = !!(user && (isPlayer1 || isPlayer2 || isPrivileged));
 
-  const queueAgain = useMutation({
-    mutationFn: joinQueue,
-    onSuccess: (data) => {
-      void qc.invalidateQueries({ queryKey: ['queue-status'] });
-      if (data.matched && data.match_id) {
-        void navigate({ to: '/matches/$matchId', params: { matchId: data.match_id } });
-      }
-    },
-  });
   const reportable = match.status === 'ONGOING' || match.status === 'PENDING';
 
   // ---------------------------------------------------------------------------
