@@ -24,12 +24,13 @@ rizzotto.gg {
 
 	encode gzip zstd
 
-	# Backend: API, Auth, GraphQL, Health, WebSocket.
+	# Backend: API, Auth, GraphQL, Health, WebSocket, Uploads.
 	# `handle` blocks are used (not bare matchers + try_files) so that backend
 	# routes don't get rewritten to /index.html by the SPA fallback below.
 	@backend {
 		path /api/* /auth/* /graphql /health
 		path /socket.io/*
+		path /uploads/*
 	}
 	handle @backend {
 		reverse_proxy 127.0.0.1:3000 {
