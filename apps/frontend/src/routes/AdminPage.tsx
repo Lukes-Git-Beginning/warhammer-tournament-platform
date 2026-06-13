@@ -15,10 +15,11 @@ import { FeatureFlagsPanel } from '@/components/admin/FeatureFlagsPanel.js';
 import { WelcomeBannerEditor } from '@/components/admin/WelcomeBannerEditor.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { ImportLogTable } from '@/components/admin/ImportLogTable.js';
+import { AdminMatchesTab } from '@/components/admin/AdminMatchesTab.js';
 
-type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings' | 'import';
+type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings' | 'import' | 'matches';
 
-const ALL_TABS: Tab[] = ['dashboard', 'stats', 'settings', 'users', 'presets', 'audit', 'import'];
+const ALL_TABS: Tab[] = ['dashboard', 'stats', 'settings', 'users', 'matches', 'presets', 'audit', 'import'];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard: 'admin.tabs.dashboard',
@@ -28,6 +29,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
   stats: 'admin.tabs.stats',
   settings: 'admin.tabs.settings',
   import: 'admin.tabs.import',
+  matches: 'admin.tabs.matches',
 };
 
 const STATIC_LABELS: Record<Tab, string> = {
@@ -38,6 +40,7 @@ const STATIC_LABELS: Record<Tab, string> = {
   stats: 'Statistics',
   settings: 'Settings',
   import: 'Import-Log',
+  matches: 'Matches',
 };
 
 function StatsTab() {
@@ -155,6 +158,7 @@ export function AdminPage() {
         {tab === 'dashboard' && <StatsDashboard />}
         {tab === 'audit' && <AuditLogTable />}
         {tab === 'users' && <UserBanTab />}
+        {tab === 'matches' && <AdminMatchesTab />}
         {tab === 'presets' && <PresetLibraryAdmin />}
         {tab === 'stats' && <StatsTab />}
         {tab === 'settings' && <SettingsTab />}
