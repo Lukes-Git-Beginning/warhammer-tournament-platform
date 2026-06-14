@@ -213,6 +213,42 @@ export async function notifyReplayReminder(winnerDiscordId: string, matchId: str
  * DM both players when a scheduled challenge match starts — no result buttons
  * since BO3/BO5 matches are played out on the website.
  */
+/**
+ * DM both players ~1h before their scheduled match with a ready-check button.
+ * custom_id format: sc_ready:<matchupId>:<receiverDiscordId>
+ */
+export async function notifyScheduledMatchReminder(
+  matchupId: string,
+  proposedAt: Date,
+  format: string,
+  proposer: { discordId: string; username: string },
+  acceptor: { discordId: string; username: string },
+): Promise<void> {
+  const token = getToken();
+  if (!token) return;
+
+  const ts = Math.floor(proposedAt.getTime() / 1000);
+
+  const buildDm = (forPlayer: typeof proposer, opponent: typeof proposer) => ({
+    content: `⏰ Your **${format}** match with **${opponent.username}** starts <t:${ts}:R> (<t:${ts}:t>)! Let your opponent know you'll be there:`,
+    components: [
+      actionRow([
+        button("✅ I'm Ready", `sc_ready:${matchupId}:${forPlayer.discordId}`, BTN_SUCCESS),
+      ]),
+    ],
+  });
+
+  const [ch1, ch2] = await Promise.all([
+    openDmChannel(proposer.discordId),
+    openDmChannel(acceptor.discordId),
+  ]);
+
+  await Promise.allSettled([
+    ch1 ? discordRequest('POST', `/channels/${ch1}/messages`, buildDm(proposer, acceptor)) : Promise.resolve(),
+    ch2 ? discordRequest('POST', `/channels/${ch2}/messages`, buildDm(acceptor, proposer)) : Promise.resolve(),
+  ]);
+}
+
 export async function notifyChallengeMatchFound(
   matchId: string,
   format: string,

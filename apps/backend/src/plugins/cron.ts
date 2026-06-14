@@ -7,7 +7,7 @@ import { autoResolveStaleBlindPicks } from '../lib/blind-pick-auto-resolve.js';
 import { autoResolveStaleMatrixActions } from '../lib/matrix-auto-resolve.js';
 import { startAutoSwiss, advanceAutoSwissRound, repairBrokenAutoSwiss } from '../lib/auto-swiss-service.js';
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
-import { notifyChallengeMatchFound } from '../lib/discord-notify.js';
+import { notifyChallengeMatchFound, notifyScheduledMatchReminder } from '../lib/discord-notify.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -16,6 +16,7 @@ declare module 'fastify' {
 }
 
 const remindedTournamentIds = new Set<string>();
+const remindedMatchupIds = new Set<string>();
 
 export default fp(
   async (fastify) => {
@@ -27,6 +28,13 @@ export default fp(
       select: { entity_id: true },
     });
     alreadySent.forEach(({ entity_id }) => remindedTournamentIds.add(entity_id));
+
+    // Pre-populate matchup reminder ids to avoid duplicate DMs after restart.
+    const alreadyRemindedMatchups = await fastify.prisma.auditLog.findMany({
+      where: { action: 'matchup_reminder_sent' },
+      select: { entity_id: true },
+    });
+    alreadyRemindedMatchups.forEach(({ entity_id }) => remindedMatchupIds.add(entity_id));
 
     // -----------------------------------------------------------------------
     // Startup repair: fix ONGOING tournaments stuck due to wrong format at
@@ -338,6 +346,61 @@ export default fp(
     }, 15_000);
 
     // -----------------------------------------------------------------------
+    // Scheduled matchup reminder — every 5 minutes
+    // Sends a "1 hour to go" DM with a ready-check button to both players of
+    // ACCEPTED challenges whose proposed_at is within the next hour.
+    // -----------------------------------------------------------------------
+    const matchupReminderTask = cron.schedule('*/5 * * * *', async () => {
+      const now = new Date();
+      const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+
+      try {
+        const upcoming = await fastify.prisma.scheduledMatchup.findMany({
+          where: {
+            status: 'ACCEPTED',
+            match_id: null,
+            proposed_at: { gt: now, lte: oneHourFromNow },
+          },
+          include: {
+            proposer: { select: { id: true, username: true, discord_id: true } },
+            accepted_by: { select: { id: true, username: true, discord_id: true } },
+          },
+        });
+
+        for (const matchup of upcoming) {
+          if (remindedMatchupIds.has(matchup.id)) continue;
+          if (!matchup.proposer.discord_id || !matchup.accepted_by?.discord_id) continue;
+
+          remindedMatchupIds.add(matchup.id);
+
+          await notifyScheduledMatchReminder(
+            matchup.id,
+            matchup.proposed_at,
+            matchup.format,
+            { discordId: matchup.proposer.discord_id, username: matchup.proposer.username },
+            { discordId: matchup.accepted_by.discord_id, username: matchup.accepted_by.username },
+          ).catch((err) => {
+            fastify.log.warn({ err, matchupId: matchup.id }, 'Matchup reminder failed');
+          });
+
+          await fastify.prisma.auditLog.create({
+            data: {
+              entity_type: 'ScheduledMatchup',
+              entity_id: matchup.id,
+              action: 'matchup_reminder_sent',
+              actor_id: matchup.proposer_id,
+              new_value: { proposed_at: matchup.proposed_at.toISOString() },
+            },
+          }).catch(() => { /* non-critical */ });
+
+          fastify.log.info({ matchupId: matchup.id }, 'Sent scheduled matchup 1h reminder');
+        }
+      } catch (err) {
+        fastify.log.error({ err }, 'Matchup reminder cron failed');
+      }
+    }, { timezone: 'UTC' });
+
+    // -----------------------------------------------------------------------
     // Scheduled matchup activation — every minute
     // Creates the Open Play match for ACCEPTED challenges whose proposed_at
     // has arrived. Match creation is deferred until play time so faction picks
@@ -392,7 +455,7 @@ export default fp(
       }
     }, { timezone: 'UTC' });
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, autoSwissTask, scheduledMatchupActivationTask]);
+    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, autoSwissTask, matchupReminderTask, scheduledMatchupActivationTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
@@ -402,6 +465,7 @@ export default fp(
       matchupExpiryTask.stop();
       queueCleanupTask.stop();
       autoSwissTask.stop();
+      matchupReminderTask.stop();
       scheduledMatchupActivationTask.stop();
       clearInterval(matrixInterval);
     });

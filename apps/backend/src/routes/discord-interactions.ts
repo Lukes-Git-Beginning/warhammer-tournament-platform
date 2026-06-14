@@ -7,6 +7,7 @@ import {
   notifyMatchCancelledBothPlayers,
   notifyOpenPlayDispute,
   notifyMatchFoundWithButtons,
+  sendDm,
 } from '../lib/discord-notify.js';
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 import { invalidate } from '../lib/cache.js';
@@ -296,6 +297,42 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
 
         await fastify.prisma.match.update({ where: { id: matchId }, data: { status: 'ONGOING' } });
         return reply.code(200).send(ephemeral('Cancel rejected. Match is still active — report the result on the website if needed.'));
+      }
+
+      // sc_ready:<matchupId>:<clickerDiscordId> — "I'm Ready" button from 1h reminder
+      if (action === 'sc_ready') {
+        const [, matchupId, clickerDiscordId] = parts;
+        if (!matchupId || !clickerDiscordId) return reply.code(200).send(ephemeral('Invalid button.'));
+        if (clickerDiscordId !== discordId) return reply.code(200).send(ephemeral('This button is not for you.'));
+
+        const matchup = await fastify.prisma.scheduledMatchup.findUnique({
+          where: { id: matchupId },
+          include: {
+            proposer: { select: { id: true, username: true, discord_id: true } },
+            accepted_by: { select: { id: true, username: true, discord_id: true } },
+          },
+        });
+
+        if (!matchup || matchup.status !== 'ACCEPTED') {
+          return reply.code(200).send(ephemeral('This challenge is no longer active.'));
+        }
+
+        const isProposer = matchup.proposer.discord_id === discordId;
+        const isAcceptor = matchup.accepted_by?.discord_id === discordId;
+        if (!isProposer && !isAcceptor) return reply.code(200).send(ephemeral('This button is not for you.'));
+
+        const clicker = isProposer ? matchup.proposer : matchup.accepted_by!;
+        const other = isProposer ? matchup.accepted_by : matchup.proposer;
+
+        if (!other?.discord_id) return reply.code(200).send(ephemeral('Could not find your opponent.'));
+
+        const ts = Math.floor(matchup.proposed_at.getTime() / 1000);
+        setImmediate(() => void sendDm(
+          other.discord_id!,
+          `✅ **${clicker.username}** confirmed they'll be ready for your match <t:${ts}:R>!`,
+        ));
+
+        return reply.code(200).send(ephemeral(`✅ Confirmed! **${other.username}** has been notified.`));
       }
 
       return reply.code(200).send(ephemeral('Unknown button.'));
