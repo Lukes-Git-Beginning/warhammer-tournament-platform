@@ -110,6 +110,8 @@ export function MatchScoreModal({
   });
 
   const isForfeitOrCancelled = matchStatus === 'FORFEIT' || matchStatus === 'CANCELLED';
+  const canCancel = matchStatus === 'COMPLETED' || matchStatus === 'FORFEIT';
+  const canRestore = isForfeitOrCancelled;
 
   const [winnerId, setWinnerId] = useState<string>(initialWinnerId ?? '');
   const [isDraw, setIsDraw] = useState(false);
@@ -214,22 +216,26 @@ export function MatchScoreModal({
         )}
         {!isCompleted && <div className="mb-4" />}
 
-        {/* Match admin actions for FORFEIT / CANCELLED matches */}
-        {isForfeitOrCancelled && (
+        {/* Match admin actions — Cancel available for COMPLETED+FORFEIT, Restore for FORFEIT+CANCELLED */}
+        {(canCancel || canRestore) && (
           <div className="mb-4 rounded border border-stone-700 bg-stone-800/50 p-3 space-y-2">
             <p className="text-xs text-stone-400">
-              {matchStatus === 'CANCELLED' ? 'This match is cancelled.' : 'This match was forfeited.'}
+              {matchStatus === 'CANCELLED' ? 'This match is cancelled.'
+               : matchStatus === 'FORFEIT' ? 'This match was forfeited.'
+               : 'Admin actions:'}
             </p>
             <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={restoreMutation.isPending || cancelMutation.isPending}
-                onClick={() => restoreMutation.mutate()}
-                className="flex-1 rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-900/20 transition-colors disabled:opacity-40"
-              >
-                ↩ Restore to Pending
-              </button>
-              {matchStatus !== 'CANCELLED' && (
+              {canRestore && (
+                <button
+                  type="button"
+                  disabled={restoreMutation.isPending || cancelMutation.isPending}
+                  onClick={() => restoreMutation.mutate()}
+                  className="flex-1 rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-900/20 transition-colors disabled:opacity-40"
+                >
+                  ↩ Restore to Pending
+                </button>
+              )}
+              {canCancel && (
                 <button
                   type="button"
                   disabled={restoreMutation.isPending || cancelMutation.isPending}
@@ -241,7 +247,7 @@ export function MatchScoreModal({
               )}
             </div>
             <p className="text-[10px] text-stone-600">
-              Restore → set correct result · Cancel → remove from standings
+              Restore → enter correct result · Cancel → remove from standings
             </p>
           </div>
         )}
