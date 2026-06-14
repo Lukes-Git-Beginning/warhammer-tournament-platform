@@ -92,6 +92,9 @@ export function SwissStandings({
       void queryClient.invalidateQueries({ queryKey: ['bracket'] });
       void queryClient.invalidateQueries({ queryKey: ['tournament-participants'] });
     },
+    onError: (err: Error) => {
+      alert(`Undrop failed: ${err.message}`);
+    },
   });
   const showFactionColumn = tournamentMode ? FACTION_MODES.has(tournamentMode) : false;
   const colCount = 5 + (showFactionColumn ? 1 : 0) + 1; // # + Player + [Faction] + Score + W/L/B + GL + BH
