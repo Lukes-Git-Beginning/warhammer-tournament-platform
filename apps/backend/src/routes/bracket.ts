@@ -193,10 +193,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
               : undefined,
           }));
 
-        const rawStandings = sortSwissStandings(
-          computeSwissStandings(participantIds, completedMatches),
-          completedMatches,
-        );
+        const computedStandings = computeSwissStandings(participantIds, completedMatches);
+        // Override dropped with participant status as the authoritative source.
+        // FORFEIT history alone doesn't account for players who have been undropped.
+        for (const s of computedStandings) {
+          s.dropped = withdrawnIds.has(s.userId);
+        }
+        const rawStandings = sortSwissStandings(computedStandings, completedMatches);
 
         const standings: SwissStandingEntry[] = rawStandings.map((s) => {
           const user = userMap.get(s.userId);
