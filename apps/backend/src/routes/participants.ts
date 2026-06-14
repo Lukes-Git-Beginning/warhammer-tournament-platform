@@ -715,17 +715,17 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
       }
 
-      const participant = await fastify.prisma.tournamentParticipant.findUnique({
-        where: { tournament_id_user_id: { tournament_id: tournament.id, user_id: userId } },
-        select: { status: true },
+      const participant = await fastify.prisma.tournamentParticipant.findFirst({
+        where: { tournament_id: tournament.id, user_id: userId, deleted_at: null },
+        select: { id: true, status: true },
       });
       if (!participant) return reply.code(404).send({ error: 'NotFound', message: 'Participant not found', statusCode: 404 });
-      if (participant.status !== 'WITHDREW') {
-        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Player has not withdrawn', statusCode: 422 });
+      if (participant.status === 'DISQUALIFIED') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Cannot undrop a disqualified player', statusCode: 422 });
       }
 
       await fastify.prisma.tournamentParticipant.update({
-        where: { tournament_id_user_id: { tournament_id: tournament.id, user_id: userId } },
+        where: { id: participant.id },
         data: { status: 'CHECKED_IN' },
       });
 
