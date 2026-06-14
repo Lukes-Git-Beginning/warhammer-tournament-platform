@@ -4,9 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAdminMatches, voidMatch, type AdminMatchRow } from '@/lib/api';
 
 const STATUS_BADGE: Record<string, string> = {
-  COMPLETED: 'bg-emerald-900/40 text-emerald-300',
-  FORFEIT:   'bg-red-900/40 text-red-300',
-  BYE:       'bg-stone-700/60 text-stone-400',
+  COMPLETED:  'bg-emerald-900/40 text-emerald-300',
+  FORFEIT:    'bg-red-900/40 text-red-300',
+  BYE:        'bg-stone-700/60 text-stone-400',
+  CANCELLED:  'bg-stone-800/60 text-stone-500',
 };
 
 const FORMAT_LABELS: Record<string, string> = {

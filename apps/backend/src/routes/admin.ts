@@ -1060,7 +1060,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     const baseWhere: Prisma.MatchWhereInput = {
       deleted_at: null,
-      status: { in: ['COMPLETED', 'FORFEIT', 'BYE'] },
+      status: { in: ['COMPLETED', 'FORFEIT', 'BYE', 'CANCELLED'] },
       ...(voided === 'true'  && { counts_for_leaderboard: false }),
       ...(voided === 'false' && { counts_for_leaderboard: true  }),
       ...(tournamentSlug     && { tournament: { slug: tournamentSlug } }),
