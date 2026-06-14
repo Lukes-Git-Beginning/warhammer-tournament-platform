@@ -110,7 +110,7 @@ export function MatchScoreModal({
   });
 
   const isForfeitOrCancelled = matchStatus === 'FORFEIT' || matchStatus === 'CANCELLED';
-  const canCancel = matchStatus === 'COMPLETED' || matchStatus === 'FORFEIT';
+  const canCancel = matchStatus === 'COMPLETED' || matchStatus === 'FORFEIT' || matchStatus === 'PENDING';
   const canRestore = isForfeitOrCancelled;
 
   const [winnerId, setWinnerId] = useState<string>(initialWinnerId ?? '');
