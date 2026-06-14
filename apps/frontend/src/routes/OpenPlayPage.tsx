@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
 import { useRequireAuth, useAuthQuery } from '../lib/auth';
 import {
   joinQueue,
@@ -254,7 +253,6 @@ function AvailabilityTab({ currentUserId }: { currentUserId?: string }) {
 
 function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const [format, setFormat] = useState<MatchFormat>('BO3');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showNotes, setShowNotes] = useState(false);
@@ -291,11 +289,12 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
     },
   });
 
+  const [acceptedInfo, setAcceptedInfo] = useState<{ proposed_at: string } | null>(null);
   const accept = useMutation({
     mutationFn: acceptScheduledMatchup,
     onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ['scheduled-matchups'] });
-      void navigate({ to: '/matches/$matchId', params: { matchId: result.match_id } });
+      void qc.invalidateQueries({ queryKey: ['scheduled-matchups'] });
+      setAcceptedInfo({ proposed_at: result.proposed_at });
     },
   });
 
@@ -323,16 +322,32 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
       {isLoading ? (
         <p className="text-sm text-stone-400">Loading…</p>
       ) : (
-        <ChallengeCalendar
-          format={format}
-          slots={matchmakingSlots}
-          selected={selectedDate}
-          onSelect={setSelectedDate}
-          matchups={data?.matchups}
-          currentUserId={currentUserId}
-          onAccept={(id) => accept.mutate(id)}
-          onCancel={(id) => cancel.mutate(id)}
-        />
+        <>
+          {acceptedInfo && (
+            <div className="rounded-md border border-emerald-800 bg-emerald-950/40 p-4 text-emerald-300 text-sm">
+              Challenge accepted! Your match will start at{' '}
+              <strong>{new Date(acceptedInfo.proposed_at).toLocaleString()}</strong>. You'll receive
+              a Discord notification with the map when it's time to play.
+              <button
+                type="button"
+                className="ml-3 text-emerald-500 underline text-xs"
+                onClick={() => setAcceptedInfo(null)}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+          <ChallengeCalendar
+            format={format}
+            slots={matchmakingSlots}
+            selected={selectedDate}
+            onSelect={setSelectedDate}
+            matchups={data?.matchups}
+            currentUserId={currentUserId}
+            onAccept={(id) => accept.mutate(id)}
+            onCancel={(id) => cancel.mutate(id)}
+          />
+        </>
       )}
 
       {/* Post button — only shown when logged in */}

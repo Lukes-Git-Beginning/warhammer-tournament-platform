@@ -552,6 +552,7 @@ export interface AdminStats {
   matchesPlayed: number;
   currentSeason: string | null;
   topFactions: { faction_id: string; faction_name: string; pick_count: number }[];
+  openPlay: { queueDepth: number; activeMatches: number; scheduledAccepted: number };
 }
 
 export interface AdminUser {
@@ -1350,8 +1351,8 @@ export function createScheduledMatchup(data: {
   });
 }
 
-export function acceptScheduledMatchup(id: string): Promise<{ match_id: string }> {
-  return apiFetch<{ match_id: string }>(`/api/scheduled-matchups/${id}/accept`, { method: 'POST' });
+export function acceptScheduledMatchup(id: string): Promise<{ accepted: boolean; proposed_at: string }> {
+  return apiFetch<{ accepted: boolean; proposed_at: string }>(`/api/scheduled-matchups/${id}/accept`, { method: 'POST' });
 }
 
 export function cancelScheduledMatchup(id: string): Promise<void> {

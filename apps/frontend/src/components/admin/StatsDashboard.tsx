@@ -55,6 +55,15 @@ export function StatsDashboard() {
         <KpiCard label="Current Season" value={data.currentSeason ?? '—'} />
       </div>
 
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+        Open Play
+      </h2>
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <KpiCard label="In Queue" value={data.openPlay.queueDepth} />
+        <KpiCard label="Active Ladder Matches" value={data.openPlay.activeMatches} />
+        <KpiCard label="Scheduled (Accepted)" value={data.openPlay.scheduledAccepted} />
+      </div>
+
       <div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
           Top 5 Factions (this season)

@@ -6,6 +6,8 @@ import { autoConfirmExpiredGameResults } from '../lib/match-games.js';
 import { autoResolveStaleBlindPicks } from '../lib/blind-pick-auto-resolve.js';
 import { autoResolveStaleMatrixActions } from '../lib/matrix-auto-resolve.js';
 import { startAutoSwiss, advanceAutoSwissRound, repairBrokenAutoSwiss } from '../lib/auto-swiss-service.js';
+import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
+import { notifyChallengeMatchFound } from '../lib/discord-notify.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -335,7 +337,62 @@ export default fp(
       }
     }, 15_000);
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, autoSwissTask]);
+    // -----------------------------------------------------------------------
+    // Scheduled matchup activation — every minute
+    // Creates the Open Play match for ACCEPTED challenges whose proposed_at
+    // has arrived. Match creation is deferred until play time so faction picks
+    // cannot start before the scheduled date.
+    // -----------------------------------------------------------------------
+    const scheduledMatchupActivationTask = cron.schedule('* * * * *', async () => {
+      const now = new Date();
+      try {
+        const dueMatchups = await fastify.prisma.scheduledMatchup.findMany({
+          where: { status: 'ACCEPTED', match_id: null, proposed_at: { lte: now } },
+          include: {
+            proposer: { select: { id: true, username: true, discord_id: true } },
+          },
+        });
+
+        for (const matchup of dueMatchups) {
+          if (!matchup.accepted_by_id) continue;
+          try {
+            const { matchId, mapName } = await createOpenPlayMatch(
+              fastify.prisma,
+              matchup.proposer_id,
+              matchup.accepted_by_id,
+            );
+
+            await fastify.prisma.scheduledMatchup.update({
+              where: { id: matchup.id },
+              data: { match_id: matchId },
+            });
+
+            const acceptor = await fastify.prisma.user.findUnique({
+              where: { id: matchup.accepted_by_id },
+              select: { username: true, discord_id: true },
+            });
+
+            if (acceptor?.discord_id) {
+              setImmediate(() => void notifyChallengeMatchFound(
+                matchId,
+                matchup.format,
+                { discordId: matchup.proposer.discord_id, username: matchup.proposer.username },
+                { discordId: acceptor.discord_id!, username: acceptor.username },
+                mapName,
+              ));
+            }
+
+            fastify.log.info({ matchupId: matchup.id, matchId }, 'Scheduled matchup activated');
+          } catch (err) {
+            fastify.log.error({ err, matchupId: matchup.id }, 'Failed to activate scheduled matchup');
+          }
+        }
+      } catch (err) {
+        fastify.log.error({ err }, 'Scheduled matchup activation cron failed');
+      }
+    }, { timezone: 'UTC' });
+
+    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, autoSwissTask, scheduledMatchupActivationTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
@@ -345,6 +402,7 @@ export default fp(
       matchupExpiryTask.stop();
       queueCleanupTask.stop();
       autoSwissTask.stop();
+      scheduledMatchupActivationTask.stop();
       clearInterval(matrixInterval);
     });
   },

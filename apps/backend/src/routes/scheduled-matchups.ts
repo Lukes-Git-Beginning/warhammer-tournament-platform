@@ -1,7 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { notifyChallengeMatchFound } from '../lib/discord-notify.js';
-import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 
 const CreateMatchupSchema = z.object({
   format: z.enum(['BO1', 'BO3', 'BO5']),
@@ -119,33 +117,14 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Cannot accept your own matchup', statusCode: 422 });
       }
 
-      const { matchId, mapName } = await createOpenPlayMatch(
-        fastify.prisma,
-        matchup.proposer_id,
-        acceptorId,
-      );
-
       await fastify.prisma.scheduledMatchup.update({
         where: { id },
-        data: { status: 'ACCEPTED', accepted_by_id: acceptorId, match_id: matchId },
+        data: { status: 'ACCEPTED', accepted_by_id: acceptorId },
       });
 
-      const acceptor = await fastify.prisma.user.findUnique({
-        where: { id: acceptorId },
-        select: { username: true, discord_id: true },
-      });
-
-      if (acceptor?.discord_id) {
-        setImmediate(() => void notifyChallengeMatchFound(
-          matchId,
-          matchup.format,
-          { discordId: matchup.proposer.discord_id, username: matchup.proposer.username },
-          { discordId: acceptor.discord_id!, username: acceptor.username },
-          mapName,
-        ));
-      }
-
-      return reply.code(200).send({ match_id: matchId });
+      // Match creation is deferred to the cron task that runs at proposed_at.
+      // This prevents faction picks from starting before the scheduled play time.
+      return reply.code(200).send({ accepted: true, proposed_at: matchup.proposed_at.toISOString() });
     },
   );
 

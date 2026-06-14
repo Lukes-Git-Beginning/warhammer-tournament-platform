@@ -153,6 +153,9 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           completedTournaments,
           totalMatches,
           activeSeason,
+          queueDepth,
+          activeOpenPlayMatches,
+          scheduledAccepted,
         ] = await Promise.all([
           fastify.prisma.user.count({ where: { deleted_at: null } }),
           fastify.prisma.tournament.count({ where: { deleted_at: null } }),
@@ -160,6 +163,9 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           fastify.prisma.tournament.count({ where: { status: 'COMPLETED' } }),
           fastify.prisma.match.count(),
           fastify.prisma.season.findFirst({ where: { is_active: true } }),
+          fastify.redis ? fastify.redis.llen('rizzotto:queue:open_play') : Promise.resolve(0),
+          fastify.prisma.match.count({ where: { type: 'OPEN_PLAY', status: 'ONGOING', deleted_at: null } }),
+          fastify.prisma.scheduledMatchup.count({ where: { status: 'ACCEPTED', match_id: null } }),
         ]);
 
         let topFactions: Array<{ faction_id: string; name: string; matches_played: number; wins: number }> = [];
@@ -188,6 +194,11 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
             faction_name: f.name,
             pick_count: f.matches_played,
           })),
+          openPlay: {
+            queueDepth,
+            activeMatches: activeOpenPlayMatches,
+            scheduledAccepted,
+          },
         };
       },
       { ttlSeconds: 60 },
