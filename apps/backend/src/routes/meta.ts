@@ -203,8 +203,10 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
 
     const matchWhere = {
       status: 'COMPLETED' as const,
+      winner_id: { not: null },      // exclude draws (no real game was played)
       player1_id: { not: null },
       player2_id: { not: null },
+      counts_for_leaderboard: true,  // exclude admin-voided matches
       ...(tournamentSlug ? { tournament: { slug: tournamentSlug, deleted_at: null } } : { deleted_at: null }),
     };
 
@@ -216,6 +218,8 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           round: true,
           match_number: true,
           winner_id: true,
+          result: true,
+          counts_for_leaderboard: true,
           player1_faction_id: true,
           player2_faction_id: true,
           played_at: true,
@@ -280,7 +284,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           countsForLeaderboard: g.counts_for_leaderboard,
         }));
       }
-      return [{ ...base, id: m.id, gameNumber: 1, playedAt: m.played_at?.toISOString() ?? null, winnerId: m.winner_id, player1FactionId: m.player1_faction_id ?? pFaction(m.tournament?.id ?? '', m.player1?.id), player2FactionId: m.player2_faction_id ?? pFaction(m.tournament?.id ?? '', m.player2?.id), mapPickedId: null, replayUrl: null, countsForLeaderboard: true }];
+      return [{ ...base, id: m.id, gameNumber: 1, playedAt: m.played_at?.toISOString() ?? null, winnerId: m.winner_id, player1FactionId: m.player1_faction_id ?? pFaction(m.tournament?.id ?? '', m.player1?.id), player2FactionId: m.player2_faction_id ?? pFaction(m.tournament?.id ?? '', m.player2?.id), mapPickedId: null, replayUrl: null, countsForLeaderboard: m.counts_for_leaderboard }];
     });
 
     rows.sort((a, b) => (b.playedAt ?? '').localeCompare(a.playedAt ?? ''));
