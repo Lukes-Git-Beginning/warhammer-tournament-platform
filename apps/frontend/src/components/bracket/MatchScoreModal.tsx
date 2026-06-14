@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, dropParticipant } from '@/lib/api';
+import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, dropParticipant, restoreMatch, cancelMatch } from '@/lib/api';
 import { useState } from 'react';
 
 interface MatchScoreModalProps {
@@ -83,6 +83,24 @@ export function MatchScoreModal({
       onClose();
     },
   });
+
+  const restoreMutation = useMutation({
+    mutationFn: () => restoreMatch(matchId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      onClose();
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelMatch(matchId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      onClose();
+    },
+  });
+
+  const isForfeitOrCancelled = matchStatus === 'FORFEIT' || matchStatus === 'CANCELLED';
 
   const [winnerId, setWinnerId] = useState<string>(initialWinnerId ?? '');
   const [isDraw, setIsDraw] = useState(false);
@@ -186,6 +204,38 @@ export function MatchScoreModal({
           </p>
         )}
         {!isCompleted && <div className="mb-4" />}
+
+        {/* Match admin actions for FORFEIT / CANCELLED matches */}
+        {isForfeitOrCancelled && (
+          <div className="mb-4 rounded border border-stone-700 bg-stone-800/50 p-3 space-y-2">
+            <p className="text-xs text-stone-400">
+              {matchStatus === 'CANCELLED' ? 'This match is cancelled.' : 'This match was forfeited.'}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={restoreMutation.isPending || cancelMutation.isPending}
+                onClick={() => restoreMutation.mutate()}
+                className="flex-1 rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-900/20 transition-colors disabled:opacity-40"
+              >
+                ↩ Restore to Pending
+              </button>
+              {matchStatus !== 'CANCELLED' && (
+                <button
+                  type="button"
+                  disabled={restoreMutation.isPending || cancelMutation.isPending}
+                  onClick={() => cancelMutation.mutate()}
+                  className="flex-1 rounded border border-stone-600 px-2 py-1 text-xs text-stone-400 hover:bg-stone-700/30 transition-colors disabled:opacity-40"
+                >
+                  ✕ Cancel Match
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] text-stone-600">
+              Restore → set correct result · Cancel → remove from standings
+            </p>
+          </div>
+        )}
 
         <fieldset className="mb-4">
           <legend className="text-xs text-stone-400 mb-2">Gewinner</legend>

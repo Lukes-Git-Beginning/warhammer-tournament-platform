@@ -958,6 +958,31 @@ export function voidMatch(matchId: string, isVoid: boolean): Promise<{ matchId: 
   });
 }
 
+export function restoreMatch(matchId: string): Promise<{ matchId: string; status: string }> {
+  return apiFetch(`/api/matches/${matchId}/restore`, { method: 'POST' });
+}
+
+export function cancelMatch(matchId: string): Promise<{ matchId: string; status: string }> {
+  return apiFetch(`/api/matches/${matchId}/cancel-match`, { method: 'POST' });
+}
+
+export function undropParticipant(
+  slug: string,
+  userId: string,
+): Promise<{ undroped: boolean }> {
+  return apiFetch(`/api/tournaments/${slug}/participants/${userId}/undrop`, { method: 'POST' });
+}
+
+export function addLateJoiner(
+  slug: string,
+  userId: string,
+): Promise<{ participant: { id: string; status: string; user: { id: string; username: string } } }> {
+  return apiFetch(`/api/admin/tournaments/${slug}/add-late`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
 /** @deprecated Use getMatchScoringBreakdown instead */
 export const getScoringBreakdown = getMatchScoringBreakdown;
 

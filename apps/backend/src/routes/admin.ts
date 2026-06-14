@@ -1005,6 +1005,42 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       matchesGenerated: newPlayoffs.length,
     });
   });
+  // POST /api/admin/tournaments/:slug/add-late — add a participant after tournament start
+  fastify.post('/api/admin/tournaments/:slug/add-late', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const parsed = z.object({ userId: z.string().uuid() }).safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    const tournament = await fastify.prisma.tournament.findUnique({
+      where: { slug, deleted_at: null },
+      select: { id: true, status: true },
+    });
+    if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+    if (tournament.status !== 'ONGOING') {
+      return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Tournament must be ONGOING to add a late joiner', statusCode: 422 });
+    }
+
+    const user = await fastify.prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { id: true, username: true } });
+    if (!user) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
+
+    const existing = await fastify.prisma.tournamentParticipant.findUnique({
+      where: { tournament_id_user_id: { tournament_id: tournament.id, user_id: parsed.data.userId } },
+      select: { status: true },
+    });
+    if (existing) {
+      return reply.code(409).send({ error: 'Conflict', message: `${user.username} is already a participant (status: ${existing.status})`, statusCode: 409 });
+    }
+
+    const participant = await fastify.prisma.tournamentParticipant.create({
+      data: { tournament_id: tournament.id, user_id: parsed.data.userId, status: 'CHECKED_IN' },
+      select: { id: true, status: true, user: { select: { id: true, username: true } } },
+    });
+
+    return reply.code(201).send({ participant });
+  });
+
   // GET /api/admin/matches — paginated match list with leaderboard status
   fastify.get('/api/admin/matches', async (request, reply) => {
     const parsed = z.object({
