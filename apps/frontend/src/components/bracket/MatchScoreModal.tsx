@@ -76,11 +76,20 @@ export function MatchScoreModal({
   const isCompleted = matchStatus === 'COMPLETED';
   const isBo1 = matchFormat === 'BO1';
 
+  const [dropError, setDropError] = useState<string | null>(null);
   const dropMutation = useMutation({
     mutationFn: (userId: string) => dropParticipant(tournamentSlug!, userId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['bracket'] });
       onClose();
+    },
+    onError: (err: Error) => {
+      const msg = err.message.toLowerCase();
+      if (msg.includes('already') || msg.includes('conflict') || msg.includes('409')) {
+        setDropError('Player is already withdrawn. Use "Cancel Match" or "Restore to Pending" instead.');
+      } else {
+        setDropError(err.message);
+      }
     },
   });
 
@@ -101,6 +110,8 @@ export function MatchScoreModal({
   });
 
   const isForfeitOrCancelled = matchStatus === 'FORFEIT' || matchStatus === 'CANCELLED';
+  const canCancel = matchStatus === 'COMPLETED' || matchStatus === 'FORFEIT';
+  const canRestore = isForfeitOrCancelled;
 
   const [winnerId, setWinnerId] = useState<string>(initialWinnerId ?? '');
   const [isDraw, setIsDraw] = useState(false);
@@ -205,26 +216,34 @@ export function MatchScoreModal({
         )}
         {!isCompleted && <div className="mb-4" />}
 
-        {/* Match admin actions for FORFEIT / CANCELLED matches */}
-        {isForfeitOrCancelled && (
+        {/* Match admin actions — Cancel available for COMPLETED+FORFEIT, Restore for FORFEIT+CANCELLED */}
+        {(canCancel || canRestore) && (
           <div className="mb-4 rounded border border-stone-700 bg-stone-800/50 p-3 space-y-2">
             <p className="text-xs text-stone-400">
-              {matchStatus === 'CANCELLED' ? 'This match is cancelled.' : 'This match was forfeited.'}
+              {matchStatus === 'CANCELLED' ? 'This match is cancelled.'
+               : matchStatus === 'FORFEIT' ? 'This match was forfeited.'
+               : 'Admin actions:'}
             </p>
             <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={restoreMutation.isPending || cancelMutation.isPending}
-                onClick={() => restoreMutation.mutate()}
-                className="flex-1 rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-900/20 transition-colors disabled:opacity-40"
-              >
-                ↩ Restore to Pending
-              </button>
-              {matchStatus !== 'CANCELLED' && (
+              {canRestore && (
                 <button
                   type="button"
                   disabled={restoreMutation.isPending || cancelMutation.isPending}
-                  onClick={() => cancelMutation.mutate()}
+                  onClick={() => restoreMutation.mutate()}
+                  className="flex-1 rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-900/20 transition-colors disabled:opacity-40"
+                >
+                  ↩ Restore to Pending
+                </button>
+              )}
+              {canCancel && (
+                <button
+                  type="button"
+                  disabled={restoreMutation.isPending || cancelMutation.isPending}
+                  onClick={() => {
+                    if (confirm('Cancel this match? It will be removed from standings. The match data (replay, factions) is preserved and the match can be restored to Pending if needed.')) {
+                      cancelMutation.mutate();
+                    }
+                  }}
                   className="flex-1 rounded border border-stone-600 px-2 py-1 text-xs text-stone-400 hover:bg-stone-700/30 transition-colors disabled:opacity-40"
                 >
                   ✕ Cancel Match
@@ -232,7 +251,7 @@ export function MatchScoreModal({
               )}
             </div>
             <p className="text-[10px] text-stone-600">
-              Restore → set correct result · Cancel → remove from standings
+              Restore → enter correct result · Cancel → remove from standings
             </p>
           </div>
         )}
@@ -304,6 +323,11 @@ export function MatchScoreModal({
               <span className="text-amber-400 font-medium">Draw</span>
               <span className="text-xs text-stone-500">(0.5 pts each — couldn't play)</span>
             </label>
+            {dropError && (
+              <p className="mt-2 text-xs text-amber-400 rounded border border-amber-800 bg-amber-950/30 px-2 py-1.5">
+                {dropError}
+              </p>
+            )}
           </div>
         </fieldset>
 

@@ -59,11 +59,12 @@ function FactionIndicator({ faction }: { faction?: FactionDto | null }) {
 }
 
 export const statusColors: Record<string, string> = {
-  ONGOING: 'border-green-600 bg-green-900/40',
+  ONGOING:   'border-green-600 bg-green-900/40',
   COMPLETED: 'border-stone-600 bg-stone-800/60',
-  PENDING: 'border-stone-700 bg-stone-900/40',
-  BYE: 'border-stone-800 bg-stone-900/30 opacity-60',
-  FORFEIT: 'border-amber-700 bg-amber-950/40',
+  PENDING:   'border-stone-700 bg-stone-900/40',
+  BYE:       'border-stone-800 bg-stone-900/30 opacity-60',
+  FORFEIT:   'border-amber-700 bg-amber-950/40',
+  CANCELLED: 'border-stone-700 bg-stone-900/20 opacity-50',
 };
 
 export function MatchNode({
@@ -81,11 +82,14 @@ export function MatchNode({
 }: MatchNodeProps) {
   const isBye = match.status === 'BYE';
   const isForfeit = match.status === 'FORFEIT';
+  const isCancelled = match.status === 'CANCELLED';
   const isOngoing = match.status === 'ONGOING';
-  // In a FORFEIT match the non-winner is the dropped player
+  // FORFEIT: non-winner is the dropped player
+  // CANCELLED: both players dropped — treat both slots as dropped
   const droppedPlayerId = isForfeit && match.winnerId
     ? (match.winnerId === match.player1Id ? match.player2Id : match.player1Id)
     : null;
+  const bothDropped = isCancelled;
 
   const statusCls = statusColors[match.status] ?? 'border-stone-700 bg-stone-900/40';
 
@@ -152,7 +156,7 @@ export function MatchNode({
         {match.player1Id && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
-            droppedPlayerId === match.player1Id
+            droppedPlayerId === match.player1Id || bothDropped
               ? 'line-through text-stone-300'
               : p1Winner
                 ? 'text-rizzotto-gold-500 font-semibold'
@@ -165,11 +169,11 @@ export function MatchNode({
             ? (player1Name ?? match.player1Id)
             : (p1SlotLabel ?? (isBye ? 'BYE' : 'TBD'))}
         </span>
-        {droppedPlayerId === match.player1Id && (
+        {(droppedPlayerId === match.player1Id || bothDropped) && (
           <span className="text-[9px] text-red-400 uppercase tracking-wider ml-1 font-semibold">out</span>
         )}
         {showFaction && match.player1Id && <FactionIndicator faction={player1Faction} />}
-        {score1 && droppedPlayerId !== match.player1Id && (
+        {score1 && droppedPlayerId !== match.player1Id && !bothDropped && (
           <span
             className={`text-xs ml-1 tabular-nums ${isDraw ? 'text-amber-400' : p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
           >
@@ -183,7 +187,7 @@ export function MatchNode({
         {match.player2Id && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
-            droppedPlayerId === match.player2Id
+            droppedPlayerId === match.player2Id || bothDropped
               ? 'line-through text-stone-300'
               : p2Winner
                 ? 'text-rizzotto-gold-500 font-semibold'
@@ -196,11 +200,11 @@ export function MatchNode({
             ? (player2Name ?? match.player2Id)
             : (p2SlotLabel ?? (isBye ? 'BYE' : 'TBD'))}
         </span>
-        {droppedPlayerId === match.player2Id && (
+        {(droppedPlayerId === match.player2Id || bothDropped) && (
           <span className="text-[9px] text-red-400 uppercase tracking-wider ml-1 font-semibold">out</span>
         )}
         {showFaction && match.player2Id && <FactionIndicator faction={player2Faction} />}
-        {score2 && droppedPlayerId !== match.player2Id && (
+        {score2 && droppedPlayerId !== match.player2Id && !bothDropped && (
           <span
             className={`text-xs ml-1 tabular-nums ${isDraw ? 'text-amber-400' : p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
           >
