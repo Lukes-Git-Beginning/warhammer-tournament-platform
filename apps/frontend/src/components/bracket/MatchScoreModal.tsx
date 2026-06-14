@@ -239,7 +239,11 @@ export function MatchScoreModal({
                 <button
                   type="button"
                   disabled={restoreMutation.isPending || cancelMutation.isPending}
-                  onClick={() => cancelMutation.mutate()}
+                  onClick={() => {
+                    if (confirm('Cancel this match? It will be removed from standings. The match data (replay, factions) is preserved and the match can be restored to Pending if needed.')) {
+                      cancelMutation.mutate();
+                    }
+                  }}
                   className="flex-1 rounded border border-stone-600 px-2 py-1 text-xs text-stone-400 hover:bg-stone-700/30 transition-colors disabled:opacity-40"
                 >
                   ✕ Cancel Match
