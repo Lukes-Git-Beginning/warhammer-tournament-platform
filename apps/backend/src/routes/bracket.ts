@@ -161,6 +161,14 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         const userMap = new Map(
           participants.map((p) => [p.user_id, p.user]),
         );
+        // Track WITHDREW status directly from DB — not just from FORFEIT matches.
+        // A player dropped between rounds has no FORFEIT match but is still WITHDREW.
+        const withdrawnIds = new Set(
+          (await fastify.prisma.tournamentParticipant.findMany({
+            where: { tournament_id: tournament.id, status: 'WITHDREW', deleted_at: null },
+            select: { user_id: true },
+          })).map((p) => p.user_id)
+        );
 
         const completedMatches = matches
           .filter((m) =>
@@ -205,7 +213,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             gamesLost: s.gamesLost,
             buchholz: s.buchholz,
             solkoff: s.solkoff,
-            dropped: s.dropped || undefined,
+            dropped: (s.dropped || withdrawnIds.has(s.userId)) || undefined,
           };
         });
 
