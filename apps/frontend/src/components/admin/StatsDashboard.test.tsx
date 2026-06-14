@@ -27,6 +27,7 @@ const MOCK_STATS: AdminStats = {
     { faction_id: 'f1', faction_name: 'Greenskinz', pick_count: 25 },
     { faction_id: 'f2', faction_name: 'Chaos Warriors', pick_count: 18 },
   ],
+  openPlay: { queueDepth: 0, activeMatches: 0, scheduledAccepted: 0 },
 };
 
 function renderWithQuery(ui: React.ReactNode): string {
@@ -86,7 +87,7 @@ describe('StatsDashboard Rendering (pre-hydrated QueryClient)', () => {
     // 4 KPI-Karten gerendert
     const cardMatches = html.match(/data-testid="kpi-card"/g);
     expect(cardMatches).not.toBeNull();
-    expect(cardMatches!.length).toBe(4);
+    expect(cardMatches!.length).toBe(7); // 4 main KPIs + 3 Open Play KPIs
 
     // Zahlenwerte vorhanden
     expect(html).toContain('42');      // activeUsers

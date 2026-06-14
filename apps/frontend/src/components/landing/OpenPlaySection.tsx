@@ -100,9 +100,9 @@ function ChallengeCard({ matchup, userId }: { matchup: ScheduledMatchup; userId?
 
   const accept = useMutation({
     mutationFn: () => acceptScheduledMatchup(matchup.id),
-    onSuccess: (data) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['scheduled-matchups'] });
-      void navigate({ to: '/matches/$matchId', params: { matchId: data.match_id } });
+      void navigate({ to: '/open-play' });
     },
   });
 
