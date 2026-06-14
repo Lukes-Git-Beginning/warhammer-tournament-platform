@@ -76,11 +76,20 @@ export function MatchScoreModal({
   const isCompleted = matchStatus === 'COMPLETED';
   const isBo1 = matchFormat === 'BO1';
 
+  const [dropError, setDropError] = useState<string | null>(null);
   const dropMutation = useMutation({
     mutationFn: (userId: string) => dropParticipant(tournamentSlug!, userId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['bracket'] });
       onClose();
+    },
+    onError: (err: Error) => {
+      const msg = err.message.toLowerCase();
+      if (msg.includes('already') || msg.includes('conflict') || msg.includes('409')) {
+        setDropError('Player is already withdrawn. Use "Cancel Match" or "Restore to Pending" instead.');
+      } else {
+        setDropError(err.message);
+      }
     },
   });
 
@@ -304,6 +313,11 @@ export function MatchScoreModal({
               <span className="text-amber-400 font-medium">Draw</span>
               <span className="text-xs text-stone-500">(0.5 pts each — couldn't play)</span>
             </label>
+            {dropError && (
+              <p className="mt-2 text-xs text-amber-400 rounded border border-amber-800 bg-amber-950/30 px-2 py-1.5">
+                {dropError}
+              </p>
+            )}
           </div>
         </fieldset>
 
