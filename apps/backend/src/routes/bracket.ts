@@ -561,7 +561,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       // Verify all matches in current round are completed or BYE
       const currentRoundMatches = existingMatches.filter((m) => m.round === currentRound);
       const incomplete = currentRoundMatches.filter(
-        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT',
+        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED',
       );
 
       if (incomplete.length > 0) {
@@ -962,7 +962,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         .sort((a, b) => a.match_number - b.match_number);
 
       const incomplete = currentRoundMatches.filter(
-        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT',
+        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED',
       );
       if (incomplete.length > 0) {
         return reply.code(422).send({

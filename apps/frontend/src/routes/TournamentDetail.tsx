@@ -634,6 +634,8 @@ export function TournamentDetail() {
                 playoffFormat={tournament.playoff_format ?? undefined}
                 finalistIds={standingsFinalistIds}
                 semifinalistIds={standingsSemifinalistIds}
+                tournamentSlug={tournament.slug}
+                canManage={!!canManage}
               />
             </section>
           );

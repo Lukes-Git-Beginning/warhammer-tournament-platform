@@ -254,6 +254,8 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           tournamentMode={data.mode}
           playoffFormat={playoffFormat}
           finalistIds={finalistIds}
+          tournamentSlug={slug}
+          canManage={canManage}
         />
       )}
 

@@ -636,6 +636,54 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(200).send({ dropped: true, matchesForfeited, gamesVoided });
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // POST /api/tournaments/:slug/participants/:userId/undrop
+  // Restore a WITHDREW participant to CHECKED_IN. Does NOT auto-restore FORFEIT
+  // matches — admin handles those separately via match restore/cancel endpoints.
+  // ---------------------------------------------------------------------------
+  fastify.post(
+    '/api/tournaments/:slug/participants/:userId/undrop',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug, userId } = request.params as { slug: string; userId: string };
+      const currentUserId = request.user?.sub;
+      const role = request.user?.role;
+
+      const tournament = await fastify.prisma.tournament.findUnique({
+        where: { slug, deleted_at: null },
+        select: { id: true, status: true, organizer_id: true },
+      });
+      if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (tournament.status !== 'ONGOING') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Tournament is not ongoing', statusCode: 422 });
+      }
+
+      const isAdminOrMod = role === 'ADMIN' || role === 'MODERATOR';
+      const isOrganizer = currentUserId === tournament.organizer_id;
+      if (!isAdminOrMod && !isOrganizer) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+      }
+
+      const participant = await fastify.prisma.tournamentParticipant.findUnique({
+        where: { tournament_id_user_id: { tournament_id: tournament.id, user_id: userId } },
+        select: { status: true },
+      });
+      if (!participant) return reply.code(404).send({ error: 'NotFound', message: 'Participant not found', statusCode: 404 });
+      if (participant.status !== 'WITHDREW') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Player has not withdrawn', statusCode: 422 });
+      }
+
+      await fastify.prisma.tournamentParticipant.update({
+        where: { tournament_id_user_id: { tournament_id: tournament.id, user_id: userId } },
+        data: { status: 'CHECKED_IN' },
+      });
+
+      emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'registered' });
+
+      return reply.code(200).send({ undroped: true });
+    },
+  );
 };
 
 export default participantRoutes;

@@ -474,6 +474,57 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(200).send({ matchId, void: parsed.data.void });
     },
   );
+
+  // POST /api/matches/:id/restore — admin/mod/host: reset a FORFEIT match back to PENDING
+  fastify.post(
+    '/api/matches/:id/restore',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const match = await fastify.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true, status: true, tournament: { select: { organizer_id: true } } },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      if (match.status !== 'FORFEIT' && match.status !== 'CANCELLED') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Only FORFEIT or CANCELLED matches can be restored', statusCode: 422 });
+      }
+      const role = request.user?.role;
+      const userId = request.user?.sub;
+      if (role !== 'ADMIN' && role !== 'MODERATOR' && match.tournament?.organizer_id !== userId) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+      }
+      await fastify.prisma.match.update({
+        where: { id: matchId },
+        data: { status: 'PENDING', winner_id: null, result: null, score: null, player1_points: null, player2_points: null, played_at: null },
+      });
+      return reply.code(200).send({ matchId, status: 'PENDING' });
+    },
+  );
+
+  // POST /api/matches/:id/cancel-match — admin/mod/host: cancel a match (excluded from standings)
+  fastify.post(
+    '/api/matches/:id/cancel-match',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const match = await fastify.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true, tournament: { select: { organizer_id: true } } },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      const role = request.user?.role;
+      const userId = request.user?.sub;
+      if (role !== 'ADMIN' && role !== 'MODERATOR' && match.tournament?.organizer_id !== userId) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+      }
+      await fastify.prisma.match.update({
+        where: { id: matchId },
+        data: { status: 'CANCELLED', winner_id: null, result: null, score: null, player1_points: null, player2_points: null, played_at: null },
+      });
+      return reply.code(200).send({ matchId, status: 'CANCELLED' });
+    },
+  );
 };
 
 export default matchRoutes;

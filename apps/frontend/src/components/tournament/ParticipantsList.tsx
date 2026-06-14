@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { getParticipants, dropParticipant } from '@/lib/api';
+import { getParticipants, dropParticipant, undropParticipant, addLateJoiner } from '@/lib/api';
 
 export interface ParticipantsListProps {
   slug: string;
@@ -33,6 +33,24 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus }: 
     },
   });
 
+  const undropMutation = useMutation({
+    mutationFn: (userId: string) => undropParticipant(slug, userId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
+    },
+  });
+
+  const lateJoinMutation = useMutation({
+    mutationFn: (userId: string) => addLateJoiner(slug, userId),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
+      alert(`${data.participant.user.username} added as late joiner.`);
+    },
+    onError: (err: Error) => alert(`Error: ${err.message}`),
+  });
+
   if (isLoading || !data) return null;
 
   const showDropButtons = canManage && tournamentStatus === 'ONGOING';
@@ -49,6 +67,7 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus }: 
           {data.data.map((p) => {
             const inactive = p.status === 'WITHDREW' || p.status === 'DISQUALIFIED';
             const canDrop = showDropButtons && !inactive;
+            const canUndrop = showDropButtons && p.status === 'WITHDREW';
             return (
               <li
                 key={p.id}
@@ -100,10 +119,39 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus }: 
                     Drop
                   </button>
                 )}
+                {canUndrop && (
+                  <button
+                    type="button"
+                    disabled={undropMutation.isPending}
+                    className="ml-2 rounded border border-emerald-800 px-2 py-0.5 text-xs text-emerald-400 hover:border-emerald-600 hover:text-emerald-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => {
+                      if (confirm(`Undrop ${p.user.username}? Their FORFEIT matches are NOT automatically restored — fix those separately via the match modal.`)) {
+                        undropMutation.mutate(p.user.id);
+                      }
+                    }}
+                  >
+                    Undrop
+                  </button>
+                )}
               </li>
             );
           })}
         </ul>
+      )}
+      {showDropButtons && (
+        <div className="mt-3">
+          <button
+            type="button"
+            disabled={lateJoinMutation.isPending}
+            onClick={() => {
+              const userId = prompt('Enter the User ID of the player to add (find it in Admin → Users):');
+              if (userId?.trim()) lateJoinMutation.mutate(userId.trim());
+            }}
+            className="rounded border border-stone-600 px-3 py-1 text-xs text-stone-400 hover:border-stone-400 hover:text-stone-200 transition-colors disabled:opacity-40"
+          >
+            + Add Late Joiner / Sub
+          </button>
+        </div>
       )}
     </section>
   );

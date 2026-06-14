@@ -1,6 +1,8 @@
 import { Link } from '@tanstack/react-router';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 import type { FactionDto, SwissMeta } from '@rizzotto/types';
 import { FactionBadge } from '@/components/meta/FactionBadge';
+import { dropParticipant, undropParticipant } from '@/lib/api';
 
 const PLACEMENT_BADGE: Record<1 | 2 | 3, { label: string; className: string }> = {
   1: { label: '1ST', className: 'text-rizzotto-gold-400 border-rizzotto-gold-500/50 bg-rizzotto-gold-500/10' },
@@ -23,6 +25,10 @@ interface SwissStandingsProps {
   finalistIds?: Set<string>;
   /** Players who have qualified for the Semifinals (QF winners — TOP8 only) */
   semifinalistIds?: Set<string>;
+  /** Tournament slug — enables drop/undrop buttons when set */
+  tournamentSlug?: string;
+  /** Whether the current user can manage the tournament */
+  canManage?: boolean;
 }
 
 function Avatar({ url, username }: { url: string | null; username: string }) {
@@ -69,7 +75,24 @@ export function SwissStandings({
   playoffFormat,
   finalistIds,
   semifinalistIds,
+  tournamentSlug,
+  canManage = false,
 }: SwissStandingsProps) {
+  const queryClient = useQueryClient();
+  const dropMutation = useMutation({
+    mutationFn: (userId: string) => dropParticipant(tournamentSlug!, userId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants'] });
+    },
+  });
+  const undropMutation = useMutation({
+    mutationFn: (userId: string) => undropParticipant(tournamentSlug!, userId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants'] });
+    },
+  });
   const showFactionColumn = tournamentMode ? FACTION_MODES.has(tournamentMode) : false;
   const colCount = 5 + (showFactionColumn ? 1 : 0) + 1; // # + Player + [Faction] + Score + W/L/B + GL + BH
 
@@ -171,6 +194,32 @@ export function SwissStandings({
                           <span className="text-[10px] text-amber-600/80 uppercase tracking-wider font-semibold">Withdrew</span>
                         )}
                       </Link>
+                      {canManage && tournamentSlug && !isDropped && (
+                        <button
+                          type="button"
+                          disabled={dropMutation.isPending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Drop ${displayName} from the tournament?`)) dropMutation.mutate(entry.userId);
+                          }}
+                          className="ml-1 rounded border border-red-900/60 px-1.5 py-px text-[10px] text-red-500/70 hover:border-red-700 hover:text-red-400 transition-colors disabled:opacity-40 shrink-0"
+                        >
+                          Drop
+                        </button>
+                      )}
+                      {canManage && tournamentSlug && isDropped && (
+                        <button
+                          type="button"
+                          disabled={undropMutation.isPending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Undrop ${displayName}? FORFEIT matches are NOT auto-restored.`)) undropMutation.mutate(entry.userId);
+                          }}
+                          className="ml-1 rounded border border-emerald-900/60 px-1.5 py-px text-[10px] text-emerald-500/70 hover:border-emerald-700 hover:text-emerald-400 transition-colors disabled:opacity-40 shrink-0"
+                        >
+                          Undrop
+                        </button>
+                      )}
                     </td>
                     {showFactionColumn && (
                       <td className="px-4 py-2">
