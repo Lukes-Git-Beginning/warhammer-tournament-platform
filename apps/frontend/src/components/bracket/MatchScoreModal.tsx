@@ -84,12 +84,7 @@ export function MatchScoreModal({
       onClose();
     },
     onError: (err: Error) => {
-      const msg = err.message.toLowerCase();
-      if (msg.includes('already') || msg.includes('conflict') || msg.includes('409')) {
-        setDropError('Player is already withdrawn. Use "Cancel Match" or "Restore to Pending" instead.');
-      } else {
-        setDropError(err.message);
-      }
+      setDropError(err.message);
     },
   });
 

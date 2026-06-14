@@ -576,9 +576,12 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       if (!participant) {
         return reply.code(404).send({ error: 'NotFound', message: 'Participant not found', statusCode: 404 });
       }
-      if (participant.status === 'WITHDREW' || participant.status === 'DISQUALIFIED') {
+      if (participant.status === 'DISQUALIFIED') {
         return reply.code(409).send({ error: 'Conflict', message: 'Participant has already been dropped', statusCode: 409 });
       }
+      // If already WITHDREW but a PENDING match exists (e.g. created before the drop was
+      // processed), skip the status update but still forfeit the open match.
+      const alreadyWithdrew = participant.status === 'WITHDREW';
 
       // Find the player's open match (PENDING or ONGOING, not yet decided)
       const openMatches = await fastify.prisma.match.findMany({
@@ -610,11 +613,12 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       );
 
       await fastify.prisma.$transaction(async (tx) => {
-        // Mark participant as withdrawn
-        await tx.tournamentParticipant.update({
-          where: { id: participant.id },
-          data: { status: 'WITHDREW' },
-        });
+        if (!alreadyWithdrew) {
+          await tx.tournamentParticipant.update({
+            where: { id: participant.id },
+            data: { status: 'WITHDREW' },
+          });
+        }
 
         for (const match of openMatches) {
           const opponent = match.player1_id === userId ? match.player2_id : match.player1_id;
