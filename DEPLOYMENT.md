@@ -85,8 +85,15 @@ Bei Änderungen manuell synchronisieren:
 
 ```bash
 sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
-sudo systemctl reload caddy
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile  # optional sanity check
+sudo systemctl restart caddy
 ```
+
+> **`restart`, nicht `reload`:** Der globale `admin off`-Block in der Caddyfile
+> deaktiviert die Admin-API (Port 2019). `systemctl reload caddy` schickt die
+> neue Config über genau diese API an den laufenden Prozess und schlägt deshalb
+> fehl (`dial tcp [::1]:2019: connect: connection refused`). `restart` lädt die
+> Datei direkt neu — Sub-Sekunden-Downtime hinter Cloudflare.
 
 > Caddy liest TLS-Zertifikate aus `/etc/rizzotto/secrets/cf-origin.pem` (Cert) und  
 > `/etc/rizzotto/secrets/cf-origin.key` (Key). Ablauf des Cloudflare-Origin-Certs (15 Jahre) rechtzeitig überwachen.

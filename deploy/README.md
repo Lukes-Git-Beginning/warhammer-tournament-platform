@@ -63,7 +63,7 @@ For a clean restore: drop+recreate the DB inside the container first, then pipe.
 | Caddy logs (live)                   | `sudo journalctl -u caddy -f`                            |
 | Postgres logs                       | `docker logs -f rizzotto-postgres`                       |
 | Restart backend                     | `sudo systemctl restart rizzotto-backend`                |
-| Reload Caddy config                 | `sudo systemctl reload caddy`                            |
+| Apply Caddy config (admin off → restart, not reload) | `sudo systemctl restart caddy`          |
 | Run backup manually                 | `sudo systemctl start rizzotto-backup.service`           |
 | List backup timer status            | `sudo systemctl list-timers rizzotto-backup`             |
 | Preflight checks                    | `bash scripts/preflight.sh`                              |
