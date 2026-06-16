@@ -254,6 +254,39 @@ export default fp(
     );
 
     // -----------------------------------------------------------------------
+    // Cancel abandoned open-play matches — hourly at :15.
+    // Open-play (ladder/challenge) matches go ONGOING immediately but have no
+    // built-in timeout: if neither player ever reports a result, the match sits
+    // ONGOING forever and keeps showing up as an "active ladder match". After
+    // STALE_OPEN_PLAY_HOURS without resolution we cancel it as a safety net.
+    // (A richer re-prompt lifecycle is planned separately.)
+    // -----------------------------------------------------------------------
+    const STALE_OPEN_PLAY_HOURS = 24;
+    const staleOpenPlayTask = cron.schedule(
+      '15 * * * *',
+      async () => {
+        try {
+          const cutoff = new Date(Date.now() - STALE_OPEN_PLAY_HOURS * 60 * 60 * 1000);
+          const { count } = await fastify.prisma.match.updateMany({
+            where: {
+              type: 'OPEN_PLAY',
+              status: 'ONGOING',
+              deleted_at: null,
+              created_at: { lt: cutoff },
+            },
+            data: { status: 'CANCELLED' },
+          });
+          if (count > 0) {
+            fastify.log.info({ count }, 'Cancelled abandoned open-play matches');
+          }
+        } catch (err) {
+          fastify.log.error({ err }, 'Stale open-play cancel cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    // -----------------------------------------------------------------------
     // Auto Swiss — check-in opener + starter + round progression
     // Runs every minute. Handles three phases:
     //   1. OPEN_REGISTRATION → REGISTRATION_CLOSED (1h before start_date)
@@ -455,7 +488,7 @@ export default fp(
       }
     }, { timezone: 'UTC' });
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, autoSwissTask, matchupReminderTask, scheduledMatchupActivationTask]);
+    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, staleOpenPlayTask, autoSwissTask, matchupReminderTask, scheduledMatchupActivationTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
@@ -464,6 +497,7 @@ export default fp(
       blindPickTask.stop();
       matchupExpiryTask.stop();
       queueCleanupTask.stop();
+      staleOpenPlayTask.stop();
       autoSwissTask.stop();
       matchupReminderTask.stop();
       scheduledMatchupActivationTask.stop();
