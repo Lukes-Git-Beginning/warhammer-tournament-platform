@@ -204,3 +204,80 @@ export async function computeSeasonLeaderboard(
   entries.sort((x, y) => y.totalFinalPoints - x.totalFinalPoints || y.wins - x.wins);
   return entries;
 }
+
+export interface PlayerStats {
+  total_points: number;
+  games_played: number;
+  wins: number;
+  losses: number;
+}
+
+const ZERO_STATS: PlayerStats = { total_points: 0, games_played: 0, wins: 0, losses: 0 };
+
+/**
+ * Single-player view of the dynamic season leaderboard. Reuses
+ * computeSeasonLeaderboard (cache-hit likely via the rating model) and picks the
+ * player's entry. Returns zero-valued stats — never undefined — when the player
+ * has no confirmed games in the season.
+ */
+export async function getPlayerSeasonStats(
+  prisma: PrismaClient,
+  redis: Redis | undefined,
+  seasonId: string,
+  playerId: string,
+): Promise<PlayerStats> {
+  const board = await computeSeasonLeaderboard(prisma, redis, seasonId);
+  const entry = board.find((e) => e.playerId === playerId);
+  if (!entry) return { ...ZERO_STATS };
+  return {
+    total_points: entry.totalFinalPoints,
+    games_played: entry.totalGames,
+    wins: entry.wins,
+    losses: entry.losses,
+  };
+}
+
+/**
+ * All-time dynamic stats: sum of getPlayerSeasonStats across every season the
+ * player has at least one confirmed game in. Kept consistent with the leaderboard
+ * so the profile never shows numbers that disagree with the ranking.
+ */
+export async function getPlayerAllTimeStats(
+  prisma: PrismaClient,
+  redis: Redis | undefined,
+  playerId: string,
+): Promise<PlayerStats> {
+  const rows = await prisma.match.findMany({
+    where: {
+      status: 'COMPLETED',
+      deleted_at: null,
+      winner_id: { not: null },
+      player1_id: { not: null },
+      player2_id: { not: null },
+      season_id: { not: null },
+      counts_for_leaderboard: true,
+      AND: [
+        {
+          OR: [
+            { tournament: { counts_for_leaderboard: true } },
+            { type: 'OPEN_PLAY', games: { some: { counts_for_leaderboard: true } } },
+          ],
+        },
+        { OR: [{ player1_id: playerId }, { player2_id: playerId }] },
+      ],
+    },
+    select: { season_id: true },
+    distinct: ['season_id'],
+  });
+
+  const totals: PlayerStats = { ...ZERO_STATS };
+  for (const { season_id } of rows) {
+    if (!season_id) continue;
+    const s = await getPlayerSeasonStats(prisma, redis, season_id, playerId);
+    totals.total_points += s.total_points;
+    totals.games_played += s.games_played;
+    totals.wins += s.wins;
+    totals.losses += s.losses;
+  }
+  return totals;
+}

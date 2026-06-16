@@ -90,7 +90,7 @@ function WinLossCard({
 }) {
   return (
     <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
-      <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">Win / Loss</p>
+      <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">Recent Win / Loss</p>
       <div className="flex items-end gap-2">
         <span className="text-3xl font-bold text-rizzotto-gold-400">
           {(winRate * 100).toFixed(1)}%
@@ -222,7 +222,7 @@ export function UserProfilePage() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <StatCard
                 label={t('user_profile.stats.points')}
-                value={current_season.total_points}
+                value={current_season.total_points.toFixed(1)}
               />
               <StatCard
                 label={t('user_profile.stats.games')}
@@ -254,7 +254,7 @@ export function UserProfilePage() {
             label={t('user_profile.stats.tournaments')}
             value={all_time.tournaments_played}
           />
-          <StatCard label={t('user_profile.stats.points')} value={all_time.total_points} />
+          <StatCard label={t('user_profile.stats.points')} value={all_time.total_points.toFixed(1)} />
         </div>
       </section>
 

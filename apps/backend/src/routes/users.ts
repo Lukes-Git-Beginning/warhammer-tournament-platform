@@ -8,6 +8,7 @@ import {
 } from '@rizzotto/types';
 import { z } from 'zod';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
+import { getPlayerSeasonStats, getPlayerAllTimeStats } from '../lib/leaderboard-service.js';
 
 const meSelect = {
   id: true,
@@ -553,14 +554,20 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
     }
 
-    // Active season entry
+    // current_season + all_time stats come from the dynamic leaderboard system
+    // (lib/leaderboard-service.ts) — the single source of truth that also powers
+    // the leaderboard page. LeaderboardEntry is NOT read here: it uses 3-point
+    // scoring and drifts on void/cancel/edit, which is exactly the mismatch we fix.
     const activeSeason = await fastify.prisma.season.findFirst({ where: { is_active: true } });
     let currentSeasonEntry = null;
     if (activeSeason) {
-      const entry = await fastify.prisma.leaderboardEntry.findUnique({
-        where: { user_id_season_id: { user_id: id, season_id: activeSeason.id } },
-      });
-      if (entry) {
+      const seasonStats = await getPlayerSeasonStats(
+        fastify.prisma,
+        fastify.redis,
+        activeSeason.id,
+        id,
+      );
+      if (seasonStats.games_played > 0) {
         currentSeasonEntry = {
           season: {
             id: activeSeason.id,
@@ -569,20 +576,16 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
             end_date: activeSeason.end_date.toISOString(),
             is_active: activeSeason.is_active,
           },
-          total_points: entry.total_points,
-          games_played: entry.games_played,
-          wins: entry.wins,
-          losses: entry.losses,
+          total_points: seasonStats.total_points,
+          games_played: seasonStats.games_played,
+          wins: seasonStats.wins,
+          losses: seasonStats.losses,
         };
       }
     }
 
-    // All-time stats
-    const allTimeAgg = await fastify.prisma.leaderboardEntry.aggregate({
-      where: { user_id: id },
-      _sum: { games_played: true, wins: true, losses: true, total_points: true },
-      _count: { season_id: true },
-    });
+    // All-time stats — summed across every season the player has confirmed games in.
+    const allTime = await getPlayerAllTimeStats(fastify.prisma, fastify.redis, id);
     const tournamentsPlayed = await fastify.prisma.tournamentResult.count({ where: { user_id: id } });
 
     // Recent tournament results (last 10)
@@ -624,11 +627,11 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       },
       current_season: currentSeasonEntry,
       all_time: {
-        games_played: allTimeAgg._sum.games_played ?? 0,
-        wins: allTimeAgg._sum.wins ?? 0,
-        losses: allTimeAgg._sum.losses ?? 0,
+        games_played: allTime.games_played,
+        wins: allTime.wins,
+        losses: allTime.losses,
         tournaments_played: tournamentsPlayed,
-        total_points: allTimeAgg._sum.total_points ?? 0,
+        total_points: allTime.total_points,
       },
       recent_results: recentResults.map((r) => ({
         tournament: {

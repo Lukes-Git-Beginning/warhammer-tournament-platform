@@ -3,9 +3,11 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
+import { computeSeasonLeaderboard } from '../src/lib/leaderboard-service.js';
 import {
   createTestUser,
   createTestSeason,
+  createTestTournament,
   cleanupSeason,
   cleanupTournament,
   cleanupUsers,
@@ -39,10 +41,13 @@ let testUser2: TestUser;
 let testUser3: TestUser;
 let testSeason: TestSeason | null = null;
 let testTournament: TestTournament | null = null;
+let testFactionIds: string[] = [];
+let matchNo = 0;
 
 beforeEach(async () => {
   testSeason = null;
   testTournament = null;
+  testFactionIds = [];
   testUser1 = await createTestUser({ username: 'Alpha' });
   testUser2 = await createTestUser({ username: 'Beta' });
   testUser3 = await createTestUser({ username: 'Gamma' });
@@ -51,9 +56,55 @@ beforeEach(async () => {
 afterEach(async () => {
   // Clean up in dependency order — scoped to this run's IDs only
   if (testTournament) await cleanupTournament(testTournament.id);
+  if (testFactionIds.length) {
+    await prisma.faction.deleteMany({ where: { id: { in: testFactionIds } } });
+  }
   if (testSeason) await cleanupSeason(testSeason.id);
   await cleanupUsers([testUser1.id, testUser2.id, testUser3.id]);
 });
+
+async function createTestFaction(displayOrder: number): Promise<string> {
+  const id = `test-faction-${randomUUID()}`;
+  await prisma.faction.create({
+    data: {
+      id,
+      name: `Test Faction ${displayOrder}`,
+      race: 'test-race',
+      category: 'ORDER',
+      color_hex: '#abcdef',
+      display_order: displayOrder,
+    },
+  });
+  testFactionIds.push(id);
+  return id;
+}
+
+async function completedMatch(
+  seasonId: string,
+  tournamentId: string,
+  p1: string,
+  p2: string,
+  pf1: string,
+  pf2: string,
+  winner: string,
+): Promise<void> {
+  await prisma.match.create({
+    data: {
+      tournament_id: tournamentId,
+      round: 1,
+      match_number: matchNo++,
+      player1_id: p1,
+      player2_id: p2,
+      winner_id: winner,
+      player1_faction_id: pf1,
+      player2_faction_id: pf2,
+      status: 'COMPLETED',
+      result: winner === p1 ? 'PLAYER1_WIN' : 'PLAYER2_WIN',
+      season_id: seasonId,
+      played_at: new Date('2026-06-01'),
+    },
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Seed helper — creates season + leaderboard entries for this test run
@@ -168,16 +219,30 @@ describe('GET /api/users/:id', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 200 with correct stats for known user', async () => {
-    await seedBase();
+  it('returns dynamic current_season + all_time stats that match the leaderboard', async () => {
+    testSeason = await createTestSeason({ is_active: true });
+    testTournament = await createTestTournament({ organizerId: testUser1.id });
+    const f1 = await createTestFaction(901);
+    const f2 = await createTestFaction(902);
+    const f3 = await createTestFaction(903);
+
+    // Alpha wins twice, Beta once, Gamma none — game-level (one synthetic game per match).
+    await completedMatch(testSeason.id, testTournament.id, testUser1.id, testUser2.id, f1, f2, testUser1.id);
+    await completedMatch(testSeason.id, testTournament.id, testUser1.id, testUser3.id, f1, f3, testUser1.id);
+    await completedMatch(testSeason.id, testTournament.id, testUser2.id, testUser3.id, f2, f3, testUser2.id);
+
+    // Source of truth: the dynamic leaderboard the profile must now mirror.
+    const board = await computeSeasonLeaderboard(prisma, undefined, testSeason.id);
+    const expected = board.find((e) => e.playerId === testUser1.id);
+    expect(expected).toBeDefined();
 
     const res = await app.inject({ method: 'GET', url: `/api/users/${testUser1.id}` });
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{
       user: { id: string; username: string };
-      current_season: { total_points: number; wins: number } | null;
-      all_time: { games_played: number; wins: number; total_points: number; tournaments_played: number };
+      current_season: { total_points: number; games_played: number; wins: number; losses: number } | null;
+      all_time: { games_played: number; wins: number; losses: number; total_points: number; tournaments_played: number };
       recent_results: unknown[];
       recent_matches: unknown[];
     }>();
@@ -186,20 +251,24 @@ describe('GET /api/users/:id', () => {
     expect(body.user.username).toBe('Alpha');
 
     expect(body.current_season).not.toBeNull();
-    expect(body.current_season!.total_points).toBe(100);
-    expect(body.current_season!.wins).toBe(8);
+    expect(body.current_season!.games_played).toBe(2);
+    expect(body.current_season!.wins).toBe(2);
+    expect(body.current_season!.losses).toBe(0);
+    expect(body.current_season!.total_points).toBeCloseTo(expected!.totalFinalPoints, 6);
 
-    expect(body.all_time.games_played).toBe(10);
-    expect(body.all_time.wins).toBe(8);
-    expect(body.all_time.total_points).toBe(100);
+    // Single season → all_time mirrors current_season (summed across seasons).
+    expect(body.all_time.games_played).toBe(2);
+    expect(body.all_time.wins).toBe(2);
+    expect(body.all_time.losses).toBe(0);
+    expect(body.all_time.total_points).toBeCloseTo(expected!.totalFinalPoints, 6);
     expect(body.all_time.tournaments_played).toBe(0);
 
     expect(Array.isArray(body.recent_results)).toBe(true);
     expect(Array.isArray(body.recent_matches)).toBe(true);
   });
 
-  it('returns null current_season when user has no leaderboard entry in any active season', async () => {
-    // testUser1 exists but has no leaderboard entries — current_season should be null
+  it('returns null current_season when user has no confirmed games', async () => {
+    // testUser1 exists but has played no confirmed games — current_season should be null
     const res = await app.inject({ method: 'GET', url: `/api/users/${testUser1.id}` });
     expect(res.statusCode).toBe(200);
     const body = res.json<{ current_season: null | { total_points: number } }>();
