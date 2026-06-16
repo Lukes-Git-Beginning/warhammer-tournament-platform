@@ -7,7 +7,7 @@ import { autoResolveStaleBlindPicks } from '../lib/blind-pick-auto-resolve.js';
 import { autoResolveStaleMatrixActions } from '../lib/matrix-auto-resolve.js';
 import { startAutoSwiss, advanceAutoSwissRound, repairBrokenAutoSwiss } from '../lib/auto-swiss-service.js';
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
-import { notifyChallengeMatchFound, notifyScheduledMatchReminder } from '../lib/discord-notify.js';
+import { notifyChallengeMatchFound, notifyScheduledMatchReminder, notifyReQueuePrompt } from '../lib/discord-notify.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -206,10 +206,11 @@ export default fp(
     );
 
     // -----------------------------------------------------------------------
-    // Expire open ScheduledMatchups past their expiry date — daily at 01:00 UTC
+    // Expire open ScheduledMatchups past their expiry date — every 15 min.
+    // Runs frequently so short-lived (30-min) challenges expire promptly.
     // -----------------------------------------------------------------------
     const matchupExpiryTask = cron.schedule(
-      '0 1 * * *',
+      '*/15 * * * *',
       async () => {
         try {
           const { count } = await fastify.prisma.scheduledMatchup.updateMany({
@@ -227,10 +228,10 @@ export default fp(
     );
 
     // -----------------------------------------------------------------------
-    // Queue cleanup — hourly: remove entries older than 30 minutes from Redis
+    // Queue cleanup — every 15 min: remove entries older than 30 min from Redis
     // -----------------------------------------------------------------------
     const queueCleanupTask = cron.schedule(
-      '0 * * * *',
+      '*/15 * * * *',
       async () => {
         if (!fastify.redis) return;
         try {
@@ -254,12 +255,40 @@ export default fp(
     );
 
     // -----------------------------------------------------------------------
+    // Re-queue reminder — every 30 min: DM queued players who have been idle
+    // for 25–30 min (about to be cleaned up) to ask if they're still available.
+    // -----------------------------------------------------------------------
+    const reQueueReminderTask = cron.schedule(
+      '*/30 * * * *',
+      async () => {
+        if (!fastify.redis) return;
+        try {
+          const key = 'rizzotto:queue:open_play';
+          const items = await fastify.redis.lrange(key, 0, -1);
+          const lowerCutoff = new Date(Date.now() - 30 * 60 * 1000); // 30 min ago
+          const upperCutoff = new Date(Date.now() - 25 * 60 * 1000); // 25 min ago
+          for (const userId of items) {
+            const user = await fastify.prisma.user.findUnique({
+              where: { id: userId },
+              select: { discord_id: true, updated_at: true },
+            });
+            if (user && user.updated_at >= lowerCutoff && user.updated_at < upperCutoff) {
+              await notifyReQueuePrompt(user.discord_id).catch(() => {});
+            }
+          }
+        } catch (err) {
+          fastify.log.error({ err }, 'Re-queue reminder cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    // -----------------------------------------------------------------------
     // Cancel abandoned open-play matches — hourly at :15.
     // Open-play (ladder/challenge) matches go ONGOING immediately but have no
     // built-in timeout: if neither player ever reports a result, the match sits
     // ONGOING forever and keeps showing up as an "active ladder match". After
     // STALE_OPEN_PLAY_HOURS without resolution we cancel it as a safety net.
-    // (A richer re-prompt lifecycle is planned separately.)
     // -----------------------------------------------------------------------
     const STALE_OPEN_PLAY_HOURS = 24;
     const staleOpenPlayTask = cron.schedule(
@@ -488,7 +517,7 @@ export default fp(
       }
     }, { timezone: 'UTC' });
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, staleOpenPlayTask, autoSwissTask, matchupReminderTask, scheduledMatchupActivationTask]);
+    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, matchupReminderTask, scheduledMatchupActivationTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
@@ -497,6 +526,7 @@ export default fp(
       blindPickTask.stop();
       matchupExpiryTask.stop();
       queueCleanupTask.stop();
+      reQueueReminderTask.stop();
       staleOpenPlayTask.stop();
       autoSwissTask.stop();
       matchupReminderTask.stop();

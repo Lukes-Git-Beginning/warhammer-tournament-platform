@@ -5,7 +5,7 @@ const CreateMatchupSchema = z.object({
   format: z.enum(['BO1', 'BO3', 'BO5']),
   proposed_at: z.string().datetime(),
   notes: z.string().max(500).optional(),
-  expires_in_hours: z.number().int().min(1).max(168).optional().default(72),
+  expires_in_hours: z.number().min(0.5).max(168).optional().default(72),
 });
 
 const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {

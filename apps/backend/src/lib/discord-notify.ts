@@ -296,6 +296,24 @@ export async function notifyMatchCancelledBothPlayers(
 }
 
 /**
+ * DM a queued player to check whether they're still looking for a game.
+ * Sent ~5 minutes before the queue slot expires.
+ */
+export async function notifyReQueuePrompt(discordId: string): Promise<void> {
+  const token = getToken();
+  if (!token) return;
+  try {
+    await sendDmWithComponents(
+      discordId,
+      "⏱️ You've been in the Open Play queue for 30 minutes — still looking for a game?",
+      [actionRow([button('Stay in Queue', `op_queue:${discordId}`, BTN_SUCCESS)])],
+    );
+  } catch {
+    // non-fatal — user may have DMs disabled
+  }
+}
+
+/**
  * DM moderators about an Open Play dispute (no tournament organizer to notify).
  */
 export async function notifyOpenPlayDispute(matchId: string, reporterUsername: string): Promise<void> {
