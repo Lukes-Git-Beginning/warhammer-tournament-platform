@@ -1,5 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getAdminStats, recomputeFactionStats, type AdminStats } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { getAdminStats, type AdminStats } from '@/lib/api';
 
 interface KpiCardProps {
   label: string;
@@ -32,17 +32,6 @@ export function StatsDashboard() {
   const { data, isLoading, error } = useQuery<AdminStats>({
     queryKey: ['admin-stats'],
     queryFn: getAdminStats,
-  });
-
-  const queryClient = useQueryClient();
-  const recompute = useMutation({
-    mutationFn: recomputeFactionStats,
-    onSuccess: (res) => {
-      const games = res.recomputed.reduce((sum, r) => sum + r.gamesProcessed, 0);
-      void queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
-      alert(`Faction stats rebuilt from ${games} games across ${res.recomputed.length} season(s).`);
-    },
-    onError: (err: Error) => alert(`Recompute failed: ${err.message}`),
   });
 
   if (isLoading) {
@@ -108,23 +97,6 @@ export function StatsDashboard() {
         </div>
       </div>
 
-      <div className="mt-8 flex items-center gap-3 border-t border-stone-800 pt-6">
-        <button
-          type="button"
-          disabled={recompute.isPending}
-          onClick={() => {
-            if (confirm('Rebuild faction & matchup stats from played games? Fixes drift, safe to run.')) {
-              recompute.mutate();
-            }
-          }}
-          className="rounded border border-stone-700 px-3 py-1.5 text-xs font-medium text-stone-300 hover:border-rizzotto-gold-500/50 hover:text-rizzotto-gold-500 transition-colors disabled:opacity-40"
-        >
-          {recompute.isPending ? 'Recomputing…' : 'Recompute faction stats'}
-        </button>
-        <span className="text-xs text-stone-500">
-          Rebuilds meta stats game-by-game from played games (corrects any drift).
-        </span>
-      </div>
     </div>
   );
 }

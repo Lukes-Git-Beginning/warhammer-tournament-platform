@@ -7,7 +7,6 @@ import { TournamentFormat, Prisma } from '@rizzotto/db';
 import { ImportLogListResponseSchema } from '@rizzotto/types';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
-import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -208,37 +207,6 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     );
   });
 
-  // POST /api/admin/recompute-faction-stats
-  // Rebuilds FactionStats + MatchupStats for every season from the COMPLETED
-  // MatchGame records (game-level, idempotent). Fixes incremental drift and
-  // guarantees game-level meta counting. Safe to run any time.
-  fastify.post('/api/admin/recompute-faction-stats', async (request) => {
-    const seasons = await fastify.prisma.season.findMany({ select: { id: true, name: true } });
-    const results = [];
-    for (const season of seasons) {
-      const r = await recomputeFactionStats(fastify.prisma, season.id);
-      results.push({ season: season.name, ...r });
-    }
-
-    if (fastify.redis) {
-      await Promise.all([
-        invalidate(fastify.redis, 'factions:*'),
-        invalidate(fastify.redis, 'meta:*'),
-      ]);
-    }
-
-    await fastify.prisma.auditLog.create({
-      data: {
-        entity_type: 'FactionStats',
-        entity_id: 'recompute',
-        action: 'faction_stats_recompute',
-        actor_id: request.user?.sub,
-        new_value: { seasons: results.length, results },
-      },
-    }).catch(() => { /* non-critical */ });
-
-    return { recomputed: results };
-  });
 
   // POST /api/admin/users/:id/ban
   fastify.post<{ Params: { id: string } }>('/api/admin/users/:id/ban', async (request, reply) => {
