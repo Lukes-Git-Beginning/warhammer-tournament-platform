@@ -64,33 +64,73 @@ export function makeSlotLabel(
   return isLoserSlot ? `Loser of ${candidates}` : candidates;
 }
 
-export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchClick }: SVGBracketProps) {
-  const isSft = tournamentMode === 'SFT';
-  const layout = computeBracketLayout(data.matches);
-
-  // For each match, find the two feeder matches (sorted by matchNumber) so we can
-  // show "Grombrindal / Louen" instead of "BYE" in undecided future-round slots.
-  // Falls back to round/matchNumber arithmetic when next_match_id is null in the DB.
+/**
+ * Compute the projected labels ("P1 / P2", "Winner of …", "Loser of …") for every
+ * match slot that has no concrete player yet, so future rounds preview their
+ * candidates instead of showing "TBD"/"BYE". Feeders are matched by nextMatchId
+ * (winner path) and loserNextMatchId (loser path), falling back to round/matchNumber
+ * arithmetic when next_match_id is null in the DB.
+ *
+ * A feeder whose decided result already occupies a slot of the target is dropped, so
+ * a half-filled target (one semifinal done, the other still pending) projects the
+ * *other* feeder into its empty slot rather than duplicating the player already seated.
+ */
+export function computeSlotLabels(
+  matches: BracketNode[],
+  players?: Map<string, BracketPlayerInfo>,
+): Map<string, { p1: string | null; p2: string | null }> {
   const slotLabels = new Map<string, { p1: string | null; p2: string | null }>();
-  for (const target of data.matches) {
+  for (const target of matches) {
     if (target.player1Id !== null && target.player2Id !== null) continue;
     // Include both winner-path feeders (nextMatchId) and loser-path feeders (loserNextMatchId)
-    const feeders = data.matches
+    const feeders = matches
       .filter((f) =>
-        resolveNextMatchId(f, data.matches) === target.matchId ||
+        resolveNextMatchId(f, matches) === target.matchId ||
         f.loserNextMatchId === target.matchId,
       )
       .sort((a, b) => a.matchNumber - b.matchNumber);
     const isLoserFeeder = (f: BracketNode) => f.loserNextMatchId === target.matchId;
-    slotLabels.set(target.matchId, {
-      p1: target.player1Id === null
-        ? (feeders[0] ? makeSlotLabel(feeders[0], players, isLoserFeeder(feeders[0])) : null)
-        : null,
-      p2: target.player2Id === null
-        ? (feeders[1] ? makeSlotLabel(feeders[1], players, isLoserFeeder(feeders[1])) : null)
-        : null,
+
+    // A decided feeder delivers exactly one player to this target: its winner, or
+    // its loser for a loser-path feeder (third-place). Drop feeders whose delivered
+    // player already sits in a slot — otherwise a feeder that has already advanced
+    // (e.g. SF2 when only SF1 is still pending) gets projected a second time into
+    // the remaining empty slot, duplicating the player already shown there.
+    const deliveredId = (f: BracketNode): string | null => {
+      if ((f.status === 'COMPLETED' || f.status === 'FORFEIT') && f.winnerId) {
+        if (isLoserFeeder(f)) return f.player1Id === f.winnerId ? f.player2Id : f.player1Id;
+        return f.winnerId;
+      }
+      return null; // undecided feeder — cannot be "already consumed"
+    };
+    const occupied = new Set(
+      [target.player1Id, target.player2Id].filter((id): id is string => id !== null),
+    );
+    const pending = feeders.filter((f) => {
+      const id = deliveredId(f);
+      return id === null || !occupied.has(id);
     });
+
+    // Assign the still-pending feeders to the empty slots in order, so a half-filled
+    // target projects the *other* feeder rather than the one already seated.
+    const labels: { p1: string | null; p2: string | null } = { p1: null, p2: null };
+    const emptySlots: ('p1' | 'p2')[] = [];
+    if (target.player1Id === null) emptySlots.push('p1');
+    if (target.player2Id === null) emptySlots.push('p2');
+    emptySlots.forEach((slot, idx) => {
+      const f = pending[idx];
+      if (f) labels[slot] = makeSlotLabel(f, players, isLoserFeeder(f));
+    });
+    slotLabels.set(target.matchId, labels);
   }
+  return slotLabels;
+}
+
+export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchClick }: SVGBracketProps) {
+  const isSft = tournamentMode === 'SFT';
+  const layout = computeBracketLayout(data.matches);
+
+  const slotLabels = computeSlotLabels(data.matches, players);
 
   // Add padding so connectors and labels don't clip
   const PAD = 20;
