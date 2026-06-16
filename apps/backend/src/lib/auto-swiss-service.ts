@@ -72,7 +72,6 @@ export async function startAutoSwiss(prisma: PrismaClient, tournamentId: string)
       where: { id: tournamentId },
       data: {
         status: 'ONGOING',
-        mode: 'SFT',
         rounds_count: config.rounds,
         playoff_format: config.playoffFormat,
         swiss_match_format: 'BO1',

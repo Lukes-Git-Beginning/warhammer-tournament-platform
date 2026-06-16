@@ -232,6 +232,7 @@ model Faction {
 
   // Reverse relations
   tournament_allowlists      TournamentFactionAllowlist[]
+  tournament_restrictions    TournamentRestrictedFaction[]
   participants               TournamentParticipant[]
   matches_as_player1_faction Match[]                      @relation("MatchPlayer1Faction")
   matches_as_player2_faction Match[]                      @relation("MatchPlayer2Faction")
@@ -291,6 +292,7 @@ model Tournament {
   organizer             User                         @relation("OrganizedTournaments", fields: [organizer_id], references: [id])
   draft_preset          DraftPreset?                 @relation(fields: [draft_preset_id], references: [id])
   faction_allowlist     TournamentFactionAllowlist[]
+  restricted_factions   TournamentRestrictedFaction[]
   participants          TournamentParticipant[]
   matches               Match[]
   teams                 Team[]
@@ -307,6 +309,19 @@ model Tournament {
 
 // Empty allowlist => all factions allowed.
 model TournamentFactionAllowlist {
+  tournament_id String @db.Uuid
+  faction_id    String
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  faction    Faction    @relation(fields: [faction_id], references: [id])
+
+  @@id([tournament_id, faction_id])
+  @@index([tournament_id])
+}
+
+// Factions nerfed for this tournament (unit bans/caps). Games where either
+// player used a restricted faction are excluded from the leaderboard.
+model TournamentRestrictedFaction {
   tournament_id String @db.Uuid
   faction_id    String
 

@@ -57,6 +57,7 @@ const CreateTournamentSchema = z.object({
   map_pool: z.array(z.string().min(1)).min(3).max(36).optional(),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   faction_pool: z.array(z.string().min(1)).max(24).optional(),
+  restricted_factions: z.array(z.string().min(1)).max(24).optional(),
 });
 
 const PatchTournamentSchema = z.object({
@@ -88,6 +89,7 @@ const PatchTournamentSchema = z.object({
   has_third_place_match: z.boolean().optional(),
   counts_for_leaderboard: z.boolean().optional(),
   faction_pool: z.array(z.string().min(1)).optional(),
+  restricted_factions: z.array(z.string().min(1)).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
 
 // ---------------------------------------------------------------------------
@@ -262,7 +264,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           slug,
           name: data.name,
           format: data.format,
-          mode: isAutoSwiss ? 'SFT' : data.mode,
+          mode: data.mode,
           status: TournamentStatus.DRAFT,
           visibility: data.visibility ?? 'PUBLIC',
           start_date: new Date(data.start_date),
@@ -323,6 +325,17 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       if (data.faction_pool && data.faction_pool.length > 0) {
         await fastify.prisma.tournamentFactionAllowlist.createMany({
           data: data.faction_pool.map((factionId) => ({
+            tournament_id: tournament.id,
+            faction_id: factionId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      // Persist restricted factions (games with these factions excluded from leaderboard)
+      if (data.restricted_factions && data.restricted_factions.length > 0) {
+        await fastify.prisma.tournamentRestrictedFaction.createMany({
+          data: data.restricted_factions.map((factionId) => ({
             tournament_id: tournament.id,
             faction_id: factionId,
           })),
@@ -526,6 +539,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           select: { participants: { where: { deleted_at: null } } },
         },
         faction_allowlist: { select: { faction_id: true } },
+        restricted_factions: { select: { faction_id: true } },
         map_pool: {
           select: {
             map: { select: { id: true, slug: true, name: true, description: true, image_url: true } },
@@ -568,11 +582,12 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    const { _count, faction_allowlist, map_pool, ...rest } = tournament;
+    const { _count, faction_allowlist, restricted_factions, map_pool, ...rest } = tournament;
     return {
       ...rest,
       participantCount: _count.participants,
       faction_allowlist: faction_allowlist.map((fa) => fa.faction_id),
+      restricted_factions: restricted_factions.map((rf) => rf.faction_id),
       map_pool: map_pool.map((entry) => entry.map),
     };
   });
@@ -637,7 +652,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { status: newStatus, map_pool: newMapPool, faction_pool: newFactionPool, ...rest } = parsed.data;
+      const { status: newStatus, map_pool: newMapPool, faction_pool: newFactionPool, restricted_factions: newRestrictedFactions, ...rest } = parsed.data;
 
       // Validate map_pool change: only allowed before tournament starts (DRAFT or ANNOUNCED)
       if (newMapPool !== undefined) {
@@ -746,8 +761,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         ...(newStatus !== undefined ? { status: newStatus } : {}),
       };
 
-      // map_pool and faction_pool are relations — exclude from the scalar updateData loop
-      const RELATION_FIELDS = new Set(['map_pool', 'faction_pool']);
+      // map_pool, faction_pool and restricted_factions are relations — exclude from the scalar updateData loop
+      const RELATION_FIELDS = new Set(['map_pool', 'faction_pool', 'restricted_factions']);
 
       for (const [key, value] of Object.entries(fieldMap)) {
         if (value !== undefined && !RELATION_FIELDS.has(key)) {
@@ -822,6 +837,22 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         if (newFactionPool.length > 0) {
           await fastify.prisma.tournamentFactionAllowlist.createMany({
             data: newFactionPool.map((factionId) => ({
+              tournament_id: tournament.id,
+              faction_id: factionId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      // Update restricted factions (replace all rows)
+      if (newRestrictedFactions !== undefined) {
+        await fastify.prisma.tournamentRestrictedFaction.deleteMany({
+          where: { tournament_id: tournament.id },
+        });
+        if (newRestrictedFactions.length > 0) {
+          await fastify.prisma.tournamentRestrictedFaction.createMany({
+            data: newRestrictedFactions.map((factionId) => ({
               tournament_id: tournament.id,
               faction_id: factionId,
             })),

@@ -70,6 +70,7 @@ type EditFormData = {
   format: Tournament['format'];
   mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
   faction_pool: string[];
+  restricted_factions: string[];
   visibility: 'PUBLIC' | 'PRIVATE';
 };
 
@@ -181,6 +182,7 @@ function buildInitialForm(t: Tournament): EditFormData {
     format: t.format,
     mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX') ? t.mode : 'BPT',
     faction_pool: t.faction_allowlist ?? [],
+    restricted_factions: t.restricted_factions ?? [],
     visibility: t.visibility ?? 'PUBLIC',
   };
 }
@@ -201,6 +203,7 @@ function buildPatchBody(
   form: EditFormData,
   initialMapIds: string[],
   initialFactionIds: string[],
+  initialRestrictedIds: string[],
 ): TournamentPatchInput {
   const body: TournamentPatchInput = {};
 
@@ -250,6 +253,7 @@ function buildPatchBody(
   if (form.mode !== current.mode) body.mode = form.mode;
   if (form.visibility !== (current.visibility ?? 'PUBLIC')) body.visibility = form.visibility;
   if (!arraysEqual(form.faction_pool, initialFactionIds)) body.faction_pool = form.faction_pool;
+  if (!arraysEqual(form.restricted_factions, initialRestrictedIds)) body.restricted_factions = form.restricted_factions;
 
   return body;
 }
@@ -354,8 +358,10 @@ export function TournamentEditPage() {
   const [form, setForm] = useState<EditFormData | null>(null);
   const [initialMapIds, setInitialMapIds] = useState<string[]>([]);
   const [initialFactionIds, setInitialFactionIds] = useState<string[]>([]);
+  const [initialRestrictedIds, setInitialRestrictedIds] = useState<string[]>([]);
   const [mapSearch, setMapSearch] = useState('');
   const [factionPoolEnabled, setFactionPoolEnabled] = useState(false);
+  const [restrictedFactionsEnabled, setRestrictedFactionsEnabled] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; discord_link?: string }>({});
 
   useEffect(() => {
@@ -366,6 +372,9 @@ export function TournamentEditPage() {
       const factionIds = tournament.faction_allowlist ?? [];
       setInitialFactionIds(factionIds);
       if (factionIds.length > 0) setFactionPoolEnabled(true);
+      const restrictedIds = tournament.restricted_factions ?? [];
+      setInitialRestrictedIds(restrictedIds);
+      if (restrictedIds.length > 0) setRestrictedFactionsEnabled(true);
     }
   }, [tournament, form]);
 
@@ -450,7 +459,7 @@ export function TournamentEditPage() {
       return;
     }
 
-    const body = buildPatchBody(tournament, form, initialMapIds, initialFactionIds);
+    const body = buildPatchBody(tournament, form, initialMapIds, initialFactionIds, initialRestrictedIds);
     if (Object.keys(body).length === 0) {
       void navigate({ to: '/tournaments/$slug', params: { slug } });
       return;
@@ -545,7 +554,7 @@ export function TournamentEditPage() {
                 </Select>
               )}
             </div>
-            {!isAutoSwiss && <div className="min-w-0">
+            <div className="min-w-0">
               <Label htmlFor="tef-mode">{t('tournament.form.mode')}</Label>
               {draftLocked ? (
                 <>
@@ -562,12 +571,12 @@ export function TournamentEditPage() {
                   <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
                 </Select>
               )}
-            </div>}
+            </div>
           </div>
           {isAutoSwiss && (
             <div className="mt-3 rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-3 text-sm text-rizzotto-stone-300">
               <p className="font-semibold text-rizzotto-gold-400 mb-1">Auto Swiss</p>
-              <p>Mode (SFT), match format (BO1), map mode (Random Ban&Pick) and rounds are set automatically at tournament start based on check-in count. Check-in opens 1h before start time.</p>
+              <p>Match format (BO1), map mode (Random Ban&amp;Pick) and rounds are set automatically at tournament start based on check-in count. Check-in opens 1h before start time.</p>
             </div>
           )}
         </fieldset>
@@ -1031,6 +1040,88 @@ export function TournamentEditPage() {
                               set('faction_pool', updated);
                             }}
                             className="accent-rizzotto-gold-400 shrink-0"
+                          />
+                          <span
+                            className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: `#${faction.color_hex}` }}
+                          />
+                          <span className="truncate">{faction.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </fieldset>
+
+        {/* ── Restricted Factions ───────────────────────────────────────── */}
+        <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+          <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
+            Restricted Factions
+          </legend>
+
+          <label className="flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              checked={restrictedFactionsEnabled}
+              onChange={(e) => {
+                setRestrictedFactionsEnabled(e.target.checked);
+                if (!e.target.checked) set('restricted_factions', []);
+              }}
+              className="h-4 w-4 rounded border-rizzotto-iron-600 bg-rizzotto-iron-800 text-rizzotto-gold-500 focus:ring-rizzotto-gold-500"
+            />
+            <span className="text-sm text-rizzotto-stone-300">Mark factions as restricted (nerfed)</span>
+          </label>
+          <FieldHint>
+            Games where either player used a restricted faction will not count toward the leaderboard. Use this for factions affected by unit bans or caps.
+          </FieldHint>
+
+          {restrictedFactionsEnabled && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>
+                  Restricted Factions{' '}
+                  <span className="text-rizzotto-stone-500 font-normal text-xs">
+                    ({form.restricted_factions.length} selected)
+                  </span>
+                </Label>
+                {form.restricted_factions.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => set('restricted_factions', [])}
+                    className="text-xs text-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+              <div className="max-h-52 overflow-y-auto rounded-md border border-rizzotto-iron-700 p-2">
+                {allFactions.length === 0 ? (
+                  <p className="text-xs text-rizzotto-stone-500 text-center py-4">Loading factions…</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+                    {allFactions.map((faction) => {
+                      const isSelected = form.restricted_factions.includes(faction.id);
+                      return (
+                        <label
+                          key={faction.id}
+                          className={[
+                            'flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer transition-colors text-sm',
+                            isSelected ? 'bg-red-900/30 text-red-300' : 'hover:bg-rizzotto-iron-800 text-rizzotto-stone-300',
+                          ].join(' ')}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              const updated = isSelected
+                                ? form.restricted_factions.filter((id) => id !== faction.id)
+                                : [...form.restricted_factions, faction.id];
+                              set('restricted_factions', updated);
+                            }}
+                            className="accent-red-400 shrink-0"
                           />
                           <span
                             className="inline-block w-2.5 h-2.5 rounded-full shrink-0"

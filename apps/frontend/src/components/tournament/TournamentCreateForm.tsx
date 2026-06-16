@@ -34,6 +34,7 @@ const TournamentCreateSchema = z.object({
   map_pool: z.array(z.string()).min(1).max(36).default([]),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   faction_pool: z.array(z.string()).optional(),
+  restricted_factions: z.array(z.string()).optional(),
 });
 
 type FormData = z.infer<typeof TournamentCreateSchema>;
@@ -127,6 +128,7 @@ export function TournamentCreateForm() {
   });
   const [mapSearch, setMapSearch] = useState('');
   const [factionPoolEnabled, setFactionPoolEnabled] = useState(false);
+  const [restrictedFactionsEnabled, setRestrictedFactionsEnabled] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
   const { data: _draftPresets } = useQuery({
@@ -242,6 +244,9 @@ export function TournamentCreateForm() {
       ...(factionPoolEnabled && (form.faction_pool ?? []).length > 0 && (form.faction_pool ?? []).length < allFactions.length
         ? { faction_pool: form.faction_pool }
         : {}),
+      ...(restrictedFactionsEnabled && (form.restricted_factions ?? []).length > 0
+        ? { restricted_factions: form.restricted_factions }
+        : {}),
     });
   }
 
@@ -303,34 +308,32 @@ export function TournamentCreateForm() {
           </Select>
         </div>
 
-        {form.format !== 'AUTO_SWISS' && (
-          <div className="min-w-0">
-            <Label htmlFor="tcf-mode">{t('tournament.form.mode')}</Label>
-            <Select
-              id="tcf-mode"
-              name="mode"
-              value={form.mode ?? 'BPT'}
-              onChange={handleChange}
-            >
-              <option value="BPT">BPT — Blind Pick Tournament</option>
-              <option value="SFT">SFT — Single Faction Tournament</option>
-              <option value="SLT">SLT — Single List Tournament</option>
-              <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
-            </Select>
-            <FieldHint>
-              {(form.mode === 'BPT' || !form.mode) && 'Every match includes a blind faction pick phase.'}
-              {form.mode === 'SFT' && 'Players pre-select a faction at registration; revealed at tournament start.'}
-              {form.mode === 'SLT' && 'Players upload their army list at registration. Reveal after each completed match.'}
-              {form.mode === 'MATRIX' && 'Each match: both players pick 3 factions blindly, then ban from the 3×3 matchup grid.'}
-            </FieldHint>
-          </div>
-        )}
+        <div className="min-w-0">
+          <Label htmlFor="tcf-mode">{t('tournament.form.mode')}</Label>
+          <Select
+            id="tcf-mode"
+            name="mode"
+            value={form.mode ?? 'BPT'}
+            onChange={handleChange}
+          >
+            <option value="BPT">BPT — Blind Pick Tournament</option>
+            <option value="SFT">SFT — Single Faction Tournament</option>
+            <option value="SLT">SLT — Single List Tournament</option>
+            <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
+          </Select>
+          <FieldHint>
+            {(form.mode === 'BPT' || !form.mode) && 'Every match includes a blind faction pick phase.'}
+            {form.mode === 'SFT' && 'Players pre-select a faction at registration; revealed at tournament start.'}
+            {form.mode === 'SLT' && 'Players upload their army list at registration. Reveal after each completed match.'}
+            {form.mode === 'MATRIX' && 'Each match: both players pick 3 factions blindly, then ban from the 3×3 matchup grid.'}
+          </FieldHint>
+        </div>
       </div>
 
       {form.format === 'AUTO_SWISS' && (
         <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">
           <p className="font-semibold text-rizzotto-gold-400">Auto Swiss — self-running tournament</p>
-          <p>Check-in opens automatically 1 hour before start. Rounds and playoff size are determined by how many players check in (4–7: 3R + Final, 8–15: 5R + Top 4, 16+: 4R + Top 8). Rounds advance automatically when all matches are complete. Mode: SFT · All matches: BO1 · Map: Random Ban&Pick.</p>
+          <p>Check-in opens automatically 1 hour before start. Rounds and playoff size are determined by how many players check in (4–7: 3R + Final, 8–15: 5R + Top 4, 16+: 4R + Top 8). Rounds advance automatically when all matches are complete. All matches: BO1 · Map: Random Ban&amp;Pick.</p>
         </div>
       )}
 
@@ -880,6 +883,92 @@ export function TournamentCreateForm() {
         )}
       </fieldset>
 
+      {/* ─── Restricted Factions ───────────────────────────────────────── */}
+      <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+        <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
+          Restricted Factions
+        </legend>
+
+        <label className="flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            checked={restrictedFactionsEnabled}
+            onChange={(e) => {
+              setRestrictedFactionsEnabled(e.target.checked);
+              if (!e.target.checked) setForm((prev) => ({ ...prev, restricted_factions: [] }));
+            }}
+            className="h-4 w-4 rounded border-rizzotto-iron-600 bg-rizzotto-iron-800 text-rizzotto-gold-500 focus:ring-rizzotto-gold-500"
+          />
+          <span className="text-sm text-rizzotto-stone-300">
+            Mark factions as restricted (nerfed)
+          </span>
+        </label>
+        <FieldHint>
+          Games where either player used a restricted faction will not count toward the leaderboard. Use this for factions affected by unit bans or caps.
+        </FieldHint>
+
+        {restrictedFactionsEnabled && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>
+                Restricted Factions{' '}
+                <span className="text-rizzotto-stone-500 font-normal text-xs">
+                  ({(form.restricted_factions ?? []).length} selected)
+                </span>
+              </Label>
+              {(form.restricted_factions ?? []).length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, restricted_factions: [] }))}
+                  className="text-xs text-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+            <div className="max-h-52 overflow-y-auto rounded-md border border-rizzotto-iron-700 p-2">
+              {allFactions.length === 0 ? (
+                <p className="text-xs text-rizzotto-stone-500 text-center py-4">Loading factions…</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+                  {allFactions.map((faction) => {
+                    const isSelected = (form.restricted_factions ?? []).includes(faction.id);
+                    return (
+                      <label
+                        key={faction.id}
+                        className={[
+                          'flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer transition-colors text-sm',
+                          isSelected
+                            ? 'bg-red-900/30 text-red-300'
+                            : 'hover:bg-rizzotto-iron-800 text-rizzotto-stone-300',
+                        ].join(' ')}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            const current = form.restricted_factions ?? [];
+                            const updated = isSelected
+                              ? current.filter((id) => id !== faction.id)
+                              : [...current, faction.id];
+                            setForm((prev) => ({ ...prev, restricted_factions: updated }));
+                          }}
+                          className="accent-red-400 shrink-0"
+                        />
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: `#${faction.color_hex}` }}
+                        />
+                        <span className="truncate">{faction.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </fieldset>
 
       <Button
         type="submit"

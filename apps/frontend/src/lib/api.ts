@@ -88,6 +88,7 @@ export interface Tournament {
   map_preset_config?: MapPresetConfig | null;
   map_pool?: MapDto[];
   faction_allowlist?: string[];
+  restricted_factions?: string[];
 }
 
 export type MapDecisionMode = 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
@@ -198,6 +199,7 @@ export interface TournamentPatchInput {
   format?: Tournament['format'];
   mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
   faction_pool?: string[];
+  restricted_factions?: string[];
   // until-ongoing fields
   rounds_count?: number;
   playoff_format?: 'NONE' | 'TOP4' | 'TOP8';

@@ -86,6 +86,7 @@ export async function finalizeGameResult(
                 },
                 where: { deleted_at: null },
               },
+              restricted_factions: { select: { faction_id: true } },
             },
           },
         },
@@ -131,6 +132,15 @@ export async function finalizeGameResult(
     p2FactionId = game.match.player2_faction_id ?? null;
   }
 
+  // If either faction is restricted in this tournament, this game doesn't count for the leaderboard.
+  const restrictedIds = new Set(
+    game.match.tournament?.restricted_factions.map((r) => r.faction_id) ?? [],
+  );
+  const isRestrictedGame =
+    restrictedIds.size > 0 &&
+    ((p1FactionId !== null && restrictedIds.has(p1FactionId)) ||
+      (p2FactionId !== null && restrictedIds.has(p2FactionId)));
+
   // Finalize game row
   await fastify.prisma.matchGame.update({
     where: { id: gameId },
@@ -141,6 +151,7 @@ export async function finalizeGameResult(
       player2_faction_id: p2FactionId,
       confirmed_at: now,
       played_at: now,
+      ...(isRestrictedGame ? { counts_for_leaderboard: false } : {}),
     },
   });
 
