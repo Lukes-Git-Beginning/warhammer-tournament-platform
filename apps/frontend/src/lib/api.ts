@@ -583,6 +583,21 @@ export function getAdminStats(): Promise<AdminStats> {
   return apiFetch('/api/admin/stats');
 }
 
+export interface RecomputeFactionStatsResponse {
+  recomputed: {
+    season: string;
+    seasonId: string;
+    factionStatsRows: number;
+    matchupStatsRows: number;
+    gamesProcessed: number;
+  }[];
+}
+
+/** Rebuilds FactionStats + MatchupStats from MatchGame records (game-level, fixes drift). ADMIN only. */
+export function recomputeFactionStats(): Promise<RecomputeFactionStatsResponse> {
+  return apiFetch('/api/admin/recompute-faction-stats', { method: 'POST' });
+}
+
 export interface AdminMatchRow {
   id: string;
   round: number;
