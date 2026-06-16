@@ -316,7 +316,7 @@ Nach v1 folgten sechs Sessions Feature-Ausbau + Härtung (Detail-Logs in den Ses
 - **14.06.** — Beta-Bugfix-Tag: **Match-Control** (Restore/Cancel/Void), **Admin-Matches-Tab** (Void-Toggle, Leaderboard-Exclusion), **Drop-System** (Doppel-Drop→CANCELLED, Undrop, Late-Joiner, WITHDREW als authoritative dropped-Flag), sortable User-Mgmt, Draw=½ aus All-Games excludiert.
 - **15.06.** — **Discord-Bot live** (Luke setzt Token/Public-Key in Prod) → alle bot-abhängigen Features aktiv. ROADMAP + Memory auf verifizierten Stand gebracht (diese Session).
 
-**Verbleibendes post-v1-Backlog (codebar, verifiziert offen):** 2FT/3FT-Formate (nur Frontend-Guard `SwissStandings.tsx:51` vorbereitet) · Liechtenstein Early Clinching + aktive Mirror-Vermeidung · MMR-Matchmaking-Format · FactionStats-Recalculate-Endpoint (Drift) · `LeaderboardEntry`-Felder-Cleanup · `poster_url`-Upload-Flow (totes Schema-Feld).
+**Verbleibendes post-v1-Backlog (codebar, verifiziert offen):** 2FT/3FT-Formate (nur Frontend-Guard `SwissStandings.tsx:51` vorbereitet) · Liechtenstein Early Clinching + aktive Mirror-Vermeidung · MMR-Matchmaking-Format · FactionStats-Recalculate-Endpoint (Drift) · `LeaderboardEntry`-Felder-Cleanup · `poster_url`-Upload-Flow (totes Schema-Feld) · **Auto-Replay-Verifikation (ESF-Parser)** — Replay-`.replay`-Format (ESF) ist analysiert: Fraktion/Map/Spieler/Armee per String-Extraktion trivial auslesbar; Sieger braucht echten ESF-Typcode-Walker (6 Ground-Truth-Dateien vorhanden). Nutzen: Anti-Cheat-Abgleich beim Upload bzw. Auto-Ergebnis im Open-Play-Ladder. Details: Memory `project-replay-parsing`.
 
 ---
 
