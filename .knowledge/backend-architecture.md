@@ -302,3 +302,7 @@ const isAdminOrMod = role === 'ADMIN' || role === 'MODERATOR';
 const isHost = userId && match.tournament?.organizer_id === userId;
 if (!isAdminOrMod && !isHost) return reply.code(403)...
 ```
+
+## Profil-Stats-Quelle umgestellt (2026-06-16)
+
+`getUserProfile` (`routes/users.ts`) liest `current_season` **und** `all_time` jetzt **dynamisch** über die neuen Helper `getPlayerSeasonStats` / `getPlayerAllTimeStats` (`lib/leaderboard-service.ts`, derive-on-read via `computeSeasonLeaderboard`) — **nicht mehr** aus `LeaderboardEntry`. Damit sind Profil-Punkte konsistent mit dem dynamischen Leaderboard (jetzt Float, `.toFixed(1)`); `all_time` = Summe der Modell-Punkte über alle Seasons. Die `LeaderboardEntry`-**Schreibpfade bleiben** und versorgen weiterhin `/api/leaderboard/all-time` (`routes/leaderboard.ts`). `getUserStats` (Recent Form, letzte 20 Games) ist unverändert — nur das Card-Label wurde auf „Recent Win / Loss" präzisiert. Die Entfernung der redundanten `LeaderboardEntry`-Felder (`games_played/wins/losses`) bleibt post-v1-Backlog (ROADMAP §5.7).
