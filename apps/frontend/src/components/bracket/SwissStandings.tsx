@@ -97,7 +97,7 @@ export function SwissStandings({
     },
   });
   const showFactionColumn = tournamentMode ? FACTION_MODES.has(tournamentMode) : false;
-  const colCount = 5 + (showFactionColumn ? 1 : 0) + 1; // # + Player + [Faction] + Score + W/L/B + GL + BH
+  const colCount = 5 + (showFactionColumn ? 1 : 0) + 1; // # + Player + [Faction] + Score + W/D/L/B + GL + BH
 
   // Cap displayed round at the Swiss phase — don't count playoff rounds.
   const displayRound = Math.min(currentRound, recommendedRounds);
@@ -142,7 +142,7 @@ export function SwissStandings({
               <th className="px-4 py-2 text-left font-medium text-stone-400">Player</th>
               {showFactionColumn && <th className="px-4 py-2 text-left font-medium text-stone-400">Faction</th>}
               <th className="px-4 py-2 text-right font-medium text-stone-400">Score</th>
-              <th className="px-4 py-2 text-center font-medium text-stone-400">W / L / B</th>
+              <th className="px-4 py-2 text-center font-medium text-stone-400" title="Wins / Draws / Losses / Byes">W / D / L / B</th>
               <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Games Lost">GL</th>
               <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Buchholz">BH</th>
             </tr>
@@ -247,6 +247,8 @@ export function SwissStandings({
                     </td>
                     <td className="px-4 py-2 text-center text-stone-300">
                       <span className="text-emerald-400">{entry.wins}</span>
+                      <span className="text-stone-600"> / </span>
+                      <span className="text-amber-400">{entry.draws}</span>
                       <span className="text-stone-600"> / </span>
                       <span className="text-red-400">{entry.losses}</span>
                       <span className="text-stone-600"> / </span>
