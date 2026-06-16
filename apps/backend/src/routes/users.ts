@@ -586,7 +586,23 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
 
     // All-time stats — summed across every season the player has confirmed games in.
     const allTime = await getPlayerAllTimeStats(fastify.prisma, fastify.redis, id);
-    const tournamentsPlayed = await fastify.prisma.tournamentResult.count({ where: { user_id: id } });
+    // "Tournaments played" = distinct tournaments the user actually took part in,
+    // defined as having played at least one game. A game counts once it is COMPLETED
+    // (win, loss, or the split games of a drawn match — all COMPLETED). A pure drop
+    // produces a FORFEIT match with no COMPLETED game and therefore does NOT count,
+    // matching the rule "a draw counts, a first-match drop does not". Participation-
+    // based on purpose: independent of tournament finalization or TournamentResult.
+    const playedTournamentRows = await fastify.prisma.match.findMany({
+      where: {
+        tournament_id: { not: null },
+        deleted_at: null,
+        OR: [{ player1_id: id }, { player2_id: id }],
+        games: { some: { status: 'COMPLETED' } },
+      },
+      select: { tournament_id: true },
+      distinct: ['tournament_id'],
+    });
+    const tournamentsPlayed = playedTournamentRows.length;
 
     // Recent tournament results (last 10)
     const recentResults = await fastify.prisma.tournamentResult.findMany({
