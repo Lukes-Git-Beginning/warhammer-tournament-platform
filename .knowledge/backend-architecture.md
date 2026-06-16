@@ -282,3 +282,23 @@ Checkliste für neue Endpunkte:
 6. **Validation:** Zod-Schemas aus `@rizzotto/types` verwenden; `.safeParse()` und bei Fehler 400 zurückgeben.
 7. **ESM-Imports:** Alle lokalen Imports mit `.js`-Extension (`../lib/cache.js`).
 8. **Caching:** Read-Through-Pattern mit `cached(fastify.redis, key, compute, { ttlSeconds })` wo sinnvoll [siehe `.knowledge/caching.md`].
+
+## Neue Endpoints (2026-06-14)
+
+| Endpoint | Datei | Beschreibung |
+|---|---|---|
+| `PATCH /api/matches/:id/void` | `matches.ts` | Match vom Leaderboard ausschließen (reversibel); Permission: ADMIN/MOD oder Tournament-Host |
+| `POST /api/matches/:id/restore` | `matches.ts` | FORFEIT/CANCELLED → PENDING; löscht winner_id, result, score, played_at |
+| `POST /api/matches/:id/cancel-match` | `matches.ts` | → CANCELLED; aus Swiss-Standings + round-complete-Check ausgeschlossen |
+| `POST /api/tournaments/:slug/participants/:userId/undrop` | `participants.ts` | WITHDREW → CHECKED_IN; stellt FORFEIT-Matches NICHT automatisch her |
+| `POST /api/admin/tournaments/:slug/add-late` | `admin.ts` | Spieler nach Turnierstart hinzufügen (bypasses OPEN_REGISTRATION-Check); CHECKED_IN sofort |
+| `GET /api/admin/matches` | `admin.ts` | Paginierte Match-Liste (COMPLETED/FORFEIT/BYE/CANCELLED) mit Leaderboard-Status und Void-Toggle; Filter: voided, search, tournamentSlug |
+
+**Permission-Pattern für Host-eigene Resourcen** (aus `matches.ts`):
+```typescript
+const role = request.user?.role;
+const userId = request.user?.sub;  // JWT sub = user ID (nicht .id!)
+const isAdminOrMod = role === 'ADMIN' || role === 'MODERATOR';
+const isHost = userId && match.tournament?.organizer_id === userId;
+if (!isAdminOrMod && !isHost) return reply.code(403)...
+```
