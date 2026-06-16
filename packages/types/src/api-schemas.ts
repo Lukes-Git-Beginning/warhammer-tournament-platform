@@ -168,8 +168,8 @@ export type MatchScoringBreakdownDto = z.infer<typeof MatchScoringBreakdownDtoSc
 export const PlayerOpponentBreakdownDtoSchema = z.object({
   playerId: z.string().uuid(),
   opponentId: z.string().uuid(),
-  matchesVsOpponent: z.number().int(),
-  playerTotalMatches: z.number().int(),
+  winsVsOpponent: z.number().int(),
+  playerTotalWins: z.number().int(),
   opponentShare: z.number(),
   opponentModifier: z.number(),
   rawPointsFromWinsVsOpponent: z.number(),

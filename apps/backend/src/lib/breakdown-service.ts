@@ -10,46 +10,32 @@
 //   - a player's faction table   (playerFactionProficiency)
 // ---------------------------------------------------------------------------
 
-import type { PrismaClient, Prisma } from '@rizzotto/db';
+import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
-import { confirmedMatchWhere, getRatingModel } from './rating-model-service.js';
+import { getRatingModel } from './rating-model-service.js';
 import { logistic } from './rating-model.js';
 import { rawPoints, opponentShare, opponentModifier, finalPoints } from './scoring-service.js';
+import { loadConfirmedGames, type ConfirmedGame } from './leaderboard-service.js';
 
 // ---------------------------------------------------------------------------
-// Shared count helpers (single source of "what counts" via confirmedMatchWhere)
+// Shared WIN-count helpers — derived from the SAME game source the leaderboard
+// uses (loadConfirmedGames), so the explainability numbers match the ranking
+// exactly: game-level, incl. the synthetic-game fallback for pre-GL-fix data.
 // ---------------------------------------------------------------------------
 
-/** Count of a player's confirmed matches in the season. */
-async function playerTotalMatches(
-  prisma: PrismaClient,
-  seasonId: string,
-  playerId: string,
-): Promise<number> {
-  return prisma.match.count({
-    where: {
-      ...confirmedMatchWhere(seasonId),
-      OR: [{ player1_id: playerId }, { player2_id: playerId }],
-    } as Prisma.MatchWhereInput,
-  });
+/** How many confirmed games the player WON in the season. */
+function playerTotalWins(games: ConfirmedGame[], playerId: string): number {
+  return games.filter((g) => g.winner_id === playerId).length;
 }
 
-/** Count of confirmed matches between two players in the season. */
-async function matchesBetween(
-  prisma: PrismaClient,
-  seasonId: string,
-  playerId: string,
-  opponentId: string,
-): Promise<number> {
-  return prisma.match.count({
-    where: {
-      ...confirmedMatchWhere(seasonId),
-      OR: [
-        { player1_id: playerId, player2_id: opponentId },
-        { player1_id: opponentId, player2_id: playerId },
-      ],
-    } as Prisma.MatchWhereInput,
-  });
+/** How many confirmed games the player WON against this specific opponent. */
+function winsBetween(games: ConfirmedGame[], playerId: string, opponentId: string): number {
+  return games.filter(
+    (g) =>
+      g.winner_id === playerId &&
+      ((g.player1_id === playerId && g.player2_id === opponentId) ||
+        (g.player1_id === opponentId && g.player2_id === playerId)),
+  ).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,8 +103,10 @@ export async function matchBreakdown(
   const p = model.expectedChanceToWin(winnerId, winnerFaction, loserId, loserFaction);
   const raw = rawPoints(p);
 
-  const total = await playerTotalMatches(prisma, match.season_id, winnerId);
-  const vs = await matchesBetween(prisma, match.season_id, winnerId, loserId);
+  // Game-level win counts from the same source as the leaderboard → identical share.
+  const games = await loadConfirmedGames(prisma, match.season_id);
+  const total = playerTotalWins(games, winnerId);
+  const vs = winsBetween(games, winnerId, loserId);
   const share = opponentShare(vs, total);
   const mod = opponentModifier(share, total);
 
@@ -152,8 +140,8 @@ export async function matchBreakdown(
 export interface PlayerOpponentBreakdown {
   playerId: string;
   opponentId: string;
-  matchesVsOpponent: number;
-  playerTotalMatches: number;
+  winsVsOpponent: number;
+  playerTotalWins: number;
   opponentShare: number;
   opponentModifier: number;
   rawPointsFromWinsVsOpponent: number;
@@ -167,44 +155,36 @@ export async function playerOpponentBreakdown(
   playerId: string,
   opponentId: string,
 ): Promise<PlayerOpponentBreakdown> {
-  const total = await playerTotalMatches(prisma, seasonId, playerId);
-  const vs = await matchesBetween(prisma, seasonId, playerId, opponentId);
+  // Single game source — identical to the leaderboard, incl. synthetic-game fallback.
+  const games = await loadConfirmedGames(prisma, seasonId);
+  const total = playerTotalWins(games, playerId);
+  const vs = winsBetween(games, playerId, opponentId);
   const share = opponentShare(vs, total);
   const mod = opponentModifier(share, total);
 
-  // Wins of `player` over `opponent` → raw points from the current model.
-  const wins = await prisma.match.findMany({
-    where: {
-      ...confirmedMatchWhere(seasonId),
-      winner_id: playerId,
-      OR: [
-        { player1_id: playerId, player2_id: opponentId },
-        { player1_id: opponentId, player2_id: playerId },
-      ],
-    } as Prisma.MatchWhereInput,
-    select: {
-      player1_id: true,
-      player2_id: true,
-      player1_faction_id: true,
-      player2_faction_id: true,
-    },
-  });
-
   const model = await getRatingModel(prisma, redis, { seasonId });
 
+  // Raw points the player earned from each won game against this opponent.
   let rawSum = 0;
-  for (const w of wins) {
-    const playerIsP1 = w.player1_id === playerId;
-    const playerFaction = (playerIsP1 ? w.player1_faction_id : w.player2_faction_id)!;
-    const oppFaction = (playerIsP1 ? w.player2_faction_id : w.player1_faction_id)!;
-    rawSum += rawPoints(model.expectedChanceToWin(playerId, playerFaction, opponentId, oppFaction));
+  for (const g of games) {
+    if (g.winner_id !== playerId) continue;
+    const playerIsP1 = g.player1_id === playerId;
+    const isVsOpponent = playerIsP1 ? g.player2_id === opponentId : g.player1_id === opponentId;
+    if (!isVsOpponent) continue;
+    const playerFaction = playerIsP1 ? g.player1_faction_id : g.player2_faction_id;
+    const oppFaction = playerIsP1 ? g.player2_faction_id : g.player1_faction_id;
+    const pWin =
+      playerFaction && oppFaction
+        ? model.expectedChanceToWin(playerId, playerFaction, opponentId, oppFaction)
+        : 0.5; // no faction data — neutral weighting (matches leaderboard)
+    rawSum += rawPoints(pWin);
   }
 
   return {
     playerId,
     opponentId,
-    matchesVsOpponent: vs,
-    playerTotalMatches: total,
+    winsVsOpponent: vs,
+    playerTotalWins: total,
     opponentShare: share,
     opponentModifier: mod,
     rawPointsFromWinsVsOpponent: rawSum,

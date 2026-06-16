@@ -27,6 +27,7 @@ const factionIds: string[] = [];
 let tournamentId: string;
 let seasonRR: string; // round-robin scenario
 let seasonAF: string; // anti-farm scenario
+let seasonTG: string; // wins-based targeting scenario
 
 // Round-robin players
 let A: string, B: string, C: string;
@@ -36,6 +37,10 @@ const aWinMatchIds: string[] = [];
 // Anti-farm players
 let D: string, E: string;
 const oppIds: string[] = [];
+
+// Targeting players (wins-based anti-farm): favourite-victim vs bogey opponent
+let P: string, V: string, Bg: string;
+const tgOppIds: string[] = [];
 
 let matchNo = 0;
 
@@ -121,6 +126,27 @@ beforeAll(async () => {
     oppIds.push(o);
     await completedMatch(seasonAF, D, o, f1, f2, D);
   }
+
+  // --- Targeting scenario (wins-based): P has 20 total WINS. ---
+  // vs V (favourite victim): P wins 4 of 5 → 4/20 = 20% of wins → penalised (mod 0).
+  // vs Bg (bogey): P wins 1 of 10, loses 9 → 1/20 = 5% of wins → NOT penalised,
+  //   even though 10 of P's 30 GAMES (33%) were vs Bg. The old games-based share
+  //   would have zeroed Bg; the wins-based share spares it. 15 further wins vs
+  //   distinct opponents make up the remaining 75% of P's wins.
+  const season3 = await createTestSeason({ is_active: false });
+  seasonTG = season3.id;
+  P = await newUser();
+  V = await newUser();
+  Bg = await newUser();
+  for (let i = 0; i < 4; i++) await completedMatch(seasonTG, P, V, f1, f2, P); // P beats V ×4
+  await completedMatch(seasonTG, P, V, f1, f2, V); // V beats P ×1
+  await completedMatch(seasonTG, P, Bg, f1, f2, P); // P beats Bg ×1
+  for (let i = 0; i < 9; i++) await completedMatch(seasonTG, P, Bg, f1, f2, Bg); // Bg beats P ×9
+  for (let i = 0; i < 15; i++) {
+    const o = await newUser();
+    tgOppIds.push(o);
+    await completedMatch(seasonTG, P, o, f1, f2, P); // P beats distinct ×15
+  }
 }, 30_000);
 
 afterAll(async () => {
@@ -128,6 +154,7 @@ afterAll(async () => {
   await prisma.faction.deleteMany({ where: { id: { in: factionIds } } });
   await cleanupSeason(seasonRR);
   await cleanupSeason(seasonAF);
+  await cleanupSeason(seasonTG);
   await cleanupUsers(userIds);
   await prisma.$disconnect();
 });
@@ -177,11 +204,34 @@ describe('computeSeasonLeaderboard — anti-farm', () => {
     expect(dEntry.totalFinalPoints).toBeLessThan(dEntry.totalRawPoints);
 
     const vsE = await playerOpponentBreakdown(prisma, undefined, seasonAF, D, E);
-    expect(vsE.matchesVsOpponent).toBe(8);
-    expect(vsE.playerTotalMatches).toBe(20);
+    expect(vsE.winsVsOpponent).toBe(8);
+    expect(vsE.playerTotalWins).toBe(20);
     expect(vsE.opponentShare).toBeCloseTo(0.4, 6);
     expect(vsE.opponentModifier).toBeCloseTo(0, 10);
     expect(vsE.rawPointsFromWinsVsOpponent).toBeGreaterThan(0);
     expect(vsE.finalPointsFromWinsVsOpponent).toBeCloseTo(0, 10);
+  });
+});
+
+describe('computeSeasonLeaderboard — wins-based targeting', () => {
+  it('penalises a favourite victim but spares a bogey opponent', async () => {
+    // Favourite victim: 4 of P's 20 wins (20% share) → zeroed.
+    const vsVictim = await playerOpponentBreakdown(prisma, undefined, seasonTG, P, V);
+    expect(vsVictim.winsVsOpponent).toBe(4);
+    expect(vsVictim.playerTotalWins).toBe(20);
+    expect(vsVictim.opponentShare).toBeCloseTo(0.2, 6);
+    expect(vsVictim.opponentModifier).toBeCloseTo(0, 10);
+
+    // Bogey opponent: only 1 of P's 20 wins (5% share) → full credit, NOT penalised —
+    // despite 10 of P's 30 games being vs Bg (the old games-based share would zero it).
+    const vsBogey = await playerOpponentBreakdown(prisma, undefined, seasonTG, P, Bg);
+    expect(vsBogey.winsVsOpponent).toBe(1);
+    expect(vsBogey.playerTotalWins).toBe(20);
+    expect(vsBogey.opponentShare).toBeCloseTo(0.05, 6);
+    expect(vsBogey.opponentModifier).toBeCloseTo(1, 10);
+    expect(vsBogey.finalPointsFromWinsVsOpponent).toBeCloseTo(
+      vsBogey.rawPointsFromWinsVsOpponent,
+      6,
+    );
   });
 });

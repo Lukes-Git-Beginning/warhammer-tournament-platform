@@ -34,17 +34,19 @@ RawPoints(Sieger)    = 100 · (1 − ExpectedChanceToWin)         // kein Cap/Fl
 
 **Anti-Farming** (`scoring-service.ts`) — player-spezifisch, asymmetrisch, **nicht** auf Faktion/Matchup/Combo:
 ```
-OpponentShare    = gamesVsOpponent / playerTotalGames
-OpponentModifier = total<20 → 1 ; share≤0.05 → 1 ; share≥0.10 → 0 ; sonst (0.10−share)/0.05
+OpponentShare    = winsVsOpponent / playerTotalWins
+OpponentModifier = totalWins<20 → 1 ; share≤0.05 → 1 ; share≥0.10 → 0 ; sonst (0.10−share)/0.05
 FinalPoints      = RawPoints · OpponentModifier ;  LeaderboardScore = Σ FinalPoints über Siege
 ```
-Dynamische Erholung: viele andere Gegner spielen senkt die Share → frühere Punkte kommen zurück.
+Dynamische Erholung: viele andere Gegner **schlagen** senkt die Share → frühere Punkte kommen zurück.
+
+**Einheit = Siege (seit 2026-06-16):** Der Anteil zählt **Siege**, nicht alle Spiele — der Modifier dämpft ausschließlich Punkte aus Siegen, also wird der Anteil in derselben Einheit gemessen (`winsVsOpponent / playerTotalWins`, Schwelle 20 Siege). Effekt: ein „Lieblingsopfer" (überdurchschnittliche Siegquote gegen X) wird gedämpft, ein „Angstgegner" (viele Spiele, wenige Siege) **nicht**.
 
 Tests: `test/{scoring-service,rating-model,leaderboard-service}.test.ts` (alle 8 Spec-Cases + Optimizer + DB-Integration inkl. Explainability-Invariante).
 
 **Game-Ebene (2026-06-06):** Leaderboard und Rating-Modell rechnen auf **MatchGame**-Ebene, nicht Match-Ebene. Jede Battle ist eine separate Observation. Laden via `confirmedMatchWhere()` auf Match → Expansion auf `MatchGame`-Records (`m.games`) → Fallback auf synthetisches Einzel-Game wenn `games.length === 0` (pre-GL-fix Daten). Faction-Fallback 3-stufig: `MatchGame.player1_faction_id` → `Match.player1_faction_id` → `TournamentParticipant.faction_id`. Null-Factions → p=0.5 neutral in Score-Berechnung; für Modell-Training übersprungen.
 
-**`confirmedGameWhere()`** in `rating-model-service.ts` existiert als Hilfs-Where für MatchGame-Queries, wird aber im Leaderboard nicht mehr als primärer Filter verwendet (Match-first-Ansatz). `confirmedMatchWhere()` bleibt für `breakdown-service.ts` (Explainability-Helpers bleiben auf Match-Ebene).
+**`confirmedGameWhere()`** in `rating-model-service.ts` existiert als Hilfs-Where für MatchGame-Queries, wird aber im Leaderboard nicht mehr als primärer Filter verwendet (Match-first-Ansatz). `breakdown-service.ts` rechnet seit 2026-06-16 **game-level über `loadConfirmedGames()`** (exportiert aus `leaderboard-service.ts`) — dieselbe Quelle wie die Bestenliste inkl. synthetisches-Game-Fallback —, sodass Share/Modifier in der Erklär-Ansicht exakt mit der Bestenliste übereinstimmen (vorher Match-Ebene, was bei Best-of-N abwich).
 
 **API-Shape:** `DynamicLeaderboardEntryDto.totalMatches` → **`totalGames`** (seit 2026-06-06, `packages/types/src/api-schemas.ts`).
 

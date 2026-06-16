@@ -25,7 +25,7 @@ export interface DynamicLeaderboardEntry {
   losses: number;
 }
 
-interface ConfirmedGame {
+export interface ConfirmedGame {
   player1_id: string;
   player2_id: string;
   winner_id: string;
@@ -123,9 +123,9 @@ export async function computeSeasonLeaderboard(
   const games = await loadConfirmedGames(prisma, seasonId);
   const model = await getRatingModel(prisma, redis, { seasonId });
 
-  // --- Pass 1: per-player totals + per-(player, opponent) game counts --------
+  // --- Pass 1: per-player totals + per-(player, opponent) WIN counts ----------
   const agg = new Map<string, PlayerAgg>();
-  const opponentCounts = new Map<string, Map<string, number>>();
+  const winsVsOpponent = new Map<string, Map<string, number>>();
 
   const ensureAgg = (id: string): PlayerAgg => {
     let a = agg.get(id);
@@ -135,11 +135,13 @@ export async function computeSeasonLeaderboard(
     }
     return a;
   };
-  const bumpOpponent = (player: string, opponent: string): void => {
-    let inner = opponentCounts.get(player);
+  // Anti-farm share is "what fraction of MY wins came from one opponent", so the
+  // count is directional — only the winner bumps the count against the loser.
+  const bumpWin = (winner: string, opponent: string): void => {
+    let inner = winsVsOpponent.get(winner);
     if (!inner) {
       inner = new Map();
-      opponentCounts.set(player, inner);
+      winsVsOpponent.set(winner, inner);
     }
     inner.set(opponent, (inner.get(opponent) ?? 0) + 1);
   };
@@ -150,8 +152,7 @@ export async function computeSeasonLeaderboard(
     ensureAgg(loserId).losses += 1;
     ensureAgg(g.winner_id).games += 1;
     ensureAgg(loserId).games += 1;
-    bumpOpponent(g.player1_id, g.player2_id);
-    bumpOpponent(g.player2_id, g.player1_id);
+    bumpWin(g.winner_id, loserId);
   }
 
   // --- Pass 2: points for each win, using current model + current shares -----
@@ -168,8 +169,8 @@ export async function computeSeasonLeaderboard(
         : 0.5; // no faction data — neutral weighting
     const raw = rawPoints(p);
 
-    const winnerTotal = agg.get(winnerId)!.games;
-    const vsOpponent = opponentCounts.get(winnerId)?.get(loserId) ?? 0;
+    const winnerTotal = agg.get(winnerId)!.wins;
+    const vsOpponent = winsVsOpponent.get(winnerId)?.get(loserId) ?? 0;
     const share = opponentShare(vsOpponent, winnerTotal);
     const mod = opponentModifier(share, winnerTotal);
 

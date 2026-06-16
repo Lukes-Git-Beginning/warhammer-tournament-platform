@@ -30,7 +30,7 @@ describe('rawPoints', () => {
 
 // ---------------------------------------------------------------------------
 // #4 Opponent modifier
-//   <20 total → 1 ; share<=5% → 1 ; share>=10% → 0 ; else (0.10-share)/0.05
+//   <20 total wins → 1 ; share<=5% → 1 ; share>=10% → 0 ; else (0.10-share)/0.05
 // ---------------------------------------------------------------------------
 
 describe('opponentModifier', () => {
@@ -46,7 +46,7 @@ describe('opponentModifier', () => {
     expect(opponentModifier(opponentShare(10, 100), 100)).toBeCloseTo(0.0, 10);
   });
 
-  it('19 total, 10 vs opponent → 1.00 (below the 20-match floor)', () => {
+  it('19 total wins, 10 vs opponent → 1.00 (below the 20-win floor)', () => {
     expect(opponentModifier(opponentShare(10, 19), 19)).toBeCloseTo(1.0, 10);
   });
 
@@ -58,28 +58,28 @@ describe('opponentModifier', () => {
 });
 
 // ---------------------------------------------------------------------------
-// #5 Player-specific (asymmetric) modifier — same 8 shared matches, different
-//    totals → different modifiers.
+// #5 Player-specific (asymmetric) modifier — 8 wins vs one opponent, but
+//    different win totals → different modifiers.
 // ---------------------------------------------------------------------------
 
 describe('player-specific opponent modifier', () => {
-  it('A: 200 total, 8 vs B → share 4% → 1.00', () => {
+  it('A: 200 total wins, 8 vs B → share 4% → 1.00', () => {
     expect(opponentShare(8, 200)).toBeCloseTo(0.04, 10);
     expect(opponentModifier(opponentShare(8, 200), 200)).toBeCloseTo(1.0, 10);
   });
 
-  it('B: 40 total, 8 vs A → share 20% → 0.00', () => {
+  it('B: 40 total wins, 8 vs A → share 20% → 0.00', () => {
     expect(opponentShare(8, 40)).toBeCloseTo(0.2, 10);
     expect(opponentModifier(opponentShare(8, 40), 40)).toBeCloseTo(0.0, 10);
   });
 });
 
 // ---------------------------------------------------------------------------
-// #6 Dynamic recovery — same 8 matches vs B, growing total → modifier recovers.
+// #6 Dynamic recovery — same 8 wins vs B, growing win total → modifier recovers.
 // ---------------------------------------------------------------------------
 
 describe('dynamic recovery', () => {
-  it('50 total, 8 vs B → 0; later 160 total, still 8 vs B → 1', () => {
+  it('50 total wins, 8 vs B → 0; later 160 total wins, still 8 vs B → 1', () => {
     expect(opponentModifier(opponentShare(8, 50), 50)).toBeCloseTo(0.0, 10); // 16% share
     expect(opponentModifier(opponentShare(8, 160), 160)).toBeCloseTo(1.0, 10); // 5% share
   });

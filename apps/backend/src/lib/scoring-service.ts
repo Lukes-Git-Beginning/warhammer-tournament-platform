@@ -9,14 +9,16 @@
 //   FinalPoints = RawPoints * OpponentModifier
 //
 // Anti-farming is player-specific and asymmetric: it only depends on how large
-// a share of a player's own confirmed matches were played against one opponent.
+// a share of a player's own confirmed WINS were earned against one opponent.
+// Because the penalty only ever scales points earned FROM wins, the share that
+// drives it is measured in the same unit (wins), not all games.
 // Repeated factions / matchups / faction-combos are deliberately NOT penalized.
 // ---------------------------------------------------------------------------
 
 /** Opponent-share thresholds (Alex-Spec). Exported for tests + documentation. */
 export const OPPONENT_SHARE_FULL = 0.05; // <= 5%  → full value
 export const OPPONENT_SHARE_ZERO = 0.1; //  >= 10% → zero value
-export const MIN_MATCHES_FOR_ANTI_FARM = 20; // < 20 total matches → no penalty
+export const MIN_WINS_FOR_ANTI_FARM = 20; // < 20 total wins → no penalty
 
 /**
  * Raw victory points for the winner of a single match.
@@ -31,30 +33,30 @@ export function rawPoints(expectedChanceToWin: number): number {
 }
 
 /**
- * Player-specific opponent share: how large a fraction of THIS player's
- * confirmed matches were played against this opponent. Asymmetric by design —
- * A-vs-B and B-vs-A generally differ because the totals differ.
+ * Player-specific opponent share: how large a fraction of THIS player's WINS
+ * were earned against this opponent. Asymmetric by design — A-vs-B and B-vs-A
+ * generally differ because their win totals differ.
  *
- * Returns 0 when the player has no matches (avoids division by zero).
+ * Returns 0 when the player has no wins (avoids division by zero).
  */
-export function opponentShare(matchesVsOpponent: number, playerTotalMatches: number): number {
-  if (playerTotalMatches <= 0) return 0;
-  return matchesVsOpponent / playerTotalMatches;
+export function opponentShare(winsVsOpponent: number, playerTotalWins: number): number {
+  if (playerTotalWins <= 0) return 0;
+  return winsVsOpponent / playerTotalWins;
 }
 
 /**
  * Anti-farming modifier in [0, 1] applied to a win's raw points.
  *
- *   total matches < 20        → 1     (not enough history to farm)
+ *   total wins < 20           → 1     (not enough history to farm)
  *   share <= 5%               → 1     (full value)
  *   share >= 10%              → 0     (zero value)
  *   otherwise                 → (0.10 - share) / 0.05   (linear ramp)
  *
- * Because share is recomputed from current data, a player who over-plays one
- * opponent early recovers those points later by playing many other opponents.
+ * Because share is recomputed from current data, a player who over-beats one
+ * opponent early recovers those points later by beating many other opponents.
  */
-export function opponentModifier(share: number, playerTotalMatches: number): number {
-  if (playerTotalMatches < MIN_MATCHES_FOR_ANTI_FARM) return 1;
+export function opponentModifier(share: number, playerTotalWins: number): number {
+  if (playerTotalWins < MIN_WINS_FOR_ANTI_FARM) return 1;
   if (share <= OPPONENT_SHARE_FULL) return 1;
   if (share >= OPPONENT_SHARE_ZERO) return 0;
   return (OPPONENT_SHARE_ZERO - share) / (OPPONENT_SHARE_ZERO - OPPONENT_SHARE_FULL);
