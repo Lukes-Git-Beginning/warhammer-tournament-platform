@@ -39,7 +39,7 @@ interface SVGBracketProps {
  * - Pending feeder with 1 player  → that player's name
  * - Pending feeder with 0 players → null → MatchNode shows "TBD"
  */
-function makeSlotLabel(
+export function makeSlotLabel(
   feeder: BracketNode,
   players?: Map<string, BracketPlayerInfo>,
   isLoserSlot = false,
@@ -55,10 +55,13 @@ function makeSlotLabel(
     return players?.get(feeder.winnerId)?.name ?? null;
   }
 
-  if (p1Name && p2Name) return `${p1Name} / ${p2Name}`;
-  if (p1Name) return `${p1Name} / TBD`;
-  if (p2Name) return `${p2Name} / TBD`;
-  return null; // feeder has no known players yet → show TBD
+  // Feeder not yet decided — project the candidate pair. Mark loser-path slots
+  // ("Loser of …") so the third-place match doesn't render the identical pair as
+  // the Grand Final (whose slots are the *winners* of the very same feeders).
+  const candidates =
+    p1Name && p2Name ? `${p1Name} / ${p2Name}` : p1Name ? `${p1Name} / TBD` : p2Name ? `${p2Name} / TBD` : null;
+  if (!candidates) return null; // feeder has no known players yet → show TBD
+  return isLoserSlot ? `Loser of ${candidates}` : candidates;
 }
 
 export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchClick }: SVGBracketProps) {
