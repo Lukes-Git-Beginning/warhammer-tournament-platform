@@ -972,13 +972,21 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         .filter((m) => m.round === currentRound)
         .sort((a, b) => a.match_number - b.match_number);
 
-      const incomplete = currentRoundMatches.filter(
-        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED',
-      );
+      // A playoff match only counts as resolved when it has a definitive winner:
+      // COMPLETED / BYE always resolve; FORFEIT resolves only if a winner was
+      // recorded (one-sided drop). CANCELLED (double-drop, no winner) and any
+      // FORFEIT without winner_id do NOT resolve — they must block advancement,
+      // otherwise we propagate phantom/dropped players into the GF + third-place
+      // match before the semifinals were ever played.
+      const incomplete = currentRoundMatches.filter((m) => {
+        if (m.status === 'COMPLETED' || m.status === 'BYE') return false;
+        if (m.status === 'FORFEIT' && m.winner_id !== null) return false;
+        return true;
+      });
       if (incomplete.length > 0) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: `${incomplete.length} match(es) in current playoff round not yet completed`,
+          message: `${incomplete.length} match(es) in current playoff round not yet decided (a cancelled or unfinished match cannot advance — restore or replay it first)`,
           statusCode: 422,
         });
       }
@@ -1010,6 +1018,18 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           phase: nextPhase,
         }));
 
+      // Defend against a phantom slot: with the guard above every feeding match
+      // has a winner, but never persist a next-round match with an empty slot.
+      const phantom = nextMatches.find((m) => m.player1_id === null || m.player2_id === null);
+      if (phantom) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message:
+            'Cannot generate the next round: a feeding match has no winner. Restore or replay the affected match first.',
+          statusCode: 422,
+        });
+      }
+
       // When advancing to the Grand Final: also create the third-place match with
       // the SF losers already filled in — exactly analogous to the GF being created
       // with the SF winners. Then wire loser_next_match_id on the SF rows.
@@ -1018,15 +1038,22 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           ? (() => {
               const sf1 = currentRoundMatches[0];
               const sf2 = currentRoundMatches[1];
-              const loser = (m: typeof sf1) =>
-                m ? (m.player1_id === m.winner_id ? m.player2_id : m.player1_id) : null;
+              const loser = (m: typeof sf1): string | null => {
+                if (!m || m.winner_id === null) return null;
+                return m.player1_id === m.winner_id ? m.player2_id : m.player1_id;
+              };
+              const l1 = loser(sf1);
+              const l2 = loser(sf2);
+              // Skip when a loser cannot be determined (e.g. a bye SF). The small
+              // final can still be added later via add-third-place-match.
+              if (l1 === null || l2 === null) return null;
               return {
                 id: randomUUID(),
                 tournament_id: id,
                 round: currentRound + 1,
                 match_number: 2,
-                player1_id: loser(sf1),
-                player2_id: loser(sf2),
+                player1_id: l1,
+                player2_id: l2,
                 status: 'PENDING' as MatchStatus,
                 next_match_id: null as string | null,
                 phase: 'PLAYOFF_THIRD_PLACE' as const,
@@ -1146,21 +1173,25 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Expected 2 semifinal matches feeding into the final', statusCode: 422 });
       }
 
-      const incomplete = sfMatches.filter(
-        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT',
-      );
+      // Same resolution rule as advance-playoffs: FORFEIT only counts when a
+      // winner was recorded; CANCELLED / winner-less matches block the repair.
+      const incomplete = sfMatches.filter((m) => {
+        if (m.status === 'COMPLETED' || m.status === 'BYE') return false;
+        if (m.status === 'FORFEIT' && m.winner_id !== null) return false;
+        return true;
+      });
       if (incomplete.length > 0) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: `${incomplete.length} semifinal match(es) not yet completed`,
+          message: `${incomplete.length} semifinal match(es) not yet decided`,
           statusCode: 422,
         });
       }
 
       const sf1 = sfMatches[0]!;
       const sf2 = sfMatches[1]!;
-      const loser = (m: typeof sf1) =>
-        m.player1_id === m.winner_id ? m.player2_id : m.player1_id;
+      const loser = (m: typeof sf1): string | null =>
+        m.winner_id === null ? null : m.player1_id === m.winner_id ? m.player2_id : m.player1_id;
       const p1 = loser(sf1);
       const p2 = loser(sf2);
 

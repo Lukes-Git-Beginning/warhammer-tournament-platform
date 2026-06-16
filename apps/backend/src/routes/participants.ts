@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { emitParticipantChange } from '../lib/emit.js';
+import { emitParticipantChange, emitBracketUpdate } from '../lib/emit.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -689,8 +689,9 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ---------------------------------------------------------------------------
   // POST /api/tournaments/:slug/participants/:userId/undrop
-  // Restore a WITHDREW participant to CHECKED_IN. Does NOT auto-restore FORFEIT
-  // matches — admin handles those separately via match restore/cancel endpoints.
+  // Restore a WITHDREW participant to CHECKED_IN and reset any never-played
+  // playoff matches that were forfeited/cancelled solely because of the drop.
+  // Swiss FORFEIT rows and already-played matches are left untouched.
   // ---------------------------------------------------------------------------
   fastify.post(
     '/api/tournaments/:slug/participants/:userId/undrop',
@@ -724,14 +725,60 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Cannot undrop a disqualified player', statusCode: 422 });
       }
 
-      await fastify.prisma.tournamentParticipant.update({
-        where: { id: participant.id },
-        data: { status: 'CHECKED_IN' },
+      // Reset any never-played playoff matches that were only forfeited/cancelled
+      // because of the drop. Without this the SF rows stay FORFEIT/CANCELLED
+      // (showing the player as OUT) and advance-playoffs would propagate phantom
+      // players into the GF / third-place node. Conservative scope: playoff phase,
+      // winner-less or forfeited, and never actually played. Swiss FORFEIT rows
+      // are left untouched (they correctly reflect the missed round in standings).
+      const droppedPlayoffMatches = await fastify.prisma.match.findMany({
+        where: {
+          tournament_id: tournament.id,
+          deleted_at: null,
+          status: { in: ['FORFEIT', 'CANCELLED'] },
+          played_at: null,
+          phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] },
+          OR: [{ player1_id: userId }, { player2_id: userId }],
+        },
+        select: { id: true },
+      });
+
+      await fastify.prisma.$transaction(async (tx) => {
+        await tx.tournamentParticipant.update({
+          where: { id: participant.id },
+          data: { status: 'CHECKED_IN' },
+        });
+        if (droppedPlayoffMatches.length > 0) {
+          await tx.match.updateMany({
+            where: { id: { in: droppedPlayoffMatches.map((m) => m.id) } },
+            data: {
+              status: 'PENDING',
+              winner_id: null,
+              result: null,
+              score: null,
+              player1_points: null,
+              player2_points: null,
+              played_at: null,
+            },
+          });
+        }
+        await tx.auditLog.create({
+          data: {
+            entity_type: 'Tournament',
+            entity_id: tournament.id,
+            action: 'participant_undrop',
+            actor_id: currentUserId,
+            new_value: { userId, matchesRestored: droppedPlayoffMatches.length },
+          },
+        });
       });
 
       emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'registered' });
+      if (droppedPlayoffMatches.length > 0) {
+        emitBracketUpdate(fastify.io, tournament.id);
+      }
 
-      return reply.code(200).send({ undroped: true });
+      return reply.code(200).send({ undroped: true, matchesRestored: droppedPlayoffMatches.length });
     },
   );
 };
