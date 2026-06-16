@@ -198,7 +198,8 @@ export type FactionMatchupMatrixResponse = z.infer<typeof FactionMatchupMatrixRe
 export const PlayerFactionProficiencyDtoSchema = z.object({
   playerId: z.string().uuid(),
   factionId: z.string(),
-  playerFactionSkill: z.number(),
+  playerFactionSkill: z.number(), // raw model log-odds (can be negative or >1); for sorting only
+  neutralWinChance: z.number(), // logistic(skill): win chance vs neutral opponent, in [0..1]
   games: z.number().int(),
   wins: z.number().int(),
   losses: z.number().int(),

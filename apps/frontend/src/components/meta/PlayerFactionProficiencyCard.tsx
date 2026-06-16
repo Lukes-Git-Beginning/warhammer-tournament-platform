@@ -13,7 +13,7 @@ interface PlayerFactionProficiencyCardProps {
 }
 
 function SkillBar({ value }: { value: number }) {
-  // playerFactionSkill is a probability [0..1]; scale to percentage
+  // value is neutralWinChance — already a probability in [0..1]
   const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
   return (
     <div className="flex items-center gap-1.5">
@@ -39,7 +39,9 @@ function ProficiencyRow({
     entry.games > 0 ? Math.round((entry.wins / entry.games) * 100) : null;
 
   return (
-    <div className="flex items-center gap-2">
+    <div
+      className={`flex items-center gap-2 ${entry.lowSampleWarning ? 'opacity-50' : ''}`}
+    >
       {faction ? (
         <FactionBadge
           colorHex={faction.color_hex}
@@ -54,23 +56,25 @@ function ProficiencyRow({
         </span>
       )}
 
-      <span className="min-w-0 flex-1 truncate text-xs text-stone-300">
-        {faction?.name ?? entry.factionId}
+      <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-stone-300">
+        <span className="truncate">{faction?.name ?? entry.factionId}</span>
+        {entry.lowSampleWarning && (
+          <span
+            title="Low sample size (fewer than 5 games)"
+            className="shrink-0 text-[10px] uppercase tracking-wider text-stone-500"
+          >
+            low sample
+          </span>
+        )}
       </span>
 
-      <span className="text-xs text-stone-500">{entry.games}g</span>
+      <span className="w-10 text-right text-xs text-stone-500">{entry.games}</span>
 
-      {winRate !== null && (
-        <span className="w-8 text-right text-xs text-stone-400">{winRate}%</span>
-      )}
+      <span className="w-10 text-right text-xs text-stone-400">
+        {winRate !== null ? `${winRate}%` : '—'}
+      </span>
 
-      <SkillBar value={entry.playerFactionSkill} />
-
-      {entry.lowSampleWarning && (
-        <span title="Low sample size" className="text-[10px] text-stone-600 italic">
-          ~
-        </span>
-      )}
+      <SkillBar value={entry.neutralWinChance} />
     </div>
   );
 }
@@ -122,6 +126,15 @@ export function PlayerFactionProficiencyCard({
         />
       ) : (
         <div className="space-y-2">
+          <div className="flex items-center gap-2 pb-1 text-[10px] uppercase tracking-wider text-stone-600">
+            <span className="h-6 w-6 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1">Faction</span>
+            <span className="w-10 text-right">Games</span>
+            <span className="w-10 text-right">Win rate</span>
+            <span className="w-[90px]" title="Win chance vs a neutral opponent">
+              Skill
+            </span>
+          </div>
           {sorted.map((entry) => (
             <ProficiencyRow
               key={entry.factionId}

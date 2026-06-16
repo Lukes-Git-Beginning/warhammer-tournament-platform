@@ -248,7 +248,8 @@ export async function factionMatchupMatrix(
 export interface PlayerFactionProficiencyEntry {
   playerId: string;
   factionId: string;
-  playerFactionSkill: number;
+  playerFactionSkill: number; // raw model log-odds (can be negative or >1); used for sorting
+  neutralWinChance: number; // logistic(skill): win chance vs a neutral/average opponent, in [0..1]
   games: number;
   wins: number;
   losses: number;
@@ -308,13 +309,17 @@ export async function playerFactionProficiency(
       .map((e) => [e.factionId, e.lowSampleWarning]),
   );
 
-  return [...tally.entries()].map(([factionId, t]) => ({
-    playerId,
-    factionId,
-    playerFactionSkill: model.getPlayerFactionSkill(playerId, factionId),
-    games: t.games,
-    wins: t.wins,
-    losses: t.losses,
-    lowSampleWarning: warnOf.get(factionId) ?? t.games < 5,
-  }));
+  return [...tally.entries()].map(([factionId, t]) => {
+    const skill = model.getPlayerFactionSkill(playerId, factionId);
+    return {
+      playerId,
+      factionId,
+      playerFactionSkill: skill,
+      neutralWinChance: logistic(skill),
+      games: t.games,
+      wins: t.wins,
+      losses: t.losses,
+      lowSampleWarning: warnOf.get(factionId) ?? t.games < 5,
+    };
+  });
 }
