@@ -151,7 +151,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           totalTournaments,
           activeTournaments,
           completedTournaments,
-          totalMatches,
+          totalGames,
           activeSeason,
           queueDepth,
           activeOpenPlayMatches,
@@ -161,7 +161,9 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           fastify.prisma.tournament.count({ where: { deleted_at: null } }),
           fastify.prisma.tournament.count({ where: { deleted_at: null, status: { in: ['ONGOING', 'OPEN_REGISTRATION', 'REGISTRATION_CLOSED'] } } }),
           fastify.prisma.tournament.count({ where: { status: 'COMPLETED' } }),
-          fastify.prisma.match.count(),
+          // Games — not Matches — are the statistical unit: a Match is just a
+          // container (Bo3, challenge series). Count actually-played games.
+          fastify.prisma.matchGame.count({ where: { status: 'COMPLETED', match: { deleted_at: null } } }),
           fastify.prisma.season.findFirst({ where: { is_active: true } }),
           fastify.redis ? fastify.redis.llen('rizzotto:queue:open_play') : Promise.resolve(0),
           fastify.prisma.match.count({ where: { type: 'OPEN_PLAY', status: 'ONGOING', deleted_at: null } }),
@@ -187,7 +189,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         return {
           activeUsers,
           tournaments: { total: totalTournaments, active: activeTournaments, completed: completedTournaments },
-          matchesPlayed: totalMatches,
+          gamesPlayed: totalGames,
           currentSeason: activeSeason?.name ?? null,
           topFactions: topFactions.map((f) => ({
             faction_id: f.faction_id,

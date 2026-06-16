@@ -21,7 +21,7 @@ import { StatsDashboard } from './StatsDashboard';
 const MOCK_STATS: AdminStats = {
   activeUsers: 42,
   tournaments: { total: 10, active: 3, completed: 7 },
-  matchesPlayed: 128,
+  gamesPlayed: 128,
   currentSeason: 'Season 4',
   topFactions: [
     { faction_id: 'f1', faction_name: 'Greenskinz', pick_count: 25 },
@@ -91,7 +91,7 @@ describe('StatsDashboard Rendering (pre-hydrated QueryClient)', () => {
 
     // Zahlenwerte vorhanden
     expect(html).toContain('42');      // activeUsers
-    expect(html).toContain('128');     // matchesPlayed
+    expect(html).toContain('128');     // gamesPlayed
     expect(html).toContain('Season 4'); // currentSeason
     expect(html).toContain('10');      // tournaments.total
   });

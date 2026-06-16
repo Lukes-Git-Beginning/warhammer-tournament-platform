@@ -169,7 +169,7 @@ describe('GET /api/admin/stats', () => {
     const body = res.json<{
       activeUsers: number;
       tournaments: { total: number; active: number; completed: number };
-      matchesPlayed: number;
+      gamesPlayed: number;
       currentSeason: string | null;
       topFactions: unknown[];
     }>();
@@ -177,7 +177,7 @@ describe('GET /api/admin/stats', () => {
     expect(typeof body.tournaments.total).toBe('number');
     expect(typeof body.tournaments.active).toBe('number');
     expect(typeof body.tournaments.completed).toBe('number');
-    expect(typeof body.matchesPlayed).toBe('number');
+    expect(typeof body.gamesPlayed).toBe('number');
     expect(Array.isArray(body.topFactions)).toBe(true);
   });
 

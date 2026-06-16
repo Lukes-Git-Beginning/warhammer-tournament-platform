@@ -51,7 +51,7 @@ export function StatsDashboard() {
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-8">
         <KpiCard label="Active Users" value={data.activeUsers} />
         <TournamentCard data={data.tournaments} />
-        <KpiCard label="Matches Played" value={data.matchesPlayed} />
+        <KpiCard label="Games Played" value={data.gamesPlayed} />
         <KpiCard label="Current Season" value={data.currentSeason ?? '—'} />
       </div>
 

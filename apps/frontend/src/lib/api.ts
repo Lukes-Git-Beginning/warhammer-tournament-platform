@@ -549,7 +549,7 @@ export interface AuditLogEntry {
 export interface AdminStats {
   activeUsers: number;
   tournaments: { total: number; active: number; completed: number };
-  matchesPlayed: number;
+  gamesPlayed: number;
   currentSeason: string | null;
   topFactions: { faction_id: string; faction_name: string; pick_count: number }[];
   openPlay: { queueDepth: number; activeMatches: number; scheduledAccepted: number };
