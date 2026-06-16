@@ -1347,6 +1347,7 @@ export function createScheduledMatchup(data: {
   proposed_at: string;
   notes?: string;
   anonymous?: boolean;
+  expires_in_hours?: number;
 }): Promise<{ id: string }> {
   return apiFetch<{ id: string }>('/api/scheduled-matchups', {
     method: 'POST',

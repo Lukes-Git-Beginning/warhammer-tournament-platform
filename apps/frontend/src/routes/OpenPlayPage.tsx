@@ -274,12 +274,15 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
     (s) => s.context === 'MATCHMAKING',
   );
 
+  const isImmediate = selectedDate === null;
+
   const create = useMutation({
     mutationFn: () =>
       createScheduledMatchup({
         format,
-        proposed_at: selectedDate!.toISOString(),
+        proposed_at: isImmediate ? new Date().toISOString() : selectedDate.toISOString(),
         notes: notes || undefined,
+        ...(isImmediate ? { expires_in_hours: 0.5 } : {}),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['scheduled-matchups'] });
@@ -357,12 +360,17 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
             <Button
               size="lg"
               onClick={() => setShowNotes(true)}
-              disabled={!selectedDate}
+
             >
               Post a Challenge
             </Button>
           ) : (
             <div className="space-y-3 max-w-sm">
+              {isImmediate && (
+                <p className="text-xs text-amber-400/90 rounded border border-amber-800/40 bg-amber-950/30 px-3 py-2">
+                  You're about to post an <strong>immediate challenge</strong> — it expires in 30 minutes if no one accepts. To schedule a specific time, pick a slot in the calendar first.
+                </p>
+              )}
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
