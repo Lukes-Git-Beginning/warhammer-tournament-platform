@@ -90,6 +90,11 @@ export function MatchNode({
     ? (match.winnerId === match.player1Id ? match.player2Id : match.player1Id)
     : null;
   const bothDropped = isCancelled;
+  // A slot is only "dropped" when it actually holds a player. Without the
+  // null check, an empty/TBD slot (player1Id === null) matches droppedPlayerId
+  // (also null) and a pending future-round node renders struck-through "OUT".
+  const p1Dropped = match.player1Id !== null && (bothDropped || droppedPlayerId === match.player1Id);
+  const p2Dropped = match.player2Id !== null && (bothDropped || droppedPlayerId === match.player2Id);
 
   const statusCls = statusColors[match.status] ?? 'border-stone-700 bg-stone-900/40';
 
@@ -156,7 +161,7 @@ export function MatchNode({
         {match.player1Id && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
-            droppedPlayerId === match.player1Id || bothDropped
+            p1Dropped
               ? 'line-through text-stone-300'
               : p1Winner
                 ? 'text-rizzotto-gold-500 font-semibold'
@@ -169,11 +174,11 @@ export function MatchNode({
             ? (player1Name ?? match.player1Id)
             : (p1SlotLabel ?? (isBye ? 'BYE' : 'TBD'))}
         </span>
-        {(droppedPlayerId === match.player1Id || bothDropped) && (
+        {p1Dropped && (
           <span className="text-[9px] text-red-400 uppercase tracking-wider ml-1 font-semibold">out</span>
         )}
         {showFaction && match.player1Id && <FactionIndicator faction={player1Faction} />}
-        {score1 && droppedPlayerId !== match.player1Id && !bothDropped && (
+        {score1 && !p1Dropped && (
           <span
             className={`text-xs ml-1 tabular-nums ${isDraw ? 'text-amber-400' : p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
           >
@@ -187,7 +192,7 @@ export function MatchNode({
         {match.player2Id && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
-            droppedPlayerId === match.player2Id || bothDropped
+            p2Dropped
               ? 'line-through text-stone-300'
               : p2Winner
                 ? 'text-rizzotto-gold-500 font-semibold'
@@ -200,11 +205,11 @@ export function MatchNode({
             ? (player2Name ?? match.player2Id)
             : (p2SlotLabel ?? (isBye ? 'BYE' : 'TBD'))}
         </span>
-        {(droppedPlayerId === match.player2Id || bothDropped) && (
+        {p2Dropped && (
           <span className="text-[9px] text-red-400 uppercase tracking-wider ml-1 font-semibold">out</span>
         )}
         {showFaction && match.player2Id && <FactionIndicator faction={player2Faction} />}
-        {score2 && droppedPlayerId !== match.player2Id && !bothDropped && (
+        {score2 && !p2Dropped && (
           <span
             className={`text-xs ml-1 tabular-nums ${isDraw ? 'text-amber-400' : p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
           >

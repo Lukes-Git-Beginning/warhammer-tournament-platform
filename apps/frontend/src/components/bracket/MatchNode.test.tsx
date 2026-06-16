@@ -123,4 +123,33 @@ describe('MatchNode DOM rendering', () => {
     const pulse = container.querySelector('.animate-pulse');
     expect(pulse).toBeNull();
   });
+
+  it('does not render OUT or strike-through for empty/TBD slots in a pending node', () => {
+    const match = makeMatch({ status: 'PENDING', player1Id: null, player2Id: null });
+    act(() => {
+      root.render(
+        createElement(MatchNode, {
+          match,
+          p1SlotLabel: 'Byrd / Galju',
+          p2SlotLabel: 'Loser of ponti / jimmy',
+        }),
+      );
+    });
+    // The OUT badge uses text-red-400; empty projected slots must not show it.
+    expect(container.querySelector('.text-red-400')).toBeNull();
+    expect(container.querySelector('.line-through')).toBeNull();
+    expect(container.textContent).toContain('Byrd / Galju');
+  });
+
+  it('renders OUT + strike-through only for the forfeiting (non-winner) player', () => {
+    const match = makeMatch({ status: 'FORFEIT', player1Id: 'p1', player2Id: 'p2', winnerId: 'p1' });
+    act(() => {
+      root.render(
+        createElement(MatchNode, { match, player1Name: 'Alpha', player2Name: 'Beta' }),
+      );
+    });
+    // Exactly one slot (the loser) is marked dropped.
+    expect(container.querySelectorAll('.text-red-400')).toHaveLength(1);
+    expect(container.querySelectorAll('.line-through')).toHaveLength(1);
+  });
 });
