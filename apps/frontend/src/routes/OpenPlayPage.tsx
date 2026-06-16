@@ -274,6 +274,8 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
     (s) => s.context === 'MATCHMAKING',
   );
 
+  const [playNowPosted, setPlayNowPosted] = useState(false);
+
   const create = useMutation({
     mutationFn: () =>
       createScheduledMatchup({
@@ -285,6 +287,21 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
       qc.invalidateQueries({ queryKey: ['scheduled-matchups'] });
       setSelectedDate(null);
       setShowNotes(false);
+      setNotes('');
+    },
+  });
+
+  const createNow = useMutation({
+    mutationFn: () =>
+      createScheduledMatchup({
+        format,
+        proposed_at: new Date().toISOString(),
+        expires_in_hours: 0.5,
+        notes: notes || undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['scheduled-matchups'] });
+      setPlayNowPosted(true);
       setNotes('');
     },
   });
@@ -317,6 +334,41 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
           <option value="BO5">BO5 (~150 min)</option>
         </Select>
       </div>
+
+      {/* Play Now — immediate challenge, expires in 30 min */}
+      {currentUserId && (
+        <div className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/40 p-3 space-y-2">
+          {playNowPosted ? (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-emerald-400">⚡ Challenge posted — expires in 30 minutes. Someone will ping you on Discord.</p>
+              <button
+                type="button"
+                className="text-xs text-stone-500 hover:text-stone-300 transition-colors"
+                onClick={() => setPlayNowPosted(false)}
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                size="sm"
+                variant="forge"
+                disabled={createNow.isPending}
+                onClick={() => createNow.mutate()}
+              >
+                {createNow.isPending ? 'Posting…' : '⚡ Play Now'}
+              </Button>
+              <span className="text-xs text-stone-500">Post an immediate challenge — expires in 30 minutes if no one accepts.</span>
+              {createNow.error && (
+                <p className="text-xs text-red-400 w-full">{String(createNow.error)}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="text-xs text-stone-600 text-center">— or pick a time slot below —</div>
 
       {/* Dual-purpose calendar: view open challenges + pick your slot */}
       {isLoading ? (
