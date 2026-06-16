@@ -1,6 +1,6 @@
 # ROADMAP — Rizzotto
 
-> **Stand:** 2026-06-09 · **Phase:** Live (Beta) — auf dem Weg zu Launch v1 · **Domain:** rizzotto.gg (Prod-Betrieb: Luke)
+> **Stand:** 2026-06-15 · **Phase:** Live — v1 ausgeliefert, M8 Open Play live, Open-Beta-Turnier gelaufen · **Domain:** rizzotto.gg (Prod-Betrieb: Luke)
 >
 > Diese Roadmap ist die **SSOT** für _was läuft_, _was als nächstes drankommt_ und _was bewusst nicht gebaut wird_. Sub-Pläne (Detail-Plans für einzelne Tracks) liegen unter `~/.claude/plans/`, nicht im Repo. Historie und Welle-Specs siehe `docs/archive/`.
 
@@ -10,9 +10,9 @@
 
 - **rizzotto.gg ist live seit 2026-05-19** auf Hetzner CX22, Caddy + Cloudflare-Origin-Cert. **Rollenmodell seit 2026-06-04:** Alex = Product Owner + lokale Entwicklung, Luke = Prod-Betrieb (Server, Cloudflare, Deploys). **Seit 2026-06-09:** Alex' Agent pusht direkt auf `main` und deployt selbst (Push→Auto-Deploy, `workflow_dispatch`-Fallback); Server/Cloudflare/Secrets bleiben bei Luke (s. §5 Arbeitsmodell).
 - **M1–M6 + Welle 2 + DOUBLE_ELIMINATION + Dynamic Weighted Leaderboard sind durch.**
-- **Zuletzt live (2026-06-04):** Die 13 Commits der Nacht-Session (Registration-UI, Lifecycle-Buttons, SE-Generator-Fix, Bracket-Polish, Faction-Select, Cast-Iron-Logo) sind deployed — nach CI-Fix (Visual-Baselines, §2.7). Live-Smoke grün; 1 staler Cloudflare-Cache-Eintrag (`rizzotto-wordmark.avif`) wartet auf Luke-Purge.
-- **Aktueller Fokus: M7 — Launch v1 „Match Hub" (§5, Alex-Spec 2026-06-04):** Match-Klärung (BPT-Pick, Map-Ban&Pick, 4 Map-Modi) lebt im Match-Panel statt in Discord-DMs — der intrinsische Mehrwert ggü. Totaltavern. Dazu: Decision-Flow-Reparatur (§2.7-Audit), SFT-Hidden-Fix, Withdraw, Bracket-Reset, Englisch-only. Danach gestufter Community-Launch (geschlossener Kreis → öffentlich).
-- **Reprioritisiert (Prio-Session 2026-06-04):** **Open Play/Ladder → M8 (§7, neu — Alex-Wunsch, regelmäßig auf Prio ansprechen)**, Datentiefe → M9 (§8.1), UGC → M10 (§8.2), Team-Play → M11 (§8.3), **Army-Lists/SLT/3×3 → M12 on hold (§8.4, Re-Eval bei v1-Launch)**.
+- **M7 Launch v1 „Match Hub" ist ausgeliefert** (alle §5-Items done): Match-Klärung (BPT-Pick, 4 Map-Modi, Lobby-Code, Game-Kacheln), Decision-Flow, SFT-Hidden-Fix, Withdraw, Bracket-Reset, Englisch-only — alles live. **Open-Beta-Turnier** wurde gespielt (Swiss SFT + Playoffs), die Generalproben deckten viele Bugs auf, die in den Post-Launch-Wellen (§5.7) behoben wurden.
+- **M8 Open Play / Ladder ist live** (merge 12.06.): Queue, Availability-Kalender, Challenges, Discord-Lobby-Finder. **Discord-Bot RizzBOTto läuft in Prod** (Token gesetzt ~14./15.06.) — alle bot-abhängigen Features (Check-in-Reminder, 1h-Match-Reminder, Lobby-Finder) aktiv. **MATRIX-Mode** (3×3-Faction-Matrix, eigentlich M12) wurde ebenfalls gebaut.
+- **Reprioritisiert (Prio-Session 2026-06-04, Stand nach M8):** M8 ✅ ausgeliefert → Datentiefe M9 (§8.1), UGC M10 (§8.2), Team-Play M11 (§8.3), **Army-Lists/SLT M12 on hold (§8.4, Re-Eval jetzt fällig — v1 ist live)**.
 - **Bewusst geparkt:** In-App-Listenbauer, Live-Stream-Embed, Achievements, Coaching, Multi-Tenant, Native-App, Draft-Builder für fremde Hosts (§9).
 
 ---
@@ -37,6 +37,12 @@
 | **Dynamic Weighted Leaderboard** | ✅ live (2026-06-02)    | Derive-on-read (L2-Logistic-Regression, `lib/rating-model.ts`); `mode=rating_model` ist Live-Default (Prod-Endpoint verifiziert). Frontend (`DynamicLeaderboardTable` + RollOfHonour) + E2E-Contract nachgezogen. Löst Welle-2-MMR ab — Deprecation-Cleanup gelandet (Phase-2, 2026-06-03) |
 | **Phase-2-Konsolidierung**       | ✅ live (2026-06-03)    | PR #10 (`36e206e`) nach `main` + deployed: MMR-DB-Drop (`drop_welle2_mmr_deprecated`) auf Prod ausgeführt (Welle-2-Tabellen weg, kein CSV-Export — bewusst), Matrix-/Proficiency-Views im UI. Prod-Smoke grün                |
 | **M6 Hub-Foundation**            | ✅ live (2026-06-03)    | PR #11 (`5b8b732`), migrationsfrei: H2H (`/users/$a/vs/$b`), Tournament-Kalender + iCal-Feed, Major-Badge/Filter, ImportLog-Admin-UI, `preferred_factions`-Block. 429+25 Tests, E2E-Routen-Guard grün. Community-Links deferred                |
+| **M7 Launch v1 „Match Hub"**     | ✅ done (2026-06-08)    | Decision-Flow im Match-Panel, BPT Blind-Pick, 4 Map-Modi, Game-Kacheln, Lobby-Code, SFT-Hidden-Fix, Withdraw, Bracket-Reset, Englisch-only, Map/Faction „Select all". Generalproben (Swiss SFT + BPT) gelaufen (§5.3–§5.5) |
+| **M8 Open Play / Ladder**        | ✅ live (2026-06-12)    | Queue (Redis-Matching), Availability-Kalender + Heatmap, Challenges/ScheduledMatchup, Discord-Lobby-Finder. Schema: `Match.tournament_id` nullable + `MatchType`, `AvailabilitySlot`, `ScheduledMatchup` (§7) |
+| **Discord-Bot RizzBOTto**        | ✅ live (~2026-06-15)   | HTTP-Interactions (Ed25519), Token in Prod gesetzt (Luke). Aktiv: Check-in-Reminder (T-60min), 1h-Match-Reminder + Ready-Check, Lobby-Finder/Queue, Pairing-/Dispute-Notifications |
+| **MATRIX-Mode (3×3-Faction)**    | ✅ done (2026-06-11)    | Blind 3 Fraktionen → 3×3-Ban-Grid. `MATRIX` in `TournamentMode`, `MatchFactionMatrix`-Model, `routes/faction-matrix.ts`, Socket-Event, UI (vorgezogen aus M12) |
+| **Replay-Download**              | ✅ done (2026-06-13)    | Upload + Download (`@fastify/static`, `/uploads`), Caddy-Routing committed (`deploy/Caddyfile`). Live-Reload `/etc/caddy/Caddyfile` ist Luke-Server-Task |
+| **Post-Launch-Härtung**          | ✅ live (06-13/14)      | Auto Swiss Repair, FORFEIT-Semantik, Match-Control (Restore/Cancel/Void), Admin-Matches-Tab, Drop/Undrop/Late-Joiner, sortable User-Mgmt, Mirror-Vermeidung (Swiss) (§5.7) |
 
 ---
 
@@ -51,7 +57,7 @@ Bundled in `f4e3705` und deployed 2026-05-20: Delete-Button, Status-Transition (
 | #   | Item                                                                          | Wo                           | Notiz                                                                 |
 | --- | ----------------------------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------- |
 | 1   | ~~`STEAM_WEB_API_KEY` in `/etc/rizzotto/env/backend.env` setzen~~             | Server                       | ✅ done 2026-05-20                                                    |
-| 2   | **`DISCORD_BOT_TOKEN`** in env setzen + Discord-Bot starten                   | Server + Discord-Application | Schaltet vorhandene Notify-Features frei (`discord-notify.ts`: Announce, Check-in, Pairings, Dispute); Bot-Commands später in M10 (§8.2). Teil der Luke-Checkliste §5.3 |
+| 2   | ~~**`DISCORD_BOT_TOKEN`** in env setzen + Discord-Bot starten~~ ✅ **done (~2026-06-15)** — Token + `DISCORD_PUBLIC_KEY` in Prod gesetzt (Luke), RizzBOTto läuft (HTTP-Interactions). Alle Notify-/Bot-Features live | Server + Discord-Application | ✅ done |
 | 3   | **Hetzner-VM-Backup aktivieren**                                              | Hetzner Cloud-Console        | ~1.68 €/mo, User-Task                                                 |
 | 4   | ~~`.env.example` ergänzen um `STEAM_OPENID_RETURN_URL`, `STEAM_WEB_API_KEY`~~ | root `.env.example`          | ✅ war faktisch schon geschlossen (Zeile 45, 48); §2.2 #4 war Phantom |
 
@@ -140,12 +146,12 @@ Vier annotierte Screenshots von Alex (Stand 20.05.), gegen aktuellen Stand gepr�
 | --- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | ------------------------------------ | ---------------------------------- |
 | 1   | ~~**DOUBLE_ELIMINATION wirft 501**~~ ✅ **gelöst (2026-06-03)** — Format end-to-end implementiert     | `apps/backend/src/routes/bracket.ts`                          | —                                    | s. §6                              |
 | 2   | ~~**Tournament-Edit/Delete-Buttons sind Stubs**~~ ✅ done — Lifecycle-UI gelandet (§2.1, `f4e3705`)          | `TournamentDetail.tsx`                                        | —                                    | §2.1                               |
-| 3   | **Scraper-Write-Path** wirft "not implemented"                                                               | `scraper/src/cli.ts:148,155`                                  | Mittel — Datenhebel ungenutzt        | M9 (§8.1)                          |
+| 3   | ~~**Scraper-Write-Path** wirft "not implemented"~~ ✅ **done** — `tournaments`-Command persistiert via `externalGame.upsert` (`cli.ts:148`); kein separates `ExternalTournament`-Model (denormalisiert auf `ExternalGame`). Verbleibendes `throw` (`cli.ts:60`) ist eine valide „no active season"-Guard | `scraper/src/cli.ts`                                  | —        | ✅ done                          |
 | 9   | ~~**`GET /api/matches/:id/decision` + `POST …/decision/random` fehlen im Backend**~~ ✅ **done** — Endpoints implementiert (GET Zeile 185, POST random Zeile 623, blind-pick lock Zeile 676 in `match-decision.ts`); `BlindPickPhase`-UI in `MatchDecisionPage.tsx` fertig | `apps/backend/src/routes/match-decision.ts` | — | ✅ M7 |
 | 10  | ~~**SFT-Fraktions-Leak:** `faction` ist entgegen FieldHint sofort öffentlich~~ ✅ **done (2026-06-05)** — GET participants maskiert `faction: null` wenn mode=SFT und Status nicht ONGOING/COMPLETED | `apps/backend/src/routes/participants.ts` | — | M7 (§5.1 #5) |
 | 11  | **PICK_BAN nur bei Pool = 3 funktional** (kein expliziter Pick-Step); **RANDOM ohne Re-Pick-Schutz**          | `apps/backend/src/routes/match-decision.ts`                   | Mittel                               | M7 (§5.1 #3)                       |
 | 4   | `Tournament.poster_url` Upload-Flow fehlt                                                                    | `packages/db/prisma/schema.prisma:172`                        | Niedrig                              | M6 optional                        |
-| 5   | `SigillumSection`-Community-Links Platzhalter                                                                | `apps/frontend/src/components/landing/SigillumSection.tsx:93` | Niedrig                              | M6 — 🟡 deferred (echte URLs ausstehend) |
+| 5   | ~~`SigillumSection`-Community-Links Platzhalter~~ ✅ **done** — echte URLs gesetzt (Discord `discord.gg/MX3cs6gA54`, YouTube `@RizzOttoGaming`) | `apps/frontend/src/components/landing/SigillumSection.tsx` | —                              | ✅ done |
 | 6   | ~~`ImportLog` ohne Admin-UI~~                                                                                | —                                                             | Niedrig                              | ✅ done (2026-06-03) — §4.7        |
 | 7   | `Team`/`TeamMember`-Models reserviert, ungenutzt                                                             | `schema.prisma:286`                                           | —                                    | M11 (§8.3)                         |
 | 8   | **MatchDetailPage ist ganzseitiger Stub** („Full match view (scores, result reporting) — coming in Welle D") | `apps/frontend/src/routes/MatchDetailPage.tsx`                | Mittel — nutzer-sichtbarer Kern-Flow | ✅ done (2026-06-02) — §P1a        |
@@ -169,7 +175,9 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 
 ---
 
-## 5. M7 — Launch v1 „Match Hub" _(aktueller Fokus — Alex-Spec, Prio-Session 2026-06-04)_
+## 5. M7 — Launch v1 „Match Hub" — ✅ **AUSGELIEFERT** _(Alex-Spec, Prio-Session 2026-06-04)_
+
+> **Status:** Alle Kern- (§5.1) und Begleit-Items (§5.2) sind live; Generalproben gelaufen (§5.3–§5.5). Post-Launch-Bugfix-Wellen siehe §5.7. Der historische Verlauf (§5.1–§5.6) bleibt als Referenz erhalten.
 
 **Ziel:** Alles, was zum Match zu klären ist, lebt **im Match-Panel auf der Turnierseite** — keine Discord-DMs, kein externes Draft-Tool. Das ist der intrinsische Mehrwert gegenüber dem Status quo der Szene (Totaltavern: Bracket auf TT, Draft auf aoe2cm, Matrix + Map-Bans per Discord-DM). **BPT + SFT decken 80–90 % der real gespielten Turniere ab** — sie sind der v1-Scope; das mit Abstand häufigste Format ist **Swiss SFT, 4–5 Runden + Top-4-Playoffs**.
 
@@ -194,7 +202,7 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 7. ~~**Withdraw-UI**~~ ✅ **done (2026-06-05)** — 2-Stufen-Confirm in `RegisterButton.tsx`; `withdrawFromTournament()` in `api.ts`; invalidiert tournament/participant-me/tournament-participants
 8. ~~**Bracket-Reset**~~ ✅ **done (2026-06-05)** — `POST /api/tournaments/:id/bracket/reset`: nullt Self-Referenz-FKs, `deleteMany` Matches (cascaded), setzt Status auf `REGISTRATION_CLOSED`. Frontend: oranges Reset-Button in Admin-Controls (nur bei ONGOING). Lösung für Unique-Constraint: Hard-Delete statt Soft-Delete + FK-Null-Pass vor Delete
 9. ~~**Englisch-only**~~ ✅ **done (2026-06-05)** — `LanguageToggle.tsx` gelöscht, Header bereinigt; alle DE-Strings in 13 Dateien → EN (bracket, draft, admin, tournament, calendar, H2H, preset-Bereiche)
-10. **UI-Kleinkram:** Map-Pool **„Select All"** (36 Checkboxen einzeln ist unzumutbar) — **offen**
+10. ~~**UI-Kleinkram:** Map-Pool **„Select All"**~~ ✅ **done** — „Select all/Deselect all"-Toggle für Map-Pool **und** Faction-Pool, in Create- (`TournamentCreateForm.tsx:734,836`) und Edit-Form (`TournamentEditPage.tsx:907,1002`)
 
 ### 5.2b Session 2026-06-05 — M7-Begleit-Items + Bugfixes ✅
 
@@ -213,10 +221,10 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 ### 5.3 Generalprobe & gestufter Launch
 
 11. **Lokale Generalprobe:** Swiss SFT, 4–5 Runden + Top-4-Playoffs mit `db:seed:dummies` — **abgeschlossen (2026-06-06), alle Runden + Playoffs gespielt.** Zahlreiche Bugs gefunden und gefixed (Faction-Latch, GL-Berechnung, All-Games-Architektur, Leaderboard-Pfade, Match/Game-Terminologie-Konvention).
-12. **Handover-PR** an Luke → Review/Merge → Auto-Deploy
-13. **Luke-Checkliste (extern):** Cloudflare Custom Purge `https://rizzotto.gg/img/rizzotto-wordmark.avif` · Hetzner-VM-Backup aktivieren (~1.68 €/mo) · `DISCORD_BOT_TOKEN` setzen · echte Community-Links (`SigillumSection`) · Caddyfile-Live-Sync (§2.3 #1)
-14. **Stufe 1 — geschlossener Kreis:** Prod-Generalprobe (Alex als ORGANIZER auf rizzotto.gg), dann erstes echtes Turnier (Swiss SFT) mit Discord-Kreis
-15. **Stufe 2 — öffentlich** (Reddit/Foren): erst nach 1–2 sauberen Stufe-1-Turnieren
+12. ~~**Handover-PR** an Luke~~ — **obsolet:** Arbeitsmodell seit 09.06. direkter `main`-Push + Auto-Deploy (git-History bestätigt), kein PR-Gate mehr
+13. **Luke-Checkliste (extern):** ✅ `DISCORD_BOT_TOKEN` + `DISCORD_PUBLIC_KEY` gesetzt · ✅ echte Community-Links (`SigillumSection`). **Serverseitig offen / Status bei Luke (nicht aus Repo verifizierbar):** Cloudflare Custom Purge `rizzotto-wordmark.avif` (vermutlich durch OG-Reworks überholt) · Hetzner-VM-Backup (~1.68 €/mo) · `Caddyfile`-Live-Sync inkl. Replay-`/uploads/*`-Reload (§2.3 #1)
+14. **Stufe 1 — geschlossener Kreis:** ✅ Open-Beta-Turnier (Swiss SFT + Playoffs) auf rizzotto.gg gespielt — diente als realer QA-Lauf (Quelle der §5.7-Bugfix-Wellen)
+15. **Stufe 2 — öffentlich** (Reddit/Foren): noch offen — nach weiteren sauberen Stufe-1-Turnieren
 
 **Offene Items aus Generalprobe (vor Handover-PR abschließen):**
 - [x] Meta-Overview-Counter: aus All-Games-Quelle statt FactionStats — ✅ done (2026-06-06, direktes `prisma.match.count()`)
@@ -229,7 +237,7 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 - [x] **Generalprobe abgeschlossen** — ✅ done (2026-06-06)
 - [x] **ELO-System entfernt** (placement-basiert, faction-blind, zu wenig Datenmasse für kleine Szene) — ✅ done (2026-06-07, Migration `remove_elo`)
 - [x] **Win-Rate-Tab** auf dynamische MatchGame-Quelle umgestellt (war: `LeaderboardEntry`, jetzt: `computeSeasonLeaderboard`) — ✅ done (2026-06-07)
-- [x] **Handover-PR** feat/launch-v1 → main — **ausstehend** (PR-Body-Entwurf in `.claude/pr-body.md`, erst nach Generalprobe-Phase 2 erstellen)
+- [x] ~~**Handover-PR** feat/launch-v1 → main~~ — **obsolet:** seit 09.06. direkter `main`-Push; Code ist längst auf `main` + deployed
 - [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant, dynamisch aus MatchGame berechenbar; nur noch `total_points` für All-Time-Tab nötig
 
 ### 5.4 Session 2026-06-07/08 — BPT-Generalprobe + Feature-Welle
@@ -254,7 +262,7 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 - [x] **Duplicate Map-Records bereinigen** — ✅ done (2026-06-08): Map-Pool auf kanonische 36 Maps zurückgebaut, `seed.ts` korrigiert, DB-Cleanup via `prisma/cleanup-maps.ts`. Korrekte In-Game-Namen laut Alex: Bleakspire Labor Camp, Glade of the Everqueen, Rifts at World's Edge, Skjalandir's Cave, Battle for Itza.
 - [x] **Itza** — ✅ done: Kein Bild verfügbar, Map heißt korrekt „Battle for Itza", bleibt im Pool ohne Bild.
 - [x] **Onboarding-Tour-Stops** — ✅ done (2026-06-08): Hardcoded strings in `OnboardingOverlay.tsx` durch i18n ersetzt, `data-testid` off-by-one gefixt.
-- [ ] **Handover-PR** — PR-Body in `.claude/pr-body.md` aktualisiert (Session §5.4 + §5.5). `gh` CLI nicht installiert → PR manuell erstellen: `gh pr create --title "feat: v1 launch" --body "$(cat .claude/pr-body.md)" --base main` oder via GitHub Web UI.
+- [x] ~~**Handover-PR**~~ — **obsolet** (direkter `main`-Push seit 09.06.)
 
 ### 5.5 Session 2026-06-08 — Edit-View, counts_for_leaderboard, SFT-Registration, Bracket-Polish
 
@@ -273,8 +281,8 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 | **Dev-Scripts** — `prisma/fill-registrations.ts` (nutzt bestehende User zuerst), `prisma/list-users.ts`, `prisma/fix-dummy-registrations.ts` | ✅ done |
 
 **Offen nach §5.5:**
-- [ ] **Handover-PR** — s.o., `gh` CLI fehlt
-- [ ] **SFT-Generalprobe mit Playoffs** — §5.4-Playoff-Phase noch nicht durchgetestet
+- [x] ~~**Handover-PR**~~ — **obsolet** (direkter `main`-Push seit 09.06.)
+- [x] ~~**SFT-Generalprobe mit Playoffs**~~ — ✅ durch das echte Open-Beta-Turnier (Swiss SFT + Playoffs) abgedeckt; Bugs in §5.7-Wellen behoben
 - [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant zu MatchGame-Level-Aggregation
 
 **§5.6 Session 2026-06-09 — Playoff-Standings, Check-in, Admin-IDs, German-Strings-Final:**
@@ -292,10 +300,23 @@ Sonst keine `@ts-expect-error`, kein `FIXME`/`HACK` — Codebase ist sauber.
 
 **Offen (post-v1 oder Luke):**
 - [ ] **Admin: Discord/Steam ID re-auth** — Luke entscheidet: ADMIN-Guard reicht oder separater Discord-Confirm-Step? (Details im PR-Body)
-- [ ] **Admin: User Management — sortierbare Spalten** — alle Spalten (Username, Discord ID, Steam ID, Role, Joined) per Click sortierbar machen (`AdminPage.tsx`, client-seitiges Sort reicht)
-- [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant zu MatchGame-Aggregation
-- [ ] **post-v1: Mirror-Vermeidung im Swiss/Liechtenstein-Pairing** — Soft-Tiebreaker: Mirror (gleiche `faction_id` auf beiden Seiten) wird vermieden wenn ein gleichwertiges Pairing (gleiche Punktdifferenz) verfügbar ist. Nie größere Punktdifferenz für Mirror-Vermeidung akzeptieren. Prio-Reihenfolge: (1) Score-Delta minimieren → (2) Rematch vermeiden → (3) Mirror vermeiden. Betrifft `lib/swiss.ts` + `lib/liechtenstein.ts`. Nur aktiv wenn `faction_id` vorhanden (SFT/2FT/3FT), OPEN-Mode ignoriert.
-- [ ] **post-v1: Discord-Check-in-Reminder** — Cron-Job bei T-60min schickt DM via Bot an alle `REGISTERED`-Teilnehmer. Voraussetzungen: `DISCORD_BOT_TOKEN` gesetzt (Luke), Bot Mitglied im Community-Server (`discord.gg/NbuHNYP9`). `discord_id` auf User-Model vorhanden. ~2-3h Arbeit. Einschränkung: DM nur wenn User Mitglied im selben Server → kein Problem da Teilnehmer aus diesem Server kommen.
+- [x] **Admin: User Management — sortierbare Spalten** — ✅ done (2026-06-14): Member/Role/Joined/Status per Click sortierbar (`AdminPage.tsx`)
+- [ ] **post-v1: `LeaderboardEntry.games_played/wins/losses` entfernen** — redundant zu MatchGame-Aggregation; Felder werden aber noch aktiv gelesen (`leaderboard.ts`, `users.ts`, `LeaderboardPage.tsx`, `UserProfilePage.tsx`) → erst Lese-Stellen auf dynamische Aggregation umstellen
+- [~] **post-v1: Mirror-Vermeidung im Swiss/Liechtenstein-Pairing** — ✅ **Swiss done** (`lib/swiss.ts` `tryAvoidMirrors()`, jede Runde). 🔴 **Liechtenstein offen** — nur passives `interleaveFactions()` beim Schedule-Aufbau, kein aktiver `tryAvoidMirrors`-Nachbearbeitungsschritt. Prio-Reihenfolge bleibt: (1) Score-Delta → (2) Rematch → (3) Mirror; nie größeres Score-Delta für Mirror-Vermeidung.
+- [x] **post-v1: Discord-Check-in-Reminder** — ✅ done + **live**: Cron T-60min DMs an `REGISTERED` (`notifyCheckInReminder()` in `discord-notify.ts`, `cron.ts`). Bot läuft in Prod (§1).
+
+### 5.7 Post-Launch-Wellen (2026-06-10 – 06-15) — konsolidiert
+
+Nach v1 folgten sechs Sessions Feature-Ausbau + Härtung (Detail-Logs in den Session-Memories `~/.claude/projects/.../memory/session-2026-06-1X.md`). Kompakt:
+
+- **10.06.** — CI nach Bruch (09.06.) entsperrt; Check-in-Enforcement, **Mirror-Vermeidung (Swiss)**, BPT-Faction-Pick; OG-Preview neu. **M8 Open Play** vollständig gebaut (Branch `feat/m8-open-play`).
+- **11.06.** — **MATRIX-Mode** (3×3-Faction); WB/LB-Round-Presets für DE, EliminationStandings.
+- **12.06.** — `feat/m8-open-play` → `main` gemergt + deployed; CI-Fixes (Test-Rolle `ORGANIZER`→`HOST`).
+- **13.06.** — **Replay-Download** (Upload+Download, Caddy-`/uploads/*`); **Auto Swiss Repair**; **FORFEIT-Semantik** (Drop = BYE, kein BH-Beitrag); Standings-Overhaul (Placement-Badges, dynamische Divider); Faction-Diversity = Coverage × Evenness; OG-Image v4.
+- **14.06.** — Beta-Bugfix-Tag: **Match-Control** (Restore/Cancel/Void), **Admin-Matches-Tab** (Void-Toggle, Leaderboard-Exclusion), **Drop-System** (Doppel-Drop→CANCELLED, Undrop, Late-Joiner, WITHDREW als authoritative dropped-Flag), sortable User-Mgmt, Draw=½ aus All-Games excludiert.
+- **15.06.** — **Discord-Bot live** (Luke setzt Token/Public-Key in Prod) → alle bot-abhängigen Features aktiv. ROADMAP + Memory auf verifizierten Stand gebracht (diese Session).
+
+**Verbleibendes post-v1-Backlog (codebar, verifiziert offen):** 2FT/3FT-Formate (nur Frontend-Guard `SwissStandings.tsx:51` vorbereitet) · Liechtenstein Early Clinching + aktive Mirror-Vermeidung · MMR-Matchmaking-Format · FactionStats-Recalculate-Endpoint (Drift) · `LeaderboardEntry`-Felder-Cleanup · `poster_url`-Upload-Flow (totes Schema-Feld).
 
 ---
 
@@ -314,11 +335,13 @@ Details: `.knowledge/algorithms.md` (Abschnitt „Bracket — Double-Elimination
 
 ---
 
-## 7. M8 — Open Play / Ladder _(direkt nach v1 — Alex-Wunsch 2026-06-04)_
+## 7. M8 — Open Play / Ladder — ✅ **LIVE (merge 2026-06-12)**
 
 **Ziel:** Leaderboard-relevante Matches **ohne Turnier-Commitment** — „viele Spieler scheuen sich vor dem Commitment von Turnieren" (Alex). Matchmaking auf der Site senkt die Einstiegshürde und füttert Leaderboard + Meta, bevor Spieler sich an Turniere trauen.
 
-> **Prio-Vermerk:** Alex in regelmäßigen Abständen auf dieses Thema ansprechen — es ist ihm wichtig und könnte weiter vorrücken.
+> **Status:** Ausgeliefert. Gebaut: nullable `Match.tournament_id` + `MatchType`-Enum, `AvailabilitySlot`- & `ScheduledMatchup`-Models; `routes/open-play-queue.ts` (Redis-FIFO-Matching), `routes/availability.ts` (CRUD + Heatmap), `routes/scheduled-matchups.ts`; Discord-Lobby-Finder (`discord-interactions.ts`) + Match-Reminder; Frontend `/open-play` (Queue/Availability/Challenges) + 1h-Match-Reminder mit Ready-Check. Anti-Farm-Kalibrierung (Item 5) bei wachsender Datenmasse beobachten.
+>
+> **Prio-Vermerk (erfüllt):** Open Play war Alex' Wunsch-Vorzug — ist umgesetzt. Jetzt Adoption/Feinschliff beobachten ([[produkt-prioritaeten-alex]]).
 
 1. **Challenge-/Open-Match-Modell** (Schema-Entscheidung): `Match.tournament_id` ist heute required → nullable machen oder eigenes Challenge-Konzept. Matches tragen bereits den Season-Tag (Rating-Einbeziehung möglich); **Anti-Farm-Modifier existiert** im Rating-Modell (Validierung gegen Punkte-Schieberei)
 2. **Friendlies (Bo1) + organisierte Bo3/Bo5-Series**
@@ -346,7 +369,7 @@ Details: `.knowledge/algorithms.md` (Abschnitt „Bracket — Double-Elimination
 
 1. **Battle-Report-Editor** — Markdown + Photo-Upload, Match-Timeline, Card-Embeds für referenzierte Listen/Fraktionen. Verknüpft mit `Match.id` (optional)
 2. **Comment-System** — Match-Detail, Tournament, Battle-Report. Markdown, Soft-Delete, Moderation-Flag
-3. **Discord-Bot zur Match-Reporting-Integration** — Spieler reportet im Discord-Channel, Bot triggert Backend. Braucht `DISCORD_BOT_TOKEN` (§5.3 Luke-Checkliste)
+3. **Discord-Bot zur Match-Reporting-Integration** — Spieler reportet im Discord-Channel, Bot triggert Backend. Bot-Infra steht bereits (Token live, Interactions-Endpoint + Ed25519, `discord-interactions.ts`) → nur neue Slash-Commands/Handler nötig
 
 **Risiko:** UGC braucht Moderation. Plan ab ~50 aktive Schreiber: Flag-Queue + Auto-Throttle für neue Accounts.
 
@@ -369,7 +392,7 @@ Details: `.knowledge/algorithms.md` (Abschnitt „Bracket — Double-Elimination
 1. **Army-List-Browser** (ex-M7-Kern) — Filter (Faction/Lord/Battle-Type), Search, "neueste"/"meistgesehene"
 2. **Library-Section-Reaktivierung** als Einstieg (§2.5 F)
 3. **SLT-Vertiefung** (Listen-Upload bei Anmeldung, Reveal-Regeln)
-4. **3×3-Matrix-Format** im Match-Panel
+4. ~~**3×3-Matrix-Format** im Match-Panel~~ ✅ **done (2026-06-11)** — `MATRIX`-Mode aus M12 vorgezogen & gebaut (s. §1); Rest des Listen-Blocks bleibt on hold
 
 > **Re-Eval-Trigger:** Wenn v1 produktiv live geht, Alex erneut fragen, wie dieser Block priorisiert wird — nicht vorher anfassen.
 
