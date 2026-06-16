@@ -403,6 +403,8 @@ Raw-SQL via `prisma.$queryRaw` — berechnet `total` und `winrate_a` direkt in P
 
 Jedes Matchup wird **einmal** in der Tabelle gespeichert. Konvention: `faction_a_id < faction_b_id` (alphabetisch/lexikalisch via `[id1, id2].sort()`).
 
+> **Game-level Recompute (2026-06-16):** `FactionStats` + `MatchupStats` können per `recomputeFactionStats()` (`lib/recompute-faction-stats.ts`, Admin-Endpoint `POST /api/admin/recompute-faction-stats`) aus den `COMPLETED` `MatchGame`-Records **neu aufgebaut** werden — game-level (Bo3 = 3 Observations), idempotent (delete-then-rebuild pro Season). Das ist die Wahrheitsquelle und behebt den Inkrement-Drift der drei Live-Schreibpfade. Details: `.knowledge/backend-architecture.md`.
+
 ```typescript
 // routes/matches.ts — Match-Result-Hook
 const sorted = [effectiveP1FactionId, effectiveP2FactionId].sort();
