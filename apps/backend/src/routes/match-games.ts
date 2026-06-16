@@ -4,9 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ensureMatchGame, finalizeGameResult } from '../lib/match-games.js';
-
-const REPLAY_DIR =
-  process.env.REPLAY_UPLOAD_DIR ?? join(process.cwd(), 'uploads', 'replays');
+import { REPLAY_DIR } from '../lib/replays.js';
 
 const LobbyCodeBodySchema = z.object({
   lobby_code: z.string().max(64).nullable(),
