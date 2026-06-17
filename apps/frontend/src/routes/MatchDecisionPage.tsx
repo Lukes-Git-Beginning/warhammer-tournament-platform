@@ -483,25 +483,26 @@ function PickBanPhase({
       {/* Map preview lightbox */}
       {mapPreview && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
           onClick={() => setMapPreview(null)}
         >
-          <div className="flex flex-col items-center gap-3 max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
-            <p className="font-display text-lg font-semibold text-rizzotto-gold-400 tracking-wider">
-              {mapPreview.name}
-            </p>
+          <div className="relative flex flex-col items-center gap-2 w-full h-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between w-full px-1 shrink-0">
+              <span className="text-white font-semibold">{mapPreview.name}</span>
+              <button
+                type="button"
+                onClick={() => setMapPreview(null)}
+                className="text-white/60 hover:text-white text-xl leading-none transition-colors"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
             <img
               src={mapPreview.image_url!}
               alt={mapPreview.name}
-              className="max-h-[75vh] max-w-full w-full object-contain rounded-md border border-stone-700"
+              className="w-full h-full object-contain"
             />
-            <button
-              type="button"
-              onClick={() => setMapPreview(null)}
-              className="text-xs text-stone-500 hover:text-stone-300 transition-colors"
-            >
-              Close (ESC)
-            </button>
           </div>
         </div>
       )}
