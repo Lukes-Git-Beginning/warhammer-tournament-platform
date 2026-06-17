@@ -987,6 +987,16 @@ export function addLateJoiner(
   });
 }
 
+export function fillByeMatch(
+  matchId: string,
+  userId: string,
+): Promise<{ matchId: string; status: string }> {
+  return apiFetch(`/api/matches/${matchId}/fill-bye`, {
+    method: 'PATCH',
+    body: JSON.stringify({ userId }),
+  });
+}
+
 /** @deprecated Use getMatchScoringBreakdown instead */
 export const getScoringBreakdown = getMatchScoringBreakdown;
 

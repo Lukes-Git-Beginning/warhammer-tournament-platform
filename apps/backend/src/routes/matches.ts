@@ -525,6 +525,51 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(200).send({ matchId, status: 'CANCELLED' });
     },
   );
+
+  // PATCH /api/matches/:id/fill-bye — assign a late joiner to a BYE slot, converting it to a real match
+  fastify.patch(
+    '/api/matches/:id/fill-bye',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const parsed = z.object({ userId: z.string().uuid() }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+
+      const match = await fastify.prisma.match.findUnique({
+        where: { id: matchId, deleted_at: null },
+        select: { id: true, status: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+
+      const role = request.user?.role;
+      const callerId = request.user?.sub;
+      if (role !== 'ADMIN' && role !== 'MODERATOR' && match.tournament?.organizer_id !== callerId) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+      }
+      if (match.status !== 'BYE') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Only BYE matches can be filled', statusCode: 422 });
+      }
+
+      const participant = await fastify.prisma.tournamentParticipant.findUnique({
+        where: { tournament_id_user_id: { tournament_id: match.tournament_id!, user_id: parsed.data.userId } },
+        select: { id: true },
+      });
+      if (!participant) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'User is not a participant in this tournament', statusCode: 422 });
+      }
+
+      await fastify.prisma.match.update({
+        where: { id: matchId },
+        data: { player2_id: parsed.data.userId, status: 'PENDING', winner_id: null },
+      });
+
+      if (fastify.io && match.tournament_id) {
+        fastify.io.to(`bracket_${match.tournament_id}`).emit('bracket_update', { tournamentId: match.tournament_id! });
+      }
+
+      return reply.code(200).send({ matchId, status: 'PENDING' });
+    },
+  );
 };
 
 export default matchRoutes;

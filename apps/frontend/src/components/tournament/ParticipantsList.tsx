@@ -57,9 +57,24 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus }: 
 
   return (
     <section className="mb-8">
-      <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-3">
-        {t('tournament.participants.heading', { count: data.total })}
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500">
+          {t('tournament.participants.heading', { count: data.total })}
+        </h2>
+        {showDropButtons && (
+          <button
+            type="button"
+            disabled={lateJoinMutation.isPending}
+            onClick={() => {
+              const userId = prompt('Enter the User ID of the player to add (find it in Admin → Users):');
+              if (userId?.trim()) lateJoinMutation.mutate(userId.trim());
+            }}
+            className="rounded border border-rizzotto-gold-500/40 px-3 py-1 text-xs text-rizzotto-gold-400 hover:border-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors disabled:opacity-40"
+          >
+            + Add Late Joiner
+          </button>
+        )}
+      </div>
       {data.total === 0 ? (
         <p className="text-sm text-rizzotto-stone-500">{t('tournament.participants.empty')}</p>
       ) : (
@@ -137,21 +152,6 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus }: 
             );
           })}
         </ul>
-      )}
-      {showDropButtons && (
-        <div className="mt-3">
-          <button
-            type="button"
-            disabled={lateJoinMutation.isPending}
-            onClick={() => {
-              const userId = prompt('Enter the User ID of the player to add (find it in Admin → Users):');
-              if (userId?.trim()) lateJoinMutation.mutate(userId.trim());
-            }}
-            className="rounded border border-stone-600 px-3 py-1 text-xs text-stone-400 hover:border-stone-400 hover:text-stone-200 transition-colors disabled:opacity-40"
-          >
-            + Add Late Joiner / Sub
-          </button>
-        </div>
       )}
     </section>
   );
