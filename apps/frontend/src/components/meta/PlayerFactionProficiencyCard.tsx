@@ -16,7 +16,7 @@ function SkillBar({ value }: { value: number }) {
   // value is neutralWinChance — already a probability in [0..1]
   const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex w-[102px] shrink-0 items-center gap-1.5">
       <div className="h-1.5 w-16 overflow-hidden rounded-full bg-stone-800">
         <div
           className="h-full rounded-full bg-rizzotto-gold-500/70"
@@ -127,11 +127,11 @@ export function PlayerFactionProficiencyCard({
       ) : (
         <div className="space-y-2">
           <div className="flex items-center gap-2 pb-1 text-[10px] uppercase tracking-wider text-stone-600">
-            <span className="h-6 w-6 shrink-0" aria-hidden="true" />
+            <span className="h-[30px] w-[30px] shrink-0" aria-hidden="true" />
             <span className="min-w-0 flex-1">Faction</span>
             <span className="w-10 text-right">Games</span>
             <span className="w-10 text-right">Win rate</span>
-            <span className="w-[90px]" title="Win chance vs a neutral opponent">
+            <span className="w-[102px]" title="Win chance vs a neutral opponent">
               Skill
             </span>
           </div>

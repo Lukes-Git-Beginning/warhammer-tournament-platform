@@ -604,17 +604,30 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     });
     const tournamentsPlayed = playedTournamentRows.length;
 
-    // Recent tournament results (last 10)
-    const recentResults = await fastify.prisma.tournamentResult.findMany({
-      where: { user_id: id },
-      orderBy: { created_at: 'desc' },
+    // Recent tournaments — based on participation, merged with result data when available
+    const recentParticipations = await fastify.prisma.tournamentParticipant.findMany({
+      where: { user_id: id, deleted_at: null },
+      orderBy: { registered_at: 'desc' },
       take: 10,
       select: {
-        placement: true,
-        points_earned: true,
-        created_at: true,
-        tournament: { select: { slug: true, name: true, start_date: true } },
-        season: { select: { name: true } },
+        registered_at: true,
+        tournament: {
+          select: {
+            slug: true,
+            name: true,
+            start_date: true,
+            results: {
+              where: { user_id: id },
+              select: {
+                placement: true,
+                points_earned: true,
+                created_at: true,
+                season: { select: { name: true } },
+              },
+              take: 1,
+            },
+          },
+        },
       },
     });
 
@@ -649,17 +662,20 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         tournaments_played: tournamentsPlayed,
         total_points: allTime.total_points,
       },
-      recent_results: recentResults.map((r) => ({
-        tournament: {
-          slug: r.tournament.slug,
-          name: r.tournament.name,
-          start_date: r.tournament.start_date.toISOString(),
-        },
-        season_name: r.season?.name ?? null,
-        placement: r.placement,
-        points_earned: r.points_earned,
-        created_at: r.created_at.toISOString(),
-      })),
+      recent_results: recentParticipations.map((p) => {
+        const result = p.tournament.results[0] ?? null;
+        return {
+          tournament: {
+            slug: p.tournament.slug,
+            name: p.tournament.name,
+            start_date: p.tournament.start_date.toISOString(),
+          },
+          season_name: result?.season?.name ?? null,
+          placement: result?.placement ?? null,
+          points_earned: result?.points_earned ?? null,
+          created_at: result?.created_at.toISOString() ?? p.registered_at.toISOString(),
+        };
+      }),
       recent_matches: recentMatches.map((m) => {
         const opponentUser = m.player1_id === id ? m.player2 : m.player1;
         return {
