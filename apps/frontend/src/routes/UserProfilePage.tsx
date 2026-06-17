@@ -141,7 +141,7 @@ function StatsSection({ userId }: StatsSectionProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_2fr]">
       <WinLossCard
         wins={data.total_wins}
         losses={data.total_losses}

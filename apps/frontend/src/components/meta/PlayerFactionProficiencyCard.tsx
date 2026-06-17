@@ -68,9 +68,9 @@ function ProficiencyRow({
         )}
       </span>
 
-      <span className="w-10 text-right text-xs text-stone-500">{entry.games}</span>
+      <span className="w-10 text-center text-xs text-stone-500">{entry.games}</span>
 
-      <span className="w-10 text-right text-xs text-stone-400">
+      <span className="w-16 text-center text-xs text-stone-400">
         {winRate !== null ? `${winRate}%` : '—'}
       </span>
 
@@ -126,14 +126,11 @@ export function PlayerFactionProficiencyCard({
         />
       ) : (
         <div className="space-y-2">
-          <div className="flex items-center gap-2 pb-1 text-[10px] uppercase tracking-wider text-stone-600">
-            <span className="h-[30px] w-[30px] shrink-0" aria-hidden="true" />
+          <div className="flex items-center gap-2 pb-1 text-[10px] uppercase tracking-wider text-stone-400">
             <span className="min-w-0 flex-1">Faction</span>
-            <span className="w-10 text-right">Games</span>
-            <span className="w-10 text-right">Win rate</span>
-            <span className="w-[102px]" title="Win chance vs a neutral opponent">
-              Skill
-            </span>
+            <span className="w-10 text-center">Games</span>
+            <span className="w-16 text-center">Win Rate</span>
+            <span className="w-[102px] text-center" title="Win chance vs a neutral opponent">Skill</span>
           </div>
           {sorted.map((entry) => (
             <ProficiencyRow
