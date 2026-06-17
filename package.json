@@ -21,8 +21,8 @@
     "db:seed": "pnpm --filter @rizzotto/db run seed",
     "db:seed:dummies": "pnpm --filter @rizzotto/db run seed:dummies",
     "db:studio": "pnpm --filter @rizzotto/db exec prisma studio",
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down",
+    "docker:up": "docker compose -p tww3 up -d",
+    "docker:down": "docker compose -p tww3 down",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
     "clean": "turbo run clean && rm -rf node_modules"
   },
