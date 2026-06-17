@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { searchUsers, updateUserRole, type AdminUser } from '@/lib/api';
@@ -50,6 +50,26 @@ function SortTh({
         {active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
       </span>
     </th>
+  );
+}
+
+function CopyIdButton({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = useCallback(() => {
+    void navigator.clipboard.writeText(id).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [id]);
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={id}
+      className="font-mono text-xs text-stone-500 hover:text-rizzotto-gold-400 transition-colors text-left"
+    >
+      {copied ? <span className="text-emerald-400">copied!</span> : `${id.slice(0, 8)}…`}
+    </button>
   );
 }
 
@@ -105,6 +125,7 @@ export function UserBanTab() {
             <thead>
               <tr className="border-b border-stone-800 bg-stone-900/60">
                 <SortTh col="username" label="Member" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                <th className="px-4 py-3 text-left font-medium text-stone-400">User ID</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Discord ID</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Steam ID</th>
                 <SortTh col="role" label="Role" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
@@ -136,6 +157,7 @@ export function UserBanTab() {
                       <span className="text-rizzotto-stone-200">{user.username}</span>
                     </Link>
                   </td>
+                  <td className="px-4 py-3"><CopyIdButton id={user.id} /></td>
                   <td className="px-4 py-3 font-mono text-xs text-stone-400 select-all">{user.discord_id}</td>
                   <td className="px-4 py-3 font-mono text-xs text-stone-400 select-all">
                     {user.steam_id ?? <span className="text-stone-600 not-italic">—</span>}
@@ -170,7 +192,7 @@ export function UserBanTab() {
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-stone-500">No members found.</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-stone-500">No members found.</td>
                 </tr>
               )}
             </tbody>
