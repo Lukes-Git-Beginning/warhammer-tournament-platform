@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { getParticipants, dropParticipant, undropParticipant, addLateJoiner } from '@/lib/api';
+import { getParticipants, dropParticipant, undropParticipant } from '@/lib/api';
 
 export interface ParticipantsListProps {
   slug: string;
@@ -41,16 +41,6 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus }: 
     },
   });
 
-  const lateJoinMutation = useMutation({
-    mutationFn: (userId: string) => addLateJoiner(slug, userId),
-    onSuccess: (data) => {
-      void queryClient.invalidateQueries({ queryKey: ['tournament-participants', slug] });
-      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
-      alert(`${data.participant.user.username} added as late joiner.`);
-    },
-    onError: (err: Error) => alert(`Error: ${err.message}`),
-  });
-
   if (isLoading || !data) return null;
 
   const showDropButtons = canManage && tournamentStatus === 'ONGOING';
@@ -61,19 +51,6 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus }: 
         <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500">
           {t('tournament.participants.heading', { count: data.total })}
         </h2>
-        {showDropButtons && (
-          <button
-            type="button"
-            disabled={lateJoinMutation.isPending}
-            onClick={() => {
-              const userId = prompt('Enter the User ID of the player to add (find it in Admin → Users):');
-              if (userId?.trim()) lateJoinMutation.mutate(userId.trim());
-            }}
-            className="rounded border border-rizzotto-gold-500/40 px-3 py-1 text-xs text-rizzotto-gold-400 hover:border-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors disabled:opacity-40"
-          >
-            + Add Late Joiner
-          </button>
-        )}
       </div>
       {data.total === 0 ? (
         <p className="text-sm text-rizzotto-stone-500">{t('tournament.participants.empty')}</p>
