@@ -256,6 +256,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           finalistIds={finalistIds}
           tournamentSlug={slug}
           canManage={canManage}
+          isCompleted={data.status === 'COMPLETED'}
         />
       )}
 

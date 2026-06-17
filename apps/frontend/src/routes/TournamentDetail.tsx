@@ -636,6 +636,7 @@ export function TournamentDetail() {
                 semifinalistIds={standingsSemifinalistIds}
                 tournamentSlug={tournament.slug}
                 canManage={!!canManage}
+                isCompleted={tournament.status === 'COMPLETED'}
               />
             </section>
           );

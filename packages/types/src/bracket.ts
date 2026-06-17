@@ -57,6 +57,8 @@ export interface BracketResponse {
   matches: BracketNode[];
   /** Tournament mode (e.g. 'SFT', 'ONE_V_ONE', 'BPT') — drives conditional UI like faction column */
   mode?: string;
+  /** Tournament status — used to gate placement badges */
+  status?: string;
   /** Present only for SWISS format tournaments */
   swiss?: SwissMeta;
 }
