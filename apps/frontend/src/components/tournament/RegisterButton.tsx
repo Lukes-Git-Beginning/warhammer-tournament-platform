@@ -83,7 +83,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
   const [pickingFaction, setPickingFaction] = useState(false);
   const [selectedFaction, setSelectedFaction] = useState('');
 
-  const needsFactionPick = tournament.mode === 'SFT' || tournament.format === 'AUTO_SWISS';
+  const needsFactionPick = tournament.mode === 'SFT';
 
   const register = useMutation({
     mutationFn: (factionId?: string) =>
