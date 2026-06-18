@@ -19,15 +19,17 @@ const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('availability:heatmap', {}),
       async () => {
-        const rows = await fastify.prisma.availabilitySlot.groupBy({
-          by: ['day_of_week', 'hour_utc', 'context'],
-          _count: { id: true },
-        });
+        const rows = await fastify.prisma.$queryRaw<
+          { day_of_week: number; hour_utc: number; count: bigint }[]
+        >`
+          SELECT day_of_week, hour_utc, COUNT(DISTINCT user_id)::int AS count
+          FROM "AvailabilitySlot"
+          GROUP BY day_of_week, hour_utc
+        `;
         return rows.map((r) => ({
           day_of_week: r.day_of_week,
           hour_utc: r.hour_utc,
-          context: r.context,
-          count: r._count.id,
+          count: Number(r.count),
         }));
       },
       { ttlSeconds: 300 },

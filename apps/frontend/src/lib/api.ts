@@ -1315,7 +1315,6 @@ export interface AvailabilitySlot {
 export interface HeatmapSlot {
   day_of_week: number;
   hour_utc: number;
-  context: AvailabilityContext;
   count: number;
 }
 

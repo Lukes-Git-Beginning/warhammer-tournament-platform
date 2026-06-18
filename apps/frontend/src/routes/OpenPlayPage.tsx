@@ -117,9 +117,7 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
     staleTime: 5 * 60 * 1000,
   });
 
-  const matchmakingSlots: HeatmapSlot[] = (heatmapData?.slots ?? []).filter(
-    (s) => s.context === 'MATCHMAKING',
-  );
+  const allSlots = heatmapData?.slots ?? [];
 
   return (
     <div className="space-y-6">
@@ -151,7 +149,7 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
         <p className="text-xs text-stone-500">
           Community matchmaking availability — brighter means more players have marked this time as free.
         </p>
-        <AvailabilityHeatmap slots={matchmakingSlots} userTimezone={userTimezone} />
+        <AvailabilityHeatmap slots={allSlots} userTimezone={userTimezone} />
       </div>
     </div>
   );
@@ -271,9 +269,7 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
     refetchInterval: 30_000,
   });
 
-  const matchmakingSlots: HeatmapSlot[] = (heatmapData?.slots ?? []).filter(
-    (s) => s.context === 'MATCHMAKING',
-  );
+  const matchmakingSlots = heatmapData?.slots ?? [];
 
   const isImmediate = selectedDate === null;
 
