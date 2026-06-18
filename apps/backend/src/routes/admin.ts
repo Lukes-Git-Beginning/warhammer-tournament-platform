@@ -1123,6 +1123,70 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       limit,
     });
   });
+  // PATCH /api/admin/matches/:matchId/swap-player — replace one player in a PENDING match
+  fastify.patch('/api/admin/matches/:matchId/swap-player', async (request, reply) => {
+    const { matchId } = request.params as { matchId: string };
+    const parsed = z.object({
+      oldPlayerId: z.string().uuid(),
+      newPlayerId: z.string().uuid(),
+    }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+
+    const match = await fastify.prisma.match.findUnique({
+      where: { id: matchId },
+      select: { id: true, status: true, player1_id: true, player2_id: true },
+    });
+    if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+    if (match.status !== 'PENDING') return reply.code(409).send({ error: 'Conflict', message: 'Can only swap players in PENDING matches', statusCode: 409 });
+
+    const { oldPlayerId, newPlayerId } = parsed.data;
+    let updateData: { player1_id?: string; player2_id?: string };
+    if (match.player1_id === oldPlayerId) updateData = { player1_id: newPlayerId };
+    else if (match.player2_id === oldPlayerId) updateData = { player2_id: newPlayerId };
+    else return reply.code(400).send({ error: 'BadRequest', message: 'oldPlayerId is not in this match', statusCode: 400 });
+
+    await fastify.prisma.match.update({ where: { id: matchId }, data: updateData });
+    return reply.code(200).send({ ok: true });
+  });
+
+  // POST /api/admin/tournaments/:slug/create-match — add a manual PENDING Swiss match
+  fastify.post('/api/admin/tournaments/:slug/create-match', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const parsed = z.object({
+      player1Id: z.string().uuid(),
+      player2Id: z.string().uuid(),
+      round: z.number().int().min(1),
+    }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+
+    const tournament = await fastify.prisma.tournament.findFirst({
+      where: { slug, deleted_at: null },
+      select: { id: true, status: true },
+    });
+    if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+
+    const { round, player1Id, player2Id } = parsed.data;
+    const agg = await fastify.prisma.match.aggregate({
+      where: { tournament_id: tournament.id, round },
+      _max: { match_number: true },
+    });
+    const nextMatchNumber = (agg._max.match_number ?? 0) + 1;
+
+    const match = await fastify.prisma.match.create({
+      data: {
+        tournament_id: tournament.id,
+        round,
+        match_number: nextMatchNumber,
+        player1_id: player1Id,
+        player2_id: player2Id,
+        status: 'PENDING',
+        phase: 'SWISS',
+      },
+      select: { id: true, round: true, match_number: true },
+    });
+    return reply.code(201).send({ match });
+  });
+
 };
 
 export default adminRoutes;
