@@ -1149,6 +1149,15 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(200).send({ ok: true });
   });
 
+  // DELETE /api/admin/matches/:matchId — soft-delete a match (sets deleted_at)
+  fastify.delete('/api/admin/matches/:matchId', async (request, reply) => {
+    const { matchId } = request.params as { matchId: string };
+    const match = await fastify.prisma.match.findUnique({ where: { id: matchId }, select: { id: true } });
+    if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+    await fastify.prisma.match.update({ where: { id: matchId }, data: { deleted_at: new Date() } });
+    return reply.code(200).send({ ok: true });
+  });
+
   // POST /api/admin/tournaments/:slug/create-match — add a manual PENDING Swiss match
   fastify.post('/api/admin/tournaments/:slug/create-match', async (request, reply) => {
     const { slug } = request.params as { slug: string };
