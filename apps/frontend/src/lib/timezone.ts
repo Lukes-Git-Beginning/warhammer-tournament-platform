@@ -41,6 +41,21 @@ export function formatInUserTimezone(
 }
 
 /**
+ * Returns the UTC offset in whole hours for a given IANA timezone string.
+ * e.g. "Europe/Berlin" in summer → 2, "America/Chicago" → -5
+ */
+export function getUtcOffsetHours(timezone: string): number {
+  try {
+    const now = new Date();
+    const utcMs = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' })).getTime();
+    const tzMs  = new Date(now.toLocaleString('en-US', { timeZone: timezone })).getTime();
+    return Math.round((tzMs - utcMs) / 3_600_000);
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Returns a Discord timestamp tag, e.g. <t:1234567890:F>.
  * Paste into Discord — it renders in each user's local timezone automatically.
  * Styles: F = full date+time, R = relative, D = date only, t = time only.

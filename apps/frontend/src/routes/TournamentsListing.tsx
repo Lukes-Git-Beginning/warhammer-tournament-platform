@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { useAuthQuery } from '@/lib/auth.js';
 import { ArrowRight, Clock, Crown, Users } from 'lucide-react';
 import { listTournaments, type Tournament } from '@/lib/api.js';
 import { formatInUserTimezone } from '@/lib/timezone.js';
@@ -11,8 +12,6 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { EmptyState } from '@/components/ui/empty-state.js';
 import { Separator } from '@/components/ui/separator.js';
 import { Skeleton } from '@/components/ui/skeleton.js';
-
-type TournamentTab = 'upcoming' | 'live' | 'archive';
 
 const PAGE_SIZE = 12;
 
@@ -32,9 +31,10 @@ const MODE_LABELS: Record<string, string> = {
 
 function TournamentCard({ tournament }: { tournament: Tournament }) {
   const { t } = useTranslation();
+  const { data: me } = useAuthQuery();
   const isLive = tournament.status === 'ONGOING';
   const isCompleted = tournament.status === 'COMPLETED';
-  const startDate = formatInUserTimezone(tournament.start_date, tournament.timezone);
+  const startDate = formatInUserTimezone(tournament.start_date, me?.timezone ?? undefined);
 
   return (
     <Link
@@ -122,58 +122,57 @@ function LoadingGrid() {
   );
 }
 
-const TAB_LABELS: Record<TournamentTab, { en: string }> = {
-  upcoming: { en: 'Upcoming' },
-  live: { en: 'Live' },
-  archive: { en: 'Archive' },
-};
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-5">
+      {children}
+    </h2>
+  );
+}
 
 export function TournamentsListing() {
   const { t } = useTranslation();
   const navigate = useNavigate({ from: '/tournaments' });
   const search = useSearch({ from: '/tournaments' });
 
-  const activeTab: TournamentTab = search.tab ?? 'upcoming';
   const page = search.page ?? 1;
   const majorOnly = search.major === true;
 
-  // Map tab → backend status values. The API accepts a single status param;
-  // for "upcoming" we default to OPEN_REGISTRATION which covers most real cases.
-  // DRAFT and REGISTRATION_CLOSED are also shown in the card grid (no server-side
-  // multi-status filter today) — we fetch all and display them.
-  const statusParam = activeTab === 'live' ? 'ONGOING' : activeTab === 'archive' ? 'COMPLETED' : undefined;
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['tournaments-listing', activeTab, page, majorOnly],
-    queryFn: () =>
-      listTournaments(
-        page,
-        PAGE_SIZE,
-        statusParam as Tournament['status'] | undefined,
-        majorOnly || undefined,
-      ),
-    retry: false,
-  });
-
-  const tournaments = data?.data ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  function setTab(tab: TournamentTab) {
-    void navigate({ search: { tab, page: 1, major: majorOnly || undefined } });
-  }
-
   function setPage(p: number) {
-    void navigate({ search: { tab: activeTab, page: p, major: majorOnly || undefined } });
+    void navigate({ search: { tab: 'archive', page: p, major: majorOnly || undefined } });
   }
 
   function toggleMajor() {
     void navigate({
-      search: { tab: activeTab, page: 1, major: majorOnly ? undefined : true },
+      search: { tab: 'upcoming', page: 1, major: majorOnly ? undefined : true },
     });
   }
 
-  const TABS: TournamentTab[] = ['upcoming', 'live', 'archive'];
+  // Active tournaments (live + upcoming) — fetched without status filter, split client-side
+  const { data: activeData, isLoading: activeLoading } = useQuery({
+    queryKey: ['tournaments-active', majorOnly],
+    queryFn: () => listTournaments(1, 50, undefined, majorOnly || undefined),
+    retry: false,
+  });
+
+  // Archive — paginated
+  const { data: archiveData, isLoading: archiveLoading } = useQuery({
+    queryKey: ['tournaments-archive', page, majorOnly],
+    queryFn: () =>
+      listTournaments(page, PAGE_SIZE, 'COMPLETED' as Tournament['status'], majorOnly || undefined),
+    retry: false,
+  });
+
+  const allActive = activeData?.data ?? [];
+  const live = allActive.filter((t) => t.status === 'ONGOING');
+  const upcoming = allActive.filter(
+    (t) => t.status !== 'ONGOING' && t.status !== 'COMPLETED' && t.status !== 'DRAFT',
+  );
+  const archive = archiveData?.data ?? [];
+  const archiveTotal = archiveData?.total ?? 0;
+  const archiveTotalPages = Math.max(1, Math.ceil(archiveTotal / PAGE_SIZE));
+
+  const isLoading = activeLoading;
 
   return (
     <PageShell variant="wide" spacing="base">
@@ -184,26 +183,8 @@ export function TournamentsListing() {
         <p className="mt-2 text-sm text-rizzotto-stone-400">{t('brand.tagline')}</p>
       </div>
 
-      {/* Tab bar */}
-      <div className="mb-6 flex gap-1 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-1 w-fit">
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setTab(tab)}
-            className={`rounded px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
-              activeTab === tab
-                ? 'bg-rizzotto-gold-500/20 text-rizzotto-gold-500'
-                : 'text-rizzotto-stone-400 hover:text-rizzotto-stone-200'
-            }`}
-          >
-            {TAB_LABELS[tab].en}
-          </button>
-        ))}
-      </div>
-
       {/* Major filter */}
-      <div className="mb-6 flex items-center gap-2">
+      <div className="mb-8 flex items-center gap-2">
         <button
           type="button"
           onClick={toggleMajor}
@@ -219,58 +200,79 @@ export function TournamentsListing() {
         </button>
       </div>
 
-      {/* Content */}
       {isLoading && <LoadingGrid />}
 
-      {!isLoading && isError && (
-        <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
-          {t('errors.generic')}
-        </div>
-      )}
+      {!isLoading && (
+        <div className="space-y-14">
 
-      {!isLoading && !isError && tournaments.length === 0 && (
-        <EmptyState
-          variant="banner"
-          title={t('musters.empty_title')}
-          body={t('musters.empty_body')}
-          motto={t('musters.empty_motto')}
-          mottoTitle="Where Lists Are Forged."
-        />
-      )}
-
-      {!isLoading && !isError && tournaments.length > 0 && (
-        <>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
-            {tournaments.map((tournament) => (
-              <TournamentCard key={tournament.id} tournament={tournament} />
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="mt-8 flex items-center justify-between text-sm">
-              <button
-                type="button"
-                onClick={() => setPage(page - 1)}
-                disabled={page <= 1}
-                className="rounded border border-rizzotto-iron-700 px-3 py-1.5 text-rizzotto-stone-300 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-100 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
-              >
-                ← {t('common.back')}
-              </button>
-              <span className="text-rizzotto-stone-500">
-                {t('common.page_of', { page, total: totalPages })}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPage(page + 1)}
-                disabled={page >= totalPages}
-                className="rounded border border-rizzotto-iron-700 px-3 py-1.5 text-rizzotto-stone-300 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-100 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
-              >
-                {t('common.next')} →
-              </button>
-            </div>
+          {/* ── Live ── */}
+          {live.length > 0 && (
+            <section>
+              <SectionHeading>Live Now</SectionHeading>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
+                {live.map((t) => <TournamentCard key={t.id} tournament={t} />)}
+              </div>
+            </section>
           )}
-        </>
+
+          {/* ── Upcoming ── */}
+          <section>
+            <SectionHeading>Upcoming</SectionHeading>
+            {upcoming.length === 0 ? (
+              <EmptyState
+                variant="banner"
+                title={t('musters.empty_title')}
+                body={t('musters.empty_body')}
+                motto={t('musters.empty_motto')}
+                mottoTitle="Where Lists Are Forged."
+              />
+            ) : (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
+                {upcoming.map((t) => <TournamentCard key={t.id} tournament={t} />)}
+              </div>
+            )}
+          </section>
+
+          {/* ── Archive ── */}
+          <section>
+            <SectionHeading>Archive</SectionHeading>
+            {archiveLoading ? (
+              <LoadingGrid />
+            ) : archive.length === 0 ? (
+              <p className="text-sm text-rizzotto-stone-500">No completed tournaments yet.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
+                  {archive.map((t) => <TournamentCard key={t.id} tournament={t} />)}
+                </div>
+                {archiveTotalPages > 1 && (
+                  <div className="mt-8 flex items-center justify-between text-sm">
+                    <button
+                      type="button"
+                      onClick={() => setPage(page - 1)}
+                      disabled={page <= 1}
+                      className="rounded border border-rizzotto-iron-700 px-3 py-1.5 text-rizzotto-stone-300 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-100 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+                    >
+                      ← {t('common.back')}
+                    </button>
+                    <span className="text-rizzotto-stone-500">
+                      {t('common.page_of', { page, total: archiveTotalPages })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPage(page + 1)}
+                      disabled={page >= archiveTotalPages}
+                      className="rounded border border-rizzotto-iron-700 px-3 py-1.5 text-rizzotto-stone-300 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-100 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+                    >
+                      {t('common.next')} →
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+
+        </div>
       )}
     </PageShell>
   );
