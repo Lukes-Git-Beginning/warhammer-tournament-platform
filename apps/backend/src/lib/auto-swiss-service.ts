@@ -129,7 +129,7 @@ export async function advanceAutoSwissRound(prisma: PrismaClient, tournamentId: 
 
   const maxSwissRound = Math.max(...swissMatches.map((m) => m.round));
   const currentRoundMatches = swissMatches.filter((m) => m.round === maxSwissRound);
-  const incompleteSwiss = currentRoundMatches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT');
+  const incompleteSwiss = currentRoundMatches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED');
 
   if (incompleteSwiss.length > 0) return; // current round not done
 
