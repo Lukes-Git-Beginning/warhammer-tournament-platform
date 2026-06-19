@@ -419,10 +419,7 @@ export function GameTile({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
           onClick={() => setMapLightbox(false)}
         >
-          <div
-            className="relative flex flex-col items-center gap-2 w-full h-full"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="relative flex flex-col items-center gap-2 w-full h-full">
             <div className="flex items-center justify-between w-full px-1 shrink-0">
               <span className="text-white font-semibold">{pickedMap.name}</span>
               <button
