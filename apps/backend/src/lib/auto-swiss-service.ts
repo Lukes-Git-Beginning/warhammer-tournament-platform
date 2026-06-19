@@ -170,9 +170,10 @@ async function generateNextSwissRound(
 
   const dbParticipants = await prisma.tournamentParticipant.findMany({
     where: { tournament_id: tournament.id, user_id: { in: participantIds }, deleted_at: null },
-    select: { user_id: true, faction_id: true },
+    select: { user_id: true, faction_id: true, status: true },
   });
   const factionById = new Map(dbParticipants.map((p) => [p.user_id, p.faction_id ?? null]));
+  const withdrawnIds = new Set(dbParticipants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
 
   const completed = swissMatches
     .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
@@ -194,7 +195,7 @@ async function generateNextSwissRound(
     }
   }
 
-  const swissPlayers = standings.map((s) => ({
+  const swissPlayers = standings.filter((s) => !s.dropped && !withdrawnIds.has(s.userId)).map((s) => ({
     userId: s.userId,
     score: s.score,
     avoid: avoidMap.get(s.userId) ?? [],

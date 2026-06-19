@@ -237,6 +237,11 @@ export function TournamentDetail() {
     retry: false,
   });
 
+  const participantStatusMap = useMemo(
+    () => new Map((participantsData?.data ?? []).map((p) => [p.user.id, p.status])),
+    [participantsData],
+  );
+
   const activeDraftMatches = (bracket?.matches ?? []).filter(
     (m) => m.draft_id != null && m.draft_status === 'ONGOING',
   );
@@ -762,6 +767,7 @@ export function TournamentDetail() {
                 tournamentSlug={tournament.slug}
                 canManage={!!canManage}
                 isCompleted={tournament.status === 'COMPLETED'}
+                participantStatusMap={participantStatusMap}
               />
             </section>
           );

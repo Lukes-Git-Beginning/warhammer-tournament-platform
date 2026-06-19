@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import type { FactionDto, SwissMeta } from '@rizzotto/types';
 import { FactionBadge } from '@/components/meta/FactionBadge';
-import { dropParticipant, undropParticipant } from '@/lib/api';
+import { dropParticipant, undropParticipant, adminCheckIn, type ParticipantStatus } from '@/lib/api';
 
 const PLACEMENT_BADGE: Record<1 | 2 | 3, { label: string; className: string }> = {
   1: { label: '1ST', className: 'text-rizzotto-gold-400 border-rizzotto-gold-500/50 bg-rizzotto-gold-500/10' },
@@ -31,6 +31,8 @@ interface SwissStandingsProps {
   canManage?: boolean;
   /** Only show placement badges (1ST/2ND/3RD) once the tournament is fully completed */
   isCompleted?: boolean;
+  /** userId → ParticipantStatus — enables Force-Check-in button for REGISTERED, Withdrew badge for WITHDREW */
+  participantStatusMap?: Map<string, ParticipantStatus>;
 }
 
 function Avatar({ url, username }: { url: string | null; username: string }) {
@@ -80,6 +82,7 @@ export function SwissStandings({
   tournamentSlug,
   canManage = false,
   isCompleted = false,
+  participantStatusMap,
 }: SwissStandingsProps) {
   const queryClient = useQueryClient();
   const dropMutation = useMutation({
@@ -97,6 +100,16 @@ export function SwissStandings({
     },
     onError: (err: Error) => {
       alert(`Undrop failed: ${err.message}`);
+    },
+  });
+  const forceCheckInMutation = useMutation({
+    mutationFn: (userId: string) => adminCheckIn(tournamentSlug!, userId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants'] });
+    },
+    onError: (err: Error) => {
+      alert(`Force check-in failed: ${err.message}`);
     },
   });
   const showFactionColumn = tournamentMode ? FACTION_MODES.has(tournamentMode) : false;
@@ -157,7 +170,9 @@ export function SwissStandings({
               const factionId = entry.factionId ?? playerFactionMap?.get(entry.userId);
               const faction = factionId ? factionMap?.get(factionId) : undefined;
               const isFinalist = finalistIds?.has(entry.userId);
-              const isDropped = entry.dropped === true;
+              const participantStatus = participantStatusMap?.get(entry.userId);
+              const isDropped = entry.dropped === true || participantStatus === 'WITHDREW';
+              const isNeverCheckedIn = participantStatus === 'REGISTERED';
 
               const placementKey = (isCompleted && rank <= 3 && !isDropped ? rank : undefined) as 1 | 2 | 3 | undefined;
               const badge = placementKey ? PLACEMENT_BADGE[placementKey] : null;
@@ -178,7 +193,7 @@ export function SwissStandings({
                   )}
                   <tr
                     key={entry.userId}
-                    className={`hover:bg-stone-800/30 transition-colors ${isFinalist ? 'bg-rizzotto-gold-500/5' : ''} ${isDropped ? 'opacity-50' : ''}`}
+                    className={`hover:bg-stone-800/30 transition-colors ${isFinalist ? 'bg-rizzotto-gold-500/5' : ''} ${isDropped || isNeverCheckedIn ? 'opacity-50' : ''}`}
                   >
                     <td className="px-4 py-2 text-stone-500">{rank}</td>
                     <td className="px-4 py-2">
@@ -213,7 +228,7 @@ export function SwissStandings({
                           Drop
                         </button>
                       )}
-                      {canManage && tournamentSlug && isDropped && (
+                      {canManage && tournamentSlug && isDropped && !isNeverCheckedIn && (
                         <button
                           type="button"
                           disabled={undropMutation.isPending}
@@ -224,6 +239,19 @@ export function SwissStandings({
                           className="ml-1 rounded border border-emerald-900/60 px-1.5 py-px text-[10px] text-emerald-500/70 hover:border-emerald-700 hover:text-emerald-400 transition-colors disabled:opacity-40 shrink-0"
                         >
                           Undrop
+                        </button>
+                      )}
+                      {canManage && tournamentSlug && isNeverCheckedIn && (
+                        <button
+                          type="button"
+                          disabled={forceCheckInMutation.isPending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Force check-in ${displayName}?`)) forceCheckInMutation.mutate(entry.userId);
+                          }}
+                          className="ml-1 rounded border border-rizzotto-gold-700/60 px-1.5 py-px text-[10px] text-rizzotto-gold-400/70 hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-400 transition-colors disabled:opacity-40 shrink-0"
+                        >
+                          Force Check-in
                         </button>
                       )}
                     </td>

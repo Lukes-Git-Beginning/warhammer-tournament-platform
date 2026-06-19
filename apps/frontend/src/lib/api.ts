@@ -1198,6 +1198,13 @@ export function selfCheckIn(slug: string): Promise<{ ok: true }> {
   });
 }
 
+export function adminCheckIn(slug: string, userId: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/tournaments/${slug}/checkin`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Army Lists
 // ---------------------------------------------------------------------------

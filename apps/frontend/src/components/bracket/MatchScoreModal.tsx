@@ -236,11 +236,11 @@ export function MatchScoreModal({
     >
       <div className="bg-stone-900 border border-stone-700 rounded-lg p-6 w-full max-w-sm shadow-xl">
         <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-1">
-          {isCompleted ? 'Ergebnis korrigieren' : 'Ergebnis eintragen'}
+          {isCompleted ? 'Override Result' : 'Enter Result'}
         </h2>
         {isCompleted && (
           <p className="text-xs text-amber-400 mb-4">
-            Dieses Match ist bereits abgeschlossen. Änderungen überschreiben das bestehende Ergebnis.
+            This match is already complete. Changes will overwrite the existing result.
           </p>
         )}
         {!isCompleted && <div className="mb-4" />}
@@ -363,7 +363,7 @@ export function MatchScoreModal({
         )}
 
         <fieldset className="mb-4">
-          <legend className="text-xs text-stone-400 mb-2">Gewinner</legend>
+          <legend className="text-xs text-stone-400 mb-2">Winner</legend>
           <div className="space-y-2">
             {player1Id && (
               <div className="flex items-center gap-2">
@@ -499,14 +499,14 @@ export function MatchScoreModal({
         {isCompleted && (
           <div className="mb-4">
             <label className="text-xs text-stone-400 block mb-1" htmlFor="override-reason">
-              Begründung <span className="text-rizzotto-danger">*</span>
+              Reason <span className="text-rizzotto-danger">*</span>
             </label>
             <input
               id="override-reason"
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="z.B. Falsches Ergebnis gemeldet, Disput aufgelöst"
+              placeholder="e.g. Wrong result reported, dispute resolved"
               className="w-full rounded border border-stone-700 bg-stone-800 px-3 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
             />
           </div>
@@ -530,7 +530,7 @@ export function MatchScoreModal({
             onClick={onClose}
             className="px-4 py-1.5 text-sm text-stone-400 hover:text-stone-200 transition-colors"
           >
-            Abbrechen
+            Cancel
           </button>
           <button
             type="button"
@@ -538,7 +538,7 @@ export function MatchScoreModal({
             onClick={() => mutation.mutate()}
             className="px-4 py-1.5 text-sm rounded bg-rizzotto-blood-500 text-white font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
           >
-            {mutation.isPending ? 'Wird gespeichert…' : isCompleted ? 'Überschreiben' : 'Speichern'}
+            {mutation.isPending ? 'Saving…' : isCompleted ? 'Override' : 'Save'}
           </button>
         </div>
       </div>
