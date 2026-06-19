@@ -970,6 +970,33 @@ export function cancelMatch(matchId: string): Promise<{ matchId: string; status:
   return apiFetch(`/api/matches/${matchId}/cancel-match`, { method: 'POST' });
 }
 
+export function swapPlayer(
+  matchId: string,
+  oldPlayerId: string,
+  newPlayerId: string,
+): Promise<{ ok: true }> {
+  return apiFetch(`/api/admin/matches/${matchId}/swap-player`, {
+    method: 'PATCH',
+    body: JSON.stringify({ oldPlayerId, newPlayerId }),
+  });
+}
+
+export function createMatchNode(
+  slug: string,
+  player1Id: string,
+  player2Id: string,
+  round: number,
+): Promise<{ match: { id: string; round: number; match_number: number } }> {
+  return apiFetch(`/api/admin/tournaments/${slug}/create-match`, {
+    method: 'POST',
+    body: JSON.stringify({ player1Id, player2Id, round }),
+  });
+}
+
+export function deleteMatch(matchId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/admin/matches/${matchId}`, { method: 'DELETE' });
+}
+
 export function undropParticipant(
   slug: string,
   userId: string,

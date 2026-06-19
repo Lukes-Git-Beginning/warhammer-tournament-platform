@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
 import {
+  createMatchNode,
   deleteTournament,
   dropParticipant,
   getBracket,
@@ -144,6 +145,23 @@ export function TournamentDetail() {
       void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
       void queryClient.invalidateQueries({ queryKey: ['participant-me', slug] });
     },
+  });
+
+  const [showCreateMatch, setShowCreateMatch] = useState(false);
+  const [createP1Id, setCreateP1Id] = useState('');
+  const [createP2Id, setCreateP2Id] = useState('');
+  const [createRound, setCreateRound] = useState(1);
+  const [createMatchError, setCreateMatchError] = useState<string | null>(null);
+  const createMatchMutation = useMutation({
+    mutationFn: () => createMatchNode(slug, createP1Id, createP2Id, createRound),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
+      setShowCreateMatch(false);
+      setCreateP1Id('');
+      setCreateP2Id('');
+      setCreateMatchError(null);
+    },
+    onError: (err: Error) => setCreateMatchError(err.message),
   });
 
   const { data: bracket } = useQuery({
@@ -360,6 +378,15 @@ export function TournamentDetail() {
           {tournament.status === 'ONGOING' && (
             <button
               type="button"
+              onClick={() => { setShowCreateMatch(true); setCreateRound(bracket?.swiss?.currentRound ?? 1); }}
+              className="rounded border border-rizzotto-gold-500/40 px-3 py-1.5 text-sm text-rizzotto-gold-400 hover:border-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors"
+            >
+              + Create Match
+            </button>
+          )}
+          {tournament.status === 'ONGOING' && (
+            <button
+              type="button"
               disabled={resetBracketMutation.isPending}
               className="rounded border border-orange-900 px-4 py-1.5 text-sm text-orange-400 hover:border-orange-600 hover:text-orange-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => {
@@ -394,6 +421,67 @@ export function TournamentDetail() {
               {(resetBracketMutation.error as Error).message}
             </span>
           )}
+        </div>
+      )}
+
+      {/* ─── Create Match Modal ─── */}
+      {showCreateMatch && canManage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={(e) => { if (e.target === e.currentTarget) setShowCreateMatch(false); }}>
+          <div className="bg-stone-900 border border-stone-700 rounded-lg p-6 w-full max-w-sm shadow-xl">
+            <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-4">Create Match Node</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-stone-400 block mb-1">Player 1</label>
+                <select
+                  value={createP1Id}
+                  onChange={(e) => { setCreateP1Id(e.target.value); setCreateMatchError(null); }}
+                  className="w-full rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+                >
+                  <option value="">— select player —</option>
+                  {(participantsData?.data ?? [])
+                    .filter((p) => p.user.id !== createP2Id)
+                    .map((p) => <option key={p.user.id} value={p.user.id}>{p.user.username}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-stone-400 block mb-1">Player 2</label>
+                <select
+                  value={createP2Id}
+                  onChange={(e) => { setCreateP2Id(e.target.value); setCreateMatchError(null); }}
+                  className="w-full rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+                >
+                  <option value="">— select player —</option>
+                  {(participantsData?.data ?? [])
+                    .filter((p) => p.user.id !== createP1Id)
+                    .map((p) => <option key={p.user.id} value={p.user.id}>{p.user.username}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-stone-400 block mb-1">Round</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={createRound}
+                  onChange={(e) => setCreateRound(Number(e.target.value))}
+                  className="w-full rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+                />
+              </div>
+              {createMatchError && <p className="text-xs text-red-400">{createMatchError}</p>}
+            </div>
+            <div className="flex gap-3 justify-end mt-5">
+              <button type="button" onClick={() => setShowCreateMatch(false)} className="px-4 py-1.5 text-sm text-stone-400 hover:text-stone-200">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!createP1Id || !createP2Id || createMatchMutation.isPending}
+                onClick={() => createMatchMutation.mutate()}
+                className="px-4 py-1.5 text-sm rounded bg-rizzotto-blood-500 text-white font-medium hover:opacity-90 disabled:opacity-40"
+              >
+                {createMatchMutation.isPending ? 'Creating…' : 'Create Match'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

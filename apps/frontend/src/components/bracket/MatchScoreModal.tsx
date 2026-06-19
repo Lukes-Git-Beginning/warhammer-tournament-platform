@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, dropParticipant, restoreMatch, cancelMatch } from '@/lib/api';
+import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, dropParticipant, restoreMatch, cancelMatch, swapPlayer, deleteMatch, getParticipants } from '@/lib/api';
 import { useState } from 'react';
 
 interface MatchScoreModalProps {
@@ -17,6 +17,7 @@ interface MatchScoreModalProps {
   initialMapId?: string;
   initialP1FactionId?: string;
   initialP2FactionId?: string;
+  canManage?: boolean;
   onClose: () => void;
 }
 
@@ -70,10 +71,12 @@ export function MatchScoreModal({
   initialMapId,
   initialP1FactionId,
   initialP2FactionId,
+  canManage = false,
   onClose,
 }: MatchScoreModalProps) {
   const queryClient = useQueryClient();
   const isCompleted = matchStatus === 'COMPLETED';
+  const isPending = matchStatus === 'PENDING';
   const isBo1 = matchFormat === 'BO1';
 
   const [dropError, setDropError] = useState<string | null>(null);
@@ -100,6 +103,37 @@ export function MatchScoreModal({
     mutationFn: () => cancelMatch(matchId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      onClose();
+    },
+  });
+
+  // Swap Player
+  const [swapOldId, setSwapOldId] = useState('');
+  const [swapNewId, setSwapNewId] = useState('');
+  const [swapError, setSwapError] = useState<string | null>(null);
+  const { data: participantsData } = useQuery({
+    queryKey: ['tournament-participants', tournamentSlug],
+    queryFn: () => getParticipants(tournamentSlug!),
+    enabled: !!tournamentSlug && canManage && isPending,
+    staleTime: 60_000,
+  });
+  const participants = participantsData?.data ?? [];
+  const swapMutation = useMutation({
+    mutationFn: () => swapPlayer(matchId, swapOldId, swapNewId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      onClose();
+    },
+    onError: (err: Error) => setSwapError(err.message),
+  });
+
+  // Delete Match
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteMatch(matchId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-matches'] });
       onClose();
     },
   });
@@ -248,6 +282,83 @@ export function MatchScoreModal({
             <p className="text-[10px] text-stone-600">
               Restore → enter correct result · Cancel → remove from standings
             </p>
+          </div>
+        )}
+
+        {/* Swap Player — PENDING matches only */}
+        {canManage && isPending && tournamentSlug && (
+          <div className="mb-4 rounded border border-stone-700 bg-stone-800/50 p-3 space-y-2">
+            <p className="text-xs text-stone-400">Swap player in this match:</p>
+            <div className="flex gap-2 items-center">
+              <select
+                value={swapOldId}
+                onChange={(e) => { setSwapOldId(e.target.value); setSwapNewId(''); setSwapError(null); }}
+                className="flex-1 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+              >
+                <option value="">Replace…</option>
+                {player1Id && <option value={player1Id}>{player1Name ?? player1Id}</option>}
+                {player2Id && <option value={player2Id}>{player2Name ?? player2Id}</option>}
+              </select>
+              <span className="text-stone-600 text-xs">→</span>
+              <select
+                value={swapNewId}
+                onChange={(e) => { setSwapNewId(e.target.value); setSwapError(null); }}
+                disabled={!swapOldId}
+                className="flex-1 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:outline-none focus:border-rizzotto-gold-500 disabled:opacity-40"
+              >
+                <option value="">With…</option>
+                {participants
+                  .filter((p) => p.user.id !== (swapOldId === player1Id ? player2Id : player1Id))
+                  .filter((p) => p.user.id !== player1Id && p.user.id !== player2Id)
+                  .map((p) => (
+                    <option key={p.user.id} value={p.user.id}>{p.user.username}</option>
+                  ))}
+              </select>
+              <button
+                type="button"
+                disabled={!swapOldId || !swapNewId || swapMutation.isPending}
+                onClick={() => swapMutation.mutate()}
+                className="rounded border border-amber-700 px-2 py-1 text-xs text-amber-400 hover:bg-amber-900/20 transition-colors disabled:opacity-40 shrink-0"
+              >
+                {swapMutation.isPending ? '…' : 'Swap'}
+              </button>
+            </div>
+            {swapError && <p className="text-xs text-red-400">{swapError}</p>}
+          </div>
+        )}
+
+        {/* Delete Match */}
+        {canManage && (matchStatus === 'CANCELLED' || isPending) && (
+          <div className="mb-4 rounded border border-red-900/50 bg-stone-800/50 p-3 space-y-2">
+            <p className="text-xs text-stone-400">Danger zone:</p>
+            {!confirmDelete ? (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="rounded border border-red-800 px-2 py-1 text-xs text-red-400 hover:bg-red-900/20 transition-colors"
+              >
+                🗑 Delete Match
+              </button>
+            ) : (
+              <div className="flex gap-2 items-center">
+                <span className="text-xs text-red-300">Permanently delete this match?</span>
+                <button
+                  type="button"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => deleteMutation.mutate()}
+                  className="rounded border border-red-600 px-2 py-1 text-xs text-red-300 hover:bg-red-900/30 transition-colors disabled:opacity-40"
+                >
+                  {deleteMutation.isPending ? '…' : 'Confirm Delete'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  className="text-xs text-stone-500 hover:text-stone-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
         )}
 
