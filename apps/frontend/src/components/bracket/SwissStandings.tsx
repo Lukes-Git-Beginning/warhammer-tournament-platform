@@ -29,6 +29,8 @@ interface SwissStandingsProps {
   tournamentSlug?: string;
   /** Whether the current user can manage the tournament */
   canManage?: boolean;
+  /** Only show placement badges (1ST/2ND/3RD) once the tournament is fully completed */
+  isCompleted?: boolean;
 }
 
 function Avatar({ url, username }: { url: string | null; username: string }) {
@@ -77,6 +79,7 @@ export function SwissStandings({
   semifinalistIds,
   tournamentSlug,
   canManage = false,
+  isCompleted = false,
 }: SwissStandingsProps) {
   const queryClient = useQueryClient();
   const dropMutation = useMutation({
@@ -156,7 +159,7 @@ export function SwissStandings({
               const isFinalist = finalistIds?.has(entry.userId);
               const isDropped = entry.dropped === true;
 
-              const placementKey = (rank <= 3 && !isDropped ? rank : undefined) as 1 | 2 | 3 | undefined;
+              const placementKey = (isCompleted && rank <= 3 && !isDropped ? rank : undefined) as 1 | 2 | 3 | undefined;
               const badge = placementKey ? PLACEMENT_BADGE[placementKey] : null;
 
               return (

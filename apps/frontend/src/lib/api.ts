@@ -1014,6 +1014,16 @@ export function addLateJoiner(
   });
 }
 
+export function fillByeMatch(
+  matchId: string,
+  userId: string,
+): Promise<{ matchId: string; status: string }> {
+  return apiFetch(`/api/matches/${matchId}/fill-bye`, {
+    method: 'PATCH',
+    body: JSON.stringify({ userId }),
+  });
+}
+
 /** @deprecated Use getMatchScoringBreakdown instead */
 export const getScoringBreakdown = getMatchScoringBreakdown;
 
@@ -1332,7 +1342,6 @@ export interface AvailabilitySlot {
 export interface HeatmapSlot {
   day_of_week: number;
   hour_utc: number;
-  context: AvailabilityContext;
   count: number;
 }
 

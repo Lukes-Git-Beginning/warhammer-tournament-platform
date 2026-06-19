@@ -1,12 +1,12 @@
+import { useRef, useEffect } from 'react';
 import type { HeatmapSlot } from '../../lib/api';
+import { getUtcOffsetHours } from '../../lib/timezone';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const DISPLAY_HOURS = Array.from({ length: 24 }, (_, i) => i); // 0–23, full day
+const DISPLAY_HOURS = Array.from({ length: 24 }, (_, i) => i);
 const ROW_H = 28;
-const VISIBLE_ROWS = 16; // default view: 8am–11pm; scroll up for earlier hours
+const VISIBLE_ROWS = 16;
 const START_HOUR = 8;
-
-import { useRef, useEffect } from 'react';
 
 function intensityColor(count: number, max: number): string {
   if (max === 0 || count === 0) return 'hsl(20,3%,13%)';
@@ -16,25 +16,34 @@ function intensityColor(count: number, max: number): string {
   return `hsl(38,${saturation.toFixed(0)}%,${lightness.toFixed(0)}%)`;
 }
 
-interface AvailabilityHeatmapProps {
-  slots: HeatmapSlot[];
+function utcToLocal(dayUtc: number, hourUtc: number, offset: number): { day: number; hour: number } {
+  const total = dayUtc * 24 + hourUtc + offset;
+  const day  = ((Math.floor(total / 24) % 7) + 7) % 7;
+  const hour = ((total % 24) + 24) % 24;
+  return { day, hour };
 }
 
-export function AvailabilityHeatmap({ slots }: AvailabilityHeatmapProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+interface AvailabilityHeatmapProps {
+  slots: HeatmapSlot[];
+  userTimezone?: string;
+}
 
-  // Aggregate both contexts into a single count per cell
+export function AvailabilityHeatmap({ slots, userTimezone }: AvailabilityHeatmapProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const offset = userTimezone ? getUtcOffsetHours(userTimezone) : 0;
+
+  // Aggregate into local-time buckets
   const lookup = new Map<string, number>();
   for (const s of slots) {
-    const key = `${s.day_of_week}:${s.hour_utc}`;
+    const { day, hour } = utcToLocal(s.day_of_week, s.hour_utc, offset);
+    const key = `${day}:${hour}`;
     lookup.set(key, (lookup.get(key) ?? 0) + s.count);
   }
   const max = Math.max(0, ...lookup.values());
 
   useEffect(() => {
     if (scrollRef.current) {
-      const startIdx = DISPLAY_HOURS.indexOf(START_HOUR);
-      scrollRef.current.scrollTop = startIdx * ROW_H;
+      scrollRef.current.scrollTop = START_HOUR * ROW_H;
     }
   }, []);
 
@@ -42,7 +51,6 @@ export function AvailabilityHeatmap({ slots }: AvailabilityHeatmapProps) {
 
   return (
     <div className="overflow-x-auto select-none" style={{ minWidth: 380 }}>
-      {/* Day headers */}
       <div className="grid" style={{ gridTemplateColumns: colTemplate }}>
         <div style={{ height: ROW_H }} />
         {DAYS.map((d, i) => (
@@ -91,7 +99,7 @@ export function AvailabilityHeatmap({ slots }: AvailabilityHeatmapProps) {
           ))}
         </div>
         <span>More</span>
-        <span className="ml-2 text-stone-600">· all players, both contexts combined</span>
+        <span className="ml-2 text-stone-600">· all players in your local time</span>
       </div>
     </div>
   );

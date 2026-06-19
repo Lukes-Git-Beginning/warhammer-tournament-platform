@@ -1,19 +1,18 @@
 import { useRef, useState, useEffect } from 'react';
 import type { AvailabilityContext, AvailabilitySlot } from '../../lib/api';
+import { getUtcOffsetHours } from '../../lib/timezone';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const DISPLAY_HOURS = Array.from({ length: 24 }, (_, i) => i); // 0–23, full day
+const DISPLAY_HOURS = Array.from({ length: 24 }, (_, i) => i); // 0–23 local hours
 const ROW_H = 28;
-const VISIBLE_ROWS = 16; // default view: 8am–11pm; scroll up for earlier hours
+const VISIBLE_ROWS = 16;
 const START_HOUR = 8;
 
-// Slot colors
-const C_MATCHMAKING = 'rgba(245,158,11,0.65)';  // amber
-const C_TOURNAMENT  = 'rgba(56,189,248,0.65)';   // sky
+const C_MATCHMAKING = 'rgba(245,158,11,0.65)';
+const C_TOURNAMENT  = 'rgba(56,189,248,0.65)';
 const C_BOTH        = `linear-gradient(135deg, ${C_MATCHMAKING} 50%, ${C_TOURNAMENT} 50%)`;
 
-// Empty cell alternating bands (every 3 display rows, weekends slightly warmer)
 function emptyBg(displayIdx: number, dayIdx: number): string {
   const band = Math.floor(displayIdx / 3) % 2;
   const isWeekend = dayIdx >= 5;
@@ -21,11 +20,28 @@ function emptyBg(displayIdx: number, dayIdx: number): string {
   return band === 0 ? 'hsl(20,3%,15%)' : 'hsl(20,3%,12%)';
 }
 
+// UTC {day,hour} → local {day,hour} given offset in whole hours
+function utcToLocal(dayUtc: number, hourUtc: number, offset: number): { day: number; hour: number } {
+  const total = dayUtc * 24 + hourUtc + offset;
+  const day  = ((Math.floor(total / 24) % 7) + 7) % 7;
+  const hour = ((total % 24) + 24) % 24;
+  return { day, hour };
+}
+
+// Local {day,hour} → UTC {day,hour} given offset in whole hours
+function localToUtc(dayLocal: number, hourLocal: number, offset: number): { day: number; hour: number } {
+  const total = dayLocal * 24 + hourLocal - offset;
+  const day  = ((Math.floor(total / 24) % 7) + 7) % 7;
+  const hour = ((total % 24) + 24) % 24;
+  return { day, hour };
+}
+
 interface WeekAvailabilityGridProps {
-  slots: AvailabilitySlot[];         // all slots, both contexts
-  editContext: AvailabilityContext;  // which context dragging affects
+  slots: AvailabilitySlot[];
+  editContext: AvailabilityContext;
   onChange: (slots: AvailabilitySlot[]) => void;
   disabled?: boolean;
+  userTimezone?: string;
 }
 
 type Cell = { day: number; hour: number };
@@ -37,7 +53,9 @@ function getRect(a: Cell, b: Cell) {
   };
 }
 
-export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled }: WeekAvailabilityGridProps) {
+export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled, userTimezone }: WeekAvailabilityGridProps) {
+  const offset = userTimezone ? getUtcOffsetHours(userTimezone) : 0;
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const dragMode = useRef<'add' | 'remove'>('add');
@@ -45,26 +63,33 @@ export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled }:
   const dragCurrent = useRef<Cell | null>(null);
   const [dragHighlight, setDragHighlight] = useState<Set<string>>(new Set());
 
-  // Always-fresh refs so the window listener never goes stale
   const slotsRef = useRef(slots);
   const editCtxRef = useRef(editContext);
   const onChangeRef = useRef(onChange);
+  const offsetRef = useRef(offset);
   slotsRef.current = slots;
   editCtxRef.current = editContext;
   onChangeRef.current = onChange;
+  offsetRef.current = offset;
 
+  // Convert stored UTC slots to local {day, hour} for display
   const matchSet = new Set(
-    slots.filter((s) => s.context === 'MATCHMAKING').map((s) => `${s.day_of_week}:${s.hour_utc}`),
+    slots.filter((s) => s.context === 'MATCHMAKING').map((s) => {
+      const { day, hour } = utcToLocal(s.day_of_week, s.hour_utc, offset);
+      return `${day}:${hour}`;
+    }),
   );
   const tournSet = new Set(
-    slots.filter((s) => s.context === 'TOURNAMENT').map((s) => `${s.day_of_week}:${s.hour_utc}`),
+    slots.filter((s) => s.context === 'TOURNAMENT').map((s) => {
+      const { day, hour } = utcToLocal(s.day_of_week, s.hour_utc, offset);
+      return `${day}:${hour}`;
+    }),
   );
   const editSet = editContext === 'MATCHMAKING' ? matchSet : tournSet;
 
   useEffect(() => {
     if (scrollRef.current) {
-      const startIdx = DISPLAY_HOURS.indexOf(START_HOUR);
-      scrollRef.current.scrollTop = startIdx * ROW_H;
+      scrollRef.current.scrollTop = START_HOUR * ROW_H;
     }
   }, []);
 
@@ -72,7 +97,7 @@ export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled }:
     const onUp = () => { if (isDragging.current) applyDrag(); };
     window.addEventListener('mouseup', onUp);
     return () => window.removeEventListener('mouseup', onUp);
-  }, []); // onUp only references stable refs, no deps needed
+  }, []);
 
   function highlightRect(anchor: Cell, current: Cell) {
     const rect = getRect(anchor, current);
@@ -88,24 +113,38 @@ export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled }:
     }
     const s = slotsRef.current;
     const ctx = editCtxRef.current;
-    const curSet = new Set(s.filter((sl) => sl.context === ctx).map((sl) => `${sl.day_of_week}:${sl.hour_utc}`));
+    const off = offsetRef.current;
     const rect = getRect(dragAnchor.current, dragCurrent.current);
+
+    // Build set of currently selected local positions for this context
+    const curLocalSet = new Set(
+      s.filter((sl) => sl.context === ctx).map((sl) => {
+        const { day, hour } = utcToLocal(sl.day_of_week, sl.hour_utc, off);
+        return `${day}:${hour}`;
+      }),
+    );
+
     const other = s.filter((sl) => sl.context !== ctx);
     const same  = s.filter((sl) => sl.context === ctx);
 
     if (dragMode.current === 'add') {
       const toAdd: AvailabilitySlot[] = [];
-      for (let d = rect.minDay; d <= rect.maxDay; d++)
-        for (let h = rect.minHour; h <= rect.maxHour; h++)
-          if (!curSet.has(`${d}:${h}`)) toAdd.push({ day_of_week: d, hour_utc: h, context: ctx });
+      for (let d = rect.minDay; d <= rect.maxDay; d++) {
+        for (let h = rect.minHour; h <= rect.maxHour; h++) {
+          if (!curLocalSet.has(`${d}:${h}`)) {
+            const utc = localToUtc(d, h, off);
+            toAdd.push({ day_of_week: utc.day, hour_utc: utc.hour, context: ctx });
+          }
+        }
+      }
       onChangeRef.current([...other, ...same, ...toAdd]);
     } else {
       onChangeRef.current([
         ...other,
-        ...same.filter((sl) => !(
-          sl.day_of_week >= rect.minDay && sl.day_of_week <= rect.maxDay &&
-          sl.hour_utc   >= rect.minHour && sl.hour_utc   <= rect.maxHour
-        )),
+        ...same.filter((sl) => {
+          const { day: ld, hour: lh } = utcToLocal(sl.day_of_week, sl.hour_utc, off);
+          return !(ld >= rect.minDay && ld <= rect.maxDay && lh >= rect.minHour && lh <= rect.maxHour);
+        }),
       ]);
     }
     isDragging.current = false;
@@ -135,7 +174,6 @@ export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled }:
     if (highlighted) {
       const previewColor = editContext === 'MATCHMAKING' ? C_MATCHMAKING : C_TOURNAMENT;
       if (dragMode.current === 'add') return { background: previewColor, opacity: 0.8 };
-      // remove mode: show a reddish overlay
       return { background: 'rgba(239,68,68,0.35)' };
     }
     if (hasM && hasT) return { background: C_BOTH };
@@ -145,10 +183,10 @@ export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled }:
   }
 
   const colTemplate = `44px repeat(7, 1fr)`;
+  const offsetLabel = offset === 0 ? 'UTC' : offset > 0 ? `UTC+${offset}` : `UTC${offset}`;
 
   return (
     <div className="overflow-x-auto select-none" style={{ minWidth: 380 }}>
-      {/* Day headers */}
       <div className="grid" style={{ gridTemplateColumns: colTemplate }}>
         <div style={{ height: ROW_H }} />
         {DAYS.map((d, i) => (
@@ -162,7 +200,6 @@ export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled }:
         ))}
       </div>
 
-      {/* Scrollable hour rows */}
       <div ref={scrollRef} className="overflow-y-auto" style={{ height: VISIBLE_ROWS * ROW_H }}>
         <div className="grid" style={{ gridTemplateColumns: colTemplate }}>
           {DISPLAY_HOURS.map((hour, displayIdx) => (
@@ -192,7 +229,6 @@ export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled }:
         </div>
       </div>
 
-      {/* Legend */}
       <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-stone-400">
         <span className="flex items-center gap-1.5">
           <span className="h-3 w-5 rounded-sm" style={{ background: C_MATCHMAKING }} />
@@ -206,7 +242,7 @@ export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled }:
           <span className="h-3 w-5 rounded-sm" style={{ background: C_BOTH }} />
           Both
         </span>
-        <span className="text-stone-500">Hours in UTC · drag to mark</span>
+        <span className="text-stone-500">Hours in your local time ({offsetLabel}) · drag to mark</span>
       </div>
     </div>
   );

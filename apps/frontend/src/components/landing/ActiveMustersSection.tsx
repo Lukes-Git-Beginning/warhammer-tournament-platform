@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { listTournaments, type Tournament } from '@/lib/api';
 import { formatInUserTimezone } from '@/lib/timezone';
+import { useAuthQuery } from '@/lib/auth';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton';
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -29,9 +30,10 @@ const MODE_LABELS: Record<string, string> = {
 
 function MusterCard({ tournament }: { tournament: Tournament }) {
   const { t } = useTranslation();
+  const { data: me } = useAuthQuery();
   const isLive = tournament.status === 'ONGOING';
   const isCompleted = tournament.status === 'COMPLETED';
-  const startDate = formatInUserTimezone(tournament.start_date, tournament.timezone);
+  const startDate = formatInUserTimezone(tournament.start_date, me?.timezone ?? undefined);
 
   return (
     <Link
@@ -128,12 +130,16 @@ export function ActiveMustersSection() {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['tournaments', 1, 6],
-    queryFn: () => listTournaments(1, 6),
+    queryKey: ['tournaments', 1, 12],
+    queryFn: () => listTournaments(1, 12),
     retry: false,
   });
 
-  const tournaments = data?.data ?? [];
+  const all = data?.data ?? [];
+  const tournaments = all
+    .filter((t) => t.status === 'ONGOING' || t.status === 'OPEN_REGISTRATION' || t.status === 'REGISTRATION_CLOSED')
+    .sort((a, b) => (a.status === 'ONGOING' ? -1 : b.status === 'ONGOING' ? 1 : 0))
+    .slice(0, 6);
   const hasTournaments = tournaments.length > 0;
 
   return (

@@ -155,6 +155,7 @@ export function TournamentDetail() {
       void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
       alert(`${data.participant.user.username} added as late joiner.`);
     },
+    onError: (err: Error) => alert(`Error: ${err.message}`),
   });
 
   const [showCreateMatch, setShowCreateMatch] = useState(false);
@@ -423,6 +424,19 @@ export function TournamentDetail() {
               }}
             >
               {resetBracketMutation.isPending ? 'Resetting…' : 'Reset Bracket'}
+            </button>
+          )}
+          {tournament.status === 'ONGOING' && (
+            <button
+              type="button"
+              disabled={lateJoinMutation.isPending}
+              onClick={() => {
+                const userId = prompt('Enter the User ID of the player to add (find it in Admin → Users):');
+                if (userId?.trim()) lateJoinMutation.mutate(userId.trim());
+              }}
+              className="rounded border border-rizzotto-gold-500/40 px-3 py-1.5 text-sm text-rizzotto-gold-400 hover:border-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors disabled:opacity-40"
+            >
+              + Add Late Joiner
             </button>
           )}
           <button
@@ -747,6 +761,7 @@ export function TournamentDetail() {
                 semifinalistIds={standingsSemifinalistIds}
                 tournamentSlug={tournament.slug}
                 canManage={!!canManage}
+                isCompleted={tournament.status === 'COMPLETED'}
               />
             </section>
           );

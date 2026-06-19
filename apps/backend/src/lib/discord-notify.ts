@@ -127,7 +127,7 @@ export async function notifyMatchFoundWithButtons(
   const mapLine = mapName ? ` · Map: **${mapName}**` : '';
 
   const buildDm = (forPlayer: typeof p1, opponent: typeof p1) => ({
-    content: `Match found! Open Play vs **${opponent.username}**${mapLine}\nPick your faction → ${matchUrl}`,
+    content: `Match found! Open Play vs <@${opponent.discordId}>${mapLine}\nPick your faction → ${matchUrl}`,
     components: [
       actionRow([
         button('Declare Win', `op_declare:win:${matchId}:${forPlayer.discordId}`, BTN_SUCCESS),

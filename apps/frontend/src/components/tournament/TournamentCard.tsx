@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { formatInUserTimezone } from '@/lib/timezone';
+import { useAuthQuery } from '@/lib/auth';
 import { DiscordTimestampButton } from './DiscordTimestampButton';
 
 interface TournamentCardProps {
@@ -57,7 +58,8 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function TournamentCard({ tournament }: TournamentCardProps) {
-  const startDate = formatInUserTimezone(tournament.start_date, tournament.timezone);
+  const { data: user } = useAuthQuery();
+  const startDate = formatInUserTimezone(tournament.start_date, user?.timezone ?? undefined);
   const statusColor = STATUS_COLORS[tournament.status] ?? 'bg-stone-700 text-stone-300';
   const statusLabel = STATUS_LABELS[tournament.status] ?? tournament.status;
   const formatLabel = FORMAT_LABELS[tournament.format] ?? tournament.format;

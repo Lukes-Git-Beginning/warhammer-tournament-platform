@@ -91,8 +91,8 @@ export function OpenPlayPage() {
       </div>
 
       <div className="pt-2">
-        {activeTab === 'queue'        && <QueueTab />}
-        {activeTab === 'availability' && <AvailabilityTab currentUserId={me?.id} />}
+        {activeTab === 'queue'        && <QueueTab userTimezone={me?.timezone ?? undefined} />}
+        {activeTab === 'availability' && <AvailabilityTab currentUserId={me?.id} userTimezone={me?.timezone ?? undefined} />}
         {activeTab === 'challenges'   && <ChallengesTab currentUserId={me?.id} />}
       </div>
     </main>
@@ -103,7 +103,7 @@ export function OpenPlayPage() {
 // Queue Tab
 // ---------------------------------------------------------------------------
 
-function QueueTab() {
+function QueueTab({ userTimezone }: { userTimezone?: string }) {
   const qc = useQueryClient();
 
   const join = useMutation({
@@ -117,9 +117,7 @@ function QueueTab() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const matchmakingSlots: HeatmapSlot[] = (heatmapData?.slots ?? []).filter(
-    (s) => s.context === 'MATCHMAKING',
-  );
+  const allSlots = heatmapData?.slots ?? [];
 
   return (
     <div className="space-y-6">
@@ -151,7 +149,7 @@ function QueueTab() {
         <p className="text-xs text-stone-500">
           Community matchmaking availability — brighter means more players have marked this time as free.
         </p>
-        <AvailabilityHeatmap slots={matchmakingSlots} />
+        <AvailabilityHeatmap slots={allSlots} userTimezone={userTimezone} />
       </div>
     </div>
   );
@@ -161,7 +159,7 @@ function QueueTab() {
 // Availability Tab
 // ---------------------------------------------------------------------------
 
-function AvailabilityTab({ currentUserId }: { currentUserId?: string }) {
+function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: string; userTimezone?: string }) {
   const [editContext, setEditContext] = useState<AvailabilityContext>('MATCHMAKING');
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [localSlots, setLocalSlots] = useState<AvailabilitySlot[] | null>(null);
@@ -235,12 +233,13 @@ function AvailabilityTab({ currentUserId }: { currentUserId?: string }) {
       </div>
 
       {showHeatmap ? (
-        <AvailabilityHeatmap slots={heatmapData?.slots ?? []} />
+        <AvailabilityHeatmap slots={heatmapData?.slots ?? []} userTimezone={userTimezone} />
       ) : (
         <WeekAvailabilityGrid
           slots={slots}
           editContext={editContext}
           onChange={setLocalSlots}
+          userTimezone={userTimezone}
         />
       )}
     </div>
@@ -270,9 +269,7 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
     refetchInterval: 30_000,
   });
 
-  const matchmakingSlots: HeatmapSlot[] = (heatmapData?.slots ?? []).filter(
-    (s) => s.context === 'MATCHMAKING',
-  );
+  const matchmakingSlots = heatmapData?.slots ?? [];
 
   const isImmediate = selectedDate === null;
 

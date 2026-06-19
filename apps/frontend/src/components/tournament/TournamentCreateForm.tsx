@@ -106,6 +106,14 @@ function buildRoundKeys(form: Partial<FormData>): { key: string; label: string; 
   return keys;
 }
 
+function nextRoundHour(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(20, 0, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
+}
+
 export function TournamentCreateForm() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -115,6 +123,8 @@ export function TournamentCreateForm() {
     format: 'SINGLE_ELIMINATION',
     mode: 'BPT',
     timezone: defaultTimezone,
+    start_date: nextRoundHour(),
+    registration_deadline: nextRoundHour(),
     draft_enabled: false,
     rounds_count: 5,
     has_third_place_match: false,
@@ -176,6 +186,7 @@ export function TournamentCreateForm() {
       [name]: newValue,
       ...(name === 'draft_enabled' && !checked ? { draft_preset_id: null } : {}),
       ...(name === 'format' ? { finale_match_format: value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO1' } : {}),
+      ...(name === 'start_date' ? { registration_deadline: value } : {}),
     }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
   }

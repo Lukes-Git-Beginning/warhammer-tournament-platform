@@ -83,10 +83,11 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!fastify.redis) return reply.code(200).send({ inQueue: false, position: null, total: 0 });
 
-      const pos = await fastify.redis.lpos(QUEUE_KEY, userId);
-      if (pos === null) return reply.code(200).send({ inQueue: false, position: null, total: 0 });
-
-      const total = await fastify.redis.llen(QUEUE_KEY);
+      const [pos, total] = await Promise.all([
+        fastify.redis.lpos(QUEUE_KEY, userId),
+        fastify.redis.llen(QUEUE_KEY),
+      ]);
+      if (pos === null) return reply.code(200).send({ inQueue: false, position: null, total });
       return reply.code(200).send({ inQueue: true, position: pos + 1, total });
     },
   );

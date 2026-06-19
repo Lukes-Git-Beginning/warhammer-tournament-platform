@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import type { FactionDto } from '@rizzotto/types';
-import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, addThirdPlaceMatch, getFactions, patchTournament } from '@/lib/api';
+import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, addThirdPlaceMatch, getFactions, patchTournament, fillByeMatch } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { sortStandingsByPlayoffResult, getFinalistIds } from '@/lib/bracketStandings';
 import { computeBracketLayout } from './computeBracketLayout';
@@ -21,6 +21,7 @@ interface BracketViewProps {
 
 export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false, playoffFormat }: BracketViewProps) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [byeMatchId, setByeMatchId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -256,6 +257,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           finalistIds={finalistIds}
           tournamentSlug={slug}
           canManage={canManage}
+          isCompleted={data.status === 'COMPLETED'}
         />
       )}
 
@@ -410,7 +412,10 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                   tournamentMode={data.mode}
                   onMatchClick={(matchId) => {
                     const m = data.matches.find((x) => x.matchId === matchId);
-                    if (canManage && m?.status !== 'BYE') {
+                    if (!canManage) return;
+                    if (m?.status === 'BYE') {
+                      setByeMatchId(matchId);
+                    } else {
                       setSelectedMatchId(matchId);
                     }
                   }}
@@ -450,6 +455,41 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
               canManage={canManage}
               onClose={() => setSelectedMatchId(null)}
             />
+          );
+        })()}
+
+        {byeMatchId && (() => {
+          const participants = participantsData?.data ?? [];
+          const byeMatch = data?.matches.find((m) => m.matchId === byeMatchId);
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setByeMatchId(null)}>
+              <div className="w-full max-w-sm rounded-lg border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                <h3 className="mb-1 font-display text-base font-semibold text-rizzotto-gold-400">Assign Player to BYE Slot</h3>
+                <p className="mb-4 text-xs text-stone-500">
+                  Round {byeMatch?.round} · {players.get(byeMatch?.player1Id ?? '')?.name ?? 'TBD'} vs BYE
+                </p>
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {participants.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        fillByeMatch(byeMatchId, p.user.id)
+                          .then(() => {
+                            void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
+                            setByeMatchId(null);
+                          })
+                          .catch((err: Error) => alert(`Error: ${err.message}`));
+                      }}
+                      className="w-full rounded border border-rizzotto-iron-700 px-3 py-2 text-left text-sm text-stone-300 hover:border-rizzotto-gold-500/50 hover:text-rizzotto-gold-400 transition-colors"
+                    >
+                      {p.user.username}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" onClick={() => setByeMatchId(null)} className="mt-4 text-xs text-stone-600 hover:text-stone-400 transition-colors">Cancel</button>
+              </div>
+            </div>
           );
         })()}
       </div>
