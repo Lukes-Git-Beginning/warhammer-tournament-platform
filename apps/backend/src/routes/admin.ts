@@ -7,6 +7,7 @@ import { TournamentFormat, Prisma } from '@rizzotto/db';
 import { ImportLogListResponseSchema } from '@rizzotto/types';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
+import { emitBracketUpdate } from '../lib/emit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -1177,6 +1178,40 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
     await fastify.prisma.match.update({ where: { id: matchId }, data: { deleted_at: new Date() } });
     return reply.code(200).send({ ok: true });
+  });
+
+  // POST /api/admin/matches/:matchId/forfeit — forfeit a PENDING match in favour of the opponent.
+  // Sets status=FORFEIT and winner_id without touching MatchGame rows (no stat impact).
+  fastify.post('/api/admin/matches/:matchId/forfeit', async (request, reply) => {
+    const { matchId } = request.params as { matchId: string };
+    const parsed = z.object({ droppedPlayerId: z.string() }).safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'droppedPlayerId required', statusCode: 400 });
+    }
+    const { droppedPlayerId } = parsed.data;
+
+    const match = await fastify.prisma.match.findUnique({
+      where: { id: matchId },
+      select: { id: true, tournament_id: true, player1_id: true, player2_id: true, status: true },
+    });
+    if (!match) {
+      return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+    }
+    if (match.status !== 'PENDING') {
+      return reply.code(409).send({ error: 'Conflict', message: `Match is ${match.status}, not PENDING`, statusCode: 409 });
+    }
+    const winnerId = match.player1_id === droppedPlayerId ? match.player2_id : match.player2_id === droppedPlayerId ? match.player1_id : null;
+    if (!winnerId) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'droppedPlayerId is not in this match', statusCode: 400 });
+    }
+
+    await fastify.prisma.match.update({
+      where: { id: matchId },
+      data: { status: 'FORFEIT', winner_id: winnerId },
+    });
+
+    emitBracketUpdate(fastify.io, match.tournament_id);
+    return reply.code(200).send({ ok: true, winnerId });
   });
 
   // POST /api/admin/tournaments/:slug/create-match — add a manual PENDING Swiss match
