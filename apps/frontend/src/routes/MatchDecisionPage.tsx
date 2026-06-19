@@ -520,6 +520,7 @@ interface BlindPickPhaseProps {
   currentUserId: string;
   factions: FactionWithStatsDto[];
   pickedMapName?: string | null;
+  pickedMapImageUrl?: string | null;
   restrictedFactions?: string[];
   factionAllowlist?: string[];
 }
@@ -530,6 +531,7 @@ function BlindPickPhase({
   currentUserId,
   factions,
   pickedMapName,
+  pickedMapImageUrl,
   restrictedFactions = [],
   factionAllowlist = [],
 }: BlindPickPhaseProps) {
@@ -537,6 +539,14 @@ function BlindPickPhase({
   const [selectedFactionId, setSelectedFactionId] = useState<string | null>(null);
   const [locking, setLocking] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
+  const [mapLightbox, setMapLightbox] = useState(false);
+
+  useEffect(() => {
+    if (!mapLightbox) return;
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setMapLightbox(false); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mapLightbox]);
 
   const bp = decision.blindPick;
   // Use match player ordering (player1_id/player2_id) not coin-flip ordering
@@ -633,8 +643,52 @@ function BlindPickPhase({
       </h2>
       {pickedMapName && (
         <p className="text-sm text-rizzotto-stone-400">
-          Map: <span className="font-semibold text-stone-200">{pickedMapName}</span>
+          Map:{' '}
+          {pickedMapImageUrl ? (
+            <button
+              type="button"
+              onClick={() => setMapLightbox(true)}
+              className="font-semibold text-stone-200 hover:text-rizzotto-gold-400 underline-offset-2 hover:underline transition-colors"
+            >
+              {pickedMapName}
+            </button>
+          ) : (
+            <span className="font-semibold text-stone-200">{pickedMapName}</span>
+          )}
         </p>
+      )}
+
+      {/* Map lightbox */}
+      {mapLightbox && pickedMapImageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setMapLightbox(false)}
+        >
+          <div
+            className="relative flex flex-col items-center gap-2 w-full h-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between w-full px-1 shrink-0">
+              <span className="text-white font-semibold">{pickedMapName}</span>
+              {myLocked && bp && (
+                <BlindPickCountdown firstLockedAt={bp.firstLockedAt ?? null} timeoutMs={2 * 60 * 1000} />
+              )}
+              <button
+                type="button"
+                onClick={() => setMapLightbox(false)}
+                className="text-white/60 hover:text-white text-xl leading-none transition-colors"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <img
+              src={pickedMapImageUrl}
+              alt={pickedMapName ?? ''}
+              className="w-full h-full object-contain"
+            />
+          </div>
+        </div>
       )}
 
       {myLocked ? (
@@ -1395,6 +1449,7 @@ export function MatchDecisionPage() {
                 currentUserId={user.id}
                 factions={factions}
                 pickedMapName={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.name ?? null}
+                pickedMapImageUrl={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.image_url ?? null}
                 restrictedFactions={decision.restrictedFactions ?? []}
                 factionAllowlist={decision.factionAllowlist ?? []}
               />
