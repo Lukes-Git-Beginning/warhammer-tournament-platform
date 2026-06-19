@@ -519,6 +519,9 @@ interface BlindPickPhaseProps {
   decision: MatchDecisionState;
   currentUserId: string;
   factions: FactionWithStatsDto[];
+  pickedMapName?: string | null;
+  restrictedFactions?: string[];
+  factionAllowlist?: string[];
 }
 
 function BlindPickPhase({
@@ -526,6 +529,9 @@ function BlindPickPhase({
   decision,
   currentUserId,
   factions,
+  pickedMapName,
+  restrictedFactions = [],
+  factionAllowlist = [],
 }: BlindPickPhaseProps) {
   const queryClient = useQueryClient();
   const [selectedFactionId, setSelectedFactionId] = useState<string | null>(null);
@@ -625,6 +631,11 @@ function BlindPickPhase({
       <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">
         Blind Faction Pick
       </h2>
+      {pickedMapName && (
+        <p className="text-sm text-rizzotto-stone-400">
+          Map: <span className="font-semibold text-stone-200">{pickedMapName}</span>
+        </p>
+      )}
 
       {myLocked ? (
         <div className="flex flex-col items-center gap-3 text-center">
@@ -641,17 +652,25 @@ function BlindPickPhase({
           </p>
 
           <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-6">
-            {factions.map(({ faction }) => (
+            {factions.map(({ faction }) => {
+              const isDisabled =
+                restrictedFactions.includes(faction.id) ||
+                (factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id));
+              return (
               <button
                 key={faction.id}
                 type="button"
-                onClick={() => setSelectedFactionId(faction.id)}
+                disabled={isDisabled}
+                title={isDisabled ? 'Not permitted in this tournament' : undefined}
+                onClick={() => !isDisabled && setSelectedFactionId(faction.id)}
                 className={[
                   'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center',
                   'transition-[border-color,background-color] duration-150',
-                  selectedFactionId === faction.id
-                    ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800'
-                    : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60 hover:bg-rizzotto-iron-800',
+                  isDisabled
+                    ? 'cursor-not-allowed opacity-40 border-rizzotto-iron-700 bg-rizzotto-iron-900'
+                    : selectedFactionId === faction.id
+                      ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800'
+                      : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60 hover:bg-rizzotto-iron-800',
                 ].join(' ')}
               >
                 <FactionBadge
@@ -668,7 +687,8 @@ function BlindPickPhase({
                   {faction.name}
                 </span>
               </button>
-            ))}
+              );
+            })}
           </div>
 
           <Button
@@ -1095,15 +1115,7 @@ export function MatchDecisionPage() {
     queryFn: () => getFactions(),
   });
   // factionsData.data is FactionWithStatsDto[]
-  const allFactions = factionsData?.data ?? [];
-  // Filter out restricted factions and honour the allowlist for BPT blind pick
-  const factions = allFactions.filter(({ faction }) => {
-    const restricted = decision?.restrictedFactions ?? [];
-    const allowlist = decision?.factionAllowlist ?? [];
-    if (restricted.includes(faction.id)) return false;
-    if (allowlist.length > 0 && !allowlist.includes(faction.id)) return false;
-    return true;
-  });
+  const factions = factionsData?.data ?? [];
 
   // Socket subscriptions
   useEffect(() => {
@@ -1382,6 +1394,9 @@ export function MatchDecisionPage() {
                 decision={decision}
                 currentUserId={user.id}
                 factions={factions}
+                pickedMapName={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.name ?? null}
+                restrictedFactions={decision.restrictedFactions ?? []}
+                factionAllowlist={decision.factionAllowlist ?? []}
               />
             </motion.div>
           )}
