@@ -233,7 +233,11 @@ export function GameTile({
                       onClick={() => startDecisionMutation.mutate()}
                       disabled={startDecisionMutation.isPending}
                     >
-                      {startDecisionMutation.isPending ? 'Rolling…' : 'Choose Battlefield'}
+                      {startDecisionMutation.isPending
+                        ? 'Rolling…'
+                        : needsBlindPick
+                          ? 'Choose Map & Faction'
+                          : 'Choose Battlefield'}
                     </Button>
                   </div>
                 ) : (
@@ -271,17 +275,15 @@ export function GameTile({
                       {game.decision.mode === 'RANDOM' ? 'Drawing battlefield…' : 'Picking battlefield…'}
                     </p>
                   )}
-                  <Link
-                    to="/matches/$matchId/decision"
-                    params={{ matchId }}
-                    className="text-sm text-rizzotto-gold-400 hover:underline"
-                  >
-                    {game.decision?.pickedMapId && tournamentMode === 'MATRIX'
-                      ? 'Continue faction picking →'
-                      : game.decision?.pickedMapId && needsBlindPick
-                        ? 'Pick your faction →'
-                        : 'Go to map selection →'}
-                  </Link>
+                  <Button variant="forge" size="sm" asChild>
+                    <Link to="/matches/$matchId/decision" params={{ matchId }}>
+                      {game.decision?.pickedMapId && tournamentMode === 'MATRIX'
+                        ? 'Continue Faction Picking'
+                        : game.decision?.pickedMapId && needsBlindPick
+                          ? 'Pick Your Faction'
+                          : 'Go to Map Selection'}
+                    </Link>
+                  </Button>
                 </div>
               )}
             </div>
