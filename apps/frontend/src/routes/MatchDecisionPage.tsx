@@ -1367,6 +1367,7 @@ export function MatchDecisionPage() {
           <Link
             to="/tournaments/$slug"
             params={{ slug: matchDetail.tournament_slug }}
+            hash="my-match"
             className="absolute left-0 top-1 text-sm text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors"
           >
             ← Back to tournament
