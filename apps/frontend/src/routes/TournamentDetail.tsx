@@ -657,9 +657,7 @@ export function TournamentDetail() {
             <div>
               <span className="text-stone-500">Mode:</span>{' '}
               <span className="text-stone-200">
-                {tournament.format === 'AUTO_SWISS'
-                  ? 'SFT'
-                  : (({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode ?? ''] ?? tournament.mode)}
+                {(({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode ?? ''] ?? tournament.mode ?? 'SFT')}
               </span>
             </div>
           )}

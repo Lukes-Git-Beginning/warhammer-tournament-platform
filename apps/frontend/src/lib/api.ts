@@ -129,6 +129,8 @@ export interface MatchDecisionState {
   decidedAt: string | null;
   tournamentMode?: string | null;
   matchPlayer1Id?: string | null;
+  restrictedFactions?: string[];
+  factionAllowlist?: string[];
   blindPick?: {
     player1Locked: boolean;
     player2Locked: boolean;

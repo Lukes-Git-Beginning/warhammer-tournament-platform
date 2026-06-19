@@ -1095,7 +1095,15 @@ export function MatchDecisionPage() {
     queryFn: () => getFactions(),
   });
   // factionsData.data is FactionWithStatsDto[]
-  const factions = factionsData?.data ?? [];
+  const allFactions = factionsData?.data ?? [];
+  // Filter out restricted factions and honour the allowlist for BPT blind pick
+  const factions = allFactions.filter(({ faction }) => {
+    const restricted = decision?.restrictedFactions ?? [];
+    const allowlist = decision?.factionAllowlist ?? [];
+    if (restricted.includes(faction.id)) return false;
+    if (allowlist.length > 0 && !allowlist.includes(faction.id)) return false;
+    return true;
+  });
 
   // Socket subscriptions
   useEffect(() => {
