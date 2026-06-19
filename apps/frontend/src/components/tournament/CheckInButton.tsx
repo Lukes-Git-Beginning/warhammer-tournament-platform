@@ -46,6 +46,10 @@ export function CheckInButton({ tournament, participantStatus }: CheckInButtonPr
   const checkIn = useMutation({
     mutationFn: () => selfCheckIn(tournament.slug),
     onSuccess: () => {
+      // Immediately update the cache so the button disappears without waiting for the refetch
+      queryClient.setQueryData(['participant-me', tournament.slug], (old: { status: string } | undefined) =>
+        old ? { ...old, status: 'CHECKED_IN' } : { status: 'CHECKED_IN' },
+      );
       void queryClient.invalidateQueries({ queryKey: ['tournament', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['tournament-participants', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['participant-me', tournament.slug] });
