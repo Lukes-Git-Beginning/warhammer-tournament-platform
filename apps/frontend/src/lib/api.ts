@@ -999,6 +999,13 @@ export function deleteMatch(matchId: string): Promise<{ ok: true }> {
   return apiFetch(`/api/admin/matches/${matchId}`, { method: 'DELETE' });
 }
 
+export function forfeitMatch(matchId: string, droppedPlayerId: string): Promise<{ ok: true; winnerId: string }> {
+  return apiFetch(`/api/admin/matches/${matchId}/forfeit`, {
+    method: 'POST',
+    body: JSON.stringify({ droppedPlayerId }),
+  });
+}
+
 export function undropParticipant(
   slug: string,
   userId: string,

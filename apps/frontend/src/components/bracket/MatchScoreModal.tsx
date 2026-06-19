@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, dropParticipant, restoreMatch, cancelMatch, swapPlayer, deleteMatch, getParticipants } from '@/lib/api';
+import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, restoreMatch, cancelMatch, swapPlayer, deleteMatch, getParticipants, forfeitMatch } from '@/lib/api';
 import { useState } from 'react';
 
 interface MatchScoreModalProps {
@@ -81,7 +81,7 @@ export function MatchScoreModal({
 
   const [dropError, setDropError] = useState<string | null>(null);
   const dropMutation = useMutation({
-    mutationFn: (userId: string) => dropParticipant(tournamentSlug!, userId),
+    mutationFn: (userId: string) => forfeitMatch(matchId, userId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['bracket'] });
       onClose();
@@ -384,7 +384,7 @@ export function MatchScoreModal({
                     disabled={dropMutation.isPending}
                     onClick={() => dropMutation.mutate(player1Id)}
                     className="rounded border border-red-800 px-1.5 py-0.5 text-[10px] text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-40 shrink-0"
-                    title="Drop this player from the tournament"
+                    title="Forfeit this match — opponent wins"
                   >
                     Drop
                   </button>
@@ -410,7 +410,7 @@ export function MatchScoreModal({
                     disabled={dropMutation.isPending}
                     onClick={() => dropMutation.mutate(player2Id)}
                     className="rounded border border-red-800 px-1.5 py-0.5 text-[10px] text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-40 shrink-0"
-                    title="Drop this player from the tournament"
+                    title="Forfeit this match — opponent wins"
                   >
                     Drop
                   </button>
