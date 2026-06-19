@@ -1,7 +1,8 @@
 import fp from 'fastify-plugin';
 import cron from 'node-cron';
+import type { FastifyInstance } from 'fastify';
 import { takeFactionsSnapshot } from '../lib/faction-snapshot.js';
-import { notifyCheckInReminder } from '../lib/discord-notify.js';
+import { sendDm } from '../lib/discord-notify.js';
 import { autoConfirmExpiredGameResults } from '../lib/match-games.js';
 import { autoResolveStaleBlindPicks } from '../lib/blind-pick-auto-resolve.js';
 import { autoResolveStaleMatrixActions } from '../lib/matrix-auto-resolve.js';
@@ -15,19 +16,47 @@ declare module 'fastify' {
   }
 }
 
-const remindedTournamentIds = new Set<string>();
 const remindedMatchupIds = new Set<string>();
+
+// Check-in reminder dedup key: rizzotto:checkin-reminded:<tournamentId>:<userId>
+// TTL 4 h — covers the check-in window (1 h) with a large safety margin.
+const CHECKIN_REMINDER_TTL = 4 * 60 * 60; // seconds
+
+async function sendPerUserCheckInReminders(
+  fastify: FastifyInstance,
+  tournament: { id: string; name: string; slug: string; start_date: Date },
+  now: Date,
+): Promise<void> {
+  const participants = await fastify.prisma.tournamentParticipant.findMany({
+    where: { tournament_id: tournament.id, status: 'REGISTERED', deleted_at: null },
+    select: { user: { select: { id: true, discord_id: true } } },
+  });
+  if (participants.length === 0) return;
+
+  const startTs = Math.floor(tournament.start_date.getTime() / 1000);
+  const message =
+    `**[RizzOtto's Arena] Check-in Reminder: ${tournament.name}**\n\n` +
+    `The tournament starts <t:${startTs}:R>. ` +
+    `Please check in at ${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug} before the start time!`;
+
+  for (const { user } of participants) {
+    const redisKey = `rizzotto:checkin-reminded:${tournament.id}:${user.id}`;
+    try {
+      const alreadySent = fastify.redis ? await fastify.redis.get(redisKey) : null;
+      if (alreadySent) continue;
+      await sendDm(user.discord_id, message).catch(() => {});
+      if (fastify.redis) {
+        await fastify.redis.set(redisKey, '1', 'EX', CHECKIN_REMINDER_TTL).catch(() => {});
+      }
+      fastify.log.info({ tournamentId: tournament.id, userId: user.id }, 'Check-in reminder sent');
+    } catch {
+      // non-fatal per-user failure
+    }
+  }
+}
 
 export default fp(
   async (fastify) => {
-    // Pre-populate from AuditLog so server restarts don't cause duplicate check-in DMs.
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const alreadySent = await fastify.prisma.auditLog.findMany({
-      where: { action: 'checkin_reminder_sent', created_at: { gte: todayStart } },
-      select: { entity_id: true },
-    });
-    alreadySent.forEach(({ entity_id }) => remindedTournamentIds.add(entity_id));
 
     // Pre-populate matchup reminder ids to avoid duplicate DMs after restart.
     const alreadyRemindedMatchups = await fastify.prisma.auditLog.findMany({
@@ -93,32 +122,7 @@ export default fp(
           });
 
           for (const tournament of upcomingTournaments) {
-            if (!remindedTournamentIds.has(tournament.id)) {
-              remindedTournamentIds.add(tournament.id);
-              fastify.log.info(
-                { tournamentId: tournament.id, slug: tournament.slug },
-                'Sending check-in reminder',
-              );
-
-              await notifyCheckInReminder(tournament).catch((err) => {
-                fastify.log.warn({ err, tournamentId: tournament.id }, 'Check-in reminder failed');
-              });
-
-              // Audit log entry for idempotency record
-              await fastify.prisma.auditLog
-                .create({
-                  data: {
-                    entity_type: 'Tournament',
-                    entity_id: tournament.id,
-                    action: 'checkin_reminder_sent',
-                    actor_id: null,
-                    new_value: { sent_at: now.toISOString() },
-                  },
-                })
-                .catch(() => {
-                  /* non-fatal */
-                });
-            }
+            await sendPerUserCheckInReminders(fastify, tournament, now);
           }
 
           // Tournaments that have started — transition REGISTRATION_CLOSED → ONGOING
@@ -350,14 +354,7 @@ export default fp(
           select: { id: true, name: true, slug: true, start_date: true },
         });
         for (const t of reminderTournaments) {
-          if (!remindedTournamentIds.has(t.id)) {
-            remindedTournamentIds.add(t.id);
-            fastify.log.info({ tournamentId: t.id }, 'Auto Swiss: sending check-in reminder');
-            await fastify.prisma.auditLog.create({
-              data: { entity_type: 'Tournament', entity_id: t.id, action: 'checkin_reminder_sent', new_value: { sent_at: now.toISOString() } },
-            }).catch(() => {});
-            await notifyCheckInReminder(t).catch(() => {});
-          }
+          await sendPerUserCheckInReminders(fastify, t, now);
         }
 
         // Phase 2: start tournament at start_date (registration was open until now)
