@@ -1205,10 +1205,21 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'BadRequest', message: 'droppedPlayerId is not in this match', statusCode: 400 });
     }
 
-    await fastify.prisma.match.update({
-      where: { id: matchId },
-      data: { status: 'FORFEIT', winner_id: winnerId },
-    });
+    await fastify.prisma.$transaction([
+      fastify.prisma.match.update({
+        where: { id: matchId },
+        data: { status: 'FORFEIT', winner_id: winnerId },
+      }),
+      // Also withdraw the dropped player from the tournament if not already done.
+      fastify.prisma.tournamentParticipant.updateMany({
+        where: {
+          tournament_id: match.tournament_id,
+          user_id: droppedPlayerId,
+          status: { notIn: ['WITHDREW', 'DISQUALIFIED'] },
+        },
+        data: { status: 'WITHDREW' },
+      }),
+    ]);
 
     emitBracketUpdate(fastify.io, match.tournament_id);
     return reply.code(200).send({ ok: true, winnerId });
