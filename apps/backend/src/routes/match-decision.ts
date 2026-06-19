@@ -265,7 +265,13 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           id: true,
           player1_id: true,
-          tournament: { select: { mode: true } },
+          tournament: {
+            select: {
+              mode: true,
+              restricted_factions: { select: { faction_id: true } },
+              faction_allowlist: { select: { faction_id: true } },
+            },
+          },
           games: {
             where: { map_decision: { isNot: null } },
             orderBy: { game_number: 'desc' },
@@ -292,9 +298,11 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      return reply.code(200).send(
-        serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? 'BPT', match.player1_id, game.faction_matrix ?? null),
-      );
+      return reply.code(200).send({
+        ...serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? 'BPT', match.player1_id, game.faction_matrix ?? null),
+        restrictedFactions: match.tournament?.restricted_factions.map((r) => r.faction_id) ?? [],
+        factionAllowlist: match.tournament?.faction_allowlist.map((r) => r.faction_id) ?? [],
+      });
     },
   );
 
@@ -835,7 +843,13 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
             },
             take: 1,
           },
-          tournament: { select: { mode: true } },
+          tournament: {
+            select: {
+              mode: true,
+              restricted_factions: { select: { faction_id: true } },
+              faction_allowlist: { select: { faction_id: true } },
+            },
+          },
         },
       });
 
@@ -878,6 +892,24 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
           message: `Faction "${faction_id}" does not exist`,
+          statusCode: 422,
+        });
+      }
+
+      // Validate faction against tournament restrictions
+      const restrictedFactions = match.tournament?.restricted_factions.map((r) => r.faction_id) ?? [];
+      const factionAllowlist = match.tournament?.faction_allowlist.map((r) => r.faction_id) ?? [];
+      if (restrictedFactions.includes(faction_id)) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'This faction is banned for this tournament',
+          statusCode: 422,
+        });
+      }
+      if (factionAllowlist.length > 0 && !factionAllowlist.includes(faction_id)) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'This faction is not in the allowed faction pool for this tournament',
           statusCode: 422,
         });
       }

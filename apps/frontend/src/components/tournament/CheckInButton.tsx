@@ -48,6 +48,7 @@ export function CheckInButton({ tournament, participantStatus }: CheckInButtonPr
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['tournament', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['tournament-participants', tournament.slug] });
+      void queryClient.invalidateQueries({ queryKey: ['participant-me', tournament.slug] });
     },
   });
 

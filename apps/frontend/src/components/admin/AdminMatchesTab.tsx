@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getAdminMatches, voidMatch, type AdminMatchRow } from '@/lib/api';
+import { getAdminMatches, voidMatch, deleteMatch, type AdminMatchRow } from '@/lib/api';
 
 const STATUS_BADGE: Record<string, string> = {
   COMPLETED:  'bg-emerald-900/40 text-emerald-300',
@@ -38,6 +38,40 @@ function VoidButton({ match }: { match: AdminMatchRow }) {
     >
       {isVoided ? 'Restore' : 'Exclude'}
     </button>
+  );
+}
+
+function DeleteButton({ match }: { match: AdminMatchRow }) {
+  const queryClient = useQueryClient();
+  const [confirm, setConfirm] = useState(false);
+  const mutation = useMutation({
+    mutationFn: () => deleteMatch(match.id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin-matches'] }),
+  });
+  if (!confirm) {
+    return (
+      <button
+        type="button"
+        disabled={mutation.isPending}
+        onClick={() => setConfirm(true)}
+        className="rounded border border-red-900 px-2 py-0.5 text-[10px] font-semibold text-red-500 hover:bg-red-900/20 transition-colors disabled:opacity-40"
+      >
+        Delete
+      </button>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1">
+      <button
+        type="button"
+        disabled={mutation.isPending}
+        onClick={() => mutation.mutate()}
+        className="rounded border border-red-600 px-2 py-0.5 text-[10px] font-semibold text-red-300 hover:bg-red-900/30 transition-colors disabled:opacity-40"
+      >
+        {mutation.isPending ? '…' : 'Confirm'}
+      </button>
+      <button type="button" onClick={() => setConfirm(false)} className="text-[10px] text-stone-500 hover:text-stone-300">✕</button>
+    </span>
   );
 }
 
@@ -194,6 +228,9 @@ export function AdminMatchesTab() {
                             View
                           </Link>
                           <VoidButton match={m} />
+                          {(m.status === 'CANCELLED' || m.status === 'PENDING') && (
+                            <DeleteButton match={m} />
+                          )}
                         </div>
                       </td>
                     </tr>

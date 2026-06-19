@@ -170,9 +170,10 @@ async function generateNextSwissRound(
 
   const dbParticipants = await prisma.tournamentParticipant.findMany({
     where: { tournament_id: tournament.id, user_id: { in: participantIds }, deleted_at: null },
-    select: { user_id: true, faction_id: true },
+    select: { user_id: true, faction_id: true, status: true },
   });
   const factionById = new Map(dbParticipants.map((p) => [p.user_id, p.faction_id ?? null]));
+  const withdrawnIds = new Set(dbParticipants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
 
   const completed = swissMatches
     .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
@@ -194,7 +195,7 @@ async function generateNextSwissRound(
     }
   }
 
-  const swissPlayers = standings.map((s) => ({
+  const swissPlayers = standings.filter((s) => !s.dropped && !withdrawnIds.has(s.userId)).map((s) => ({
     userId: s.userId,
     score: s.score,
     avoid: avoidMap.get(s.userId) ?? [],
@@ -265,7 +266,6 @@ async function startPlayoffs(
   swissRoundCount: number,
 ): Promise<void> {
   const playoffRound = swissRoundCount + 1;
-  const fmt = tournament.playoff_format;
 
   const participantIds = [...new Set(
     swissMatches.flatMap((m) => [m.player1_id, m.player2_id].filter((id): id is string => id !== null)),
@@ -275,7 +275,17 @@ async function startPlayoffs(
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
   const rawStandings = computeSwissStandings(participantIds, completed);
   const standings = sortSwissStandings(rawStandings, completed);
-  const ranked = standings.map((s) => s.userId);
+  // Exclude dropped players — they should not advance to playoffs.
+  const ranked = standings.filter((s) => !s.dropped).map((s) => s.userId);
+
+  // Re-evaluate playoff format based on active player count at Swiss end.
+  // Players may have dropped during the Swiss phase, so the start-time config
+  // (stored in tournament.playoff_format) may no longer be appropriate.
+  const effectiveConfig = autoSwissConfig(ranked.length);
+  if (effectiveConfig && effectiveConfig.playoffFormat !== tournament.playoff_format) {
+    await prisma.tournament.update({ where: { id: tournament.id }, data: { playoff_format: effectiveConfig.playoffFormat } });
+  }
+  const fmt = effectiveConfig?.playoffFormat ?? tournament.playoff_format;
 
   type PlayoffPhase = 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL' | 'PLAYOFF_THIRD_PLACE';
   const matches: {

@@ -519,6 +519,10 @@ interface BlindPickPhaseProps {
   decision: MatchDecisionState;
   currentUserId: string;
   factions: FactionWithStatsDto[];
+  pickedMapName?: string | null;
+  pickedMapImageUrl?: string | null;
+  restrictedFactions?: string[];
+  factionAllowlist?: string[];
 }
 
 function BlindPickPhase({
@@ -526,11 +530,23 @@ function BlindPickPhase({
   decision,
   currentUserId,
   factions,
+  pickedMapName,
+  pickedMapImageUrl,
+  restrictedFactions = [],
+  factionAllowlist = [],
 }: BlindPickPhaseProps) {
   const queryClient = useQueryClient();
   const [selectedFactionId, setSelectedFactionId] = useState<string | null>(null);
   const [locking, setLocking] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
+  const [mapLightbox, setMapLightbox] = useState(false);
+
+  useEffect(() => {
+    if (!mapLightbox) return;
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setMapLightbox(false); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mapLightbox]);
 
   const bp = decision.blindPick;
   // Use match player ordering (player1_id/player2_id) not coin-flip ordering
@@ -625,6 +641,52 @@ function BlindPickPhase({
       <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">
         Blind Faction Pick
       </h2>
+      {pickedMapName && (
+        <p className="text-sm text-rizzotto-stone-400">
+          Map:{' '}
+          {pickedMapImageUrl ? (
+            <button
+              type="button"
+              onClick={() => setMapLightbox(true)}
+              className="font-semibold text-stone-200 hover:text-rizzotto-gold-400 underline-offset-2 hover:underline transition-colors"
+            >
+              {pickedMapName}
+            </button>
+          ) : (
+            <span className="font-semibold text-stone-200">{pickedMapName}</span>
+          )}
+        </p>
+      )}
+
+      {/* Map lightbox */}
+      {mapLightbox && pickedMapImageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setMapLightbox(false)}
+        >
+          <div className="relative flex flex-col items-center gap-2 w-full h-full">
+            <div className="flex items-center justify-between w-full px-1 shrink-0">
+              <span className="text-white font-semibold">{pickedMapName}</span>
+              {myLocked && bp && (
+                <BlindPickCountdown firstLockedAt={bp.firstLockedAt ?? null} timeoutMs={2 * 60 * 1000} />
+              )}
+              <button
+                type="button"
+                onClick={() => setMapLightbox(false)}
+                className="text-white/60 hover:text-white text-xl leading-none transition-colors"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <img
+              src={pickedMapImageUrl}
+              alt={pickedMapName ?? ''}
+              className="w-full h-full object-contain"
+            />
+          </div>
+        </div>
+      )}
 
       {myLocked ? (
         <div className="flex flex-col items-center gap-3 text-center">
@@ -641,17 +703,25 @@ function BlindPickPhase({
           </p>
 
           <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-6">
-            {factions.map(({ faction }) => (
+            {factions.map(({ faction }) => {
+              const isDisabled =
+                restrictedFactions.includes(faction.id) ||
+                (factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id));
+              return (
               <button
                 key={faction.id}
                 type="button"
-                onClick={() => setSelectedFactionId(faction.id)}
+                disabled={isDisabled}
+                title={isDisabled ? 'Not permitted in this tournament' : undefined}
+                onClick={() => !isDisabled && setSelectedFactionId(faction.id)}
                 className={[
                   'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center',
                   'transition-[border-color,background-color] duration-150',
-                  selectedFactionId === faction.id
-                    ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800'
-                    : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60 hover:bg-rizzotto-iron-800',
+                  isDisabled
+                    ? 'cursor-not-allowed opacity-40 border-rizzotto-iron-700 bg-rizzotto-iron-900'
+                    : selectedFactionId === faction.id
+                      ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800'
+                      : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60 hover:bg-rizzotto-iron-800',
                 ].join(' ')}
               >
                 <FactionBadge
@@ -668,7 +738,8 @@ function BlindPickPhase({
                   {faction.name}
                 </span>
               </button>
-            ))}
+              );
+            })}
           </div>
 
           <Button
@@ -1296,6 +1367,7 @@ export function MatchDecisionPage() {
           <Link
             to="/tournaments/$slug"
             params={{ slug: matchDetail.tournament_slug }}
+            hash="my-match"
             className="absolute left-0 top-1 text-sm text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors"
           >
             ← Back to tournament
@@ -1374,6 +1446,10 @@ export function MatchDecisionPage() {
                 decision={decision}
                 currentUserId={user.id}
                 factions={factions}
+                pickedMapName={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.name ?? null}
+                pickedMapImageUrl={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.image_url ?? null}
+                restrictedFactions={decision.restrictedFactions ?? []}
+                factionAllowlist={decision.factionAllowlist ?? []}
               />
             </motion.div>
           )}

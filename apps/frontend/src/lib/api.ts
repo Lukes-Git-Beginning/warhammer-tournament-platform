@@ -129,6 +129,8 @@ export interface MatchDecisionState {
   decidedAt: string | null;
   tournamentMode?: string | null;
   matchPlayer1Id?: string | null;
+  restrictedFactions?: string[];
+  factionAllowlist?: string[];
   blindPick?: {
     player1Locked: boolean;
     player2Locked: boolean;
@@ -970,6 +972,33 @@ export function cancelMatch(matchId: string): Promise<{ matchId: string; status:
   return apiFetch(`/api/matches/${matchId}/cancel-match`, { method: 'POST' });
 }
 
+export function swapPlayer(
+  matchId: string,
+  oldPlayerId: string,
+  newPlayerId: string,
+): Promise<{ ok: true }> {
+  return apiFetch(`/api/admin/matches/${matchId}/swap-player`, {
+    method: 'PATCH',
+    body: JSON.stringify({ oldPlayerId, newPlayerId }),
+  });
+}
+
+export function createMatchNode(
+  slug: string,
+  player1Id: string,
+  player2Id: string,
+  round: number,
+): Promise<{ match: { id: string; round: number; match_number: number } }> {
+  return apiFetch(`/api/admin/tournaments/${slug}/create-match`, {
+    method: 'POST',
+    body: JSON.stringify({ player1Id, player2Id, round }),
+  });
+}
+
+export function deleteMatch(matchId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/admin/matches/${matchId}`, { method: 'DELETE' });
+}
+
 export function undropParticipant(
   slug: string,
   userId: string,
@@ -1168,6 +1197,13 @@ export async function reportGameResult(
 export function selfCheckIn(slug: string): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/tournaments/${slug}/checkin/self`, {
     method: 'POST',
+  });
+}
+
+export function adminCheckIn(slug: string, userId: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/tournaments/${slug}/checkin`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
   });
 }
 

@@ -1145,7 +1145,28 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     else if (match.player2_id === oldPlayerId) updateData = { player2_id: newPlayerId };
     else return reply.code(400).send({ error: 'BadRequest', message: 'oldPlayerId is not in this match', statusCode: 400 });
 
-    await fastify.prisma.match.update({ where: { id: matchId }, data: updateData });
+    await fastify.prisma.$transaction(async (tx) => {
+      await tx.match.update({ where: { id: matchId }, data: updateData });
+      // Keep MatchMapDecision and MatchFactionMatrix in sync — they persist
+      // top_player_id/bottom_player_id at decision-start time and are not
+      // automatically updated when match.player1_id/player2_id changes.
+      await tx.matchMapDecision.updateMany({
+        where: { game: { match_id: matchId }, top_player_id: oldPlayerId },
+        data: { top_player_id: newPlayerId },
+      });
+      await tx.matchMapDecision.updateMany({
+        where: { game: { match_id: matchId }, bottom_player_id: oldPlayerId },
+        data: { bottom_player_id: newPlayerId },
+      });
+      await tx.matchFactionMatrix.updateMany({
+        where: { game: { match_id: matchId }, top_player_id: oldPlayerId },
+        data: { top_player_id: newPlayerId },
+      });
+      await tx.matchFactionMatrix.updateMany({
+        where: { game: { match_id: matchId }, bottom_player_id: oldPlayerId },
+        data: { bottom_player_id: newPlayerId },
+      });
+    });
     return reply.code(200).send({ ok: true });
   });
 

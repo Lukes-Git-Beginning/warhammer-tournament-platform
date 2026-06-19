@@ -452,6 +452,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
               player2Name={
                 selectedMatch.player2Id ? players.get(selectedMatch.player2Id)?.name : undefined
               }
+              canManage={canManage}
               onClose={() => setSelectedMatchId(null)}
             />
           );

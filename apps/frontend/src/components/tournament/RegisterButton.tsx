@@ -121,7 +121,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
           </span>
         </div>
         {!confirmingWithdraw ? (
-          <button type="button" onClick={() => setConfirmingWithdraw(true)} className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-danger transition-colors self-start">
+          <button type="button" onClick={() => setConfirmingWithdraw(true)} className="rounded border border-stone-600 px-3 py-1 text-xs text-stone-400 hover:border-rizzotto-danger hover:text-rizzotto-danger transition-colors self-start">
             Withdraw from tournament
           </button>
         ) : (

@@ -579,96 +579,15 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       if (participant.status === 'DISQUALIFIED') {
         return reply.code(409).send({ error: 'Conflict', message: 'Participant has already been dropped', statusCode: 409 });
       }
-      // If already WITHDREW but a PENDING match exists (e.g. created before the drop was
-      // processed), skip the status update but still forfeit the open match.
-      const alreadyWithdrew = participant.status === 'WITHDREW';
-
-      // Find the player's open match (PENDING or ONGOING, not yet decided)
-      const openMatches = await fastify.prisma.match.findMany({
-        where: {
-          tournament_id: tournament.id,
-          deleted_at: null,
-          status: { in: ['PENDING', 'ONGOING'] },
-          OR: [{ player1_id: userId }, { player2_id: userId }],
-        },
-        include: {
-          games: { where: { status: { not: 'COMPLETED' } }, select: { id: true } },
-        },
-      });
-
-      let matchesForfeited = 0;
-      let gamesVoided = 0;
-
-      // Load WITHDREW status for all opponents involved (for double-drop detection)
-      const opponentIds = [...new Set(openMatches.flatMap((m) =>
-        [m.player1_id, m.player2_id].filter((id): id is string => !!id && id !== userId)
-      ))];
-      const withdrawnOpponents = new Set(
-        opponentIds.length > 0
-          ? (await fastify.prisma.tournamentParticipant.findMany({
-              where: { tournament_id: tournament.id, user_id: { in: opponentIds }, status: 'WITHDREW' },
-              select: { user_id: true },
-            })).map((p) => p.user_id)
-          : []
-      );
+      if (participant.status === 'WITHDREW') {
+        return reply.code(409).send({ error: 'Conflict', message: 'Participant has already withdrawn', statusCode: 409 });
+      }
 
       await fastify.prisma.$transaction(async (tx) => {
-        if (!alreadyWithdrew) {
-          await tx.tournamentParticipant.update({
-            where: { id: participant.id },
-            data: { status: 'WITHDREW' },
-          });
-        }
-
-        for (const match of openMatches) {
-          const opponent = match.player1_id === userId ? match.player2_id : match.player1_id;
-
-          // Void (delete) any unfinished games
-          if (match.games.length > 0) {
-            await tx.matchGame.deleteMany({ where: { id: { in: match.games.map((g) => g.id) } } });
-            gamesVoided += match.games.length;
-          }
-
-          if (opponent && withdrawnOpponents.has(opponent)) {
-            // Both players dropped — cancel the match so neither gets an unearned win
-            await tx.match.update({
-              where: { id: match.id },
-              data: { status: 'CANCELLED', winner_id: null },
-            });
-          } else {
-            // Forfeit the match in favour of the opponent
-            await tx.match.update({
-              where: { id: match.id },
-              data: { status: 'FORFEIT', winner_id: opponent },
-            });
-            matchesForfeited++;
-          }
-        }
-
-        // Backward check: if this player already has FORFEIT wins against opponents who
-        // are also now WITHDREW (i.e. opponent dropped before us), cancel those too.
-        const staleForfeitWins = await tx.match.findMany({
-          where: {
-            tournament_id: tournament.id,
-            status: 'FORFEIT',
-            winner_id: userId,
-          },
-          select: { id: true, player1_id: true, player2_id: true },
+        await tx.tournamentParticipant.update({
+          where: { id: participant.id },
+          data: { status: 'WITHDREW' },
         });
-        for (const m of staleForfeitWins) {
-          const loser = m.player1_id === userId ? m.player2_id : m.player1_id;
-          if (!loser) continue;
-          const loserParticipant = await tx.tournamentParticipant.findFirst({
-            where: { tournament_id: tournament.id, user_id: loser, status: 'WITHDREW' },
-            select: { id: true },
-          });
-          if (loserParticipant) {
-            await tx.match.update({
-              where: { id: m.id },
-              data: { status: 'CANCELLED', winner_id: null },
-            });
-          }
-        }
 
         await tx.auditLog.create({
           data: {
@@ -676,14 +595,14 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
             entity_id: tournament.id,
             action: 'participant_drop',
             actor_id: callerId,
-            new_value: { userId, isSelf, matchesForfeited, gamesVoided },
+            new_value: { userId, isSelf },
           },
         });
       });
 
       emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'withdrew' });
 
-      return reply.code(200).send({ dropped: true, matchesForfeited, gamesVoided });
+      return reply.code(200).send({ dropped: true });
     },
   );
 

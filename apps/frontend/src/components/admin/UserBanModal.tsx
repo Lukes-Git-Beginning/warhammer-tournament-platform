@@ -30,18 +30,17 @@ export function UserBanModal({ user, onClose }: UserBanModalProps) {
     >
       <div className="w-full max-w-md rounded-lg border border-stone-700 bg-stone-950 p-6 shadow-xl">
         <h2 id="ban-modal-title" className="mb-4 text-lg font-bold text-rizzotto-gold-500">
-          {isBanned ? 'Ban aufheben' : 'User bannen'}
+          {isBanned ? 'Lift Ban' : 'Ban User'}
         </h2>
 
         <p className="mb-4 text-stone-300 text-sm">
           {isBanned ? (
             <>
-              Ban für <span className="font-semibold text-stone-100">{user.username}</span>{' '}
-              aufheben?
+              Lift ban for <span className="font-semibold text-stone-100">{user.username}</span>?
             </>
           ) : (
             <>
-              <span className="font-semibold text-stone-100">{user.username}</span> bannen?
+              Ban <span className="font-semibold text-stone-100">{user.username}</span>?
             </>
           )}
         </p>
@@ -49,21 +48,21 @@ export function UserBanModal({ user, onClose }: UserBanModalProps) {
         {!isBanned && (
           <div className="mb-4">
             <label htmlFor="ban-reason" className="mb-1 block text-xs font-medium text-stone-400">
-              Grund (optional)
+              Reason (optional)
             </label>
             <input
               id="ban-reason"
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Regelverstoß, Betrug…"
+              placeholder="Rule violation, cheating…"
               className="w-full rounded border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-200 placeholder:text-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
             />
           </div>
         )}
 
         {mutation.error && (
-          <p className="mb-3 text-sm text-red-400">Fehler: {(mutation.error as Error).message}</p>
+          <p className="mb-3 text-sm text-red-400">Error: {(mutation.error as Error).message}</p>
         )}
 
         <div className="flex justify-end gap-3">
@@ -73,7 +72,7 @@ export function UserBanModal({ user, onClose }: UserBanModalProps) {
             disabled={mutation.isPending}
             className="rounded border border-stone-700 px-4 py-2 text-sm text-stone-300 hover:border-stone-500 hover:text-stone-100 disabled:opacity-40 transition-colors"
           >
-            Abbrechen
+            Cancel
           </button>
           <button
             type="button"
@@ -85,7 +84,7 @@ export function UserBanModal({ user, onClose }: UserBanModalProps) {
                 : 'bg-red-700 text-white hover:bg-red-600'
             }`}
           >
-            {mutation.isPending ? 'Bitte warten…' : isBanned ? 'Ban aufheben' : 'Jetzt bannen'}
+            {mutation.isPending ? 'Please wait…' : isBanned ? 'Lift Ban' : 'Ban Now'}
           </button>
         </div>
       </div>

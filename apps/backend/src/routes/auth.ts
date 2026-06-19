@@ -118,6 +118,34 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         }),
       ]);
 
+      // Silently add the user to the RizzOttoverse Discord server if they aren't
+      // already a member. Requires guilds.join scope + DISCORD_GUILD_ID env var.
+      // Fire-and-forget: failure must never block the login flow.
+      const guildId = process.env.DISCORD_GUILD_ID;
+      const botToken = process.env.DISCORD_BOT_TOKEN;
+      if (guildId && botToken) {
+        void (async () => {
+          try {
+            // Check membership first — skip the add call if already a member (204).
+            const memberCheck = await fetch(
+              `https://discord.com/api/guilds/${guildId}/members/${profile.id}`,
+              { headers: { Authorization: `Bot ${botToken}` } },
+            );
+            if (memberCheck.status === 404) {
+              // Not a member — add them using the user's access_token (guilds.join scope)
+              await fetch(`https://discord.com/api/guilds/${guildId}/members/${profile.id}`, {
+                method: 'PUT',
+                headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ access_token: accessToken }),
+              });
+              request.log.info({ userId: user.id }, 'Added user to RizzOttoverse Discord server');
+            }
+          } catch (e) {
+            request.log.warn({ e }, 'Discord guild join fire-and-forget failed');
+          }
+        })();
+      }
+
       const payload: JwtPayload = {
         sub: user.id,
         username: user.username,
