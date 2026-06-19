@@ -172,7 +172,11 @@ export function SwissStandings({
               const isFinalist = finalistIds?.has(entry.userId);
               const participantStatus = participantStatusMap?.get(entry.userId);
               const isDropped = entry.dropped === true || participantStatus === 'WITHDREW';
-              const isNeverCheckedIn = participantStatus === 'REGISTERED';
+              // Only flag as "never checked in" if REGISTERED AND has no match history.
+              // REGISTERED players who are actively playing (no check-in required tournament)
+              // must NOT show the Force Check-in button.
+              const hasNoMatchHistory = entry.wins === 0 && entry.losses === 0 && entry.draws === 0 && entry.byes === 0;
+              const isNeverCheckedIn = participantStatus === 'REGISTERED' && hasNoMatchHistory;
 
               const placementKey = (isCompleted && rank <= 3 && !isDropped ? rank : undefined) as 1 | 2 | 3 | undefined;
               const badge = placementKey ? PLACEMENT_BADGE[placementKey] : null;
