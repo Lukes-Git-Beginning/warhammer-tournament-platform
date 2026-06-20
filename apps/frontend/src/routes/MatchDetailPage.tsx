@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from '@tanstack/react-router';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, joinQueue, voidMatch, type GameDto, type MapDto } from '@/lib/api.js';
+import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, joinQueue, voidMatch, cancelOpenPlayMatch, type GameDto, type MapDto } from '@/lib/api.js';
 import type { MatchDetailDto, MatchScoringBreakdownDto } from '@/lib/api.js';
 import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth.js';
@@ -298,6 +298,11 @@ export function MatchDetailPage() {
     },
   });
 
+  const cancelOpenPlay = useMutation({
+    mutationFn: () => cancelOpenPlayMatch(matchId),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['match', matchId] }),
+  });
+
   const voidMatchMutation = useMutation({
     mutationFn: (isVoid: boolean) => voidMatch(matchId, isVoid),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['match', matchId] }),
@@ -583,6 +588,25 @@ export function MatchDetailPage() {
               factions={factions}
             />
           ))}
+        </div>
+      )}
+
+      {isOpenPlay && (isPlayer1 || isPlayer2) && (match.status === 'ONGOING' || match.status === 'AWAITING_CONFIRMATION') && (
+        <div className="flex flex-col items-center gap-2 py-4 mb-4 border border-red-900/50 rounded-lg bg-red-950/20">
+          <p className="text-xs text-stone-500">Can't play? Cancelling counts as a draw for both players.</p>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+            onClick={() => {
+              if (confirm('Cancel this match? It will count as a draw for both players.')) {
+                cancelOpenPlay.mutate();
+              }
+            }}
+            disabled={cancelOpenPlay.isPending}
+          >
+            {cancelOpenPlay.isPending ? 'Cancelling…' : 'Cancel Match'}
+          </Button>
         </div>
       )}
 

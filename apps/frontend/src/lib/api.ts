@@ -1433,6 +1433,32 @@ export function getAvailabilityNow(): Promise<{ count: number; day_of_week: numb
   return apiFetch<{ count: number; day_of_week: number; hour_utc: number }>('/api/availability/now');
 }
 
+export function cancelOpenPlayMatch(matchId: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/open-play/matches/${matchId}/cancel`, { method: 'POST' });
+}
+
+export interface AdminOpenPlayMember {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+}
+
+export interface AdminOpenPlayMatch {
+  id: string;
+  status: string;
+  player1: { id: string; name: string } | null;
+  player2: { id: string; name: string } | null;
+  createdAt: string;
+}
+
+export function getAdminOpenPlayQueue(): Promise<{ members: AdminOpenPlayMember[] }> {
+  return apiFetch<{ members: AdminOpenPlayMember[] }>('/api/admin/open-play/queue');
+}
+
+export function getAdminOpenPlayActiveMatches(): Promise<{ matches: AdminOpenPlayMatch[] }> {
+  return apiFetch<{ matches: AdminOpenPlayMatch[] }>('/api/admin/open-play/active-matches');
+}
+
 export function getMyOpenPlayMatch(): Promise<{ match_id: string | null }> {
   return apiFetch<{ match_id: string | null }>('/api/open-play/my-match');
 }

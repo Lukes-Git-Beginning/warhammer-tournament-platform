@@ -46,6 +46,19 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(409).send({ error: 'Conflict', message: 'Already in queue', statusCode: 409 });
       }
 
+      const activeMatch = await fastify.prisma.match.findFirst({
+        where: {
+          type: 'OPEN_PLAY',
+          status: { in: ['ONGOING', 'AWAITING_CONFIRMATION'] },
+          deleted_at: null,
+          OR: [{ player1_id: userId }, { player2_id: userId }],
+        },
+        select: { id: true },
+      });
+      if (activeMatch) {
+        return reply.code(409).send({ error: 'Conflict', message: 'You already have an active Open Play match', statusCode: 409 });
+      }
+
       const result = (await fastify.redis.eval(MATCH_SCRIPT, 1, QUEUE_KEY, userId, FOR_GRABS_PREFIX)) as [string, string] | false | null;
 
       if (Array.isArray(result) && result.length === 2) {
@@ -135,6 +148,43 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       ]);
       if (pos === null) return reply.code(200).send({ inQueue: false, position: null, total });
       return reply.code(200).send({ inQueue: true, position: pos + 1, total });
+    },
+  );
+
+  // POST /api/open-play/matches/:id/cancel — either player can cancel; recorded as a draw
+  fastify.post(
+    '/api/open-play/matches/:id/cancel',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const userId = request.user.sub;
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id, type: 'OPEN_PLAY', status: { in: ['ONGOING', 'AWAITING_CONFIRMATION'] }, deleted_at: null },
+        select: { id: true, player1_id: true, player2_id: true },
+      });
+      if (!match) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Active Open Play match not found', statusCode: 404 });
+      }
+      const isPlayer = match.player1_id === userId || match.player2_id === userId;
+      const isAdmin = request.user.role === 'ADMIN' || request.user.role === 'MODERATOR';
+      if (!isPlayer && !isAdmin) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not your match', statusCode: 403 });
+      }
+
+      await fastify.prisma.$transaction([
+        fastify.prisma.match.update({
+          where: { id },
+          data: { status: 'CANCELLED' },
+        }),
+        // Pending games become completed draws — counts for leaderboard so cancel ≠ free pass
+        fastify.prisma.matchGame.updateMany({
+          where: { match_id: id, status: 'PENDING', winner_id: null },
+          data: { status: 'COMPLETED', counts_for_leaderboard: true },
+        }),
+      ]);
+
+      return reply.code(200).send({ ok: true });
     },
   );
 

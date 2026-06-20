@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { getAdminStats, type AdminStats } from '@/lib/api';
+import { Link } from '@tanstack/react-router';
+import { getAdminStats, getAdminOpenPlayQueue, getAdminOpenPlayActiveMatches, type AdminStats } from '@/lib/api';
 
 interface KpiCardProps {
   label: string;
@@ -34,6 +35,18 @@ export function StatsDashboard() {
     queryFn: getAdminStats,
   });
 
+  const { data: queueData } = useQuery({
+    queryKey: ['admin-open-play-queue'],
+    queryFn: getAdminOpenPlayQueue,
+    refetchInterval: 10_000,
+  });
+
+  const { data: matchesData } = useQuery({
+    queryKey: ['admin-open-play-active-matches'],
+    queryFn: getAdminOpenPlayActiveMatches,
+    refetchInterval: 10_000,
+  });
+
   if (isLoading) {
     return <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>;
   }
@@ -58,10 +71,54 @@ export function StatsDashboard() {
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
         Open Play
       </h2>
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-3 gap-4 mb-4">
         <KpiCard label="In Queue" value={data.openPlay.queueDepth} />
         <KpiCard label="Active Ladder Matches" value={data.openPlay.activeMatches} />
         <KpiCard label="Scheduled (Accepted)" value={data.openPlay.scheduledAccepted} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        {/* Queue members */}
+        <div className="rounded-md border border-stone-800 bg-stone-900/60 p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-stone-500 mb-3">Queue</p>
+          {!queueData || queueData.members.length === 0 ? (
+            <p className="text-xs text-stone-600 italic">Empty</p>
+          ) : (
+            <ol className="space-y-1">
+              {queueData.members.map((m, i) => (
+                <li key={m.id} className="flex items-center gap-2 text-sm text-stone-300">
+                  <span className="text-xs text-stone-600 w-4 text-right">{i + 1}.</span>
+                  {m.username}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+
+        {/* Active matches */}
+        <div className="rounded-md border border-stone-800 bg-stone-900/60 p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-stone-500 mb-3">Active Matches</p>
+          {!matchesData || matchesData.matches.length === 0 ? (
+            <p className="text-xs text-stone-600 italic">None</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {matchesData.matches.map((m) => (
+                <li key={m.id} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-stone-300">
+                    {m.player1?.name ?? '?'} <span className="text-stone-600">vs</span> {m.player2?.name ?? '?'}
+                  </span>
+                  <Link
+                    to="/matches/$matchId"
+                    params={{ matchId: m.id }}
+                    className="text-xs text-amber-500 hover:text-amber-400 shrink-0"
+                  >
+                    View →
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
       <div>

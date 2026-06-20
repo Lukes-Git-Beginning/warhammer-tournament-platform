@@ -1056,6 +1056,43 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(201).send({ participant });
   });
 
+  // GET /api/admin/open-play/queue — who is currently in the Open Play queue
+  fastify.get('/api/admin/open-play/queue', { preHandler: fastify.authenticate }, async (_request, reply) => {
+    const QUEUE_KEY = 'rizzotto:queue:open_play';
+    const userIds = fastify.redis ? await fastify.redis.lrange(QUEUE_KEY, 0, -1) : [];
+    if (userIds.length === 0) return reply.code(200).send({ members: [] });
+    const users = await fastify.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, username: true, avatar_url: true },
+    });
+    const byId = new Map(users.map((u) => [u.id, u]));
+    return reply.code(200).send({ members: userIds.map((id) => byId.get(id)).filter(Boolean) });
+  });
+
+  // GET /api/admin/open-play/active-matches — active Open Play matches with player info
+  fastify.get('/api/admin/open-play/active-matches', { preHandler: fastify.authenticate }, async (_request, reply) => {
+    const matches = await fastify.prisma.match.findMany({
+      where: { type: 'OPEN_PLAY', status: { in: ['ONGOING', 'AWAITING_CONFIRMATION'] }, deleted_at: null },
+      select: {
+        id: true,
+        status: true,
+        created_at: true,
+        player1: { select: { id: true, username: true } },
+        player2: { select: { id: true, username: true } },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+    return reply.code(200).send({
+      matches: matches.map((m) => ({
+        id: m.id,
+        status: m.status,
+        player1: m.player1 ? { id: m.player1.id, name: m.player1.username } : null,
+        player2: m.player2 ? { id: m.player2.id, name: m.player2.username } : null,
+        createdAt: m.created_at,
+      })),
+    });
+  });
+
   // GET /api/admin/matches — paginated match list with leaderboard status
   fastify.get('/api/admin/matches', async (request, reply) => {
     const parsed = z.object({
