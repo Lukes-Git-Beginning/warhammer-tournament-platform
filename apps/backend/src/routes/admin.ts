@@ -1197,9 +1197,6 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!match) {
       return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
     }
-    if (match.status !== 'PENDING') {
-      return reply.code(409).send({ error: 'Conflict', message: `Match is ${match.status}, not PENDING`, statusCode: 409 });
-    }
     const winnerId = match.player1_id === droppedPlayerId ? match.player2_id : match.player2_id === droppedPlayerId ? match.player1_id : null;
     if (!winnerId) {
       return reply.code(400).send({ error: 'BadRequest', message: 'droppedPlayerId is not in this match', statusCode: 400 });
