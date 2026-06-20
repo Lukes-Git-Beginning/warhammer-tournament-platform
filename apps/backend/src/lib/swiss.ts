@@ -89,7 +89,21 @@ export function generateSwissRound(
     receivedBye: p.receivedBye,
   }));
 
-  const rawMatches = SwissPair(libPlayers, round, false, false);
+  const scoreById = new Map(activePlayers.map((p) => [p.userId, p.score]));
+  const hasLargeGap = (matches: ReturnType<typeof SwissPair>) =>
+    matches.some((m) => {
+      if (!m.player1 || !m.player2) return false;
+      return Math.abs((scoreById.get(String(m.player1)) ?? 0) - (scoreById.get(String(m.player2)) ?? 0)) > 1;
+    });
+
+  let rawMatches = SwissPair(libPlayers, round, false, false);
+
+  // If the library produced a cross-group pairing (score gap > 1) due to avoid
+  // constraints, retry without avoid lists. A rematch is less bad than a
+  // 2-point score-group violation.
+  if (hasLargeGap(rawMatches)) {
+    rawMatches = SwissPair(libPlayers.map((p) => ({ ...p, avoid: [] })), round, false, false);
+  }
 
   const result: SwissMatchInput[] = [];
 

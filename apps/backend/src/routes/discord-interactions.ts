@@ -13,14 +13,21 @@ import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 import { invalidate } from '../lib/cache.js';
 
 const QUEUE_KEY = 'rizzotto:queue:open_play';
+const FOR_GRABS_PREFIX = 'rizzotto:availability:for_grabs:';
 const MATCH_SCRIPT = `
 local queue = KEYS[1]
 local userId = ARGV[1]
+local prefix = ARGV[2]
 redis.call('RPUSH', queue, userId)
 local len = redis.call('LLEN', queue)
 if len >= 2 then
-  local p1 = redis.call('LPOP', queue)
-  local p2 = redis.call('LPOP', queue)
+  local p1 = redis.call('LINDEX', queue, 0)
+  local p2 = redis.call('LINDEX', queue, 1)
+  if redis.call('EXISTS', prefix .. p1) == 1 or redis.call('EXISTS', prefix .. p2) == 1 then
+    return false
+  end
+  redis.call('LPOP', queue)
+  redis.call('LPOP', queue)
   return {p1, p2}
 end
 return false
@@ -256,7 +263,7 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
         const existing = await fastify.redis.lpos(QUEUE_KEY, user.id);
         if (existing !== null) return reply.code(200).send(ephemeral("You're already in the queue."));
 
-        const result = await fastify.redis.eval(MATCH_SCRIPT, 1, QUEUE_KEY, user.id) as [string, string] | false | null;
+        const result = await fastify.redis.eval(MATCH_SCRIPT, 1, QUEUE_KEY, user.id, FOR_GRABS_PREFIX) as [string, string] | false | null;
 
         if (Array.isArray(result) && result.length === 2) {
           const [p1Id, p2Id] = result;
@@ -364,10 +371,11 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(200).send(ephemeral(`Got it — no more queue pings for ${label}. Your availability is still saved.`));
       }
 
-      // av_join:<actorDiscordId> — join queue from availability ping DM
+      // av_join:<actorDiscordId>:<originUserId> — direct match from availability ping DM.
+      // Atomically claims the for_grabs reservation; falls back to regular queue if expired.
       if (action === 'av_join') {
-        const [, actorDiscordId] = parts;
-        if (actorDiscordId !== discordId) return reply.code(200).send(ephemeral('This button is not for you.'));
+        const [, actorDiscordId, originUserId] = parts;
+        if (!actorDiscordId || actorDiscordId !== discordId) return reply.code(200).send(ephemeral('This button is not for you.'));
         if (!fastify.redis) return reply.code(200).send(ephemeral('Queue service is temporarily unavailable.'));
 
         const user = await fastify.prisma.user.findFirst({
@@ -375,11 +383,40 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
           select: { id: true, username: true },
         });
         if (!user) return reply.code(200).send(ephemeral('You need to log in at rizzotto.gg first.'));
+        if (user.id === originUserId) return reply.code(200).send(ephemeral("That's your own queue slot."));
 
+        // Try to claim the reservation atomically
+        if (originUserId) {
+          const claimed = await fastify.redis.getdel(`${FOR_GRABS_PREFIX}${originUserId}`);
+          if (claimed) {
+            // Reservation valid — remove origin user from queue and create direct match
+            const removed = await fastify.redis.lrem(QUEUE_KEY, 1, originUserId);
+            if (removed > 0) {
+              const [origin, clicker] = await Promise.all([
+                fastify.prisma.user.findUnique({ where: { id: originUserId }, select: { username: true, discord_id: true } }),
+                Promise.resolve(user),
+              ]);
+              const { matchId, mapName } = await createOpenPlayMatch(fastify.prisma, originUserId, user.id);
+              if (origin?.discord_id) {
+                setImmediate(() => void notifyMatchFoundWithButtons(
+                  matchId,
+                  { discordId: origin.discord_id!, username: origin.username },
+                  { discordId: discordId, username: clicker.username },
+                  mapName,
+                ));
+              }
+              const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
+              return reply.code(200).send(ephemeral(`Match found! vs **${origin?.username ?? 'opponent'}** → ${matchUrl}`));
+            }
+            // Origin user already left or matched — fall through to regular queue
+          }
+        }
+
+        // Reservation expired or not available — join regular queue
         const existing = await fastify.redis.lpos(QUEUE_KEY, user.id);
         if (existing !== null) return reply.code(200).send(ephemeral("You're already in the queue."));
 
-        const result = await fastify.redis.eval(MATCH_SCRIPT, 1, QUEUE_KEY, user.id) as [string, string] | false | null;
+        const result = await fastify.redis.eval(MATCH_SCRIPT, 1, QUEUE_KEY, user.id, FOR_GRABS_PREFIX) as [string, string] | false | null;
 
         if (Array.isArray(result) && result.length === 2) {
           const [p1Id, p2Id] = result;

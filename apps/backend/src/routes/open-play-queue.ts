@@ -4,15 +4,26 @@ import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 
 const QUEUE_KEY = 'rizzotto:queue:open_play';
 
-// Atomically push userId and try to match: returns [p1, p2] or false
+const FOR_GRABS_PREFIX = 'rizzotto:availability:for_grabs:';
+const FOR_GRABS_TTL = 60;
+
+// Atomically push userId and try to match: returns [p1, p2] or false.
+// Skips matching if either candidate has an active for_grabs reservation key
+// (set when DMs go out so notified users get a 60s window to respond first).
 const MATCH_SCRIPT = `
 local queue = KEYS[1]
 local userId = ARGV[1]
+local prefix = ARGV[2]
 redis.call('RPUSH', queue, userId)
 local len = redis.call('LLEN', queue)
 if len >= 2 then
-  local p1 = redis.call('LPOP', queue)
-  local p2 = redis.call('LPOP', queue)
+  local p1 = redis.call('LINDEX', queue, 0)
+  local p2 = redis.call('LINDEX', queue, 1)
+  if redis.call('EXISTS', prefix .. p1) == 1 or redis.call('EXISTS', prefix .. p2) == 1 then
+    return false
+  end
+  redis.call('LPOP', queue)
+  redis.call('LPOP', queue)
   return {p1, p2}
 end
 return false
@@ -35,7 +46,7 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(409).send({ error: 'Conflict', message: 'Already in queue', statusCode: 409 });
       }
 
-      const result = (await fastify.redis.eval(MATCH_SCRIPT, 1, QUEUE_KEY, userId)) as [string, string] | false | null;
+      const result = (await fastify.redis.eval(MATCH_SCRIPT, 1, QUEUE_KEY, userId, FOR_GRABS_PREFIX)) as [string, string] | false | null;
 
       if (Array.isArray(result) && result.length === 2) {
         const [p1Id, p2Id] = result;
@@ -64,6 +75,9 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       // When the first player enters an empty queue, DM users who have MATCHMAKING
       // availability for the current UTC hour (and aren't snoozed or already queued).
       if (position === 1) {
+        // Reserve the joining user for DM recipients for 60s
+        await fastify.redis.setex(`${FOR_GRABS_PREFIX}${userId}`, FOR_GRABS_TTL, '1');
+
         const redis = fastify.redis;
         const prisma = fastify.prisma;
         setImmediate(() => void (async () => {
@@ -85,7 +99,7 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
               if (!user.discord_id || queueMembers.has(user.id)) return;
               const snoozed = await redis.get(`rizzotto:availability:snooze:${user.id}`);
               if (snoozed) return;
-              await notifyAvailabilityPing(user.discord_id, position);
+              await notifyAvailabilityPing(user.discord_id, position, userId);
             }));
           } catch { /* fire and forget */ }
         })());
