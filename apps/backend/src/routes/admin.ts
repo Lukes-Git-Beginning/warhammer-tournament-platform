@@ -1194,9 +1194,10 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       where: { id: matchId },
       select: { id: true, tournament_id: true, player1_id: true, player2_id: true, status: true },
     });
-    if (!match) {
+    if (!match || !match.tournament_id) {
       return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
     }
+    const tournamentId = match.tournament_id;
     const winnerId = match.player1_id === droppedPlayerId ? match.player2_id : match.player2_id === droppedPlayerId ? match.player1_id : null;
     if (!winnerId) {
       return reply.code(400).send({ error: 'BadRequest', message: 'droppedPlayerId is not in this match', statusCode: 400 });
@@ -1215,7 +1216,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       // Also withdraw the dropped player from the tournament if not already done.
       fastify.prisma.tournamentParticipant.updateMany({
         where: {
-          tournament_id: match.tournament_id,
+          tournament_id: tournamentId,
           user_id: droppedPlayerId,
           status: { notIn: ['WITHDREW', 'DISQUALIFIED'] },
         },
@@ -1223,7 +1224,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    emitBracketUpdate(fastify.io, match.tournament_id);
+    emitBracketUpdate(fastify.io, tournamentId);
     return reply.code(200).send({ ok: true, winnerId });
   });
 
