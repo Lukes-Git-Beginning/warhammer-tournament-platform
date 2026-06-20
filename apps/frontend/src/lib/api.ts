@@ -1429,6 +1429,10 @@ export function getQueueStatus(): Promise<{ inQueue: boolean; position: number |
   return apiFetch<{ inQueue: boolean; position: number | null; total: number }>('/api/open-play/queue/status');
 }
 
+export function getAvailabilityNow(): Promise<{ count: number; day_of_week: number; hour_utc: number }> {
+  return apiFetch<{ count: number; day_of_week: number; hour_utc: number }>('/api/availability/now');
+}
+
 export function getMyOpenPlayMatch(): Promise<{ match_id: string | null }> {
   return apiFetch<{ match_id: string | null }>('/api/open-play/my-match');
 }

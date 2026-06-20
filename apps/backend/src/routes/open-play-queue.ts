@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { notifyMatchFoundWithButtons } from '../lib/discord-notify.js';
+import { notifyMatchFoundWithButtons, notifyAvailabilityPing } from '../lib/discord-notify.js';
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 
 const QUEUE_KEY = 'rizzotto:queue:open_play';
@@ -59,7 +59,39 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(200).send({ matched: true, match_id: matchId });
       }
 
-      return reply.code(200).send({ matched: false, position: await fastify.redis.llen(QUEUE_KEY) });
+      const position = await fastify.redis.llen(QUEUE_KEY);
+
+      // When the first player enters an empty queue, DM users who have MATCHMAKING
+      // availability for the current UTC hour (and aren't snoozed or already queued).
+      if (position === 1) {
+        const redis = fastify.redis;
+        const prisma = fastify.prisma;
+        setImmediate(() => void (async () => {
+          try {
+            const now = new Date();
+            const day = (now.getUTCDay() + 6) % 7;
+            const hour = now.getUTCHours();
+            const slots = await prisma.availabilitySlot.findMany({
+              where: {
+                day_of_week: day,
+                hour_utc: hour,
+                context: 'MATCHMAKING',
+                user_id: { not: userId },
+              },
+              include: { user: { select: { id: true, discord_id: true } } },
+            });
+            const queueMembers = new Set(await redis.lrange(QUEUE_KEY, 0, -1));
+            await Promise.allSettled(slots.map(async ({ user }) => {
+              if (!user.discord_id || queueMembers.has(user.id)) return;
+              const snoozed = await redis.get(`rizzotto:availability:snooze:${user.id}`);
+              if (snoozed) return;
+              await notifyAvailabilityPing(user.discord_id, position);
+            }));
+          } catch { /* fire and forget */ }
+        })());
+      }
+
+      return reply.code(200).send({ matched: false, position });
     },
   );
 

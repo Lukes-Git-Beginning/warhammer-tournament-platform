@@ -37,6 +37,17 @@ const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(200).send({ slots: data });
   });
 
+  // GET /api/availability/now — public, returns MATCHMAKING slot count for current UTC hour
+  fastify.get('/api/availability/now', async (_request, reply) => {
+    const now = new Date();
+    const day = (now.getUTCDay() + 6) % 7; // 0=Mon..6=Sun
+    const hour = now.getUTCHours();
+    const count = await fastify.prisma.availabilitySlot.count({
+      where: { day_of_week: day, hour_utc: hour, context: 'MATCHMAKING' },
+    });
+    return reply.code(200).send({ count, day_of_week: day, hour_utc: hour });
+  });
+
   // GET /api/availability/me — authenticated
   fastify.get(
     '/api/availability/me',

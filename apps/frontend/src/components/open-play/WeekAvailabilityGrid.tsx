@@ -56,6 +56,14 @@ function getRect(a: Cell, b: Cell) {
 export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled, userTimezone }: WeekAvailabilityGridProps) {
   const offset = userTimezone ? getUtcOffsetHours(userTimezone) : 0;
 
+  // Current local day and hour for the "now" indicator
+  const nowUtc = new Date();
+  const { day: nowLocalDay, hour: nowLocalHour } = utcToLocal(
+    (nowUtc.getUTCDay() + 6) % 7,
+    nowUtc.getUTCHours(),
+    offset,
+  );
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const dragMode = useRef<'add' | 'remove'>('add');
@@ -192,8 +200,16 @@ export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled, u
         {DAYS.map((d, i) => (
           <div
             key={d}
-            style={{ height: ROW_H, background: i >= 5 ? 'hsl(22,6%,13%)' : 'hsl(20,3%,11%)' }}
-            className="flex items-center justify-center text-xs font-medium text-stone-400 border-b border-stone-700"
+            style={{
+              height: ROW_H,
+              background: i === nowLocalDay
+                ? 'hsl(40,35%,16%)'
+                : (i >= 5 ? 'hsl(22,6%,13%)' : 'hsl(20,3%,11%)'),
+            }}
+            className={[
+              'flex items-center justify-center text-xs font-medium border-b',
+              i === nowLocalDay ? 'text-amber-400 border-amber-800' : 'text-stone-400 border-stone-700',
+            ].join(' ')}
           >
             {d}
           </div>
@@ -207,7 +223,10 @@ export function WeekAvailabilityGrid({ slots, editContext, onChange, disabled, u
               <div
                 key={`label-${hour}`}
                 style={{ height: ROW_H, background: 'hsl(20,3%,11%)' }}
-                className="flex items-center justify-end pr-2 text-xs text-stone-500 border-b border-stone-700/50"
+                className={[
+                  'flex items-center justify-end pr-2 text-xs border-b border-stone-700/50',
+                  hour === nowLocalHour ? 'text-amber-400 font-semibold' : 'text-stone-500',
+                ].join(' ')}
               >
                 {String(hour).padStart(2, '0')}
               </div>

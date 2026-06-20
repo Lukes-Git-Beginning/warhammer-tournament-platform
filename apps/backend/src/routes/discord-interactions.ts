@@ -335,6 +335,76 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(200).send(ephemeral(`✅ Confirmed! **${other.username}** has been notified.`));
       }
 
+      // av_snooze:<duration>:<actorDiscordId> — snooze availability pings
+      if (action === 'av_snooze') {
+        const [, duration, actorDiscordId] = parts;
+        if (!duration || !actorDiscordId) return reply.code(200).send(ephemeral('Invalid button.'));
+        if (actorDiscordId !== discordId) return reply.code(200).send(ephemeral('This button is not for you.'));
+        if (!fastify.redis) return reply.code(200).send(ephemeral('Service temporarily unavailable.'));
+
+        const user = await fastify.prisma.user.findFirst({
+          where: { discord_id: discordId, deleted_at: null },
+          select: { id: true },
+        });
+        if (!user) return reply.code(200).send(ephemeral('You need to log in at rizzotto.gg first.'));
+
+        let ttl: number;
+        let label: string;
+        if (duration === '1h') { ttl = 3600; label = '1 hour'; }
+        else if (duration === '4h') { ttl = 4 * 3600; label = '4 hours'; }
+        else {
+          const now = new Date();
+          const midnight = new Date(now);
+          midnight.setUTCHours(24, 0, 0, 0);
+          ttl = Math.max(60, Math.floor((midnight.getTime() - now.getTime()) / 1000));
+          label = 'the rest of today';
+        }
+
+        await fastify.redis.setex(`rizzotto:availability:snooze:${user.id}`, ttl, '1');
+        return reply.code(200).send(ephemeral(`Got it — no more queue pings for ${label}. Your availability is still saved.`));
+      }
+
+      // av_join:<actorDiscordId> — join queue from availability ping DM
+      if (action === 'av_join') {
+        const [, actorDiscordId] = parts;
+        if (actorDiscordId !== discordId) return reply.code(200).send(ephemeral('This button is not for you.'));
+        if (!fastify.redis) return reply.code(200).send(ephemeral('Queue service is temporarily unavailable.'));
+
+        const user = await fastify.prisma.user.findFirst({
+          where: { discord_id: discordId, deleted_at: null },
+          select: { id: true, username: true },
+        });
+        if (!user) return reply.code(200).send(ephemeral('You need to log in at rizzotto.gg first.'));
+
+        const existing = await fastify.redis.lpos(QUEUE_KEY, user.id);
+        if (existing !== null) return reply.code(200).send(ephemeral("You're already in the queue."));
+
+        const result = await fastify.redis.eval(MATCH_SCRIPT, 1, QUEUE_KEY, user.id) as [string, string] | false | null;
+
+        if (Array.isArray(result) && result.length === 2) {
+          const [p1Id, p2Id] = result;
+          const [p1, p2] = await Promise.all([
+            fastify.prisma.user.findUnique({ where: { id: p1Id }, select: { username: true, discord_id: true } }),
+            fastify.prisma.user.findUnique({ where: { id: p2Id }, select: { username: true, discord_id: true } }),
+          ]);
+          const { matchId, mapName } = await createOpenPlayMatch(fastify.prisma, p1Id, p2Id);
+          if (p1?.discord_id && p2?.discord_id) {
+            setImmediate(() => void notifyMatchFoundWithButtons(
+              matchId,
+              { discordId: p1.discord_id!, username: p1.username },
+              { discordId: p2.discord_id!, username: p2.username },
+              mapName,
+            ));
+          }
+          const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
+          const opponent = p1Id === user.id ? p2 : p1;
+          return reply.code(200).send(ephemeral(`Match found! vs **${opponent?.username ?? 'opponent'}** → ${matchUrl}`));
+        }
+
+        const position = await fastify.redis.llen(QUEUE_KEY);
+        return reply.code(200).send(ephemeral(`You're in the queue (position ${position}). You'll get a DM when a match is found.`));
+      }
+
       return reply.code(200).send(ephemeral('Unknown button.'));
     },
   );

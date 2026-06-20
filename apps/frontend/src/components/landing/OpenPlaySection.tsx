@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   getScheduledMatchups,
   getQueueStatus,
+  getAvailabilityNow,
   joinQueue,
   acceptScheduledMatchup,
   type ScheduledMatchup,
@@ -36,6 +37,12 @@ function QueueCard({ userId }: { userId?: string }) {
     enabled: !!userId,
   });
 
+  const { data: nowCount } = useQuery({
+    queryKey: ['availability-now'],
+    queryFn: getAvailabilityNow,
+    refetchInterval: 60_000,
+  });
+
   const join = useMutation({
     mutationFn: joinQueue,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['queue-status'] }),
@@ -57,6 +64,12 @@ function QueueCard({ userId }: { userId?: string }) {
           <p className="text-sm text-stone-300">
             <span className="font-mono font-bold text-amber-400">{status.total}</span>{' '}
             {status.total === 1 ? 'player' : 'players'} waiting
+          </p>
+        )}
+        {nowCount !== undefined && nowCount.count > 0 && (
+          <p className="text-sm text-stone-400 mt-0.5">
+            <span className="font-mono font-bold text-sky-400">{nowCount.count}</span>{' '}
+            {nowCount.count === 1 ? 'player has' : 'players have'} availability now
           </p>
         )}
       </CardContent>

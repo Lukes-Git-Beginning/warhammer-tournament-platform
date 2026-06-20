@@ -553,3 +553,31 @@ export async function notifyDispute(
     console.warn('[discord-notify] Dispute notify error (non-fatal):', err);
   }
 }
+
+/**
+ * DM a user when someone joins the Open Play queue during their availability window.
+ * Includes snooze buttons (1h / 4h / today) and a direct Join Queue button.
+ */
+export async function notifyAvailabilityPing(discordUserId: string, queueSize: number): Promise<void> {
+  const token = getToken();
+  if (!token) return;
+  try {
+    const baseUrl = process.env.FRONTEND_URL ?? 'https://rizzotto.gg';
+    const ch = await openDmChannel(discordUserId);
+    if (!ch) return;
+    const playerWord = queueSize === 1 ? 'player is' : 'players are';
+    await discordRequest('POST', `/channels/${ch}/messages`, {
+      content: `**${queueSize}** ${playerWord} in the Open Play queue right now — it's a great time to play! 🎮\n${baseUrl}/open-play`,
+      components: [
+        actionRow([
+          button('Join Queue',   `av_join:${discordUserId}`,         BTN_SUCCESS),
+          button('Snooze 1h',    `av_snooze:1h:${discordUserId}`,    BTN_SECONDARY),
+          button('Snooze 4h',    `av_snooze:4h:${discordUserId}`,    BTN_SECONDARY),
+          button('Snooze Today', `av_snooze:today:${discordUserId}`, BTN_SECONDARY),
+        ]),
+      ],
+    });
+  } catch (err) {
+    console.warn('[discord-notify] Availability ping error (non-fatal):', err);
+  }
+}
