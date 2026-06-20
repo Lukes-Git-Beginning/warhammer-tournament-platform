@@ -1207,6 +1207,11 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: matchId },
         data: { status: 'FORFEIT', winner_id: winnerId },
       }),
+      // Void all game records so neither leaderboard nor tournament stats
+      // reflect results from a match that is being overridden.
+      fastify.prisma.matchGame.deleteMany({
+        where: { match_id: matchId },
+      }),
       // Also withdraw the dropped player from the tournament if not already done.
       fastify.prisma.tournamentParticipant.updateMany({
         where: {
