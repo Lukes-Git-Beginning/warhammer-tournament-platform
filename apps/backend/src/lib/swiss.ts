@@ -82,12 +82,32 @@ export function generateSwissRound(
     }
   }
 
-  const libPlayers = activePlayers.map((p) => ({
-    id: p.userId,
-    score: p.score,
-    avoid: p.avoid,
-    receivedBye: p.receivedBye,
-  }));
+  // Build the player list and shuffle within each score group so that pairing
+  // within a group is random rather than standings-order (Buchholz) biased.
+  // The group boundaries are preserved — 2-point players always pair within
+  // their group, etc. — only the internal order is randomised.
+  const libPlayers = (() => {
+    const raw = activePlayers.map((p) => ({
+      id: p.userId,
+      score: p.score,
+      avoid: p.avoid,
+      receivedBye: p.receivedBye,
+    }));
+    const out: typeof raw = [];
+    let i = 0;
+    while (i < raw.length) {
+      let j = i;
+      while (j < raw.length && raw[j]!.score === raw[i]!.score) j++;
+      const group = raw.slice(i, j);
+      for (let k = group.length - 1; k > 0; k--) {
+        const r = Math.floor(Math.random() * (k + 1));
+        [group[k], group[r]] = [group[r]!, group[k]!];
+      }
+      out.push(...group);
+      i = j;
+    }
+    return out;
+  })();
 
   const scoreById = new Map(activePlayers.map((p) => [p.userId, p.score]));
   const hasLargeGap = (matches: ReturnType<typeof SwissPair>) =>
