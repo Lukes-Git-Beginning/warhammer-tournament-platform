@@ -343,7 +343,7 @@ export function UserProfilePage() {
       </section>
 
       {/* Anti-Farming (admin only) */}
-      {(me?.role === 'ADMIN' || me?.role === 'MODERATOR') && (
+      {me?.role === 'ADMIN' && (
         <AntiFarmingSection playerId={id} />
       )}
 
