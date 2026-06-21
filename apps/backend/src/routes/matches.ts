@@ -570,6 +570,101 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(200).send({ matchId, status: 'PENDING' });
     },
   );
+  // PATCH /api/matches/:id/swap-player — canManage: replace one player in a PENDING match
+  fastify.patch(
+    '/api/matches/:id/swap-player',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const parsed = z.object({ oldPlayerId: z.string().uuid(), newPlayerId: z.string().uuid() }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+
+      const match = await fastify.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true, status: true, player1_id: true, player2_id: true, tournament: { select: { organizer_id: true } } },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      if (match.status !== 'PENDING') return reply.code(409).send({ error: 'Conflict', message: 'Can only swap players in PENDING matches', statusCode: 409 });
+
+      const { role, sub: userId } = request.user;
+      const isModOrAdmin = role === 'MODERATOR' || role === 'ADMIN';
+      const isHost = match.tournament?.organizer_id === userId;
+      if (!isModOrAdmin && !isHost) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+
+      const { oldPlayerId, newPlayerId } = parsed.data;
+      let updateData: { player1_id?: string; player2_id?: string };
+      if (match.player1_id === oldPlayerId) updateData = { player1_id: newPlayerId };
+      else if (match.player2_id === oldPlayerId) updateData = { player2_id: newPlayerId };
+      else return reply.code(400).send({ error: 'BadRequest', message: 'oldPlayerId is not in this match', statusCode: 400 });
+
+      await fastify.prisma.$transaction(async (tx) => {
+        await tx.match.update({ where: { id: matchId }, data: updateData });
+        await tx.matchMapDecision.updateMany({ where: { game: { match_id: matchId }, top_player_id: oldPlayerId }, data: { top_player_id: newPlayerId } });
+        await tx.matchMapDecision.updateMany({ where: { game: { match_id: matchId }, bottom_player_id: oldPlayerId }, data: { bottom_player_id: newPlayerId } });
+        await tx.matchFactionMatrix.updateMany({ where: { game: { match_id: matchId }, top_player_id: oldPlayerId }, data: { top_player_id: newPlayerId } });
+        await tx.matchFactionMatrix.updateMany({ where: { game: { match_id: matchId }, bottom_player_id: oldPlayerId }, data: { bottom_player_id: newPlayerId } });
+      });
+      return reply.code(200).send({ ok: true });
+    },
+  );
+
+  // DELETE /api/matches/:id — canManage: soft-delete a match
+  fastify.delete(
+    '/api/matches/:id',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const match = await fastify.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true, tournament: { select: { organizer_id: true } } },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+
+      const { role, sub: userId } = request.user;
+      const isModOrAdmin = role === 'MODERATOR' || role === 'ADMIN';
+      const isHost = match.tournament?.organizer_id === userId;
+      if (!isModOrAdmin && !isHost) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+
+      await fastify.prisma.match.update({ where: { id: matchId }, data: { deleted_at: new Date() } });
+      return reply.code(200).send({ ok: true });
+    },
+  );
+
+  // POST /api/matches/:id/forfeit — canManage: forfeit a PENDING match in favour of the opponent
+  fastify.post(
+    '/api/matches/:id/forfeit',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const parsed = z.object({ droppedPlayerId: z.string() }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: 'droppedPlayerId required', statusCode: 400 });
+
+      const match = await fastify.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true, tournament_id: true, player1_id: true, player2_id: true, status: true, tournament: { select: { organizer_id: true } } },
+      });
+      if (!match || !match.tournament_id) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+
+      const { role, sub: userId } = request.user;
+      const isModOrAdmin = role === 'MODERATOR' || role === 'ADMIN';
+      const isHost = match.tournament?.organizer_id === userId;
+      if (!isModOrAdmin && !isHost) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+
+      const { droppedPlayerId } = parsed.data;
+      const winnerId = match.player1_id === droppedPlayerId ? match.player2_id : match.player2_id === droppedPlayerId ? match.player1_id : null;
+      if (!winnerId) return reply.code(400).send({ error: 'BadRequest', message: 'droppedPlayerId is not in this match', statusCode: 400 });
+
+      await fastify.prisma.$transaction([
+        fastify.prisma.match.update({ where: { id: matchId }, data: { status: 'FORFEIT', winner_id: winnerId } }),
+        fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } }),
+        fastify.prisma.tournamentParticipant.updateMany({
+          where: { tournament_id: match.tournament_id, user_id: droppedPlayerId, status: { notIn: ['WITHDREW', 'DISQUALIFIED'] } },
+          data: { status: 'WITHDREW' },
+        }),
+      ]);
+      return reply.code(200).send({ ok: true, winnerId });
+    },
+  );
 };
 
 export default matchRoutes;

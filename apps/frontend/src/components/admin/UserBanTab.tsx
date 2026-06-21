@@ -15,14 +15,11 @@ function RoleSelect({ user }: { user: AdminUser }) {
 
   return (
     <select
-      value={user.role === 'ORGANIZER' ? 'ORGANIZER' : user.role}
+      value={user.role}
       disabled={mutation.isPending}
       onChange={(e) => mutation.mutate(e.target.value)}
       className="rounded border border-stone-700 bg-stone-900 px-2 py-0.5 text-xs text-stone-300 focus:border-rizzotto-gold-500 focus:outline-none disabled:opacity-50"
     >
-      {user.role === 'ORGANIZER' && (
-        <option value="ORGANIZER" disabled>ORGANIZER (legacy)</option>
-      )}
       {ASSIGNABLE_ROLES.map((r) => (
         <option key={r} value={r}>{r}</option>
       ))}

@@ -15,7 +15,6 @@ import { ArmyListUpload } from '../components/tournament/ArmyListUpload.js';
 const ROLE_COLORS: Record<string, string> = {
   USER: 'bg-stone-700 text-stone-300',
   HOST: 'bg-blue-900/60 text-blue-300',
-  ORGANIZER: 'bg-blue-900/60 text-blue-300',
   MODERATOR: 'bg-purple-900/60 text-purple-300',
   ADMIN: 'bg-rizzotto-blood-500/60 text-red-200',
 };

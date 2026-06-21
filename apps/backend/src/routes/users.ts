@@ -47,7 +47,7 @@ type MeRow = {
   email: string | null;
   avatar_url: string | null;
   timezone: string | null;
-  role: 'USER' | 'HOST' | 'ORGANIZER' | 'MODERATOR' | 'ADMIN';
+  role: 'USER' | 'HOST' | 'MODERATOR' | 'ADMIN';
   preferred_factions: string[];
   last_login: Date | null;
   onboarded_at: Date | null;

@@ -24,7 +24,6 @@ datasource db {
 enum Role {
   USER
   HOST
-  ORGANIZER
   MODERATOR
   ADMIN
 }

@@ -1115,7 +1115,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole('ORGANIZER', 'MODERATOR', 'ADMIN'),
+        fastify.requireRole('HOST', 'MODERATOR', 'ADMIN'),
       ],
     },
     async (request, reply) => {
@@ -1128,7 +1128,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       }
-      if (request.user.role === 'ORGANIZER' && tournament.organizer_id !== request.user.sub) {
+      if (request.user.role === 'HOST' && tournament.organizer_id !== request.user.sub) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
       }
       // In DE the matches feeding the grand final are the WB and LB finals,
