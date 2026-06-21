@@ -382,8 +382,8 @@ export function recommendNumberOfRounds(participantCount: number): number {
  *
  * Priority:
  *   1. score desc
- *   2. gamesLost asc  (fewer individual games lost = better)
- *   3. buchholz desc  (sum of all opponents' scores)
+ *   2. buchholz desc  (sum of all opponents' scores)
+ *   3. gamesLost asc  (fewer individual games lost = better)
  *   4. solkoff desc   (buchholz minus highest + lowest opponent score)
  *   5. head-to-head   (direct match winner if exactly 2 players remain tied)
  *
@@ -415,10 +415,10 @@ export function sortSwissStandings(
     if (a.dropped !== b.dropped) return a.dropped ? 1 : -1;
     // 1. score
     if (b.score !== a.score) return b.score - a.score;
-    // 2. games lost asc (fewer = better)
-    if (a.gamesLost !== b.gamesLost) return a.gamesLost - b.gamesLost;
-    // 3. buchholz
+    // 2. buchholz
     if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
+    // 3. games lost asc (fewer = better)
+    if (a.gamesLost !== b.gamesLost) return a.gamesLost - b.gamesLost;
     // 4. solkoff
     if (b.solkoff !== a.solkoff) return b.solkoff - a.solkoff;
     // 5. head-to-head (only meaningful when exactly 2 players are compared here)
