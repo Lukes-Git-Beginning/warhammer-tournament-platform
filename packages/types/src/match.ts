@@ -36,7 +36,7 @@ export const OverrideMatchResultSchema = z.object({
   player2_points: z.number().min(0).max(100).nullable().optional(),
   player1_score: z.number().int().min(0).max(10000).nullable().optional(),
   player2_score: z.number().int().min(0).max(10000).nullable().optional(),
-  reason: z.string().min(1).max(2000),
+  reason: z.string().min(1).max(2000).optional(),
   map_id: z.string().min(1).optional(),
   player1FactionId: z.string().min(1).optional(),
   player2FactionId: z.string().min(1).optional(),
