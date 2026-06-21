@@ -109,18 +109,18 @@ export function Header() {
                 to="/users/$id"
                 params={{ id: user.id }}
                 aria-label={t('header.view_profile', { defaultValue: 'View profile' })}
-                className="inline-flex items-center gap-2 rounded-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rizzotto-gold-500 focus-visible:ring-offset-2 focus-visible:ring-offset-rizzotto-iron-950"
+                className="group inline-flex items-center gap-2 rounded-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rizzotto-gold-500 focus-visible:ring-offset-2 focus-visible:ring-offset-rizzotto-iron-950"
               >
                 {user.avatar_url && (
                   <img
                     src={user.avatar_url}
                     alt=""
                     data-onboarding-target="avatar"
-                    className="h-8 w-8 rounded-full ring-2 ring-rizzotto-gold-500/40 ring-offset-1 ring-offset-rizzotto-iron-950"
+                    className="h-8 w-8 rounded-full ring-2 ring-rizzotto-gold-500/40 ring-offset-1 ring-offset-rizzotto-iron-950 transition-opacity group-hover:opacity-90"
                   />
                 )}
                 <span
-                  className="hidden text-sm text-rizzotto-stone-300 xl:inline"
+                  className="hidden text-sm text-rizzotto-stone-300 transition-colors group-hover:text-rizzotto-gold-400 xl:inline"
                   data-onboarding-target={user.avatar_url ? undefined : 'avatar'}
                 >
                   {user.username}
