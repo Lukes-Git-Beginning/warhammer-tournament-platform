@@ -92,16 +92,14 @@ function MatchupGrid({ rows, factionMap }: { rows: MatchupRow[]; factionMap: Map
     const nonMirror = rows.filter((r) => !r.isMirror);
     const mirror = rows.filter((r) => r.isMirror);
     const compare = (a: MatchupRow, b: MatchupRow): number => {
-      let v = 0;
-      if (sortCol === 'name') {
-        const na = factionMap.get(a.factionId)?.name ?? a.factionId;
-        const nb = factionMap.get(b.factionId)?.name ?? b.factionId;
-        v = na.localeCompare(nb);
-      } else if (sortCol === 'wins') v = a.wins - b.wins;
-      else if (sortCol === 'losses') v = a.losses - b.losses;
-      else if (sortCol === 'total') v = a.total - b.total;
-      else v = (a.winRate ?? -1) - (b.winRate ?? -1);
-      return sortDir === 'asc' ? v : -v;
+      const raw =
+        sortCol === 'name'
+          ? (factionMap.get(a.factionId)?.name ?? a.factionId).localeCompare(factionMap.get(b.factionId)?.name ?? b.factionId)
+          : sortCol === 'wins' ? a.wins - b.wins
+          : sortCol === 'losses' ? a.losses - b.losses
+          : sortCol === 'total' ? a.total - b.total
+          : (a.winRate ?? -1) - (b.winRate ?? -1);
+      return sortDir === 'asc' ? raw : -raw;
     };
     return [...nonMirror.sort(compare), ...mirror];
   }, [rows, sortCol, sortDir, factionMap]);
