@@ -270,13 +270,18 @@ async function startPlayoffs(
   const participantIds = [...new Set(
     swissMatches.flatMap((m) => [m.player1_id, m.player2_id].filter((id): id is string => id !== null)),
   )];
+  const dbParticipants = await prisma.tournamentParticipant.findMany({
+    where: { tournament_id: tournament.id, user_id: { in: participantIds }, deleted_at: null },
+    select: { user_id: true, status: true },
+  });
+  const withdrawnIds = new Set(dbParticipants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
   const completed = swissMatches
     .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
   const rawStandings = computeSwissStandings(participantIds, completed);
   const standings = sortSwissStandings(rawStandings, completed);
-  // Exclude dropped players — they should not advance to playoffs.
-  const ranked = standings.filter((s) => !s.dropped).map((s) => s.userId);
+  // Exclude dropped players — also filter WITHDREW status not captured by s.dropped.
+  const ranked = standings.filter((s) => !s.dropped && !withdrawnIds.has(s.userId)).map((s) => s.userId);
 
   // Re-evaluate playoff format based on active player count at Swiss end.
   // Players may have dropped during the Swiss phase, so the start-time config
