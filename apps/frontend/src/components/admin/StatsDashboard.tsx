@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { getAdminStats, getAdminOpenPlayQueue, getAdminOpenPlayActiveMatches, type AdminStats } from '@/lib/api';
+import { getAdminStats, getAdminOpenPlayQueue, getAdminOpenPlayActiveMatches, getAdminScheduledMatchups, type AdminStats } from '@/lib/api';
 
 interface KpiCardProps {
   label: string;
@@ -47,6 +47,12 @@ export function StatsDashboard() {
     refetchInterval: 10_000,
   });
 
+  const { data: challengesData } = useQuery({
+    queryKey: ['admin-scheduled-matchups', 'ACCEPTED'],
+    queryFn: () => getAdminScheduledMatchups({ status: 'ACCEPTED' }),
+    refetchInterval: 30_000,
+  });
+
   if (isLoading) {
     return <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>;
   }
@@ -77,7 +83,7 @@ export function StatsDashboard() {
         <KpiCard label="Scheduled (Accepted)" value={data.openPlay.scheduledAccepted} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-3 gap-4 mb-8">
         {/* Queue members */}
         <div className="rounded-md border border-stone-800 bg-stone-900/60 p-4">
           <p className="text-xs font-medium uppercase tracking-wider text-stone-500 mb-3">Queue</p>
@@ -114,6 +120,28 @@ export function StatsDashboard() {
                   >
                     View →
                   </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Scheduled challenges (accepted) */}
+        <div className="rounded-md border border-stone-800 bg-stone-900/60 p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-stone-500 mb-3">Scheduled Challenges</p>
+          {!challengesData || challengesData.matchups.length === 0 ? (
+            <p className="text-xs text-stone-600 italic">None</p>
+          ) : (
+            <ul className="space-y-2">
+              {challengesData.matchups.map((c) => (
+                <li key={c.id} className="text-sm">
+                  <span className="text-stone-300">
+                    {c.proposer.username} <span className="text-stone-600">vs</span> {c.accepted_by?.username ?? '?'}
+                  </span>
+                  <p className="text-[10px] text-stone-600 mt-0.5">
+                    {new Date(c.proposed_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    {c.format !== 'BO1' && <span className="ml-1">{c.format}</span>}
+                  </p>
                 </li>
               ))}
             </ul>
