@@ -306,7 +306,19 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
       }
 
-      // Match history — last 20 completed matches
+      // All-time win/loss counts (separate from history so the limit of 20 doesn't skew stats)
+      const playerWhere = {
+        status: { in: ['COMPLETED' as const, 'FORFEIT' as const] },
+        OR: [{ player1_id: id }, { player2_id: id }],
+        deleted_at: null as null,
+      };
+      const [totalWins, decidedCount] = await Promise.all([
+        fastify.prisma.match.count({ where: { ...playerWhere, winner_id: id } }),
+        fastify.prisma.match.count({ where: { ...playerWhere, winner_id: { not: null } } }),
+      ]);
+      const totalLosses = decidedCount - totalWins;
+
+      // Match history — last 20 for context (faction/map data)
       const recentMatches = await fastify.prisma.match.findMany({
         where: {
           status: { in: ['COMPLETED', 'FORFEIT'] },
@@ -328,10 +340,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           },
         },
       });
-
-      // Total wins/losses
-      const totalWins = recentMatches.filter((m) => m.winner_id === id).length;
-      const totalLosses = recentMatches.filter((m) => m.winner_id !== null && m.winner_id !== id).length;
 
       const matchHistory = recentMatches.map((m) => {
         const isPlayer1 = m.player1_id === id;

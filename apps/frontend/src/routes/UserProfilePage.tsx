@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { getUserProfile, getUserStats } from '@/lib/api.js';
+import { getUserProfile, getUserStats, getPlayerAntiFarming, type AntiFarmingOpponent } from '@/lib/api.js';
 import { PlayerFactionProficiencyCard } from '../components/meta/PlayerFactionProficiencyCard.js';
 import { useAuthQuery } from '@/lib/auth.js';
 import { useOnboarding } from '@/lib/onboarding.js';
@@ -90,7 +90,7 @@ function WinLossCard({
 }) {
   return (
     <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
-      <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">Recent Win / Loss</p>
+      <p className="text-xs text-stone-500 uppercase tracking-wider mb-3">Win / Loss</p>
       <div className="flex items-end gap-2">
         <span className="text-3xl font-bold text-rizzotto-gold-400">
           {(winRate * 100).toFixed(1)}%
@@ -150,6 +150,82 @@ function StatsSection({ userId }: StatsSectionProps) {
       />
       <PlayerFactionProficiencyCard userId={userId} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Anti-Farming Section (admin-only)
+// ---------------------------------------------------------------------------
+
+function AntiFarmingSection({ playerId }: { playerId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['anti-farming', playerId],
+    queryFn: () => getPlayerAntiFarming(playerId),
+  });
+
+  return (
+    <section className="rounded-md border border-amber-900/40 bg-amber-950/10 p-5">
+      <h2 className="font-display text-base font-semibold text-amber-500/80 mb-1">
+        Anti-Farming
+      </h2>
+      <p className="text-[11px] text-stone-500 mb-4">
+        Opponents against whom this player's wins are currently reduced in value.
+        Active once the player has ≥20 season wins.
+      </p>
+
+      {isLoading && <p className="text-xs text-stone-600">Loading…</p>}
+
+      {!isLoading && data && !data.penaltyActive && (
+        <p className="text-xs text-stone-600 italic">
+          No penalty active yet — player has {data.playerTotalWins} season win{data.playerTotalWins !== 1 ? 's' : ''} (threshold: 20).
+        </p>
+      )}
+
+      {!isLoading && data?.penaltyActive && data.opponents.length === 0 && (
+        <p className="text-xs text-stone-600 italic">
+          No opponents exceed the 5% win-share threshold ({data.playerTotalWins} total wins).
+        </p>
+      )}
+
+      {!isLoading && data && data.opponents.length > 0 && (
+        <>
+          <div className="flex items-center gap-3 pb-1.5 text-[10px] uppercase tracking-wider text-stone-500 border-b border-stone-800 mb-1">
+            <span className="flex-1">Opponent</span>
+            <span className="w-14 text-right">Wins vs.</span>
+            <span className="w-14 text-right">Share</span>
+            <span className="w-24 text-right">Win Value</span>
+          </div>
+          <div className="space-y-1">
+            {(data.opponents as AntiFarmingOpponent[]).map((o) => {
+              const pct = Math.round(o.modifier * 100);
+              const share = Math.round(o.share * 100);
+              return (
+                <div key={o.id} className="flex items-center gap-3 py-1">
+                  <Link to="/users/$id" params={{ id: o.id }} className="flex flex-1 items-center gap-2 hover:text-rizzotto-gold-400 transition-colors min-w-0">
+                    {o.avatar_url
+                      ? <img src={o.avatar_url} alt="" className="h-5 w-5 rounded-full border border-stone-700 object-cover shrink-0" />
+                      : <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-stone-700 text-[9px]">{o.username[0]?.toUpperCase()}</span>
+                    }
+                    <span className="truncate text-sm text-stone-300">{o.username}</span>
+                  </Link>
+                  <span className="w-14 text-right text-xs text-stone-400">{o.wins}W</span>
+                  <span className="w-14 text-right text-xs text-stone-500">{share}%</span>
+                  <div className="w-24 flex items-center justify-end gap-1.5">
+                    <div className="h-1.5 w-12 overflow-hidden rounded-full bg-stone-800">
+                      <div className="h-full rounded-full bg-amber-500/60" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className={`text-xs font-medium ${pct === 0 ? 'text-red-500' : 'text-amber-400'}`}>{pct}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-[10px] text-stone-600">
+            {data.playerTotalWins} total season wins. Share &gt;5% → penalty starts; &gt;10% → wins count at 0%.
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -265,6 +341,11 @@ export function UserProfilePage() {
         </h2>
         <StatsSection userId={id} />
       </section>
+
+      {/* Anti-Farming (admin only) */}
+      {(me?.role === 'ADMIN' || me?.role === 'MODERATOR') && (
+        <AntiFarmingSection playerId={id} />
+      )}
 
       {/* Recent Tournaments */}
       <section>

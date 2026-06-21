@@ -1471,6 +1471,24 @@ export function adminCancelScheduledMatchup(id: string): Promise<void> {
   return apiFetch<void>(`/api/admin/scheduled-matchups/${id}`, { method: 'DELETE' });
 }
 
+export type AntiFarmingOpponent = {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+  wins: number;
+  share: number;
+  modifier: number;
+};
+
+export function getPlayerAntiFarming(playerId: string, seasonId?: string): Promise<{
+  opponents: AntiFarmingOpponent[];
+  playerTotalWins: number;
+  penaltyActive: boolean;
+}> {
+  const q = seasonId ? `?seasonId=${seasonId}` : '';
+  return apiFetch(`/api/admin/users/${playerId}/anti-farming${q}`);
+}
+
 export function joinQueue(): Promise<{ matched: boolean; match_id?: string; position?: number }> {
   return apiFetch<{ matched: boolean; match_id?: string; position?: number }>('/api/open-play/queue', {
     method: 'POST',

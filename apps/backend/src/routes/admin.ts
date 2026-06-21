@@ -8,6 +8,7 @@ import { ImportLogListResponseSchema } from '@rizzotto/types';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
 import { emitBracketUpdate } from '../lib/emit.js';
+import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM } from '../lib/scoring-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -1351,6 +1352,70 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       select: { id: true, round: true, match_number: true },
     });
     return reply.code(201).send({ match });
+  });
+
+  // GET /api/admin/users/:id/anti-farming?seasonId= — opponents with diminished win value
+  fastify.get('/api/admin/users/:id/anti-farming', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { seasonId } = z.object({ seasonId: z.string().uuid().optional() }).parse(request.query);
+
+    const season = seasonId
+      ? await fastify.prisma.season.findUnique({ where: { id: seasonId }, select: { id: true } })
+      : await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
+
+    if (!season) return reply.code(200).send({ opponents: [], playerTotalWins: 0, penaltyActive: false });
+
+    // All game-level wins for this player in the season
+    const wonGames = await fastify.prisma.matchGame.findMany({
+      where: {
+        winner_id: id,
+        counts_for_leaderboard: true,
+        match: { season_id: season.id, status: 'COMPLETED', deleted_at: null },
+      },
+      select: { match: { select: { player1_id: true, player2_id: true } } },
+    });
+
+    const playerTotalWins = wonGames.length;
+
+    // Count wins per opponent
+    const winsByOpponent = new Map<string, number>();
+    for (const g of wonGames) {
+      const opponentId = g.match.player1_id === id ? g.match.player2_id : g.match.player1_id;
+      if (opponentId) winsByOpponent.set(opponentId, (winsByOpponent.get(opponentId) ?? 0) + 1);
+    }
+
+    // Compute modifier for each opponent; keep only those with modifier < 1
+    const penaltyActive = playerTotalWins >= MIN_WINS_FOR_ANTI_FARM;
+    const diminishedOpponents = [...winsByOpponent.entries()]
+      .map(([opponentId, wins]) => {
+        const share = opponentShare(wins, playerTotalWins);
+        const modifier = opponentModifier(share, playerTotalWins);
+        return { opponentId, wins, share, modifier };
+      })
+      .filter((o) => o.modifier < 1)
+      .sort((a, b) => a.modifier - b.modifier);
+
+    if (diminishedOpponents.length === 0) {
+      return reply.code(200).send({ opponents: [], playerTotalWins, penaltyActive });
+    }
+
+    const opponentIds = diminishedOpponents.map((o) => o.opponentId);
+    const users = await fastify.prisma.user.findMany({
+      where: { id: { in: opponentIds } },
+      select: { id: true, username: true, avatar_url: true },
+    });
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    return reply.code(200).send({
+      playerTotalWins,
+      penaltyActive,
+      opponents: diminishedOpponents.map((o) => ({
+        ...userById.get(o.opponentId),
+        wins: o.wins,
+        share: o.share,
+        modifier: o.modifier,
+      })),
+    });
   });
 
   // GET /api/admin/scheduled-matchups — all matchups, all statuses, admin-only
