@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { getFaction, getMatchupHeatmap, getFactionTopPlayers, getFactionGames, getFactions, type FactionTopPlayer } from '@/lib/api';
@@ -58,20 +58,68 @@ interface MatchupRow {
   isMirror: boolean;
 }
 
+type MatchupSortCol = 'name' | 'wins' | 'losses' | 'total' | 'winRate';
+
+function SortTh({
+  label, col, sortCol, sortDir, onSort, className,
+}: {
+  label: string; col: MatchupSortCol; sortCol: MatchupSortCol; sortDir: 'asc' | 'desc';
+  onSort: (c: MatchupSortCol) => void; className?: string;
+}) {
+  const active = col === sortCol;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(col)}
+      className={`flex items-center gap-0.5 text-[10px] uppercase tracking-wider transition-colors ${active ? 'text-rizzotto-gold-400' : 'text-stone-500 hover:text-stone-300'} ${className ?? ''}`}
+    >
+      {label}
+      <span className="text-[8px]">{active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+    </button>
+  );
+}
+
 function MatchupGrid({ rows, factionMap }: { rows: MatchupRow[]; factionMap: Map<string, FactionDto> }) {
+  const [sortCol, setSortCol] = useState<MatchupSortCol>('winRate');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  function handleSort(col: MatchupSortCol) {
+    if (col === sortCol) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortCol(col); setSortDir(col === 'name' ? 'asc' : 'desc'); }
+  }
+
+  const sorted = useMemo(() => {
+    const nonMirror = rows.filter((r) => !r.isMirror);
+    const mirror = rows.filter((r) => r.isMirror);
+    const compare = (a: MatchupRow, b: MatchupRow): number => {
+      let v = 0;
+      if (sortCol === 'name') {
+        const na = factionMap.get(a.factionId)?.name ?? a.factionId;
+        const nb = factionMap.get(b.factionId)?.name ?? b.factionId;
+        v = na.localeCompare(nb);
+      } else if (sortCol === 'wins') v = a.wins - b.wins;
+      else if (sortCol === 'losses') v = a.losses - b.losses;
+      else if (sortCol === 'total') v = a.total - b.total;
+      else v = (a.winRate ?? -1) - (b.winRate ?? -1);
+      return sortDir === 'asc' ? v : -v;
+    };
+    return [...nonMirror.sort(compare), ...mirror];
+  }, [rows, sortCol, sortDir, factionMap]);
+
   if (rows.length === 0) {
     return <p className="text-sm text-stone-600">No matchup data available.</p>;
   }
+
   return (
     <div className="space-y-0">
-      <div className="flex items-center gap-2 pb-2 text-[10px] uppercase tracking-wider text-stone-500 border-b border-stone-800">
-        <span className="flex-1">Opponent</span>
-        <span className="w-8 text-right">W</span>
-        <span className="w-8 text-right">L</span>
-        <span className="w-10 text-right">Total</span>
-        <span className="w-[140px] text-right">Win Rate</span>
+      <div className="flex items-center gap-2 pb-2 border-b border-stone-800">
+        <SortTh label="Opponent" col="name" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="flex-1" />
+        <SortTh label="W" col="wins" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-8 justify-end" />
+        <SortTh label="L" col="losses" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-8 justify-end" />
+        <SortTh label="Total" col="total" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-10 justify-end" />
+        <SortTh label="Win Rate" col="winRate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-[140px] justify-end" />
       </div>
-      {rows.map((row) => {
+      {sorted.map((row) => {
         const faction = factionMap.get(row.factionId);
         return (
           <div
@@ -81,18 +129,8 @@ function MatchupGrid({ rows, factionMap }: { rows: MatchupRow[]; factionMap: Map
             <div className="flex flex-1 items-center gap-2 min-w-0">
               {faction ? (
                 <>
-                  <FactionBadge
-                    size="sm"
-                    colorHex={faction.color_hex}
-                    initials={faction.initials}
-                    name={faction.name}
-                    iconUrl={faction.icon_url}
-                  />
-                  <Link
-                    to="/factions/$id"
-                    params={{ id: row.factionId }}
-                    className="truncate text-xs text-stone-300 hover:text-rizzotto-gold-400 transition-colors"
-                  >
+                  <FactionBadge size="sm" colorHex={faction.color_hex} initials={faction.initials} name={faction.name} iconUrl={faction.icon_url} />
+                  <Link to="/factions/$id" params={{ id: row.factionId }} className="truncate text-xs text-stone-300 hover:text-rizzotto-gold-400 transition-colors">
                     {faction.name}
                   </Link>
                 </>
@@ -100,20 +138,14 @@ function MatchupGrid({ rows, factionMap }: { rows: MatchupRow[]; factionMap: Map
                 <span className="text-xs text-stone-500">{row.factionId}</span>
               )}
               {row.isMirror && (
-                <span className="text-[9px] uppercase tracking-wider text-stone-600 border border-stone-700 rounded px-1">
-                  Mirror
-                </span>
+                <span className="text-[9px] uppercase tracking-wider text-stone-600 border border-stone-700 rounded px-1">Mirror</span>
               )}
             </div>
             <span className="w-8 text-right text-xs text-emerald-400">{row.isMirror ? '—' : row.wins}</span>
             <span className="w-8 text-right text-xs text-red-400">{row.isMirror ? '—' : row.losses}</span>
             <span className="w-10 text-right text-xs text-stone-500">{row.isMirror ? '—' : row.total}</span>
             <div className="w-[140px] flex justify-end">
-              {row.isMirror ? (
-                <span className="text-xs text-stone-600">—</span>
-              ) : (
-                <WinRateBar rate={row.winRate} />
-              )}
+              {row.isMirror ? <span className="text-xs text-stone-600">—</span> : <WinRateBar rate={row.winRate} />}
             </div>
           </div>
         );

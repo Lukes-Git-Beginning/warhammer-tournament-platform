@@ -205,8 +205,15 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
             AND m.player1_id IS NOT NULL
             AND m.player2_id IS NOT NULL
           GROUP BY user_id
-          HAVING COUNT(*) >= 3
-          ORDER BY games DESC
+          HAVING COUNT(*) >= 5
+          ORDER BY (CAST(SUM(CASE
+            WHEN mg.winner_id IS NOT NULL
+              AND mg.winner_id = CASE
+                WHEN mg.player1_faction_id = ${id} THEN m.player1_id
+                ELSE m.player2_id
+              END
+            THEN 1 ELSE 0
+          END) AS float) / NULLIF(COUNT(*), 0)) DESC NULLS LAST, games DESC
           LIMIT 15
         `;
 
