@@ -161,6 +161,86 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
       { ttlSeconds: 60 },
     );
   });
+
+  // -------------------------------------------------------------------------
+  // GET /api/factions/:id/top-players
+  // Top players by game count with this faction (min 3 games), all-time.
+  // -------------------------------------------------------------------------
+  fastify.get('/api/factions/:id/top-players', async (request, reply) => {
+    const paramParsed = FactionParamSchema.safeParse(request.params);
+    if (!paramParsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: paramParsed.error.message, statusCode: 400 });
+    }
+    const { id } = paramParsed.data;
+
+    const faction = await fastify.prisma.faction.findUnique({ where: { id }, select: { id: true } });
+    if (!faction) return reply.code(404).send({ error: 'NotFound', message: 'Faction not found', statusCode: 404 });
+
+    return cached(
+      fastify.redis,
+      cacheKey('factions:top-players', { id }),
+      async () => {
+        type RawRow = { user_id: string; games: bigint; wins: bigint };
+        const rows = await fastify.prisma.$queryRaw<RawRow[]>`
+          SELECT
+            CASE
+              WHEN mg.player1_faction_id = ${id} THEN m.player1_id
+              ELSE m.player2_id
+            END AS user_id,
+            COUNT(*)::bigint AS games,
+            SUM(CASE
+              WHEN mg.winner_id IS NOT NULL
+                AND mg.winner_id = CASE
+                  WHEN mg.player1_faction_id = ${id} THEN m.player1_id
+                  ELSE m.player2_id
+                END
+              THEN 1 ELSE 0
+            END)::bigint AS wins
+          FROM "MatchGame" mg
+          JOIN "Match" m ON mg.match_id = m.id
+          WHERE (mg.player1_faction_id = ${id} OR mg.player2_faction_id = ${id})
+            AND mg.counts_for_leaderboard = true
+            AND m.status = 'COMPLETED'
+            AND m.deleted_at IS NULL
+            AND m.player1_id IS NOT NULL
+            AND m.player2_id IS NOT NULL
+          GROUP BY user_id
+          HAVING COUNT(*) >= 3
+          ORDER BY games DESC
+          LIMIT 15
+        `;
+
+        if (rows.length === 0) return { players: [] };
+
+        const userIds = rows.map((r) => r.user_id).filter(Boolean) as string[];
+        const users = await fastify.prisma.user.findMany({
+          where: { id: { in: userIds }, deleted_at: null },
+          select: { id: true, username: true, avatar_url: true },
+        });
+        const userById = new Map(users.map((u) => [u.id, u]));
+
+        const players = rows
+          .map((r) => {
+            const user = userById.get(r.user_id);
+            if (!user) return null;
+            const games = Number(r.games);
+            const wins = Number(r.wins);
+            return {
+              userId: user.id,
+              username: user.username,
+              avatarUrl: user.avatar_url,
+              games,
+              wins,
+              winRate: games > 0 ? wins / games : null,
+            };
+          })
+          .filter(Boolean);
+
+        return { players };
+      },
+      { ttlSeconds: 120 },
+    );
+  });
 };
 
 export default factionsRoutes;

@@ -1352,6 +1352,23 @@ export function getMetaGames(page = 1, limit = 50): Promise<{ games: GameHistory
   return apiFetch<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }>(`/api/meta/games?page=${page}&limit=${limit}`);
 }
 
+export function getFactionGames(factionId: string, page = 1, limit = 30): Promise<{ games: GameHistoryEntry[]; total: number }> {
+  return apiFetch<{ games: GameHistoryEntry[]; total: number }>(`/api/meta/games?factionId=${encodeURIComponent(factionId)}&page=${page}&limit=${limit}`);
+}
+
+export type FactionTopPlayer = {
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+  games: number;
+  wins: number;
+  winRate: number | null;
+};
+
+export function getFactionTopPlayers(factionId: string): Promise<{ players: FactionTopPlayer[] }> {
+  return apiFetch<{ players: FactionTopPlayer[] }>(`/api/factions/${encodeURIComponent(factionId)}/top-players`);
+}
+
 // ---------------------------------------------------------------------------
 // M8 Open Play
 // ---------------------------------------------------------------------------
