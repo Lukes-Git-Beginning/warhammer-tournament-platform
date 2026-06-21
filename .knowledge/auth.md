@@ -13,10 +13,11 @@
 
 Quellen: `apps/backend/src/routes/auth.ts`, `apps/backend/src/plugins/auth.ts`
 
-1. **Browser → `GET /auth/discord`** — `@fastify/oauth2` leitet direkt zu Discord weiter (`startRedirectPath: '/auth/discord'`). Scopes: `identify email` (konfigurierbar via `DISCORD_SCOPES`).
+1. **Browser → `GET /auth/discord`** — `@fastify/oauth2` leitet direkt zu Discord weiter (`startRedirectPath: '/auth/discord'`). Scopes: `identify email guilds.join` (konfigurierbar via `DISCORD_SCOPES`; `guilds.join` seit 2026-06-19 ergänzt).
 2. **Discord → `GET /auth/discord/callback`** — Token-Exchange via `fastify.discordOAuth2.getAccessTokenFromAuthorizationCodeFlow(request)`. Danach `fetch('https://discord.com/api/users/@me')` mit dem Access-Token.
 3. **Backend: `prisma.user.upsert({ where: { discord_id } })`** — Legt neuen User an oder aktualisiert `username`, `email`, `avatar_url`, `last_login`. Gibt `id`, `discord_id`, `username`, `role` zurück.
-4. **Backend: `fastify.signAuthCookie(reply, payload)`** — Signiert JWT mit `JWT_SECRET`, setzt HTTP-Only-Cookie. Anschließend Hard-Gate-Routing: wenn `user.steam_link == null` → Redirect zu `${FRONTEND_URL}/connect-steam`, sonst zu `FRONTEND_URL`. Damit greift der Steam-Gate **vor** dem Frontend-Guard und der User landet nie auf `/` ohne Steam-Link (siehe §Steam-OpenID-2.0 Hard-Gate).
+4. **Discord Guild Auto-Join (2026-06-19):** Fire-and-forget nach dem `upsert`. Prüft via `GET /guilds/{DISCORD_GUILD_ID}/members/{discord_id}` (Bot-Token) ob User Mitglied ist. Wenn 404 → `PUT /guilds/{id}/members/{discord_id}` mit `access_token` des Users (`guilds.join`-Scope). Braucht `DISCORD_GUILD_ID` in ENV. Non-fatal: Fehler werden nur geloggt. Bot braucht Manage-Members-Permission im Server.
+5. **Backend: `fastify.signAuthCookie(reply, payload)`** — Signiert JWT mit `JWT_SECRET`, setzt HTTP-Only-Cookie. Anschließend Hard-Gate-Routing: wenn `user.steam_link == null` → Redirect zu `${FRONTEND_URL}/connect-steam`, sonst zu `FRONTEND_URL`. Damit greift der Steam-Gate **vor** dem Frontend-Guard und der User landet nie auf `/` ohne Steam-Link (siehe §Steam-OpenID-2.0 Hard-Gate).
 
 ---
 
@@ -128,11 +129,21 @@ Enum `Role` in `packages/db/prisma/schema.prisma`:
 ```
 enum Role {
   USER
-  ORGANIZER
+  HOST
   MODERATOR
   ADMIN
 }
 ```
+
+**2026-06-21:** `ORGANIZER`-Rolle vollständig entfernt. Migration `20260621000000_remove_organizer_role` entfernt den Enum-Wert aus Postgres (alle ORGANIZER-Accounts waren bereits per Migration `20260612120000` zu HOST konvertiert). `HOST` ist der Ersatz für ORGANIZER — Rolle für Turnier-Ersteller.
+
+**canManage-Muster** (Frontend + Backend, überall konsistent):
+```typescript
+const isOwner = tournament.organizer_id === userId;
+const isModOrAdmin = role === 'MODERATOR' || role === 'ADMIN';
+const canManage = isOwner || isModOrAdmin;
+```
+`HOST` bekommt canManage nur für Turniere die sie selbst erstellt haben (`organizer_id`-Check). MODERATOR + ADMIN haben immer canManage.
 
 `requireRole('ADMIN', 'MODERATOR')` akzeptiert mehrere Rollen — der User muss eine davon haben.
 
