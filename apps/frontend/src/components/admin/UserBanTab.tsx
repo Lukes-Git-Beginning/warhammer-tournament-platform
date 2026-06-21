@@ -76,8 +76,8 @@ function CopyIdButton({ id }: { id: string }) {
 export function UserBanTab() {
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
-  const [sortBy, setSortBy] = useState<SortCol>('username');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [sortBy, setSortBy] = useState<SortCol>('created_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   function handleSort(col: SortCol) {
     if (col === sortBy) {
