@@ -1023,6 +1023,17 @@ export function addLateJoiner(
   });
 }
 
+export function setParticipantFaction(
+  slug: string,
+  userId: string,
+  factionId: string,
+): Promise<{ participant: { id: string; user_id: string; faction_id: string; status: string } }> {
+  return apiFetch(`/api/admin/tournaments/${slug}/participants/${userId}/faction`, {
+    method: 'PATCH',
+    body: JSON.stringify({ faction_id: factionId }),
+  });
+}
+
 export function fillByeMatch(
   matchId: string,
   userId: string,

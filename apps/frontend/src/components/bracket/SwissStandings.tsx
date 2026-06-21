@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import type { FactionDto, SwissMeta } from '@rizzotto/types';
 import { FactionBadge } from '@/components/meta/FactionBadge';
-import { dropParticipant, undropParticipant, adminCheckIn, type ParticipantStatus } from '@/lib/api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { dropParticipant, undropParticipant, adminCheckIn, setParticipantFaction, type ParticipantStatus } from '@/lib/api';
 
 const PLACEMENT_BADGE: Record<1 | 2 | 3, { label: string; className: string }> = {
   1: { label: '1ST', className: 'text-rizzotto-gold-400 border-rizzotto-gold-500/50 bg-rizzotto-gold-500/10' },
@@ -33,6 +35,8 @@ interface SwissStandingsProps {
   isCompleted?: boolean;
   /** userId → ParticipantStatus — enables Force-Check-in button for REGISTERED, Withdrew badge for WITHDREW */
   participantStatusMap?: Map<string, ParticipantStatus>;
+  /** Faction IDs in the allowlist (empty = all factions allowed) */
+  factionAllowlist?: string[];
 }
 
 function Avatar({ url, username }: { url: string | null; username: string }) {
@@ -83,8 +87,10 @@ export function SwissStandings({
   canManage = false,
   isCompleted = false,
   participantStatusMap,
+  factionAllowlist,
 }: SwissStandingsProps) {
   const queryClient = useQueryClient();
+  const [factionPickTarget, setFactionPickTarget] = useState<string | null>(null);
   const dropMutation = useMutation({
     mutationFn: (userId: string) => dropParticipant(tournamentSlug!, userId),
     onSuccess: () => {
@@ -112,6 +118,25 @@ export function SwissStandings({
       alert(`Force check-in failed: ${err.message}`);
     },
   });
+  const setFactionMutation = useMutation({
+    mutationFn: ({ userId, factionId }: { userId: string; factionId: string }) =>
+      setParticipantFaction(tournamentSlug!, userId, factionId),
+    onSuccess: () => {
+      setFactionPickTarget(null);
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants'] });
+    },
+    onError: (err: Error) => {
+      alert(`Failed to set faction: ${err.message}`);
+    },
+  });
+
+  const pickerFactions = factionMap
+    ? [...factionMap.values()].filter(
+        (f) => !factionAllowlist?.length || factionAllowlist.includes(f.id),
+      ).sort((a, b) => a.name.localeCompare(b.name))
+    : [];
+
   const showFactionColumn = tournamentMode ? FACTION_MODES.has(tournamentMode) : false;
   const colCount = 5 + (showFactionColumn ? 1 : 0) + 1; // # + Player + [Faction] + Score + W/D/L/B + GL + BH
 
@@ -272,6 +297,14 @@ export function SwissStandings({
                             />
                             <span className="text-xs text-stone-300">{faction.name}</span>
                           </div>
+                        ) : canManage && tournamentSlug ? (
+                          <button
+                            type="button"
+                            onClick={() => setFactionPickTarget(entry.userId)}
+                            className="rounded border border-dashed border-stone-600 px-2 py-0.5 text-[10px] text-stone-500 hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-400 transition-colors"
+                          >
+                            + Faction
+                          </button>
                         ) : (
                           <span className="text-xs text-stone-600">—</span>
                         )}
@@ -298,6 +331,29 @@ export function SwissStandings({
           </tbody>
         </table>
       </div>
+      <Dialog open={factionPickTarget !== null} onOpenChange={(open) => { if (!open) setFactionPickTarget(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Set Faction</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-2 pt-2">
+            {pickerFactions.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                disabled={setFactionMutation.isPending}
+                onClick={() => {
+                  if (factionPickTarget) setFactionMutation.mutate({ userId: factionPickTarget, factionId: f.id });
+                }}
+                className="flex items-center gap-2 rounded border border-stone-700 px-2 py-1.5 text-xs text-stone-300 hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-400 transition-colors disabled:opacity-40"
+              >
+                <FactionBadge size="sm" colorHex={f.color_hex} initials={f.initials} name={f.name} iconUrl={f.icon_url} />
+                <span className="truncate">{f.name}</span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

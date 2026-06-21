@@ -1023,14 +1023,21 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/admin/tournaments/:slug/add-late — add a participant after tournament start
   fastify.post('/api/admin/tournaments/:slug/add-late', async (request, reply) => {
     const { slug } = request.params as { slug: string };
-    const parsed = z.object({ userId: z.string().uuid() }).safeParse(request.body);
+    const parsed = z
+      .object({ userId: z.string().uuid(), faction_id: z.string().min(1).optional() })
+      .safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
 
     const tournament = await fastify.prisma.tournament.findUnique({
       where: { slug, deleted_at: null },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        mode: true,
+        faction_allowlist: { select: { faction_id: true } },
+      },
     });
     if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
     if (tournament.status !== 'ONGOING') {
@@ -1048,12 +1055,55 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(409).send({ error: 'Conflict', message: `${user.username} is already a participant (status: ${existing.status})`, statusCode: 409 });
     }
 
+    if (parsed.data.faction_id) {
+      const faction = await fastify.prisma.faction.findUnique({ where: { id: parsed.data.faction_id }, select: { id: true } });
+      if (!faction) {
+        return reply.code(400).send({ error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" does not exist`, statusCode: 400 });
+      }
+      const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
+      if (allowlist.length > 0 && !allowlist.includes(parsed.data.faction_id)) {
+        return reply.code(400).send({ error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" is not in the tournament allowlist`, statusCode: 400 });
+      }
+    }
+
     const participant = await fastify.prisma.tournamentParticipant.create({
-      data: { tournament_id: tournament.id, user_id: parsed.data.userId, status: 'CHECKED_IN' },
-      select: { id: true, status: true, user: { select: { id: true, username: true } } },
+      data: { tournament_id: tournament.id, user_id: parsed.data.userId, status: 'CHECKED_IN', faction_id: parsed.data.faction_id },
+      select: { id: true, status: true, faction_id: true, user: { select: { id: true, username: true } } },
     });
 
     return reply.code(201).send({ participant });
+  });
+
+  // PATCH /api/admin/tournaments/:slug/participants/:userId/faction — set faction pick for a participant
+  fastify.patch('/api/admin/tournaments/:slug/participants/:userId/faction', async (request, reply) => {
+    const { slug, userId } = request.params as { slug: string; userId: string };
+    const parsed = z.object({ faction_id: z.string().min(1) }).safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    const tournament = await fastify.prisma.tournament.findUnique({
+      where: { slug, deleted_at: null },
+      select: { id: true, faction_allowlist: { select: { faction_id: true } } },
+    });
+    if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+
+    const faction = await fastify.prisma.faction.findUnique({ where: { id: parsed.data.faction_id }, select: { id: true } });
+    if (!faction) {
+      return reply.code(400).send({ error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" does not exist`, statusCode: 400 });
+    }
+    const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
+    if (allowlist.length > 0 && !allowlist.includes(parsed.data.faction_id)) {
+      return reply.code(400).send({ error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" is not in the tournament allowlist`, statusCode: 400 });
+    }
+
+    const participant = await fastify.prisma.tournamentParticipant.update({
+      where: { tournament_id_user_id: { tournament_id: tournament.id, user_id: userId } },
+      data: { faction_id: parsed.data.faction_id },
+      select: { id: true, user_id: true, faction_id: true, status: true },
+    });
+
+    return reply.code(200).send({ participant });
   });
 
   // GET /api/admin/open-play/queue — who is currently in the Open Play queue

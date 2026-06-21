@@ -753,6 +753,7 @@ export function TournamentDetail() {
                 canManage={!!canManage}
                 isCompleted={tournament.status === 'COMPLETED'}
                 participantStatusMap={participantStatusMap}
+                factionAllowlist={tournament.faction_allowlist}
               />
             </section>
           );
