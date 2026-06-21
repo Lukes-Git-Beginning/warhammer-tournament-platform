@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { randomBytes, randomInt } from 'node:crypto';
 
-const BLIND_TIMEOUT_MS = 2 * 60 * 1000; // 2 min for blind faction picks
-const BAN_TIMEOUT_MS = 15 * 1000;        // 15s per ban/pick action
+const BLIND_TIMEOUT_MS = 2 * 60 * 1000;   // 2 min for blind faction picks
+const BAN_TIMEOUT_MS = 15 * 1000;          // 15s per ban/pick action (bans 2–8 and pick)
+const FIRST_BAN_TIMEOUT_MS = 30 * 1000;    // 30s for the very first ban (players need to orient)
 
 function cellKey(row: number, col: number): string {
   return `${row},${col}`;
@@ -64,13 +65,14 @@ function emitUpdate(fastify: FastifyInstance, matchId: string, matrix: {
 /**
  * Scans for stale matrix actions and auto-resolves them:
  * Phase 1 — Blind-pick timeout (2 min): one player locked but opponent hasn't.
- * Phase 2 — Ban/pick timeout (15s): revealed but no action within 15s.
+ * Phase 2 — Ban/pick timeout: 30s for the first ban, 15s for all subsequent bans/pick.
  * Called every 15 seconds by the cron plugin.
  */
 export async function autoResolveStaleMatrixActions(fastify: FastifyInstance): Promise<number> {
   const now = new Date();
   const cutoffBlind = new Date(now.getTime() - BLIND_TIMEOUT_MS);
   const cutoffBan = new Date(now.getTime() - BAN_TIMEOUT_MS);
+  const cutoffFirstBan = new Date(now.getTime() - FIRST_BAN_TIMEOUT_MS);
   let resolved = 0;
 
   // ---------------------------------------------------------------------------
@@ -177,6 +179,8 @@ export async function autoResolveStaleMatrixActions(fastify: FastifyInstance): P
   for (const matrix of staleBan) {
     try {
       const bans = (matrix.bans as string[]) ?? [];
+      // First ban gets 30s instead of 15s — skip if the longer grace period hasn't elapsed.
+      if (bans.length === 0 && matrix.last_action_at! > cutoffFirstBan) continue;
       const remaining = allCells().filter((c) => !bans.includes(c));
       if (remaining.length === 0) continue;
 

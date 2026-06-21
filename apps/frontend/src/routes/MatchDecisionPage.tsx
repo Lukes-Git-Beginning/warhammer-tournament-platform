@@ -763,11 +763,12 @@ function BlindPickPhase({
 // 3×3 Faction Matrix Phase
 // ---------------------------------------------------------------------------
 
-function MatrixCountdown({ lastActionAt }: { lastActionAt: string }) {
+function MatrixCountdown({ lastActionAt, bansCount }: { lastActionAt: string; bansCount: number }) {
   const [label, setLabel] = useState<string | null>(null);
 
   useEffect(() => {
-    const deadline = new Date(new Date(lastActionAt).getTime() + 15_000);
+    const windowMs = bansCount === 0 ? 30_000 : 15_000;
+    const deadline = new Date(new Date(lastActionAt).getTime() + windowMs);
     function tick() {
       const diff = deadline.getTime() - Date.now();
       if (diff <= 0) { setLabel('Auto-banning now…'); return; }
@@ -776,7 +777,7 @@ function MatrixCountdown({ lastActionAt }: { lastActionAt: string }) {
     tick();
     const id = setInterval(tick, 500);
     return () => clearInterval(id);
-  }, [lastActionAt]);
+  }, [lastActionAt, bansCount]);
 
   if (!label) return null;
   return <p className="text-xs text-rizzotto-stone-500 font-mono">{label}</p>;
@@ -912,7 +913,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
         <div className="text-center">
           <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">3×3 Faction Matrix</h2>
           <p className="mt-1 text-sm text-rizzotto-stone-400">{whoseTurnLabel} · {turnLabel}</p>
-          {isMyTurn && mx.lastActionAt && <MatrixCountdown lastActionAt={mx.lastActionAt} />}
+          {isMyTurn && mx.lastActionAt && <MatrixCountdown lastActionAt={mx.lastActionAt} bansCount={mx.bans.length} />}
         </div>
 
         <div className="max-w-[660px] mx-auto">

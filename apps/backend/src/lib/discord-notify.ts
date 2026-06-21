@@ -488,12 +488,12 @@ export async function notifyRoundPairings(
     const dmPromises = pairings.flatMap((p) => {
       const p1Msg =
         `**[RizzOtto's Arena] Round ${round} Pairing — ${tournament.name}**\n` +
-        `You are playing against **${p.player2.username}**` +
+        `You are playing against <@${p.player2.discord_id}>` +
         (p.map ? ` on *${p.map}*` : '') +
         `.`;
       const p2Msg =
         `**[RizzOtto's Arena] Round ${round} Pairing — ${tournament.name}**\n` +
-        `You are playing against **${p.player1.username}**` +
+        `You are playing against <@${p.player1.discord_id}>` +
         (p.map ? ` on *${p.map}*` : '') +
         `.`;
 
