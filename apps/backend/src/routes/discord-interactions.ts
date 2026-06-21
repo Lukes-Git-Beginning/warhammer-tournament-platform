@@ -87,6 +87,8 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const interaction = JSON.parse(rawBody) as {
         type: number;
+        token: string;
+        application_id: string;
         data?: { custom_id?: string };
         member?: { user: { id: string } };
         user?: { id: string };
@@ -378,85 +380,104 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // av_join:<actorDiscordId>:<originUserId> — direct match from availability ping DM.
-      // Atomically claims the for_grabs reservation; falls back to regular queue if expired.
+      // Uses Discord's deferred response pattern (type 5) to avoid the 3s timeout window:
+      // we acknowledge immediately, then do all async work, then PATCH the deferred message.
       if (action === 'av_join') {
         const [, actorDiscordId, originUserId] = parts;
         if (!actorDiscordId || actorDiscordId !== discordId) return reply.code(200).send(ephemeral('This button is not for you.'));
         if (!fastify.redis) return reply.code(200).send(ephemeral('Queue service is temporarily unavailable.'));
 
-        try {
-          // Parallelize user lookup + reservation claim to stay within Discord's 3s window
-          const grabKey = originUserId ? `${FOR_GRABS_PREFIX}${originUserId}` : null;
-          // Atomic GET+DEL via Lua (compatible with Redis < 6.2 which lacks GETDEL)
-          const GET_DEL_SCRIPT = `local v=redis.call('GET',KEYS[1]) if v then redis.call('DEL',KEYS[1]) end return v`;
+        const { token: iToken, application_id: appId } = interaction;
+        const patchDeferred = async (content: string) => {
+          try {
+            await fetch(`https://discord.com/api/v10/webhooks/${appId}/${iToken}/messages/@original`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content }),
+            });
+          } catch (err) {
+            console.error('[discord-interactions] patch deferred error:', err);
+          }
+        };
 
-          const [user, claimed] = await Promise.all([
-            fastify.prisma.user.findFirst({
-              where: { discord_id: discordId, deleted_at: null },
-              select: { id: true, username: true },
-            }),
-            grabKey
-              ? fastify.redis.eval(GET_DEL_SCRIPT, 1, grabKey) as Promise<string | null>
-              : Promise.resolve(null),
-          ]);
+        // Kick off background work before replying so state is captured in the closure.
+        const redis = fastify.redis;
+        const prisma = fastify.prisma;
+        setImmediate(() => void (async () => {
+          try {
+            const grabKey = originUserId ? `${FOR_GRABS_PREFIX}${originUserId}` : null;
+            const GET_DEL_SCRIPT = `local v=redis.call('GET',KEYS[1]) if v then redis.call('DEL',KEYS[1]) end return v`;
 
-          if (!user) return reply.code(200).send(ephemeral('You need to log in at rizzotto.gg first.'));
-          if (user.id === originUserId) return reply.code(200).send(ephemeral("That's your own queue slot."));
-
-          if (claimed && originUserId) {
-            // Reservation valid — remove origin user from queue and create direct match
-            const [removed, origin] = await Promise.all([
-              fastify.redis.lrem(QUEUE_KEY, 1, originUserId),
-              fastify.prisma.user.findUnique({ where: { id: originUserId }, select: { username: true, discord_id: true } }),
+            const [user, claimed] = await Promise.all([
+              prisma.user.findFirst({
+                where: { discord_id: discordId, deleted_at: null },
+                select: { id: true, username: true },
+              }),
+              grabKey
+                ? redis.eval(GET_DEL_SCRIPT, 1, grabKey) as Promise<string | null>
+                : Promise.resolve(null),
             ]);
-            if (removed > 0) {
-              const { matchId, mapName } = await createOpenPlayMatch(fastify.prisma, originUserId, user.id);
-              if (origin?.discord_id) {
+
+            if (!user) { await patchDeferred('You need to log in at rizzotto.gg first.'); return; }
+            if (user.id === originUserId) { await patchDeferred("That's your own queue slot."); return; }
+
+            if (claimed && originUserId) {
+              const [removed, origin] = await Promise.all([
+                redis.lrem(QUEUE_KEY, 1, originUserId),
+                prisma.user.findUnique({ where: { id: originUserId }, select: { username: true, discord_id: true } }),
+              ]);
+              if (removed > 0) {
+                const { matchId, mapName } = await createOpenPlayMatch(prisma, originUserId, user.id);
+                if (origin?.discord_id) {
+                  setImmediate(() => void notifyMatchFoundWithButtons(
+                    matchId,
+                    { discordId: origin.discord_id!, username: origin.username },
+                    { discordId: discordId, username: user.username },
+                    mapName,
+                  ));
+                }
+                const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
+                await patchDeferred(`Match found! vs **${origin?.username ?? 'opponent'}** → ${matchUrl}`);
+                return;
+              }
+            }
+
+            const existing = await redis.lpos(QUEUE_KEY, user.id);
+            if (existing !== null) { await patchDeferred("You're already in the queue."); return; }
+
+            const result = await redis.eval(MATCH_SCRIPT, 1, QUEUE_KEY, user.id, FOR_GRABS_PREFIX) as [string, string] | false | null;
+
+            if (Array.isArray(result) && result.length === 2) {
+              const [p1Id, p2Id] = result;
+              const [p1, p2] = await Promise.all([
+                prisma.user.findUnique({ where: { id: p1Id }, select: { username: true, discord_id: true } }),
+                prisma.user.findUnique({ where: { id: p2Id }, select: { username: true, discord_id: true } }),
+              ]);
+              const { matchId, mapName } = await createOpenPlayMatch(prisma, p1Id, p2Id);
+              if (p1?.discord_id && p2?.discord_id) {
                 setImmediate(() => void notifyMatchFoundWithButtons(
                   matchId,
-                  { discordId: origin.discord_id!, username: origin.username },
-                  { discordId: discordId, username: user.username },
+                  { discordId: p1.discord_id!, username: p1.username },
+                  { discordId: p2.discord_id!, username: p2.username },
                   mapName,
                 ));
               }
               const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
-              return reply.code(200).send(ephemeral(`Match found! vs **${origin?.username ?? 'opponent'}** → ${matchUrl}`));
+              const opponent = p1Id === user.id ? p2 : p1;
+              await patchDeferred(`Match found! vs **${opponent?.username ?? 'opponent'}** → ${matchUrl}`);
+              return;
             }
-            // Origin user already left or matched — fall through to regular queue
+
+            const position = await redis.llen(QUEUE_KEY);
+            await patchDeferred(`You're in the queue (position ${position}). You'll get a DM when a match is found.`);
+          } catch (err) {
+            console.error('[discord-interactions] av_join error:', err);
+            await patchDeferred('Something went wrong. Please join the queue on rizzotto.gg directly.');
           }
+        })());
 
-          // Reservation expired or not available — join regular queue
-          const existing = await fastify.redis.lpos(QUEUE_KEY, user.id);
-          if (existing !== null) return reply.code(200).send(ephemeral("You're already in the queue."));
-
-          const result = await fastify.redis.eval(MATCH_SCRIPT, 1, QUEUE_KEY, user.id, FOR_GRABS_PREFIX) as [string, string] | false | null;
-
-          if (Array.isArray(result) && result.length === 2) {
-            const [p1Id, p2Id] = result;
-            const [p1, p2] = await Promise.all([
-              fastify.prisma.user.findUnique({ where: { id: p1Id }, select: { username: true, discord_id: true } }),
-              fastify.prisma.user.findUnique({ where: { id: p2Id }, select: { username: true, discord_id: true } }),
-            ]);
-            const { matchId, mapName } = await createOpenPlayMatch(fastify.prisma, p1Id, p2Id);
-            if (p1?.discord_id && p2?.discord_id) {
-              setImmediate(() => void notifyMatchFoundWithButtons(
-                matchId,
-                { discordId: p1.discord_id!, username: p1.username },
-                { discordId: p2.discord_id!, username: p2.username },
-                mapName,
-              ));
-            }
-            const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
-            const opponent = p1Id === user.id ? p2 : p1;
-            return reply.code(200).send(ephemeral(`Match found! vs **${opponent?.username ?? 'opponent'}** → ${matchUrl}`));
-          }
-
-          const position = await fastify.redis.llen(QUEUE_KEY);
-          return reply.code(200).send(ephemeral(`You're in the queue (position ${position}). You'll get a DM when a match is found.`));
-        } catch (err) {
-          console.error('[discord-interactions] av_join error:', err);
-          return reply.code(200).send(ephemeral('Something went wrong. Please join the queue on rizzotto.gg directly.'));
-        }
+        // Acknowledge immediately — Discord's 3s window is never an issue with this pattern.
+        return reply.code(200).send({ type: 5, data: { flags: 64 } });
       }
 
       return reply.code(200).send(ephemeral('Unknown button.'));
