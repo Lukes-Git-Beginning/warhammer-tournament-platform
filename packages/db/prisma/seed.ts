@@ -238,7 +238,7 @@ function toSlug(name: string): string {
 const MAP_DATA: { name: string; image_url: string | null }[] = [
   { name: 'Altar of the Champion',     image_url: 'https://i.imgur.com/yz5oLma.jpeg' },
   { name: 'Aracknarock Lair',          image_url: 'https://i.imgur.com/saz9JBu.jpeg' },
-  { name: 'Battle for Itza',           image_url: null },
+  { name: 'Battle for Itza',           image_url: '/maps/battle-for-itza.png' },
   { name: 'Blazing Ramparts',          image_url: 'https://i.imgur.com/V7uKLph.jpeg' },
   { name: 'Bleakspire Labor Camp',     image_url: 'https://i.imgur.com/Ej0FME2.jpeg' },
   { name: 'Bordeleaux Landing',        image_url: 'https://i.imgur.com/Cyp0j7l.jpeg' },
