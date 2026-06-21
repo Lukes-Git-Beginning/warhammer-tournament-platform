@@ -1443,6 +1443,34 @@ export function cancelScheduledMatchup(id: string): Promise<void> {
   return apiFetch<void>(`/api/scheduled-matchups/${id}`, { method: 'DELETE' });
 }
 
+export type AdminScheduledMatchup = {
+  id: string;
+  format: string;
+  proposed_at: string;
+  expires_at: string;
+  created_at: string;
+  status: 'OPEN' | 'ACCEPTED' | 'EXPIRED' | 'CANCELLED';
+  notes: string | null;
+  match_id: string | null;
+  proposer: { id: string; username: string; avatar_url: string | null };
+  accepted_by: { id: string; username: string; avatar_url: string | null } | null;
+};
+
+export function getAdminScheduledMatchups(params?: {
+  status?: 'OPEN' | 'ACCEPTED' | 'EXPIRED' | 'CANCELLED';
+  page?: number;
+}): Promise<{ matchups: AdminScheduledMatchup[]; total: number; page: number }> {
+  const q = new URLSearchParams();
+  if (params?.status) q.set('status', params.status);
+  if (params?.page) q.set('page', String(params.page));
+  const qs = q.toString();
+  return apiFetch(`/api/admin/scheduled-matchups${qs ? `?${qs}` : ''}`);
+}
+
+export function adminCancelScheduledMatchup(id: string): Promise<void> {
+  return apiFetch<void>(`/api/admin/scheduled-matchups/${id}`, { method: 'DELETE' });
+}
+
 export function joinQueue(): Promise<{ matched: boolean; match_id?: string; position?: number }> {
   return apiFetch<{ matched: boolean; match_id?: string; position?: number }>('/api/open-play/queue', {
     method: 'POST',

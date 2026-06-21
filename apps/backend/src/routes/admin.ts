@@ -1353,6 +1353,69 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(201).send({ match });
   });
 
+  // GET /api/admin/scheduled-matchups — all matchups, all statuses, admin-only
+  fastify.get('/api/admin/scheduled-matchups', async (request, reply) => {
+    const parsed = z.object({
+      status: z.enum(['OPEN', 'ACCEPTED', 'EXPIRED', 'CANCELLED']).optional(),
+      page: z.coerce.number().int().min(1).default(1),
+    }).safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { status, page } = parsed.data;
+    const PAGE_SIZE = 30;
+    const skip = (page - 1) * PAGE_SIZE;
+
+    const where = status ? { status } : {};
+    const [matchups, total] = await Promise.all([
+      fastify.prisma.scheduledMatchup.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: PAGE_SIZE,
+        select: {
+          id: true,
+          format: true,
+          proposed_at: true,
+          expires_at: true,
+          created_at: true,
+          status: true,
+          notes: true,
+          match_id: true,
+          proposer: { select: { id: true, username: true, avatar_url: true } },
+          accepted_by: { select: { id: true, username: true, avatar_url: true } },
+        },
+      }),
+      fastify.prisma.scheduledMatchup.count({ where }),
+    ]);
+
+    return reply.code(200).send({
+      total,
+      page,
+      matchups: matchups.map((m) => ({
+        ...m,
+        proposed_at: m.proposed_at.toISOString(),
+        expires_at: m.expires_at.toISOString(),
+        created_at: m.created_at.toISOString(),
+      })),
+    });
+  });
+
+  // DELETE /api/admin/scheduled-matchups/:id — admin force-cancel (any status)
+  fastify.delete('/api/admin/scheduled-matchups/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const matchup = await fastify.prisma.scheduledMatchup.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+    if (!matchup) return reply.code(404).send({ error: 'NotFound', message: 'Matchup not found', statusCode: 404 });
+    if (matchup.status === 'CANCELLED' || matchup.status === 'EXPIRED') {
+      return reply.code(422).send({ error: 'UnprocessableEntity', message: `Matchup is already ${matchup.status}`, statusCode: 422 });
+    }
+    await fastify.prisma.scheduledMatchup.update({ where: { id }, data: { status: 'CANCELLED' } });
+    return reply.code(204).send();
+  });
+
 };
 
 export default adminRoutes;

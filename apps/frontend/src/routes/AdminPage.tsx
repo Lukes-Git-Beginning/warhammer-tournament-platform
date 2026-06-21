@@ -16,10 +16,11 @@ import { WelcomeBannerEditor } from '@/components/admin/WelcomeBannerEditor.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { ImportLogTable } from '@/components/admin/ImportLogTable.js';
 import { AdminMatchesTab } from '@/components/admin/AdminMatchesTab.js';
+import { AdminScheduledMatchupsTab } from '@/components/admin/AdminScheduledMatchupsTab.js';
 
-type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings' | 'import' | 'matches';
+type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings' | 'import' | 'matches' | 'challenges';
 
-const ALL_TABS: Tab[] = ['dashboard', 'stats', 'settings', 'users', 'matches', 'presets', 'audit', 'import'];
+const ALL_TABS: Tab[] = ['dashboard', 'stats', 'settings', 'users', 'matches', 'challenges', 'presets', 'audit', 'import'];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard: 'admin.tabs.dashboard',
@@ -30,6 +31,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
   settings: 'admin.tabs.settings',
   import: 'admin.tabs.import',
   matches: 'admin.tabs.matches',
+  challenges: 'admin.tabs.challenges',
 };
 
 const STATIC_LABELS: Record<Tab, string> = {
@@ -41,6 +43,7 @@ const STATIC_LABELS: Record<Tab, string> = {
   settings: 'Settings',
   import: 'Import-Log',
   matches: 'Matches',
+  challenges: 'Challenges',
 };
 
 function StatsTab() {
@@ -159,6 +162,7 @@ export function AdminPage() {
         {tab === 'audit' && <AuditLogTable />}
         {tab === 'users' && <UserBanTab />}
         {tab === 'matches' && <AdminMatchesTab />}
+        {tab === 'challenges' && <AdminScheduledMatchupsTab />}
         {tab === 'presets' && <PresetLibraryAdmin />}
         {tab === 'stats' && <StatsTab />}
         {tab === 'settings' && <SettingsTab />}
