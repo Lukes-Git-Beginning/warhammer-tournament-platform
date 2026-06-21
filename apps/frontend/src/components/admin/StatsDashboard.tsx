@@ -134,14 +134,28 @@ export function StatsDashboard() {
           ) : (
             <ul className="space-y-2">
               {challengesData.matchups.map((c) => (
-                <li key={c.id} className="text-sm">
-                  <span className="text-stone-300">
-                    {c.proposer.username} <span className="text-stone-600">vs</span> {c.accepted_by?.username ?? '?'}
-                  </span>
-                  <p className="text-[10px] text-stone-600 mt-0.5">
-                    {new Date(c.proposed_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    {c.format !== 'BO1' && <span className="ml-1">{c.format}</span>}
-                  </p>
+                <li key={c.id} className="flex items-start justify-between gap-2 text-sm">
+                  <div>
+                    <span className="text-stone-300">
+                      {c.proposer.username} <span className="text-stone-600">vs</span> {c.accepted_by?.username ?? '?'}
+                    </span>
+                    <p className="text-[10px] text-stone-600 mt-0.5">
+                      {new Date(c.proposed_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {c.format !== 'BO1' && <span className="ml-1">{c.format}</span>}
+                    </p>
+                  </div>
+                  {c.match_id ? (
+                    <Link to="/matches/$matchId" params={{ matchId: c.match_id }} className="text-xs text-amber-500 hover:text-amber-400 shrink-0 mt-0.5">
+                      View →
+                    </Link>
+                  ) : (
+                    <a
+                      href="/admin?tab=challenges"
+                      className="text-xs text-amber-500 hover:text-amber-400 shrink-0 mt-0.5 transition-colors"
+                    >
+                      View →
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>
