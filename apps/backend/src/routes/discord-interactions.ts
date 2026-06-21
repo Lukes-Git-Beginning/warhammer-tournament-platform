@@ -63,6 +63,12 @@ async function invalidateScoringCaches(redis: import('ioredis').Redis | undefine
 }
 
 const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
+  // Keep body as raw string so Discord's Ed25519 signature can be verified over
+  // the exact original bytes (re-serializing parsed JSON changes the string).
+  fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+    done(null, body);
+  });
+
   fastify.post(
     '/api/discord/interactions',
     { config: { rateLimit: false } },
@@ -74,12 +80,12 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
       const timestamp = request.headers['x-signature-timestamp'] as string | undefined;
       if (!signature || !timestamp) return reply.code(401).send({ error: 'Missing signature headers' });
 
-      const rawBody = JSON.stringify(request.body);
+      const rawBody = request.body as string;
       if (!verifyDiscordSignature(publicKey, signature, timestamp, rawBody)) {
         return reply.code(401).send({ error: 'Invalid signature' });
       }
 
-      const interaction = request.body as {
+      const interaction = JSON.parse(rawBody) as {
         type: number;
         data?: { custom_id?: string };
         member?: { user: { id: string } };
