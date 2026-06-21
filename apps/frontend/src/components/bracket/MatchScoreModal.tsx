@@ -496,17 +496,17 @@ export function MatchScoreModal({
           </fieldset>
         )}
 
-        {isCompleted && (
+        {(isCompleted || isDraw) && (
           <div className="mb-4">
             <label className="text-xs text-stone-400 block mb-1" htmlFor="override-reason">
-              Reason <span className="text-rizzotto-danger">*</span>
+              Reason {isCompleted && !isDraw && <span className="text-rizzotto-danger">*</span>}
             </label>
             <input
               id="override-reason"
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. Wrong result reported, dispute resolved"
+              placeholder={isDraw && !isCompleted ? 'e.g. Technical issues, disconnect' : 'e.g. Wrong result reported, dispute resolved'}
               className="w-full rounded border border-stone-700 bg-stone-800 px-3 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
             />
           </div>
