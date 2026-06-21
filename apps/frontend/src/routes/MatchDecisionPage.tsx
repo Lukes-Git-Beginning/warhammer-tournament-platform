@@ -791,9 +791,11 @@ interface FactionMatrixPhaseProps {
   factions: FactionWithStatsDto[];
   rowPlayer?: PlayerRef;
   colPlayer?: PlayerRef;
+  restrictedFactions?: string[];
+  factionAllowlist?: string[];
 }
 
-function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer }: FactionMatrixPhaseProps) {
+function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer, restrictedFactions = [], factionAllowlist = [] }: FactionMatrixPhaseProps) {
   const queryClient = useQueryClient();
   const [selectedFactions, setSelectedFactions] = useState<string[]>([]);
   const [locking, setLocking] = useState(false);
@@ -1020,7 +1022,10 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
       <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-6">
         {factions.map(({ faction }) => {
           const isSelected = selectedFactions.includes(faction.id);
-          const isDisabled = !isSelected && selectedFactions.length >= 3;
+          const isBanned =
+            restrictedFactions.includes(faction.id) ||
+            (factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id));
+          const isDisabled = isBanned || (!isSelected && selectedFactions.length >= 3);
           return (
             <button
               key={faction.id}
@@ -1469,6 +1474,8 @@ export function MatchDecisionPage() {
                 factions={factions}
                 rowPlayer={matrixRowPlayer}
                 colPlayer={matrixColPlayer}
+                restrictedFactions={decision.restrictedFactions ?? []}
+                factionAllowlist={decision.factionAllowlist ?? []}
               />
             </motion.div>
           )}

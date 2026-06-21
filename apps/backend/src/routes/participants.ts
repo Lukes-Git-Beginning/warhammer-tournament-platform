@@ -41,6 +41,8 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           status: true,
           max_participants: true,
+          faction_allowlist: { select: { faction_id: true } },
+          restricted_factions: { select: { faction_id: true } },
           _count: {
             select: {
               participants: {
@@ -82,18 +84,22 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Validate faction exists if provided
+      // Validate faction if provided
       if (parsed.data.faction_id) {
         const faction = await fastify.prisma.faction.findUnique({
           where: { id: parsed.data.faction_id },
           select: { id: true },
         });
         if (!faction) {
-          return reply.code(400).send({
-            error: 'BadRequest',
-            message: `Faction "${parsed.data.faction_id}" does not exist`,
-            statusCode: 400,
-          });
+          return reply.code(400).send({ error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" does not exist`, statusCode: 400 });
+        }
+        const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
+        const restricted = tournament.restricted_factions.map((f) => f.faction_id);
+        if (allowlist.length > 0 && !allowlist.includes(parsed.data.faction_id)) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'Faction is not permitted in this tournament', statusCode: 400 });
+        }
+        if (restricted.includes(parsed.data.faction_id)) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'Faction is banned in this tournament', statusCode: 400 });
         }
       }
 

@@ -61,7 +61,13 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           player1_id: true,
           player2_id: true,
-          tournament: { select: { mode: true } },
+          tournament: {
+            select: {
+              mode: true,
+              faction_allowlist: { select: { faction_id: true } },
+              restricted_factions: { select: { faction_id: true } },
+            },
+          },
           games: {
             where: {
               map_decision: { picked_map_id: { not: null } },
@@ -85,6 +91,18 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (match.tournament?.mode !== 'MATRIX') {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in MATRIX mode', statusCode: 422 });
+      }
+
+      // Validate faction picks against tournament restrictions
+      const allowlist = (match.tournament?.faction_allowlist ?? []).map((f) => f.faction_id);
+      const restricted = (match.tournament?.restricted_factions ?? []).map((f) => f.faction_id);
+      for (const factionId of factions) {
+        if (restricted.includes(factionId)) {
+          return reply.code(400).send({ error: 'BadRequest', message: `Faction "${factionId}" is banned in this tournament`, statusCode: 400 });
+        }
+        if (allowlist.length > 0 && !allowlist.includes(factionId)) {
+          return reply.code(400).send({ error: 'BadRequest', message: `Faction "${factionId}" is not permitted in this tournament`, statusCode: 400 });
+        }
       }
 
       const isParticipant = actorId === match.player1_id || actorId === match.player2_id;

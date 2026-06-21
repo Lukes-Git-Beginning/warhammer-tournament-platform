@@ -18,10 +18,12 @@ function FactionSelectGrid({
   selected,
   onSelect,
   allowedFactionIds,
+  restrictedFactionIds,
 }: {
   selected: string;
   onSelect: (id: string) => void;
   allowedFactionIds?: string[];
+  restrictedFactionIds?: string[];
 }) {
   const { data } = useQuery({
     queryKey: ['factions'],
@@ -39,7 +41,9 @@ function FactionSelectGrid({
     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
       {factions.map((f) => {
         const isSelected = selected === f.id;
-        const isDisabled = hasRestriction && !allowedFactionIds!.includes(f.id);
+        const isDisabled =
+          (hasRestriction && !allowedFactionIds!.includes(f.id)) ||
+          (restrictedFactionIds != null && restrictedFactionIds.includes(f.id));
         return (
           <button
             key={f.id}
@@ -174,6 +178,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
           selected={selectedFaction}
           onSelect={setSelectedFaction}
           allowedFactionIds={tournament.faction_allowlist}
+          restrictedFactionIds={tournament.restricted_factions}
         />
         {register.isError && (
           <p className="text-xs text-rizzotto-danger">{(register.error as Error).message}</p>
