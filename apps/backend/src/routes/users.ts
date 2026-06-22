@@ -266,7 +266,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         }),
         fastify.prisma.user.count({
           where: {
-            deleted_at: null,
             ...searchFilter,
           },
         }),

@@ -625,6 +625,7 @@ export function searchUsers(
   if (search && search.length >= 2) params.set('search', search);
   params.set('sortBy', sortBy);
   params.set('sortDir', sortDir);
+  params.set('limit', '500');
   return apiFetch(`/api/users?${params.toString()}`);
 }
 
