@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { getUserProfile, getPlayerAntiFarming, type AntiFarmingOpponent } from '@/lib/api.js';
+import { getUserProfile, getUserGames, getPlayerAntiFarming, type AntiFarmingOpponent } from '@/lib/api.js';
+import { GameHistoryTable } from '../components/match/GameHistoryTable.js';
 import { PlayerFactionProficiencyCard } from '../components/meta/PlayerFactionProficiencyCard.js';
 import { useAuthQuery } from '@/lib/auth.js';
 import { useOnboarding } from '@/lib/onboarding.js';
@@ -236,7 +237,12 @@ export function UserProfilePage() {
     );
   }
 
-  const { user, current_season, all_time, recent_results, recent_matches } = data;
+  const { user, current_season, all_time, recent_results } = data;
+
+  const { data: gamesData } = useQuery({
+    queryKey: ['user-games', id],
+    queryFn: () => getUserGames(id, 1, 20),
+  });
 
   const joinedDate = formatInUserTimezone(user.created_at, undefined, { showTime: false });
 
@@ -406,108 +412,19 @@ export function UserProfilePage() {
         </section>
       )}
 
-      {/* Recent Matches */}
+      {/* Recent Games */}
       <section>
         <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          {t('user_profile.recent_matches')}
+          Recent Games
         </h2>
-        {recent_matches.length === 0 ? (
+        {gamesData && gamesData.games.length === 0 ? (
           <EmptyState
             variant="compact"
             title={t('user_profile.empties.matches.title')}
             body={t('user_profile.empties.matches.body')}
           />
         ) : (
-          <div className="overflow-x-auto rounded-md border border-stone-800">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-stone-800 bg-stone-900/60">
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">
-                    {t('user_profile.stats.tournaments')} / {t('common.round')}
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">
-                    {t('user_profile.match.opponent')}
-                  </th>
-                  <th className="px-4 py-3 text-center font-medium text-stone-400">
-                    {t('user_profile.match.result')}
-                  </th>
-                  <th className="px-4 py-3 text-center font-medium text-stone-400">
-                    {t('user_profile.match.score')}
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400">
-                    {t('common.date')}
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-800/60">
-                {recent_matches.map((m, i) => {
-                  const won = m.winnerId === user.id;
-                  const resultLabel =
-                    m.winnerId === null
-                      ? '—'
-                      : won
-                        ? t('user_profile.match.win')
-                        : t('user_profile.match.loss');
-                  const resultColor =
-                    m.winnerId === null
-                      ? 'text-stone-500'
-                      : won
-                        ? 'text-emerald-400'
-                        : 'text-red-400';
-                  return (
-                    <tr key={i} className="hover:bg-stone-800/30 transition-colors">
-                      <td className="px-4 py-3">
-                        {m.tournament ? (
-                          <Link
-                            to="/tournaments/$slug"
-                            params={{ slug: m.tournament.slug }}
-                            className="text-stone-200 hover:text-rizzotto-gold-500 transition-colors"
-                          >
-                            {m.tournament.name}
-                          </Link>
-                        ) : (
-                          <span className="text-stone-500">—</span>
-                        )}
-                        <span className="ml-1 text-stone-500 text-xs">R{m.round}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {m.opponent ? (
-                          <Link
-                            to="/users/$id"
-                            params={{ id: m.opponent.id }}
-                            className="text-stone-200 hover:text-rizzotto-gold-500 transition-colors"
-                          >
-                            {m.opponent.username}
-                          </Link>
-                        ) : (
-                          <span className="text-stone-500">{t('user_profile.match.bye')}</span>
-                        )}
-                      </td>
-                      <td className={`px-4 py-3 text-center font-medium ${resultColor}`}>
-                        {resultLabel}
-                      </td>
-                      <td className="px-4 py-3 text-center text-stone-400">{m.score ?? '—'}</td>
-                      <td className="px-4 py-3 text-right text-stone-500">
-                        {formatInUserTimezone(m.updatedAt)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {m.opponent && (
-                          <Link
-                            to="/users/$a/vs/$b"
-                            params={{ a: user.id, b: m.opponent.id }}
-                            className="text-xs text-stone-500 hover:text-rizzotto-gold-400 transition-colors whitespace-nowrap"
-                          >
-                            Head-to-Head
-                          </Link>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <GameHistoryTable games={gamesData?.games ?? []} showTournament />
         )}
       </section>
     </PageShell>

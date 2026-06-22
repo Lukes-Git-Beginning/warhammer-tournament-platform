@@ -1359,6 +1359,10 @@ export function getFactionGames(factionId: string, page = 1, limit = 30): Promis
   return apiFetch<{ games: GameHistoryEntry[]; total: number }>(`/api/meta/games?factionId=${encodeURIComponent(factionId)}&page=${page}&limit=${limit}`);
 }
 
+export function getUserGames(userId: string, page = 1, limit = 20): Promise<{ games: GameHistoryEntry[]; total: number }> {
+  return apiFetch<{ games: GameHistoryEntry[]; total: number }>(`/api/meta/games?playerId=${encodeURIComponent(userId)}&page=${page}&limit=${limit}`);
+}
+
 export type FactionTopPlayer = {
   userId: string;
   username: string;

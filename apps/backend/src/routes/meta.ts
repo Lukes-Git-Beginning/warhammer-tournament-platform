@@ -193,13 +193,14 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       limit: z.coerce.number().int().min(1).max(100).default(50),
       tournamentSlug: z.string().optional(),
       factionId: z.string().optional(),
+      playerId: z.string().uuid().optional(),
     }).safeParse(request.query);
 
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
 
-    const { page, limit, tournamentSlug, factionId } = parsed.data;
+    const { page, limit, tournamentSlug, factionId, playerId } = parsed.data;
     const skip = (page - 1) * limit;
 
     const matchWhere = {
@@ -217,6 +218,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           { games: { some: { player2_faction_id: factionId } } },
         ],
       } : {}),
+      ...(playerId ? { OR: [{ player1_id: playerId }, { player2_id: playerId }] } : {}),
     };
 
     const [completedMatches, total] = await Promise.all([
