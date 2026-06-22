@@ -63,9 +63,10 @@ async function invalidateScoringCaches(redis: import('ioredis').Redis | undefine
 }
 
 const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
-  // Keep body as raw string so Discord's Ed25519 signature can be verified over
-  // the exact original bytes (re-serializing parsed JSON changes the string).
-  fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+  // Keep body as raw buffer so Discord's Ed25519 signature can be verified over
+  // the exact original bytes. Using 'buffer' (not 'string') is more reliable across
+  // Fastify versions since string encoding can vary.
+  fastify.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {
     done(null, body);
   });
 
@@ -80,10 +81,21 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
       const timestamp = request.headers['x-signature-timestamp'] as string | undefined;
       if (!signature || !timestamp) return reply.code(401).send({ error: 'Missing signature headers' });
 
-      const rawBody = request.body as string;
+      // Body arrives as Buffer (parseAs: 'buffer') — convert to UTF-8 string.
+      // Log the body type so we can diagnose parsing issues in server logs.
+      const bodyRaw = request.body;
+      const rawBody = Buffer.isBuffer(bodyRaw)
+        ? bodyRaw.toString('utf-8')
+        : typeof bodyRaw === 'string'
+          ? bodyRaw
+          : JSON.stringify(bodyRaw);
+      fastify.log.info({ bodyType: typeof bodyRaw, isBuffer: Buffer.isBuffer(bodyRaw) }, '[discord] body received');
+
       if (!verifyDiscordSignature(publicKey, signature, timestamp, rawBody)) {
+        fastify.log.warn({ bodyType: typeof bodyRaw, isBuffer: Buffer.isBuffer(bodyRaw) }, '[discord] signature verification failed');
         return reply.code(401).send({ error: 'Invalid signature' });
       }
+      fastify.log.info('[discord] signature ok');
 
       const interaction = JSON.parse(rawBody) as {
         type: number;
