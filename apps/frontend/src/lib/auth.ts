@@ -1,15 +1,32 @@
+import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useLocation } from '@tanstack/react-router';
 import { getMe, logout } from './api';
 import type { ApiError } from './api';
+import { patchMePreferences } from './onboarding';
 
 export function useAuthQuery() {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const syncedRef = useRef(false);
+
+  const query = useQuery({
     queryKey: ['me'],
     queryFn: getMe,
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
+
+  useEffect(() => {
+    if (!query.data || syncedRef.current) return;
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (query.data.timezone === browserTz) { syncedRef.current = true; return; }
+    syncedRef.current = true;
+    patchMePreferences({ timezone: browserTz })
+      .then((updated) => queryClient.setQueryData(['me'], updated))
+      .catch(() => { /* non-fatal — timezone sync is best-effort */ });
+  }, [query.data, queryClient]);
+
+  return query;
 }
 
 export function useLogout() {
