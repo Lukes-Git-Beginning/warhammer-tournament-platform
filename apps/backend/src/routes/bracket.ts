@@ -154,21 +154,15 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           },
           select: {
             user_id: true,
+            status: true,
             user: { select: { id: true, username: true, avatar_url: true } },
           },
         });
 
         const participantIds = participants.map((p) => p.user_id);
-        const userMap = new Map(
-          participants.map((p) => [p.user_id, p.user]),
-        );
-        // Track WITHDREW status directly from DB — not just from FORFEIT matches.
-        // A player dropped between rounds has no FORFEIT match but is still WITHDREW.
+        const userMap = new Map(participants.map((p) => [p.user_id, p.user]));
         const withdrawnIds = new Set(
-          (await fastify.prisma.tournamentParticipant.findMany({
-            where: { tournament_id: tournament.id, status: 'WITHDREW', deleted_at: null },
-            select: { user_id: true },
-          })).map((p) => p.user_id)
+          participants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id),
         );
 
         const completedMatches = matches
@@ -182,10 +176,6 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             player2_id: m.player2_id,
             winner_id: m.winner_id,
             status: m.status,
-            // Only provide game counts when MatchGame records exist; otherwise leave
-            // undefined so swiss.ts falls back to the winner-based heuristic (1/0).
-            // Only use actual game records when at least one is COMPLETED.
-            // PENDING records (created for map-tracking only) must not block the fallback.
             player1_game_wins: m.games.some((g) => g.status === 'COMPLETED')
               ? m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length
               : undefined,
@@ -194,12 +184,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
               : undefined,
           }));
 
-        const computedStandings = computeSwissStandings(participantIds, completedMatches);
-        // Override dropped with participant status as the authoritative source.
-        // FORFEIT history alone doesn't account for players who have been undropped.
-        for (const s of computedStandings) {
-          s.dropped = withdrawnIds.has(s.userId);
-        }
+        const computedStandings = computeSwissStandings(participantIds, completedMatches, withdrawnIds);
         const rawStandings = sortSwissStandings(computedStandings, completedMatches);
 
         const standings: SwissStandingEntry[] = rawStandings.map((s) => {
@@ -545,17 +530,21 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           ? Math.max(...existingMatches.map((m) => m.round))
           : 0;
 
-      // Load active participants
+      // Load all participants including withdrawn (for correct Buchholz calculation).
+      // Withdrawn players contribute to opponents' BH but are excluded from pairing.
       const participants = await fastify.prisma.tournamentParticipant.findMany({
         where: {
           tournament_id: tournament.id,
-          status: { in: ['REGISTERED', 'CHECKED_IN'] },
+          status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
           deleted_at: null,
         },
-        select: { user_id: true, faction_id: true },
+        select: { user_id: true, faction_id: true, status: true },
       });
 
       const participantIds = participants.map((p) => p.user_id);
+      const withdrawnIds = new Set(
+        participants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id),
+      );
       const factionById = new Map<string, string | null>(
         participants.map((p) => [p.user_id, p.faction_id]),
       );
@@ -595,8 +584,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           status: m.status,
         }));
 
-      // Use full tiebreaker sort (score → buchholz → solkoff → H2H) for standings
-      const rawStandings = computeSwissStandings(participantIds, completedMatchRecords);
+      const rawStandings = computeSwissStandings(participantIds, completedMatchRecords, withdrawnIds);
       const standings = sortSwissStandings(rawStandings, completedMatchRecords);
 
       // Build avoid maps: each player avoids all previous opponents
@@ -619,7 +607,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const swissPlayers = standings.map((s) => ({
+      const swissPlayers = standings.filter((s) => !s.dropped).map((s) => ({
         userId: s.userId,
         score: s.score,
         avoid: avoidMap.get(s.userId) ?? [],
@@ -780,11 +768,14 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const participants = await fastify.prisma.tournamentParticipant.findMany({
-        where: { tournament_id: id, status: { in: ['REGISTERED', 'CHECKED_IN'] }, deleted_at: null },
-        select: { user_id: true },
+        where: { tournament_id: id, status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] }, deleted_at: null },
+        select: { user_id: true, status: true },
       });
 
       const participantIds = participants.map((p) => p.user_id);
+      const withdrawnIds = new Set(
+        participants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id),
+      );
       const currentRound = existingMatches.length > 0 ? Math.max(...existingMatches.map((m) => m.round)) : 0;
 
       if (tournament.format === TournamentFormat.ROUND_ROBIN) {
@@ -832,8 +823,9 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           status: m.status,
         }));
 
-      const rawStandings = computeSwissStandings(participantIds, completedMatchRecords);
+      const rawStandings = computeSwissStandings(participantIds, completedMatchRecords, withdrawnIds);
       const standings = sortSwissStandings(rawStandings, completedMatchRecords);
+      const activeStandings = standings.filter((s) => !s.dropped);
 
       let playoffFallbackApplied: string | undefined;
 
@@ -844,7 +836,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             playoff_match_format: tournament.playoff_match_format,
             finale_match_format: tournament.finale_match_format,
           },
-          finalStandings: standings,
+          finalStandings: activeStandings,
           checkedInPlayerIds: new Set(participantIds),
         });
 

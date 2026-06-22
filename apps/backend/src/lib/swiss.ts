@@ -179,6 +179,7 @@ export function generateSwissRound(
 export function computeSwissStandings(
   participantIds: string[],
   completedMatches: CompletedMatchRecord[],
+  withdrawnIds?: ReadonlySet<string>,
 ): SwissStanding[] {
   // Initialize per-player record
   const recordMap = new Map<
@@ -277,7 +278,7 @@ export function computeSwissStandings(
       buchholz,
       solkoff,
       opponentsBeaten: rec.opponentsBeaten,
-      dropped: droppedPlayerIds.has(userId),
+      dropped: droppedPlayerIds.has(userId) || (withdrawnIds?.has(userId) ?? false),
     });
   }
 

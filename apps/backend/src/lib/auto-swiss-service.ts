@@ -179,7 +179,7 @@ async function generateNextSwissRound(
     .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
 
-  const rawStandings = computeSwissStandings(participantIds, completed);
+  const rawStandings = computeSwissStandings(participantIds, completed, withdrawnIds);
   const standings = sortSwissStandings(rawStandings, completed);
 
   const avoidMap = new Map<string, string[]>(participantIds.map((id) => [id, []]));
@@ -195,7 +195,7 @@ async function generateNextSwissRound(
     }
   }
 
-  const swissPlayers = standings.filter((s) => !s.dropped && !withdrawnIds.has(s.userId)).map((s) => ({
+  const swissPlayers = standings.filter((s) => !s.dropped).map((s) => ({
     userId: s.userId,
     score: s.score,
     avoid: avoidMap.get(s.userId) ?? [],
@@ -278,10 +278,9 @@ async function startPlayoffs(
   const completed = swissMatches
     .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
-  const rawStandings = computeSwissStandings(participantIds, completed);
+  const rawStandings = computeSwissStandings(participantIds, completed, withdrawnIds);
   const standings = sortSwissStandings(rawStandings, completed);
-  // Exclude dropped players — also filter WITHDREW status not captured by s.dropped.
-  const ranked = standings.filter((s) => !s.dropped && !withdrawnIds.has(s.userId)).map((s) => s.userId);
+  const ranked = standings.filter((s) => !s.dropped).map((s) => s.userId);
 
   // Re-evaluate playoff format based on active player count at Swiss end.
   // Players may have dropped during the Swiss phase, so the start-time config
