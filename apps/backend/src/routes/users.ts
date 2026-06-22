@@ -217,7 +217,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       const SearchQuerySchema = z.object({
         search: z.string().max(50).optional(),
         page: z.coerce.number().int().min(1).default(1),
-        limit: z.coerce.number().int().min(1).max(100).default(50),
+        limit: z.coerce.number().int().min(1).max(500).default(50),
         sortBy: z.enum(['username', 'created_at', 'role', 'is_banned']).default('username'),
         sortDir: z.enum(['asc', 'desc']).default('asc'),
       });
