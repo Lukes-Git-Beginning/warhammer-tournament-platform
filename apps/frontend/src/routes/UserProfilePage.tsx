@@ -109,44 +109,17 @@ function WinLossCard({
 
 interface StatsSectionProps {
   userId: string;
+  wins: number;
+  losses: number;
+  gamesPlayed: number;
 }
 
-function StatsSection({ userId }: StatsSectionProps) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['user-stats', userId],
-    queryFn: () => getUserStats(userId),
-    retry: false,
-  });
-
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {[1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            className="h-32 rounded-md border border-stone-800 bg-stone-900/60 animate-pulse"
-          />
-        ))}
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <div className="rounded-md border border-stone-800 bg-stone-900/40 px-4 py-3 text-sm text-stone-500">
-        No stats available yet.
-      </div>
-    );
-  }
+function StatsSection({ userId, wins, losses, gamesPlayed }: StatsSectionProps) {
+  const winRate = gamesPlayed > 0 ? wins / gamesPlayed : 0;
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_2fr]">
-      <WinLossCard
-        wins={data.total_wins}
-        losses={data.total_losses}
-        winRate={data.win_rate}
-        trend={data.win_rate_trend}
-      />
+      <WinLossCard wins={wins} losses={losses} winRate={winRate} />
       <PlayerFactionProficiencyCard userId={userId} />
     </div>
   );
@@ -338,7 +311,7 @@ export function UserProfilePage() {
         <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
           Statistics
         </h2>
-        <StatsSection userId={id} />
+        <StatsSection userId={id} wins={all_time.wins} losses={all_time.losses} gamesPlayed={all_time.games_played} />
       </section>
 
       {/* Anti-Farming (admin only) */}
