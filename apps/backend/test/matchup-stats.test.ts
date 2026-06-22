@@ -92,7 +92,7 @@ async function createMatch(opts: {
   return matchId;
 }
 
-function makeToken(userId: string, role: 'ADMIN' | 'HOST' | 'ORGANIZER' | 'USER' = 'ADMIN') {
+function makeToken(userId: string, role: 'ADMIN' | 'HOST' | 'MODERATOR' | 'USER' = 'ADMIN') {
   return app.jwt.sign({
     sub: userId,
     discord_id: testUser1!.discord_id,

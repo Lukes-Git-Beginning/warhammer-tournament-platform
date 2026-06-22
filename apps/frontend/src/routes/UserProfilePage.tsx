@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { getUserProfile, getUserStats, getPlayerAntiFarming, type AntiFarmingOpponent } from '@/lib/api.js';
+import { getUserProfile, getPlayerAntiFarming, type AntiFarmingOpponent } from '@/lib/api.js';
 import { PlayerFactionProficiencyCard } from '../components/meta/PlayerFactionProficiencyCard.js';
 import { useAuthQuery } from '@/lib/auth.js';
 import { useOnboarding } from '@/lib/onboarding.js';
