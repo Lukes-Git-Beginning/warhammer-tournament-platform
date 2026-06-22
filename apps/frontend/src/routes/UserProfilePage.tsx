@@ -344,13 +344,6 @@ export function UserProfilePage() {
                   <th className="px-4 py-3 text-left font-medium text-stone-400">
                     {t('user_profile.stats.tournaments')}
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">Season</th>
-                  <th className="px-4 py-3 text-center font-medium text-stone-400">
-                    {t('leaderboard.columns.rank')}
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400">
-                    {t('leaderboard.columns.points')}
-                  </th>
                   <th className="px-4 py-3 text-right font-medium text-stone-400">
                     {t('common.date')}
                   </th>
@@ -368,9 +361,6 @@ export function UserProfilePage() {
                         {r.tournament.name}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-stone-400">{r.season_name ?? '—'}</td>
-                    <td className="px-4 py-3 text-center text-stone-200">{r.placement != null ? `#${r.placement}` : '—'}</td>
-                    <td className="px-4 py-3 text-right text-stone-200">{r.points_earned ?? '—'}</td>
                     <td className="px-4 py-3 text-right text-stone-500">
                       {formatInUserTimezone(r.created_at)}
                     </td>
