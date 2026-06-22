@@ -568,6 +568,8 @@ export interface AdminUser {
   role: string;
   is_banned: boolean;
   created_at: string;
+  email: string | null;
+  timezone: string | null;
 }
 
 export function getAdminAuditLog(opts?: {

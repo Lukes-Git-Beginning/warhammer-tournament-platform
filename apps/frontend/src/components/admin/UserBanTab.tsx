@@ -1,8 +1,34 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { searchUsers, updateUserRole, type AdminUser } from '@/lib/api';
 import { UserBanModal } from './UserBanModal';
+
+function tzOffsetMinutes(tz: string): number {
+  const now = new Date();
+  const utc = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const local = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+  return (local.getTime() - utc.getTime()) / 60_000;
+}
+
+function TimezoneCell({ tz }: { tz: string | null }) {
+  const viewerOffset = useMemo(() => tzOffsetMinutes(Intl.DateTimeFormat().resolvedOptions().timeZone), []);
+  if (!tz) return <span className="text-stone-600">—</span>;
+  try {
+    const diff = tzOffsetMinutes(tz) - viewerOffset;
+    const sign = diff >= 0 ? '+' : '−';
+    const h = Math.floor(Math.abs(diff) / 60);
+    const m = Math.abs(diff) % 60;
+    const label = diff === 0 ? 'same' : `${sign}${h}${m ? `:${String(m).padStart(2, '0')}` : ''}h`;
+    return (
+      <span className="text-xs text-stone-400">
+        {tz} <span className="text-stone-600">({label})</span>
+      </span>
+    );
+  } catch {
+    return <span className="text-xs text-stone-400">{tz}</span>;
+  }
+}
 
 const ASSIGNABLE_ROLES = ['USER', 'HOST', 'MODERATOR', 'ADMIN'] as const;
 
@@ -125,6 +151,8 @@ export function UserBanTab() {
                 <th className="px-4 py-3 text-left font-medium text-stone-400">User ID</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Discord ID</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Steam ID</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Email</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Timezone</th>
                 <SortTh col="role" label="Role" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                 <SortTh col="created_at" label="Joined" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                 <SortTh col="is_banned" label="Status" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
@@ -158,6 +186,12 @@ export function UserBanTab() {
                   <td className="px-4 py-3 font-mono text-xs text-stone-400 select-all">{user.discord_id}</td>
                   <td className="px-4 py-3 font-mono text-xs text-stone-400 select-all">
                     {user.steam_id ?? <span className="text-stone-600 not-italic">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-stone-400 select-all">
+                    {user.email ?? <span className="text-stone-600">—</span>}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <TimezoneCell tz={user.timezone} />
                   </td>
                   <td className="px-4 py-3">
                     <RoleSelect user={user} />
