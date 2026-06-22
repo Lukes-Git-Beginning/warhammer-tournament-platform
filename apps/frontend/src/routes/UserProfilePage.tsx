@@ -219,6 +219,11 @@ export function UserProfilePage() {
     retry: false,
   });
 
+  const { data: gamesData } = useQuery({
+    queryKey: ['user-games', id],
+    queryFn: () => getUserGames(id, 1, 20),
+  });
+
   if (isLoading) {
     return (
       <PageShell variant="narrow" className="text-rizzotto-stone-400 text-sm">
@@ -238,11 +243,6 @@ export function UserProfilePage() {
   }
 
   const { user, current_season, all_time, recent_results } = data;
-
-  const { data: gamesData } = useQuery({
-    queryKey: ['user-games', id],
-    queryFn: () => getUserGames(id, 1, 20),
-  });
 
   const joinedDate = formatInUserTimezone(user.created_at, undefined, { showTime: false });
 
