@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { createVerify } from 'crypto';
+import { verify as cryptoVerify, createPublicKey } from 'crypto';
 import {
   notifyResultPending,
   notifyCancelPending,
@@ -38,11 +38,25 @@ const MESSAGE_COMPONENT = 3;
 const PONG = 1;
 const CHANNEL_MESSAGE_WITH_SOURCE = 4;
 
+// Discord signs each interaction with Ed25519. Node's streaming createVerify()
+// does NOT support Ed25519 — it throws "Invalid digest" — so the one-shot
+// crypto.verify() must be used. Discord exposes the public key as a raw 32-byte
+// hex string; wrap it in an SPKI DER envelope to build a usable KeyObject.
+const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
+
+function ed25519PublicKeyFromHex(publicKeyHex: string) {
+  const der = Buffer.concat([ED25519_SPKI_PREFIX, Buffer.from(publicKeyHex, 'hex')]);
+  return createPublicKey({ key: der, format: 'der', type: 'spki' });
+}
+
 function verifyDiscordSignature(publicKey: string, signature: string, timestamp: string, body: string): boolean {
   try {
-    const verify = createVerify('ed25519');
-    verify.update(timestamp + body);
-    return verify.verify(Buffer.from(publicKey, 'hex'), Buffer.from(signature, 'hex'));
+    return cryptoVerify(
+      null,
+      Buffer.from(timestamp + body),
+      ed25519PublicKeyFromHex(publicKey),
+      Buffer.from(signature, 'hex'),
+    );
   } catch {
     return false;
   }
