@@ -18,9 +18,10 @@ export function useAuthQuery() {
 
   useEffect(() => {
     if (!query.data || syncedRef.current) return;
-    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (query.data.timezone === browserTz) { syncedRef.current = true; return; }
     syncedRef.current = true;
+    // Only fill in timezone when it has never been set — never override an existing preference.
+    if (query.data.timezone !== null) return;
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     patchMePreferences({ timezone: browserTz })
       .then((updated) => queryClient.setQueryData(['me'], updated))
       .catch(() => { /* non-fatal — timezone sync is best-effort */ });

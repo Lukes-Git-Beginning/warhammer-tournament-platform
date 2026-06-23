@@ -1,7 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { getUserProfile, getUserGames, getPlayerAntiFarming, type AntiFarmingOpponent } from '@/lib/api.js';
+import { patchMePreferences } from '@/lib/onboarding.js';
+import type { UserMe } from '@rizzotto/types';
 import { GameHistoryTable } from '../components/match/GameHistoryTable.js';
 import { PlayerFactionProficiencyCard } from '../components/meta/PlayerFactionProficiencyCard.js';
 import { useAuthQuery } from '@/lib/auth.js';
@@ -12,6 +15,63 @@ import { EmptyState } from '@/components/ui/empty-state.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { ArmyListList } from '../components/tournament/ArmyListList.js';
 import { ArmyListUpload } from '../components/tournament/ArmyListUpload.js';
+
+const COMMON_TIMEZONES = [
+  'Europe/Berlin', 'Europe/London', 'Europe/Madrid', 'Europe/Warsaw',
+  'Europe/Paris', 'Europe/Amsterdam', 'Europe/Stockholm', 'Europe/Rome',
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'America/Sao_Paulo', 'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Seoul',
+  'Asia/Kolkata', 'Australia/Sydney', 'Pacific/Auckland',
+];
+
+function TimezoneSection({ user }: { user: UserMe }) {
+  const queryClient = useQueryClient();
+  const current = user.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [selected, setSelected] = useState(current);
+  const [saved, setSaved] = useState(false);
+
+  const options = useMemo(() => {
+    const set = new Set([current, ...COMMON_TIMEZONES]);
+    return Array.from(set);
+  }, [current]);
+
+  const mutation = useMutation({
+    mutationFn: () => patchMePreferences({ timezone: selected }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<UserMe>(['me'], updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    },
+  });
+
+  return (
+    <section>
+      <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">Timezone</h2>
+      <div className="flex items-center gap-3">
+        <select
+          value={selected}
+          onChange={(e) => { setSelected(e.target.value); setSaved(false); }}
+          className="rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
+        >
+          {options.map((tz) => (
+            <option key={tz} value={tz}>{tz}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => mutation.mutate()}
+          disabled={selected === current || mutation.isPending}
+          className="rounded border border-rizzotto-gold-600 px-3 py-1.5 text-sm text-rizzotto-gold-400 hover:bg-rizzotto-gold-900/20 disabled:opacity-40 transition-colors"
+        >
+          {mutation.isPending ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-stone-500">
+        Controls when your availability calendar sends match invitations.
+      </p>
+    </section>
+  );
+}
 
 const ROLE_COLORS: Record<string, string> = {
   USER: 'bg-stone-700 text-stone-300',
@@ -371,6 +431,9 @@ export function UserProfilePage() {
           </div>
         )}
       </section>
+
+      {/* Timezone (own profile only) */}
+      {isOwnProfile && me && <TimezoneSection user={me} />}
 
       {/* Army-Listen */}
       <section>
