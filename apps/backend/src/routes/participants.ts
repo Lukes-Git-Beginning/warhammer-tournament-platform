@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { emitParticipantChange, emitBracketUpdate } from '../lib/emit.js';
-import { canManageTournament } from '../lib/tournament-utils.js';
+import { canManageTournament, createLateJoinerBye } from '../lib/tournament-utils.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -336,6 +336,15 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         userId: parsed.data.user_id,
         action: 'checked_in',
       });
+
+      // If checked in after the bracket already started, give the late joiner a
+      // BYE in the current Swiss round so they're folded into later rounds. Non-fatal.
+      try {
+        const bye = await createLateJoinerBye(fastify.prisma, tournament.id, parsed.data.user_id);
+        if (bye) emitBracketUpdate(fastify.io, tournament.id);
+      } catch (err) {
+        request.log.warn({ err, slug }, 'Failed to create late-joiner BYE');
+      }
 
       request.log.info({ slug, targetUserId: parsed.data.user_id }, 'Participant checked in');
       return reply.code(200).send({ message: 'Check-in successful' });

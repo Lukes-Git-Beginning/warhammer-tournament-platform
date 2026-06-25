@@ -147,3 +147,87 @@ export async function canManageTournament(
   if (!t) return false;
   return t.organizer_id === userId || t.co_hosts.some((h) => h.user_id === userId);
 }
+
+// ---------------------------------------------------------------------------
+// Late joiner: BYE for a player checked in mid-tournament
+// ---------------------------------------------------------------------------
+
+/**
+ * When a player is checked in after a Swiss / Auto-Swiss tournament has already
+ * started (i.e. at least one Swiss round exists), give them a BYE in the current
+ * (latest) Swiss round. This both:
+ *   - awards a fair walkover for the round they were absent for, and
+ *   - inserts a match row for them, so the round generator (which derives part of
+ *     its player set from existing match rows) folds them into future rounds.
+ *
+ * No-op unless: tournament is ONGOING, format is SWISS / AUTO_SWISS, a Swiss round
+ * already exists, and the player has no match in that round yet. Returns the
+ * created BYE match ({ id, round }) or null when nothing was created. Callers
+ * should treat failures as non-fatal — the check-in itself must still succeed.
+ */
+export async function createLateJoinerBye(
+  prisma: PrismaClient,
+  tournamentId: string,
+  userId: string,
+): Promise<{ id: string; round: number } | null> {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: { status: true, format: true },
+  });
+  if (!tournament) return null;
+  if (tournament.status !== TournamentStatus.ONGOING) return null;
+  if (tournament.format !== 'SWISS' && tournament.format !== 'AUTO_SWISS') return null;
+
+  // Current Swiss round = highest existing SWISS-phase round.
+  const latest = await prisma.match.aggregate({
+    where: { tournament_id: tournamentId, phase: 'SWISS', deleted_at: null },
+    _max: { round: true },
+  });
+  const round = latest._max.round;
+  if (round == null) return null; // no Swiss round generated yet
+
+  // Already paired or byed this round → nothing to do.
+  const existing = await prisma.match.findFirst({
+    where: {
+      tournament_id: tournamentId,
+      round,
+      deleted_at: null,
+      OR: [{ player1_id: userId }, { player2_id: userId }],
+    },
+    select: { id: true },
+  });
+  if (existing) return null;
+
+  // Next match_number for this round (ignore deleted rows so we don't collide
+  // with the [tournament_id, round, match_number] unique constraint).
+  const agg = await prisma.match.aggregate({
+    where: { tournament_id: tournamentId, round },
+    _max: { match_number: true },
+  });
+  const matchNumber = (agg._max.match_number ?? 0) + 1;
+
+  const match = await prisma.match.create({
+    data: {
+      tournament_id: tournamentId,
+      round,
+      match_number: matchNumber,
+      player1_id: userId,
+      player2_id: null,
+      winner_id: userId,
+      status: 'BYE',
+      phase: 'SWISS',
+    },
+    select: { id: true, round: true },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      entity_type: 'Match',
+      entity_id: match.id,
+      action: 'late_joiner_bye',
+      new_value: { tournamentId, userId, round },
+    },
+  });
+
+  return match;
+}

@@ -8,6 +8,7 @@ import { ImportLogListResponseSchema } from '@rizzotto/types';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
 import { emitBracketUpdate } from '../lib/emit.js';
+import { createLateJoinerBye } from '../lib/tournament-utils.js';
 import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM } from '../lib/scoring-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1071,6 +1072,15 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       data: { tournament_id: tournament.id, user_id: parsed.data.userId, status: 'CHECKED_IN', faction_id: parsed.data.faction_id },
       select: { id: true, status: true, faction_id: true, user: { select: { id: true, username: true } } },
     });
+
+    // Late joiner mid-tournament: give them a BYE in the current Swiss round so
+    // they're folded into subsequent rounds (Swiss / Auto Swiss). Non-fatal.
+    try {
+      const bye = await createLateJoinerBye(fastify.prisma, tournament.id, parsed.data.userId);
+      if (bye) emitBracketUpdate(fastify.io, tournament.id);
+    } catch (err) {
+      request.log.warn({ err, slug }, 'Failed to create late-joiner BYE');
+    }
 
     return reply.code(201).send({ participant });
   });
