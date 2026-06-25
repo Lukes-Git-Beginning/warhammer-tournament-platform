@@ -140,6 +140,11 @@ export async function canManageTournament(
   role: string,
 ): Promise<boolean> {
   if (role === 'MODERATOR' || role === 'ADMIN') return true;
+  // No tournament to manage (e.g. an Open Play match has tournament_id = null,
+  // passed in as ''). A non-staff user can never "manage" a non-existent
+  // tournament — and querying `findUnique({ id: '' })` throws P2007 because the
+  // id column is a UUID. Bail out before the lookup.
+  if (!tournamentId) return false;
   const t = await prisma.tournament.findUnique({
     where: { id: tournamentId },
     select: { organizer_id: true, co_hosts: { select: { user_id: true } } },
