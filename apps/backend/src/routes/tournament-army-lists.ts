@@ -15,6 +15,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { canManageTournament } from '../lib/tournament-utils.js';
 
 const UPLOAD_DIR =
   process.env.ARMY_LIST_UPLOAD_DIR ??
@@ -267,10 +268,12 @@ const tournamentArmyListsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const user = request.user;
-      const isPrivileged =
-        user.role === 'ADMIN' ||
-        user.role === 'MODERATOR' ||
-        user.sub === tournament.organizer_id;
+      const isPrivileged = await canManageTournament(
+        fastify.prisma,
+        tournament.id,
+        user.sub,
+        user.role,
+      );
 
       if (!isPrivileged && tournament.status !== 'COMPLETED') {
         return reply.code(403).send({
@@ -317,10 +320,12 @@ const tournamentArmyListsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const user = request.user;
-      const isPrivileged =
-        user.role === 'ADMIN' ||
-        user.role === 'MODERATOR' ||
-        user.sub === tournament.organizer_id;
+      const isPrivileged = await canManageTournament(
+        fastify.prisma,
+        tournament.id,
+        user.sub,
+        user.role,
+      );
 
       // Check reveal conditions
       let canReveal = isPrivileged || tournament.status === 'COMPLETED';

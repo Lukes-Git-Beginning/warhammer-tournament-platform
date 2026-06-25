@@ -17,6 +17,7 @@ import {
   InsufficientPlayersError,
 } from '../lib/playoff-generator.js';
 import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
+import { canManageTournament } from '../lib/tournament-utils.js';
 import { notifyRoundPairings } from '../lib/discord-notify.js';
 
 const bracketRoutes: FastifyPluginAsync = async (fastify) => {
@@ -260,11 +261,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const actorRole = request.user.role;
-      if (
-        actorRole === 'HOST' &&
-        tournament.organizer_id !== request.user.sub
-      ) {
+      if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'Only the tournament organizer can start this tournament',
@@ -483,11 +480,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const actorRole = request.user.role;
-      if (
-        actorRole === 'HOST' &&
-        tournament.organizer_id !== request.user.sub
-      ) {
+      if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'Only the tournament organizer can advance rounds',
@@ -734,8 +727,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       }
 
-      const actorRole = request.user.role;
-      if (actorRole === 'HOST' && tournament.organizer_id !== request.user.sub) {
+      if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Only the organizer can start playoffs', statusCode: 403 });
       }
 
@@ -940,7 +932,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       }
-      if (request.user.role === 'HOST' && tournament.organizer_id !== request.user.sub) {
+      if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
       }
 
@@ -1120,7 +1112,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       }
-      if (request.user.role === 'HOST' && tournament.organizer_id !== request.user.sub) {
+      if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
       }
       // In DE the matches feeding the grand final are the WB and LB finals,
@@ -1371,8 +1363,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const actorRole = request.user.role;
-      if (actorRole === 'HOST' && tournament.organizer_id !== request.user.sub) {
+      if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'Only the tournament organizer can reset this bracket',

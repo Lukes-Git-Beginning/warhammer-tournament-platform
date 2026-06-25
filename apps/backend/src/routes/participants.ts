@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { emitParticipantChange, emitBracketUpdate } from '../lib/emit.js';
+import { canManageTournament } from '../lib/tournament-utils.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -271,12 +272,9 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Host check: if role is HOST, must own the tournament
+      // Host check: if role is HOST, must own the tournament (or be a co-host)
       const user = request.user;
-      if (
-        user.role === 'HOST' &&
-        user.sub !== tournament.organizer_id
-      ) {
+      if (!(await canManageTournament(fastify.prisma, tournament.id, user.sub, user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'You do not have permission to check in participants for this tournament',
@@ -572,7 +570,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       if (tournament.status !== 'ONGOING') {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Can only drop participants from an ongoing tournament', statusCode: 422 });
       }
-      if (callerRole === 'HOST' && !isSelf && tournament.organizer_id !== callerId) {
+      if (!isSelf && !(await canManageTournament(fastify.prisma, tournament.id, callerId, callerRole))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
       }
 
@@ -635,9 +633,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Tournament is not ongoing', statusCode: 422 });
       }
 
-      const isAdminOrMod = role === 'ADMIN' || role === 'MODERATOR';
-      const isOrganizer = currentUserId === tournament.organizer_id;
-      if (!isAdminOrMod && !isOrganizer) {
+      if (!(await canManageTournament(fastify.prisma, tournament.id, currentUserId ?? '', role ?? ''))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
       }
 

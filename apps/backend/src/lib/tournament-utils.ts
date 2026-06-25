@@ -1,5 +1,6 @@
 import {
   TournamentStatus,
+  type PrismaClient,
   type TournamentFormat,
   type TournamentMode,
   type TournamentVisibility,
@@ -117,4 +118,32 @@ export function calculateTournamentPoints(opts: {
   const base = getPlacementPoints(opts.placement, opts.playerCount);
   const mult = getSizeMultiplier(opts.playerCount) * (opts.isMajor ? 1.5 : 1.0);
   return Math.max(0, Math.round(base * mult));
+}
+
+// ---------------------------------------------------------------------------
+// Tournament management permission (single source of truth)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a user may manage a tournament. True for global MODERATOR/ADMIN, for
+ * the organizer, and for any co-host. Every management endpoint should gate on
+ * this instead of an inline `organizer_id === userId` check, so co-hosts get
+ * full host parity automatically.
+ *
+ * NOTE: ownership-control actions (transfer ownership, edit the co-host list)
+ * deliberately do NOT use this — they stay organizer + MODERATOR/ADMIN only.
+ */
+export async function canManageTournament(
+  prisma: PrismaClient,
+  tournamentId: string,
+  userId: string,
+  role: string,
+): Promise<boolean> {
+  if (role === 'MODERATOR' || role === 'ADMIN') return true;
+  const t = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: { organizer_id: true, co_hosts: { select: { user_id: true } } },
+  });
+  if (!t) return false;
+  return t.organizer_id === userId || t.co_hosts.some((h) => h.user_id === userId);
 }

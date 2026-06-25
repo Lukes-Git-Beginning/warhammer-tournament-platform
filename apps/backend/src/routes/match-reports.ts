@@ -15,6 +15,7 @@ import {
   type MatchReportingState,
 } from '@rizzotto/types';
 import { resolveMatchResult, disputeMatch } from '../lib/match-result-service.js';
+import { canManageTournament } from '../lib/tournament-utils.js';
 import { tournamentRoom } from '../lib/emit.js';
 import { notifyDispute } from '../lib/discord-notify.js';
 import { invalidate } from '../lib/cache.js';
@@ -321,8 +322,8 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // HOST must own the tournament (open play matches have no organizer)
-      if (user.role === 'HOST' && match.tournament?.organizer_id !== user.sub) {
+      // HOST must own the tournament or be a co-host (open play matches have no organizer)
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', user.sub, user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'You are not the organizer of this tournament',
@@ -330,9 +331,8 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Cannot override already-completed matches unless ADMIN or the tournament's own organizer
-      const isOwnOrganizer = match.tournament?.organizer_id === user.sub;
-      if (match.status === 'COMPLETED' && user.role !== 'ADMIN' && !isOwnOrganizer) {
+      // Cannot override already-completed matches unless ADMIN or a tournament manager
+      if (match.status === 'COMPLETED' && user.role !== 'ADMIN' && !(await canManageTournament(fastify.prisma, match.tournament_id ?? '', user.sub, user.role))) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
           message: 'Match is already COMPLETED — only the tournament organizer or an admin can re-override',

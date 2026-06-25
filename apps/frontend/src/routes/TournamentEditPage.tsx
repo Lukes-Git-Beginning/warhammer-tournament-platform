@@ -10,6 +10,10 @@ import {
   getFactions,
   getEligibleOwners,
   transferTournamentOwner,
+  getTournamentCoHosts,
+  searchCoHostCandidates,
+  addTournamentCoHost,
+  removeTournamentCoHost,
   type Tournament,
   type TournamentPatchInput,
   type MapDecisionMode,
@@ -328,6 +332,103 @@ function TransferOwnerSection({ slug, currentOwnerId }: { slug: string; currentO
       </div>
       {mutation.isSuccess && <p className="text-xs text-green-400 mt-2">Ownership transferred.</p>}
       {mutation.isError && <p className="text-xs text-red-400 mt-2">Transfer failed.</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Co-hosts (owner + staff)
+// ---------------------------------------------------------------------------
+
+function CoHostsSection({ slug }: { slug: string }) {
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+
+  const { data: coHosts = [] } = useQuery({
+    queryKey: ['co-hosts', slug],
+    queryFn: () => getTournamentCoHosts(slug),
+  });
+  const { data: candidates = [] } = useQuery({
+    queryKey: ['co-host-candidates', slug, search],
+    queryFn: () => searchCoHostCandidates(slug, search),
+    enabled: search.trim().length >= 2,
+  });
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ['co-hosts', slug] });
+    void queryClient.invalidateQueries({ queryKey: ['co-host-candidates', slug] });
+  };
+  const addMutation = useMutation({
+    mutationFn: (userId: string) => addTournamentCoHost(slug, userId),
+    onSuccess: () => {
+      setSearch('');
+      refresh();
+    },
+  });
+  const removeMutation = useMutation({
+    mutationFn: (userId: string) => removeTournamentCoHost(slug, userId),
+    onSuccess: refresh,
+  });
+
+  return (
+    <div className="border-t border-rizzotto-iron-600 pt-6 mt-6">
+      <h3 className="text-sm font-semibold text-rizzotto-stone-300 mb-1">Co-hosts</h3>
+      <p className="text-xs text-rizzotto-stone-500 mb-3">
+        Co-hosts manage this tournament just like you — except transferring ownership or editing this list.
+      </p>
+
+      {coHosts.length > 0 ? (
+        <ul className="flex flex-col gap-2 mb-3">
+          {coHosts.map((u) => (
+            <li
+              key={u.id}
+              className="flex items-center gap-2 rounded bg-rizzotto-iron-800/60 px-3 py-2"
+            >
+              {u.avatar_url && <img src={u.avatar_url} alt="" className="h-6 w-6 rounded-full" />}
+              <span className="flex-1 text-sm text-rizzotto-stone-200">{u.username}</span>
+              <button
+                type="button"
+                onClick={() => removeMutation.mutate(u.id)}
+                disabled={removeMutation.isPending}
+                className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-rizzotto-stone-500 mb-3">No co-hosts yet.</p>
+      )}
+
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search players to add…"
+        className="w-full rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-800 px-3 py-2 text-sm text-rizzotto-stone-200 placeholder-rizzotto-stone-500 focus:outline-none focus:ring-1 focus:ring-rizzotto-gold-400"
+      />
+      {search.trim().length >= 2 && (
+        <div className="mt-1 max-h-48 overflow-y-auto rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900">
+          {candidates.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-rizzotto-stone-500">No matching players.</p>
+          ) : (
+            candidates.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => addMutation.mutate(u.id)}
+                disabled={addMutation.isPending}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rizzotto-stone-200 transition-colors hover:bg-rizzotto-iron-800 disabled:opacity-50"
+              >
+                {u.avatar_url && <img src={u.avatar_url} alt="" className="h-6 w-6 rounded-full" />}
+                <span>{u.username}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+      {addMutation.isError && <p className="text-xs text-red-400 mt-2">Could not add co-host.</p>}
     </div>
   );
 }
@@ -1229,6 +1330,11 @@ export function TournamentEditPage() {
             {t('common.cancel')}
           </Button>
         </div>
+
+        {/* ── Co-hosts (owner + staff) ──────────────────────────────────── */}
+        {(user.role === 'MODERATOR' ||
+          user.role === 'ADMIN' ||
+          tournament.organizer?.id === user.id) && <CoHostsSection slug={tournament.slug} />}
 
         {/* ── Transfer Ownership (admin only) ───────────────────────────── */}
         {user.role === 'ADMIN' && (

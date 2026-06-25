@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { emitStatusChange } from '../lib/emit.js';
 import { InvalidActionError } from '../lib/draft-service.js';
 import { completeMatch } from '../lib/complete-match.js';
+import { canManageTournament } from '../lib/tournament-utils.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -179,11 +180,8 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // HOST can only start matches in their own tournament
-      const isModOrAdmin = user.role === 'MODERATOR' || user.role === 'ADMIN';
-      const isOwnOrganizer = user.sub === match.tournament.organizer_id;
-
-      if (!isModOrAdmin && !isOwnOrganizer) {
+      // HOST can only start matches in their own tournament (or be a co-host)
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', user.sub, user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'You are not the organizer of this tournament',
@@ -451,17 +449,15 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, tournament: { select: { organizer_id: true } } },
+        select: { id: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
       });
       if (!match) {
         return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       }
 
-      const role = request.user?.role;
-      const userId = request.user?.sub;
-      const isAdminOrMod = role === 'ADMIN' || role === 'MODERATOR';
-      const isHost = userId && match.tournament?.organizer_id === userId;
-      if (!isAdminOrMod && !isHost) {
+      const role = request.user?.role ?? '';
+      const userId = request.user?.sub ?? '';
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
       }
 
@@ -483,15 +479,15 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const { id: matchId } = request.params as { id: string };
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, status: true, tournament: { select: { organizer_id: true } } },
+        select: { id: true, status: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       if (match.status !== 'FORFEIT' && match.status !== 'CANCELLED') {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Only FORFEIT or CANCELLED matches can be restored', statusCode: 422 });
       }
-      const role = request.user?.role;
-      const userId = request.user?.sub;
-      if (role !== 'ADMIN' && role !== 'MODERATOR' && match.tournament?.organizer_id !== userId) {
+      const role = request.user?.role ?? '';
+      const userId = request.user?.sub ?? '';
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
       }
       await fastify.prisma.match.update({
@@ -510,12 +506,12 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const { id: matchId } = request.params as { id: string };
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, tournament: { select: { organizer_id: true } } },
+        select: { id: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
-      const role = request.user?.role;
-      const userId = request.user?.sub;
-      if (role !== 'ADMIN' && role !== 'MODERATOR' && match.tournament?.organizer_id !== userId) {
+      const role = request.user?.role ?? '';
+      const userId = request.user?.sub ?? '';
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
       }
       await fastify.prisma.match.update({
@@ -541,9 +537,9 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
 
-      const role = request.user?.role;
-      const callerId = request.user?.sub;
-      if (role !== 'ADMIN' && role !== 'MODERATOR' && match.tournament?.organizer_id !== callerId) {
+      const role = request.user?.role ?? '';
+      const callerId = request.user?.sub ?? '';
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', callerId, role))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
       }
       if (match.status !== 'BYE') {
@@ -581,15 +577,13 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, status: true, player1_id: true, player2_id: true, tournament: { select: { organizer_id: true } } },
+        select: { id: true, status: true, player1_id: true, player2_id: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       if (match.status !== 'PENDING') return reply.code(409).send({ error: 'Conflict', message: 'Can only swap players in PENDING matches', statusCode: 409 });
 
       const { role, sub: userId } = request.user;
-      const isModOrAdmin = role === 'MODERATOR' || role === 'ADMIN';
-      const isHost = match.tournament?.organizer_id === userId;
-      if (!isModOrAdmin && !isHost) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
 
       const { oldPlayerId, newPlayerId } = parsed.data;
       let updateData: { player1_id?: string; player2_id?: string };
@@ -616,14 +610,12 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const { id: matchId } = request.params as { id: string };
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, tournament: { select: { organizer_id: true } } },
+        select: { id: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
 
       const { role, sub: userId } = request.user;
-      const isModOrAdmin = role === 'MODERATOR' || role === 'ADMIN';
-      const isHost = match.tournament?.organizer_id === userId;
-      if (!isModOrAdmin && !isHost) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
 
       await fastify.prisma.match.update({ where: { id: matchId }, data: { deleted_at: new Date() } });
       return reply.code(200).send({ ok: true });
@@ -646,9 +638,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       if (!match || !match.tournament_id) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
 
       const { role, sub: userId } = request.user;
-      const isModOrAdmin = role === 'MODERATOR' || role === 'ADMIN';
-      const isHost = match.tournament?.organizer_id === userId;
-      if (!isModOrAdmin && !isHost) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
 
       const { droppedPlayerId } = parsed.data;
       const winnerId = match.player1_id === droppedPlayerId ? match.player2_id : match.player2_id === droppedPlayerId ? match.player1_id : null;

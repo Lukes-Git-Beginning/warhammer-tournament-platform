@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ensureMatchGame, finalizeGameResult } from '../lib/match-games.js';
 import { REPLAY_DIR } from '../lib/replays.js';
+import { canManageTournament } from '../lib/tournament-utils.js';
 
 const LobbyCodeBodySchema = z.object({
   lobby_code: z.string().max(64).nullable(),
@@ -140,6 +141,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           player1_id: true,
           player2_id: true,
+          tournament_id: true,
           tournament: { select: { organizer_id: true } },
           games: {
             orderBy: { game_number: 'asc' },
@@ -161,8 +163,12 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         (currentUserId === match.player1_id || currentUserId === match.player2_id);
       const isStaff =
         currentUserId !== null &&
-        (currentUserId === match.tournament?.organizer_id ||
-          (request.user?.role === 'MODERATOR' || request.user?.role === 'ADMIN'));
+        (await canManageTournament(
+          fastify.prisma,
+          match.tournament_id ?? '',
+          currentUserId,
+          request.user?.role ?? '',
+        ));
       const includeLobbyCodes = isParticipant || isStaff;
 
       // For Bo1 with no game row yet, return a virtual pending game
@@ -218,6 +224,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           player1_id: true,
           player2_id: true,
+          tournament_id: true,
           tournament: { select: { organizer_id: true } },
         },
       });
@@ -228,10 +235,12 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const userId = request.user.sub;
       const isParticipant = userId === match.player1_id || userId === match.player2_id;
-      const isStaff =
-        userId === match.tournament?.organizer_id ||
-        request.user.role === 'MODERATOR' ||
-        request.user.role === 'ADMIN';
+      const isStaff = await canManageTournament(
+        fastify.prisma,
+        match.tournament_id ?? '',
+        userId,
+        request.user.role,
+      );
 
       if (!isParticipant && !isStaff) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not a participant or staff', statusCode: 403 });
