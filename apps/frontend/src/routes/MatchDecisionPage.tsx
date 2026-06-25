@@ -704,15 +704,21 @@ function BlindPickPhase({
 
           <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-6">
             {factions.map(({ faction }) => {
-              const isDisabled =
-                restrictedFactions.includes(faction.id) ||
-                (factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id));
+              // Restricted factions are nerfed, not banned — keep them pickable.
+              const isRestricted = restrictedFactions.includes(faction.id);
+              const isDisabled = factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id);
               return (
               <button
                 key={faction.id}
                 type="button"
                 disabled={isDisabled}
-                title={isDisabled ? 'Not permitted in this tournament' : undefined}
+                title={
+                  isDisabled
+                    ? 'Not permitted in this tournament'
+                    : isRestricted
+                      ? 'Restricted (nerfed) — does not count toward the leaderboard'
+                      : undefined
+                }
                 onClick={() => !isDisabled && setSelectedFactionId(faction.id)}
                 className={[
                   'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center',
@@ -1023,9 +1029,9 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
       <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-6">
         {factions.map(({ faction }) => {
           const isSelected = selectedFactions.includes(faction.id);
-          const isBanned =
-            restrictedFactions.includes(faction.id) ||
-            (factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id));
+          // Restricted factions are nerfed, not banned — keep them pickable.
+          const isRestricted = restrictedFactions.includes(faction.id);
+          const isBanned = factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id);
           const isDisabled = isBanned || (!isSelected && selectedFactions.length >= 3);
           return (
             <button
@@ -1033,6 +1039,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
               type="button"
               onClick={() => toggleFaction(faction.id)}
               disabled={isDisabled}
+              title={isRestricted && !isBanned ? 'Restricted (nerfed) — does not count toward the leaderboard' : undefined}
               className={[
                 'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center',
                 'transition-[border-color,background-color,opacity] duration-150',

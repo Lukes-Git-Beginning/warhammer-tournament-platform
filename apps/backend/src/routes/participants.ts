@@ -95,13 +95,12 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(400).send({ error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" does not exist`, statusCode: 400 });
         }
         const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
-        const restricted = tournament.restricted_factions.map((f) => f.faction_id);
         if (allowlist.length > 0 && !allowlist.includes(parsed.data.faction_id)) {
           return reply.code(400).send({ error: 'BadRequest', message: 'Faction is not permitted in this tournament', statusCode: 400 });
         }
-        if (restricted.includes(parsed.data.faction_id)) {
-          return reply.code(400).send({ error: 'BadRequest', message: 'Faction is banned in this tournament', statusCode: 400 });
-        }
+        // Restricted factions are intentionally pickable — they are nerfed, not
+        // banned. Games involving them are excluded from the leaderboard at match
+        // completion (see lib/match-games.ts), never blocked at pick time.
       }
 
       try {

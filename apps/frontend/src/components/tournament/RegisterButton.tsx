@@ -41,16 +41,23 @@ function FactionSelectGrid({
     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
       {factions.map((f) => {
         const isSelected = selected === f.id;
-        const isDisabled =
-          (hasRestriction && !allowedFactionIds!.includes(f.id)) ||
-          (restrictedFactionIds != null && restrictedFactionIds.includes(f.id));
+        // Restricted factions are nerfed, not banned — keep them pickable; only
+        // an allowlist actually forbids a faction.
+        const isRestricted = restrictedFactionIds != null && restrictedFactionIds.includes(f.id);
+        const isDisabled = hasRestriction && !allowedFactionIds!.includes(f.id);
         return (
           <button
             key={f.id}
             type="button"
             onClick={() => !isDisabled && onSelect(f.id)}
             disabled={isDisabled}
-            title={isDisabled ? 'Not permitted in this tournament' : undefined}
+            title={
+              isDisabled
+                ? 'Not permitted in this tournament'
+                : isRestricted
+                  ? 'Restricted (nerfed) — games with this faction do not count toward the leaderboard'
+                  : undefined
+            }
             className={cn(
               'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center transition-[border-color,background-color] duration-base ease-burn',
               isDisabled
