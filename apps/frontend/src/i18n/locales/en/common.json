@@ -106,6 +106,15 @@
     "github": "GitHub",
     "discord": "Discord"
   },
+  "support": {
+    "nav": "Support",
+    "title": "Support the Forge",
+    "intro": "RizzOtto's Arena is built and run for the love of the game. If it has earned its keep with you, a small contribution helps cover the servers and the upkeep — so the tournaments keep rolling and the Roll of Honour endures.",
+    "cta": "Support on Ko-fi",
+    "note": "Support is entirely voluntary and never gates any feature. Every coin is appreciated.",
+    "motto": "\"Ex Ferro, Gratia.\"",
+    "link_label": "Support"
+  },
   "login": {
     "title": "Sign In",
     "subtitle": "Sign in with your Discord account to enter tournaments or create your own.",

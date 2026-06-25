@@ -19,6 +19,7 @@ import { MatchDetailPage } from './routes/MatchDetailPage';
 import { H2HPage } from './routes/H2HPage';
 import { CalendarPage } from './routes/CalendarPage';
 import { OpenPlayPage } from './routes/OpenPlayPage';
+import { SupportPage } from './routes/SupportPage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -175,6 +176,12 @@ const matchDetailRoute = createRoute({
   component: MatchDetailPage,
 });
 
+const supportRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/support',
+  component: SupportPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -200,6 +207,7 @@ const routeTree = rootRoute.addChildren([
   matchDetailRoute,
   matchDecisionRoute,
   openPlayRoute,
+  supportRoute,
 ]);
 
 export const router = createRouter({ routeTree });
