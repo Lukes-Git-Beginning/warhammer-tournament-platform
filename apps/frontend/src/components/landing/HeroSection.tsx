@@ -27,13 +27,13 @@ export function HeroSection() {
       {/* Hero photo (full-bleed background) */}
       <div aria-hidden="true" className="rizzotto-photo-frame absolute inset-0 -z-10">
         <Picture
-          src="/img/hero-knight"
+          src="/img/rizzotto-arena"
           alt=""
-          width={1915}
-          height={821}
+          width={1618}
+          height={800}
           priority
           className="h-full w-full object-cover"
-          objectPosition="70% 50%"
+          objectPosition="50% 50%"
         />
       </div>
 
