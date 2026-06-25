@@ -901,7 +901,13 @@ export function TournamentEditPage() {
                   <Label>
                     Map Selection{' '}
                     <span className="text-rizzotto-stone-500 font-normal text-xs">
-                      ({form.map_pool.length}/{allMaps.length} selected, min 3)
+                      ({form.map_pool.length}/{allMaps.length} selected, min{' '}
+                      {Math.max(
+                        3,
+                        formatToMaxGames(form.swiss_match_format),
+                        formatToMaxGames(form.playoff_match_format),
+                        formatToMaxGames(form.finale_match_format),
+                      )})
                     </span>
                   </Label>
                   {!ongoingLocked && (

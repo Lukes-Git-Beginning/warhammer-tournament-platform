@@ -31,6 +31,51 @@ const ListQuerySchema = z.object({
   date_to: z.string().datetime().optional(),
 });
 
+// Map decision modes that draw from the shared tournament map pool. Host-preset
+// modes define their maps per round instead, so the shared-pool minimum does
+// not apply to them.
+const POOL_MAP_MODES = new Set(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'RANDOM_PICK_BAN']);
+
+function matchFormatGames(fmt?: string): number {
+  if (fmt === 'BO3') return 3;
+  if (fmt === 'BO5') return 5;
+  return 1;
+}
+
+/**
+ * Enforce the shared map-pool minimum only for pool-based modes. The minimum is
+ * a floor of 3 plus enough maps to avoid repeats within the longest match
+ * (best-of-N needs N distinct maps). Skipped entirely for host-preset modes and
+ * when map_pool is not part of the request.
+ */
+function refineMapPool(
+  data: {
+    map_decision_mode?: string;
+    map_pool?: string[];
+    swiss_match_format?: string;
+    playoff_match_format?: string;
+    finale_match_format?: string;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.map_pool === undefined) return;
+  const mode = data.map_decision_mode ?? 'RANDOM_PICK_BAN';
+  if (!POOL_MAP_MODES.has(mode)) return;
+  const min = Math.max(
+    3,
+    matchFormatGames(data.swiss_match_format),
+    matchFormatGames(data.playoff_match_format),
+    matchFormatGames(data.finale_match_format),
+  );
+  if (data.map_pool.length < min) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['map_pool'],
+      message: `Map pool must have at least ${min} maps for this map decision mode.`,
+    });
+  }
+}
+
 const CreateTournamentSchema = z.object({
   name: z.string().min(3).max(120),
   format: z.enum(['SWISS', 'AUTO_SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN']),
@@ -54,11 +99,11 @@ const CreateTournamentSchema = z.object({
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).optional(),
-  map_pool: z.array(z.string().min(1)).min(3).max(36).optional(),
+  map_pool: z.array(z.string().min(1)).max(36).optional(),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   faction_pool: z.array(z.string().min(1)).max(24).optional(),
   restricted_factions: z.array(z.string().min(1)).max(24).optional(),
-});
+}).superRefine(refineMapPool);
 
 const PatchTournamentSchema = z.object({
   name: z.string().min(3).max(120).optional(),
@@ -80,7 +125,7 @@ const PatchTournamentSchema = z.object({
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).optional(),
-  map_pool: z.array(z.string().min(1)).min(3).max(36).optional(),
+  map_pool: z.array(z.string().min(1)).max(36).optional(),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   is_major: z.boolean().optional(),
   // Fields added for full edit-form support
@@ -90,7 +135,9 @@ const PatchTournamentSchema = z.object({
   counts_for_leaderboard: z.boolean().optional(),
   faction_pool: z.array(z.string().min(1)).optional(),
   restricted_factions: z.array(z.string().min(1)).optional(),
-}).refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
+})
+  .superRefine(refineMapPool)
+  .refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
 
 // ---------------------------------------------------------------------------
 // Helper: attempt slug generation with collision retry

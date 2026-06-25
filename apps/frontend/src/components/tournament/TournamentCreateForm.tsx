@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -31,7 +31,7 @@ const TournamentCreateSchema = z.object({
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).default('RANDOM_PICK_BAN'),
-  map_pool: z.array(z.string()).min(1).max(36).default([]),
+  map_pool: z.array(z.string()).max(36).default([]),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   faction_pool: z.array(z.string()).optional(),
   restricted_factions: z.array(z.string()).optional(),
@@ -152,21 +152,37 @@ export function TournamentCreateForm() {
   });
   const allMaps = mapsData?.data ?? [];
 
+  // Default the map pool to ALL maps once they load (only if untouched).
+  const mapPoolInitialized = useRef(false);
+  useEffect(() => {
+    if (mapPoolInitialized.current || allMaps.length === 0) return;
+    mapPoolInitialized.current = true;
+    setForm((prev) =>
+      (prev.map_pool ?? []).length === 0
+        ? { ...prev, map_pool: allMaps.map((m) => m.id) }
+        : prev,
+    );
+  }, [allMaps]);
+
   const { data: factionsData } = useQuery({
     queryKey: ['factions'],
     queryFn: () => getFactions(),
   });
   const allFactions = (factionsData?.data ?? []).map((f) => f.faction).sort((a, b) => a.name.localeCompare(b.name));
 
-  const BAN_MODES = new Set(['PICK_BAN', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']);
+  // Modes that draw from the shared map pool. Host-preset modes define maps
+  // per round instead, so the shared-pool minimum does not apply to them.
+  const usesMapPool = !(
+    form.map_decision_mode === 'HOST_PRESET' || form.map_decision_mode === 'HOST_PRESET_PICK_BAN'
+  );
   const maxFormatGames = Math.max(
     formatToMaxGames(form.swiss_match_format),
     formatToMaxGames(form.playoff_match_format),
     formatToMaxGames(form.finale_match_format),
   );
-  const minPool = BAN_MODES.has(form.map_decision_mode ?? 'RANDOM_PICK_BAN')
-    ? Math.max(3, maxFormatGames)
-    : Math.max(1, maxFormatGames);
+  // Floor of 3, plus enough maps to avoid repeats within the longest match
+  // (best-of-N needs N distinct maps). Only enforced when usesMapPool.
+  const minPool = Math.max(3, maxFormatGames);
 
   const mutation = useMutation({
     mutationFn: createTournament,
@@ -210,9 +226,13 @@ export function TournamentCreateForm() {
       return;
     }
 
-    // Dynamic map pool minimum: must cover the largest match format selected.
-    if ((result.data.map_pool ?? []).length < minPool) {
-      setErrors((prev) => ({ ...prev, map_pool: `Select at least ${minPool} maps (your largest format needs ${maxFormatGames} games).` }));
+    // Map pool minimum only applies to modes that use the shared pool.
+    // Host-preset modes define their maps per round, so the pool may be empty.
+    if (usesMapPool && (result.data.map_pool ?? []).length < minPool) {
+      setErrors((prev) => ({
+        ...prev,
+        map_pool: `Select at least ${minPool} maps (your longest match is best-of-${maxFormatGames}).`,
+      }));
       return;
     }
 
@@ -798,13 +818,13 @@ export function TournamentCreateForm() {
             </div>
           )}
         </div></>)}
-        {(form.map_decision_mode === 'RANDOM_NO_REPEAT' || form.map_decision_mode === 'RANDOM_PICK_BAN') && (
+        {usesMapPool && (
           <FieldHint>
-            Minimum pool: {minPool} map{minPool !== 1 ? 's' : ''} required for your current format and mode selection (BO1=1, BO3=3, BO5=5 — ban modes need at least 3).
+            Minimum pool: {minPool} maps — a floor of 3, plus at least your longest match (best-of-{maxFormatGames}) so maps don't repeat within a match.
           </FieldHint>
         )}
-        {(form.map_pool ?? []).length < 3 && (form.map_pool ?? []).length > 0 && (
-          <FieldError message={`Select at least 3 maps (${(form.map_pool ?? []).length} selected)`} />
+        {usesMapPool && (form.map_pool ?? []).length < minPool && (
+          <FieldError message={`Select at least ${minPool} maps (${(form.map_pool ?? []).length} selected).`} />
         )}
       </fieldset>
 
@@ -988,7 +1008,7 @@ export function TournamentCreateForm() {
         disabled={
           mutation.isPending ||
           !!(form.draft_enabled && !form.draft_preset_id) ||
-          ((form.map_pool?.length ?? 0) > 0 && (form.map_pool?.length ?? 0) < 3)
+          (usesMapPool && (form.map_pool?.length ?? 0) < minPool)
         }
       >
         {mutation.isPending ? t('tournament.form.submitting') : t('tournament.form.submit')}
