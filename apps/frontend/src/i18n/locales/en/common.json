@@ -142,12 +142,55 @@
       "subtitle": "Create a new tournament for the RizzOtto's Arena community.",
       "role_warning": "You need the Host role to create tournaments. Contact an administrator to upgrade your role.",
       "aside": {
-        "heading": "What is a Tournament?",
-        "body": "A tournament brings players together to compete. You define the format, mode, and rules — others sign up and play.",
-        "bullet_format": "The <strong>format</strong> sets the bracket structure — Single Elimination, Swiss or Round Robin.",
-        "bullet_mode": "The <strong>mode</strong> sets the match size — 1v1 or team encounters.",
-        "bullet_draft": "Optional: Enable the <strong>draft system</strong> for live picks with real-time streaming.",
-        "footnote": "You can edit every field after the tournament has been created."
+        "heading": "Hosting a Tournament",
+        "intro": "Two choices set the shape of your event: the Format (how players are paired) and the Mode (how factions are chosen). Everything else in the form has its own inline hint — and you can edit any field after creating.",
+        "format_label": "Format — how players are paired",
+        "format": {
+          "single_elim": {
+            "name": "Single Elimination",
+            "desc": "One loss and you're out; the bracket runs until a single player remains. Optional third-place match."
+          },
+          "double_elim": {
+            "name": "Double Elimination",
+            "desc": "A loss drops you to the losers bracket — you're eliminated only after a second loss."
+          },
+          "swiss": {
+            "name": "Swiss",
+            "desc": "A fixed number of rounds, paired each round by record with no rematches. Optional Top-4 / Top-8 playoffs."
+          },
+          "auto_swiss": {
+            "name": "Auto Swiss",
+            "desc": "Self-running Swiss: check-in, round count and playoff size are set automatically from the turnout. All BO1."
+          },
+          "round_robin": {
+            "name": "Round Robin",
+            "desc": "Everyone plays everyone once — or twice with sides reversed in Double Round Robin."
+          },
+          "liechtenstein": {
+            "name": "Liechtenstein",
+            "desc": "A pre-drawn Swiss-style schedule with faction-spread pairings to avoid mirror matchups."
+          }
+        },
+        "mode_label": "Mode — how factions are chosen",
+        "mode": {
+          "bpt": {
+            "name": "Blind Pick (BPT)",
+            "desc": "Both players secretly pick a faction each match, revealed once both have locked."
+          },
+          "sft": {
+            "name": "Single Faction (SFT)",
+            "desc": "Pick one faction at registration; it's locked for the entire event."
+          },
+          "slt": {
+            "name": "Single List (SLT)",
+            "desc": "Upload an army list at registration; it's revealed to your opponent after each match."
+          },
+          "matrix": {
+            "name": "3×3 Matrix",
+            "desc": "Each player picks 3 factions, then you ban down the 3×3 grid to one matchup."
+          }
+        },
+        "footnote": "Map rules, the draft system, faction pools and more each have their own help in the form below."
       }
     },
     "form": {
