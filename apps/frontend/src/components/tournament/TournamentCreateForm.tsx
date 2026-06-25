@@ -58,6 +58,37 @@ function formatToMaxGames(fmt?: string): number {
   return 1;
 }
 
+/**
+ * Worst-case number of games a single player can play — the map-pool size needed
+ * so that player never repeats a map (RANDOM_NO_REPEAT). Exact for Swiss/
+ * Liechtenstein; estimated for elimination / round-robin from max_participants.
+ */
+function maxPlayerGames(form: Partial<FormData>): number {
+  const swissGames = formatToMaxGames(form.swiss_match_format);
+  const playoffGames = formatToMaxGames(form.playoff_match_format);
+  const finaleGames = formatToMaxGames(form.finale_match_format);
+  const participants = form.max_participants ? Number(form.max_participants) : 0;
+  const playoffExtra =
+    form.playoff_format === 'TOP4'
+      ? playoffGames + finaleGames
+      : form.playoff_format === 'TOP8'
+        ? 2 * playoffGames + finaleGames
+        : 0;
+  switch (form.format) {
+    case 'SWISS':
+    case 'LIECHTENSTEIN':
+      return (form.rounds_count ?? 5) * swissGames + playoffExtra;
+    case 'ROUND_ROBIN':
+      return (participants > 1 ? participants - 1 : 7) * swissGames + playoffExtra;
+    case 'SINGLE_ELIMINATION':
+      return (participants > 1 ? Math.ceil(Math.log2(participants)) : 4) * swissGames;
+    case 'DOUBLE_ELIMINATION':
+      return 2 * (participants > 1 ? Math.ceil(Math.log2(participants)) : 4) * swissGames;
+    default:
+      return (form.rounds_count ?? 5) * swissGames;
+  }
+}
+
 function buildRoundKeys(form: Partial<FormData>): { key: string; label: string; maxGames: number }[] {
   const keys: { key: string; label: string; maxGames: number }[] = [];
   const swissGames = formatToMaxGames(form.swiss_match_format);
@@ -180,9 +211,13 @@ export function TournamentCreateForm() {
     formatToMaxGames(form.playoff_match_format),
     formatToMaxGames(form.finale_match_format),
   );
-  // Floor of 3, plus enough maps to avoid repeats within the longest match
-  // (best-of-N needs N distinct maps). Only enforced when usesMapPool.
-  const minPool = Math.max(3, maxFormatGames);
+  // RANDOM_NO_REPEAT needs enough maps so no player repeats a map across all
+  // their games; other pool modes only need to cover the longest single match.
+  // Floor of 3. Only enforced when usesMapPool.
+  const minPool =
+    form.map_decision_mode === 'RANDOM_NO_REPEAT'
+      ? Math.max(3, maxPlayerGames(form))
+      : Math.max(3, maxFormatGames);
 
   const mutation = useMutation({
     mutationFn: createTournament,
@@ -231,7 +266,7 @@ export function TournamentCreateForm() {
     if (usesMapPool && (result.data.map_pool ?? []).length < minPool) {
       setErrors((prev) => ({
         ...prev,
-        map_pool: `Select at least ${minPool} maps (your longest match is best-of-${maxFormatGames}).`,
+        map_pool: `Select at least ${minPool} maps for this map decision mode.`,
       }));
       return;
     }
@@ -820,7 +855,9 @@ export function TournamentCreateForm() {
         </div></>)}
         {usesMapPool && (
           <FieldHint>
-            Minimum pool: {minPool} maps — a floor of 3, plus at least your longest match (best-of-{maxFormatGames}) so maps don't repeat within a match.
+            {form.map_decision_mode === 'RANDOM_NO_REPEAT'
+              ? `Minimum ${minPool} maps — enough that no player gets the same map twice across their games. Selecting all maps is recommended.`
+              : `Minimum ${minPool} maps — a floor of 3 plus your longest match (best-of-${maxFormatGames}), so maps don't repeat within a match.`}
           </FieldHint>
         )}
         {usesMapPool && (form.map_pool ?? []).length < minPool && (

@@ -43,13 +43,57 @@ function matchFormatGames(fmt?: string): number {
 }
 
 /**
- * Enforce the shared map-pool minimum only for pool-based modes. The minimum is
- * a floor of 3 plus enough maps to avoid repeats within the longest match
- * (best-of-N needs N distinct maps). Skipped entirely for host-preset modes and
- * when map_pool is not part of the request.
+ * Worst-case number of games a single player can play in the tournament — i.e.
+ * the map-pool size needed so that one player never repeats a map
+ * (RANDOM_NO_REPEAT). Exact for Swiss/Liechtenstein (rounds known); estimated
+ * for elimination / round-robin from max_participants (defaults when unset).
+ */
+function maxPlayerGames(data: {
+  format?: string;
+  rounds_count?: number;
+  playoff_format?: string;
+  max_participants?: number | null;
+  swiss_match_format?: string;
+  playoff_match_format?: string;
+  finale_match_format?: string;
+}): number {
+  const swissGames = matchFormatGames(data.swiss_match_format);
+  const playoffGames = matchFormatGames(data.playoff_match_format);
+  const finaleGames = matchFormatGames(data.finale_match_format);
+  const participants = data.max_participants ?? 0;
+  const playoffExtra =
+    data.playoff_format === 'TOP4'
+      ? playoffGames + finaleGames
+      : data.playoff_format === 'TOP8'
+        ? 2 * playoffGames + finaleGames
+        : 0;
+  switch (data.format) {
+    case 'SWISS':
+    case 'LIECHTENSTEIN':
+      return (data.rounds_count ?? 5) * swissGames + playoffExtra;
+    case 'ROUND_ROBIN':
+      return (participants > 1 ? participants - 1 : 7) * swissGames + playoffExtra;
+    case 'SINGLE_ELIMINATION':
+      return (participants > 1 ? Math.ceil(Math.log2(participants)) : 4) * swissGames;
+    case 'DOUBLE_ELIMINATION':
+      return 2 * (participants > 1 ? Math.ceil(Math.log2(participants)) : 4) * swissGames;
+    default:
+      return (data.rounds_count ?? 5) * swissGames;
+  }
+}
+
+/**
+ * Enforce the shared map-pool minimum only for pool-based modes (host-preset
+ * modes define maps per round). RANDOM_NO_REPEAT needs enough maps so no player
+ * repeats a map across their games; other pool modes only need to cover the
+ * longest single match. Skipped when map_pool is not part of the request.
  */
 function refineMapPool(
   data: {
+    format?: string;
+    rounds_count?: number;
+    playoff_format?: string;
+    max_participants?: number | null;
     map_decision_mode?: string;
     map_pool?: string[];
     swiss_match_format?: string;
@@ -61,12 +105,15 @@ function refineMapPool(
   if (data.map_pool === undefined) return;
   const mode = data.map_decision_mode ?? 'RANDOM_PICK_BAN';
   if (!POOL_MAP_MODES.has(mode)) return;
-  const min = Math.max(
-    3,
-    matchFormatGames(data.swiss_match_format),
-    matchFormatGames(data.playoff_match_format),
-    matchFormatGames(data.finale_match_format),
-  );
+  const min =
+    mode === 'RANDOM_NO_REPEAT'
+      ? Math.max(3, maxPlayerGames(data))
+      : Math.max(
+          3,
+          matchFormatGames(data.swiss_match_format),
+          matchFormatGames(data.playoff_match_format),
+          matchFormatGames(data.finale_match_format),
+        );
   if (data.map_pool.length < min) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

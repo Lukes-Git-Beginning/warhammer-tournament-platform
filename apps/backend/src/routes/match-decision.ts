@@ -164,6 +164,57 @@ async function getPlayedMapsInMatch(
 }
 
 /**
+ * Gibt alle Map-IDs zurück, die einer der angegebenen Spieler in diesem Turnier
+ * schon gespielt hat (über alle Matches/Runden). Basis für Per-Spieler-No-Repeat:
+ * kein Spieler soll dieselbe Map zweimal bekommen.
+ */
+async function getPlayedMapsByPlayers(
+  prisma: PrismaClient,
+  tournamentId: string,
+  playerIds: string[],
+): Promise<string[]> {
+  if (playerIds.length === 0 || !tournamentId) return [];
+  const games = await prisma.matchGame.findMany({
+    where: {
+      match: {
+        tournament_id: tournamentId,
+        deleted_at: null,
+        OR: [{ player1_id: { in: playerIds } }, { player2_id: { in: playerIds } }],
+      },
+    },
+    select: { map_decision: { select: { picked_map_id: true } } },
+  });
+  return [
+    ...new Set(
+      games
+        .map((g) => g.map_decision?.picked_map_id)
+        .filter((id): id is string => id !== null && id !== undefined),
+    ),
+  ];
+}
+
+/**
+ * Wählt 1 Map aus `pool`, die keiner der beiden Spieler im Turnier schon gespielt
+ * hat. Fällt gestaffelt zurück, wenn der Pool für beide erschöpft ist: zuerst nur
+ * No-Repeat innerhalb dieses Matches, zuletzt der volle Pool.
+ */
+export function pickMapPerPlayerNoRepeat(
+  pool: string[],
+  playedByEitherPlayer: string[],
+  playedInMatch: string[],
+): string | null {
+  if (pool.length === 0) return null;
+  const excluded = new Set([...playedByEitherPlayer, ...playedInMatch]);
+  let available = pool.filter((id) => !excluded.has(id));
+  if (available.length === 0) {
+    const withinMatch = new Set(playedInMatch);
+    available = pool.filter((id) => !withinMatch.has(id));
+  }
+  if (available.length === 0) available = pool;
+  return available[randomInt(available.length)] ?? null;
+}
+
+/**
  * Zieht `count` Maps aus `pool`; berücksichtigt No-Repeat im Match (`exclude`)
  * und turnierweit (`tournament.random_map_pool_played`).
  * Aktualisiert `random_map_pool_played` in einer Transaktion.
@@ -448,9 +499,18 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           break;
 
         case 'RANDOM_NO_REPEAT': {
+          // Per-player no-repeat: pick a map neither of the two players has
+          // played anywhere in this tournament (covers within-match repeats too).
           const playedInMatch = await getPlayedMapsInMatch(fastify.prisma, matchId, gameNumber);
-          const drawn = await drawMapsWithNoRepeat(fastify.prisma, match.tournament?.id ?? '', mapPool, playedInMatch, 1);
-          pickedMapId = drawn[0] ?? null;
+          const playerIds = [match.player1_id, match.player2_id].filter(
+            (id): id is string => !!id,
+          );
+          const playedByPlayers = await getPlayedMapsByPlayers(
+            fastify.prisma,
+            match.tournament?.id ?? '',
+            playerIds,
+          );
+          pickedMapId = pickMapPerPlayerNoRepeat(mapPool, playedByPlayers, playedInMatch);
           break;
         }
 

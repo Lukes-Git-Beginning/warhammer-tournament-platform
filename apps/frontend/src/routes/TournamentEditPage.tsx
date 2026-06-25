@@ -85,6 +85,44 @@ function formatToMaxGames(fmt?: string): number {
   return 1;
 }
 
+/** Worst-case games a single player can play — pool size for per-player no-repeat. */
+function maxPlayerGames(form: Partial<EditFormData>): number {
+  const swissGames = formatToMaxGames(form.swiss_match_format);
+  const playoffGames = formatToMaxGames(form.playoff_match_format);
+  const finaleGames = formatToMaxGames(form.finale_match_format);
+  const participants = form.max_participants ? Number(form.max_participants) : 0;
+  const playoffExtra =
+    form.playoff_format === 'TOP4'
+      ? playoffGames + finaleGames
+      : form.playoff_format === 'TOP8'
+        ? 2 * playoffGames + finaleGames
+        : 0;
+  switch (form.format) {
+    case 'SWISS':
+    case 'LIECHTENSTEIN':
+      return (form.rounds_count ?? 5) * swissGames + playoffExtra;
+    case 'ROUND_ROBIN':
+      return (participants > 1 ? participants - 1 : 7) * swissGames + playoffExtra;
+    case 'SINGLE_ELIMINATION':
+      return (participants > 1 ? Math.ceil(Math.log2(participants)) : 4) * swissGames;
+    case 'DOUBLE_ELIMINATION':
+      return 2 * (participants > 1 ? Math.ceil(Math.log2(participants)) : 4) * swissGames;
+    default:
+      return (form.rounds_count ?? 5) * swissGames;
+  }
+}
+
+/** Minimum map-pool size for the current mode (mirrors the create form + backend). */
+function mapPoolMin(form: Partial<EditFormData>): number {
+  if (form.map_decision_mode === 'RANDOM_NO_REPEAT') return Math.max(3, maxPlayerGames(form));
+  return Math.max(
+    3,
+    formatToMaxGames(form.swiss_match_format),
+    formatToMaxGames(form.playoff_match_format),
+    formatToMaxGames(form.finale_match_format),
+  );
+}
+
 function buildRoundKeys(form: Partial<EditFormData>): { key: string; label: string; maxGames: number }[] {
   const keys: { key: string; label: string; maxGames: number }[] = [];
   const swissGames = formatToMaxGames(form.swiss_match_format);
@@ -901,13 +939,7 @@ export function TournamentEditPage() {
                   <Label>
                     Map Selection{' '}
                     <span className="text-rizzotto-stone-500 font-normal text-xs">
-                      ({form.map_pool.length}/{allMaps.length} selected, min{' '}
-                      {Math.max(
-                        3,
-                        formatToMaxGames(form.swiss_match_format),
-                        formatToMaxGames(form.playoff_match_format),
-                        formatToMaxGames(form.finale_match_format),
-                      )})
+                      ({form.map_pool.length}/{allMaps.length} selected, min {mapPoolMin(form)})
                     </span>
                   </Label>
                   {!ongoingLocked && (
