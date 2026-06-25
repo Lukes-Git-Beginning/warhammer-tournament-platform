@@ -20,7 +20,7 @@ export function MusterCallAside() {
     <aside className="flex flex-col gap-6 rounded-md border border-rizzotto-iron-700/50 bg-rizzotto-iron-900/40 p-6 backdrop-blur-sm">
       <div className="relative overflow-hidden rounded-md ring-1 ring-rizzotto-iron-700/60">
         <Picture
-          src="/img/host-aside"
+          src="/img/host-aside-v2"
           alt=""
           width={720}
           height={907}

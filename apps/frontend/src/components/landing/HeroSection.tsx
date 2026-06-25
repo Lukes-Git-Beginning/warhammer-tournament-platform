@@ -27,7 +27,7 @@ export function HeroSection() {
       {/* Hero photo (full-bleed background) */}
       <div aria-hidden="true" className="rizzotto-photo-frame absolute inset-0 -z-10">
         <Picture
-          src="/img/rizzotto-arena"
+          src="/img/rizzotto-arena-v2"
           alt=""
           width={1618}
           height={800}
