@@ -1,8 +1,8 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import type { Prisma } from '@rizzotto/db';
 import { z } from 'zod';
 import ical from 'ical-generator';
-import { generateSlug, validateStatusTransition, TournamentStatus } from '../lib/tournament-utils.js';
+import { generateSlug, validateStatusTransition, TournamentStatus, canManageTournament } from '../lib/tournament-utils.js';
 import { emitStatusChange } from '../lib/emit.js';
 import { finalizeTournament } from '../lib/finalize-tournament.js';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
@@ -663,11 +663,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
       const user = request.user;
-      const isAllowed =
-        user.sub === tournament.organizer_id ||
-        user.role === 'MODERATOR' ||
-        user.role === 'ADMIN';
-      if (!isAllowed) {
+      if (!(await canManageTournament(fastify.prisma, tournament.id, user.sub, user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'This tournament is private',
@@ -725,11 +721,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const user = request.user;
-      const canEdit =
-        user.sub === tournament.organizer_id ||
-        user.role === 'MODERATOR' ||
-        user.role === 'ADMIN';
-      if (!canEdit) {
+      if (!(await canManageTournament(fastify.prisma, tournament.id, user.sub, user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'You do not have permission to edit this tournament',
@@ -1028,11 +1020,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const user = request.user;
-      const canDelete =
-        user.sub === tournament.organizer_id ||
-        user.role === 'MODERATOR' ||
-        user.role === 'ADMIN';
-      if (!canDelete) {
+      if (!(await canManageTournament(fastify.prisma, tournament.id, user.sub, user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'You do not have permission to delete this tournament',
@@ -1180,6 +1168,138 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
       await invalidate(fastify.redis, `tournament:${slug}`);
 
+      return reply.send({ ok: true });
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // Co-hosts — users who manage a tournament alongside the organizer (full host
+  // parity via canManageTournament). Editing the roster itself stays with the
+  // owner + MODERATOR/ADMIN, so a co-host can't seize control.
+  // ---------------------------------------------------------------------------
+
+  // Load tournament and assert the caller may edit its co-host roster.
+  async function loadTournamentForRoster(
+    slug: string,
+    userId: string,
+    role: string,
+    reply: FastifyReply,
+  ): Promise<{ id: string; organizer_id: string } | null> {
+    const tournament = await fastify.prisma.tournament.findFirst({
+      where: { slug, deleted_at: null },
+      select: { id: true, organizer_id: true },
+    });
+    if (!tournament) {
+      reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      return null;
+    }
+    const isOwner = tournament.organizer_id === userId;
+    const isModOrAdmin = role === 'MODERATOR' || role === 'ADMIN';
+    if (!isOwner && !isModOrAdmin) {
+      reply.code(403).send({ error: 'Forbidden', message: 'Only the tournament owner can manage co-hosts', statusCode: 403 });
+      return null;
+    }
+    return tournament;
+  }
+
+  // GET co-host roster (any authenticated user may view it)
+  fastify.get<{ Params: { slug: string } }>(
+    '/api/tournaments/:slug/co-hosts',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { slug: request.params.slug, deleted_at: null },
+        select: { id: true },
+      });
+      if (!tournament) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      }
+      const hosts = await fastify.prisma.tournamentHost.findMany({
+        where: { tournament_id: tournament.id },
+        select: { user: { select: { id: true, username: true, avatar_url: true } } },
+        orderBy: { user: { username: 'asc' } },
+      });
+      return reply.send(hosts.map((h) => h.user));
+    },
+  );
+
+  // GET co-host candidates — owner + mod/admin user search to add
+  fastify.get<{ Params: { slug: string }; Querystring: { q?: string } }>(
+    '/api/tournaments/:slug/co-host-candidates',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { sub: userId, role } = request.user;
+      const tournament = await loadTournamentForRoster(request.params.slug, userId, role, reply);
+      if (!tournament) return;
+      const q = (request.query.q ?? '').trim();
+      if (q.length < 2) return reply.send([]);
+      const existing = await fastify.prisma.tournamentHost.findMany({
+        where: { tournament_id: tournament.id },
+        select: { user_id: true },
+      });
+      const excludeIds = [tournament.organizer_id, ...existing.map((h) => h.user_id)];
+      const users = await fastify.prisma.user.findMany({
+        where: {
+          deleted_at: null,
+          id: { notIn: excludeIds },
+          username: { contains: q, mode: 'insensitive' },
+        },
+        select: { id: true, username: true, avatar_url: true },
+        orderBy: { username: 'asc' },
+        take: 10,
+      });
+      return reply.send(users);
+    },
+  );
+
+  // POST add co-host — owner + mod/admin
+  fastify.post<{ Params: { slug: string }; Body: { user_id: string } }>(
+    '/api/tournaments/:slug/co-hosts',
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['user_id'],
+          properties: { user_id: { type: 'string', format: 'uuid' } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { sub: userId, role } = request.user;
+      const tournament = await loadTournamentForRoster(request.params.slug, userId, role, reply);
+      if (!tournament) return;
+      const { user_id } = request.body;
+      if (user_id === tournament.organizer_id) {
+        return reply.code(400).send({ error: 'BadRequest', message: 'The owner is already a host', statusCode: 400 });
+      }
+      const target = await fastify.prisma.user.findUnique({
+        where: { id: user_id },
+        select: { id: true, deleted_at: true, username: true, avatar_url: true },
+      });
+      if (!target || target.deleted_at) {
+        return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
+      }
+      await fastify.prisma.tournamentHost.upsert({
+        where: { tournament_id_user_id: { tournament_id: tournament.id, user_id } },
+        create: { tournament_id: tournament.id, user_id },
+        update: {},
+      });
+      return reply.send({ id: target.id, username: target.username, avatar_url: target.avatar_url });
+    },
+  );
+
+  // DELETE remove co-host — owner + mod/admin
+  fastify.delete<{ Params: { slug: string; userId: string } }>(
+    '/api/tournaments/:slug/co-hosts/:userId',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { sub: userId, role } = request.user;
+      const tournament = await loadTournamentForRoster(request.params.slug, userId, role, reply);
+      if (!tournament) return;
+      await fastify.prisma.tournamentHost.deleteMany({
+        where: { tournament_id: tournament.id, user_id: request.params.userId },
+      });
       return reply.send({ ok: true });
     },
   );

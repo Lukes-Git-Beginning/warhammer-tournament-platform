@@ -1555,3 +1555,26 @@ export function transferTournamentOwner(slug: string, organizer_id: string): Pro
     body: JSON.stringify({ organizer_id }),
   });
 }
+
+// --- Co-hosts -------------------------------------------------------------
+export type CoHostUser = { id: string; username: string; avatar_url: string | null };
+
+export function getTournamentCoHosts(slug: string): Promise<CoHostUser[]> {
+  return apiFetch(`/api/tournaments/${slug}/co-hosts`);
+}
+
+export function searchCoHostCandidates(slug: string, q: string): Promise<CoHostUser[]> {
+  return apiFetch(`/api/tournaments/${slug}/co-host-candidates?q=${encodeURIComponent(q)}`);
+}
+
+export function addTournamentCoHost(slug: string, user_id: string): Promise<CoHostUser> {
+  return apiFetch(`/api/tournaments/${slug}/co-hosts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id }),
+  });
+}
+
+export function removeTournamentCoHost(slug: string, userId: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/tournaments/${slug}/co-hosts/${userId}`, { method: 'DELETE' });
+}

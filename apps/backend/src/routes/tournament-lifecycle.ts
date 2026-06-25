@@ -8,6 +8,7 @@
 
 import type { FastifyPluginAsync } from 'fastify';
 import { emitListsLocked } from '../lib/emit.js';
+import { canManageTournament } from '../lib/tournament-utils.js';
 
 // Allowed statuses for locking (DRAFT and COMPLETED are excluded per spec)
 const LOCKABLE_STATUSES = new Set([
@@ -43,10 +44,8 @@ const tournamentLifecycleRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Auth: only organizer, MODERATOR, or ADMIN
-      const isOrganizer = user.sub === tournament.organizer_id;
-      const isPrivileged = user.role === 'ADMIN' || user.role === 'MODERATOR';
-      if (!isOrganizer && !isPrivileged) {
+      // Auth: only organizer, co-host, MODERATOR, or ADMIN
+      if (!(await canManageTournament(fastify.prisma, tournament.id, user.sub, user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'Only the tournament organizer or an admin/moderator may lock army lists',

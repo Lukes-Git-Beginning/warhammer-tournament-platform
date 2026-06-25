@@ -184,6 +184,7 @@ model User {
 
   // Organizer relations
   organized_tournaments Tournament[]  @relation("OrganizedTournaments")
+  co_hosted_tournaments TournamentHost[]
   created_draft_presets DraftPreset[] @relation("CreatedDraftPresets")
 
   // Player relations
@@ -299,11 +300,26 @@ model Tournament {
   major_for_seasons     Season[]                     @relation("SeasonMajor")
   map_pool              TournamentMapPool[]
   tournament_army_lists TournamentArmyList[]
+  co_hosts              TournamentHost[]
 
   @@index([status])
   @@index([organizer_id])
   @@index([start_date])
   @@index([deleted_at])
+}
+
+/// Co-hosts: users who can manage a tournament alongside its organizer.
+/// Full host parity except transferring ownership and editing the co-host list.
+model TournamentHost {
+  tournament_id String @db.Uuid
+  user_id       String @db.Uuid
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([tournament_id, user_id])
+  @@index([tournament_id])
+  @@index([user_id])
 }
 
 // Empty allowlist => all factions allowed.
