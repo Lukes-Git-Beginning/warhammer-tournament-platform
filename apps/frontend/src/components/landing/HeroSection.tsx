@@ -6,6 +6,7 @@ import { useAuthQuery } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Picture } from '@/components/ui/picture';
 import { ScrollCue } from './ScrollCue';
+import { LaunchCountdown } from './LaunchCountdown';
 
 /**
  * Section 1 — Hero. Cinematic photo backdrop + animated wordmark reveal +
@@ -93,9 +94,10 @@ export function HeroSection() {
               visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
             }}
           >
-            <Button asChild variant="iron" size="lg">
-              <Link to="/leaderboard">{t('hero.cta_secondary')}</Link>
-            </Button>
+            {/* TEMPORARY: launch-day countdown CTA — replaces the leaderboard
+               button until the Grand Launch Tournament is over. Revert by
+               restoring this Button + deleting LaunchCountdown.tsx. */}
+            <LaunchCountdown />
           </motion.div>
         </motion.div>
 
