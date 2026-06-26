@@ -164,14 +164,27 @@ async function generateNextSwissRound(
   swissMatches: { id: string; round: number; phase: string | null; status: string; player1_id: string | null; player2_id: string | null; winner_id: string | null; match_number: number }[],
   targetRound: number,
 ): Promise<void> {
-  const participantIds = [...new Set(
-    swissMatches.flatMap((m) => [m.player1_id, m.player2_id].filter((id): id is string => id !== null)),
-  )];
+  const matchPlayerIds = swissMatches.flatMap((m) =>
+    [m.player1_id, m.player2_id].filter((id): id is string => id !== null),
+  );
 
+  // Source the player set from TournamentParticipant — not only from existing
+  // match rows — so a player checked in after round 1 (late joiner) is folded
+  // into pairing. CHECKED_IN + WITHDREW is the active set; anyone already in a
+  // match row is unioned in to preserve their faction/status. REGISTERED is
+  // excluded: in Auto Swiss only CHECKED_IN players were ever in the bracket.
   const dbParticipants = await prisma.tournamentParticipant.findMany({
-    where: { tournament_id: tournament.id, user_id: { in: participantIds }, deleted_at: null },
+    where: {
+      tournament_id: tournament.id,
+      deleted_at: null,
+      OR: [
+        { status: { in: ['CHECKED_IN', 'WITHDREW'] } },
+        { user_id: { in: matchPlayerIds } },
+      ],
+    },
     select: { user_id: true, faction_id: true, status: true },
   });
+  const participantIds = dbParticipants.map((p) => p.user_id);
   const factionById = new Map(dbParticipants.map((p) => [p.user_id, p.faction_id ?? null]));
   const withdrawnIds = new Set(dbParticipants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
 
