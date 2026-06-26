@@ -69,6 +69,12 @@ function SafeMarkdown({ children }: { children: string }) {
         code: ({ children: c }) => (
           <code className="rounded bg-stone-800 px-1 py-0.5 text-sm font-mono">{c}</code>
         ),
+        blockquote: ({ children: c }) => (
+          <blockquote className="border-l-[3px] border-rizzotto-gold-500 pl-3 my-2 italic text-rizzotto-stone-300">{c}</blockquote>
+        ),
+        a: ({ children: c, href }) => (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="text-rizzotto-gold-400 underline hover:text-rizzotto-gold-300">{c}</a>
+        ),
       }}
     >
       {clean}

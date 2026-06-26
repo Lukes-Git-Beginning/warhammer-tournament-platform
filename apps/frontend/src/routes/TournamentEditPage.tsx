@@ -22,7 +22,7 @@ import {
 import { useAuthQuery } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { Select } from '@/components/ui/select';
 import { Label, FieldError, FieldHint } from '@/components/ui/label';
 import { PageShell } from '@/components/layout/PageShell';
@@ -638,6 +638,25 @@ export function TournamentEditPage() {
   const isSwissFamily = form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN';
   const isAutoSwiss = form.format === 'AUTO_SWISS';
 
+  const actionButtons = (
+    <div className="flex gap-3">
+      <Button type="submit" variant="forge" size="md" disabled={mutation.isPending}>
+        {mutation.isPending
+          ? t('tournament.form.submitting_edit')
+          : t('tournament.form.submit_edit')}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="md"
+        disabled={mutation.isPending}
+        onClick={() => navigate({ to: '/tournaments/$slug', params: { slug } })}
+      >
+        {t('common.cancel')}
+      </Button>
+    </div>
+  );
+
   return (
     <PageShell variant="narrow">
       <Link
@@ -661,6 +680,8 @@ export function TournamentEditPage() {
       </header>
 
       <form onSubmit={handleSubmit} className="w-full space-y-6">
+        {actionButtons}
+
         {mutation.error && (
           <div className="rounded-md border border-red-800 bg-red-950/50 p-4 text-sm text-red-300">
             {(mutation.error as Error).message}
@@ -735,12 +756,13 @@ export function TournamentEditPage() {
 
         <div>
           <Label htmlFor="tef-description">{t('tournament.form.description')}</Label>
-          <Textarea
+          <MarkdownEditor
             id="tef-description"
             name="description"
             value={form.description}
             onChange={handleChange}
             rows={4}
+            maxLength={5000}
             placeholder={t('tournament.form.description_placeholder')}
             disabled={ongoingLocked}
           />
@@ -1280,14 +1302,14 @@ export function TournamentEditPage() {
         {/* ── Rules ─────────────────────────────────────────────────────── */}
         <div>
           <Label htmlFor="tef-rules">{t('tournament.form.rules')}</Label>
-          <Textarea
+          <MarkdownEditor
             id="tef-rules"
             name="rules"
             value={form.rules}
             onChange={handleChange}
             rows={6}
+            maxLength={10000}
             placeholder={t('tournament.form.rules_placeholder')}
-            className="font-mono text-sm"
             disabled={ongoingLocked}
           />
           {ongoingLocked && <LockNote>Locked — tournament is underway</LockNote>}
@@ -1352,22 +1374,7 @@ export function TournamentEditPage() {
         </fieldset>
 
         {/* ── Actions ───────────────────────────────────────────────────── */}
-        <div className="flex gap-3">
-          <Button type="submit" variant="forge" size="md" disabled={mutation.isPending}>
-            {mutation.isPending
-              ? t('tournament.form.submitting_edit')
-              : t('tournament.form.submit_edit')}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            disabled={mutation.isPending}
-            onClick={() => navigate({ to: '/tournaments/$slug', params: { slug } })}
-          >
-            {t('common.cancel')}
-          </Button>
-        </div>
+        {actionButtons}
 
         {/* ── Co-hosts (owner + staff) ──────────────────────────────────── */}
         {(user.role === 'MODERATOR' ||

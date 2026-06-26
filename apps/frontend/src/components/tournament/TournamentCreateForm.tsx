@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { createTournament, listDraftPresets, getMaps, getFactions } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { Select } from '@/components/ui/select';
 import { Label, FieldError, FieldHint } from '@/components/ui/label';
 
@@ -340,12 +340,13 @@ export function TournamentCreateForm() {
 
       <div>
         <Label htmlFor="tcf-description">{t('tournament.form.description')}</Label>
-        <Textarea
+        <MarkdownEditor
           id="tcf-description"
           name="description"
           value={form.description ?? ''}
           onChange={handleChange}
           rows={4}
+          maxLength={5000}
           placeholder={t('tournament.form.description_placeholder')}
         />
       </div>
@@ -448,14 +449,14 @@ export function TournamentCreateForm() {
 
       <div>
         <Label htmlFor="tcf-rules">{t('tournament.form.rules')}</Label>
-        <Textarea
+        <MarkdownEditor
           id="tcf-rules"
           name="rules"
           value={form.rules ?? ''}
           onChange={handleChange}
           rows={6}
+          maxLength={10000}
           placeholder={t('tournament.form.rules_placeholder')}
-          className="font-mono text-sm"
         />
       </div>
 

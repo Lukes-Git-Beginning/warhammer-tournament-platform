@@ -423,3 +423,80 @@ h6 {
   animation-duration: 320ms;
   animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* ───────────────────────────────────────────────────────────── */
+/* TipTap (markdown WYSIWYG editor)                                */
+/* ───────────────────────────────────────────────────────────── */
+.tiptap:focus {
+  outline: none;
+}
+/* Placeholder text on an empty editor (extension sets data-placeholder). */
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-rizzotto-stone-500);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+/* Block-level formatting — Tailwind preflight resets these, and the typography
+   plugin isn't installed, so style them explicitly (mirrors the rendered
+   tournament page). Unlayered rules intentionally win over preflight. */
+.tiptap p {
+  margin: 0 0 0.6rem;
+}
+.tiptap h1,
+.tiptap h2,
+.tiptap h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--color-rizzotto-stone-100);
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  margin: 0.9rem 0 0.4rem;
+}
+.tiptap h1 {
+  font-size: 1.4rem;
+}
+.tiptap h2 {
+  font-size: 1.25rem;
+}
+.tiptap h3 {
+  font-size: 1.05rem;
+}
+.tiptap ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin: 0 0 0.6rem;
+}
+.tiptap ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+  margin: 0 0 0.6rem;
+}
+.tiptap li {
+  margin: 0.15rem 0;
+}
+.tiptap blockquote {
+  border-left: 3px solid var(--color-rizzotto-gold-500);
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+  font-style: italic;
+  color: var(--color-rizzotto-stone-300);
+}
+.tiptap a {
+  color: var(--color-rizzotto-gold-400);
+  text-decoration: underline;
+}
+.tiptap code {
+  border-radius: 0.25rem;
+  background: var(--color-rizzotto-iron-800);
+  padding: 0.05rem 0.3rem;
+  font-family: monospace;
+  font-size: 0.85em;
+}
+.tiptap strong {
+  font-weight: 700;
+}
+.tiptap em {
+  font-style: italic;
+}
