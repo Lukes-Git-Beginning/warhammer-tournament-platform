@@ -68,7 +68,7 @@ export interface Tournament {
   registration_deadline: string | null;
   rules: string | null;
   discord_link: string | null;
-  organizer?: {
+  host?: {
     id: string;
     username: string;
     avatar_url: string | null;
@@ -336,7 +336,7 @@ export function patchTournament(
   });
 }
 
-/** Generates the bracket and transitions to ONGOING. Organizer only; note :id, not :slug. */
+/** Generates the bracket and transitions to ONGOING. Host only; note :id, not :slug. */
 export function startTournament(id: string): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/tournaments/${id}/start`, {
     method: 'POST',
@@ -1559,11 +1559,11 @@ export function getEligibleOwners(): Promise<{ id: string; username: string; ava
   return apiFetch('/api/users/eligible-owners');
 }
 
-export function transferTournamentOwner(slug: string, organizer_id: string): Promise<{ ok: boolean }> {
+export function transferTournamentOwner(slug: string, host_id: string): Promise<{ ok: boolean }> {
   return apiFetch(`/api/tournaments/${slug}/transfer-owner`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ organizer_id }),
+    body: JSON.stringify({ host_id }),
   });
 }
 

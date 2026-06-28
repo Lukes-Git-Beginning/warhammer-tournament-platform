@@ -282,7 +282,7 @@ export function TournamentDetail() {
   const startDate = formatInUserTimezone(tournament.start_date, user?.timezone ?? undefined);
 
   // Server-computed (host, co-host, moderator, admin) — co-hosts now get the full
-  // management UI, not just the organizer.
+  // management UI, not just the host.
   const canManage = !!tournament.can_manage;
 
   // Derive participant status from the /participants/me endpoint
@@ -667,10 +667,10 @@ export function TournamentDetail() {
               </span>
             </div>
           )}
-          {tournament.organizer && (
+          {tournament.host && (
             <div>
               <span className="text-stone-500">{t('tournament.detail.organizer')}</span>{' '}
-              <span className="text-stone-200">{tournament.organizer.username}</span>
+              <span className="text-stone-200">{tournament.host.username}</span>
             </div>
           )}
           {tournament.discord_link && (

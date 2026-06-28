@@ -361,7 +361,7 @@ export async function cleanupTestData(userIds: string[]): Promise<void> {
 
   // Find tournaments organized by these users
   const organizedTournaments = await prisma.tournament.findMany({
-    where: { organizer_id: { in: userIds }, deleted_at: null },
+    where: { host_id: { in: userIds }, deleted_at: null },
     select: { id: true },
   });
   const tournamentIds = organizedTournaments.map((t) => t.id);

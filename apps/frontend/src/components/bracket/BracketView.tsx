@@ -261,7 +261,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
         />
       )}
 
-      {/* Next Swiss Round button — organizer only */}
+      {/* Next Swiss Round button — host only */}
       {showNextRoundButton && (
         <div className="mb-4">
           {nextRoundError && (

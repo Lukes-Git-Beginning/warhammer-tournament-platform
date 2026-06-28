@@ -522,7 +522,7 @@ export function TournamentEditPage() {
     !!tournament &&
     (user.role === 'MODERATOR' ||
       user.role === 'ADMIN' ||
-      (user.role === 'HOST' && tournament.organizer?.id === user.id));
+      (user.role === 'HOST' && tournament.host?.id === user.id));
 
   useEffect(() => {
     if (!isLoading && tournament && user && !canManage) {
@@ -1380,11 +1380,11 @@ export function TournamentEditPage() {
         {/* ── Co-hosts (owner + staff) ──────────────────────────────────── */}
         {(user.role === 'MODERATOR' ||
           user.role === 'ADMIN' ||
-          tournament.organizer?.id === user.id) && <CoHostsSection slug={tournament.slug} />}
+          tournament.host?.id === user.id) && <CoHostsSection slug={tournament.slug} />}
 
         {/* ── Transfer Ownership (admin only) ───────────────────────────── */}
         {user.role === 'ADMIN' && (
-          <TransferOwnerSection slug={tournament.slug} currentOwnerId={tournament.organizer?.id ?? ''} />
+          <TransferOwnerSection slug={tournament.slug} currentOwnerId={tournament.host?.id ?? ''} />
         )}
       </form>
     </PageShell>

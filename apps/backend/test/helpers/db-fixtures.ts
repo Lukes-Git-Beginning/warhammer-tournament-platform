@@ -74,7 +74,7 @@ export async function createTestTournament(opts: {
       id,
       slug,
       name: `Test Tournament ${id.slice(0, 8)}`,
-      organizer_id: opts.organizerId,
+      host_id: opts.organizerId,
       format: 'SWISS',
       status: 'ONGOING',
       start_date: new Date('2026-06-01'),

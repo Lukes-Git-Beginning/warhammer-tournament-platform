@@ -96,8 +96,8 @@ enum MatchStatus {
   ONGOING
   COMPLETED
   BYE // system-generated walkover (odd participant count)
-  FORFEIT // organizer-triggered (no-show / DQ)
-  DISPUTED // Q4: dual-submit conflict, awaiting organizer/admin override
+  FORFEIT // host-triggered (no-show / DQ)
+  DISPUTED // Q4: dual-submit conflict, awaiting host/admin override
   AWAITING_CONFIRMATION // Discord flow: one player declared, waiting for opponent response
   CANCELLED // Open Play no-contest: both players agreed to close without a result
   NO_CONTEST // tournament double-bye: technical abort, both players get a bye point (1.0, no BH)
@@ -184,8 +184,8 @@ model User {
   updated_at         DateTime  @updatedAt
   deleted_at         DateTime?
 
-  // Organizer relations
-  organized_tournaments Tournament[]  @relation("OrganizedTournaments")
+  // Host relations
+  hosted_tournaments    Tournament[]  @relation("HostedTournaments")
   co_hosted_tournaments TournamentHost[]
   created_draft_presets DraftPreset[] @relation("CreatedDraftPresets")
 
@@ -260,7 +260,7 @@ model Tournament {
   name                   String
   description            String?
   poster_url             String?
-  organizer_id           String               @db.Uuid
+  host_id                String               @db.Uuid
   format                 TournamentFormat
   mode                   TournamentMode       @default(BPT)
   status                 TournamentStatus     @default(DRAFT)
@@ -291,7 +291,7 @@ model Tournament {
   deleted_at             DateTime?
 
   // Relations
-  organizer             User                         @relation("OrganizedTournaments", fields: [organizer_id], references: [id])
+  host                  User                         @relation("HostedTournaments", fields: [host_id], references: [id])
   draft_preset          DraftPreset?                 @relation(fields: [draft_preset_id], references: [id])
   faction_allowlist     TournamentFactionAllowlist[]
   restricted_factions   TournamentRestrictedFaction[]
@@ -305,12 +305,12 @@ model Tournament {
   co_hosts              TournamentHost[]
 
   @@index([status])
-  @@index([organizer_id])
+  @@index([host_id])
   @@index([start_date])
   @@index([deleted_at])
 }
 
-/// Co-hosts: users who can manage a tournament alongside its organizer.
+/// Co-hosts: users who can manage a tournament alongside its host.
 /// Full host parity except transferring ownership and editing the co-host list.
 model TournamentHost {
   tournament_id String @db.Uuid
@@ -359,7 +359,7 @@ model TournamentParticipant {
   army_list_id    String?           @db.Uuid
   status          ParticipantStatus @default(REGISTERED)
   registered_at   DateTime          @default(now())
-  lists_locked_at DateTime? // Q3: after organizer locks lists, army_list_id becomes immutable
+  lists_locked_at DateTime? // Q3: after host locks lists, army_list_id becomes immutable
   deleted_at      DateTime?
 
   tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
@@ -513,13 +513,13 @@ model MatchBlindPick {
 }
 
 // Q4: Dual-submit match reports. Each player submits their own report; agreement
-// completes the match, disagreement flips status to DISPUTED for organizer review.
+// completes the match, disagreement flips status to DISPUTED for host review.
 model MatchReport {
   id            String          @id @default(uuid()) @db.Uuid
   match_id      String          @db.Uuid
   reporter_id   String          @db.Uuid
   result        MatchResultType
-  player1_score Int? // optional raw VP / battle points for organizer context
+  player1_score Int? // optional raw VP / battle points for host context
   player2_score Int?
   notes         String?
   created_at    DateTime        @default(now())

@@ -118,7 +118,7 @@ beforeEach(async () => {
       name: 'Draft Test Tournament',
       format: 'SINGLE_ELIMINATION',
       status: 'ONGOING',
-      organizer_id: ADMIN_ID,
+      host_id: ADMIN_ID,
       timezone: 'Europe/Berlin',
       start_date: new Date('2026-06-01'),
     },

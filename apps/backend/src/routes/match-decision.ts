@@ -1083,7 +1083,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // POST /api/matches/:id/decision/force-resolve
-  // Organizer / Moderator / Admin only: immediately resolve an in-progress
+  // Host / Moderator / Admin only: immediately resolve an in-progress
   // PICK_BAN decision by randomly selecting from the remaining (non-banned)
   // maps. Useful when a player goes AFK during the ban phase.
   // -------------------------------------------------------------------------

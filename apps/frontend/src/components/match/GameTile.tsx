@@ -211,7 +211,7 @@ export function GameTile({
       {/* DISPUTED */}
       {game.status === 'DISPUTED' && (
         <div className="rounded-lg border border-yellow-600/50 bg-yellow-900/20 p-3 text-sm text-yellow-300 text-center">
-          Result disputed — waiting for organizer to resolve.
+          Result disputed — waiting for host to resolve.
         </div>
       )}
 

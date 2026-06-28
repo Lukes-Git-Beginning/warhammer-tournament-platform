@@ -258,7 +258,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
               is_major: true,
               created_at: true,
               rounds_count: true,
-              organizer: { select: { id: true, username: true, avatar_url: true } },
+              host: { select: { id: true, username: true, avatar_url: true } },
               _count: { select: { participants: { where: { deleted_at: null } } } },
               faction_allowlist: { select: { faction: { select: { name: true } } } },
             },
@@ -374,7 +374,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           draft_enabled: data.draft_enabled ?? false,
           draft_preset_id: data.draft_preset_id ?? null,
           description: data.description,
-          organizer_id: request.user.sub,
+          host_id: request.user.sub,
           // Welle 2
           rounds_count: isAutoSwiss ? undefined : data.rounds_count,
           playoff_format: isAutoSwiss ? undefined : data.playoff_format,
@@ -392,7 +392,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           mode: true,
           status: true,
           visibility: true,
-          organizer_id: true,
+          host_id: true,
           rounds_count: true,
           playoff_format: true,
           swiss_match_format: true,
@@ -626,7 +626,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         draft_enabled: true,
         counts_for_leaderboard: true,
         is_major: true,
-        organizer_id: true,
+        host_id: true,
         rounds_count: true,
         playoff_format: true,
         has_third_place_match: true,
@@ -637,7 +637,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         map_preset_config: true,
         created_at: true,
         updated_at: true,
-        organizer: { select: { id: true, username: true, avatar_url: true } },
+        host: { select: { id: true, username: true, avatar_url: true } },
         _count: {
           select: { participants: { where: { deleted_at: null } } },
         },
@@ -695,7 +695,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { slug, deleted_at: null },
         select: {
           id: true,
-          organizer_id: true,
+          host_id: true,
           status: true,
           format: true,
           mode: true,
@@ -1010,7 +1010,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, organizer_id: true },
+        select: { id: true, host_id: true },
       });
 
       if (!tournament) {
@@ -1139,13 +1139,13 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, organizer_id: true },
+        select: { id: true, host_id: true },
       });
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       }
 
-      const isOwner = tournament.organizer_id === userId;
+      const isOwner = tournament.host_id === userId;
       const isModOrAdmin = role === 'MODERATOR' || role === 'ADMIN';
       if (!isOwner && !isModOrAdmin) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Only the tournament host, moderators, or admins can transfer ownership', statusCode: 403 });
@@ -1165,7 +1165,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
       await fastify.prisma.tournament.update({
         where: { id: tournament.id },
-        data: { organizer_id: new_host_id },
+        data: { host_id: new_host_id },
       });
 
       await invalidate(fastify.redis, `tournament:${slug}`);
@@ -1175,7 +1175,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // ---------------------------------------------------------------------------
-  // Co-hosts — users who manage a tournament alongside the organizer (full host
+  // Co-hosts — users who manage a tournament alongside the host (full host
   // parity via canManageTournament). Editing the roster itself stays with the
   // owner + MODERATOR/ADMIN, so a co-host can't seize control.
   // ---------------------------------------------------------------------------
@@ -1186,16 +1186,16 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
     userId: string,
     role: string,
     reply: FastifyReply,
-  ): Promise<{ id: string; organizer_id: string } | null> {
+  ): Promise<{ id: string; host_id: string } | null> {
     const tournament = await fastify.prisma.tournament.findFirst({
       where: { slug, deleted_at: null },
-      select: { id: true, organizer_id: true },
+      select: { id: true, host_id: true },
     });
     if (!tournament) {
       reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       return null;
     }
-    const isOwner = tournament.organizer_id === userId;
+    const isOwner = tournament.host_id === userId;
     const isModOrAdmin = role === 'MODERATOR' || role === 'ADMIN';
     if (!isOwner && !isModOrAdmin) {
       reply.code(403).send({ error: 'Forbidden', message: 'Only the tournament owner can manage co-hosts', statusCode: 403 });
@@ -1239,7 +1239,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { tournament_id: tournament.id },
         select: { user_id: true },
       });
-      const excludeIds = [tournament.organizer_id, ...existing.map((h) => h.user_id)];
+      const excludeIds = [tournament.host_id, ...existing.map((h) => h.user_id)];
       const users = await fastify.prisma.user.findMany({
         where: {
           deleted_at: null,
@@ -1272,7 +1272,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       const tournament = await loadTournamentForRoster(request.params.slug, userId, role, reply);
       if (!tournament) return;
       const { user_id } = request.body;
-      if (user_id === tournament.organizer_id) {
+      if (user_id === tournament.host_id) {
         return reply.code(400).send({ error: 'BadRequest', message: 'The owner is already a host', statusCode: 400 });
       }
       const target = await fastify.prisma.user.findUnique({

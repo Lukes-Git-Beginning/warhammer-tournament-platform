@@ -160,7 +160,7 @@ export async function completeMatch(
       match_number: true,
       player1_faction_id: true,
       player2_faction_id: true,
-      tournament: { select: { organizer_id: true, format: true, mode: true, counts_for_leaderboard: true } },
+      tournament: { select: { host_id: true, format: true, mode: true, counts_for_leaderboard: true } },
     },
   });
 

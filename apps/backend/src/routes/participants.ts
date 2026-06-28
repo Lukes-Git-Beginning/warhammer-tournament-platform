@@ -234,13 +234,13 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Self-withdraw is only allowed before the tournament starts. Once it is
-      // ONGOING/COMPLETED, a player must be dropped by an organizer (which
+      // ONGOING/COMPLETED, a player must be dropped by an host (which
       // forfeits open matches and keeps the bracket consistent).
       if (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
           message:
-            'Cannot withdraw once the tournament has started — contact an organizer to be dropped',
+            'Cannot withdraw once the tournament has started — contact an host to be dropped',
           statusCode: 422,
         });
       }
@@ -315,7 +315,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, organizer_id: true },
+        select: { id: true, host_id: true },
       });
 
       if (!tournament) {
@@ -608,7 +608,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
   // ---------------------------------------------------------------------------
   // POST /api/tournaments/:slug/participants/:userId/drop
   // Drop a participant mid-tournament. Callable by the player themselves OR by
-  // organizer/moderator/admin. Sets status WITHDREW, forfeits any open match,
+  // host/moderator/admin. Sets status WITHDREW, forfeits any open match,
   // and voids (deletes) unfinished MatchGames with no winner yet.
   // ---------------------------------------------------------------------------
   fastify.post(
@@ -628,7 +628,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, status: true, organizer_id: true },
+        select: { id: true, status: true, host_id: true },
       });
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
@@ -695,7 +695,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findUnique({
         where: { slug, deleted_at: null },
-        select: { id: true, status: true, organizer_id: true },
+        select: { id: true, status: true, host_id: true },
       });
       if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       if (tournament.status !== 'ONGOING') {

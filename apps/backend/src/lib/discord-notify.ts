@@ -314,7 +314,7 @@ export async function notifyReQueuePrompt(discordId: string): Promise<void> {
 }
 
 /**
- * DM moderators about an Open Play dispute (no tournament organizer to notify).
+ * DM moderators about an Open Play dispute (no tournament host to notify).
  */
 export async function notifyOpenPlayDispute(matchId: string, reporterUsername: string): Promise<void> {
   const token = getToken();
@@ -573,13 +573,13 @@ export async function notifyHostsOfWithdrawal(
     const [tournament, user] = await Promise.all([
       prisma.tournament.findFirst({
         where: { id: tournamentId },
-        select: { name: true, slug: true, organizer_id: true, co_hosts: { select: { user_id: true } } },
+        select: { name: true, slug: true, host_id: true, co_hosts: { select: { user_id: true } } },
       }),
       prisma.user.findUnique({ where: { id: userId }, select: { username: true } }),
     ]);
     if (!tournament || !user) return;
 
-    const hostIds = [...new Set([tournament.organizer_id, ...tournament.co_hosts.map((h) => h.user_id)])]
+    const hostIds = [...new Set([tournament.host_id, ...tournament.co_hosts.map((h) => h.user_id)])]
       .filter((hid) => hid !== excludeUserId);
     if (hostIds.length === 0) return;
     const hosts = await prisma.user.findMany({
@@ -597,7 +597,7 @@ export async function notifyHostsOfWithdrawal(
 }
 
 /**
- * Notify organizer + all moderators about a match dispute via DM.
+ * Notify host + all moderators about a match dispute via DM.
  */
 export async function notifyDispute(
   match: MatchForNotify,
@@ -610,11 +610,11 @@ export async function notifyDispute(
   }
 
   try {
-    // Fetch organizer + all moderators
-    const [organizer, moderators] = await Promise.all([
+    // Fetch host + all moderators
+    const [tournament, moderators] = await Promise.all([
       prisma.tournament.findUnique({
         where: { id: match.tournament.id },
-        select: { organizer: { select: { discord_id: true, username: true } } },
+        select: { host: { select: { discord_id: true, username: true } } },
       }),
       prisma.user.findMany({
         where: { role: 'MODERATOR', deleted_at: null },
@@ -629,8 +629,8 @@ export async function notifyDispute(
       `Please review and resolve the dispute at ${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${match.tournament.slug}`;
 
     const recipients: string[] = moderators.map((m) => m.discord_id);
-    if (organizer?.organizer.discord_id) {
-      recipients.push(organizer.organizer.discord_id);
+    if (tournament?.host.discord_id) {
+      recipients.push(tournament.host.discord_id);
     }
     // Deduplicate
     const unique = [...new Set(recipients)];

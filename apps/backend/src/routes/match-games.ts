@@ -142,7 +142,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           player1_id: true,
           player2_id: true,
           tournament_id: true,
-          tournament: { select: { organizer_id: true } },
+          tournament: { select: { host_id: true } },
           games: {
             orderBy: { game_number: 'asc' },
             select: GAME_SELECT,
@@ -198,7 +198,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // PATCH /api/matches/:id/games/:gameNumber/lobby-code
-  // Either player or organizer/admin can set the optional lobby code.
+  // Either player or host/admin can set the optional lobby code.
   // -------------------------------------------------------------------------
   fastify.patch(
     '/api/matches/:id/games/:gameNumber/lobby-code',
@@ -225,7 +225,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           player1_id: true,
           player2_id: true,
           tournament_id: true,
-          tournament: { select: { organizer_id: true } },
+          tournament: { select: { host_id: true } },
         },
       });
 
@@ -364,7 +364,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       if (existingGame.status === 'DISPUTED') {
         return reply.code(409).send({
           error: 'Conflict',
-          message: 'Game is disputed — organizer must resolve it',
+          message: 'Game is disputed — host must resolve it',
           statusCode: 409,
         });
       }
@@ -396,7 +396,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         const now = new Date();
 
         // Store report metadata (replay, reporter) then finalize immediately.
-        // The bracket advances right away — disputes go via the organizer override.
+        // The bracket advances right away — disputes go via the host override.
         await fastify.prisma.matchGame.update({
           where: { id: gameId },
           data: {
@@ -435,7 +435,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         data: { status: 'DISPUTED' },
       });
 
-      fastify.log.warn({ matchId, gameId }, 'Game result disputed — organizer must resolve');
+      fastify.log.warn({ matchId, gameId }, 'Game result disputed — host must resolve');
 
       if (fastify.io) {
         fastify.io.to(`match_decision_${matchId}`).emit('match.game.updated', {
@@ -450,7 +450,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      return reply.code(200).send({ disputed: true, message: 'Organizer will resolve the dispute' });
+      return reply.code(200).send({ disputed: true, message: 'Host will resolve the dispute' });
     },
   );
 };

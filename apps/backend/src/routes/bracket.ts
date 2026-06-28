@@ -225,7 +225,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /api/tournaments/:id/start
-   * Auth required. Organizer or MOD/ADMIN only.
+   * Auth required. Host or MOD/ADMIN only.
    * Generates the bracket/rounds, transitions tournament to ONGOING.
    */
   fastify.post<{ Params: { id: string } }>(
@@ -246,7 +246,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           slug: true,
           status: true,
           format: true,
-          organizer_id: true,
+          host_id: true,
           rounds_count: true,
           has_third_place_match: true,
           start_date: true,
@@ -264,7 +264,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: 'Only the tournament organizer can start this tournament',
+          message: 'Only the tournament host can start this tournament',
           statusCode: 403,
         });
       }
@@ -455,7 +455,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /api/tournaments/:id/next-round
-   * Auth required. Organizer or MOD/ADMIN only.
+   * Auth required. Host or MOD/ADMIN only.
    * SWISS only: generates the next round of pairings based on current standings.
    */
   fastify.post<{ Params: { id: string } }>(
@@ -475,7 +475,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           status: true,
           format: true,
-          organizer_id: true,
+          host_id: true,
         },
       });
 
@@ -490,7 +490,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: 'Only the tournament organizer can advance rounds',
+          message: 'Only the tournament host can advance rounds',
           statusCode: 403,
         });
       }
@@ -672,7 +672,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /api/tournaments/:id/start-playoffs
-   * Auth required. Organizer or MOD/ADMIN only.
+   * Auth required. Host or MOD/ADMIN only.
    * Generates the playoff bracket from the final Swiss standings.
    * Must be called after all Swiss rounds are completed.
    */
@@ -693,7 +693,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           format: true,
           status: true,
-          organizer_id: true,
+          host_id: true,
           playoff_format: true,
           playoff_match_format: true,
           finale_match_format: true,
@@ -706,7 +706,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
-        return reply.code(403).send({ error: 'Forbidden', message: 'Only the organizer can start playoffs', statusCode: 403 });
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the host can start playoffs', statusCode: 403 });
       }
 
       if (
@@ -914,7 +914,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { id, deleted_at: null, status: 'ONGOING' },
-        select: { id: true, organizer_id: true, playoff_match_format: true, finale_match_format: true, has_third_place_match: true },
+        select: { id: true, host_id: true, playoff_match_format: true, finale_match_format: true, has_third_place_match: true },
       });
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
@@ -1101,7 +1101,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { id, deleted_at: null, status: 'ONGOING' },
-        select: { id: true, organizer_id: true, format: true },
+        select: { id: true, host_id: true, format: true },
       });
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
@@ -1331,7 +1331,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * POST /api/tournaments/:id/bracket/reset
    * Deletes all matches (and cascaded sub-entities) and resets status to
-   * REGISTRATION_CLOSED so the organizer can re-start from scratch.
+   * REGISTRATION_CLOSED so the host can re-start from scratch.
    */
   fastify.post<{ Params: { id: string } }>(
     '/api/tournaments/:id/bracket/reset',
@@ -1346,7 +1346,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { id, deleted_at: null },
-        select: { id: true, slug: true, status: true, organizer_id: true },
+        select: { id: true, slug: true, status: true, host_id: true },
       });
 
       if (!tournament) {
@@ -1360,7 +1360,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: 'Only the tournament organizer can reset this bracket',
+          message: 'Only the tournament host can reset this bracket',
           statusCode: 403,
         });
       }

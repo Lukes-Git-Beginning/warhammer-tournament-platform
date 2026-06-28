@@ -126,12 +126,12 @@ export function calculateTournamentPoints(opts: {
 
 /**
  * Whether a user may manage a tournament. True for global MODERATOR/ADMIN, for
- * the organizer, and for any co-host. Every management endpoint should gate on
- * this instead of an inline `organizer_id === userId` check, so co-hosts get
+ * the host, and for any co-host. Every management endpoint should gate on
+ * this instead of an inline `host_id === userId` check, so co-hosts get
  * full host parity automatically.
  *
  * NOTE: ownership-control actions (transfer ownership, edit the co-host list)
- * deliberately do NOT use this — they stay organizer + MODERATOR/ADMIN only.
+ * deliberately do NOT use this — they stay host + MODERATOR/ADMIN only.
  */
 export async function canManageTournament(
   prisma: PrismaClient,
@@ -147,10 +147,10 @@ export async function canManageTournament(
   if (!tournamentId) return false;
   const t = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    select: { organizer_id: true, co_hosts: { select: { user_id: true } } },
+    select: { host_id: true, co_hosts: { select: { user_id: true } } },
   });
   if (!t) return false;
-  return t.organizer_id === userId || t.co_hosts.some((h) => h.user_id === userId);
+  return t.host_id === userId || t.co_hosts.some((h) => h.user_id === userId);
 }
 
 // ---------------------------------------------------------------------------

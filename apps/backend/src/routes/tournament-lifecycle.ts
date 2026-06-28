@@ -3,7 +3,7 @@
  *
  * POST /api/tournaments/:tournamentId/lock-lists
  *   Locks all participant army-list submissions for a tournament.
- *   Only callable by the tournament organizer or ADMIN/MODERATOR.
+ *   Only callable by the tournament host or ADMIN/MODERATOR.
  */
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -31,7 +31,7 @@ const tournamentLifecycleRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: tournamentId, deleted_at: null },
         select: {
           id: true,
-          organizer_id: true,
+          host_id: true,
           status: true,
         },
       });
@@ -44,11 +44,11 @@ const tournamentLifecycleRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Auth: only organizer, co-host, MODERATOR, or ADMIN
+      // Auth: only host, co-host, MODERATOR, or ADMIN
       if (!(await canManageTournament(fastify.prisma, tournament.id, user.sub, user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: 'Only the tournament organizer or an admin/moderator may lock army lists',
+          message: 'Only the tournament host or an admin/moderator may lock army lists',
           statusCode: 403,
         });
       }

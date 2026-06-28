@@ -1530,7 +1530,7 @@ export function MatchDecisionPage() {
         </AnimatePresence>
       </div>
 
-      {/* Organizer/Admin escape hatch — force-pick a random map if a player is AFK */}
+      {/* Host/Admin escape hatch — force-pick a random map if a player is AFK */}
       {isHostOrAdmin && phase === 'map_pick_ban' && !decision.pickedMapId && (
         <div className="mt-4 flex justify-center">
           <button
