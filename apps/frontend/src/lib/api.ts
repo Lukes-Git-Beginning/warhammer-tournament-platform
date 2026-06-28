@@ -980,7 +980,7 @@ export function swapPlayer(
   oldPlayerId: string,
   newPlayerId: string,
 ): Promise<{ ok: true }> {
-  return apiFetch(`/api/admin/matches/${matchId}/swap-player`, {
+  return apiFetch(`/api/matches/${matchId}/swap-player`, {
     method: 'PATCH',
     body: JSON.stringify({ oldPlayerId, newPlayerId }),
   });
@@ -999,11 +999,11 @@ export function createMatchNode(
 }
 
 export function deleteMatch(matchId: string): Promise<{ ok: true }> {
-  return apiFetch(`/api/admin/matches/${matchId}`, { method: 'DELETE' });
+  return apiFetch(`/api/matches/${matchId}`, { method: 'DELETE' });
 }
 
 export function forfeitMatch(matchId: string, droppedPlayerId: string): Promise<{ ok: true; winnerId: string }> {
-  return apiFetch(`/api/admin/matches/${matchId}/forfeit`, {
+  return apiFetch(`/api/matches/${matchId}/forfeit`, {
     method: 'POST',
     body: JSON.stringify({ droppedPlayerId }),
   });
