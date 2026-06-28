@@ -4,7 +4,7 @@ import { getAdminConfig, putAdminConfig } from '@/lib/api.js';
 
 interface TournamentDefaults {
   rounds_count: number;
-  playoff_format: 'NONE' | 'TOP4' | 'TOP8';
+  playoff_format: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   swiss_match_format: 'BO1';
   playoff_match_format: 'BO1'; // Bo3/Bo5 re-enable with series support
   finale_match_format: 'BO1';
@@ -89,7 +89,7 @@ export function TournamentDefaultsEditor() {
               {
                 key: 'playoff_format' as const,
                 label: 'Playoff Format',
-                options: ['NONE', 'TOP4', 'TOP8'] as const,
+                options: ['NONE', 'TOP2', 'TOP4', 'TOP8'] as const,
               },
               {
                 key: 'swiss_match_format' as const,

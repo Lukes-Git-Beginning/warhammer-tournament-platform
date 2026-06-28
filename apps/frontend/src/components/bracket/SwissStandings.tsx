@@ -24,7 +24,7 @@ interface SwissStandingsProps {
   /** Tournament mode — Faction column shown only for SFT (and future 2FT/3FT) */
   tournamentMode?: string;
   /** Playoff format — controls first-divider position */
-  playoffFormat?: 'NONE' | 'TOP4' | 'TOP8' | null;
+  playoffFormat?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' | null;
   /** Players who have advanced to the Grand Final (from PLAYOFF_FINAL match) */
   finalistIds?: Set<string>;
   /** Players who have qualified for the Semifinals (QF winners — TOP8 only) */
@@ -151,7 +151,7 @@ export function SwissStandings({
   //   1. "Advance to Quarterfinals" (TOP8 only, before any QF is played)
   //   2. "Advance to Semifinals"   (TOP8: after QF winners known; TOP4: on playoff start)
   //   3. "Advance to Grand Final"  (after SF winners known)
-  const playoffCutoff = playoffFormat === 'TOP8' ? 8 : playoffFormat === 'TOP4' ? 4 : 0;
+  const playoffCutoff = playoffFormat === 'TOP8' ? 8 : playoffFormat === 'TOP4' ? 4 : playoffFormat === 'TOP2' ? 2 : 0;
   const playoffsStarted = playoffCutoff > 0 && currentRound >= recommendedRounds;
 
   const isTop8 = playoffFormat === 'TOP8';

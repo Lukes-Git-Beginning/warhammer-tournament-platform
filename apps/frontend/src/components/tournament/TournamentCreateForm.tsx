@@ -26,7 +26,7 @@ const TournamentCreateSchema = z.object({
   // Welle 2 fields
   rounds_count: z.coerce.number().int().min(3).max(6).default(5),
   has_third_place_match: z.boolean().default(false),
-  playoff_format: z.enum(['NONE', 'TOP4', 'TOP8']).default('NONE'),
+  playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).default('NONE'),
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
@@ -508,7 +508,7 @@ export function TournamentCreateForm() {
             <div>
               <Label htmlFor="tcf-playoff">Playoff Format</Label>
               <div className="flex gap-3 mt-1 flex-wrap">
-                {(['NONE', 'TOP4', 'TOP8'] as const).map((opt) => (
+                {(['NONE', 'TOP2', 'TOP4', 'TOP8'] as const).map((opt) => (
                   <label key={opt} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"

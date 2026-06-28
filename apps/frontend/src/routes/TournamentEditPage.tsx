@@ -63,7 +63,7 @@ type EditFormData = {
   registration_deadline: string;
   max_participants: number | '';
   rounds_count: number;
-  playoff_format: 'NONE' | 'TOP4' | 'TOP8';
+  playoff_format: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   has_third_place_match: boolean;
   swiss_match_format: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format: 'BO1' | 'BO3' | 'BO5';
@@ -853,7 +853,7 @@ export function TournamentEditPage() {
               <div>
                 <Label>Playoff Format</Label>
                 <div className="flex gap-3 mt-1 flex-wrap">
-                  {(['NONE', 'TOP4', 'TOP8'] as const).map((opt) => (
+                  {(['NONE', 'TOP2', 'TOP4', 'TOP8'] as const).map((opt) => (
                     <label key={opt} className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="radio"

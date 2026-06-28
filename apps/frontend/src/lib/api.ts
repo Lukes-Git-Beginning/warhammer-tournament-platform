@@ -80,7 +80,7 @@ export interface Tournament {
   counts_for_leaderboard?: boolean;
   // Welle 2 fields
   rounds_count?: number | null;
-  playoff_format?: 'NONE' | 'TOP4' | 'TOP8' | null;
+  playoff_format?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' | null;
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
   finale_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
@@ -173,7 +173,7 @@ export interface TournamentCreate {
   draft_preset_id?: string;
   // Welle 2 fields
   rounds_count?: number;
-  playoff_format?: 'NONE' | 'TOP4' | 'TOP8';
+  playoff_format?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
   finale_match_format?: 'BO1' | 'BO3' | 'BO5';
@@ -204,7 +204,7 @@ export interface TournamentPatchInput {
   restricted_factions?: string[];
   // until-ongoing fields
   rounds_count?: number;
-  playoff_format?: 'NONE' | 'TOP4' | 'TOP8';
+  playoff_format?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   has_third_place_match?: boolean;
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5';

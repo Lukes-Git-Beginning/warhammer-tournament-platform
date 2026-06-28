@@ -21,7 +21,7 @@ import type { SwissStanding } from './swiss.js';
 
 // ---------- Types ----------
 
-export type PlayoffFormat = 'NONE' | 'TOP4' | 'TOP8';
+export type PlayoffFormat = 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
 
 /** Maps a MatchFormat enum value to its game count. */
 const MATCH_FORMAT_GAME_COUNT: Record<string, number> = {
@@ -51,7 +51,7 @@ export interface GeneratePlayoffArgs {
 export interface GeneratePlayoffResult {
   format: PlayoffFormat;
   matches: PlayoffMatch[];
-  fallbackApplied?: 'TOP8_TO_TOP4';
+  fallbackApplied?: 'TOP8_TO_TOP4' | 'TOP4_TO_TOP2';
 }
 
 // ---------- Errors ----------
@@ -110,7 +110,19 @@ export function generatePlayoffBracket(args: GeneratePlayoffArgs): GeneratePlayo
   // -------------------------------------------------------------------------
   // TOP4
   // -------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // TOP2 — Grand Final only (top 2 advance, no semis).
+  // -------------------------------------------------------------------------
+  if (format === 'TOP2') {
+    return buildTop2(finalStandings, checkedInPlayerIds, finaleGameCount);
+  }
+
   if (format === 'TOP4') {
+    // Auto-fallback to TOP2 when fewer than 8 checked-in players.
+    if (checkedInPlayerIds.size < 8) {
+      const result = buildTop2(finalStandings, checkedInPlayerIds, finaleGameCount);
+      return { ...result, fallbackApplied: 'TOP4_TO_TOP2' };
+    }
     return buildTop4(
       finalStandings,
       checkedInPlayerIds,
@@ -149,6 +161,27 @@ export function generatePlayoffBracket(args: GeneratePlayoffArgs): GeneratePlayo
 }
 
 // ---------- Private bracket builders ----------
+
+function buildTop2(
+  standings: SwissStanding[],
+  checkedIn: Set<string>,
+  finaleGames: number,
+): GeneratePlayoffResult {
+  const seeds = topNCheckedIn(standings, 2, checkedIn);
+
+  if (seeds.length < 2) {
+    throw new InsufficientPlayersError(2, seeds.length, 'TOP2');
+  }
+
+  const [s1, s2] = seeds as [SwissStanding, SwissStanding];
+
+  // Round 1 = Grand Final (top 2 advance → no semi-finals).
+  const matches: PlayoffMatch[] = [
+    { round: 1, bracket_position: 1, player1_id: s1.userId, player2_id: s2.userId, game_count: finaleGames },
+  ];
+
+  return { format: 'TOP2', matches };
+}
 
 function buildTop4(
   standings: SwissStanding[],

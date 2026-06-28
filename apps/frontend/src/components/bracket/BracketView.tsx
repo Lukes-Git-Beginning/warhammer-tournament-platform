@@ -16,7 +16,7 @@ interface BracketViewProps {
   tournamentId: string;
   canManage?: boolean;
   hideStandings?: boolean;
-  playoffFormat?: 'NONE' | 'TOP4' | 'TOP8' | null;
+  playoffFormat?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' | null;
 }
 
 export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false, playoffFormat }: BracketViewProps) {

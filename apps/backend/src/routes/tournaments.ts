@@ -141,7 +141,7 @@ const CreateTournamentSchema = z.object({
   description: z.string().max(2000).optional(),
   // Welle 2 — Tournament mechanics
   rounds_count: z.number().int().min(3).max(6).optional(),
-  playoff_format: z.enum(['NONE', 'TOP4', 'TOP8']).optional(),
+  playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).optional(),
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
@@ -167,7 +167,7 @@ const PatchTournamentSchema = z.object({
   draft_preset_id: z.string().uuid().nullable().optional(),
   // Welle 2 — Tournament mechanics
   rounds_count: z.number().int().min(3).max(6).optional(),
-  playoff_format: z.enum(['NONE', 'TOP4', 'TOP8']).optional(),
+  playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).optional(),
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),

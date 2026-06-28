@@ -792,12 +792,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const playoffResult = generatePlayoffBracket({
           tournament: {
-            playoff_format: tournament.playoff_format as 'NONE' | 'TOP4' | 'TOP8',
+            playoff_format: tournament.playoff_format as 'NONE' | 'TOP2' | 'TOP4' | 'TOP8',
             playoff_match_format: tournament.playoff_match_format,
             finale_match_format: tournament.finale_match_format,
           },
           finalStandings: activeStandings,
-          checkedInPlayerIds: new Set(participantIds),
+          // B6: count only active (non-dropped) players for the reduction thresholds.
+          checkedInPlayerIds: new Set(activeStandings.map((s) => s.userId)),
         });
 
         if (playoffResult.fallbackApplied) {
@@ -808,7 +809,9 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         const phaseMap: Record<number, 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL'> =
           playoffResult.format === 'TOP8'
             ? { 1: 'PLAYOFF_QF', 2: 'PLAYOFF_SF', 3: 'PLAYOFF_FINAL' }
-            : { 1: 'PLAYOFF_SF', 2: 'PLAYOFF_FINAL' };
+            : playoffResult.format === 'TOP2'
+              ? { 1: 'PLAYOFF_FINAL' }
+              : { 1: 'PLAYOFF_SF', 2: 'PLAYOFF_FINAL' };
 
         // Only generate the first playoff round — subsequent rounds are advanced
         // one at a time via POST /advance-playoffs once each round completes.
