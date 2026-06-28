@@ -351,8 +351,8 @@ export function MatchScoreModal({
           </div>
         )}
 
-        {/* Delete Match */}
-        {canManage && (matchStatus === 'CANCELLED' || isPending) && (
+        {/* Delete Match — B19: BYE nodes are directly deletable too */}
+        {canManage && (matchStatus === 'CANCELLED' || isPending || matchStatus === 'BYE') && (
           <div className="mb-4 rounded border border-red-900/50 bg-stone-800/50 p-3 space-y-2">
             <p className="text-xs text-stone-400">Danger zone:</p>
             {!confirmDelete ? (
