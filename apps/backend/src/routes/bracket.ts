@@ -523,12 +523,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           ? Math.max(...existingMatches.map((m) => m.round))
           : 0;
 
-      // Load all participants including withdrawn (for correct Buchholz calculation).
-      // Withdrawn players contribute to opponents' BH but are excluded from pairing.
+      // Pair only CHECKED_IN players (B14): REGISTERED-but-never-checked-in must not
+      // enter pairing in later rounds. WITHDREW is kept for correct Buchholz (they
+      // contribute to opponents' BH) but is excluded from pairing via withdrawnIds.
       const participants = await fastify.prisma.tournamentParticipant.findMany({
         where: {
           tournament_id: tournament.id,
-          status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
+          status: { in: ['CHECKED_IN', 'WITHDREW'] },
           deleted_at: null,
         },
         select: { user_id: true, faction_id: true, status: true },
