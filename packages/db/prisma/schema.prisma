@@ -46,6 +46,7 @@ enum TournamentMode {
   SFT // Single Faction Tournament — faction pre-pick at registration
   SLT // Single List Tournament — army list pre-upload at registration
   MATRIX // 3×3 Faction Matrix — blind 3-pick per player, 7 bans + 1 pick
+  TWO_D_THREE // 2D3 — each player picks 3 factions at registration, one drawn at random per game
 }
 
 enum PlayoffFormat {
@@ -353,6 +354,7 @@ model TournamentParticipant {
   user_id         String            @db.Uuid
   team_id         String?           @db.Uuid // null for 1v1 (Phase 1+2)
   faction_id      String? // pre-pick at registration (SFT mode) or post-draft
+  faction_ids     String[]          @default([]) // TWO_D_THREE — 3 factions picked at registration; one drawn per game
   army_list_id    String?           @db.Uuid
   status          ParticipantStatus @default(REGISTERED)
   registered_at   DateTime          @default(now())

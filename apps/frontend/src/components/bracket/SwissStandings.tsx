@@ -19,6 +19,8 @@ interface SwissStandingsProps {
   factionMap?: Map<string, FactionDto>;
   /** userId → factionId, derived from bracket matches as fallback */
   playerFactionMap?: Map<string, string>;
+  /** userId → 3-faction pool, for TWO_D_THREE (shows all 3 picked factions) */
+  playerFactionPoolMap?: Map<string, string[]>;
   /** Tournament mode — Faction column shown only for SFT (and future 2FT/3FT) */
   tournamentMode?: string;
   /** Playoff format — controls first-divider position */
@@ -56,7 +58,7 @@ function Avatar({ url, username }: { url: string | null; username: string }) {
   );
 }
 
-const FACTION_MODES = new Set(['SFT', '2FT', 'DFT', '3FT', 'TFT']);
+const FACTION_MODES = new Set(['SFT', '2FT', 'DFT', '3FT', 'TFT', 'TWO_D_THREE']);
 
 function Divider({ label, colSpan }: { label: string; colSpan: number }) {
   return (
@@ -79,6 +81,7 @@ export function SwissStandings({
   recommendedRounds,
   factionMap,
   playerFactionMap,
+  playerFactionPoolMap,
   tournamentMode,
   playoffFormat,
   finalistIds,
@@ -138,6 +141,7 @@ export function SwissStandings({
     : [];
 
   const showFactionColumn = tournamentMode ? FACTION_MODES.has(tournamentMode) : false;
+  const is2D3 = tournamentMode === 'TWO_D_THREE';
   const colCount = 5 + (showFactionColumn ? 1 : 0) + 1; // # + Player + [Faction] + Score + W/D/L/B + GL + BH
 
   // Cap displayed round at the Swiss phase — don't count playoff rounds.
@@ -194,6 +198,7 @@ export function SwissStandings({
               const displayName = entry.username ?? entry.userId;
               const factionId = entry.factionId ?? playerFactionMap?.get(entry.userId);
               const faction = factionId ? factionMap?.get(factionId) : undefined;
+              const factionPool = is2D3 ? (playerFactionPoolMap?.get(entry.userId) ?? []) : [];
               const isFinalist = finalistIds?.has(entry.userId);
               const participantStatus = participantStatusMap?.get(entry.userId);
               const isDropped = entry.dropped === true || participantStatus === 'WITHDREW';
@@ -284,7 +289,30 @@ export function SwissStandings({
                         </button>
                       )}
                     </td>
-                    {showFactionColumn && (
+                    {showFactionColumn && is2D3 && (
+                      <td className="px-4 py-2">
+                        {factionPool.length > 0 ? (
+                          <div className="flex items-center gap-1">
+                            {factionPool.map((fid) => {
+                              const f = factionMap?.get(fid);
+                              return f ? (
+                                <FactionBadge
+                                  key={fid}
+                                  size="sm"
+                                  colorHex={f.color_hex}
+                                  initials={f.initials}
+                                  name={f.name}
+                                  iconUrl={f.icon_url}
+                                />
+                              ) : null;
+                            })}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-stone-600">—</span>
+                        )}
+                      </td>
+                    )}
+                    {showFactionColumn && !is2D3 && (
                       <td className="px-4 py-2">
                         {faction ? (
                           <div className="flex items-center gap-2">

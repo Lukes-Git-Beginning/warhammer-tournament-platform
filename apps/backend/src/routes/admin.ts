@@ -32,7 +32,7 @@ const AuditLogQuerySchema = PaginationSchema.extend({
 const FactionWinRatesQuerySchema = z.object({
   season: z.string().uuid().optional(),
   format: z.enum(['SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN']).optional(),
-  mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT']).optional(),
+  mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE']).optional(),
   period: z.enum(['last_30d', 'last_90d', 'season']).optional(),
 });
 

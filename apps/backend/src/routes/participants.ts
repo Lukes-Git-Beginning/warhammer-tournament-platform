@@ -9,6 +9,7 @@ import { canManageTournament, createLateJoinerBye } from '../lib/tournament-util
 
 const RegisterSchema = z.object({
   faction_id: z.string().min(1).optional(),
+  faction_ids: z.array(z.string().min(1)).optional(), // TWO_D_THREE: exactly 3 distinct
 });
 
 const CheckinSchema = z.object({
@@ -41,6 +42,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           id: true,
           status: true,
+          mode: true,
           max_participants: true,
           faction_allowlist: { select: { faction_id: true } },
           restricted_factions: { select: { faction_id: true } },
@@ -103,12 +105,35 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         // completion (see lib/match-games.ts), never blocked at pick time.
       }
 
+      // 2D3 mode: player picks exactly 3 distinct factions; one is drawn at random
+      // per game (see lib/match-games.ts drawTwoD3GameFactions).
+      let factionIds: string[] = [];
+      if (tournament.mode === 'TWO_D_THREE') {
+        factionIds = parsed.data.faction_ids ?? [];
+        if (factionIds.length !== 3 || new Set(factionIds).size !== 3) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'This mode requires exactly 3 distinct factions', statusCode: 400 });
+        }
+        const found = await fastify.prisma.faction.findMany({
+          where: { id: { in: factionIds } },
+          select: { id: true },
+        });
+        if (found.length !== 3) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'One or more selected factions do not exist', statusCode: 400 });
+        }
+        const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
+        if (allowlist.length > 0 && factionIds.some((id) => !allowlist.includes(id))) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'One or more selected factions are not permitted in this tournament', statusCode: 400 });
+        }
+        // Restricted factions stay pickable (nerfed, not banned) — same as faction_id above.
+      }
+
       try {
         const participant = await fastify.prisma.tournamentParticipant.create({
           data: {
             tournament_id: tournament.id,
             user_id: request.user.sub,
             faction_id: parsed.data.faction_id,
+            faction_ids: factionIds,
             status: 'REGISTERED',
           },
           select: {
@@ -116,6 +141,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
             tournament_id: true,
             user_id: true,
             faction_id: true,
+            faction_ids: true,
             status: true,
             registered_at: true,
           },
@@ -533,15 +559,18 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         lists_locked_at: true,
         user: { select: { id: true, username: true, avatar_url: true } },
         faction: { select: { id: true, name: true, color_hex: true } },
+        faction_ids: true, // TWO_D_THREE: the player's 3-faction pool
       },
       orderBy: { registered_at: 'asc' },
     });
 
     const started = tournament.status === 'ONGOING' || tournament.status === 'COMPLETED';
-    const maskFactions = (tournament.mode === 'SFT' || tournament.mode === 'BPT') && !started;
+    const maskFactions =
+      (tournament.mode === 'SFT' || tournament.mode === 'BPT' || tournament.mode === 'TWO_D_THREE') &&
+      !started;
 
     const data = maskFactions
-      ? participants.map((p) => ({ ...p, faction: null }))
+      ? participants.map((p) => ({ ...p, faction: null, faction_ids: [] }))
       : participants;
 
     return { data, total: data.length };

@@ -14,7 +14,7 @@ const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
   format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'AUTO_SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN']),
-  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX']).default('BPT'),
+  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE']).default('BPT'),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
   max_participants: z.coerce.number().int().positive().optional().or(z.literal('')),
@@ -387,12 +387,14 @@ export function TournamentCreateForm() {
             <option value="SFT">SFT — Single Faction Tournament</option>
             <option value="SLT">SLT — Single List Tournament</option>
             <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
+            <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
           </Select>
           <FieldHint>
             {(form.mode === 'BPT' || !form.mode) && 'Every match includes a blind faction pick phase.'}
             {form.mode === 'SFT' && 'Players pre-select a faction at registration; revealed at tournament start.'}
             {form.mode === 'SLT' && 'Players upload their army list at registration. Reveal after each completed match.'}
             {form.mode === 'MATRIX' && 'Each match: both players pick 3 factions blindly, then ban from the 3×3 matchup grid.'}
+            {form.mode === 'TWO_D_THREE' && 'Players pick 3 factions at registration; one is drawn at random for each player before every game.'}
           </FieldHint>
         </div>
       </div>

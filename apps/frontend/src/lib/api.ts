@@ -60,7 +60,7 @@ export interface Tournament {
   description: string | null;
   format: 'SINGLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
+  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
   status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
   start_date: string;
   timezone: string;
@@ -161,7 +161,7 @@ export interface TournamentCreate {
   name: string;
   format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
+  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
   start_date: string;
   timezone: string;
   max_participants?: number;
@@ -199,7 +199,7 @@ export interface TournamentPatchInput {
   draft_preset_id?: string | null;
   // draft-only (backend enforces, frontend disables after DRAFT)
   format?: Tournament['format'];
-  mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
+  mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
   faction_pool?: string[];
   restricted_factions?: string[];
   // until-ongoing fields
@@ -1306,6 +1306,7 @@ export interface TournamentParticipantEntry {
   lists_locked_at: string | null;
   user: { id: string; username: string; avatar_url: string | null };
   faction: { id: string; name: string; color_hex: string } | null;
+  faction_ids: string[]; // TWO_D_THREE: the player's 3-faction pool
 }
 
 export interface TournamentParticipantsResponse {
@@ -1319,11 +1320,14 @@ export function getParticipants(slug: string): Promise<TournamentParticipantsRes
 
 export function registerForTournament(
   slug: string,
-  opts?: { factionId?: string },
+  opts?: { factionId?: string; factionIds?: string[] },
 ): Promise<{ id: string; status: ParticipantStatus }> {
+  const body: Record<string, unknown> = {};
+  if (opts?.factionId) body.faction_id = opts.factionId;
+  if (opts?.factionIds) body.faction_ids = opts.factionIds;
   return apiFetch<{ id: string; status: ParticipantStatus }>(
     `/api/tournaments/${slug}/register`,
-    { method: 'POST', body: JSON.stringify({ faction_id: opts?.factionId }) },
+    { method: 'POST', body: JSON.stringify(body) },
   );
 }
 

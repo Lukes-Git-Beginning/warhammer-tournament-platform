@@ -248,6 +248,12 @@ export function TournamentDetail() {
     [participantsData],
   );
 
+  // TWO_D_THREE: userId → the player's 3-faction pool, for the standings column.
+  const standingsPlayerFactionPoolMap = useMemo(
+    () => new Map((participantsData?.data ?? []).map((p) => [p.user.id, p.faction_ids])),
+    [participantsData],
+  );
+
   const activeDraftMatches = (bracket?.matches ?? []).filter(
     (m) => m.draft_id != null && m.draft_status === 'ONGOING',
   );
@@ -650,7 +656,7 @@ export function TournamentDetail() {
             <div>
               <span className="text-stone-500">Mode:</span>{' '}
               <span className="text-stone-200">
-                {(({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode ?? ''] ?? tournament.mode ?? 'SFT')}
+                {(({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', TWO_D_THREE: '2D3', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode ?? ''] ?? tournament.mode ?? 'SFT')}
               </span>
             </div>
           )}
@@ -752,6 +758,7 @@ export function TournamentDetail() {
                 tournamentMode={tournament.mode}
                 factionMap={standingsFactionMap}
                 playerFactionMap={standingsPlayerFactionMap}
+                playerFactionPoolMap={standingsPlayerFactionPoolMap}
                 playoffFormat={tournament.playoff_format ?? undefined}
                 finalistIds={standingsFinalistIds}
                 semifinalistIds={standingsSemifinalistIds}
