@@ -608,12 +608,22 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // No-contest pairs must NEVER be re-paired (B8/B10) — harder than a rematch.
+      const noContestMap = new Map<string, string[]>();
+      for (const m of existingMatches) {
+        if (m.status === 'NO_CONTEST' && m.player1_id && m.player2_id) {
+          (noContestMap.get(m.player1_id) ?? noContestMap.set(m.player1_id, []).get(m.player1_id)!).push(m.player2_id);
+          (noContestMap.get(m.player2_id) ?? noContestMap.set(m.player2_id, []).get(m.player2_id)!).push(m.player1_id);
+        }
+      }
+
       const swissPlayers = standings.filter((s) => !s.dropped).map((s) => ({
         userId: s.userId,
         score: s.score,
         avoid: avoidMap.get(s.userId) ?? [],
         receivedBye: byeMap.get(s.userId) ?? false,
         factionId: factionById.get(s.userId) ?? null,
+        noContestAvoid: noContestMap.get(s.userId) ?? [],
       }));
 
       const newMatches = generateSwissRound(tournament.id, swissPlayers, targetRound);

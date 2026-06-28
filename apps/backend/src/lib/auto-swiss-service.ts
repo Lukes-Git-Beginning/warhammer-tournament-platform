@@ -200,10 +200,15 @@ async function generateNextSwissRound(
 
   const avoidMap = new Map<string, string[]>(participantIds.map((id) => [id, []]));
   const byeMap = new Map<string, boolean>();
+  const noContestMap = new Map<string, string[]>(participantIds.map((id) => [id, []]));
   for (const m of swissMatches) {
     if (m.player1_id && m.player2_id) {
       avoidMap.get(m.player1_id)?.push(m.player2_id);
       avoidMap.get(m.player2_id)?.push(m.player1_id);
+      if (m.status === 'NO_CONTEST') {
+        noContestMap.get(m.player1_id)?.push(m.player2_id);
+        noContestMap.get(m.player2_id)?.push(m.player1_id);
+      }
     }
     if (m.status === 'BYE') {
       const byePlayer = m.player1_id ?? m.player2_id;
@@ -217,6 +222,7 @@ async function generateNextSwissRound(
     avoid: avoidMap.get(s.userId) ?? [],
     receivedBye: byeMap.get(s.userId) ?? false,
     factionId: factionById.get(s.userId) ?? null,
+    noContestAvoid: noContestMap.get(s.userId) ?? [],
   }));
 
   const newMatches = generateSwissRound(tournament.id, swissPlayers, targetRound);

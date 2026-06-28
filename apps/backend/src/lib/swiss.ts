@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Swiss as SwissPair } from 'tournament-pairings';
+import blossom from 'edmonds-blossom';
 import type { MatchStatus } from '@rizzotto/db';
 
 // ---------- Public interfaces ----------
@@ -10,6 +10,8 @@ export interface SwissPlayer {
   avoid: string[];
   receivedBye: boolean;
   factionId?: string | null;
+  /** B8: opponents this player must NEVER be re-paired with (no-contest / double-bye). */
+  noContestAvoid?: string[];
 }
 
 export interface SwissMatchInput {
@@ -53,6 +55,94 @@ export interface CompletedMatchRecord {
   player2_game_wins?: number;
 }
 
+// ---------- Min-weight pairing (B8) ----------
+// Pairing is a minimum-cost perfect matching over the active players. Edge cost is
+// tiered so the optimiser, globally (not greedily), prefers in order:
+//   1. avoid no-contest re-pairs   (P_NOCONTEST)
+//   2. avoid rematches             (P_REMATCH)
+//   3. minimise (ΔScore)²          (SCALE_SCORE) — large gaps hurt quadratically
+//   4. avoid faction mirrors       (P_MIRROR, pure tiebreaker)
+// The ±1 score-group limit is gone: avoiding a rematch outranks score proximity.
+
+const SCALE_SCORE = 100;
+const P_MIRROR = 1;
+const P_REMATCH = 10_000_000; // dominates any achievable score+mirror cost
+const P_NOCONTEST = 100_000_000_000; // dominates any number of rematches
+
+/** Deterministic PRNG shuffle (mulberry32) seeded from a string — reproducible tiebreaks. */
+function seededShuffle<T>(arr: T[], seed: string): T[] {
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  let a = h >>> 0;
+  const rand = () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
+function pairCost(a: SwissPlayer, b: SwissPlayer): number {
+  const dScaled = Math.round(Math.abs(a.score - b.score) * 2); // 0.5-point steps → integer
+  let cost = dScaled * dScaled * SCALE_SCORE;
+  const noContest =
+    (a.noContestAvoid?.includes(b.userId) ?? false) ||
+    (b.noContestAvoid?.includes(a.userId) ?? false);
+  const rematch = a.avoid.includes(b.userId) || b.avoid.includes(a.userId);
+  if (noContest) cost += P_NOCONTEST;
+  else if (rematch) cost += P_REMATCH;
+  if (a.factionId && b.factionId && a.factionId === b.factionId) cost += P_MIRROR;
+  return cost;
+}
+
+/** Minimum-cost perfect matching over an even-sized set (Edmonds blossom, max-weight). */
+function pairByMinWeight(active: SwissPlayer[]): Array<[SwissPlayer, SwissPlayer]> {
+  const n = active.length;
+  if (n < 2) return [];
+  if (n === 2) return [[active[0]!, active[1]!]];
+
+  let maxCost = 0;
+  const cost: number[][] = Array.from({ length: n }, () => new Array<number>(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const c = pairCost(active[i]!, active[j]!);
+      cost[i]![j] = c;
+      cost[j]![i] = c;
+      if (c > maxCost) maxCost = c;
+    }
+  }
+  // Offset so every weight is positive → max-weight matching == min-cost perfect matching.
+  const K = maxCost + 1;
+  const edges: Array<[number, number, number]> = [];
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      edges.push([i, j, K - cost[i]![j]!]);
+    }
+  }
+
+  const mate = blossom(edges);
+  const pairs: Array<[SwissPlayer, SwissPlayer]> = [];
+  const seen = new Set<number>();
+  for (let i = 0; i < n; i++) {
+    const j = mate[i]!;
+    if (j >= 0 && !seen.has(i) && !seen.has(j)) {
+      seen.add(i);
+      seen.add(j);
+      pairs.push([active[i]!, active[j]!]);
+    }
+  }
+  return pairs;
+}
+
 // ---------- Core functions ----------
 
 /**
@@ -82,73 +172,24 @@ export function generateSwissRound(
     }
   }
 
-  // Build the player list and shuffle within each score group so that pairing
-  // within a group is random rather than standings-order (Buchholz) biased.
-  // The group boundaries are preserved — 2-point players always pair within
-  // their group, etc. — only the internal order is randomised.
-  const libPlayers = (() => {
-    const raw = activePlayers.map((p) => ({
-      id: p.userId,
-      score: p.score,
-      avoid: p.avoid,
-      receivedBye: p.receivedBye,
-    }));
-    const out: typeof raw = [];
-    let i = 0;
-    while (i < raw.length) {
-      let j = i;
-      while (j < raw.length && raw[j]!.score === raw[i]!.score) j++;
-      const group = raw.slice(i, j);
-      for (let k = group.length - 1; k > 0; k--) {
-        const r = Math.floor(Math.random() * (k + 1));
-        [group[k], group[r]] = [group[r]!, group[k]!];
-      }
-      out.push(...group);
-      i = j;
-    }
-    return out;
-  })();
+  // Global minimum-cost perfect matching over the active players (B8). A seeded
+  // shuffle makes tiebreaks reproducible for a given (tournament, round). This
+  // replaces the greedy score-bucket pairer + cross-group fallback + the mirror
+  // post-processor (mirror avoidance is now folded into the edge cost).
+  const ordered = seededShuffle(activePlayers, `${tournamentId}:${round}`);
+  const pairs = pairByMinWeight(ordered);
 
-  const scoreById = new Map(activePlayers.map((p) => [p.userId, p.score]));
-  const hasLargeGap = (matches: ReturnType<typeof SwissPair>) =>
-    matches.some((m) => {
-      if (!m.player1 || !m.player2) return false;
-      return Math.abs((scoreById.get(String(m.player1)) ?? 0) - (scoreById.get(String(m.player2)) ?? 0)) > 1;
-    });
-
-  let rawMatches = SwissPair(libPlayers, round, false, false);
-
-  // If the library produced a cross-group pairing (score gap > 1) due to avoid
-  // constraints, retry without avoid lists. A rematch is less bad than a
-  // 2-point score-group violation.
-  if (hasLargeGap(rawMatches)) {
-    rawMatches = SwissPair(libPlayers.map((p) => ({ ...p, avoid: [] })), round, false, false);
-  }
-
-  const result: SwissMatchInput[] = [];
-
-  rawMatches.forEach((m, idx) => {
-    const p1 = typeof m.player1 === 'string' ? m.player1 : null;
-    const p2 = typeof m.player2 === 'string' ? m.player2 : null;
-
-    const hasBye = (p1 !== null && p2 === null) || (p1 === null && p2 !== null);
-    const status: MatchStatus = hasBye ? 'BYE' : 'PENDING';
-    const winner_id: string | null = hasBye ? (p1 ?? p2) : null;
-
-    result.push({
-      id: randomUUID(),
-      tournament_id: tournamentId,
-      round,
-      match_number: idx + 1,
-      player1_id: p1,
-      player2_id: p2,
-      status,
-      next_match_id: null,
-      winner_id,
-    });
-  });
-
-  tryAvoidMirrors(result, activePlayers);
+  const result: SwissMatchInput[] = pairs.map(([a, b], idx) => ({
+    id: randomUUID(),
+    tournament_id: tournamentId,
+    round,
+    match_number: idx + 1,
+    player1_id: a.userId,
+    player2_id: b.userId,
+    status: 'PENDING' as MatchStatus,
+    next_match_id: null,
+    winner_id: null,
+  }));
 
   // Append the explicit Bye match for the pre-selected player
   if (byePlayer) {
