@@ -737,8 +737,11 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         select: { id: true, status: true, host_id: true },
       });
       if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
-      if (tournament.status !== 'ONGOING') {
-        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Tournament is not ongoing', statusCode: 422 });
+      // N13: undrop must also work before the tournament starts (a player can
+      // self-withdraw during registration). Pre-start there are no matches to
+      // restore, so the playoff-reset below is simply a no-op.
+      if (tournament.status !== 'ONGOING' && tournament.status !== 'REGISTRATION_CLOSED') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Tournament must be ongoing or registration-closed to undrop', statusCode: 422 });
       }
 
       if (!(await canManageTournament(fastify.prisma, tournament.id, currentUserId ?? '', role ?? ''))) {
