@@ -38,7 +38,10 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const { seasonId } = parsed.data;
 
-    // Resolve season
+    // Resolve season. A specific seasonId must exist; otherwise fall back to the
+    // active season — but NO active season is fine: faction master data (names,
+    // icons) is global reference data and must never be gated behind a season.
+    // In that case stats simply come back null.
     let season;
     if (seasonId) {
       season = await fastify.prisma.season.findUnique({ where: { id: seasonId } });
@@ -47,31 +50,27 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     } else {
       season = await fastify.prisma.season.findFirst({ where: { is_active: true } });
-      if (!season) {
-        return {
-          data: [],
-          season: null,
-        };
-      }
     }
 
-    const resolvedSeasonId = season.id;
+    const resolvedSeasonId = season?.id ?? null;
 
     return cached(
       fastify.redis,
-      cacheKey('factions:list', { seasonId: resolvedSeasonId }),
+      cacheKey('factions:list', { seasonId: resolvedSeasonId ?? 'none' }),
       async () => {
         const data = await getFactionsWithStats(fastify.prisma, resolvedSeasonId);
         return {
           data,
-          season: {
-            id: season!.id,
-            name: season!.name,
-            start_date: season!.start_date.toISOString(),
-            end_date: season!.end_date.toISOString(),
-            is_active: season!.is_active,
-            dlc_tag: season!.dlc_tag ?? null,
-          },
+          season: season
+            ? {
+                id: season.id,
+                name: season.name,
+                start_date: season.start_date.toISOString(),
+                end_date: season.end_date.toISOString(),
+                is_active: season.is_active,
+                dlc_tag: season.dlc_tag ?? null,
+              }
+            : null,
         };
       },
       { ttlSeconds: 60 },
@@ -103,7 +102,9 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = paramParsed.data;
     const { seasonId } = queryParsed.data;
 
-    // Resolve season
+    // Resolve season. As with the list endpoint, NO active season is fine: the
+    // faction's master data is global reference data. Only stats + trend are
+    // season-scoped and simply come back null/empty without one.
     let season;
     if (seasonId) {
       season = await fastify.prisma.season.findUnique({ where: { id: seasonId } });
@@ -112,12 +113,9 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     } else {
       season = await fastify.prisma.season.findFirst({ where: { is_active: true } });
-      if (!season) {
-        return reply.code(404).send({ error: 'NotFound', message: 'No active season', statusCode: 404 });
-      }
     }
 
-    const resolvedSeasonId = season.id;
+    const resolvedSeasonId = season?.id ?? null;
 
     // Check faction existence before caching
     const faction = await fastify.prisma.faction.findUnique({ where: { id } });
@@ -127,30 +125,35 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
 
     return cached(
       fastify.redis,
-      cacheKey('factions:detail', { id, seasonId: resolvedSeasonId }),
+      cacheKey('factions:detail', { id, seasonId: resolvedSeasonId ?? 'none' }),
       async () => {
-        const stats = await fastify.prisma.factionStats.findUnique({
-          where: { faction_id_season_id: { faction_id: id, season_id: resolvedSeasonId } },
-        });
+        const stats = resolvedSeasonId
+          ? await fastify.prisma.factionStats.findUnique({
+              where: { faction_id_season_id: { faction_id: id, season_id: resolvedSeasonId } },
+            })
+          : null;
 
-        // 30-day snapshot trend
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        // 30-day snapshot trend — season-scoped, empty without a season.
+        let trend: { date: string; matches_played: number; win_rate: number | null }[] = [];
+        if (resolvedSeasonId) {
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const snapshots = await fastify.prisma.factionStatsSnapshot.findMany({
-          where: {
-            faction_id: id,
-            season_id: resolvedSeasonId,
-            snapshot_date: { gte: thirtyDaysAgo },
-          },
-          orderBy: { snapshot_date: 'asc' },
-        });
+          const snapshots = await fastify.prisma.factionStatsSnapshot.findMany({
+            where: {
+              faction_id: id,
+              season_id: resolvedSeasonId,
+              snapshot_date: { gte: thirtyDaysAgo },
+            },
+            orderBy: { snapshot_date: 'asc' },
+          });
 
-        const trend = snapshots.map((s) => ({
-          date: s.snapshot_date.toISOString().split('T')[0]!,
-          matches_played: s.matches_played,
-          win_rate: s.matches_played > 0 ? s.wins / s.matches_played : null,
-        }));
+          trend = snapshots.map((s) => ({
+            date: s.snapshot_date.toISOString().split('T')[0]!,
+            matches_played: s.matches_played,
+            win_rate: s.matches_played > 0 ? s.wins / s.matches_played : null,
+          }));
+        }
 
         return {
           faction: asFactionDto(faction),
