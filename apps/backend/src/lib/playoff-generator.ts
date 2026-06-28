@@ -107,9 +107,9 @@ export function generatePlayoffBracket(args: GeneratePlayoffArgs): GeneratePlayo
   const normalGameCount = gameCount(tournament.playoff_match_format);
   const finaleGameCount = gameCount(tournament.finale_match_format);
 
-  // -------------------------------------------------------------------------
-  // TOP4
-  // -------------------------------------------------------------------------
+  // Reduction principle: the playoff field must never exceed half the active
+  // field — TOP8 needs ≥16, TOP4 needs ≥8, TOP2 needs ≥4. Formats cascade down.
+
   // -------------------------------------------------------------------------
   // TOP2 — Grand Final only (top 2 advance, no semis).
   // -------------------------------------------------------------------------
@@ -117,43 +117,28 @@ export function generatePlayoffBracket(args: GeneratePlayoffArgs): GeneratePlayo
     return buildTop2(finalStandings, checkedInPlayerIds, finaleGameCount);
   }
 
+  // -------------------------------------------------------------------------
+  // TOP4 — auto-fallback to TOP2 below 8 checked-in players.
+  // -------------------------------------------------------------------------
   if (format === 'TOP4') {
-    // Auto-fallback to TOP2 when fewer than 8 checked-in players.
     if (checkedInPlayerIds.size < 8) {
-      const result = buildTop2(finalStandings, checkedInPlayerIds, finaleGameCount);
-      return { ...result, fallbackApplied: 'TOP4_TO_TOP2' };
+      return { ...buildTop2(finalStandings, checkedInPlayerIds, finaleGameCount), fallbackApplied: 'TOP4_TO_TOP2' };
     }
-    return buildTop4(
-      finalStandings,
-      checkedInPlayerIds,
-      normalGameCount,
-      finaleGameCount,
-    );
+    return buildTop4(finalStandings, checkedInPlayerIds, normalGameCount, finaleGameCount);
   }
 
   // -------------------------------------------------------------------------
-  // TOP8 — with auto-fallback to TOP4 when <16 checked-in players
+  // TOP8 — cascade: below 16 → TOP4, and further below 8 → TOP2.
   // -------------------------------------------------------------------------
   if (format === 'TOP8') {
-    const totalCheckedIn = checkedInPlayerIds.size;
-
-    if (totalCheckedIn < 16) {
-      // Auto-fallback: not enough players for a full TOP8
-      const result = buildTop4(
-        finalStandings,
-        checkedInPlayerIds,
-        normalGameCount,
-        finaleGameCount,
-      );
-      return { ...result, fallbackApplied: 'TOP8_TO_TOP4' };
+    const total = checkedInPlayerIds.size;
+    if (total < 8) {
+      return { ...buildTop2(finalStandings, checkedInPlayerIds, finaleGameCount), fallbackApplied: 'TOP4_TO_TOP2' };
     }
-
-    return buildTop8(
-      finalStandings,
-      checkedInPlayerIds,
-      normalGameCount,
-      finaleGameCount,
-    );
+    if (total < 16) {
+      return { ...buildTop4(finalStandings, checkedInPlayerIds, normalGameCount, finaleGameCount), fallbackApplied: 'TOP8_TO_TOP4' };
+    }
+    return buildTop8(finalStandings, checkedInPlayerIds, normalGameCount, finaleGameCount);
   }
 
   // Should never reach here if the caller passes a valid PlayoffFormat
