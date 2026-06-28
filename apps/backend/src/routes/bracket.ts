@@ -720,6 +720,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           playoff_match_format: true,
           finale_match_format: true,
           has_third_place_match: true,
+          rounds_count: true,
         },
       });
 
@@ -783,8 +784,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
       } else {
-        // Swiss: must have played the recommended number of rounds
-        const recommendedRounds = recommendNumberOfRounds(participantIds.length);
+        // Swiss: must have played the configured number of rounds. The stored
+        // rounds_count (set at tournament creation) is authoritative — fall back
+        // to the participant-count heuristic only when it is unset. Without this,
+        // a tournament configured for fewer rounds than the heuristic recommends
+        // (e.g. 5 rounds with >32 players → heuristic 6) can never start playoffs.
+        const recommendedRounds = tournament.rounds_count ?? recommendNumberOfRounds(participantIds.length);
         if (currentRound < recommendedRounds) {
           return reply.code(400).send({
             error: 'BadRequest',
