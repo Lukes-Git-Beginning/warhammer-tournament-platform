@@ -689,6 +689,19 @@ export function TournamentDetail() {
         </div>
       </div>
 
+      {/* B11: every Arena tournament requires the same map pack — hardcoded notice. */}
+      <div className="mb-8 rounded-md border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 px-4 py-3 text-sm">
+        <span className="text-stone-300">Required mod for all Arena tournaments: </span>
+        <a
+          href="https://steamcommunity.com/sharedfiles/filedetails/?id=2875865414"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-rizzotto-gold-400 hover:underline"
+        >
+          Total Tavern Tournament Map Pack ↗
+        </a>
+      </div>
+
       {/* Faction allowlist (only shown if restrictions are set) */}
       {tournament.faction_allowlist && tournament.faction_allowlist.length > 0 && (() => {
         const factionMap = new Map((factionsData?.data ?? []).map((f) => [f.faction.id, f.faction]));
