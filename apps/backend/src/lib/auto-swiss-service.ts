@@ -14,7 +14,7 @@ import {
   computeSwissStandings,
   sortSwissStandings,
 } from './swiss.js';
-import { notifyRoundPairings } from './discord-notify.js';
+import { notifyRoundPairings, notifyMatchesCreated } from './discord-notify.js';
 
 // ---------------------------------------------------------------------------
 // Config: derive rounds + playoff format from check-in count
@@ -103,6 +103,9 @@ export async function startAutoSwiss(prisma: PrismaClient, tournamentId: string)
       },
     });
   });
+
+  // B22: notify round-1 pairings for Auto Swiss too.
+  await notifyMatchesCreated(tournamentId, 1, round1Matches);
 }
 
 // ---------------------------------------------------------------------------
@@ -400,6 +403,12 @@ async function startPlayoffs(
       new_value: { format: fmt, matches: matches.length },
     },
   });
+
+  // B22: notify the first playoff round's participants.
+  const playablePO = matches.filter((m) => m.player1_id && m.player2_id);
+  if (playablePO.length > 0) {
+    await notifyMatchesCreated(tournament.id, Math.min(...playablePO.map((m) => m.round)), playablePO);
+  }
 }
 
 // ---------------------------------------------------------------------------

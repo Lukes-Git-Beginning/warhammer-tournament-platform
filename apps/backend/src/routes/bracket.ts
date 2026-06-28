@@ -18,7 +18,7 @@ import {
 } from '../lib/playoff-generator.js';
 import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
-import { notifyRoundPairings } from '../lib/discord-notify.js';
+import { notifyMatchesCreated } from '../lib/discord-notify.js';
 
 const bracketRoutes: FastifyPluginAsync = async (fastify) => {
   /**
@@ -432,6 +432,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       });
       emitBracketUpdate(fastify.io, tournament.id);
 
+      // B22: notify round-1 pairings (previously only rounds 2+ were announced).
+      await notifyMatchesCreated(
+        tournament.id,
+        1,
+        bracketMatches.filter((m) => m.round === 1),
+      );
+
       const responseBody: Record<string, unknown> = {
         tournamentId: tournament.id,
         matches_created: bracketMatches.length,
@@ -641,47 +648,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       emitBracketUpdate(fastify.io, tournament.id);
 
       // Notify pairings via Discord (non-fatal, fire-and-forget)
-      try {
-        const tournamentForNotify = await fastify.prisma.tournament.findFirst({
-          where: { id: tournament.id },
-          select: { id: true, name: true, slug: true, start_date: true },
-        });
-
-        if (tournamentForNotify) {
-          const pairingData = await Promise.all(
-            newMatches
-              .filter((m) => m.player1_id && m.player2_id)
-              .map(async (m) => {
-                const [p1, p2] = await Promise.all([
-                  fastify.prisma.user.findUnique({
-                    where: { id: m.player1_id! },
-                    select: { discord_id: true, username: true },
-                  }),
-                  fastify.prisma.user.findUnique({
-                    where: { id: m.player2_id! },
-                    select: { discord_id: true, username: true },
-                  }),
-                ]);
-                if (!p1 || !p2) return null;
-                return {
-                  matchId: m.id,
-                  player1: { discord_id: p1.discord_id, username: p1.username },
-                  player2: { discord_id: p2.discord_id, username: p2.username },
-                  round: targetRound,
-                  map: null,
-                };
-              }),
-          );
-
-          const pairings = pairingData.filter((p): p is NonNullable<typeof p> => p !== null);
-
-          await notifyRoundPairings(tournamentForNotify, targetRound, pairings).catch((err) => {
-            request.log.warn({ err }, 'notifyRoundPairings failed (non-fatal)');
-          });
-        }
-      } catch (notifyErr) {
-        request.log.warn({ notifyErr }, 'Pairing notification error (non-fatal)');
-      }
+      await notifyMatchesCreated(tournament.id, targetRound, newMatches);
 
       return reply.code(200).send({
         tournamentId: tournament.id,
@@ -891,6 +858,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
         emitBracketUpdate(fastify.io, id);
 
+        // B22: notify the first playoff round's participants (QF/SF).
+        const playablePO = playoffMatches.filter((m) => m.player1_id && m.player2_id);
+        if (playablePO.length > 0) {
+          await notifyMatchesCreated(id, Math.min(...playablePO.map((m) => m.round)), playablePO);
+        }
+
         return reply.code(200).send({
           tournamentId: id,
           format: playoffResult.format,
@@ -1082,6 +1055,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       emitBracketUpdate(fastify.io, id);
+
+      // B22: notify newly created playoff-round participants (SF/GF/small final).
+      const advanced = [...nextMatches, ...(thirdPlaceMatch ? [thirdPlaceMatch] : [])]
+        .filter((m) => m.player1_id && m.player2_id);
+      if (advanced.length > 0) {
+        await notifyMatchesCreated(id, Math.min(...advanced.map((m) => m.round)), advanced);
+      }
 
       return reply.code(200).send({ phase: nextPhase, matches_created: nextMatches.length });
     },

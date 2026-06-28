@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { emitParticipantChange, emitBracketUpdate } from '../lib/emit.js';
 import { canManageTournament, createLateJoinerBye } from '../lib/tournament-utils.js';
+import { notifyHostsOfWithdrawal } from '../lib/discord-notify.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -670,6 +671,9 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'withdrew' });
+
+      // B20: let the host(s) know a player dropped — excluding the actor.
+      void notifyHostsOfWithdrawal(tournament.id, userId, callerId);
 
       return reply.code(200).send({ dropped: true });
     },
