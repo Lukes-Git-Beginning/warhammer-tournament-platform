@@ -994,7 +994,7 @@ export function createMatchNode(
   player2Id: string,
   round: number,
 ): Promise<{ match: { id: string; round: number; match_number: number } }> {
-  return apiFetch(`/api/admin/tournaments/${slug}/create-match`, {
+  return apiFetch(`/api/tournaments/${slug}/create-match`, {
     method: 'POST',
     body: JSON.stringify({ player1Id, player2Id, round }),
   });
@@ -1027,7 +1027,7 @@ export function addLateJoiner(
   slug: string,
   userId: string,
 ): Promise<{ participant: { id: string; status: string; user: { id: string; username: string } } }> {
-  return apiFetch(`/api/admin/tournaments/${slug}/add-late`, {
+  return apiFetch(`/api/tournaments/${slug}/add-late`, {
     method: 'POST',
     body: JSON.stringify({ userId }),
   });
@@ -1038,7 +1038,7 @@ export function setParticipantFaction(
   userId: string,
   factionId: string,
 ): Promise<{ participant: { id: string; user_id: string; faction_id: string; status: string } }> {
-  return apiFetch(`/api/admin/tournaments/${slug}/participants/${userId}/faction`, {
+  return apiFetch(`/api/tournaments/${slug}/participants/${userId}/faction`, {
     method: 'PATCH',
     body: JSON.stringify({ faction_id: factionId }),
   });

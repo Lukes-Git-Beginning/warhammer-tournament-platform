@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { emitParticipantChange, emitBracketUpdate } from '../lib/emit.js';
 import { canManageTournament, createLateJoinerBye } from '../lib/tournament-utils.js';
 import { notifyHostsOfWithdrawal } from '../lib/discord-notify.js';
+import { addLateParticipant, setParticipantFactionOp } from '../lib/tournament-management.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -604,6 +605,44 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
     return { data, total: data.length };
   });
+
+  // ---------------------------------------------------------------------------
+  // Host-accessible operative actions (B12) — canManage-gated mirrors of the
+  // ADMIN-scoped /api/admin/tournaments/:slug/* routes, so hosts and co-hosts
+  // (not just global admins) can run them. Shared logic in tournament-management.
+  // ---------------------------------------------------------------------------
+
+  // POST /api/tournaments/:slug/add-late — add a participant after registration closed
+  fastify.post(
+    '/api/tournaments/:slug/add-late',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      const t = await fastify.prisma.tournament.findFirst({ where: { slug, deleted_at: null }, select: { id: true } });
+      if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (!(await canManageTournament(fastify.prisma, t.id, request.user.sub, request.user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
+      }
+      const r = await addLateParticipant(fastify.prisma, fastify.io, slug, request.body, request.log);
+      return reply.code(r.status).send(r.body);
+    },
+  );
+
+  // PATCH /api/tournaments/:slug/participants/:userId/faction — set a participant's faction
+  fastify.patch(
+    '/api/tournaments/:slug/participants/:userId/faction',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug, userId } = request.params as { slug: string; userId: string };
+      const t = await fastify.prisma.tournament.findFirst({ where: { slug, deleted_at: null }, select: { id: true } });
+      if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (!(await canManageTournament(fastify.prisma, t.id, request.user.sub, request.user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
+      }
+      const r = await setParticipantFactionOp(fastify.prisma, slug, userId, request.body);
+      return reply.code(r.status).send(r.body);
+    },
+  );
 
   // ---------------------------------------------------------------------------
   // POST /api/tournaments/:slug/participants/:userId/drop

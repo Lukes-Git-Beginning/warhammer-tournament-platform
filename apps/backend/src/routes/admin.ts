@@ -8,7 +8,7 @@ import { ImportLogListResponseSchema } from '@rizzotto/types';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
 import { emitBracketUpdate } from '../lib/emit.js';
-import { createLateJoinerBye } from '../lib/tournament-utils.js';
+import { addLateParticipant, setParticipantFactionOp, createManualMatch } from '../lib/tournament-management.js';
 import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM } from '../lib/scoring-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1025,101 +1025,15 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/admin/tournaments/:slug/add-late — add a participant after tournament start
   fastify.post('/api/admin/tournaments/:slug/add-late', async (request, reply) => {
     const { slug } = request.params as { slug: string };
-    const parsed = z
-      .object({ userId: z.string().uuid(), faction_id: z.string().min(1).optional() })
-      .safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
-    }
-
-    const tournament = await fastify.prisma.tournament.findUnique({
-      where: { slug, deleted_at: null },
-      select: {
-        id: true,
-        status: true,
-        mode: true,
-        faction_allowlist: { select: { faction_id: true } },
-      },
-    });
-    if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
-    // B21: also allow adding participants in the pre-start phase (registration closed,
-    // not yet started) — not only mid-tournament.
-    if (tournament.status !== 'ONGOING' && tournament.status !== 'REGISTRATION_CLOSED') {
-      return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Tournament must be ongoing or registration-closed to add a participant', statusCode: 422 });
-    }
-
-    const user = await fastify.prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { id: true, username: true } });
-    if (!user) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
-
-    const existing = await fastify.prisma.tournamentParticipant.findUnique({
-      where: { tournament_id_user_id: { tournament_id: tournament.id, user_id: parsed.data.userId } },
-      select: { status: true },
-    });
-    if (existing) {
-      return reply.code(409).send({ error: 'Conflict', message: `${user.username} is already a participant (status: ${existing.status})`, statusCode: 409 });
-    }
-
-    if (parsed.data.faction_id) {
-      const faction = await fastify.prisma.faction.findUnique({ where: { id: parsed.data.faction_id }, select: { id: true } });
-      if (!faction) {
-        return reply.code(400).send({ error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" does not exist`, statusCode: 400 });
-      }
-      const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
-      if (allowlist.length > 0 && !allowlist.includes(parsed.data.faction_id)) {
-        return reply.code(400).send({ error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" is not in the tournament allowlist`, statusCode: 400 });
-      }
-    }
-
-    const participant = await fastify.prisma.tournamentParticipant.create({
-      data: { tournament_id: tournament.id, user_id: parsed.data.userId, status: 'CHECKED_IN', faction_id: parsed.data.faction_id },
-      select: { id: true, status: true, faction_id: true, user: { select: { id: true, username: true } } },
-    });
-
-    // Late joiner mid-tournament: give them a BYE in the current Swiss round so
-    // they're folded into subsequent rounds (Swiss / Auto Swiss). Non-fatal.
-    // Pre-start (REGISTRATION_CLOSED) there is no round yet — just add them.
-    if (tournament.status === 'ONGOING') {
-      try {
-        const bye = await createLateJoinerBye(fastify.prisma, tournament.id, parsed.data.userId);
-        if (bye) emitBracketUpdate(fastify.io, tournament.id);
-      } catch (err) {
-        request.log.warn({ err, slug }, 'Failed to create late-joiner BYE');
-      }
-    }
-
-    return reply.code(201).send({ participant });
+    const r = await addLateParticipant(fastify.prisma, fastify.io, slug, request.body, request.log);
+    return reply.code(r.status).send(r.body);
   });
 
   // PATCH /api/admin/tournaments/:slug/participants/:userId/faction — set faction pick for a participant
   fastify.patch('/api/admin/tournaments/:slug/participants/:userId/faction', async (request, reply) => {
     const { slug, userId } = request.params as { slug: string; userId: string };
-    const parsed = z.object({ faction_id: z.string().min(1) }).safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
-    }
-
-    const tournament = await fastify.prisma.tournament.findUnique({
-      where: { slug, deleted_at: null },
-      select: { id: true, faction_allowlist: { select: { faction_id: true } } },
-    });
-    if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
-
-    const faction = await fastify.prisma.faction.findUnique({ where: { id: parsed.data.faction_id }, select: { id: true } });
-    if (!faction) {
-      return reply.code(400).send({ error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" does not exist`, statusCode: 400 });
-    }
-    const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
-    if (allowlist.length > 0 && !allowlist.includes(parsed.data.faction_id)) {
-      return reply.code(400).send({ error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" is not in the tournament allowlist`, statusCode: 400 });
-    }
-
-    const participant = await fastify.prisma.tournamentParticipant.update({
-      where: { tournament_id_user_id: { tournament_id: tournament.id, user_id: userId } },
-      data: { faction_id: parsed.data.faction_id },
-      select: { id: true, user_id: true, faction_id: true, status: true },
-    });
-
-    return reply.code(200).send({ participant });
+    const r = await setParticipantFactionOp(fastify.prisma, slug, userId, request.body);
+    return reply.code(r.status).send(r.body);
   });
 
   // GET /api/admin/open-play/queue — who is currently in the Open Play queue
@@ -1327,41 +1241,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/admin/tournaments/:slug/create-match — add a manual PENDING Swiss match
   fastify.post('/api/admin/tournaments/:slug/create-match', async (request, reply) => {
     const { slug } = request.params as { slug: string };
-    const parsed = z.object({
-      player1Id: z.string().uuid(),
-      player2Id: z.string().uuid().optional(), // B18: omit → BYE node
-      round: z.number().int().min(1),
-    }).safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
-
-    const tournament = await fastify.prisma.tournament.findFirst({
-      where: { slug, deleted_at: null },
-      select: { id: true, status: true },
-    });
-    if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
-
-    const { round, player1Id, player2Id } = parsed.data;
-    const agg = await fastify.prisma.match.aggregate({
-      where: { tournament_id: tournament.id, round },
-      _max: { match_number: true },
-    });
-    const nextMatchNumber = (agg._max.match_number ?? 0) + 1;
-
-    const match = await fastify.prisma.match.create({
-      data: {
-        tournament_id: tournament.id,
-        round,
-        match_number: nextMatchNumber,
-        player1_id: player1Id,
-        player2_id: player2Id ?? null,
-        // B18: no second player → BYE node (1.0 to player1, no opponent).
-        status: player2Id ? 'PENDING' : 'BYE',
-        phase: 'SWISS',
-      },
-      select: { id: true, round: true, match_number: true },
-    });
-    emitBracketUpdate(fastify.io, tournament.id);
-    return reply.code(201).send({ match });
+    const r = await createManualMatch(fastify.prisma, fastify.io, slug, request.body);
+    return reply.code(r.status).send(r.body);
   });
 
   // GET /api/admin/users/:id/anti-farming?seasonId= — opponents with diminished win value

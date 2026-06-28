@@ -18,6 +18,7 @@ import {
 } from '../lib/playoff-generator.js';
 import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
+import { createManualMatch } from '../lib/tournament-management.js';
 import { notifyMatchesCreated } from '../lib/discord-notify.js';
 
 const bracketRoutes: FastifyPluginAsync = async (fastify) => {
@@ -1397,6 +1398,23 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       return reply.code(200).send({ ok: true });
+    },
+  );
+
+  // POST /api/tournaments/:slug/create-match — host-accessible manual match node
+  // (B12 + B18). canManage-gated mirror of the ADMIN-scoped admin route.
+  fastify.post(
+    '/api/tournaments/:slug/create-match',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      const t = await fastify.prisma.tournament.findFirst({ where: { slug, deleted_at: null }, select: { id: true } });
+      if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (!(await canManageTournament(fastify.prisma, t.id, request.user.sub, request.user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
+      }
+      const r = await createManualMatch(fastify.prisma, fastify.io, slug, request.body);
+      return reply.code(r.status).send(r.body);
     },
   );
 };

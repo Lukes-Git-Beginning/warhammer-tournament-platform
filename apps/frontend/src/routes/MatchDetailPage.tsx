@@ -343,8 +343,10 @@ export function MatchDetailPage() {
 
   const isPlayer1 = user?.id === match.player1_id;
   const isPlayer2 = user?.id === match.player2_id;
-  const isPrivileged =
-    user?.role === 'ADMIN' || user?.role === 'MODERATOR' || user?.role === 'HOST';
+  // B12: scope management controls to those who can manage THIS match's
+  // tournament (server-computed: host, co-host, mod, admin) — not every HOST
+  // globally. Admins/mods get can_manage=true via canManageTournament.
+  const isPrivileged = !!match.can_manage;
   const canReport = !!(user && (isPlayer1 || isPlayer2 || isPrivileged));
 
   const reportable = match.status === 'ONGOING' || match.status === 'PENDING';

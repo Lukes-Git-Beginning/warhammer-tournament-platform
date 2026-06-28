@@ -337,10 +337,24 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         .send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
     }
 
+    // Optional auth — compute whether the viewer may manage this match's
+    // tournament (host, co-host, mod, admin), so the UI can scope management
+    // controls to the owner instead of showing them to every HOST globally (B12).
+    let can_manage = false;
+    try {
+      await request.jwtVerify();
+      if (match.tournament?.id) {
+        can_manage = await canManageTournament(fastify.prisma, match.tournament.id, request.user.sub, request.user.role);
+      }
+    } catch {
+      // unauthenticated — fine, can_manage stays false
+    }
+
     return reply.code(200).send({
       id: match.id,
       tournament_id: match.tournament?.id ?? null,
       tournament_slug: match.tournament?.slug ?? null,
+      can_manage,
       round: match.round,
       match_number: match.match_number,
       status: match.status,

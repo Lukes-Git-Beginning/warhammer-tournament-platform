@@ -402,7 +402,8 @@ export function TournamentDetail() {
               {completeMutation.isPending ? 'Finalising…' : 'Finalise Tournament'}
             </button>
           )}
-          {tournament.status === 'ONGOING' && (
+          {/* B21: also available pre-start (REGISTRATION_CLOSED), not just ONGOING. */}
+          {(tournament.status === 'ONGOING' || tournament.status === 'REGISTRATION_CLOSED') && (
             <button
               type="button"
               disabled={lateJoinMutation.isPending}
@@ -415,7 +416,7 @@ export function TournamentDetail() {
               + Add Late Joiner
             </button>
           )}
-          {tournament.status === 'ONGOING' && (
+          {(tournament.status === 'ONGOING' || tournament.status === 'REGISTRATION_CLOSED') && (
             <button
               type="button"
               onClick={() => { setShowCreateMatch(true); setCreateRound(bracket?.swiss?.currentRound ?? 1); }}
