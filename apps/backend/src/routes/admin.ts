@@ -1042,8 +1042,10 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
     if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
-    if (tournament.status !== 'ONGOING') {
-      return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Tournament must be ONGOING to add a late joiner', statusCode: 422 });
+    // B21: also allow adding participants in the pre-start phase (registration closed,
+    // not yet started) — not only mid-tournament.
+    if (tournament.status !== 'ONGOING' && tournament.status !== 'REGISTRATION_CLOSED') {
+      return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Tournament must be ongoing or registration-closed to add a participant', statusCode: 422 });
     }
 
     const user = await fastify.prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { id: true, username: true } });
@@ -1075,11 +1077,14 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Late joiner mid-tournament: give them a BYE in the current Swiss round so
     // they're folded into subsequent rounds (Swiss / Auto Swiss). Non-fatal.
-    try {
-      const bye = await createLateJoinerBye(fastify.prisma, tournament.id, parsed.data.userId);
-      if (bye) emitBracketUpdate(fastify.io, tournament.id);
-    } catch (err) {
-      request.log.warn({ err, slug }, 'Failed to create late-joiner BYE');
+    // Pre-start (REGISTRATION_CLOSED) there is no round yet — just add them.
+    if (tournament.status === 'ONGOING') {
+      try {
+        const bye = await createLateJoinerBye(fastify.prisma, tournament.id, parsed.data.userId);
+        if (bye) emitBracketUpdate(fastify.io, tournament.id);
+      } catch (err) {
+        request.log.warn({ err, slug }, 'Failed to create late-joiner BYE');
+      }
     }
 
     return reply.code(201).send({ participant });
@@ -1331,7 +1336,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { slug } = request.params as { slug: string };
     const parsed = z.object({
       player1Id: z.string().uuid(),
-      player2Id: z.string().uuid(),
+      player2Id: z.string().uuid().optional(), // B18: omit → BYE node
       round: z.number().int().min(1),
     }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
@@ -1355,12 +1360,14 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         round,
         match_number: nextMatchNumber,
         player1_id: player1Id,
-        player2_id: player2Id,
-        status: 'PENDING',
+        player2_id: player2Id ?? null,
+        // B18: no second player → BYE node (1.0 to player1, no opponent).
+        status: player2Id ? 'PENDING' : 'BYE',
         phase: 'SWISS',
       },
       select: { id: true, round: true, match_number: true },
     });
+    emitBracketUpdate(fastify.io, tournament.id);
     return reply.code(201).send({ match });
   });
 
