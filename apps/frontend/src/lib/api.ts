@@ -1009,6 +1009,11 @@ export function forfeitMatch(matchId: string, droppedPlayerId: string): Promise<
   });
 }
 
+/** B10: technical-abort double-bye — both players get a bye point, no winner. */
+export function setMatchNoContest(matchId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/matches/${matchId}/no-contest`, { method: 'POST' });
+}
+
 export function undropParticipant(
   slug: string,
   userId: string,

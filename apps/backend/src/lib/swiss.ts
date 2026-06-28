@@ -192,7 +192,7 @@ export function computeSwissStandings(
   }
 
   for (const match of completedMatches) {
-    if (match.status !== 'COMPLETED' && match.status !== 'BYE' && match.status !== 'FORFEIT') continue;
+    if (match.status !== 'COMPLETED' && match.status !== 'BYE' && match.status !== 'FORFEIT' && match.status !== 'NO_CONTEST') continue;
 
     const p1 = match.player1_id;
     const p2 = match.player2_id;
@@ -204,6 +204,20 @@ export function computeSwissStandings(
         const r = recordMap.get(byePlayer)!;
         r.byes += 1;
         r.score += 1;
+      }
+      continue;
+    }
+
+    // NO_CONTEST (B10): technical-abort double-bye — both players get a bye point
+    // (1.0), counted as a bye, with no opponent (0 BH). The pair are not pushed to
+    // each other's opponents, so this never feeds Buchholz.
+    if (match.status === 'NO_CONTEST') {
+      for (const pid of [p1, p2]) {
+        if (pid && recordMap.has(pid)) {
+          const r = recordMap.get(pid)!;
+          r.byes += 1;
+          r.score += 1;
+        }
       }
       continue;
     }

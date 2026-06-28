@@ -100,6 +100,7 @@ enum MatchStatus {
   DISPUTED // Q4: dual-submit conflict, awaiting organizer/admin override
   AWAITING_CONFIRMATION // Discord flow: one player declared, waiting for opponent response
   CANCELLED // Open Play no-contest: both players agreed to close without a result
+  NO_CONTEST // tournament double-bye: technical abort, both players get a bye point (1.0, no BH)
 }
 
 enum MatchResultType {

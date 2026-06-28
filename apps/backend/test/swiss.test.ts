@@ -203,6 +203,25 @@ describe('computeSwissStandings', () => {
     const rank1 = standings.findIndex((s) => s.userId === ids[1]);
     expect(rank0).toBeLessThan(rank1);
   });
+
+  it('NO_CONTEST → both players get a bye point, 0 Buchholz, not dropped (B10)', () => {
+    const ids = fakeIds(4);
+    const matches: CompletedMatchRecord[] = [
+      // A real result so opponents would otherwise contribute Buchholz.
+      { round: 1, player1_id: ids[2], player2_id: ids[3], winner_id: ids[2], status: 'COMPLETED' },
+      // ids[0] vs ids[1] declared a No Contest (technical-abort double bye).
+      { round: 1, player1_id: ids[0], player2_id: ids[1], winner_id: null, status: 'NO_CONTEST' },
+    ];
+    const standings = computeSwissStandings(ids, matches);
+    const get = (id: string) => standings.find((s) => s.userId === id)!;
+
+    for (const id of [ids[0], ids[1]]) {
+      expect(get(id).score).toBe(1);
+      expect(get(id).byes).toBe(1);
+      expect(get(id).buchholz).toBe(0); // forfeiting opponent contributes no BH
+      expect(get(id).dropped).toBe(false); // a No Contest does not drop anyone
+    }
+  });
 });
 
 // ---------- recommendNumberOfRounds ----------

@@ -654,6 +654,31 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(200).send({ ok: true, winnerId });
     },
   );
+
+  // POST /api/matches/:id/no-contest — canManage: B10 technical-abort double-bye.
+  // Both players receive a bye point (1.0, no BH, see computeSwissStandings); the
+  // match is awarded to no one and its games are voided. NOT a withdraw.
+  fastify.post(
+    '/api/matches/:id/no-contest',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const match = await fastify.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
+      });
+      if (!match || !match.tournament_id) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+
+      const { role, sub: userId } = request.user;
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+
+      await fastify.prisma.$transaction([
+        fastify.prisma.match.update({ where: { id: matchId }, data: { status: 'NO_CONTEST', winner_id: null } }),
+        fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } }),
+      ]);
+      return reply.code(200).send({ ok: true });
+    },
+  );
 };
 
 export default matchRoutes;

@@ -132,7 +132,7 @@ export async function advanceAutoSwissRound(prisma: PrismaClient, tournamentId: 
 
   const maxSwissRound = Math.max(...swissMatches.map((m) => m.round));
   const currentRoundMatches = swissMatches.filter((m) => m.round === maxSwissRound);
-  const incompleteSwiss = currentRoundMatches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED');
+  const incompleteSwiss = currentRoundMatches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED' && m.status !== 'NO_CONTEST');
 
   if (incompleteSwiss.length > 0) return; // current round not done
 
@@ -192,7 +192,7 @@ async function generateNextSwissRound(
   const withdrawnIds = new Set(dbParticipants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
 
   const completed = swissMatches
-    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
+    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST')
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
 
   const rawStandings = computeSwissStandings(participantIds, completed, withdrawnIds);
@@ -292,7 +292,7 @@ async function startPlayoffs(
   });
   const withdrawnIds = new Set(dbParticipants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
   const completed = swissMatches
-    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
+    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST')
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
   const rawStandings = computeSwissStandings(participantIds, completed, withdrawnIds);
   const standings = sortSwissStandings(rawStandings, completed);
@@ -444,7 +444,7 @@ export async function repairBrokenAutoSwiss(prisma: PrismaClient): Promise<void>
     if (hasPlayoffs) continue;
 
     // Only repair if all matches are done (Swiss rounds complete, including forfeit wins)
-    const pending = matches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT');
+    const pending = matches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'NO_CONTEST');
     if (pending.length > 0) continue;
 
     // All matches done, no playoffs — this is a stuck tournament

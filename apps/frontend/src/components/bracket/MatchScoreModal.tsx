@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, restoreMatch, cancelMatch, swapPlayer, deleteMatch, getParticipants, forfeitMatch } from '@/lib/api';
+import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, restoreMatch, cancelMatch, swapPlayer, deleteMatch, getParticipants, forfeitMatch, setMatchNoContest } from '@/lib/api';
 import { useState } from 'react';
 
 interface MatchScoreModalProps {
@@ -103,6 +103,16 @@ export function MatchScoreModal({
     mutationFn: () => cancelMatch(matchId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      onClose();
+    },
+  });
+
+  // B10: technical-abort double-bye (both players get a bye point, no winner).
+  const noContestMutation = useMutation({
+    mutationFn: () => setMatchNoContest(matchId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants'] });
       onClose();
     },
   });
@@ -278,9 +288,23 @@ export function MatchScoreModal({
                   ✕ Cancel Match
                 </button>
               )}
+              {canManage && isPending && (
+                <button
+                  type="button"
+                  disabled={noContestMutation.isPending}
+                  onClick={() => {
+                    if (confirm('Declare a No Contest (double bye)? Both players get a bye point (1.0, no Buchholz). Use this for a technical abort that was never really played — it does NOT withdraw either player.')) {
+                      noContestMutation.mutate();
+                    }
+                  }}
+                  className="flex-1 rounded border border-amber-700 px-2 py-1 text-xs text-amber-300 hover:bg-amber-900/20 transition-colors disabled:opacity-40"
+                >
+                  ⚖ No Contest
+                </button>
+              )}
             </div>
             <p className="text-[10px] text-stone-600">
-              Restore → enter correct result · Cancel → remove from standings
+              Restore → enter correct result · Cancel → remove from standings · No Contest → double bye
             </p>
           </div>
         )}
