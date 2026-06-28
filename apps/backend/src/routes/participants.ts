@@ -43,6 +43,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           status: true,
           mode: true,
+          start_date: true,
           max_participants: true,
           faction_allowlist: { select: { faction_id: true } },
           restricted_factions: { select: { faction_id: true } },
@@ -127,33 +128,60 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         // Restricted factions stay pickable (nerfed, not banned) — same as faction_id above.
       }
 
-      try {
-        const participant = await fastify.prisma.tournamentParticipant.create({
-          data: {
-            tournament_id: tournament.id,
-            user_id: request.user.sub,
-            faction_id: parsed.data.faction_id,
-            faction_ids: factionIds,
-            status: 'REGISTERED',
-          },
-          select: {
-            id: true,
-            tournament_id: true,
-            user_id: true,
-            faction_id: true,
-            faction_ids: true,
-            status: true,
-            registered_at: true,
-          },
+      // B5: registering during the check-in window [start-1h, start) auto-checks-in.
+      const now = new Date();
+      const startMs = tournament.start_date.getTime();
+      const checkInOpen = now.getTime() >= startMs - 3_600_000 && now.getTime() < startMs;
+      const initialStatus: 'CHECKED_IN' | 'REGISTERED' = checkInOpen ? 'CHECKED_IN' : 'REGISTERED';
+
+      const participantData = {
+        faction_id: parsed.data.faction_id ?? null,
+        faction_ids: factionIds,
+        status: initialStatus,
+      };
+      const participantSelect = {
+        id: true,
+        tournament_id: true,
+        user_id: true,
+        faction_id: true,
+        faction_ids: true,
+        status: true,
+        registered_at: true,
+      } as const;
+
+      // B15: a player who withdrew before start can re-register — reactivate the
+      // existing row instead of failing on the (tournament_id, user_id) unique key.
+      const existing = await fastify.prisma.tournamentParticipant.findFirst({
+        where: { tournament_id: tournament.id, user_id: request.user.sub },
+        select: { id: true, status: true },
+      });
+      if (existing && existing.status !== 'WITHDREW') {
+        return reply.code(409).send({
+          error: 'Conflict',
+          message: 'You are already registered for this tournament',
+          statusCode: 409,
         });
+      }
+
+      try {
+        const participant = existing
+          ? await fastify.prisma.tournamentParticipant.update({
+              where: { id: existing.id },
+              data: { ...participantData, registered_at: now },
+              select: participantSelect,
+            })
+          : await fastify.prisma.tournamentParticipant.create({
+              data: { tournament_id: tournament.id, user_id: request.user.sub, ...participantData },
+              select: participantSelect,
+            });
 
         await fastify.prisma.auditLog.create({
           data: {
             entity_type: 'TournamentParticipant',
             entity_id: participant.id,
-            action: 'register',
+            action: existing ? 're-register' : 'register',
             actor_id: request.user.sub,
-            new_value: { tournament_id: tournament.id, user_id: request.user.sub },
+            new_value: { tournament_id: tournament.id, user_id: request.user.sub, status: initialStatus },
           },
         });
 
@@ -163,10 +191,10 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           action: 'registered',
         });
 
-        request.log.info({ slug, userId: request.user.sub }, 'User registered for tournament');
+        request.log.info({ slug, userId: request.user.sub, status: initialStatus }, 'User registered for tournament');
         return reply.code(201).send(participant);
       } catch (err: unknown) {
-        // Prisma unique constraint violation
+        // Prisma unique constraint violation (race)
         if (
           err !== null &&
           typeof err === 'object' &&
