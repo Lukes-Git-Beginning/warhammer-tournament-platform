@@ -1306,6 +1306,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'BadRequest', message: 'droppedPlayerId is not in this match', statusCode: 400 });
     }
 
+    // B1: forfeiting a match is match-scoped — it must NOT withdraw the player from
+    // the whole tournament (withdraw is a separate explicit action).
     await fastify.prisma.$transaction([
       fastify.prisma.match.update({
         where: { id: matchId },
@@ -1315,15 +1317,6 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       // reflect results from a match that is being overridden.
       fastify.prisma.matchGame.deleteMany({
         where: { match_id: matchId },
-      }),
-      // Also withdraw the dropped player from the tournament if not already done.
-      fastify.prisma.tournamentParticipant.updateMany({
-        where: {
-          tournament_id: tournamentId,
-          user_id: droppedPlayerId,
-          status: { notIn: ['WITHDREW', 'DISQUALIFIED'] },
-        },
-        data: { status: 'WITHDREW' },
       }),
     ]);
 

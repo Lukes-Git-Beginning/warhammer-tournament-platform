@@ -191,9 +191,6 @@ export function computeSwissStandings(
     recordMap.set(id, { wins: 0, losses: 0, draws: 0, byes: 0, score: 0, gamesLost: 0, opponents: [], opponentsBeaten: [] });
   }
 
-  // Track players who withdrew mid-tournament (lost a FORFEIT match)
-  const droppedPlayerIds = new Set<string>();
-
   for (const match of completedMatches) {
     if (match.status !== 'COMPLETED' && match.status !== 'BYE' && match.status !== 'FORFEIT') continue;
 
@@ -211,20 +208,18 @@ export function computeSwissStandings(
       continue;
     }
 
-    // FORFEIT: opponent dropped mid-tournament — treat as a bye for the winner.
-    // No BH contribution from the dropped player (they didn't play).
-    // The dropped player's own previous-round results are preserved but they
-    // are flagged so they sort to the bottom of standings.
+    // FORFEIT: the match is awarded to the opponent as a bye-like win (no BH
+    // contribution from the forfeiting player). B1: a forfeit does NOT itself mark
+    // a player as dropped — "dropped" is derived from current WITHDREW status only,
+    // so a match-drop keeps the player active in the standings.
     if (match.status === 'FORFEIT') {
       if (!p1 || !p2 || !winner) continue;
-      const dropped = winner === p1 ? p2 : p1;
-      droppedPlayerIds.add(dropped);
       const rWinner = recordMap.get(winner);
       if (rWinner) {
         rWinner.byes += 1;
         rWinner.score += 1;
-        // Deliberately do NOT push `dropped` into rWinner.opponents — FORFEIT
-        // is treated as a bye, so the dropped player contributes 0 BH.
+        // Deliberately do NOT push the forfeiting player into rWinner.opponents —
+        // FORFEIT is treated as a bye, so they contribute 0 BH.
       }
       continue;
     }
@@ -278,7 +273,7 @@ export function computeSwissStandings(
       buchholz,
       solkoff,
       opponentsBeaten: rec.opponentsBeaten,
-      dropped: droppedPlayerIds.has(userId) || (withdrawnIds?.has(userId) ?? false),
+      dropped: withdrawnIds?.has(userId) ?? false,
     });
   }
 
