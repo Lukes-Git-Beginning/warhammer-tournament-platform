@@ -281,10 +281,9 @@ export function TournamentDetail() {
   const formatLabel = formatKey ? t(formatKey) : tournament.format;
   const startDate = formatInUserTimezone(tournament.start_date, user?.timezone ?? undefined);
 
-  const canManage =
-    user &&
-    (user.role === 'MODERATOR' || user.role === 'ADMIN' ||
-      (user.role === 'HOST' && tournament.organizer?.id === user.id));
+  // Server-computed (host, co-host, moderator, admin) — co-hosts now get the full
+  // management UI, not just the organizer.
+  const canManage = !!tournament.can_manage;
 
   // Derive participant status from the /participants/me endpoint
   const participantStatus: ParticipantStatus | null = participantData?.status ?? null;

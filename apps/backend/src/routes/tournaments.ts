@@ -597,6 +597,15 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/api/tournaments/:slug', async (request, reply) => {
     const { slug } = request.params as { slug: string };
 
+    // Optional auth — read the user if a valid cookie is present (for can_manage).
+    let authedUser: { sub: string; role: string } | null = null;
+    try {
+      await request.jwtVerify();
+      authedUser = { sub: request.user.sub, role: request.user.role };
+    } catch {
+      // unauthenticated — fine for public tournaments
+    }
+
     const tournament = await fastify.prisma.tournament.findFirst({
       where: { slug, deleted_at: null },
       select: {
@@ -650,31 +659,24 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    // PRIVATE tournaments only visible to organizer or MODERATOR/ADMIN
-    if (tournament.visibility === 'PRIVATE') {
-      // Try to read auth from cookie — optional auth pattern
-      try {
-        await request.jwtVerify();
-      } catch {
-        return reply.code(403).send({
-          error: 'Forbidden',
-          message: 'This tournament is private',
-          statusCode: 403,
-        });
-      }
-      const user = request.user;
-      if (!(await canManageTournament(fastify.prisma, tournament.id, user.sub, user.role))) {
-        return reply.code(403).send({
-          error: 'Forbidden',
-          message: 'This tournament is private',
-          statusCode: 403,
-        });
-      }
+    // Whether the viewer may manage this tournament (host, co-host, mod, admin).
+    const can_manage = authedUser
+      ? await canManageTournament(fastify.prisma, tournament.id, authedUser.sub, authedUser.role)
+      : false;
+
+    // PRIVATE tournaments are only visible to those who can manage them.
+    if (tournament.visibility === 'PRIVATE' && !can_manage) {
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: 'This tournament is private',
+        statusCode: 403,
+      });
     }
 
     const { _count, faction_allowlist, restricted_factions, map_pool, ...rest } = tournament;
     return {
       ...rest,
+      can_manage,
       participantCount: _count.participants,
       faction_allowlist: faction_allowlist.map((fa) => fa.faction_id),
       restricted_factions: restricted_factions.map((rf) => rf.faction_id),

@@ -73,6 +73,8 @@ export interface Tournament {
     username: string;
     avatar_url: string | null;
   };
+  /** Server-computed: viewer may manage (host, co-host, moderator, admin). */
+  can_manage?: boolean;
   participantCount?: number;
   created_at: string;
   is_major?: boolean;
