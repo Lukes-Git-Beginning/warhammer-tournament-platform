@@ -16,8 +16,13 @@ import { PageShell } from '@/components/layout/PageShell.js';
 import { ArmyListList } from '../components/tournament/ArmyListList.js';
 import { ArmyListUpload } from '../components/tournament/ArmyListUpload.js';
 
+/** Map deprecated IANA aliases to their current canonical name (e.g. Kiev → Kyiv). */
+function normalizeTimezone(tz: string): string {
+  return tz === 'Europe/Kiev' ? 'Europe/Kyiv' : tz;
+}
+
 const COMMON_TIMEZONES = [
-  'Europe/Berlin', 'Europe/London', 'Europe/Madrid', 'Europe/Warsaw',
+  'Europe/Berlin', 'Europe/London', 'Europe/Madrid', 'Europe/Warsaw', 'Europe/Kyiv',
   'Europe/Paris', 'Europe/Amsterdam', 'Europe/Stockholm', 'Europe/Rome',
   'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
   'America/Sao_Paulo', 'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Seoul',
@@ -26,7 +31,7 @@ const COMMON_TIMEZONES = [
 
 function TimezoneSection({ user }: { user: UserMe }) {
   const queryClient = useQueryClient();
-  const current = user.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const current = normalizeTimezone(user.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [selected, setSelected] = useState(current);
   const [saved, setSaved] = useState(false);
 
