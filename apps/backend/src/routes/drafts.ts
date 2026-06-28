@@ -176,7 +176,7 @@ const draftRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // POST /api/drafts/:id/cancel
-  // Organizer / Moderator / Admin only.
+  // Host / Moderator / Admin only.
   // -------------------------------------------------------------------------
   fastify.post(
     '/api/drafts/:id/cancel',
@@ -187,14 +187,14 @@ const draftRoutes: FastifyPluginAsync = async (fastify) => {
       const { id: draftId } = request.params as { id: string };
       const actorUserId = request.user.sub;
 
-      // Load draft to check organizer ownership
+      // Load draft to check host ownership
       const draft = await fastify.prisma.draft.findUnique({
         where: { id: draftId },
         include: {
           match: {
             include: {
               tournament: {
-                select: { organizer_id: true },
+                select: { host_id: true },
               },
             },
           },
@@ -209,15 +209,15 @@ const draftRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // HOST role: must be the tournament organizer
+      // HOST role: must be the tournament host
       const userRole = request.user.role;
       const isModOrAdmin = userRole === 'MODERATOR' || userRole === 'ADMIN';
-      const isOwnOrganizer = actorUserId === draft.match.tournament?.organizer_id;
+      const isOwnHost = actorUserId === draft.match.tournament?.host_id;
 
-      if (!isModOrAdmin && !isOwnOrganizer) {
+      if (!isModOrAdmin && !isOwnHost) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: 'You are not the organizer of this tournament',
+          message: 'You are not the host of this tournament',
           statusCode: 403,
         });
       }

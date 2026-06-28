@@ -47,7 +47,7 @@ async function makeTournament(
       id,
       slug: `late-joiner-${id}`,
       name: `Late Joiner Test ${id.slice(0, 8)}`,
-      organizer_id: organizer.id,
+      host_id: organizer.id,
       format: opts.format ?? 'AUTO_SWISS',
       mode: 'BPT',
       status: 'ONGOING',

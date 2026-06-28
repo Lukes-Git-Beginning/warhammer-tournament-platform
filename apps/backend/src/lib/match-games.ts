@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@rizzotto/db';
 import { completeMatch } from './complete-match.js';
@@ -25,7 +26,65 @@ export async function ensureMatchGame(
     data: { match_id: matchId, game_number: gameNumber, counts_for_leaderboard: countsForLeaderboard },
     select: { id: true },
   });
+
+  // 2D3 mode: draw one faction per player from their registered 3-faction pool and
+  // write it onto the fresh game, so it shows on the game tile (like an SFT faction)
+  // before the game is played. Runs only on creation → drawn once per game.
+  await drawTwoD3GameFactions(prisma, matchId, created.id);
+
   return created.id;
+}
+
+/**
+ * For TWO_D_THREE tournaments, randomly draws one faction per player from each
+ * player's registered pool (TournamentParticipant.faction_ids) and writes them onto
+ * the given freshly-created MatchGame. No-op for other modes / Open Play, or when a
+ * player has no registered pool.
+ */
+async function drawTwoD3GameFactions(
+  prisma: PrismaClient,
+  matchId: string,
+  gameId: string,
+): Promise<void> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      player1_id: true,
+      player2_id: true,
+      tournament: {
+        select: {
+          mode: true,
+          participants: {
+            where: { deleted_at: null },
+            select: { user_id: true, faction_ids: true },
+          },
+        },
+      },
+    },
+  });
+  if (!match || match.tournament?.mode !== 'TWO_D_THREE') return;
+
+  const poolByUser = new Map(
+    match.tournament.participants.map((p) => [p.user_id, p.faction_ids]),
+  );
+  const drawOne = (userId: string | null): string | null => {
+    if (!userId) return null;
+    const pool = poolByUser.get(userId) ?? [];
+    if (pool.length === 0) return null;
+    return pool[randomInt(pool.length)] ?? null;
+  };
+
+  const p1FactionId = drawOne(match.player1_id);
+  const p2FactionId = drawOne(match.player2_id);
+  if (p1FactionId === null && p2FactionId === null) return;
+
+  await prisma.matchGame.update({
+    where: { id: gameId },
+    data: {
+      ...(p1FactionId !== null ? { player1_faction_id: p1FactionId } : {}),
+      ...(p2FactionId !== null ? { player2_faction_id: p2FactionId } : {}),
+    },
+  });
 }
 
 function resolveMatchFormat(
@@ -52,6 +111,8 @@ export async function finalizeGameResult(
       match_id: true,
       game_number: true,
       reported_winner_id: true,
+      player1_faction_id: true,
+      player2_faction_id: true,
       blind_pick: {
         select: {
           revealed_at: true,
@@ -125,6 +186,10 @@ export async function finalizeGameResult(
       p1FactionId = null;
       p2FactionId = null;
     }
+  } else if (mode === 'TWO_D_THREE') {
+    // 2D3: faction was drawn per game at creation (drawTwoD3GameFactions) — keep it.
+    p1FactionId = game.player1_faction_id ?? null;
+    p2FactionId = game.player2_faction_id ?? null;
   } else if (!game.match.tournament && game.blind_pick?.revealed_at) {
     // Open Play: factions come from the blind pick
     p1FactionId = game.blind_pick.player1_faction_id ?? null;

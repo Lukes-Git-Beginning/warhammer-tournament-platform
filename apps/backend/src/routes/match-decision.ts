@@ -225,6 +225,7 @@ async function drawMapsWithNoRepeat(
   pool: string[],
   exclude: string[],
   count: number,
+  playerExclude: string[] = [],
 ): Promise<string[]> {
   return await prisma.$transaction(async (tx) => {
     const t = await tx.tournament.findUniqueOrThrow({
@@ -233,16 +234,29 @@ async function drawMapsWithNoRepeat(
     });
 
     let played = t.random_map_pool_played;
-    let available = pool.filter((id) => !played.includes(id) && !exclude.includes(id));
+    const matchExcl = new Set(exclude);
+    const playerExcl = new Set(playerExclude);
 
-    // Zyklus zurücksetzen, wenn nicht genug Maps verfügbar sind
+    // Tiered relaxation — drop the weakest constraint first when the pool can't
+    // fill `count`:
+    //   1. rotation + within-match + per-player (maps either player already played)
+    //   2. drop rotation
+    //   3. drop per-player (B4: not enough maps left to fill the sub-pool)
+    //   4. drop within-match (last resort)
+    let available = pool.filter((id) => !played.includes(id) && !matchExcl.has(id) && !playerExcl.has(id));
     if (available.length < count) {
       played = [];
-      available = pool.filter((id) => !exclude.includes(id));
+      available = pool.filter((id) => !matchExcl.has(id) && !playerExcl.has(id));
+    }
+    if (available.length < count) {
+      available = pool.filter((id) => !matchExcl.has(id));
+    }
+    if (available.length < count) {
+      available = [...pool];
     }
 
     if (available.length < count) {
-      throw new Error(`Not enough maps in pool (pool=${pool.length}, exclude=${exclude.length}, need=${count})`);
+      throw new Error(`Not enough maps in pool (pool=${pool.length}, need=${count})`);
     }
 
     const drawn: string[] = [];
@@ -552,7 +566,9 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
             });
           }
           const playedInMatch = await getPlayedMapsInMatch(fastify.prisma, matchId, gameNumber);
-          activePool = await drawMapsWithNoRepeat(fastify.prisma, match.tournament?.id ?? '', mapPool, playedInMatch, 3);
+          const pbPlayerIds = [match.player1_id, match.player2_id].filter((id): id is string => !!id);
+          const playedByPlayers = await getPlayedMapsByPlayers(fastify.prisma, match.tournament?.id ?? '', pbPlayerIds);
+          activePool = await drawMapsWithNoRepeat(fastify.prisma, match.tournament?.id ?? '', mapPool, playedInMatch, 3, playedByPlayers);
           break;
         }
 
@@ -1067,7 +1083,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // POST /api/matches/:id/decision/force-resolve
-  // Organizer / Moderator / Admin only: immediately resolve an in-progress
+  // Host / Moderator / Admin only: immediately resolve an in-progress
   // PICK_BAN decision by randomly selecting from the remaining (non-banned)
   // maps. Useful when a player goes AFK during the ban phase.
   // -------------------------------------------------------------------------

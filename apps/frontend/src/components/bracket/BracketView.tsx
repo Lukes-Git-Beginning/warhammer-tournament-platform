@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import type { FactionDto } from '@rizzotto/types';
-import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, addThirdPlaceMatch, getFactions, patchTournament, fillByeMatch } from '@/lib/api';
+import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, addThirdPlaceMatch, getFactions, patchTournament, fillByeMatch, deleteMatch } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { sortStandingsByPlayoffResult, getFinalistIds } from '@/lib/bracketStandings';
 import { computeBracketLayout } from './computeBracketLayout';
@@ -16,7 +16,7 @@ interface BracketViewProps {
   tournamentId: string;
   canManage?: boolean;
   hideStandings?: boolean;
-  playoffFormat?: 'NONE' | 'TOP4' | 'TOP8' | null;
+  playoffFormat?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' | null;
 }
 
 export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false, playoffFormat }: BracketViewProps) {
@@ -261,7 +261,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
         />
       )}
 
-      {/* Next Swiss Round button — organizer only */}
+      {/* Next Swiss Round button — host only */}
       {showNextRoundButton && (
         <div className="mb-4">
           {nextRoundError && (
@@ -487,7 +487,27 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                     </button>
                   ))}
                 </div>
-                <button type="button" onClick={() => setByeMatchId(null)} className="mt-4 text-xs text-stone-600 hover:text-stone-400 transition-colors">Cancel</button>
+                <div className="mt-4 flex items-center justify-between">
+                  <button type="button" onClick={() => setByeMatchId(null)} className="text-xs text-stone-600 hover:text-stone-400 transition-colors">Cancel</button>
+                  {canManage && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm('Delete this BYE node? The player keeps no bye point for it.')) {
+                          deleteMatch(byeMatchId)
+                            .then(() => {
+                              void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
+                              setByeMatchId(null);
+                            })
+                            .catch((err: Error) => alert(`Error: ${err.message}`));
+                        }
+                      }}
+                      className="rounded border border-red-800 px-2 py-1 text-xs text-red-400 hover:bg-red-900/20 transition-colors"
+                    >
+                      🗑 Delete BYE
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           );

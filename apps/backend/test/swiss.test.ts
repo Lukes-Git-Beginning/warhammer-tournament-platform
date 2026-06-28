@@ -127,6 +127,58 @@ describe('rematch avoidance', () => {
   });
 });
 
+describe('min-weight pairing (B8)', () => {
+  it('never re-pairs a no-contest pair, even when score-optimal', () => {
+    const ids = fakeIds(4);
+    // All same score → score doesn't force anything; ids[0] & ids[1] had a no-contest.
+    const players: SwissPlayer[] = ids.map((id) => ({
+      userId: id,
+      score: 1,
+      avoid: [],
+      receivedBye: false,
+      noContestAvoid: id === ids[0] ? [ids[1]!] : id === ids[1] ? [ids[0]!] : [],
+    }));
+    const matches = generateSwissRound(T_ID, players, 2);
+    const pairedTogether = matches.some(
+      (m) =>
+        (m.player1_id === ids[0] && m.player2_id === ids[1]) ||
+        (m.player1_id === ids[1] && m.player2_id === ids[0]),
+    );
+    expect(pairedTogether).toBe(false);
+  });
+
+  it('is deterministic for the same (tournament, round)', () => {
+    const ids = fakeIds(8);
+    const mk = (): SwissPlayer[] =>
+      ids.map((id, i) => ({ userId: id, score: i < 4 ? 1 : 0, avoid: [], receivedBye: false }));
+    const norm = (ms: ReturnType<typeof generateSwissRound>) =>
+      ms
+        .filter((m) => m.player1_id && m.player2_id)
+        .map((m) => [m.player1_id!, m.player2_id!].sort().join('|'))
+        .sort()
+        .join(',');
+    expect(norm(generateSwissRound(T_ID, mk(), 2))).toBe(norm(generateSwissRound(T_ID, mk(), 2)));
+  });
+
+  it('minimises score gap: equal-score players pair together', () => {
+    const ids = fakeIds(4);
+    const players: SwissPlayer[] = [
+      { userId: ids[0]!, score: 2, avoid: [], receivedBye: false },
+      { userId: ids[1]!, score: 2, avoid: [], receivedBye: false },
+      { userId: ids[2]!, score: 1, avoid: [], receivedBye: false },
+      { userId: ids[3]!, score: 1, avoid: [], receivedBye: false },
+    ];
+    const matches = generateSwissRound(T_ID, players, 2);
+    const paired = (a: string, b: string) =>
+      matches.some(
+        (m) =>
+          (m.player1_id === a && m.player2_id === b) || (m.player1_id === b && m.player2_id === a),
+      );
+    expect(paired(ids[0]!, ids[1]!)).toBe(true); // both score 2
+    expect(paired(ids[2]!, ids[3]!)).toBe(true); // both score 1
+  });
+});
+
 // ---------- computeSwissStandings ----------
 
 describe('computeSwissStandings', () => {
@@ -202,6 +254,25 @@ describe('computeSwissStandings', () => {
     const rank0 = standings.findIndex((s) => s.userId === ids[0]);
     const rank1 = standings.findIndex((s) => s.userId === ids[1]);
     expect(rank0).toBeLessThan(rank1);
+  });
+
+  it('NO_CONTEST → both players get a bye point, 0 Buchholz, not dropped (B10)', () => {
+    const ids = fakeIds(4);
+    const matches: CompletedMatchRecord[] = [
+      // A real result so opponents would otherwise contribute Buchholz.
+      { round: 1, player1_id: ids[2], player2_id: ids[3], winner_id: ids[2], status: 'COMPLETED' },
+      // ids[0] vs ids[1] declared a No Contest (technical-abort double bye).
+      { round: 1, player1_id: ids[0], player2_id: ids[1], winner_id: null, status: 'NO_CONTEST' },
+    ];
+    const standings = computeSwissStandings(ids, matches);
+    const get = (id: string) => standings.find((s) => s.userId === id)!;
+
+    for (const id of [ids[0], ids[1]]) {
+      expect(get(id).score).toBe(1);
+      expect(get(id).byes).toBe(1);
+      expect(get(id).buchholz).toBe(0); // forfeiting opponent contributes no BH
+      expect(get(id).dropped).toBe(false); // a No Contest does not drop anyone
+    }
   });
 });
 

@@ -18,7 +18,8 @@ import {
 } from '../lib/playoff-generator.js';
 import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
-import { notifyRoundPairings } from '../lib/discord-notify.js';
+import { createManualMatch } from '../lib/tournament-management.js';
+import { notifyMatchesCreated } from '../lib/discord-notify.js';
 
 const bracketRoutes: FastifyPluginAsync = async (fastify) => {
   /**
@@ -168,7 +169,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
         const completedMatches = matches
           .filter((m) =>
-            (m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT') &&
+            (m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST') &&
             (m.phase === null || m.phase === 'SWISS'),
           )
           .map((m) => ({
@@ -225,7 +226,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /api/tournaments/:id/start
-   * Auth required. Organizer or MOD/ADMIN only.
+   * Auth required. Host or MOD/ADMIN only.
    * Generates the bracket/rounds, transitions tournament to ONGOING.
    */
   fastify.post<{ Params: { id: string } }>(
@@ -246,7 +247,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           slug: true,
           status: true,
           format: true,
-          organizer_id: true,
+          host_id: true,
           rounds_count: true,
           has_third_place_match: true,
           start_date: true,
@@ -264,7 +265,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: 'Only the tournament organizer can start this tournament',
+          message: 'Only the tournament host can start this tournament',
           statusCode: 403,
         });
       }
@@ -432,6 +433,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       });
       emitBracketUpdate(fastify.io, tournament.id);
 
+      // B22: notify round-1 pairings (previously only rounds 2+ were announced).
+      await notifyMatchesCreated(
+        tournament.id,
+        1,
+        bracketMatches.filter((m) => m.round === 1),
+      );
+
       const responseBody: Record<string, unknown> = {
         tournamentId: tournament.id,
         matches_created: bracketMatches.length,
@@ -448,7 +456,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /api/tournaments/:id/next-round
-   * Auth required. Organizer or MOD/ADMIN only.
+   * Auth required. Host or MOD/ADMIN only.
    * SWISS only: generates the next round of pairings based on current standings.
    */
   fastify.post<{ Params: { id: string } }>(
@@ -468,7 +476,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           status: true,
           format: true,
-          organizer_id: true,
+          host_id: true,
         },
       });
 
@@ -483,7 +491,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: 'Only the tournament organizer can advance rounds',
+          message: 'Only the tournament host can advance rounds',
           statusCode: 403,
         });
       }
@@ -523,12 +531,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           ? Math.max(...existingMatches.map((m) => m.round))
           : 0;
 
-      // Load all participants including withdrawn (for correct Buchholz calculation).
-      // Withdrawn players contribute to opponents' BH but are excluded from pairing.
+      // Pair only CHECKED_IN players (B14): REGISTERED-but-never-checked-in must not
+      // enter pairing in later rounds. WITHDREW is kept for correct Buchholz (they
+      // contribute to opponents' BH) but is excluded from pairing via withdrawnIds.
       const participants = await fastify.prisma.tournamentParticipant.findMany({
         where: {
           tournament_id: tournament.id,
-          status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
+          status: { in: ['CHECKED_IN', 'WITHDREW'] },
           deleted_at: null,
         },
         select: { user_id: true, faction_id: true, status: true },
@@ -555,7 +564,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       // Verify all matches in current round are completed or BYE
       const currentRoundMatches = existingMatches.filter((m) => m.round === currentRound);
       const incomplete = currentRoundMatches.filter(
-        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED',
+        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED' && m.status !== 'NO_CONTEST',
       );
 
       if (incomplete.length > 0) {
@@ -568,7 +577,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Compute standings from all completed matches
       const completedMatchRecords = existingMatches
-        .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
+        .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST')
         .map((m) => ({
           round: m.round,
           player1_id: m.player1_id,
@@ -600,12 +609,22 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // No-contest pairs must NEVER be re-paired (B8/B10) — harder than a rematch.
+      const noContestMap = new Map<string, string[]>();
+      for (const m of existingMatches) {
+        if (m.status === 'NO_CONTEST' && m.player1_id && m.player2_id) {
+          (noContestMap.get(m.player1_id) ?? noContestMap.set(m.player1_id, []).get(m.player1_id)!).push(m.player2_id);
+          (noContestMap.get(m.player2_id) ?? noContestMap.set(m.player2_id, []).get(m.player2_id)!).push(m.player1_id);
+        }
+      }
+
       const swissPlayers = standings.filter((s) => !s.dropped).map((s) => ({
         userId: s.userId,
         score: s.score,
         avoid: avoidMap.get(s.userId) ?? [],
         receivedBye: byeMap.get(s.userId) ?? false,
         factionId: factionById.get(s.userId) ?? null,
+        noContestAvoid: noContestMap.get(s.userId) ?? [],
       }));
 
       const newMatches = generateSwissRound(tournament.id, swissPlayers, targetRound);
@@ -640,47 +659,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       emitBracketUpdate(fastify.io, tournament.id);
 
       // Notify pairings via Discord (non-fatal, fire-and-forget)
-      try {
-        const tournamentForNotify = await fastify.prisma.tournament.findFirst({
-          where: { id: tournament.id },
-          select: { id: true, name: true, slug: true, start_date: true },
-        });
-
-        if (tournamentForNotify) {
-          const pairingData = await Promise.all(
-            newMatches
-              .filter((m) => m.player1_id && m.player2_id)
-              .map(async (m) => {
-                const [p1, p2] = await Promise.all([
-                  fastify.prisma.user.findUnique({
-                    where: { id: m.player1_id! },
-                    select: { discord_id: true, username: true },
-                  }),
-                  fastify.prisma.user.findUnique({
-                    where: { id: m.player2_id! },
-                    select: { discord_id: true, username: true },
-                  }),
-                ]);
-                if (!p1 || !p2) return null;
-                return {
-                  matchId: m.id,
-                  player1: { discord_id: p1.discord_id, username: p1.username },
-                  player2: { discord_id: p2.discord_id, username: p2.username },
-                  round: targetRound,
-                  map: null,
-                };
-              }),
-          );
-
-          const pairings = pairingData.filter((p): p is NonNullable<typeof p> => p !== null);
-
-          await notifyRoundPairings(tournamentForNotify, targetRound, pairings).catch((err) => {
-            request.log.warn({ err }, 'notifyRoundPairings failed (non-fatal)');
-          });
-        }
-      } catch (notifyErr) {
-        request.log.warn({ notifyErr }, 'Pairing notification error (non-fatal)');
-      }
+      await notifyMatchesCreated(tournament.id, targetRound, newMatches);
 
       return reply.code(200).send({
         tournamentId: tournament.id,
@@ -694,7 +673,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /api/tournaments/:id/start-playoffs
-   * Auth required. Organizer or MOD/ADMIN only.
+   * Auth required. Host or MOD/ADMIN only.
    * Generates the playoff bracket from the final Swiss standings.
    * Must be called after all Swiss rounds are completed.
    */
@@ -715,7 +694,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           format: true,
           status: true,
-          organizer_id: true,
+          host_id: true,
           playoff_format: true,
           playoff_match_format: true,
           finale_match_format: true,
@@ -728,7 +707,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
-        return reply.code(403).send({ error: 'Forbidden', message: 'Only the organizer can start playoffs', statusCode: 403 });
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the host can start playoffs', statusCode: 403 });
       }
 
       if (
@@ -793,7 +772,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
         const incomplete = existingMatches.filter(
-          (m) => m.round === currentRound && m.status !== 'COMPLETED' && m.status !== 'BYE',
+          (m) => m.round === currentRound && m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED' && m.status !== 'NO_CONTEST',
         );
         if (incomplete.length > 0) {
           return reply.code(400).send({
@@ -824,12 +803,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const playoffResult = generatePlayoffBracket({
           tournament: {
-            playoff_format: tournament.playoff_format as 'NONE' | 'TOP4' | 'TOP8',
+            playoff_format: tournament.playoff_format as 'NONE' | 'TOP2' | 'TOP4' | 'TOP8',
             playoff_match_format: tournament.playoff_match_format,
             finale_match_format: tournament.finale_match_format,
           },
           finalStandings: activeStandings,
-          checkedInPlayerIds: new Set(participantIds),
+          // B6: count only active (non-dropped) players for the reduction thresholds.
+          checkedInPlayerIds: new Set(activeStandings.map((s) => s.userId)),
         });
 
         if (playoffResult.fallbackApplied) {
@@ -840,7 +820,9 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         const phaseMap: Record<number, 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL'> =
           playoffResult.format === 'TOP8'
             ? { 1: 'PLAYOFF_QF', 2: 'PLAYOFF_SF', 3: 'PLAYOFF_FINAL' }
-            : { 1: 'PLAYOFF_SF', 2: 'PLAYOFF_FINAL' };
+            : playoffResult.format === 'TOP2'
+              ? { 1: 'PLAYOFF_FINAL' }
+              : { 1: 'PLAYOFF_SF', 2: 'PLAYOFF_FINAL' };
 
         // Only generate the first playoff round — subsequent rounds are advanced
         // one at a time via POST /advance-playoffs once each round completes.
@@ -890,6 +872,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
         emitBracketUpdate(fastify.io, id);
 
+        // B22: notify the first playoff round's participants (QF/SF).
+        const playablePO = playoffMatches.filter((m) => m.player1_id && m.player2_id);
+        if (playablePO.length > 0) {
+          await notifyMatchesCreated(id, Math.min(...playablePO.map((m) => m.round)), playablePO);
+        }
+
         return reply.code(200).send({
           tournamentId: id,
           format: playoffResult.format,
@@ -927,7 +915,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { id, deleted_at: null, status: 'ONGOING' },
-        select: { id: true, organizer_id: true, playoff_match_format: true, finale_match_format: true, has_third_place_match: true },
+        select: { id: true, host_id: true, playoff_match_format: true, finale_match_format: true, has_third_place_match: true },
       });
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
@@ -1082,6 +1070,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       emitBracketUpdate(fastify.io, id);
 
+      // B22: notify newly created playoff-round participants (SF/GF/small final).
+      const advanced = [...nextMatches, ...(thirdPlaceMatch ? [thirdPlaceMatch] : [])]
+        .filter((m) => m.player1_id && m.player2_id);
+      if (advanced.length > 0) {
+        await notifyMatchesCreated(id, Math.min(...advanced.map((m) => m.round)), advanced);
+      }
+
       return reply.code(200).send({ phase: nextPhase, matches_created: nextMatches.length });
     },
   );
@@ -1107,7 +1102,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { id, deleted_at: null, status: 'ONGOING' },
-        select: { id: true, organizer_id: true, format: true },
+        select: { id: true, host_id: true, format: true },
       });
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
@@ -1337,7 +1332,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * POST /api/tournaments/:id/bracket/reset
    * Deletes all matches (and cascaded sub-entities) and resets status to
-   * REGISTRATION_CLOSED so the organizer can re-start from scratch.
+   * REGISTRATION_CLOSED so the host can re-start from scratch.
    */
   fastify.post<{ Params: { id: string } }>(
     '/api/tournaments/:id/bracket/reset',
@@ -1352,7 +1347,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { id, deleted_at: null },
-        select: { id: true, slug: true, status: true, organizer_id: true },
+        select: { id: true, slug: true, status: true, host_id: true },
       });
 
       if (!tournament) {
@@ -1366,7 +1361,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: 'Only the tournament organizer can reset this bracket',
+          message: 'Only the tournament host can reset this bracket',
           statusCode: 403,
         });
       }
@@ -1403,6 +1398,23 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       return reply.code(200).send({ ok: true });
+    },
+  );
+
+  // POST /api/tournaments/:slug/create-match — host-accessible manual match node
+  // (B12 + B18). canManage-gated mirror of the ADMIN-scoped admin route.
+  fastify.post(
+    '/api/tournaments/:slug/create-match',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      const t = await fastify.prisma.tournament.findFirst({ where: { slug, deleted_at: null }, select: { id: true } });
+      if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (!(await canManageTournament(fastify.prisma, t.id, request.user.sub, request.user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
+      }
+      const r = await createManualMatch(fastify.prisma, fastify.io, slug, request.body);
+      return reply.code(r.status).send(r.body);
     },
   );
 };

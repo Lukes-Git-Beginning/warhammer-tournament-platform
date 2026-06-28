@@ -56,7 +56,7 @@ async function setup() {
       slug: TOURN_SLUG,
       format: 'SWISS',
       status: 'ONGOING',
-      organizer_id: ADMIN_ID,
+      host_id: ADMIN_ID,
       has_third_place_match: true,
       start_date: new Date('2026-06-01'),
       timezone: 'UTC',

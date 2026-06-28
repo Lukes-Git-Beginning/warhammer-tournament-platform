@@ -74,6 +74,9 @@ importers:
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1
+      edmonds-blossom:
+        specifier: ^1.0.0
+        version: 1.0.0
       fastify:
         specifier: ^5.8.0
         version: 5.8.5
@@ -3381,6 +3384,9 @@ packages:
 
   edmonds-blossom-fixed@1.0.1:
     resolution: {integrity: sha512-wtpraSt4yJeUpNU8RGC4q2JBxsJbHFxI7/htm/mS4FgxSN90WBwmgE7QZwpcY70KJRqmfLCNxU49UIc+DfzLKQ==}
+
+  edmonds-blossom@1.0.0:
+    resolution: {integrity: sha512-wz18RgLg21nW4afc80d080fZuAjiaePfSoHje56aOiH8mO6O5Mc/VAv7s8bCBJkxsks37e0cYTS0dNirsQ4/rg==}
 
   effect@3.20.0:
     resolution: {integrity: sha512-qMLfDJscrNG8p/aw+IkT9W7fgj50Z4wG5bLBy0Txsxz8iUHjDIkOgO3SV0WZfnQbNG2VJYb0b+rDLMrhM4+Krw==}
@@ -7827,11 +7833,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@vitest/browser@2.1.9(@types/node@22.19.19)(playwright@1.60.0)(typescript@5.9.3)(vite@6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0))(vitest@2.1.9)':
+  '@vitest/browser@2.1.9(@types/node@22.19.19)(playwright@1.60.0)(typescript@5.9.3)(vite@5.4.21(@types/node@22.19.19)(lightningcss@1.32.0))(vitest@2.1.9)':
     dependencies:
       '@testing-library/dom': 10.4.1
       '@testing-library/user-event': 14.6.1(@testing-library/dom@10.4.1)
-      '@vitest/mocker': 2.1.9(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0))
+      '@vitest/mocker': 2.1.9(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@5.4.21(@types/node@22.19.19)(lightningcss@1.32.0))
       '@vitest/utils': 2.1.9
       magic-string: 0.30.21
       msw: 2.14.6(@types/node@22.19.19)(typescript@5.9.3)
@@ -7864,16 +7870,6 @@ snapshots:
     optionalDependencies:
       msw: 2.14.6(@types/node@22.19.19)(typescript@5.9.3)
       vite: 5.4.21(@types/node@22.19.19)(lightningcss@1.32.0)
-
-  '@vitest/mocker@2.1.9(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0))':
-    dependencies:
-      '@vitest/spy': 2.1.9
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      msw: 2.14.6(@types/node@22.19.19)(typescript@5.9.3)
-      vite: 6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)
-    optional: true
 
   '@vitest/pretty-format@2.1.9':
     dependencies:
@@ -8313,6 +8309,8 @@ snapshots:
       safe-buffer: 5.2.1
 
   edmonds-blossom-fixed@1.0.1: {}
+
+  edmonds-blossom@1.0.0: {}
 
   effect@3.20.0:
     dependencies:
@@ -10572,7 +10570,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 22.19.19
-      '@vitest/browser': 2.1.9(@types/node@22.19.19)(playwright@1.60.0)(typescript@5.9.3)(vite@6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0))(vitest@2.1.9)
+      '@vitest/browser': 2.1.9(@types/node@22.19.19)(playwright@1.60.0)(typescript@5.9.3)(vite@5.4.21(@types/node@22.19.19)(lightningcss@1.32.0))(vitest@2.1.9)
       happy-dom: 16.8.1
     transitivePeerDependencies:
       - less

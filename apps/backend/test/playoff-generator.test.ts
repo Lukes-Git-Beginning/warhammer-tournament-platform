@@ -141,19 +141,20 @@ describe('generatePlayoffBracket — TOP4', () => {
     }
   });
 
-  it('throws InsufficientPlayersError when fewer than 4 checked-in', () => {
+  it('reduces TOP4 to TOP2 when fewer than 8 checked-in (B6)', () => {
     const standings = makeStandings(8);
-    // Only 3 checked in
+    // Only 3 checked in → below the TOP4 threshold of 8 → reduce to TOP2.
     const checkedIn = new Set(standings.slice(0, 3).map((s) => s.userId));
+    const result = generatePlayoffBracket(buildArgs('TOP4', standings, checkedIn));
 
-    expect(() => generatePlayoffBracket(buildArgs('TOP4', standings, checkedIn))).toThrow(
-      InsufficientPlayersError,
-    );
+    expect(result.format).toBe('TOP2');
+    expect(result.fallbackApplied).toBe('TOP4_TO_TOP2');
+    expect(result.matches).toHaveLength(1); // Grand Final only
   });
 
-  it('InsufficientPlayersError carries required and actual counts', () => {
+  it('throws InsufficientPlayersError when fewer than 2 checked-in (after reduction)', () => {
     const standings = makeStandings(4);
-    const checkedIn = new Set(standings.slice(0, 2).map((s) => s.userId)); // only 2
+    const checkedIn = new Set(standings.slice(0, 1).map((s) => s.userId)); // only 1
 
     try {
       generatePlayoffBracket(buildArgs('TOP4', standings, checkedIn));
@@ -161,10 +162,20 @@ describe('generatePlayoffBracket — TOP4', () => {
     } catch (err) {
       expect(err).toBeInstanceOf(InsufficientPlayersError);
       const e = err as InsufficientPlayersError;
-      expect(e.required).toBe(4);
-      expect(e.actual).toBe(2);
-      expect(e.format).toBe('TOP4');
+      // TOP4 reduces to TOP2 below 8, so the floor is 2 players.
+      expect(e.required).toBe(2);
+      expect(e.actual).toBe(1);
+      expect(e.format).toBe('TOP2');
     }
+  });
+
+  it('keeps TOP4 (4 matches: 2 SF + 1 Final) with 8+ checked-in', () => {
+    const standings = makeStandings(8);
+    const checkedIn = new Set(standings.map((s) => s.userId));
+    const result = generatePlayoffBracket(buildArgs('TOP4', standings, checkedIn));
+    expect(result.format).toBe('TOP4');
+    expect(result.fallbackApplied).toBeUndefined();
+    expect(result.matches.filter((m) => m.round === 1)).toHaveLength(2); // SFs
   });
 });
 

@@ -314,7 +314,7 @@ export async function notifyReQueuePrompt(discordId: string): Promise<void> {
 }
 
 /**
- * DM moderators about an Open Play dispute (no tournament organizer to notify).
+ * DM moderators about an Open Play dispute (no tournament host to notify).
  */
 export async function notifyOpenPlayDispute(matchId: string, reporterUsername: string): Promise<void> {
   const token = getToken();
@@ -510,7 +510,94 @@ export async function notifyRoundPairings(
 }
 
 /**
- * Notify organizer + all moderators about a match dispute via DM.
+ * High-level helper: given freshly created matches (with player ids), looks up the
+ * tournament + players and notifies pairings. Skips matches without both players
+ * (BYE / not-yet-filled playoff slots). Fully fire-and-forget safe (never throws).
+ * Used for round 1, every Swiss round, and all playoff match creations.
+ */
+export async function notifyMatchesCreated(
+  tournamentId: string,
+  round: number,
+  matches: { id: string; player1_id: string | null; player2_id: string | null }[],
+): Promise<void> {
+  if (!getToken()) return;
+  try {
+    const tournament = await prisma.tournament.findFirst({
+      where: { id: tournamentId },
+      select: { id: true, name: true, slug: true, start_date: true },
+    });
+    if (!tournament) return;
+
+    const playable = matches.filter((m) => m.player1_id && m.player2_id);
+    if (playable.length === 0) return;
+
+    const userIds = [...new Set(playable.flatMap((m) => [m.player1_id as string, m.player2_id as string]))];
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, discord_id: true, username: true },
+    });
+    const byId = new Map(users.map((u) => [u.id, u]));
+
+    const pairings: PairingForNotify[] = [];
+    for (const m of playable) {
+      const p1 = byId.get(m.player1_id as string);
+      const p2 = byId.get(m.player2_id as string);
+      if (!p1 || !p2) continue;
+      pairings.push({
+        matchId: m.id,
+        player1: { discord_id: p1.discord_id, username: p1.username },
+        player2: { discord_id: p2.discord_id, username: p2.username },
+        round,
+        map: null,
+      });
+    }
+    if (pairings.length === 0) return;
+
+    await notifyRoundPairings(tournament, round, pairings);
+  } catch (err) {
+    console.warn('[discord-notify] notifyMatchesCreated error (non-fatal):', err);
+  }
+}
+
+/**
+ * B20: DM the tournament host + co-hosts when a player drops/withdraws — so drops
+ * don't go unnoticed in large fields. Fire-and-forget safe (never throws).
+ */
+export async function notifyHostsOfWithdrawal(
+  tournamentId: string,
+  userId: string,
+  excludeUserId?: string,
+): Promise<void> {
+  if (!getToken()) return;
+  try {
+    const [tournament, user] = await Promise.all([
+      prisma.tournament.findFirst({
+        where: { id: tournamentId },
+        select: { name: true, slug: true, host_id: true, co_hosts: { select: { user_id: true } } },
+      }),
+      prisma.user.findUnique({ where: { id: userId }, select: { username: true } }),
+    ]);
+    if (!tournament || !user) return;
+
+    const hostIds = [...new Set([tournament.host_id, ...tournament.co_hosts.map((h) => h.user_id)])]
+      .filter((hid) => hid !== excludeUserId);
+    if (hostIds.length === 0) return;
+    const hosts = await prisma.user.findMany({
+      where: { id: { in: hostIds } },
+      select: { discord_id: true },
+    });
+    const msg =
+      `**[RizzOtto's Arena] Player dropped — ${tournament.name}**\n` +
+      `**${user.username}** is no longer in the tournament. ` +
+      `Review the bracket at ${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}.`;
+    await Promise.allSettled(hosts.map((h) => sendDm(h.discord_id, msg)));
+  } catch (err) {
+    console.warn('[discord-notify] notifyHostsOfWithdrawal error (non-fatal):', err);
+  }
+}
+
+/**
+ * Notify host + all moderators about a match dispute via DM.
  */
 export async function notifyDispute(
   match: MatchForNotify,
@@ -523,11 +610,11 @@ export async function notifyDispute(
   }
 
   try {
-    // Fetch organizer + all moderators
-    const [organizer, moderators] = await Promise.all([
+    // Fetch host + all moderators
+    const [tournament, moderators] = await Promise.all([
       prisma.tournament.findUnique({
         where: { id: match.tournament.id },
-        select: { organizer: { select: { discord_id: true, username: true } } },
+        select: { host: { select: { discord_id: true, username: true } } },
       }),
       prisma.user.findMany({
         where: { role: 'MODERATOR', deleted_at: null },
@@ -542,8 +629,8 @@ export async function notifyDispute(
       `Please review and resolve the dispute at ${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${match.tournament.slug}`;
 
     const recipients: string[] = moderators.map((m) => m.discord_id);
-    if (organizer?.organizer.discord_id) {
-      recipients.push(organizer.organizer.discord_id);
+    if (tournament?.host.discord_id) {
+      recipients.push(tournament.host.discord_id);
     }
     // Deduplicate
     const unique = [...new Set(recipients)];

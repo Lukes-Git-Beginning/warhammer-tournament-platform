@@ -19,7 +19,7 @@ export function TournamentGamesPage() {
   });
 
   return (
-    <PageShell>
+    <PageShell variant="wide">
       <div className="mb-6 flex items-center gap-3">
         <Link
           to="/tournaments/$slug"

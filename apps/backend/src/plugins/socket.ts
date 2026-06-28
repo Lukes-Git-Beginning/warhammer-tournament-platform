@@ -67,17 +67,17 @@ export default fp(
           fastify.log.warn({ sid: socket.id, id }, 'join_tournament: invalid UUID, ignoring');
           return;
         }
-        // PRIVATE tournaments: only organizer or MODERATOR/ADMIN may receive
+        // PRIVATE tournaments: only host or MODERATOR/ADMIN may receive
         // live bracket/result events (mirrors the REST visibility gate).
         try {
           const tournament = await fastify.prisma.tournament.findFirst({
             where: { id, deleted_at: null },
-            select: { visibility: true, organizer_id: true },
+            select: { visibility: true, host_id: true },
           });
           if (!tournament) return;
           if (tournament.visibility === 'PRIVATE') {
             const isAllowed =
-              socket.data.userId === tournament.organizer_id ||
+              socket.data.userId === tournament.host_id ||
               socket.data.role === 'MODERATOR' ||
               socket.data.role === 'ADMIN';
             if (!isAllowed) {

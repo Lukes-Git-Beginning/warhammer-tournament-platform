@@ -121,7 +121,7 @@ const armyListsRoutes: FastifyPluginAsync = async (fastify) => {
         if (!isPrivileged) {
           return reply.code(403).send({
             error: 'ListsLocked',
-            message: 'Army lists are locked for this tournament. Contact the organizer.',
+            message: 'Army lists are locked for this tournament. Contact the host.',
             statusCode: 403,
           });
         }

@@ -131,6 +131,8 @@ export const MatchDetailDtoSchema = z.object({
   player1_faction_id: z.string().nullable(),
   player2_faction_id: z.string().nullable(),
   counts_for_leaderboard: z.boolean(),
+  /** Server-computed: viewer may manage this match's tournament (host, co-host, mod, admin). */
+  can_manage: z.boolean().optional(),
   // Enriched relations
   player1: MatchPlayerRefSchema.nullable(),
   player2: MatchPlayerRefSchema.nullable(),

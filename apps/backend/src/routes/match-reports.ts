@@ -2,7 +2,7 @@
  * Match Report Routes — Dual-Submit flow (Q4 / Q12)
  *
  * POST /api/matches/:matchId/reports      — player submits their own result
- * PUT  /api/matches/:matchId/result       — organizer/mod/admin override
+ * PUT  /api/matches/:matchId/result       — host/mod/admin override
  * GET  /api/matches/:matchId/reports      — fetch existing reports + match state
  */
 
@@ -217,7 +217,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
               fastify.io,
             );
 
-            // Notify organizer + moderators of the dispute via Discord DM (non-fatal)
+            // Notify host + moderators of the dispute via Discord DM (non-fatal)
             if (match.tournament_id) {
               try {
                 const tournamentForNotify = await fastify.prisma.tournament.findUnique({
@@ -267,7 +267,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // PUT /api/matches/:matchId/result
-  // Organizer / Moderator / Admin override — bypasses dual-submit flow.
+  // Host / Moderator / Admin override — bypasses dual-submit flow.
   // -------------------------------------------------------------------------
   fastify.put<{ Params: { matchId: string } }>(
     '/api/matches/:matchId/result',
@@ -306,7 +306,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
           tournament: {
             select: {
               id: true,
-              organizer_id: true,
+              host_id: true,
               counts_for_leaderboard: true,
               is_major: true,
             },
@@ -322,11 +322,11 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // HOST must own the tournament or be a co-host (open play matches have no organizer)
+      // HOST must own the tournament or be a co-host (open play matches have no host)
       if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', user.sub, user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: 'You are not the organizer of this tournament',
+          message: 'You are not the host of this tournament',
           statusCode: 403,
         });
       }
@@ -335,7 +335,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
       if (match.status === 'COMPLETED' && user.role !== 'ADMIN' && !(await canManageTournament(fastify.prisma, match.tournament_id ?? '', user.sub, user.role))) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
-          message: 'Match is already COMPLETED — only the tournament organizer or an admin can re-override',
+          message: 'Match is already COMPLETED — only the tournament host or an admin can re-override',
           statusCode: 422,
         });
       }

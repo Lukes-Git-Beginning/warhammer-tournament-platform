@@ -126,7 +126,7 @@ function refineMapPool(
 const CreateTournamentSchema = z.object({
   name: z.string().min(3).max(120),
   format: z.enum(['SWISS', 'AUTO_SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN']),
-  mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT', 'MATRIX']).optional(),
+  mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE']).optional(),
   start_date: z.string().datetime(),
   timezone: z.string().min(1).max(64),
   max_participants: z.number().int().min(2).max(512).optional(),
@@ -141,7 +141,7 @@ const CreateTournamentSchema = z.object({
   description: z.string().max(2000).optional(),
   // Welle 2 — Tournament mechanics
   rounds_count: z.number().int().min(3).max(6).optional(),
-  playoff_format: z.enum(['NONE', 'TOP4', 'TOP8']).optional(),
+  playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).optional(),
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
@@ -167,7 +167,7 @@ const PatchTournamentSchema = z.object({
   draft_preset_id: z.string().uuid().nullable().optional(),
   // Welle 2 — Tournament mechanics
   rounds_count: z.number().int().min(3).max(6).optional(),
-  playoff_format: z.enum(['NONE', 'TOP4', 'TOP8']).optional(),
+  playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).optional(),
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
@@ -177,7 +177,7 @@ const PatchTournamentSchema = z.object({
   is_major: z.boolean().optional(),
   // Fields added for full edit-form support
   format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN']).optional(),
-  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX']).optional(),
+  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE']).optional(),
   has_third_place_match: z.boolean().optional(),
   counts_for_leaderboard: z.boolean().optional(),
   faction_pool: z.array(z.string().min(1)).optional(),
@@ -258,7 +258,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
               is_major: true,
               created_at: true,
               rounds_count: true,
-              organizer: { select: { id: true, username: true, avatar_url: true } },
+              host: { select: { id: true, username: true, avatar_url: true } },
               _count: { select: { participants: { where: { deleted_at: null } } } },
               faction_allowlist: { select: { faction: { select: { name: true } } } },
             },
@@ -374,7 +374,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           draft_enabled: data.draft_enabled ?? false,
           draft_preset_id: data.draft_preset_id ?? null,
           description: data.description,
-          organizer_id: request.user.sub,
+          host_id: request.user.sub,
           // Welle 2
           rounds_count: isAutoSwiss ? undefined : data.rounds_count,
           playoff_format: isAutoSwiss ? undefined : data.playoff_format,
@@ -392,7 +392,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           mode: true,
           status: true,
           visibility: true,
-          organizer_id: true,
+          host_id: true,
           rounds_count: true,
           playoff_format: true,
           swiss_match_format: true,
@@ -597,6 +597,15 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/api/tournaments/:slug', async (request, reply) => {
     const { slug } = request.params as { slug: string };
 
+    // Optional auth — read the user if a valid cookie is present (for can_manage).
+    let authedUser: { sub: string; role: string } | null = null;
+    try {
+      await request.jwtVerify();
+      authedUser = { sub: request.user.sub, role: request.user.role };
+    } catch {
+      // unauthenticated — fine for public tournaments
+    }
+
     const tournament = await fastify.prisma.tournament.findFirst({
       where: { slug, deleted_at: null },
       select: {
@@ -617,7 +626,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         draft_enabled: true,
         counts_for_leaderboard: true,
         is_major: true,
-        organizer_id: true,
+        host_id: true,
         rounds_count: true,
         playoff_format: true,
         has_third_place_match: true,
@@ -628,7 +637,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         map_preset_config: true,
         created_at: true,
         updated_at: true,
-        organizer: { select: { id: true, username: true, avatar_url: true } },
+        host: { select: { id: true, username: true, avatar_url: true } },
         _count: {
           select: { participants: { where: { deleted_at: null } } },
         },
@@ -650,31 +659,24 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    // PRIVATE tournaments only visible to organizer or MODERATOR/ADMIN
-    if (tournament.visibility === 'PRIVATE') {
-      // Try to read auth from cookie — optional auth pattern
-      try {
-        await request.jwtVerify();
-      } catch {
-        return reply.code(403).send({
-          error: 'Forbidden',
-          message: 'This tournament is private',
-          statusCode: 403,
-        });
-      }
-      const user = request.user;
-      if (!(await canManageTournament(fastify.prisma, tournament.id, user.sub, user.role))) {
-        return reply.code(403).send({
-          error: 'Forbidden',
-          message: 'This tournament is private',
-          statusCode: 403,
-        });
-      }
+    // Whether the viewer may manage this tournament (host, co-host, mod, admin).
+    const can_manage = authedUser
+      ? await canManageTournament(fastify.prisma, tournament.id, authedUser.sub, authedUser.role)
+      : false;
+
+    // PRIVATE tournaments are only visible to those who can manage them.
+    if (tournament.visibility === 'PRIVATE' && !can_manage) {
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: 'This tournament is private',
+        statusCode: 403,
+      });
     }
 
     const { _count, faction_allowlist, restricted_factions, map_pool, ...rest } = tournament;
     return {
       ...rest,
+      can_manage,
       participantCount: _count.participants,
       faction_allowlist: faction_allowlist.map((fa) => fa.faction_id),
       restricted_factions: restricted_factions.map((rf) => rf.faction_id),
@@ -693,7 +695,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { slug, deleted_at: null },
         select: {
           id: true,
-          organizer_id: true,
+          host_id: true,
           status: true,
           format: true,
           mode: true,
@@ -1008,7 +1010,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, organizer_id: true },
+        select: { id: true, host_id: true },
       });
 
       if (!tournament) {
@@ -1137,13 +1139,13 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, organizer_id: true },
+        select: { id: true, host_id: true },
       });
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       }
 
-      const isOwner = tournament.organizer_id === userId;
+      const isOwner = tournament.host_id === userId;
       const isModOrAdmin = role === 'MODERATOR' || role === 'ADMIN';
       if (!isOwner && !isModOrAdmin) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Only the tournament host, moderators, or admins can transfer ownership', statusCode: 403 });
@@ -1163,7 +1165,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
       await fastify.prisma.tournament.update({
         where: { id: tournament.id },
-        data: { organizer_id: new_host_id },
+        data: { host_id: new_host_id },
       });
 
       await invalidate(fastify.redis, `tournament:${slug}`);
@@ -1173,7 +1175,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // ---------------------------------------------------------------------------
-  // Co-hosts — users who manage a tournament alongside the organizer (full host
+  // Co-hosts — users who manage a tournament alongside the host (full host
   // parity via canManageTournament). Editing the roster itself stays with the
   // owner + MODERATOR/ADMIN, so a co-host can't seize control.
   // ---------------------------------------------------------------------------
@@ -1184,16 +1186,16 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
     userId: string,
     role: string,
     reply: FastifyReply,
-  ): Promise<{ id: string; organizer_id: string } | null> {
+  ): Promise<{ id: string; host_id: string } | null> {
     const tournament = await fastify.prisma.tournament.findFirst({
       where: { slug, deleted_at: null },
-      select: { id: true, organizer_id: true },
+      select: { id: true, host_id: true },
     });
     if (!tournament) {
       reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       return null;
     }
-    const isOwner = tournament.organizer_id === userId;
+    const isOwner = tournament.host_id === userId;
     const isModOrAdmin = role === 'MODERATOR' || role === 'ADMIN';
     if (!isOwner && !isModOrAdmin) {
       reply.code(403).send({ error: 'Forbidden', message: 'Only the tournament owner can manage co-hosts', statusCode: 403 });
@@ -1237,7 +1239,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { tournament_id: tournament.id },
         select: { user_id: true },
       });
-      const excludeIds = [tournament.organizer_id, ...existing.map((h) => h.user_id)];
+      const excludeIds = [tournament.host_id, ...existing.map((h) => h.user_id)];
       const users = await fastify.prisma.user.findMany({
         where: {
           deleted_at: null,
@@ -1270,7 +1272,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       const tournament = await loadTournamentForRoster(request.params.slug, userId, role, reply);
       if (!tournament) return;
       const { user_id } = request.body;
-      if (user_id === tournament.organizer_id) {
+      if (user_id === tournament.host_id) {
         return reply.code(400).send({ error: 'BadRequest', message: 'The owner is already a host', statusCode: 400 });
       }
       const target = await fastify.prisma.user.findUnique({

@@ -248,6 +248,12 @@ export function TournamentDetail() {
     [participantsData],
   );
 
+  // TWO_D_THREE: userId → the player's 3-faction pool, for the standings column.
+  const standingsPlayerFactionPoolMap = useMemo(
+    () => new Map((participantsData?.data ?? []).map((p) => [p.user.id, p.faction_ids])),
+    [participantsData],
+  );
+
   const activeDraftMatches = (bracket?.matches ?? []).filter(
     (m) => m.draft_id != null && m.draft_status === 'ONGOING',
   );
@@ -275,10 +281,9 @@ export function TournamentDetail() {
   const formatLabel = formatKey ? t(formatKey) : tournament.format;
   const startDate = formatInUserTimezone(tournament.start_date, user?.timezone ?? undefined);
 
-  const canManage =
-    user &&
-    (user.role === 'MODERATOR' || user.role === 'ADMIN' ||
-      (user.role === 'HOST' && tournament.organizer?.id === user.id));
+  // Server-computed (host, co-host, moderator, admin) — co-hosts now get the full
+  // management UI, not just the host.
+  const canManage = !!tournament.can_manage;
 
   // Derive participant status from the /participants/me endpoint
   const participantStatus: ParticipantStatus | null = participantData?.status ?? null;
@@ -397,7 +402,8 @@ export function TournamentDetail() {
               {completeMutation.isPending ? 'Finalising…' : 'Finalise Tournament'}
             </button>
           )}
-          {tournament.status === 'ONGOING' && (
+          {/* B21: also available pre-start (REGISTRATION_CLOSED), not just ONGOING. */}
+          {(tournament.status === 'ONGOING' || tournament.status === 'REGISTRATION_CLOSED') && (
             <button
               type="button"
               disabled={lateJoinMutation.isPending}
@@ -410,7 +416,7 @@ export function TournamentDetail() {
               + Add Late Joiner
             </button>
           )}
-          {tournament.status === 'ONGOING' && (
+          {(tournament.status === 'ONGOING' || tournament.status === 'REGISTRATION_CLOSED') && (
             <button
               type="button"
               onClick={() => { setShowCreateMatch(true); setCreateRound(bracket?.swiss?.currentRound ?? 1); }}
@@ -650,7 +656,7 @@ export function TournamentDetail() {
             <div>
               <span className="text-stone-500">Mode:</span>{' '}
               <span className="text-stone-200">
-                {(({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode ?? ''] ?? tournament.mode ?? 'SFT')}
+                {(({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', TWO_D_THREE: '2D3', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode ?? ''] ?? tournament.mode ?? 'SFT')}
               </span>
             </div>
           )}
@@ -662,10 +668,10 @@ export function TournamentDetail() {
               </span>
             </div>
           )}
-          {tournament.organizer && (
+          {tournament.host && (
             <div>
               <span className="text-stone-500">{t('tournament.detail.organizer')}</span>{' '}
-              <span className="text-stone-200">{tournament.organizer.username}</span>
+              <span className="text-stone-200">{tournament.host.username}</span>
             </div>
           )}
           {tournament.discord_link && (
@@ -681,6 +687,19 @@ export function TournamentDetail() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* B11: every Arena tournament requires the same map pack — hardcoded notice. */}
+      <div className="mb-8 rounded-md border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 px-4 py-3 text-sm">
+        <span className="text-stone-300">Required mod for all Arena tournaments: </span>
+        <a
+          href="https://steamcommunity.com/sharedfiles/filedetails/?id=2875865414"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-rizzotto-gold-400 hover:underline"
+        >
+          Total Tavern Tournament Map Pack ↗
+        </a>
       </div>
 
       {/* Faction allowlist (only shown if restrictions are set) */}
@@ -752,6 +771,7 @@ export function TournamentDetail() {
                 tournamentMode={tournament.mode}
                 factionMap={standingsFactionMap}
                 playerFactionMap={standingsPlayerFactionMap}
+                playerFactionPoolMap={standingsPlayerFactionPoolMap}
                 playoffFormat={tournament.playoff_format ?? undefined}
                 finalistIds={standingsFinalistIds}
                 semifinalistIds={standingsSemifinalistIds}

@@ -211,13 +211,24 @@ export function GameTile({
       {/* DISPUTED */}
       {game.status === 'DISPUTED' && (
         <div className="rounded-lg border border-yellow-600/50 bg-yellow-900/20 p-3 text-sm text-yellow-300 text-center">
-          Result disputed — waiting for organizer to resolve.
+          Result disputed — waiting for host to resolve.
         </div>
       )}
 
       {/* PENDING / ONGOING */}
       {(game.status === 'PENDING' || game.status === 'ONGOING') && (
         <>
+          {/* Players + factions — shown from the moment the tile appears when the
+              factions are already known and not blind (SFT, 2D3). For 2D3 this
+              surfaces the per-game roll before map selection, like an SFT faction. */}
+          {!decisionComplete && !needsBlindPick && (p1Faction || p2Faction) && (
+            <div className="flex items-start justify-center gap-6">
+              <PlayerInfo name={player1Name} avatarUrl={player1AvatarUrl} faction={p1Faction} />
+              <span className="self-center text-xs uppercase tracking-wider text-rizzotto-stone-500">vs</span>
+              <PlayerInfo name={player2Name} avatarUrl={player2AvatarUrl} faction={p2Faction} />
+            </div>
+          )}
+
           {/* Decision phase */}
           {!decisionComplete && (
             <div className="flex flex-col gap-3">

@@ -22,7 +22,7 @@ const ReportResultSchema = z.object({
 // ---------------------------------------------------------------------------
 
 const matchRoutes: FastifyPluginAsync = async (fastify) => {
-  // POST /api/matches/:id/result — legacy organizer/player override endpoint
+  // POST /api/matches/:id/result — legacy host/player override endpoint
   fastify.post(
     '/api/matches/:id/result',
     { preHandler: fastify.authenticate },
@@ -47,7 +47,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           status: true,
           player1_id: true,
           player2_id: true,
-          tournament: { select: { organizer_id: true, counts_for_leaderboard: true } },
+          tournament: { select: { host_id: true, counts_for_leaderboard: true } },
         },
       });
 
@@ -68,12 +68,12 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const user = request.user;
-      const isOrganizer = match.tournament ? user.sub === match.tournament.organizer_id : false;
+      const isHost = match.tournament ? user.sub === match.tournament.host_id : false;
       const isModOrAdmin = user.role === 'MODERATOR' || user.role === 'ADMIN';
       const isPlayer1 = match.player1_id !== null && user.sub === match.player1_id;
       const isPlayer2 = match.player2_id !== null && user.sub === match.player2_id;
 
-      if (!isOrganizer && !isModOrAdmin && !isPlayer1 && !isPlayer2) {
+      if (!isHost && !isModOrAdmin && !isPlayer1 && !isPlayer2) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'You are not authorized to report the result for this match',
@@ -134,7 +134,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // PATCH /api/matches/:id/start
-  // Organizer / Moderator / Admin: set match PENDING→ONGOING, start draft if enabled.
+  // Host / Moderator / Admin: set match PENDING→ONGOING, start draft if enabled.
   // -------------------------------------------------------------------------
   fastify.patch(
     '/api/matches/:id/start',
@@ -152,7 +152,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           tournament: {
             select: {
               id: true,
-              organizer_id: true,
+              host_id: true,
               status: true,
               draft_enabled: true,
               draft_preset_id: true,
@@ -184,7 +184,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', user.sub, user.role))) {
         return reply.code(403).send({
           error: 'Forbidden',
-          message: 'You are not the organizer of this tournament',
+          message: 'You are not the host of this tournament',
           statusCode: 403,
         });
       }
@@ -337,10 +337,24 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         .send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
     }
 
+    // Optional auth — compute whether the viewer may manage this match's
+    // tournament (host, co-host, mod, admin), so the UI can scope management
+    // controls to the owner instead of showing them to every HOST globally (B12).
+    let can_manage = false;
+    try {
+      await request.jwtVerify();
+      if (match.tournament?.id) {
+        can_manage = await canManageTournament(fastify.prisma, match.tournament.id, request.user.sub, request.user.role);
+      }
+    } catch {
+      // unauthenticated — fine, can_manage stays false
+    }
+
     return reply.code(200).send({
       id: match.id,
       tournament_id: match.tournament?.id ?? null,
       tournament_slug: match.tournament?.slug ?? null,
+      can_manage,
       round: match.round,
       match_number: match.match_number,
       status: match.status,
@@ -449,7 +463,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
+        select: { id: true, tournament_id: true, tournament: { select: { host_id: true } } },
       });
       if (!match) {
         return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
@@ -479,7 +493,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const { id: matchId } = request.params as { id: string };
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, status: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
+        select: { id: true, status: true, tournament_id: true, tournament: { select: { host_id: true } } },
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       if (match.status !== 'FORFEIT' && match.status !== 'CANCELLED') {
@@ -506,7 +520,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const { id: matchId } = request.params as { id: string };
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
+        select: { id: true, tournament_id: true, tournament: { select: { host_id: true } } },
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       const role = request.user?.role ?? '';
@@ -533,7 +547,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId, deleted_at: null },
-        select: { id: true, status: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
+        select: { id: true, status: true, tournament_id: true, tournament: { select: { host_id: true } } },
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
 
@@ -577,7 +591,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, status: true, player1_id: true, player2_id: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
+        select: { id: true, status: true, player1_id: true, player2_id: true, tournament_id: true, tournament: { select: { host_id: true } } },
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       if (match.status !== 'PENDING') return reply.code(409).send({ error: 'Conflict', message: 'Can only swap players in PENDING matches', statusCode: 409 });
@@ -610,7 +624,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const { id: matchId } = request.params as { id: string };
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, tournament_id: true, tournament: { select: { organizer_id: true } } },
+        select: { id: true, tournament_id: true, tournament: { select: { host_id: true } } },
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
 
@@ -633,7 +647,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, tournament_id: true, player1_id: true, player2_id: true, status: true, tournament: { select: { organizer_id: true } } },
+        select: { id: true, tournament_id: true, player1_id: true, player2_id: true, status: true, tournament: { select: { host_id: true } } },
       });
       if (!match || !match.tournament_id) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
 
@@ -644,15 +658,39 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const winnerId = match.player1_id === droppedPlayerId ? match.player2_id : match.player2_id === droppedPlayerId ? match.player1_id : null;
       if (!winnerId) return reply.code(400).send({ error: 'BadRequest', message: 'droppedPlayerId is not in this match', statusCode: 400 });
 
+      // B1: a match forfeit (match-drop) is match-scoped — it must NOT withdraw the
+      // player from the whole tournament. They keep playing future rounds; only this
+      // match is awarded to the opponent. (Withdraw is a separate explicit action.)
       await fastify.prisma.$transaction([
         fastify.prisma.match.update({ where: { id: matchId }, data: { status: 'FORFEIT', winner_id: winnerId } }),
         fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } }),
-        fastify.prisma.tournamentParticipant.updateMany({
-          where: { tournament_id: match.tournament_id, user_id: droppedPlayerId, status: { notIn: ['WITHDREW', 'DISQUALIFIED'] } },
-          data: { status: 'WITHDREW' },
-        }),
       ]);
       return reply.code(200).send({ ok: true, winnerId });
+    },
+  );
+
+  // POST /api/matches/:id/no-contest — canManage: B10 technical-abort double-bye.
+  // Both players receive a bye point (1.0, no BH, see computeSwissStandings); the
+  // match is awarded to no one and its games are voided. NOT a withdraw.
+  fastify.post(
+    '/api/matches/:id/no-contest',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const match = await fastify.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true, tournament_id: true, tournament: { select: { host_id: true } } },
+      });
+      if (!match || !match.tournament_id) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+
+      const { role, sub: userId } = request.user;
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+
+      await fastify.prisma.$transaction([
+        fastify.prisma.match.update({ where: { id: matchId }, data: { status: 'NO_CONTEST', winner_id: null } }),
+        fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } }),
+      ]);
+      return reply.code(200).send({ ok: true });
     },
   );
 };

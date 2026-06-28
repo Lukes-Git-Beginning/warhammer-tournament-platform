@@ -458,7 +458,7 @@ describe('DELETE /api/draft-presets/:id', () => {
         status: 'DRAFT',
         start_date: new Date('2027-01-01'),
         timezone: 'UTC',
-        organizer_id: ORGANIZER_ID,
+        host_id: ORGANIZER_ID,
         draft_preset_id: PRESET_A,
         draft_enabled: true,
       },

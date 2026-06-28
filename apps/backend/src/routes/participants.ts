@@ -2,6 +2,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { emitParticipantChange, emitBracketUpdate } from '../lib/emit.js';
 import { canManageTournament, createLateJoinerBye } from '../lib/tournament-utils.js';
+import { notifyHostsOfWithdrawal } from '../lib/discord-notify.js';
+import { addLateParticipant, setParticipantFactionOp } from '../lib/tournament-management.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -9,6 +11,7 @@ import { canManageTournament, createLateJoinerBye } from '../lib/tournament-util
 
 const RegisterSchema = z.object({
   faction_id: z.string().min(1).optional(),
+  faction_ids: z.array(z.string().min(1)).optional(), // TWO_D_THREE: exactly 3 distinct
 });
 
 const CheckinSchema = z.object({
@@ -41,6 +44,8 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           id: true,
           status: true,
+          mode: true,
+          start_date: true,
           max_participants: true,
           faction_allowlist: { select: { faction_id: true } },
           restricted_factions: { select: { faction_id: true } },
@@ -103,31 +108,82 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         // completion (see lib/match-games.ts), never blocked at pick time.
       }
 
-      try {
-        const participant = await fastify.prisma.tournamentParticipant.create({
-          data: {
-            tournament_id: tournament.id,
-            user_id: request.user.sub,
-            faction_id: parsed.data.faction_id,
-            status: 'REGISTERED',
-          },
-          select: {
-            id: true,
-            tournament_id: true,
-            user_id: true,
-            faction_id: true,
-            status: true,
-            registered_at: true,
-          },
+      // 2D3 mode: player picks exactly 3 distinct factions; one is drawn at random
+      // per game (see lib/match-games.ts drawTwoD3GameFactions).
+      let factionIds: string[] = [];
+      if (tournament.mode === 'TWO_D_THREE') {
+        factionIds = parsed.data.faction_ids ?? [];
+        if (factionIds.length !== 3 || new Set(factionIds).size !== 3) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'This mode requires exactly 3 distinct factions', statusCode: 400 });
+        }
+        const found = await fastify.prisma.faction.findMany({
+          where: { id: { in: factionIds } },
+          select: { id: true },
         });
+        if (found.length !== 3) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'One or more selected factions do not exist', statusCode: 400 });
+        }
+        const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
+        if (allowlist.length > 0 && factionIds.some((id) => !allowlist.includes(id))) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'One or more selected factions are not permitted in this tournament', statusCode: 400 });
+        }
+        // Restricted factions stay pickable (nerfed, not banned) — same as faction_id above.
+      }
+
+      // B5: registering during the check-in window [start-1h, start) auto-checks-in.
+      const now = new Date();
+      const startMs = tournament.start_date.getTime();
+      const checkInOpen = now.getTime() >= startMs - 3_600_000 && now.getTime() < startMs;
+      const initialStatus: 'CHECKED_IN' | 'REGISTERED' = checkInOpen ? 'CHECKED_IN' : 'REGISTERED';
+
+      const participantData = {
+        faction_id: parsed.data.faction_id ?? null,
+        faction_ids: factionIds,
+        status: initialStatus,
+      };
+      const participantSelect = {
+        id: true,
+        tournament_id: true,
+        user_id: true,
+        faction_id: true,
+        faction_ids: true,
+        status: true,
+        registered_at: true,
+      } as const;
+
+      // B15: a player who withdrew before start can re-register — reactivate the
+      // existing row instead of failing on the (tournament_id, user_id) unique key.
+      const existing = await fastify.prisma.tournamentParticipant.findFirst({
+        where: { tournament_id: tournament.id, user_id: request.user.sub },
+        select: { id: true, status: true },
+      });
+      if (existing && existing.status !== 'WITHDREW') {
+        return reply.code(409).send({
+          error: 'Conflict',
+          message: 'You are already registered for this tournament',
+          statusCode: 409,
+        });
+      }
+
+      try {
+        const participant = existing
+          ? await fastify.prisma.tournamentParticipant.update({
+              where: { id: existing.id },
+              data: { ...participantData, registered_at: now },
+              select: participantSelect,
+            })
+          : await fastify.prisma.tournamentParticipant.create({
+              data: { tournament_id: tournament.id, user_id: request.user.sub, ...participantData },
+              select: participantSelect,
+            });
 
         await fastify.prisma.auditLog.create({
           data: {
             entity_type: 'TournamentParticipant',
             entity_id: participant.id,
-            action: 'register',
+            action: existing ? 're-register' : 'register',
             actor_id: request.user.sub,
-            new_value: { tournament_id: tournament.id, user_id: request.user.sub },
+            new_value: { tournament_id: tournament.id, user_id: request.user.sub, status: initialStatus },
           },
         });
 
@@ -137,10 +193,10 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           action: 'registered',
         });
 
-        request.log.info({ slug, userId: request.user.sub }, 'User registered for tournament');
+        request.log.info({ slug, userId: request.user.sub, status: initialStatus }, 'User registered for tournament');
         return reply.code(201).send(participant);
       } catch (err: unknown) {
-        // Prisma unique constraint violation
+        // Prisma unique constraint violation (race)
         if (
           err !== null &&
           typeof err === 'object' &&
@@ -179,13 +235,13 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Self-withdraw is only allowed before the tournament starts. Once it is
-      // ONGOING/COMPLETED, a player must be dropped by an organizer (which
+      // ONGOING/COMPLETED, a player must be dropped by an host (which
       // forfeits open matches and keeps the bracket consistent).
       if (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
           message:
-            'Cannot withdraw once the tournament has started — contact an organizer to be dropped',
+            'Cannot withdraw once the tournament has started — contact an host to be dropped',
           statusCode: 422,
         });
       }
@@ -260,7 +316,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, organizer_id: true },
+        select: { id: true, host_id: true },
       });
 
       if (!tournament) {
@@ -533,24 +589,65 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         lists_locked_at: true,
         user: { select: { id: true, username: true, avatar_url: true } },
         faction: { select: { id: true, name: true, color_hex: true } },
+        faction_ids: true, // TWO_D_THREE: the player's 3-faction pool
       },
       orderBy: { registered_at: 'asc' },
     });
 
     const started = tournament.status === 'ONGOING' || tournament.status === 'COMPLETED';
-    const maskFactions = (tournament.mode === 'SFT' || tournament.mode === 'BPT') && !started;
+    const maskFactions =
+      (tournament.mode === 'SFT' || tournament.mode === 'BPT' || tournament.mode === 'TWO_D_THREE') &&
+      !started;
 
     const data = maskFactions
-      ? participants.map((p) => ({ ...p, faction: null }))
+      ? participants.map((p) => ({ ...p, faction: null, faction_ids: [] }))
       : participants;
 
     return { data, total: data.length };
   });
 
   // ---------------------------------------------------------------------------
+  // Host-accessible operative actions (B12) — canManage-gated mirrors of the
+  // ADMIN-scoped /api/admin/tournaments/:slug/* routes, so hosts and co-hosts
+  // (not just global admins) can run them. Shared logic in tournament-management.
+  // ---------------------------------------------------------------------------
+
+  // POST /api/tournaments/:slug/add-late — add a participant after registration closed
+  fastify.post(
+    '/api/tournaments/:slug/add-late',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      const t = await fastify.prisma.tournament.findFirst({ where: { slug, deleted_at: null }, select: { id: true } });
+      if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (!(await canManageTournament(fastify.prisma, t.id, request.user.sub, request.user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
+      }
+      const r = await addLateParticipant(fastify.prisma, fastify.io, slug, request.body, request.log);
+      return reply.code(r.status).send(r.body);
+    },
+  );
+
+  // PATCH /api/tournaments/:slug/participants/:userId/faction — set a participant's faction
+  fastify.patch(
+    '/api/tournaments/:slug/participants/:userId/faction',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug, userId } = request.params as { slug: string; userId: string };
+      const t = await fastify.prisma.tournament.findFirst({ where: { slug, deleted_at: null }, select: { id: true } });
+      if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (!(await canManageTournament(fastify.prisma, t.id, request.user.sub, request.user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
+      }
+      const r = await setParticipantFactionOp(fastify.prisma, slug, userId, request.body);
+      return reply.code(r.status).send(r.body);
+    },
+  );
+
+  // ---------------------------------------------------------------------------
   // POST /api/tournaments/:slug/participants/:userId/drop
   // Drop a participant mid-tournament. Callable by the player themselves OR by
-  // organizer/moderator/admin. Sets status WITHDREW, forfeits any open match,
+  // host/moderator/admin. Sets status WITHDREW, forfeits any open match,
   // and voids (deletes) unfinished MatchGames with no winner yet.
   // ---------------------------------------------------------------------------
   fastify.post(
@@ -570,7 +667,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, status: true, organizer_id: true },
+        select: { id: true, status: true, host_id: true },
       });
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
@@ -614,6 +711,9 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'withdrew' });
 
+      // B20: let the host(s) know a player dropped — excluding the actor.
+      void notifyHostsOfWithdrawal(tournament.id, userId, callerId);
+
       return reply.code(200).send({ dropped: true });
     },
   );
@@ -634,11 +734,14 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findUnique({
         where: { slug, deleted_at: null },
-        select: { id: true, status: true, organizer_id: true },
+        select: { id: true, status: true, host_id: true },
       });
       if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
-      if (tournament.status !== 'ONGOING') {
-        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Tournament is not ongoing', statusCode: 422 });
+      // N13: undrop must also work before the tournament starts (a player can
+      // self-withdraw during registration). Pre-start there are no matches to
+      // restore, so the playoff-reset below is simply a no-op.
+      if (tournament.status !== 'ONGOING' && tournament.status !== 'REGISTRATION_CLOSED') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Tournament must be ongoing or registration-closed to undrop', statusCode: 422 });
       }
 
       if (!(await canManageTournament(fastify.prisma, tournament.id, currentUserId ?? '', role ?? ''))) {

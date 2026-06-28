@@ -63,7 +63,7 @@ type EditFormData = {
   registration_deadline: string;
   max_participants: number | '';
   rounds_count: number;
-  playoff_format: 'NONE' | 'TOP4' | 'TOP8';
+  playoff_format: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   has_third_place_match: boolean;
   swiss_match_format: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format: 'BO1' | 'BO3' | 'BO5';
@@ -72,7 +72,7 @@ type EditFormData = {
   map_pool: string[];
   map_preset_config: MapPresetConfig | null;
   format: Tournament['format'];
-  mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
+  mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
   faction_pool: string[];
   restricted_factions: string[];
   visibility: 'PUBLIC' | 'PRIVATE';
@@ -222,7 +222,7 @@ function buildInitialForm(t: Tournament): EditFormData {
     map_pool: (t.map_pool ?? []).map((m) => m.id),
     map_preset_config: (t.map_preset_config as MapPresetConfig | null) ?? null,
     format: t.format,
-    mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX') ? t.mode : 'BPT',
+    mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX' || t.mode === 'TWO_D_THREE') ? t.mode : 'BPT',
     faction_pool: t.faction_allowlist ?? [],
     restricted_factions: t.restricted_factions ?? [],
     visibility: t.visibility ?? 'PUBLIC',
@@ -522,7 +522,7 @@ export function TournamentEditPage() {
     !!tournament &&
     (user.role === 'MODERATOR' ||
       user.role === 'ADMIN' ||
-      (user.role === 'HOST' && tournament.organizer?.id === user.id));
+      (user.role === 'HOST' && tournament.host?.id === user.id));
 
   useEffect(() => {
     if (!isLoading && tournament && user && !canManage) {
@@ -729,6 +729,7 @@ export function TournamentEditPage() {
                   <option value="SFT">SFT — Single Faction Tournament</option>
                   <option value="SLT">SLT — Single List Tournament</option>
                   <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
+                  <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
                 </Select>
               )}
             </div>
@@ -852,7 +853,7 @@ export function TournamentEditPage() {
               <div>
                 <Label>Playoff Format</Label>
                 <div className="flex gap-3 mt-1 flex-wrap">
-                  {(['NONE', 'TOP4', 'TOP8'] as const).map((opt) => (
+                  {(['NONE', 'TOP2', 'TOP4', 'TOP8'] as const).map((opt) => (
                     <label key={opt} className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="radio"
@@ -1379,11 +1380,11 @@ export function TournamentEditPage() {
         {/* ── Co-hosts (owner + staff) ──────────────────────────────────── */}
         {(user.role === 'MODERATOR' ||
           user.role === 'ADMIN' ||
-          tournament.organizer?.id === user.id) && <CoHostsSection slug={tournament.slug} />}
+          tournament.host?.id === user.id) && <CoHostsSection slug={tournament.slug} />}
 
         {/* ── Transfer Ownership (admin only) ───────────────────────────── */}
         {user.role === 'ADMIN' && (
-          <TransferOwnerSection slug={tournament.slug} currentOwnerId={tournament.organizer?.id ?? ''} />
+          <TransferOwnerSection slug={tournament.slug} currentOwnerId={tournament.host?.id ?? ''} />
         )}
       </form>
     </PageShell>

@@ -14,7 +14,7 @@ import {
   computeSwissStandings,
   sortSwissStandings,
 } from './swiss.js';
-import { notifyRoundPairings } from './discord-notify.js';
+import { notifyRoundPairings, notifyMatchesCreated } from './discord-notify.js';
 
 // ---------------------------------------------------------------------------
 // Config: derive rounds + playoff format from check-in count
@@ -103,6 +103,9 @@ export async function startAutoSwiss(prisma: PrismaClient, tournamentId: string)
       },
     });
   });
+
+  // B22: notify round-1 pairings for Auto Swiss too.
+  await notifyMatchesCreated(tournamentId, 1, round1Matches);
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +132,7 @@ export async function advanceAutoSwissRound(prisma: PrismaClient, tournamentId: 
 
   const maxSwissRound = Math.max(...swissMatches.map((m) => m.round));
   const currentRoundMatches = swissMatches.filter((m) => m.round === maxSwissRound);
-  const incompleteSwiss = currentRoundMatches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED');
+  const incompleteSwiss = currentRoundMatches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED' && m.status !== 'NO_CONTEST');
 
   if (incompleteSwiss.length > 0) return; // current round not done
 
@@ -189,7 +192,7 @@ async function generateNextSwissRound(
   const withdrawnIds = new Set(dbParticipants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
 
   const completed = swissMatches
-    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
+    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST')
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
 
   const rawStandings = computeSwissStandings(participantIds, completed, withdrawnIds);
@@ -197,10 +200,15 @@ async function generateNextSwissRound(
 
   const avoidMap = new Map<string, string[]>(participantIds.map((id) => [id, []]));
   const byeMap = new Map<string, boolean>();
+  const noContestMap = new Map<string, string[]>(participantIds.map((id) => [id, []]));
   for (const m of swissMatches) {
     if (m.player1_id && m.player2_id) {
       avoidMap.get(m.player1_id)?.push(m.player2_id);
       avoidMap.get(m.player2_id)?.push(m.player1_id);
+      if (m.status === 'NO_CONTEST') {
+        noContestMap.get(m.player1_id)?.push(m.player2_id);
+        noContestMap.get(m.player2_id)?.push(m.player1_id);
+      }
     }
     if (m.status === 'BYE') {
       const byePlayer = m.player1_id ?? m.player2_id;
@@ -214,6 +222,7 @@ async function generateNextSwissRound(
     avoid: avoidMap.get(s.userId) ?? [],
     receivedBye: byeMap.get(s.userId) ?? false,
     factionId: factionById.get(s.userId) ?? null,
+    noContestAvoid: noContestMap.get(s.userId) ?? [],
   }));
 
   const newMatches = generateSwissRound(tournament.id, swissPlayers, targetRound);
@@ -289,7 +298,7 @@ async function startPlayoffs(
   });
   const withdrawnIds = new Set(dbParticipants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
   const completed = swissMatches
-    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT')
+    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST')
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
   const rawStandings = computeSwissStandings(participantIds, completed, withdrawnIds);
   const standings = sortSwissStandings(rawStandings, completed);
@@ -400,6 +409,12 @@ async function startPlayoffs(
       new_value: { format: fmt, matches: matches.length },
     },
   });
+
+  // B22: notify the first playoff round's participants.
+  const playablePO = matches.filter((m) => m.player1_id && m.player2_id);
+  if (playablePO.length > 0) {
+    await notifyMatchesCreated(tournament.id, Math.min(...playablePO.map((m) => m.round)), playablePO);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -435,7 +450,7 @@ export async function repairBrokenAutoSwiss(prisma: PrismaClient): Promise<void>
     if (hasPlayoffs) continue;
 
     // Only repair if all matches are done (Swiss rounds complete, including forfeit wins)
-    const pending = matches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT');
+    const pending = matches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'NO_CONTEST');
     if (pending.length > 0) continue;
 
     // All matches done, no playoffs — this is a stuck tournament

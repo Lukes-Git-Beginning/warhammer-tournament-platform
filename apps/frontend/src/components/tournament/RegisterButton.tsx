@@ -16,12 +16,14 @@ export interface RegisterButtonProps {
 
 function FactionSelectGrid({
   selected,
-  onSelect,
+  onToggle,
+  pickCount,
   allowedFactionIds,
   restrictedFactionIds,
 }: {
-  selected: string;
-  onSelect: (id: string) => void;
+  selected: string[];
+  onToggle: (id: string) => void;
+  pickCount: number;
   allowedFactionIds?: string[];
   restrictedFactionIds?: string[];
 }) {
@@ -40,23 +42,26 @@ function FactionSelectGrid({
   return (
     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
       {factions.map((f) => {
-        const isSelected = selected === f.id;
+        const isSelected = selected.includes(f.id);
         // Restricted factions are nerfed, not banned — keep them pickable; only
         // an allowlist actually forbids a faction.
         const isRestricted = restrictedFactionIds != null && restrictedFactionIds.includes(f.id);
-        const isDisabled = hasRestriction && !allowedFactionIds!.includes(f.id);
+        const isFull = pickCount > 1 && !isSelected && selected.length >= pickCount;
+        const isDisabled = (hasRestriction && !allowedFactionIds!.includes(f.id)) || isFull;
         return (
           <button
             key={f.id}
             type="button"
-            onClick={() => !isDisabled && onSelect(f.id)}
+            onClick={() => !isDisabled && onToggle(f.id)}
             disabled={isDisabled}
             title={
-              isDisabled
-                ? 'Not permitted in this tournament'
-                : isRestricted
-                  ? 'Restricted (nerfed) — games with this faction do not count toward the leaderboard'
-                  : undefined
+              isFull
+                ? `Pick limit reached (${pickCount})`
+                : hasRestriction && !allowedFactionIds!.includes(f.id)
+                  ? 'Not permitted in this tournament'
+                  : isRestricted
+                    ? 'Restricted (nerfed) — games with this faction do not count toward the leaderboard'
+                    : undefined
             }
             className={cn(
               'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center transition-[border-color,background-color] duration-base ease-burn',
@@ -92,16 +97,27 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
   const queryClient = useQueryClient();
   const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
   const [pickingFaction, setPickingFaction] = useState(false);
-  const [selectedFaction, setSelectedFaction] = useState('');
+  const [selectedFactions, setSelectedFactions] = useState<string[]>([]);
 
-  const needsFactionPick = tournament.mode === 'SFT';
+  const needsFactionPick = tournament.mode === 'SFT' || tournament.mode === 'TWO_D_THREE';
+  const pickCount = tournament.mode === 'TWO_D_THREE' ? 3 : 1;
+
+  const toggleFaction = (id: string) =>
+    setSelectedFactions((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (pickCount === 1) return [id];
+      if (prev.length >= pickCount) return prev;
+      return [...prev, id];
+    });
 
   const register = useMutation({
-    mutationFn: (factionId?: string) =>
-      registerForTournament(tournament.slug, factionId ? { factionId } : undefined),
+    mutationFn: () =>
+      pickCount > 1
+        ? registerForTournament(tournament.slug, { factionIds: selectedFactions })
+        : registerForTournament(tournament.slug, selectedFactions[0] ? { factionId: selectedFactions[0] } : undefined),
     onSuccess: () => {
       setPickingFaction(false);
-      setSelectedFaction('');
+      setSelectedFactions([]);
       void queryClient.invalidateQueries({ queryKey: ['tournament', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['participant-me', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['tournament-participants', tournament.slug] });
@@ -173,17 +189,31 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
   }
 
   if (needsFactionPick && pickingFaction) {
+    const is2D3 = tournament.mode === 'TWO_D_THREE';
     return (
       <div className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4 space-y-4">
         <div>
-          <p className="text-sm font-semibold text-rizzotto-stone-200 mb-1">Choose your faction</p>
-          <p className="text-xs text-rizzotto-stone-500">
-            SFT — Single Faction Tournament. Your faction is locked for the entire event.
+          <p className="text-sm font-semibold text-rizzotto-stone-200 mb-1">
+            {is2D3 ? 'Choose your 3 factions' : 'Choose your faction'}
           </p>
+          <p className="text-xs text-rizzotto-stone-500">
+            {is2D3
+              ? 'Pick exactly 3 factions. One of them is drawn at random for you before each game.'
+              : 'SFT — Single Faction Tournament. Your faction is locked for the entire event.'}
+          </p>
+          {is2D3 && (
+            <p className="mt-1 text-xs">
+              <span className={cn('font-semibold', selectedFactions.length === pickCount ? 'text-rizzotto-gold-400' : 'text-rizzotto-stone-300')}>
+                {selectedFactions.length}/{pickCount}
+              </span>{' '}
+              <span className="text-rizzotto-stone-500">selected</span>
+            </p>
+          )}
         </div>
         <FactionSelectGrid
-          selected={selectedFaction}
-          onSelect={setSelectedFaction}
+          selected={selectedFactions}
+          onToggle={toggleFaction}
+          pickCount={pickCount}
           allowedFactionIds={tournament.faction_allowlist}
           restrictedFactionIds={tournament.restricted_factions}
         />
@@ -194,12 +224,12 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
           <Button
             variant="forge"
             size="md"
-            disabled={!selectedFaction || register.isPending}
-            onClick={() => register.mutate(selectedFaction)}
+            disabled={selectedFactions.length !== pickCount || register.isPending}
+            onClick={() => register.mutate()}
           >
             {register.isPending ? t('tournament.register.pending') : 'Confirm Registration'}
           </Button>
-          <button type="button" onClick={() => { setPickingFaction(false); setSelectedFaction(''); }} className="text-sm text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors">
+          <button type="button" onClick={() => { setPickingFaction(false); setSelectedFactions([]); }} className="text-sm text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors">
             Cancel
           </button>
         </div>
@@ -217,7 +247,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
           if (needsFactionPick) {
             setPickingFaction(true);
           } else {
-            register.mutate(undefined);
+            register.mutate();
           }
         }}
       >

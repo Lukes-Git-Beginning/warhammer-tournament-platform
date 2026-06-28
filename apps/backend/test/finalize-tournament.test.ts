@@ -348,7 +348,7 @@ async function seedEloBase({ withExistingLeaderboard = false }: { withExistingLe
       timezone: 'Europe/Berlin',
       is_major: false,
       counts_for_leaderboard: true,
-      organizer_id: EACTOR,
+      host_id: EACTOR,
     },
   });
 

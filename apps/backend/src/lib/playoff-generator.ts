@@ -21,7 +21,7 @@ import type { SwissStanding } from './swiss.js';
 
 // ---------- Types ----------
 
-export type PlayoffFormat = 'NONE' | 'TOP4' | 'TOP8';
+export type PlayoffFormat = 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
 
 /** Maps a MatchFormat enum value to its game count. */
 const MATCH_FORMAT_GAME_COUNT: Record<string, number> = {
@@ -51,7 +51,7 @@ export interface GeneratePlayoffArgs {
 export interface GeneratePlayoffResult {
   format: PlayoffFormat;
   matches: PlayoffMatch[];
-  fallbackApplied?: 'TOP8_TO_TOP4';
+  fallbackApplied?: 'TOP8_TO_TOP4' | 'TOP4_TO_TOP2';
 }
 
 // ---------- Errors ----------
@@ -107,41 +107,38 @@ export function generatePlayoffBracket(args: GeneratePlayoffArgs): GeneratePlayo
   const normalGameCount = gameCount(tournament.playoff_match_format);
   const finaleGameCount = gameCount(tournament.finale_match_format);
 
+  // Reduction principle: the playoff field must never exceed half the active
+  // field — TOP8 needs ≥16, TOP4 needs ≥8, TOP2 needs ≥4. Formats cascade down.
+
   // -------------------------------------------------------------------------
-  // TOP4
+  // TOP2 — Grand Final only (top 2 advance, no semis).
   // -------------------------------------------------------------------------
-  if (format === 'TOP4') {
-    return buildTop4(
-      finalStandings,
-      checkedInPlayerIds,
-      normalGameCount,
-      finaleGameCount,
-    );
+  if (format === 'TOP2') {
+    return buildTop2(finalStandings, checkedInPlayerIds, finaleGameCount);
   }
 
   // -------------------------------------------------------------------------
-  // TOP8 — with auto-fallback to TOP4 when <16 checked-in players
+  // TOP4 — auto-fallback to TOP2 below 8 checked-in players.
+  // -------------------------------------------------------------------------
+  if (format === 'TOP4') {
+    if (checkedInPlayerIds.size < 8) {
+      return { ...buildTop2(finalStandings, checkedInPlayerIds, finaleGameCount), fallbackApplied: 'TOP4_TO_TOP2' };
+    }
+    return buildTop4(finalStandings, checkedInPlayerIds, normalGameCount, finaleGameCount);
+  }
+
+  // -------------------------------------------------------------------------
+  // TOP8 — cascade: below 16 → TOP4, and further below 8 → TOP2.
   // -------------------------------------------------------------------------
   if (format === 'TOP8') {
-    const totalCheckedIn = checkedInPlayerIds.size;
-
-    if (totalCheckedIn < 16) {
-      // Auto-fallback: not enough players for a full TOP8
-      const result = buildTop4(
-        finalStandings,
-        checkedInPlayerIds,
-        normalGameCount,
-        finaleGameCount,
-      );
-      return { ...result, fallbackApplied: 'TOP8_TO_TOP4' };
+    const total = checkedInPlayerIds.size;
+    if (total < 8) {
+      return { ...buildTop2(finalStandings, checkedInPlayerIds, finaleGameCount), fallbackApplied: 'TOP4_TO_TOP2' };
     }
-
-    return buildTop8(
-      finalStandings,
-      checkedInPlayerIds,
-      normalGameCount,
-      finaleGameCount,
-    );
+    if (total < 16) {
+      return { ...buildTop4(finalStandings, checkedInPlayerIds, normalGameCount, finaleGameCount), fallbackApplied: 'TOP8_TO_TOP4' };
+    }
+    return buildTop8(finalStandings, checkedInPlayerIds, normalGameCount, finaleGameCount);
   }
 
   // Should never reach here if the caller passes a valid PlayoffFormat
@@ -149,6 +146,27 @@ export function generatePlayoffBracket(args: GeneratePlayoffArgs): GeneratePlayo
 }
 
 // ---------- Private bracket builders ----------
+
+function buildTop2(
+  standings: SwissStanding[],
+  checkedIn: Set<string>,
+  finaleGames: number,
+): GeneratePlayoffResult {
+  const seeds = topNCheckedIn(standings, 2, checkedIn);
+
+  if (seeds.length < 2) {
+    throw new InsufficientPlayersError(2, seeds.length, 'TOP2');
+  }
+
+  const [s1, s2] = seeds as [SwissStanding, SwissStanding];
+
+  // Round 1 = Grand Final (top 2 advance → no semi-finals).
+  const matches: PlayoffMatch[] = [
+    { round: 1, bracket_position: 1, player1_id: s1.userId, player2_id: s2.userId, game_count: finaleGames },
+  ];
+
+  return { format: 'TOP2', matches };
+}
 
 function buildTop4(
   standings: SwissStanding[],

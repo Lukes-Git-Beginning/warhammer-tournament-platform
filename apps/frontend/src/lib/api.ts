@@ -60,7 +60,7 @@ export interface Tournament {
   description: string | null;
   format: 'SINGLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
+  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
   status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
   start_date: string;
   timezone: string;
@@ -68,11 +68,13 @@ export interface Tournament {
   registration_deadline: string | null;
   rules: string | null;
   discord_link: string | null;
-  organizer?: {
+  host?: {
     id: string;
     username: string;
     avatar_url: string | null;
   };
+  /** Server-computed: viewer may manage (host, co-host, moderator, admin). */
+  can_manage?: boolean;
   participantCount?: number;
   created_at: string;
   is_major?: boolean;
@@ -80,7 +82,7 @@ export interface Tournament {
   counts_for_leaderboard?: boolean;
   // Welle 2 fields
   rounds_count?: number | null;
-  playoff_format?: 'NONE' | 'TOP4' | 'TOP8' | null;
+  playoff_format?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' | null;
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
   finale_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
@@ -161,7 +163,7 @@ export interface TournamentCreate {
   name: string;
   format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
+  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
   start_date: string;
   timezone: string;
   max_participants?: number;
@@ -173,7 +175,7 @@ export interface TournamentCreate {
   draft_preset_id?: string;
   // Welle 2 fields
   rounds_count?: number;
-  playoff_format?: 'NONE' | 'TOP4' | 'TOP8';
+  playoff_format?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
   finale_match_format?: 'BO1' | 'BO3' | 'BO5';
@@ -199,12 +201,12 @@ export interface TournamentPatchInput {
   draft_preset_id?: string | null;
   // draft-only (backend enforces, frontend disables after DRAFT)
   format?: Tournament['format'];
-  mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX';
+  mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
   faction_pool?: string[];
   restricted_factions?: string[];
   // until-ongoing fields
   rounds_count?: number;
-  playoff_format?: 'NONE' | 'TOP4' | 'TOP8';
+  playoff_format?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   has_third_place_match?: boolean;
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
@@ -334,7 +336,7 @@ export function patchTournament(
   });
 }
 
-/** Generates the bracket and transitions to ONGOING. Organizer only; note :id, not :slug. */
+/** Generates the bracket and transitions to ONGOING. Host only; note :id, not :slug. */
 export function startTournament(id: string): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/tournaments/${id}/start`, {
     method: 'POST',
@@ -980,7 +982,7 @@ export function swapPlayer(
   oldPlayerId: string,
   newPlayerId: string,
 ): Promise<{ ok: true }> {
-  return apiFetch(`/api/admin/matches/${matchId}/swap-player`, {
+  return apiFetch(`/api/matches/${matchId}/swap-player`, {
     method: 'PATCH',
     body: JSON.stringify({ oldPlayerId, newPlayerId }),
   });
@@ -992,21 +994,26 @@ export function createMatchNode(
   player2Id: string,
   round: number,
 ): Promise<{ match: { id: string; round: number; match_number: number } }> {
-  return apiFetch(`/api/admin/tournaments/${slug}/create-match`, {
+  return apiFetch(`/api/tournaments/${slug}/create-match`, {
     method: 'POST',
     body: JSON.stringify({ player1Id, player2Id, round }),
   });
 }
 
 export function deleteMatch(matchId: string): Promise<{ ok: true }> {
-  return apiFetch(`/api/admin/matches/${matchId}`, { method: 'DELETE' });
+  return apiFetch(`/api/matches/${matchId}`, { method: 'DELETE' });
 }
 
 export function forfeitMatch(matchId: string, droppedPlayerId: string): Promise<{ ok: true; winnerId: string }> {
-  return apiFetch(`/api/admin/matches/${matchId}/forfeit`, {
+  return apiFetch(`/api/matches/${matchId}/forfeit`, {
     method: 'POST',
     body: JSON.stringify({ droppedPlayerId }),
   });
+}
+
+/** B10: technical-abort double-bye — both players get a bye point, no winner. */
+export function setMatchNoContest(matchId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/matches/${matchId}/no-contest`, { method: 'POST' });
 }
 
 export function undropParticipant(
@@ -1020,7 +1027,7 @@ export function addLateJoiner(
   slug: string,
   userId: string,
 ): Promise<{ participant: { id: string; status: string; user: { id: string; username: string } } }> {
-  return apiFetch(`/api/admin/tournaments/${slug}/add-late`, {
+  return apiFetch(`/api/tournaments/${slug}/add-late`, {
     method: 'POST',
     body: JSON.stringify({ userId }),
   });
@@ -1031,7 +1038,7 @@ export function setParticipantFaction(
   userId: string,
   factionId: string,
 ): Promise<{ participant: { id: string; user_id: string; faction_id: string; status: string } }> {
-  return apiFetch(`/api/admin/tournaments/${slug}/participants/${userId}/faction`, {
+  return apiFetch(`/api/tournaments/${slug}/participants/${userId}/faction`, {
     method: 'PATCH',
     body: JSON.stringify({ faction_id: factionId }),
   });
@@ -1306,6 +1313,7 @@ export interface TournamentParticipantEntry {
   lists_locked_at: string | null;
   user: { id: string; username: string; avatar_url: string | null };
   faction: { id: string; name: string; color_hex: string } | null;
+  faction_ids: string[]; // TWO_D_THREE: the player's 3-faction pool
 }
 
 export interface TournamentParticipantsResponse {
@@ -1319,11 +1327,14 @@ export function getParticipants(slug: string): Promise<TournamentParticipantsRes
 
 export function registerForTournament(
   slug: string,
-  opts?: { factionId?: string },
+  opts?: { factionId?: string; factionIds?: string[] },
 ): Promise<{ id: string; status: ParticipantStatus }> {
+  const body: Record<string, unknown> = {};
+  if (opts?.factionId) body.faction_id = opts.factionId;
+  if (opts?.factionIds) body.faction_ids = opts.factionIds;
   return apiFetch<{ id: string; status: ParticipantStatus }>(
     `/api/tournaments/${slug}/register`,
-    { method: 'POST', body: JSON.stringify({ faction_id: opts?.factionId }) },
+    { method: 'POST', body: JSON.stringify(body) },
   );
 }
 
@@ -1548,11 +1559,11 @@ export function getEligibleOwners(): Promise<{ id: string; username: string; ava
   return apiFetch('/api/users/eligible-owners');
 }
 
-export function transferTournamentOwner(slug: string, organizer_id: string): Promise<{ ok: boolean }> {
+export function transferTournamentOwner(slug: string, host_id: string): Promise<{ ok: boolean }> {
   return apiFetch(`/api/tournaments/${slug}/transfer-owner`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ organizer_id }),
+    body: JSON.stringify({ host_id }),
   });
 }
 

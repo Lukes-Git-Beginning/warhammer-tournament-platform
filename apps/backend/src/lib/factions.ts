@@ -135,8 +135,16 @@ export function asFactionStatsDto(stats: NonNullable<PrismaFactionStats>): Facti
 
 export async function getFactionsWithStats(
   prisma: PrismaClient,
-  seasonId: string,
+  seasonId: string | null,
 ): Promise<FactionWithStatsDto[]> {
+  // Faction master data (name, icon, colour) is global reference data — always
+  // returned. Only the per-season stats are gated on a season; with no season
+  // (e.g. between seasons) every faction simply comes back with stats: null.
+  if (!seasonId) {
+    const factions = await prisma.faction.findMany({ orderBy: { display_order: 'asc' } });
+    return factions.map((f) => ({ faction: asFactionDto(f), stats: null }));
+  }
+
   const factions = await prisma.faction.findMany({
     orderBy: { display_order: 'asc' },
     include: {

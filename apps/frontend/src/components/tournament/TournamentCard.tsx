@@ -15,7 +15,7 @@ interface TournamentCardProps {
     max_participants?: number | null;
     rounds_count?: number | null;
     faction_allowlist?: string[];
-    organizer?: { username: string } | undefined;
+    host?: { username: string } | undefined;
     participantCount?: number | undefined;
   };
 }
@@ -34,6 +34,7 @@ const MODE_LABELS: Record<string, string> = {
   BPT: 'BPT',
   SLT: 'SLT',
   MATRIX: 'Matrix',
+  TWO_D_THREE: '2D3',
   BLIND_PICK: 'Blind Pick',
   ONE_V_ONE: '1v1',
   THREE_V_THREE: '3v3',
@@ -109,8 +110,8 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
       </div>
 
       <div className="mt-1 flex items-center justify-between gap-2">
-        {tournament.organizer && (
-          <p className="text-xs text-stone-500">by {tournament.organizer.username}</p>
+        {tournament.host && (
+          <p className="text-xs text-stone-500">by {tournament.host.username}</p>
         )}
         {tournament.participantCount !== undefined && (
           <p className="text-xs text-stone-500">

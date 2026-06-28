@@ -246,7 +246,7 @@ const tournamentArmyListsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // GET /api/tournaments/:slug/army-lists/all
-  // Only after tournament COMPLETED or admin/mod/organizer
+  // Only after tournament COMPLETED or admin/mod/host
   // -------------------------------------------------------------------------
   fastify.get(
     '/api/tournaments/:slug/army-lists/all',
@@ -256,7 +256,7 @@ const tournamentArmyListsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, status: true, organizer_id: true },
+        select: { id: true, status: true, host_id: true },
       });
 
       if (!tournament) {
@@ -295,7 +295,7 @@ const tournamentArmyListsRoutes: FastifyPluginAsync = async (fastify) => {
   // -------------------------------------------------------------------------
   // GET /api/tournaments/:slug/army-lists/:opponent_user_id
   // Reveal check: allowed if current user has a COMPLETED match with opponent
-  // in this tournament, or tournament is COMPLETED, or user is admin/mod/organizer
+  // in this tournament, or tournament is COMPLETED, or user is admin/mod/host
   // -------------------------------------------------------------------------
   fastify.get(
     '/api/tournaments/:slug/army-lists/:opponent_user_id',
@@ -308,7 +308,7 @@ const tournamentArmyListsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, status: true, organizer_id: true },
+        select: { id: true, status: true, host_id: true },
       });
 
       if (!tournament) {

@@ -55,7 +55,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 async function cleanupAll() {
-  await prisma.tournament.deleteMany({ where: { organizer_id: ADMIN_ID } });
+  await prisma.tournament.deleteMany({ where: { host_id: ADMIN_ID } });
   await prisma.draftPreset.deleteMany({ where: { id: PRESET_ID } });
   await prisma.user.deleteMany({ where: { id: ADMIN_ID } });
 }
