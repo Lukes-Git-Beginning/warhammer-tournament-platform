@@ -715,18 +715,19 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Cannot undrop a disqualified player', statusCode: 422 });
       }
 
-      // B1: fully reverse the drop. Restore any never-played match (Swiss OR
-      // playoff) that was forfeited/cancelled because of the drop back to PENDING.
-      // Previously Swiss FORFEIT rows were left untouched, which kept the player in
-      // computeSwissStandings' droppedPlayerIds set — so undrop appeared to do
-      // nothing in the standings. Only never-actually-played rows are touched
-      // (played_at = null), so real results are never reverted.
+      // Reset any never-played playoff matches that were only forfeited/cancelled
+      // because of the drop. Without this the SF rows stay FORFEIT/CANCELLED
+      // (showing the player as OUT) and advance-playoffs would propagate phantom
+      // players into the GF / third-place node. Conservative scope: playoff phase,
+      // winner-less or forfeited, and never actually played. Swiss FORFEIT rows
+      // are left untouched (they correctly reflect the missed round in standings).
       const droppedPlayoffMatches = await fastify.prisma.match.findMany({
         where: {
           tournament_id: tournament.id,
           deleted_at: null,
           status: { in: ['FORFEIT', 'CANCELLED'] },
           played_at: null,
+          phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] },
           OR: [{ player1_id: userId }, { player2_id: userId }],
         },
         select: { id: true },
