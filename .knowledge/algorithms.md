@@ -5,7 +5,7 @@
 - **ELO — ENTFERNT (2026-06-07)**: `lib/elo.ts` + `computeEloDeltas()` gelöscht. `LeaderboardEntry.elo_rating` und `TournamentResult.elo_change` per Migration `remove_elo` gedroppt. Begründung: placement-basiert (ignoriert Games), faction-blind, braucht Datenmasse die eine kleine Szene nicht hat. Ersetzt durch das dynamische Rating-Modell (unten). `EloRatingDisplay`-Komponente ebenfalls gelöscht.
 - **MMR (Welle 2) — ENTFERNT (2026-06-03)**: `lib/mmr.ts`, die Tabellen `FactionMastery`/`FactionMatchupStat`/`AntiFarmCap` und `LeaderboardEntry.season_points` wurden per Migration `drop_welle2_mmr_deprecated` (Branch `chore/phase2-consolidation`) gedroppt. Vollständig abgelöst vom dynamischen Rating-Modell (unten). Die MMR-Formel-Sektion weiter unten ist nur noch **historisch**.
 - **Dynamic Weighted Leaderboard (Alex-Spec, 2026-06)**: derive-on-read. L2-regularisierte Logistic Regression `fitRatingModel()` in `lib/rating-model.ts` fittet `PlayerFactionSkill(player,faction)` + antisymmetrischen `MatchupEffect(X,Y)`. Punkte rein abgeleitet via `lib/scoring-service.ts` + aggregiert in `lib/leaderboard-service.ts`. Nichts gespeichert, jeder Punkt rekonstruierbar (`lib/breakdown-service.ts`).
-- **Pairings** via `tournament-pairings` v2 — `SingleElimination`, `Swiss`, `RoundRobin` — alle drei Formate in je einer `lib/`-Datei.
+- **Pairings**: `SingleElimination` + `RoundRobin` via `tournament-pairings` v2 (je eine `lib/`-Datei). **Swiss seit B8 (2026-06-28) eigenständig** — globales Minimum-Cost-Perfect-Matching (Edmonds-Blossom, Dep `edmonds-blossom`), kein `tournament-pairings`/Greedy mehr (Details unten in der Swiss-Sektion).
 - **Swiss-Tiebreaker** (Welle 2): Score → **Buchholz (desc)** → GL (Games Lost, aufsteigend) → Solkoff → H2H — `sortSwissStandings()`. **+2026-06-06:** GL-Tiebreaker war broken (PENDING MatchGame-Records blockierten Fallback) → gefixt in `bracket.ts` (nur COMPLETED Games zählen für GL). **+2026-06-21:** Tiebreaker-Reihenfolge korrigiert: GL war fälschlicherweise VOR Buchholz (führte zu unintuitivem Ranking wenn Spieler gleiche Punkte aber sehr unterschiedliche BH hatten). Korrekte Reihenfolge: Score → BH → GL → Solkoff → H2H.
 - **Swiss-Bye** (2026-06-06): Niedrigster Score ohne bisherige Bye bekommt die Freirunde; bei Gleichstand zufällig aus der Gruppe. Kein Doppel-Bye. `lib/swiss.ts`: `byePlayer` wird vor dem Blossom-Algorithmus explizit herausgefiltert.
 - **Swiss FORFEIT = BYE (2026-06-13, bestätigt 2026-06-14):** Verlierer eines FORFEIT-Matches bekommt `droppedPlayerIds`-Flag. Gewinner: `byes+1`, `score+1` (gleich wie BYE). Der gedropte Gegner trägt **kein Buchholz** bei (kein Eintrag in `opponents[]`). DRAW: `score+0.5` für beide, kein `winner_id`. Scoring: Win=1, Draw=0.5, Loss=0, BYE=1, FORFEIT-Win=1.
@@ -14,8 +14,11 @@
 - **Auto Swiss Playoff-Format — Neubewertung am Swiss-Ende (2026-06-19):** `autoSwissConfig()` wird zweimal aufgerufen: (1) beim Start anhand Check-in-Zahlen → schreibt `rounds_count` + `playoff_format` in DB. (2) in `startPlayoffs()` (internes Auto-Swiss-Fn, aufgerufen wenn Swiss-Phase abgeschlossen) anhand `ranked.length` (aktive, nicht-gedropte Spieler) → überschreibt `tournament.playoff_format` wenn das Format sich geändert hat. Formel: `≥16 → TOP8 (4 Runden)`, `8-15 → TOP4 (5 Runden)`, `4-7 → TOP2 (3 Runden)`.
 - **Doppel-Drop (2026-06-14):** Wenn beide Spieler eines Matches droppen → Match wird CANCELLED statt FORFEIT. Zwei Checks in `participants.ts`/drop-Endpoint: (1) Forward: wenn Gegner schon WITHDREW ist beim Erstellen des FORFEIT → CANCELLED. (2) Backward: nach dem Drop werden alle FORFEIT-Wins des Spielers geprüft; falls Gegner ebenfalls WITHDREW → nachträglich auf CANCELLED setzen.
 - **dropped-Flag (2026-06-14 gefixt, 2026-06-22 refactored):** `computeSwissStandings()` in `lib/swiss.ts` akzeptiert jetzt einen optionalen `withdrawnIds?: ReadonlySet<string>`-Parameter. `s.dropped` ist true wenn FORFEIT-basiert ODER in `withdrawnIds`. Alle Aufruforte (`generateNextSwissRound`, `startPlayoffs`, manuelle Next-Round in `bracket.ts`, manuelle Start-Playoffs in `bracket.ts`, Standings-Anzeige) laden `TournamentParticipant.status=WITHDREW` und übergeben es direkt. Redundante Post-Checks (`!withdrawnIds.has(s.userId)`) entfernt. **Resultat: `s.dropped` ist die einzige Authority für Drop-Status — neue Formate die `computeSwissStandings` + `!s.dropped`-Filter nutzen, bekommen WITHDREW-Handling automatisch gratis.** Für korrekte Buchholz-Berechnung werden WITHDREW-Spieler jetzt in `participantIds` einbezogen (waren vorher ausgeschlossen).
-- **Mirror-Vermeidung (implementiert 2026-06-10):** Post-Processing in `lib/swiss.ts` (`tryAvoidMirrors()`) + Zipper-Sort in `lib/liechtenstein.ts` (`interleaveFactions()`). Swiss: nach `SwissPair()` werden Mirror-Paare (gleiche `faction_id`) lokal getauscht, falls kein Score-Delta-Anstieg entsteht. Liechtenstein: Teilnehmer werden vor Round-Robin nach Fraktion in Gruppen gezippt (größte Gruppe zuerst), sodass gleiche Fraktionen im Schedule auseinanderliegen. `faction_id` wird in `bracket.ts` für beide Pairing-Aufrufe (Start + Next-Round) mitgegeben. Nur aktiv wenn `faction_id` non-null (SFT/2FT/3FT); kein Eingriff ohne Fraktionsdaten.
-- **Playoff-Generator** (Welle 2): `generatePlayoffBracket()` in `lib/playoff-generator.ts` — NONE/TOP4/TOP8 mit Auto-Fallback TOP8→TOP4 bei <16 checked-in.
+- **Mirror-Vermeidung:** **Swiss seit B8 (2026-06-28):** Mirror ist als Edge-Kosten-Term (`P_MIRROR=1`, reiner Tiebreaker) in das Min-Weight-Matching gefaltet — das alte Post-Processing `tryAvoidMirrors()` wurde entfernt. **Liechtenstein** unverändert: Zipper-Sort `interleaveFactions()` in `lib/liechtenstein.ts` (Teilnehmer vor Round-Robin nach Fraktion in Gruppen gezippt, größte zuerst). `faction_id` wird in `bracket.ts` für die Pairing-Aufrufe mitgegeben; nur aktiv wenn `faction_id` non-null (SFT/2D3/2FT/3FT).
+- **Global Min-Weight Swiss-Pairing (B8, 2026-06-28):** `generateSwissRound()` baut einen vollständigen Kostengraphen und löst ihn als Minimum-Cost-Perfect-Matching (Edmonds-Blossom). Gestaffelte Edge-Kosten `P_NOCONTEST (1e11) ≫ P_REMATCH (1e7) ≫ (ΔScore·2)²·SCALE_SCORE (100) ≫ P_MIRROR (1)`. Die ±1-Score-Group-Schranke entfällt — Rematch-Vermeidung schlägt Score-Nähe. Determinismus über seeded `mulberry32`-Shuffle aus `${tournamentId}:${round}`. Bye bleibt explizit vorab gewählt (niedrigster Score ohne bisheriges Bye), nur die Restmenge wird optimiert.
+- **NO_CONTEST (B10, 2026-06-28):** Eigener `MatchStatus` für technische Abbrüche (Double-Bye) — **getrennt von echtem DRAW**. `computeSwissStandings`: beide Spieler +1.0, +1 Bye, **keine** `opponents` (0 BH-Beitrag). Paar wird via `noContestAvoid` zur höchsten Hard-Avoid-Stufe im Pairing (nie wieder zusammengelost). Host-Aktion über `POST /api/matches/:id/no-contest` (canManage).
+- **Check-in-Filter ab Runde 2 (B14, 2026-06-28):** Spätere Swiss-Runden paaren nur noch `CHECKED_IN`-Spieler; `REGISTERED` (nie eingecheckt) fällt raus. `WITHDREW` bleibt nur für Buchholz in `participantIds`, fliegt via `withdrawnIds` aus der aktiven Paarung.
+- **Playoff-Generator** (Welle 2 + B6): `generatePlayoffBracket()` in `lib/playoff-generator.ts` — NONE/**TOP2**/TOP4/TOP8. Kaskadierende Auto-Reduktion (Feld ≤ halbes aktives Feld): TOP8→TOP4 (<16), TOP4→TOP2 (<8), TOP8→TOP2 direkt (<8). `fallbackApplied` meldet die Reduktion.
 - `finalizeTournament()` schreibt Placements → Tournament-Points → upsert `LeaderboardEntry` + `TournamentResult` in einer Transaktion. (ELO-Deltas entfernt 2026-06-07.)
 
 ---
@@ -208,27 +211,41 @@ Einbindung in `finalizeTournament()`: `format === 'DOUBLE_ELIMINATION'` → `com
 
 ## Swiss-System (`lib/swiss.ts`)
 
-Nutzt `Swiss` aus `tournament-pairings`.
+**Eigenständiges Min-Weight-Pairing seit B8 (2026-06-28)** — `tournament-pairings` wird für Swiss nicht mehr verwendet. Die Paarung ist ein **Minimum-Cost-Perfect-Matching** über die aktiven Spieler, gelöst via Edmonds-Blossom (`edmonds-blossom`, als Max-Weight-Matching über den Offset-Trick `weight = K − cost`, `K = maxCost + 1` → alle Gewichte positiv).
 
-**Rematch-Avoidance:** Jeder `SwissPlayer` trägt ein `avoid: string[]`-Array (bereits getroffene Gegner). Die Library respektiert dieses Feld bei der Paarung.
+**Edge-Kostenmodell** (`pairCost(a, b)`, ganzzahlig skaliert, gestaffelt — der Optimierer minimiert global, nicht greedy):
 
-**Score-Group-basiert:** Spieler werden nach `score` absteigend gepaart; bei ungerader Zahl erhält der Schlusslichte ein BYE (`winner_id = player1`, `player2 = null`).
+| Priorität | Term | Wert |
+|-----------|------|------|
+| 1 | No-Contest-Re-Pair (`noContestAvoid`) | `P_NOCONTEST = 1e11` |
+| 2 | Rematch (`avoid`, inkl. echter Draw) | `P_REMATCH = 1e7` |
+| 3 | Score-Differenz quadratisch | `round(|Δscore|·2)² · SCALE_SCORE (100)` |
+| 4 | Faction-Mirror (reiner Tiebreaker) | `P_MIRROR = 1` |
 
-**Tiebreaker:** `computeSwissStandings()` berechnet Score + Buchholz + Solkoff. Für Final-Sortierung (z.B. Playoff-Seed) `sortSwissStandings(standings, allMatches)` aufrufen — Hierarchie: `score desc, buchholz desc, solkoff desc, headToHeadWinner desc`. Solkoff = Buchholz minus höchstem und niedrigstem Opponent-Score (nur bei ≥3 Gegnern). H2H entscheidet nur bei genau 2 Spielern auf allen anderen Tiebreakern gleich.
+Die Staffelung (jede Stufe dominiert die Summe aller niedrigeren) garantiert die lexikographische Präferenz: ein Rematch wird nur akzeptiert, wenn sonst gar kein perfektes Matching existiert; im Kleinfeld der global am wenigsten schlimme Kompromiss. **Die ±1-Score-Group-Schranke entfällt** — Rematch-Vermeidung schlägt Score-Nähe.
+
+**Determinismus:** `seededShuffle(activePlayers, \`${tournamentId}:${round}\`)` (mulberry32) vor dem Matching → reproduzierbare Tiebreaks für ein gegebenes (Turnier, Runde).
+
+**Bye:** Bei ungerader Spielerzahl wird der Bye **vor** dem Matching explizit zugewiesen — niedrigster Score ohne bisheriges Bye, bei Gleichstand zufällig aus der Gruppe; nur die Restmenge geht ins Blossom-Matching. Kein Top-Scorer rutscht auf einem Freilos in die Playoffs. Kein Doppel-Bye (außer erzwungen).
+
+**Standings (`computeSwissStandings`):** akzeptiert `COMPLETED | BYE | FORFEIT | NO_CONTEST` (alles andere, inkl. `CANCELLED`, wird ignoriert). Scoring: Win=1, Draw=0.5, Loss=0, BYE=1, FORFEIT-Win=1, **NO_CONTEST=1 für beide**. Buchholz-Beitrag nur aus echten Gegnern (`opponents[]`): BYE/FORFEIT/NO_CONTEST pushen **keinen** Gegner → 0 BH. Optionaler `withdrawnIds`-Parameter ist die alleinige Authority für `s.dropped` (siehe TL;DR dropped-Flag). NO_CONTEST-Paare werden als `noContestAvoid` ins nächste Pairing gereicht.
+
+**Tiebreaker:** Für Final-Sortierung (z.B. Playoff-Seed) `sortSwissStandings(standings, allMatches)` — Hierarchie: `score desc → buchholz desc → gamesLost asc → solkoff desc → headToHeadWinner`. Solkoff = Buchholz minus höchstem und niedrigstem Opponent-Score (nur bei ≥3 Gegnern). H2H entscheidet nur bei genau 2 Spielern, die auf allen anderen Tiebreakern gleich sind.
 
 **Rundenempfehlung:** `recommendNumberOfRounds(n) = clamp(ceil(log2(n)), 3, 7)`.
 
 ```typescript
 export function generateSwissRound(
   tournamentId: string,
-  players: SwissPlayer[],   // { userId, score, avoid, receivedBye }
+  players: SwissPlayer[],   // { userId, score, avoid, receivedBye, factionId?, noContestAvoid? }
   round: number,
 ): SwissMatchInput[]
 
 export function computeSwissStandings(
   participantIds: string[],
   completedMatches: CompletedMatchRecord[],
-): SwissStanding[]          // { userId, score, wins, losses, draws, byes, buchholz, solkoff, opponentsBeaten, ... }
+  withdrawnIds?: ReadonlySet<string>,   // current WITHDREW set → drives s.dropped
+): SwissStanding[]          // { userId, score, wins, losses, draws, byes, gamesLost, buchholz, solkoff, opponentsBeaten, dropped }
 
 export function sortSwissStandings(   // Welle 2 — Multi-Level-Tiebreaker
   standings: SwissStanding[],
@@ -248,15 +265,19 @@ export function generatePlayoffBracket(args: {
   finalStandings: SwissStanding[];   // sorted via sortSwissStandings
   checkedInPlayerIds: Set<string>;
 }): {
-  format: 'NONE' | 'TOP4' | 'TOP8';
+  format: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   matches: PlayoffMatch[];           // mit phase=PLAYOFF_QF|SF|FINAL
-  fallbackApplied?: 'TOP8_TO_TOP4';
+  fallbackApplied?: 'TOP8_TO_TOP4' | 'TOP4_TO_TOP2';
 };
 ```
 
+**Reduktionsprinzip (B6):** Das Playoff-Feld darf nie mehr als das halbe aktive Feld umfassen — TOP8 braucht ≥16, TOP4 ≥8, TOP2 ≥4. Formate kaskadieren nach unten (`fallbackApplied` meldet die angewandte Reduktion):
+
 - `playoff_format=NONE`: leeres Bracket, Swiss-Standings = Final
-- `playoff_format=TOP4`: SF1 = Seed1 vs Seed4, SF2 = Seed2 vs Seed3, Final
-- `playoff_format=TOP8`: nur wenn `checked_in >= 16` — sonst Auto-Fallback auf TOP4. Seed 1v8 / 4v5 / 3v6 / 2v7. Drop-out 1h vor Playoff = exclusion.
+- `playoff_format=TOP2` (B6): nur Grand Final (Seed1 vs Seed2), keine Semis
+- `playoff_format=TOP4`: SF1 = Seed1 vs Seed4, SF2 = Seed2 vs Seed3, Final. **<8 checked-in → Auto-Fallback TOP2** (`TOP4_TO_TOP2`)
+- `playoff_format=TOP8`: Seed 1v8 / 4v5 / 3v6 / 2v7 → 2 SF → Final. **<16 → TOP4** (`TOP8_TO_TOP4`), **<8 → direkt TOP2** (`TOP4_TO_TOP2`). Drop-out 1h vor Playoff = exclusion.
+- Zählbasis = **aktive (nicht-gedropte) checked-in Spieler** (`checkedInPlayerIds`), nicht alle Teilnehmer
 - `game_count` aus `tournament.playoff_match_format` (Bo3/Bo5); Finale aus `finale_match_format`
 - TBD-Player-IDs für SF/Final werden via `propagatePlayoffWinner()` aus Match-Result-Hook aufgefüllt
 
@@ -441,7 +462,9 @@ Relevante Test-Files in `apps/backend/test/`:
 |------|-----------|
 | `elo.test.ts` | Zero-sum-Property, K-Faktor, Tie-Handling, Solo-Edge-Case |
 | `bracket.test.ts` | BYE-Handling, `next_match_id`-Verkettung, Power-of-2 |
-| `swiss.test.ts` | Rematch-Avoidance, Score-Groups, Buchholz |
+| `swiss.test.ts` | Min-Weight-Matching (B8): Rematch-Hard-Avoid, No-Contest-Hard-Avoid, ΔScore²-Minimierung im Kleinfeld, Bye-Zuteilung, Determinismus (seeded); Buchholz/Solkoff; NO_CONTEST-Standings (B10) |
+| `playoff-generator.test.ts` | TOP2/TOP4/TOP8-Brackets + Kaskaden-Reduktion (TOP8→TOP4→TOP2, B6), Seed-Pairings, Insufficient-Players |
+| `playoff-advance-undrop.test.ts` | Resolution nur bei definitivem Sieger (422 bei CANCELLED/winner-los), Undrop setzt drop-bedingte Playoff-Matches auf PENDING |
 | `round-robin.test.ts` | Single/Double-RR, BYE, Rundenzählung |
 | `finalize-tournament.test.ts` | End-to-End-Placements, ELO-Upsert, Points |
 | `faction-snapshot.test.ts` | Idempotenz (`skipDuplicates`), kein aktiver Season-Guard |
