@@ -1,9 +1,10 @@
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { motion, useReducedMotion } from 'motion/react';
-import { ExternalLink } from 'lucide-react';
+import { Coffee, ExternalLink } from 'lucide-react';
 import { RizzottoSigil } from '@/components/icons/RizzottoSigil';
 import { Button } from '@/components/ui/button';
+import { KOFI_URL } from '@/lib/constants';
 
 /**
  * Section 6 — Sigillum Karaz.
@@ -93,6 +94,15 @@ export function SigillumSection() {
           >
             YouTube
             <ExternalLink className="size-3.5" strokeWidth={1.5} />
+          </a>
+          <a
+            href={KOFI_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm font-display tracking-wider uppercase hover:text-rizzotto-gold-400 transition-colors"
+          >
+            {t('support.link_label')}
+            <Coffee className="size-3.5" strokeWidth={1.5} />
           </a>
         </motion.div>
       </div>

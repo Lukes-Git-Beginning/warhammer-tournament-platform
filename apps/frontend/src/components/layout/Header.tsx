@@ -62,6 +62,13 @@ export function Header() {
       >
         {t('header.factions')}
       </Link>
+      <Link
+        to="/support"
+        className={NAV_LINK_CLASS}
+        activeProps={NAV_LINK_ACTIVE_PROPS}
+      >
+        {t('support.nav')}
+      </Link>
 
       {canCreate && (
         <Link
