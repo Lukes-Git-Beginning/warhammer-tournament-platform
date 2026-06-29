@@ -97,7 +97,11 @@ function FactionBreakdown({ data }: { data: H2HResponse }) {
         <tbody className="divide-y divide-stone-800/60">
           {faction_breakdown.map((row) => (
             <tr key={row.faction_id} className="hover:bg-stone-800/30 transition-colors">
-              <td className="px-4 py-3 text-stone-200">{row.faction_name}</td>
+              <td className="px-4 py-3">
+                <Link to="/factions/$id" params={{ id: row.faction_id }} className="text-stone-200 hover:text-rizzotto-gold-400 transition-colors">
+                  {row.faction_name}
+                </Link>
+              </td>
               <td className="px-4 py-3 text-center text-emerald-400 font-semibold">
                 {row.a_wins}
               </td>
@@ -153,18 +157,29 @@ function RecentMatchesList({ data }: { data: H2HResponse }) {
             className="flex items-center justify-between rounded-md border border-stone-800 bg-stone-900/40 px-4 py-3 text-sm"
           >
             <div className="flex items-center gap-3">
-              {m.tournament_slug ? (
+              {m.player_a_faction?.id ? (
+                <Link to="/factions/$id" params={{ id: m.player_a_faction.id }} className="text-stone-300 hover:text-rizzotto-gold-400 transition-colors">
+                  {m.player_a_faction.name}
+                </Link>
+              ) : (
+                <span className="text-stone-400">{m.player_a_faction?.name ?? '?'}</span>
+              )}
+              <span className="text-stone-600">vs</span>
+              {m.player_b_faction?.id ? (
+                <Link to="/factions/$id" params={{ id: m.player_b_faction.id }} className="text-stone-300 hover:text-rizzotto-gold-400 transition-colors">
+                  {m.player_b_faction.name}
+                </Link>
+              ) : (
+                <span className="text-stone-400">{m.player_b_faction?.name ?? '?'}</span>
+              )}
+              {m.tournament_slug && (
                 <Link
                   to="/tournaments/$slug"
                   params={{ slug: m.tournament_slug }}
-                  className="text-stone-300 hover:text-rizzotto-gold-400 transition-colors"
+                  className="text-stone-500 hover:text-rizzotto-gold-400 transition-colors text-xs"
                 >
-                  {m.player_a_faction?.name ?? '?'} vs {m.player_b_faction?.name ?? '?'}
+                  (view)
                 </Link>
-              ) : (
-                <span className="text-stone-400">
-                  {m.player_a_faction?.name ?? '?'} vs {m.player_b_faction?.name ?? '?'}
-                </span>
               )}
             </div>
             <div className="flex items-center gap-4">

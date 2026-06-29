@@ -107,13 +107,15 @@ export function RollOfHonourSection() {
                     >
                       {ROMAN[idx] ?? idx + 1}
                     </span>
-                    <Avatar goldRim={idx < 3} className="size-10">
-                      {entry.avatarUrl && <AvatarImage src={entry.avatarUrl} alt="" />}
-                      <AvatarFallback>{entry.displayName[0]?.toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <span className="truncate font-medium text-rizzotto-stone-100 group-hover:text-rizzotto-gold-300">
+                    <Link to="/users/$id" params={{ id: entry.playerId }} className="hover:opacity-80 transition-opacity">
+                      <Avatar goldRim={idx < 3} className="size-10">
+                        {entry.avatarUrl && <AvatarImage src={entry.avatarUrl} alt="" />}
+                        <AvatarFallback>{entry.displayName[0]?.toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                    </Link>
+                    <Link to="/users/$id" params={{ id: entry.playerId }} className="truncate font-medium text-rizzotto-stone-100 group-hover:text-rizzotto-gold-300 hover:text-rizzotto-gold-400 transition-colors">
                       {entry.displayName}
-                    </span>
+                    </Link>
                     <span className="font-mono tabular-nums text-rizzotto-gold-400">
                       {Math.round(entry.totalFinalPoints)}
                     </span>

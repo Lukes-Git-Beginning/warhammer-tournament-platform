@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import {
   getPlayerFactionProficiency,
   getFactions,
@@ -42,22 +43,24 @@ function ProficiencyRow({
     <div
       className={`flex items-center gap-2 ${entry.lowSampleWarning ? 'opacity-50' : ''}`}
     >
-      {faction ? (
-        <FactionBadge
-          colorHex={faction.color_hex}
-          initials={faction.initials}
-          name={faction.name}
-          iconUrl={faction.icon_url}
-          size="sm"
-        />
-      ) : (
-        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-stone-800 text-[10px] text-stone-500">
-          ?
-        </span>
-      )}
+      <Link to="/factions/$id" params={{ id: entry.factionId }} className="inline-flex shrink-0 hover:opacity-80 transition-opacity">
+        {faction ? (
+          <FactionBadge
+            colorHex={faction.color_hex}
+            initials={faction.initials}
+            name={faction.name}
+            iconUrl={faction.icon_url}
+            size="sm"
+          />
+        ) : (
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-stone-800 text-[10px] text-stone-500">
+            ?
+          </span>
+        )}
+      </Link>
 
       <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-stone-300">
-        <span className="truncate">{faction?.name ?? entry.factionId}</span>
+        <Link to="/factions/$id" params={{ id: entry.factionId }} className="truncate hover:text-rizzotto-gold-400 transition-colors">{faction?.name ?? entry.factionId}</Link>
         {entry.lowSampleWarning && (
           <span
             title="Low sample size (fewer than 5 games)"

@@ -1,4 +1,5 @@
 import { Fragment, useRef, useEffect, useMemo, useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import type { MatchFormat, HeatmapSlot, ScheduledMatchup } from '../../lib/api';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 
@@ -42,7 +43,14 @@ function ChallengePopoverItem({
       </p>
       {matchup.proposer && (
         <p className="text-xs text-stone-400">
-          by <span className="text-stone-300">{matchup.proposer.username}</span>
+          by{' '}
+          <Link
+            to="/users/$id"
+            params={{ id: matchup.proposer.id }}
+            className="text-stone-300 hover:text-rizzotto-gold-400 transition-colors"
+          >
+            {matchup.proposer.username}
+          </Link>
         </p>
       )}
       {matchup.notes && (

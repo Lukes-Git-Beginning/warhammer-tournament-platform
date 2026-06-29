@@ -69,21 +69,6 @@ function PlayerAvatar({ username, avatarUrl }: { username: string; avatarUrl: st
 function FactionChip({ faction }: { faction: MatchDetailDto['player1_faction'] }) {
   if (!faction) return <span className="text-rizzotto-stone-500 text-xs">—</span>;
 
-  if (faction.icon_url) {
-    return (
-      <span className="inline-flex items-center gap-1.5">
-        <img
-          src={faction.icon_url}
-          alt={faction.name}
-          className="h-5 w-5 rounded-full object-cover"
-          loading="lazy"
-          decoding="async"
-        />
-        <span className="text-xs text-rizzotto-stone-300">{faction.name}</span>
-      </span>
-    );
-  }
-
   const initials = faction.name
     .split(/\s+/)
     .map((w) => w[0] ?? '')
@@ -91,13 +76,30 @@ function FactionChip({ faction }: { faction: MatchDetailDto['player1_faction'] }
     .toUpperCase()
     .slice(0, 3);
 
-  return (
+  const inner = faction.icon_url ? (
+    <span className="inline-flex items-center gap-1.5">
+      <img
+        src={faction.icon_url}
+        alt={faction.name}
+        className="h-5 w-5 rounded-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+      <span className="text-xs text-rizzotto-stone-300">{faction.name}</span>
+    </span>
+  ) : (
     <span className="inline-flex items-center gap-1.5">
       <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rizzotto-iron-600 text-[9px] font-bold text-rizzotto-stone-200 select-none">
         {initials}
       </span>
       <span className="text-xs text-rizzotto-stone-300">{faction.name}</span>
     </span>
+  );
+
+  return (
+    <Link to="/factions/$id" params={{ id: faction.id }} className="hover:opacity-80 transition-opacity">
+      {inner}
+    </Link>
   );
 }
 
@@ -444,20 +446,24 @@ export function MatchDetailPage() {
         >
           {match.player1 ? (
             <>
-              <PlayerAvatar
-                username={match.player1.username}
-                avatarUrl={match.player1.avatar_url}
-              />
-              <span
+              <Link to="/users/$id" params={{ id: match.player1_id! }} className="hover:opacity-80 transition-opacity">
+                <PlayerAvatar
+                  username={match.player1.username}
+                  avatarUrl={match.player1.avatar_url}
+                />
+              </Link>
+              <Link
+                to="/users/$id"
+                params={{ id: match.player1_id! }}
                 className={[
-                  'text-sm font-semibold',
+                  'text-sm font-semibold hover:text-rizzotto-gold-400 transition-colors',
                   match.winner_id === match.player1_id
                     ? 'text-rizzotto-gold-400'
                     : 'text-rizzotto-stone-200',
                 ].join(' ')}
               >
                 {match.player1.username}
-              </span>
+              </Link>
               {match.winner_id === match.player1_id && (
                 <span className="text-[10px] font-bold uppercase tracking-widest text-rizzotto-gold-500">
                   Winner
@@ -507,20 +513,24 @@ export function MatchDetailPage() {
         >
           {match.player2 ? (
             <>
-              <PlayerAvatar
-                username={match.player2.username}
-                avatarUrl={match.player2.avatar_url}
-              />
-              <span
+              <Link to="/users/$id" params={{ id: match.player2_id! }} className="hover:opacity-80 transition-opacity">
+                <PlayerAvatar
+                  username={match.player2.username}
+                  avatarUrl={match.player2.avatar_url}
+                />
+              </Link>
+              <Link
+                to="/users/$id"
+                params={{ id: match.player2_id! }}
                 className={[
-                  'text-sm font-semibold',
+                  'text-sm font-semibold hover:text-rizzotto-gold-400 transition-colors',
                   match.winner_id === match.player2_id
                     ? 'text-rizzotto-gold-400'
                     : 'text-rizzotto-stone-200',
                 ].join(' ')}
               >
                 {match.player2.username}
-              </span>
+              </Link>
               {match.winner_id === match.player2_id && (
                 <span className="text-[10px] font-bold uppercase tracking-widest text-rizzotto-gold-500">
                   Winner

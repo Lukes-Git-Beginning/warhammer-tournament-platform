@@ -17,13 +17,13 @@ function FactionChip({ factionId, factionMap }: {
   const f = factionMap.get(factionId);
   if (!f) return <span className="text-stone-500 text-xs">{factionId.slice(0, 8)}</span>;
   return (
-    <span className="inline-flex items-center gap-1">
+    <Link to="/factions/$id" params={{ id: factionId }} className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity">
       {f.icon_url
         ? <img src={f.icon_url} alt={f.name} className="w-4 h-4 object-contain" />
-        : <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: f.color_hex ?? '#555' }} />
+        : <span className="w-3 h-3 rounded-full inline-block shrink-0" style={{ backgroundColor: f.color_hex ?? '#555' }} />
       }
-      <span className="text-xs text-stone-300">{f.name}</span>
-    </span>
+      <span className="text-xs text-stone-300 hover:text-rizzotto-gold-400 transition-colors">{f.name}</span>
+    </Link>
   );
 }
 
@@ -96,14 +96,22 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
                   R{g.round}·G{g.gameNumber}
                 </td>
                 <td className={`px-3 py-2 font-medium ${p1Won ? 'text-rizzotto-gold-400' : 'text-stone-300'}`}>
-                  {g.player1?.username ?? '—'}
+                  {g.player1 ? (
+                    <Link to="/users/$id" params={{ id: g.player1.id }} className="hover:text-rizzotto-gold-400 transition-colors">
+                      {g.player1.username}
+                    </Link>
+                  ) : '—'}
                   {p1Won && <span className="ml-1 text-rizzotto-gold-500">✓</span>}
                 </td>
                 <td className="px-3 py-2">
                   <FactionChip factionId={g.player1FactionId} factionMap={factionMap} />
                 </td>
                 <td className={`px-3 py-2 font-medium ${p2Won ? 'text-rizzotto-gold-400' : 'text-stone-300'}`}>
-                  {g.player2?.username ?? '—'}
+                  {g.player2 ? (
+                    <Link to="/users/$id" params={{ id: g.player2.id }} className="hover:text-rizzotto-gold-400 transition-colors">
+                      {g.player2.username}
+                    </Link>
+                  ) : '—'}
                   {p2Won && <span className="ml-1 text-rizzotto-gold-500">✓</span>}
                 </td>
                 <td className="px-3 py-2">
@@ -113,9 +121,14 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
                   {g.mapName ?? '—'}
                 </td>
                 <td className="px-3 py-2 text-stone-300 text-xs">
-                  {g.winnerId
-                    ? (g.player1?.id === g.winnerId ? g.player1?.username : g.player2?.username) ?? '—'
-                    : '—'}
+                  {g.winnerId ? (() => {
+                    const winner = g.player1?.id === g.winnerId ? g.player1 : g.player2;
+                    return winner ? (
+                      <Link to="/users/$id" params={{ id: winner.id }} className="hover:text-rizzotto-gold-400 transition-colors">
+                        {winner.username}
+                      </Link>
+                    ) : '—';
+                  })() : '—'}
                 </td>
                 <td className="px-3 py-2">
                   {g.replayUrl

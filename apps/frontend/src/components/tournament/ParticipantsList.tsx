@@ -85,14 +85,18 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus }: 
                   {p.user.username}
                 </Link>
                 {p.faction && (
-                  <span className="flex items-center gap-1.5 text-xs text-rizzotto-stone-400">
+                  <Link
+                    to="/factions/$id"
+                    params={{ id: p.faction.id }}
+                    className="flex items-center gap-1.5 text-xs text-rizzotto-stone-400 hover:text-rizzotto-gold-400 transition-colors"
+                  >
                     <span
-                      className="inline-block h-2 w-2 rounded-full"
+                      className="inline-block h-2 w-2 rounded-full shrink-0"
                       style={{ backgroundColor: p.faction.color_hex }}
                       aria-hidden="true"
                     />
                     {p.faction.name}
-                  </span>
+                  </Link>
                 )}
                 <span className="ml-auto text-xs text-rizzotto-stone-500">
                   {t(`tournament.participants.status.${p.status.toLowerCase()}`)}

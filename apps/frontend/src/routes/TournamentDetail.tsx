@@ -671,7 +671,13 @@ export function TournamentDetail() {
           {tournament.host && (
             <div>
               <span className="text-stone-500">{t('tournament.detail.organizer')}</span>{' '}
-              <span className="text-stone-200">{tournament.host.username}</span>
+              <Link
+                to="/users/$id"
+                params={{ id: tournament.host.id }}
+                className="text-stone-200 hover:text-rizzotto-gold-400 transition-colors"
+              >
+                {tournament.host.username}
+              </Link>
             </div>
           )}
           {tournament.discord_link && (
@@ -727,10 +733,12 @@ export function TournamentDetail() {
         if (!hasAllowlist && !hasRestricted) return null;
 
         const FactionChip = ({ faction, variant }: { faction: FactionDto; variant: 'allowed' | 'banned' | 'restricted' }) => (
-          <div
+          <Link
             key={faction.id}
+            to="/factions/$id"
+            params={{ id: faction.id }}
             className={[
-              'flex items-center gap-1.5 rounded border px-2 py-1',
+              'flex items-center gap-1.5 rounded border px-2 py-1 hover:opacity-80 transition-opacity',
               variant === 'banned'
                 ? 'bg-red-950/40 border-red-900/60'
                 : variant === 'restricted'
@@ -745,7 +753,7 @@ export function TournamentDetail() {
               'text-xs',
               variant === 'banned' ? 'text-red-300' : variant === 'restricted' ? 'text-amber-300' : 'text-stone-200',
             ].join(' ')}>{faction.name}</span>
-          </div>
+          </Link>
         );
 
         return (

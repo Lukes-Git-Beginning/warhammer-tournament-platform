@@ -296,14 +296,15 @@ export function SwissStandings({
                             {factionPool.map((fid) => {
                               const f = factionMap?.get(fid);
                               return f ? (
-                                <FactionBadge
-                                  key={fid}
-                                  size="sm"
-                                  colorHex={f.color_hex}
-                                  initials={f.initials}
-                                  name={f.name}
-                                  iconUrl={f.icon_url}
-                                />
+                                <Link key={fid} to="/factions/$id" params={{ id: fid }} className="inline-flex shrink-0 hover:opacity-80 transition-opacity">
+                                  <FactionBadge
+                                    size="sm"
+                                    colorHex={f.color_hex}
+                                    initials={f.initials}
+                                    name={f.name}
+                                    iconUrl={f.icon_url}
+                                  />
+                                </Link>
                               ) : null;
                             })}
                           </div>
@@ -314,8 +315,8 @@ export function SwissStandings({
                     )}
                     {showFactionColumn && !is2D3 && (
                       <td className="px-4 py-2">
-                        {faction ? (
-                          <div className="flex items-center gap-2">
+                        {faction && factionId ? (
+                          <Link to="/factions/$id" params={{ id: factionId }} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                             <FactionBadge
                               size="sm"
                               colorHex={faction.color_hex}
@@ -323,8 +324,8 @@ export function SwissStandings({
                               name={faction.name}
                               iconUrl={faction.icon_url}
                             />
-                            <span className="text-xs text-stone-300">{faction.name}</span>
-                          </div>
+                            <span className="text-xs text-stone-300 hover:text-rizzotto-gold-400 transition-colors">{faction.name}</span>
+                          </Link>
                         ) : canManage && tournamentSlug ? (
                           <button
                             type="button"
