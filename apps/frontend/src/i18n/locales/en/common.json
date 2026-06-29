@@ -108,11 +108,11 @@
   },
   "support": {
     "nav": "Support",
-    "title": "Support the Forge",
-    "intro": "RizzOtto's Arena is built and run for the love of the game. If it has earned its keep with you, a small contribution helps cover the servers and the upkeep — so the tournaments keep rolling and the Roll of Honour endures.",
+    "title": "Support the Project",
+    "intro": "RizzOtto's Arena is built and run for the love of the game. If it has earned its keep with you, a small contribution helps cover the servers and the upkeep — so the tournaments keep rolling and the Arena endures.",
     "cta": "Support on Ko-fi",
-    "note": "Support is entirely voluntary and never gates any feature. Every coin is appreciated.",
-    "motto": "\"Ex Ferro, Gratia.\"",
+    "note": "Support is entirely voluntary. Every coin is appreciated.",
+    "motto": "Thanks for your support!",
     "link_label": "Support"
   },
   "login": {
