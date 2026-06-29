@@ -2,12 +2,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
+import { ensureMatchupPlayers, seedMatchupGames, cleanupMatchupGames } from './helpers/matchup-seed.js';
 
 // ---------------------------------------------------------------------------
 // Deterministic IDs
 // ---------------------------------------------------------------------------
 
 const S1 = 'a9000000-0000-0000-0000-000000000001'; // season for graphql tests
+const U1 = 'a9000000-0000-0000-0000-0000000000a1';
+const U2 = 'a9000000-0000-0000-0000-0000000000a2';
 
 // ---------------------------------------------------------------------------
 // App lifecycle
@@ -35,6 +38,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 async function cleanup() {
+  await cleanupMatchupGames(prisma, S1, [U1, U2]);
   await prisma.factionStatsSnapshot.deleteMany({ where: { season_id: S1 } });
   await prisma.matchupStats.deleteMany({ where: { season_id: S1 } });
   await prisma.factionStats.deleteMany({ where: { season_id: S1 } });
@@ -58,6 +62,7 @@ async function seedSeason() {
       is_active: true,
     },
   });
+  await ensureMatchupPlayers(prisma, U1, U2, 'gql');
 }
 
 async function seedFactionStats() {
@@ -311,15 +316,10 @@ describe('GraphQL — matchupHeatmap query', () => {
   it('2b. returns correct cells when MatchupStats are seeded', async () => {
     await seedSeason();
 
-    await prisma.matchupStats.create({
-      data: {
-        faction_a_id: 'bretonnia',
-        faction_b_id: 'empire',
-        season_id: S1,
-        faction_a_wins: 4,
-        faction_b_wins: 6,
-        draws: 0,
-      },
+    // bretonnia (a) vs empire (b): 4 a_wins, 6 b_wins, 0 draws
+    await seedMatchupGames(prisma, {
+      seasonId: S1, u1: U1, u2: U2, p1f: 'bretonnia', p2f: 'empire',
+      results: ['P1', 'P1', 'P1', 'P1', 'P2', 'P2', 'P2', 'P2', 'P2', 'P2'],
     });
 
     const res = await gql(`

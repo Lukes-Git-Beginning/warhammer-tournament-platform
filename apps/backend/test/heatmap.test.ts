@@ -3,12 +3,15 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
 import { getMatchupMatrix } from '../src/lib/heatmap.js';
+import { ensureMatchupPlayers, seedMatchupGames, cleanupMatchupGames } from './helpers/matchup-seed.js';
 
 // ---------------------------------------------------------------------------
 // Deterministic IDs
 // ---------------------------------------------------------------------------
 
 const S1 = 'd1000000-0000-0000-0000-000000000001'; // season for heatmap tests
+const U1 = 'd1000000-0000-0000-0000-0000000000a1';
+const U2 = 'd1000000-0000-0000-0000-0000000000a2';
 
 // ---------------------------------------------------------------------------
 // App lifecycle
@@ -31,6 +34,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 async function cleanup() {
+  await cleanupMatchupGames(prisma, S1, [U1, U2]);
   await prisma.matchupStats.deleteMany({ where: { season_id: S1 } });
   await prisma.season.deleteMany({ where: { id: S1 } });
 }
@@ -38,7 +42,7 @@ async function cleanup() {
 beforeEach(cleanup);
 
 // ---------------------------------------------------------------------------
-// Seed helper
+// Seed helpers
 // ---------------------------------------------------------------------------
 
 async function seedSeason() {
@@ -51,64 +55,35 @@ async function seedSeason() {
       is_active: false,
     },
   });
+  await ensureMatchupPlayers(prisma, U1, U2, 'hm');
 }
 
+// Convenience: seed one matchup pairing as real games.
+const seedMatchup = (p1f: string, p2f: string, results: Array<'P1' | 'P2' | 'D'>) =>
+  seedMatchupGames(prisma, { seasonId: S1, u1: U1, u2: U2, p1f, p2f, results });
+
 // ---------------------------------------------------------------------------
-// Tests — getMatchupMatrix (lib)
+// Tests — getMatchupMatrix (lib) — now aggregated live from COMPLETED MatchGames
 // ---------------------------------------------------------------------------
 
 describe('getMatchupMatrix', () => {
-  it('1. returns empty array for a season with no MatchupStats rows', async () => {
+  it('1. returns empty array for a season with no completed games', async () => {
     await seedSeason();
     const cells = await getMatchupMatrix(prisma, S1);
     expect(cells).toEqual([]);
   });
 
-  it('2. computes correct total and winrate_a from seeded rows', async () => {
+  it('2. computes correct total and winrate_a from seeded games', async () => {
     await seedSeason();
 
-    // bretonnia (a) vs empire (b): 3 a_wins, 2 b_wins, 0 draws
-    // → total=5, winrate_a=3/5=0.6
-    await prisma.matchupStats.create({
-      data: {
-        faction_a_id: 'bretonnia',
-        faction_b_id: 'empire',
-        season_id: S1,
-        faction_a_wins: 3,
-        faction_b_wins: 2,
-        draws: 0,
-      },
-    });
-
-    // dwarfs (a) vs kislev (b): 1 a_wins, 0 b_wins, 4 draws
-    // → total=5, winrate_a=1/5=0.2
-    await prisma.matchupStats.create({
-      data: {
-        faction_a_id: 'dwarfs',
-        faction_b_id: 'kislev',
-        season_id: S1,
-        faction_a_wins: 1,
-        faction_b_wins: 0,
-        draws: 4,
-      },
-    });
-
-    // high_elves (a) vs lizardmen (b): 0 a_wins, 0 b_wins, 7 draws
-    // → total=7, winrate_a=0/7=0.0 (not null — 0 wins is still a defined rate)
-    await prisma.matchupStats.create({
-      data: {
-        faction_a_id: 'high_elves',
-        faction_b_id: 'lizardmen',
-        season_id: S1,
-        faction_a_wins: 0,
-        faction_b_wins: 0,
-        draws: 7,
-      },
-    });
+    // bretonnia (a) vs empire (b): 3 a_wins, 2 b_wins, 0 draws → total=5, winrate_a=0.6
+    await seedMatchup('bretonnia', 'empire', ['P1', 'P1', 'P1', 'P2', 'P2']);
+    // dwarfs (a) vs kislev (b): 1 a_win, 0 b_wins, 4 draws → total=5, winrate_a=0.2
+    await seedMatchup('dwarfs', 'kislev', ['P1', 'D', 'D', 'D', 'D']);
+    // high_elves (a) vs lizardmen (b): 0/0/7 → total=7, winrate_a=0.0 (defined, not null)
+    await seedMatchup('high_elves', 'lizardmen', ['D', 'D', 'D', 'D', 'D', 'D', 'D']);
 
     const cells = await getMatchupMatrix(prisma, S1);
-
-    // Results are ordered by faction_a_id, faction_b_id
     expect(cells).toHaveLength(3);
 
     const bretonnia = cells.find(
@@ -140,16 +115,12 @@ describe('getMatchupMatrix', () => {
   it('3. all returned values are JS numbers (no BigInt or string leakage)', async () => {
     await seedSeason();
 
-    await prisma.matchupStats.create({
-      data: {
-        faction_a_id: 'skaven',
-        faction_b_id: 'vampire_counts',
-        season_id: S1,
-        faction_a_wins: 10,
-        faction_b_wins: 5,
-        draws: 2,
-      },
-    });
+    // skaven (a) vs vampire_counts (b): 10 a_wins, 5 b_wins, 2 draws → total=17
+    await seedMatchup('skaven', 'vampire_counts', [
+      'P1', 'P1', 'P1', 'P1', 'P1', 'P1', 'P1', 'P1', 'P1', 'P1',
+      'P2', 'P2', 'P2', 'P2', 'P2',
+      'D', 'D',
+    ]);
 
     const cells = await getMatchupMatrix(prisma, S1);
     expect(cells).toHaveLength(1);
@@ -161,7 +132,6 @@ describe('getMatchupMatrix', () => {
     expect(typeof c.total).toBe('number');
     expect(typeof c.winrate_a).toBe('number');
 
-    // Verify values: 10+5+2=17 total, 10/17 winrate_a
     expect(c.total).toBe(17);
     expect(c.winrate_a).toBeCloseTo(10 / 17);
   });
@@ -171,8 +141,8 @@ describe('getMatchupMatrix', () => {
 // Tests — GET /api/meta/matchups (integration via HTTP)
 // ---------------------------------------------------------------------------
 
-describe('GET /api/meta/matchups — with real $queryRaw aggregation', () => {
-  it('4. returns empty cells for season with no MatchupStats', async () => {
+describe('GET /api/meta/matchups — live aggregation', () => {
+  it('4. returns empty cells for season with no completed games', async () => {
     await seedSeason();
 
     const res = await app.inject({ method: 'GET', url: `/api/meta/matchups?seasonId=${S1}` });
@@ -187,16 +157,8 @@ describe('GET /api/meta/matchups — with real $queryRaw aggregation', () => {
   it('5. returns correct aggregated cell via HTTP route', async () => {
     await seedSeason();
 
-    await prisma.matchupStats.create({
-      data: {
-        faction_a_id: 'chaos_dwarfs',
-        faction_b_id: 'norsca',
-        season_id: S1,
-        faction_a_wins: 6,
-        faction_b_wins: 4,
-        draws: 0,
-      },
-    });
+    // chaos_dwarfs (a) vs norsca (b): 6 a_wins, 4 b_wins, 0 draws → total=10, winrate_a=0.6
+    await seedMatchup('chaos_dwarfs', 'norsca', ['P1', 'P1', 'P1', 'P1', 'P1', 'P1', 'P2', 'P2', 'P2', 'P2']);
 
     const res = await app.inject({ method: 'GET', url: `/api/meta/matchups?seasonId=${S1}` });
     expect(res.statusCode).toBe(200);

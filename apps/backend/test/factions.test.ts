@@ -2,12 +2,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
+import { ensureMatchupPlayers, seedMatchupGames, cleanupMatchupGames } from './helpers/matchup-seed.js';
 
 // ---------------------------------------------------------------------------
 // Deterministic IDs
 // ---------------------------------------------------------------------------
 
 const S1 = 'f1000000-0000-0000-0000-000000000001'; // season
+const U1 = 'f1000000-0000-0000-0000-0000000000a1';
+const U2 = 'f1000000-0000-0000-0000-0000000000a2';
 
 // ---------------------------------------------------------------------------
 // App lifecycle
@@ -30,6 +33,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 async function cleanup() {
+  await cleanupMatchupGames(prisma, S1, [U1, U2]);
   await prisma.factionStatsSnapshot.deleteMany({ where: { season_id: S1 } });
   await prisma.matchupStats.deleteMany({ where: { season_id: S1 } });
   await prisma.factionStats.deleteMany({ where: { season_id: S1 } });
@@ -53,6 +57,7 @@ async function seedSeason() {
       is_active: true,
     },
   });
+  await ensureMatchupPlayers(prisma, U1, U2, 'fac');
 }
 
 async function seedFactionStats() {
@@ -373,15 +378,10 @@ describe('GET /api/meta/matchups', () => {
   it('returns cells when MatchupStats exist', async () => {
     await seedSeason();
 
-    await prisma.matchupStats.create({
-      data: {
-        faction_a_id: 'bretonnia',
-        faction_b_id: 'empire',
-        season_id: S1,
-        faction_a_wins: 3,
-        faction_b_wins: 7,
-        draws: 0,
-      },
+    // bretonnia (a) vs empire (b): 3 a_wins, 7 b_wins, 0 draws
+    await seedMatchupGames(prisma, {
+      seasonId: S1, u1: U1, u2: U2, p1f: 'bretonnia', p2f: 'empire',
+      results: ['P1', 'P1', 'P1', 'P2', 'P2', 'P2', 'P2', 'P2', 'P2', 'P2'],
     });
 
     const res = await app.inject({ method: 'GET', url: `/api/meta/matchups?seasonId=${S1}` });
