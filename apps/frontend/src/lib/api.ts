@@ -1381,6 +1381,8 @@ export type FactionTopPlayer = {
   games: number;
   wins: number;
   winRate: number | null;
+  /** neutralWinChance from the faction-proficiency model for this faction. */
+  proficiency: number | null;
 };
 
 export function getFactionTopPlayers(factionId: string): Promise<{ players: FactionTopPlayer[] }> {

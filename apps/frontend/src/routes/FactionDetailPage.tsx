@@ -158,6 +158,7 @@ function MatchupGrid({ rows, factionMap }: { rows: MatchupRow[]; factionMap: Map
 
 function TopPlayerRow({ player }: { player: FactionTopPlayer }) {
   const wr = player.winRate !== null ? Math.round(player.winRate * 100) : null;
+  const prof = player.proficiency !== null ? Math.round(player.proficiency * 100) : null;
   return (
     <Link
       to="/users/$id"
@@ -175,6 +176,9 @@ function TopPlayerRow({ player }: { player: FactionTopPlayer }) {
       <span className="w-10 text-right text-xs text-stone-500">{player.games}</span>
       <span className={`w-12 text-right text-xs font-medium ${wr !== null && wr >= 50 ? 'text-emerald-400' : 'text-red-400'}`}>
         {wr !== null ? `${wr}%` : '—'}
+      </span>
+      <span className={`w-14 text-right text-xs font-medium ${prof !== null && prof >= 50 ? 'text-rizzotto-gold-400' : 'text-stone-500'}`}>
+        {prof !== null ? `${prof}%` : '—'}
       </span>
     </Link>
   );
@@ -346,6 +350,7 @@ export function FactionDetailPage() {
                 <span className="flex-1">Player</span>
                 <span className="w-10 text-right">Games</span>
                 <span className="w-12 text-right">WR</span>
+                <span className="w-14 text-right" title="Proficiency: model-estimated win chance at neutral opponent skill">Prof.</span>
               </div>
               <div className="space-y-0.5">
                 {(topPlayersData?.players ?? []).map((p) => (

@@ -6,6 +6,7 @@ import {
   asFactionStatsDto,
   getFactionsWithStats,
 } from '../lib/factions.js';
+import { playerFactionProficiency } from '../lib/breakdown-service.js';
 
 // ---------------------------------------------------------------------------
 // Query Schemas
@@ -229,7 +230,10 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
         });
         const userById = new Map(users.map((u) => [u.id, u]));
 
-        const players = rows
+        // Resolve active season for proficiency computation.
+        const activeSeason = await fastify.prisma.season.findFirst({ where: { is_active: true } });
+
+        const rawPlayers = rows
           .map((r) => {
             const user = userById.get(r.user_id);
             if (!user) return null;
@@ -244,7 +248,27 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
               winRate: games > 0 ? wins / games : null,
             };
           })
-          .filter(Boolean);
+          .filter((p): p is NonNullable<typeof p> => p !== null);
+
+        // Attach per-faction proficiency (neutralWinChance) for each player.
+        // Only computed when an active season exists; null otherwise.
+        let players: (typeof rawPlayers[number] & { proficiency: number | null })[];
+        if (activeSeason) {
+          players = await Promise.all(
+            rawPlayers.map(async (p) => {
+              const entries = await playerFactionProficiency(
+                fastify.prisma,
+                fastify.redis,
+                activeSeason.id,
+                p.userId,
+              );
+              const entry = entries.find((e) => e.factionId === id);
+              return { ...p, proficiency: entry?.neutralWinChance ?? null };
+            }),
+          );
+        } else {
+          players = rawPlayers.map((p) => ({ ...p, proficiency: null }));
+        }
 
         return { players };
       },
