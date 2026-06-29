@@ -193,6 +193,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       limit: z.coerce.number().int().min(1).max(100).default(50),
       tournamentSlug: z.string().optional(),
       factionId: z.string().optional(),
+      opponentFactionId: z.string().optional(),
       playerId: z.string().uuid().optional(),
     }).safeParse(request.query);
 
@@ -200,8 +201,38 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
 
-    const { page, limit, tournamentSlug, factionId, playerId } = parsed.data;
+    const { page, limit, tournamentSlug, factionId, opponentFactionId, playerId } = parsed.data;
     const skip = (page - 1) * limit;
+
+    // When both factionId and opponentFactionId are provided, filter to games
+    // where one side is factionId and the other is opponentFactionId.
+    const factionFilter = factionId && opponentFactionId
+      ? {
+          OR: [
+            {
+              AND: [
+                { OR: [{ player1_faction_id: factionId }, { games: { some: { player1_faction_id: factionId } } }] },
+                { OR: [{ player2_faction_id: opponentFactionId }, { games: { some: { player2_faction_id: opponentFactionId } } }] },
+              ],
+            },
+            {
+              AND: [
+                { OR: [{ player2_faction_id: factionId }, { games: { some: { player2_faction_id: factionId } } }] },
+                { OR: [{ player1_faction_id: opponentFactionId }, { games: { some: { player1_faction_id: opponentFactionId } } }] },
+              ],
+            },
+          ],
+        }
+      : factionId
+        ? {
+            OR: [
+              { player1_faction_id: factionId },
+              { player2_faction_id: factionId },
+              { games: { some: { player1_faction_id: factionId } } },
+              { games: { some: { player2_faction_id: factionId } } },
+            ],
+          }
+        : {};
 
     const matchWhere = {
       status: 'COMPLETED' as const,
@@ -210,14 +241,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       player2_id: { not: null },
       counts_for_leaderboard: true,  // exclude admin-voided matches
       ...(tournamentSlug ? { tournament: { slug: tournamentSlug, deleted_at: null } } : { deleted_at: null }),
-      ...(factionId ? {
-        OR: [
-          { player1_faction_id: factionId },
-          { player2_faction_id: factionId },
-          { games: { some: { player1_faction_id: factionId } } },
-          { games: { some: { player2_faction_id: factionId } } },
-        ],
-      } : {}),
+      ...factionFilter,
       ...(playerId ? { OR: [{ player1_id: playerId }, { player2_id: playerId }] } : {}),
     };
 

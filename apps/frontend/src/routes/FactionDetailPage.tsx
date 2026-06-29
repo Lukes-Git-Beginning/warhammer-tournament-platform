@@ -79,7 +79,7 @@ function SortTh({
   );
 }
 
-function MatchupGrid({ rows, factionMap }: { rows: MatchupRow[]; factionMap: Map<string, FactionDto> }) {
+function MatchupGrid({ rows, factionMap, onSelectOpponent }: { rows: MatchupRow[]; factionMap: Map<string, FactionDto>; onSelectOpponent?: (factionId: string) => void }) {
   const [sortCol, setSortCol] = useState<MatchupSortCol>('winRate');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -122,7 +122,7 @@ function MatchupGrid({ rows, factionMap }: { rows: MatchupRow[]; factionMap: Map
         return (
           <div
             key={row.factionId}
-            className="flex items-center gap-2 border-b border-stone-800/40 py-1.5 last:border-0"
+            className="flex items-center gap-2 border-b border-stone-800/40 py-1.5 last:border-0 group"
           >
             <div className="flex flex-1 items-center gap-2 min-w-0">
               {faction ? (
@@ -142,8 +142,24 @@ function MatchupGrid({ rows, factionMap }: { rows: MatchupRow[]; factionMap: Map
             <span className="w-8 text-right text-xs text-emerald-400">{row.isMirror ? '—' : row.wins}</span>
             <span className="w-8 text-right text-xs text-red-400">{row.isMirror ? '—' : row.losses}</span>
             <span className="w-10 text-right text-xs text-stone-500">{row.isMirror ? '—' : row.total}</span>
-            <div className="w-[140px] flex justify-end">
-              {row.isMirror ? <span className="text-xs text-stone-600">—</span> : <WinRateBar rate={row.winRate} />}
+            <div className="w-[140px] flex justify-end items-center gap-1">
+              {row.isMirror ? (
+                <span className="text-xs text-stone-600">—</span>
+              ) : (
+                <>
+                  <WinRateBar rate={row.winRate} />
+                  {onSelectOpponent && (
+                    <button
+                      type="button"
+                      title={`Filter replays: vs ${faction?.name ?? row.factionId}`}
+                      onClick={() => onSelectOpponent(row.factionId)}
+                      className="ml-1 text-[9px] text-stone-600 hover:text-rizzotto-gold-400 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      replays
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         );
@@ -190,6 +206,7 @@ function TopPlayerRow({ player }: { player: FactionTopPlayer }) {
 
 export function FactionDetailPage() {
   const { id } = useParams({ from: '/factions/$id' });
+  const [opponentFactionFilter, setOpponentFactionFilter] = useState<string>('');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['faction', id],
@@ -208,8 +225,8 @@ export function FactionDetailPage() {
   });
 
   const { data: gamesData } = useQuery({
-    queryKey: ['faction-games', id],
-    queryFn: () => getFactionGames(id),
+    queryKey: ['faction-games', id, opponentFactionFilter],
+    queryFn: () => getFactionGames(id, 1, 30, opponentFactionFilter || undefined),
   });
 
   const { data: factionsData } = useQuery({
@@ -336,7 +353,14 @@ export function FactionDetailPage() {
         {/* Matchup grid */}
         <section className="rounded-md border border-stone-800 bg-stone-900/40 p-5">
           <SectionHeader title="Matchup Win Rates" />
-          <MatchupGrid rows={matchupRows} factionMap={factionMap} />
+          <MatchupGrid
+            rows={matchupRows}
+            factionMap={factionMap}
+            onSelectOpponent={(factionId) => {
+              setOpponentFactionFilter(factionId);
+              document.getElementById('faction-games-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          />
         </section>
 
         {/* Top Players */}
@@ -362,11 +386,45 @@ export function FactionDetailPage() {
         </section>
       </div>
 
-      {/* All Games */}
-      <section className="rounded-md border border-stone-800 bg-stone-900/40 p-5">
-        <SectionHeader title="Recent Games" />
+      {/* Recent Games — filterable by opponent faction */}
+      <section id="faction-games-section" className="rounded-md border border-stone-800 bg-stone-900/40 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <SectionHeader title="Recent Games" />
+          <div className="flex items-center gap-2">
+            <label htmlFor="opponent-filter" className="text-xs text-stone-500 whitespace-nowrap">
+              vs.
+            </label>
+            <select
+              id="opponent-filter"
+              value={opponentFactionFilter}
+              onChange={(e) => setOpponentFactionFilter(e.target.value)}
+              className="rounded border border-stone-700 bg-stone-800 px-2 py-1 text-xs text-stone-300 focus:outline-none focus:ring-1 focus:ring-rizzotto-gold-400"
+            >
+              <option value="">All opponents</option>
+              {[...factionMap.values()]
+                .filter((f) => f.id !== id)
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+            </select>
+            {opponentFactionFilter && (
+              <button
+                type="button"
+                onClick={() => setOpponentFactionFilter('')}
+                className="text-xs text-stone-500 hover:text-stone-300 transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
         {(gamesData?.games.length ?? 0) === 0 ? (
-          <p className="text-sm text-stone-600">No games recorded for this faction yet.</p>
+          <p className="text-sm text-stone-600">
+            {opponentFactionFilter
+              ? `No games vs ${factionMap.get(opponentFactionFilter)?.name ?? opponentFactionFilter} recorded yet.`
+              : 'No games recorded for this faction yet.'}
+          </p>
         ) : (
           <GameHistoryTable games={gamesData?.games ?? []} showTournament />
         )}

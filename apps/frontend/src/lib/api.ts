@@ -1366,8 +1366,10 @@ export function getMetaGames(page = 1, limit = 50): Promise<{ games: GameHistory
   return apiFetch<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }>(`/api/meta/games?page=${page}&limit=${limit}`);
 }
 
-export function getFactionGames(factionId: string, page = 1, limit = 30): Promise<{ games: GameHistoryEntry[]; total: number }> {
-  return apiFetch<{ games: GameHistoryEntry[]; total: number }>(`/api/meta/games?factionId=${encodeURIComponent(factionId)}&page=${page}&limit=${limit}`);
+export function getFactionGames(factionId: string, page = 1, limit = 30, opponentFactionId?: string): Promise<{ games: GameHistoryEntry[]; total: number }> {
+  const params = new URLSearchParams({ factionId, page: String(page), limit: String(limit) });
+  if (opponentFactionId) params.set('opponentFactionId', opponentFactionId);
+  return apiFetch<{ games: GameHistoryEntry[]; total: number }>(`/api/meta/games?${params.toString()}`);
 }
 
 export function getUserGames(userId: string, page = 1, limit = 20): Promise<{ games: GameHistoryEntry[]; total: number }> {
