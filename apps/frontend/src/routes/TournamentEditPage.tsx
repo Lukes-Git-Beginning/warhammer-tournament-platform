@@ -1144,7 +1144,14 @@ export function TournamentEditPage() {
               disabled={draftLocked}
               onChange={(e) => {
                 setFactionPoolEnabled(e.target.checked);
-                if (!e.target.checked) set('faction_pool', []);
+                if (e.target.checked) {
+                  // Default to all factions selected when enabling — host deselects to ban.
+                  if (form.faction_pool.length === 0) {
+                    set('faction_pool', allFactions.map((f) => f.id));
+                  }
+                } else {
+                  set('faction_pool', []);
+                }
               }}
               className="h-4 w-4 rounded border-rizzotto-iron-600 bg-rizzotto-iron-800 text-rizzotto-gold-500 focus:ring-rizzotto-gold-500"
             />

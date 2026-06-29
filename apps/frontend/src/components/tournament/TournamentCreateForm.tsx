@@ -201,6 +201,17 @@ export function TournamentCreateForm() {
   });
   const allFactions = (factionsData?.data ?? []).map((f) => f.faction).sort((a, b) => a.name.localeCompare(b.name));
 
+  // Default the faction pool to ALL factions once they load (only if the pool
+  // toggle is on and no factions have been manually selected yet).
+  const factionPoolInitialized = useRef(false);
+  useEffect(() => {
+    if (factionPoolInitialized.current || allFactions.length === 0) return;
+    factionPoolInitialized.current = true;
+    if (factionPoolEnabled && (form.faction_pool ?? []).length === 0) {
+      setForm((prev) => ({ ...prev, faction_pool: allFactions.map((f) => f.id) }));
+    }
+  }, [allFactions, factionPoolEnabled, form.faction_pool]);
+
   // Modes that draw from the shared map pool. Host-preset modes define maps
   // per round instead, so the shared-pool minimum does not apply to them.
   const usesMapPool = !(
@@ -880,7 +891,12 @@ export function TournamentCreateForm() {
             checked={factionPoolEnabled}
             onChange={(e) => {
               setFactionPoolEnabled(e.target.checked);
-              if (!e.target.checked) setForm((prev) => ({ ...prev, faction_pool: [] }));
+              if (e.target.checked) {
+                // Default to all factions selected — host deselects the ones to ban.
+                setForm((prev) => ({ ...prev, faction_pool: allFactions.map((f) => f.id) }));
+              } else {
+                setForm((prev) => ({ ...prev, faction_pool: [] }));
+              }
             }}
             className="h-4 w-4 rounded border-rizzotto-iron-600 bg-rizzotto-iron-800 text-rizzotto-gold-500 focus:ring-rizzotto-gold-500"
           />
