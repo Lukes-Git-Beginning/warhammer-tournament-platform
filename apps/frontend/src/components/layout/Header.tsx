@@ -7,6 +7,7 @@ import { DiscordLoginButton } from '@/components/auth/DiscordLoginButton';
 import { RizzottoWordmarkImage } from '@/components/icons/RizzottoWordmarkImage';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ActiveMatchIndicator } from './ActiveMatchIndicator';
 
 const NAV_LINK_CLASS =
   'font-display text-[13px] uppercase tracking-wider text-rizzotto-stone-300 hover:text-rizzotto-gold-400 transition-colors';
@@ -112,6 +113,7 @@ export function Header() {
         <div className="flex items-center gap-3">
           {user ? (
             <>
+              <ActiveMatchIndicator />
               <Link
                 to="/users/$id"
                 params={{ id: user.id }}

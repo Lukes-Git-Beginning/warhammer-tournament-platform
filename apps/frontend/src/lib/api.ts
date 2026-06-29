@@ -1595,3 +1595,20 @@ export function addTournamentCoHost(slug: string, user_id: string): Promise<CoHo
 export function removeTournamentCoHost(slug: string, userId: string): Promise<{ ok: boolean }> {
   return apiFetch(`/api/tournaments/${slug}/co-hosts/${userId}`, { method: 'DELETE' });
 }
+
+// ---------------------------------------------------------------------------
+// N16: Active Match Indicator
+// ---------------------------------------------------------------------------
+
+export interface ActiveMatchItem {
+  matchId: string;
+  kind: 'tournament' | 'open_play' | 'challenge';
+  status: string;
+  opponentName: string | null;
+  tournamentSlug: string | null;
+  label: string;
+}
+
+export function getMyActiveMatches(): Promise<{ items: ActiveMatchItem[] }> {
+  return apiFetch<{ items: ActiveMatchItem[] }>('/api/me/active-matches');
+}

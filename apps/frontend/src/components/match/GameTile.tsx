@@ -4,6 +4,7 @@ import { Link } from '@tanstack/react-router';
 import { useNavigate } from '@tanstack/react-router';
 import type { FactionDto } from '@rizzotto/types';
 import { FactionBadge } from '@/components/meta/FactionBadge';
+import { useReportTileVisible } from '@/contexts/ActiveMatchVisibility';
 
 declare module '@tanstack/react-router' {
   interface HistoryState {
@@ -58,6 +59,7 @@ export function GameTile({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const tileRef = useReportTileVisible(matchId);
   const [selectedWinnerId, setSelectedWinnerId] = useState<string | null>(null);
   const [replayFile, setReplayFile] = useState<File | null>(null);
   const [replayError, setReplayError] = useState<string | null>(null);
@@ -139,7 +141,7 @@ export function GameTile({
   }
 
   return (
-    <div className="rounded-xl border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-5 flex flex-col gap-4">
+    <div ref={tileRef} className="rounded-xl border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-5 flex flex-col gap-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider font-semibold">

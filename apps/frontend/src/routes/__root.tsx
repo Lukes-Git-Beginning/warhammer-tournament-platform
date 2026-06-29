@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '@/components/layout/Header';
 import { useRequireSteamLink } from '@/lib/auth';
 import { DevLoginPanel } from '@/components/dev/DevLoginPanel';
+import { ActiveMatchVisibilityProvider } from '@/contexts/ActiveMatchVisibility';
 
 function RootLayout() {
   const { t } = useTranslation();
@@ -10,6 +11,7 @@ function RootLayout() {
   // unless the current path is whitelisted in useRequireSteamLink.
   useRequireSteamLink();
   return (
+    <ActiveMatchVisibilityProvider>
     <div className="relative min-h-screen bg-rizzotto-iron-950 text-rizzotto-stone-200 antialiased">
       {/* Atmospheric Layer 1: stone-wall texture, page-wide */}
       <div
@@ -39,6 +41,7 @@ function RootLayout() {
       </div>
 {import.meta.env.DEV && <DevLoginPanel />}
     </div>
+    </ActiveMatchVisibilityProvider>
   );
 }
 
