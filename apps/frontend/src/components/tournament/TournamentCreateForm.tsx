@@ -3,7 +3,9 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { createTournament, listDraftPresets, getMaps, getFactions } from '@/lib/api';
+import { createTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap } from '@/lib/api';
+import { useAuthQuery } from '@/lib/auth';
+import { AvailabilityHeatmap } from '@/components/open-play/AvailabilityHeatmap';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MarkdownEditor } from '@/components/ui/markdown-editor';
@@ -200,6 +202,15 @@ export function TournamentCreateForm() {
     queryFn: () => getFactions(),
   });
   const allFactions = (factionsData?.data ?? []).map((f) => f.faction).sort((a, b) => a.name.localeCompare(b.name));
+
+  // N8: general community availability, shown next to the start-time picker so
+  // the host can choose a slot when most players are around.
+  const { data: me } = useAuthQuery();
+  const { data: heatmapData } = useQuery({
+    queryKey: ['availability-heatmap'],
+    queryFn: getAvailabilityHeatmap,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Default the faction pool to ALL factions once they load (only if the pool
   // toggle is on and no factions have been manually selected yet).
@@ -432,6 +443,15 @@ export function TournamentCreateForm() {
           <FieldError message={errors.start_date} />
         </div>
 
+      </div>
+
+      {/* N8: general availability heatmap to help the host pick a start time */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-stone-300">When are players usually around?</p>
+        <p className="text-xs text-stone-500">
+          Community availability — brighter means more players have marked this time as free. Pick a start time when most can attend.
+        </p>
+        <AvailabilityHeatmap slots={heatmapData?.slots ?? []} userTimezone={me?.timezone ?? undefined} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
