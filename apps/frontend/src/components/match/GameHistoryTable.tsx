@@ -128,7 +128,7 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
                         {winner.username}
                       </Link>
                     ) : '—';
-                  })() : '—'}
+                  })() : <span className="text-stone-500">Draw</span>}
                 </td>
                 <td className="px-3 py-2">
                   {g.replayUrl

@@ -57,11 +57,14 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('meta:overview', { seasonId: resolvedSeasonId }),
       async () => {
-        // Same matchWhere as /api/meta/games so the counter matches the list.
+        // Identical filter to /api/meta/games so the counter matches the list:
+        // a draw IS a played game (no winner_id filter), but admin-voided matches
+        // (counts_for_leaderboard = false) are excluded.
         const globalMatchWhere = {
           status: 'COMPLETED' as const,
           player1_id: { not: null },
           player2_id: { not: null },
+          counts_for_leaderboard: true,
           deleted_at: null,
         };
 
@@ -236,10 +239,11 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
 
     const matchWhere = {
       status: 'COMPLETED' as const,
-      winner_id: { not: null },      // exclude draws (no real game was played)
+      // Draws count as played games (no winner_id filter); admin-voided matches
+      // (counts_for_leaderboard = false) are excluded.
       player1_id: { not: null },
       player2_id: { not: null },
-      counts_for_leaderboard: true,  // exclude admin-voided matches
+      counts_for_leaderboard: true,
       ...(tournamentSlug ? { tournament: { slug: tournamentSlug, deleted_at: null } } : { deleted_at: null }),
       ...factionFilter,
       ...(playerId ? { OR: [{ player1_id: playerId }, { player2_id: playerId }] } : {}),

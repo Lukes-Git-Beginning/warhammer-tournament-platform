@@ -2,61 +2,88 @@ import type { PrismaClient } from '@rizzotto/db';
 import type { MatchupCell } from '@rizzotto/types';
 
 // ---------------------------------------------------------------------------
-// Raw row shape returned by Postgres $queryRaw
-// ---------------------------------------------------------------------------
-
-interface RawMatchupRow {
-  faction_a_id: string;
-  faction_b_id: string;
-  faction_a_wins: bigint | number | string;
-  faction_b_wins: bigint | number | string;
-  draws: bigint | number | string;
-  total: bigint | number | string;
-  winrate_a: number | string | null;
-}
-
-// ---------------------------------------------------------------------------
 // getMatchupMatrix
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch all MatchupStats rows for a given season and return them as
- * MatchupCell objects with correctly typed numeric fields.
+ * Builds the faction-vs-faction matchup matrix for a season by aggregating the
+ * source of truth live: every COMPLETED MatchGame (game-level, so a Bo3
+ * contributes up to three observations, and per-game factions for 2FT/3FT/MATRIX
+ * are honoured).
  *
- * Uses $queryRaw so the same function can be reused for GraphQL (M3.9).
+ * This intentionally does NOT read the persisted `MatchupStats` snapshot, which
+ * only updates on the per-game completion path and drifts out of sync with the
+ * real data (e.g. legacy-path completions or games whose faction was set late).
+ * Aggregating live keeps the heatmap consistent with the games list. Callers
+ * cache the result (the matchups endpoint caches 120s), so the per-request cost
+ * is bounded.
  *
- * Postgres may return aggregate/arithmetic columns as bigint or decimal
- * strings — we normalise everything via Number().
+ * Mirrors the matchup logic in `recomputeFactionStats()`: pairs are keyed with
+ * the lexicographically smaller faction id as `faction_a`, draws have no winner,
+ * and games with a faction missing on either side cannot be attributed.
  */
 export async function getMatchupMatrix(
   prisma: PrismaClient,
   seasonId: string,
 ): Promise<MatchupCell[]> {
-  const rows = await prisma.$queryRaw<RawMatchupRow[]>`
-    SELECT
-      ms.faction_a_id,
-      ms.faction_b_id,
-      ms.faction_a_wins,
-      ms.faction_b_wins,
-      ms.draws,
-      (ms.faction_a_wins + ms.faction_b_wins + ms.draws) AS total,
-      CASE
-        WHEN (ms.faction_a_wins + ms.faction_b_wins + ms.draws) > 0
-        THEN ms.faction_a_wins::float / NULLIF(ms.faction_a_wins + ms.faction_b_wins + ms.draws, 0)
-        ELSE NULL
-      END AS winrate_a
-    FROM "MatchupStats" ms
-    WHERE ms.season_id = ${seasonId}
-    ORDER BY ms.faction_a_id, ms.faction_b_id
-  `;
+  const games = await prisma.matchGame.findMany({
+    where: {
+      status: 'COMPLETED',
+      match: { season_id: seasonId, deleted_at: null },
+    },
+    select: {
+      winner_id: true,
+      player1_faction_id: true,
+      player2_faction_id: true,
+      match: { select: { player1_id: true, player2_id: true } },
+    },
+  });
 
-  return rows.map((r) => ({
-    faction_a_id: r.faction_a_id,
-    faction_b_id: r.faction_b_id,
-    faction_a_wins: Number(r.faction_a_wins),
-    faction_b_wins: Number(r.faction_b_wins),
-    draws: Number(r.draws),
-    total: Number(r.total),
-    winrate_a: r.winrate_a === null ? null : Number(r.winrate_a),
-  }));
+  // Keyed by `${aId}|${bId}` with aId <= bId (string sort).
+  type Agg = { aWins: number; bWins: number; draws: number };
+  const matchupAgg = new Map<string, Agg>();
+
+  for (const g of games) {
+    const p1f = g.player1_faction_id;
+    const p2f = g.player2_faction_id;
+    if (!p1f || !p2f) continue; // a matchup needs both factions known
+
+    const isDraw = g.winner_id === null;
+    let winnerFaction: string | null = null;
+    if (!isDraw) {
+      if (g.winner_id === g.match.player1_id) winnerFaction = p1f;
+      else if (g.winner_id === g.match.player2_id) winnerFaction = p2f;
+    }
+
+    const [aId, bId] = [p1f, p2f].sort() as [string, string];
+    const key = `${aId}|${bId}`;
+    let m = matchupAgg.get(key);
+    if (!m) {
+      m = { aWins: 0, bWins: 0, draws: 0 };
+      matchupAgg.set(key, m);
+    }
+    if (isDraw) m.draws++;
+    else if (winnerFaction === aId) m.aWins++;
+    else m.bWins++;
+  }
+
+  return [...matchupAgg.entries()]
+    .map(([key, m]) => {
+      const [faction_a_id, faction_b_id] = key.split('|') as [string, string];
+      const total = m.aWins + m.bWins + m.draws;
+      return {
+        faction_a_id,
+        faction_b_id,
+        faction_a_wins: m.aWins,
+        faction_b_wins: m.bWins,
+        draws: m.draws,
+        total,
+        winrate_a: total > 0 ? m.aWins / total : null,
+      };
+    })
+    .sort((x, y) =>
+      x.faction_a_id === y.faction_a_id
+        ? x.faction_b_id.localeCompare(y.faction_b_id)
+        : x.faction_a_id.localeCompare(y.faction_a_id),
+    );
 }
