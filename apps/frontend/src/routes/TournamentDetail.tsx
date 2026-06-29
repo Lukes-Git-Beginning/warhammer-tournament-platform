@@ -702,31 +702,91 @@ export function TournamentDetail() {
         </a>
       </div>
 
-      {/* Faction allowlist (only shown if restrictions are set) */}
-      {tournament.faction_allowlist && tournament.faction_allowlist.length > 0 && (() => {
+      {/* Faction allowlist, banned factions and restricted factions */}
+      {(() => {
         const factionMap = new Map((factionsData?.data ?? []).map((f) => [f.faction.id, f.faction]));
-        const allowedFactions = tournament.faction_allowlist
+        const allFactionList = [...factionMap.values()];
+
+        const hasAllowlist = tournament.faction_allowlist && tournament.faction_allowlist.length > 0;
+        const allowedFactions: FactionDto[] = hasAllowlist
+          ? (tournament.faction_allowlist ?? []).map((id) => factionMap.get(id)).filter((f): f is FactionDto => f !== undefined)
+          : [];
+
+        const bannedFactions: FactionDto[] = hasAllowlist
+          ? allFactionList.filter((f) => !(tournament.faction_allowlist ?? []).includes(f.id))
+          : [];
+
+        const restrictedIds = tournament.restricted_factions ?? [];
+        const restrictedFactions: FactionDto[] = restrictedIds
           .map((id) => factionMap.get(id))
           .filter((f): f is FactionDto => f !== undefined);
-        if (allowedFactions.length === 0) return null;
+
+        const hasBanned = bannedFactions.length > 0;
+        const hasRestricted = restrictedFactions.length > 0;
+
+        if (!hasAllowlist && !hasRestricted) return null;
+
+        const FactionChip = ({ faction, variant }: { faction: FactionDto; variant: 'allowed' | 'banned' | 'restricted' }) => (
+          <div
+            key={faction.id}
+            className={[
+              'flex items-center gap-1.5 rounded border px-2 py-1',
+              variant === 'banned'
+                ? 'bg-red-950/40 border-red-900/60'
+                : variant === 'restricted'
+                  ? 'bg-amber-950/40 border-amber-900/60'
+                  : 'bg-stone-800 border-stone-700',
+            ].join(' ')}
+          >
+            {faction.icon_url && (
+              <img src={faction.icon_url} alt="" className="w-5 h-5 object-contain" />
+            )}
+            <span className={[
+              'text-xs',
+              variant === 'banned' ? 'text-red-300' : variant === 'restricted' ? 'text-amber-300' : 'text-stone-200',
+            ].join(' ')}>{faction.name}</span>
+          </div>
+        );
+
         return (
-          <div className="mb-8">
-            <h2 className="font-display text-base font-semibold text-rizzotto-gold-400 mb-3">
-              Allowed Factions
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              {allowedFactions.map((faction) => (
-                <div
-                  key={faction.id}
-                  className="flex items-center gap-1.5 rounded bg-stone-800 border border-stone-700 px-2 py-1"
-                >
-                  {faction.icon_url && (
-                    <img src={faction.icon_url} alt="" className="w-5 h-5 object-contain" />
-                  )}
-                  <span className="text-xs text-stone-200">{faction.name}</span>
+          <div className="mb-8 space-y-4">
+            {hasAllowlist && allowedFactions.length > 0 && (
+              <div>
+                <h2 className="font-display text-base font-semibold text-rizzotto-gold-400 mb-3">
+                  Allowed Factions
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                  {allowedFactions.map((faction) => (
+                    <FactionChip key={faction.id} faction={faction} variant="allowed" />
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+            {hasBanned && (
+              <div>
+                <h2 className="font-display text-base font-semibold text-red-400 mb-3">
+                  Banned Factions
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                  {bannedFactions.map((faction) => (
+                    <FactionChip key={faction.id} faction={faction} variant="banned" />
+                  ))}
+                </div>
+              </div>
+            )}
+            {hasRestricted && (
+              <div>
+                <h2 className="font-display text-base font-semibold text-amber-400 mb-3">
+                  Restricted Factions{' '}
+                  <span className="text-xs font-normal text-stone-500">(pickable but excluded from leaderboard)</span>
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                  {restrictedFactions.map((faction) => (
+                    <FactionChip key={faction.id} faction={faction} variant="restricted" />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
