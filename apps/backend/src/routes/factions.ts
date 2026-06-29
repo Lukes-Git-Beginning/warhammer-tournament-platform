@@ -6,7 +6,8 @@ import {
   asFactionStatsDto,
   getFactionsWithStats,
 } from '../lib/factions.js';
-import { playerFactionProficiency } from '../lib/breakdown-service.js';
+import { getRatingModel } from '../lib/rating-model-service.js';
+import { logistic } from '../lib/rating-model.js';
 
 // ---------------------------------------------------------------------------
 // Query Schemas
@@ -251,21 +252,20 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
           .filter((p): p is NonNullable<typeof p> => p !== null);
 
         // Attach per-faction proficiency (neutralWinChance) for each player.
-        // Only computed when an active season exists; null otherwise.
+        // The season-wide rating model is fitted once (cached, event-invalidated)
+        // and already holds every player's skill for this faction, so we read it
+        // directly — no per-player query. Same value & freshness as the profile
+        // page (both derive from this one model). Unknown pairs default to 0 skill
+        // → logistic(0) = 0.5; top players always have a fitted entry here.
         let players: (typeof rawPlayers[number] & { proficiency: number | null })[];
         if (activeSeason) {
-          players = await Promise.all(
-            rawPlayers.map(async (p) => {
-              const entries = await playerFactionProficiency(
-                fastify.prisma,
-                fastify.redis,
-                activeSeason.id,
-                p.userId,
-              );
-              const entry = entries.find((e) => e.factionId === id);
-              return { ...p, proficiency: entry?.neutralWinChance ?? null };
-            }),
-          );
+          const model = await getRatingModel(fastify.prisma, fastify.redis, {
+            seasonId: activeSeason.id,
+          });
+          players = rawPlayers.map((p) => ({
+            ...p,
+            proficiency: logistic(model.getPlayerFactionSkill(p.userId, id)),
+          }));
         } else {
           players = rawPlayers.map((p) => ({ ...p, proficiency: null }));
         }
