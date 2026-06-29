@@ -1500,6 +1500,8 @@ export type AntiFarmingOpponent = {
   wins: number;
   share: number;
   modifier: number;
+  /** 'reduced' = win value already cut; 'approaching' = full value but near the cap. */
+  status: 'reduced' | 'approaching';
 };
 
 export function getPlayerAntiFarming(playerId: string, seasonId?: string): Promise<{

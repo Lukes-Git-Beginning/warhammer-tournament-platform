@@ -19,6 +19,10 @@
 export const OPPONENT_SHARE_FULL = 0.05; // <= 5%  → full value
 export const OPPONENT_SHARE_ZERO = 0.1; //  >= 10% → zero value
 export const MIN_WINS_FOR_ANTI_FARM = 20; // < 20 total wins → no penalty
+// Early-warning band: still full value, but within 80% of the reduction
+// threshold (>=4%, <5%). Used by the admin view to flag opponents approaching
+// the cap before the penalty kicks in.
+export const OPPONENT_SHARE_WARN = 0.04;
 
 /**
  * Raw victory points for the winner of a single match.

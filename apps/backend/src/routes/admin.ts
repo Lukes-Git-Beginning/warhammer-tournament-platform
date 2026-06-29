@@ -9,7 +9,7 @@ import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
 import { emitBracketUpdate } from '../lib/emit.js';
 import { addLateParticipant, setParticipantFactionOp, createManualMatch } from '../lib/tournament-management.js';
-import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM } from '../lib/scoring-service.js';
+import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM, OPPONENT_SHARE_WARN } from '../lib/scoring-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -1281,10 +1281,14 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       .map(([opponentId, wins]) => {
         const share = opponentShare(wins, playerTotalWins);
         const modifier = opponentModifier(share, playerTotalWins);
-        return { opponentId, wins, share, modifier };
+        const status: 'reduced' | 'approaching' = modifier < 1 ? 'reduced' : 'approaching';
+        return { opponentId, wins, share, modifier, status };
       })
-      .filter((o) => o.modifier < 1)
-      .sort((a, b) => a.modifier - b.modifier);
+      // Show opponents already reduced (modifier < 1) AND those approaching the
+      // cap (still full value, but win-share within the warning band) as an early
+      // warning before the penalty actually kicks in.
+      .filter((o) => o.modifier < 1 || o.share >= OPPONENT_SHARE_WARN)
+      .sort((a, b) => a.modifier - b.modifier || b.share - a.share);
 
     if (diminishedOpponents.length === 0) {
       return reply.code(200).send({ opponents: [], playerTotalWins, penaltyActive });
@@ -1305,6 +1309,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         wins: o.wins,
         share: o.share,
         modifier: o.modifier,
+        status: o.status,
       })),
     });
   });

@@ -207,8 +207,9 @@ function AntiFarmingSection({ playerId }: { playerId: string }) {
         Anti-Farming
       </h2>
       <p className="text-[11px] text-stone-500 mb-4">
-        Opponents against whom this player's wins are currently reduced in value.
-        Active once the player has ≥20 season wins.
+        Opponents against whom this player's wins are reduced in value, plus those
+        approaching the cap (≥4% win-share, still full value). Reductions activate
+        once the player has ≥20 season wins.
       </p>
 
       {isLoading && <p className="text-xs text-stone-600">Loading…</p>}
@@ -221,7 +222,7 @@ function AntiFarmingSection({ playerId }: { playerId: string }) {
 
       {!isLoading && data?.penaltyActive && data.opponents.length === 0 && (
         <p className="text-xs text-stone-600 italic">
-          No opponents exceed the 5% win-share threshold ({data.playerTotalWins} total wins).
+          No opponents at or near the 5% win-share threshold ({data.playerTotalWins} total wins).
         </p>
       )}
 
@@ -247,12 +248,18 @@ function AntiFarmingSection({ playerId }: { playerId: string }) {
                     <span className="truncate text-sm text-stone-300">{o.username}</span>
                   </Link>
                   <span className="w-14 text-right text-xs text-stone-400">{o.wins}W</span>
-                  <span className="w-14 text-right text-xs text-stone-500">{share}%</span>
+                  <span className={`w-14 text-right text-xs ${o.status === 'approaching' ? 'text-yellow-600/80' : 'text-stone-500'}`}>{share}%</span>
                   <div className="w-24 flex items-center justify-end gap-1.5">
-                    <div className="h-1.5 w-12 overflow-hidden rounded-full bg-stone-800">
-                      <div className="h-full rounded-full bg-amber-500/60" style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className={`text-xs font-medium ${pct === 0 ? 'text-red-500' : 'text-amber-400'}`}>{pct}%</span>
+                    {o.status === 'approaching' ? (
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-yellow-500/80">approaching</span>
+                    ) : (
+                      <>
+                        <div className="h-1.5 w-12 overflow-hidden rounded-full bg-stone-800">
+                          <div className="h-full rounded-full bg-amber-500/60" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className={`text-xs font-medium ${pct === 0 ? 'text-red-500' : 'text-amber-400'}`}>{pct}%</span>
+                      </>
+                    )}
                   </div>
                 </div>
               );
