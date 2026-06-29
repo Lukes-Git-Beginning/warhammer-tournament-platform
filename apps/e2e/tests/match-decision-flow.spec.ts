@@ -352,7 +352,9 @@ test.describe('Welle-D: Deferred Playoff Generation after Swiss', () => {
       role: 'HOST',
       usernamePrefix: 'welle-d-org4',
     });
-    const players = await createTestUsers(4, { role: 'PLAYER', usernamePrefix: 'welle-d-playoff' });
+    // 8 players: TOP4 requires >= 8 active players (B6 auto-reduces TOP4 -> TOP2
+    // below 8). With fewer players TOP4 would collapse to a single Grand Final.
+    const players = await createTestUsers(8, { role: 'PLAYER', usernamePrefix: 'welle-d-playoff' });
     if (!organizer) throw new Error('No organizer');
     userIds.push(organizer.id, ...players.map((p) => p.id));
 
@@ -362,8 +364,8 @@ test.describe('Welle-D: Deferred Playoff Generation after Swiss', () => {
       await signInRequest(orgCtx, organizer.id, BACKEND);
 
       // rounds_count minimum is 3 (backend schema).
-      // recommendNumberOfRounds(4) = ceil(log2(4)) = 2, clamped to max(3,2) = 3.
-      // So with 4 players and rounds_count=3, the last Swiss round is round 3.
+      // recommendNumberOfRounds(8) = ceil(log2(8)) = 3.
+      // So with 8 players and rounds_count=3, the last Swiss round is round 3.
       const createRes = await orgCtx.post(`${BACKEND}/api/tournaments`, {
         data: {
           name: 'Welle-D Playoff Gen Test',
