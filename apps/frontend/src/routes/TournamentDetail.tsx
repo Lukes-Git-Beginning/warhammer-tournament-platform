@@ -31,6 +31,7 @@ import { CheckInButton } from '@/components/tournament/CheckInButton';
 import { RegisterButton } from '@/components/tournament/RegisterButton';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton';
 import { ParticipantsList } from '@/components/tournament/ParticipantsList';
+import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
 import { ArmyListUploader } from '@/components/tournament/ArmyListUploader';
 import { MyMatchSection } from '@/components/match/MyMatchSection';
 import type { ParticipantStatus } from '@/lib/api';
@@ -810,13 +811,28 @@ export function TournamentDetail() {
         </section>
       )}
 
-      {tournament.rules && (
+      {(tournament.standard_rules_enabled || tournament.rules || tournament.restrictions) && (
         <section className="mb-8">
           <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-3">
             {t('tournament.detail.rules')}
           </h2>
-          <div className="rounded-md border border-stone-800 bg-stone-900/50 p-6 text-stone-300 leading-relaxed">
-            <SafeMarkdown>{tournament.rules}</SafeMarkdown>
+          <div className="space-y-4">
+            {tournament.standard_rules_enabled && <StandardRulesetCard />}
+            {tournament.rules && (
+              <div className="rounded-md border border-stone-800 bg-stone-900/50 p-6 text-stone-300 leading-relaxed">
+                <SafeMarkdown>{tournament.rules}</SafeMarkdown>
+              </div>
+            )}
+            {tournament.restrictions && (
+              <div>
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-rizzotto-gold-500/80">
+                  Restrictions
+                </h3>
+                <div className="rounded-md border border-stone-800 bg-stone-900/50 p-6 text-stone-300 leading-relaxed">
+                  <SafeMarkdown>{tournament.restrictions}</SafeMarkdown>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { createTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
 import { AvailabilityHeatmap } from '@/components/open-play/AvailabilityHeatmap';
+import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MarkdownEditor } from '@/components/ui/markdown-editor';
@@ -22,6 +23,8 @@ const TournamentCreateSchema = z.object({
   max_participants: z.coerce.number().int().positive().optional().or(z.literal('')),
   registration_deadline: z.string().optional(),
   rules: z.string().max(10000).optional(),
+  standard_rules_enabled: z.boolean().default(false),
+  restrictions: z.string().max(10000).optional(),
   discord_link: z.string().url().optional().or(z.literal('')),
   draft_enabled: z.boolean().default(false),
   draft_preset_id: z.string().uuid().nullable().optional(),
@@ -159,6 +162,7 @@ export function TournamentCreateForm() {
     start_date: nextRoundHour(),
     registration_deadline: nextRoundHour(),
     draft_enabled: false,
+    standard_rules_enabled: false,
     rounds_count: 5,
     has_third_place_match: false,
     playoff_format: 'NONE',
@@ -480,18 +484,48 @@ export function TournamentCreateForm() {
         </div>
       </div>
 
-      <div>
-        <Label htmlFor="tcf-rules">{t('tournament.form.rules')}</Label>
-        <MarkdownEditor
-          id="tcf-rules"
-          name="rules"
-          value={form.rules ?? ''}
-          onChange={handleChange}
-          rows={6}
-          maxLength={10000}
-          placeholder={t('tournament.form.rules_placeholder')}
-        />
-      </div>
+      {/* ─── Rules (N17) ───────────────────────────────────────────────── */}
+      <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+        <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">Rules</legend>
+
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            name="standard_rules_enabled"
+            checked={form.standard_rules_enabled ?? false}
+            onChange={handleChange}
+            className="accent-rizzotto-gold-400 h-4 w-4"
+          />
+          <span className="text-sm text-rizzotto-stone-300">Enable standard rules</span>
+        </label>
+        {form.standard_rules_enabled && <StandardRulesetCard compact />}
+
+        <div>
+          <Label htmlFor="tcf-rules">Custom Rules</Label>
+          <MarkdownEditor
+            id="tcf-rules"
+            name="rules"
+            value={form.rules ?? ''}
+            onChange={handleChange}
+            rows={6}
+            maxLength={10000}
+            placeholder={t('tournament.form.rules_placeholder')}
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="tcf-restrictions">Custom Restrictions</Label>
+          <MarkdownEditor
+            id="tcf-restrictions"
+            name="restrictions"
+            value={form.restrictions ?? ''}
+            onChange={handleChange}
+            rows={4}
+            maxLength={10000}
+            placeholder="Faction-specific house rules, list-submission notes, …"
+          />
+        </div>
+      </fieldset>
 
       <div>
         <Label htmlFor="tcf-discord">{t('tournament.form.discord_link')}</Label>

@@ -67,6 +67,8 @@ export interface Tournament {
   max_participants: number | null;
   registration_deadline: string | null;
   rules: string | null;
+  standard_rules_enabled?: boolean;
+  restrictions?: string | null;
   discord_link: string | null;
   host?: {
     id: string;
@@ -171,6 +173,8 @@ export interface TournamentCreate {
   rules?: string;
   discord_link?: string;
   description?: string;
+  standard_rules_enabled?: boolean;
+  restrictions?: string;
   draft_enabled?: boolean;
   draft_preset_id?: string;
   // Welle 2 fields
@@ -190,6 +194,8 @@ export interface TournamentPatchInput {
   name?: string;
   description?: string | null;
   rules?: string | null;
+  standard_rules_enabled?: boolean;
+  restrictions?: string | null;
   discord_link?: string | null;
   start_date?: string;
   timezone?: string;

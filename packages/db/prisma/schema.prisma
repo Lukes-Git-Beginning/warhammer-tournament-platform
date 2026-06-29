@@ -281,7 +281,9 @@ model Tournament {
   start_date             DateTime
   timezone               String // IANA
   registration_deadline  DateTime?
-  rules                  String               @default("") // markdown
+  rules                  String               @default("") // markdown — "Custom Rules"
+  standard_rules_enabled Boolean              @default(false) // N17: show the fixed Community Standard ruleset block
+  restrictions           String               @default("") // markdown — "Custom Restrictions"
   discord_link           String?
   entry_fee              String? // free-text
   draft_enabled          Boolean              @default(false)

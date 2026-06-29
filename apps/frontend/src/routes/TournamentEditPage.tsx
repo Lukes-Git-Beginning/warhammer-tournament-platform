@@ -26,6 +26,7 @@ import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { Select } from '@/components/ui/select';
 import { Label, FieldError, FieldHint } from '@/components/ui/label';
 import { PageShell } from '@/components/layout/PageShell';
+import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
 
 // ---------------------------------------------------------------------------
 // Lock helpers
@@ -59,6 +60,8 @@ type EditFormData = {
   counts_for_leaderboard: boolean;
   description: string;
   rules: string;
+  standard_rules_enabled: boolean;
+  restrictions: string;
   start_date: string;
   registration_deadline: string;
   max_participants: number | '';
@@ -209,6 +212,8 @@ function buildInitialForm(t: Tournament): EditFormData {
     counts_for_leaderboard: t.counts_for_leaderboard ?? true,
     description: t.description ?? '',
     rules: t.rules ?? '',
+    standard_rules_enabled: t.standard_rules_enabled ?? false,
+    restrictions: t.restrictions ?? '',
     start_date: isoToLocalInput(t.start_date),
     registration_deadline: isoToLocalInput(t.registration_deadline),
     max_participants: t.max_participants ?? '',
@@ -264,6 +269,11 @@ function buildPatchBody(
   // rules is non-nullable in the DB (@default("")), so clear with '' not null
   const rulesNorm = form.rules.trim();
   if (rulesNorm !== (current.rules ?? '')) body.rules = rulesNorm;
+  if (form.standard_rules_enabled !== (current.standard_rules_enabled ?? false)) {
+    body.standard_rules_enabled = form.standard_rules_enabled;
+  }
+  const restrictionsNorm = form.restrictions.trim();
+  if (restrictionsNorm !== (current.restrictions ?? '')) body.restrictions = restrictionsNorm;
 
   const startIso = localInputToIso(form.start_date);
   if (startIso !== current.start_date) body.start_date = startIso;
@@ -1307,21 +1317,52 @@ export function TournamentEditPage() {
           )}
         </fieldset>
 
-        {/* ── Rules ─────────────────────────────────────────────────────── */}
-        <div>
-          <Label htmlFor="tef-rules">{t('tournament.form.rules')}</Label>
-          <MarkdownEditor
-            id="tef-rules"
-            name="rules"
-            value={form.rules}
-            onChange={handleChange}
-            rows={6}
-            maxLength={10000}
-            placeholder={t('tournament.form.rules_placeholder')}
-            disabled={ongoingLocked}
-          />
+        {/* ── Rules (N17) ──────────────────────────────────────────────── */}
+        <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+          <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">Rules</legend>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              name="standard_rules_enabled"
+              checked={form.standard_rules_enabled}
+              onChange={handleChange}
+              disabled={ongoingLocked}
+              className="accent-rizzotto-gold-400 h-4 w-4"
+            />
+            <span className="text-sm text-rizzotto-stone-300">Enable standard rules</span>
+          </label>
+          {form.standard_rules_enabled && <StandardRulesetCard compact />}
+
+          <div>
+            <Label htmlFor="tef-rules">Custom Rules</Label>
+            <MarkdownEditor
+              id="tef-rules"
+              name="rules"
+              value={form.rules}
+              onChange={handleChange}
+              rows={6}
+              maxLength={10000}
+              placeholder={t('tournament.form.rules_placeholder')}
+              disabled={ongoingLocked}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="tef-restrictions">Custom Restrictions</Label>
+            <MarkdownEditor
+              id="tef-restrictions"
+              name="restrictions"
+              value={form.restrictions}
+              onChange={handleChange}
+              rows={4}
+              maxLength={10000}
+              placeholder="Faction-specific house rules, list-submission notes, …"
+              disabled={ongoingLocked}
+            />
+          </div>
           {ongoingLocked && <LockNote>Locked — tournament is underway</LockNote>}
-        </div>
+        </fieldset>
 
         {/* ── Communications ────────────────────────────────────────────── */}
         <div>
