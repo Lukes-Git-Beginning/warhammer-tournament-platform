@@ -108,6 +108,9 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const { reset_onboarding, ...patch } = parsed.data;
       const data: Record<string, unknown> = { ...patch };
+      // Canonicalize the deprecated IANA alias on write so it can never re-enter
+      // the DB (same zone, current name). Mirrors the one-time data migration.
+      if (data.timezone === 'Europe/Kiev') data.timezone = 'Europe/Kyiv';
       if (reset_onboarding) {
         data.onboarded_at = null;
         data.onboarding_stage = 0;
