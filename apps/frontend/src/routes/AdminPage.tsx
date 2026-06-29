@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuthQuery } from '@/lib/auth.js';
 import { AuditLogTable } from '@/components/admin/AuditLogTable.js';
+import { QueueActivityTable } from '@/components/admin/QueueActivityTable.js';
 import { StatsDashboard } from '@/components/admin/StatsDashboard.js';
 import { UserBanTab } from '@/components/admin/UserBanTab.js';
 import { PresetLibraryAdmin } from '@/components/admin/PresetLibraryAdmin.js';
@@ -18,9 +19,9 @@ import { ImportLogTable } from '@/components/admin/ImportLogTable.js';
 import { AdminMatchesTab } from '@/components/admin/AdminMatchesTab.js';
 import { AdminScheduledMatchupsTab } from '@/components/admin/AdminScheduledMatchupsTab.js';
 
-type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings' | 'import' | 'matches' | 'challenges';
+type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings' | 'import' | 'matches' | 'challenges' | 'queue';
 
-const ALL_TABS: Tab[] = ['dashboard', 'stats', 'settings', 'users', 'matches', 'challenges', 'presets', 'audit', 'import'];
+const ALL_TABS: Tab[] = ['dashboard', 'stats', 'settings', 'users', 'matches', 'challenges', 'queue', 'presets', 'audit', 'import'];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard: 'admin.tabs.dashboard',
@@ -32,6 +33,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
   import: 'admin.tabs.import',
   matches: 'admin.tabs.matches',
   challenges: 'admin.tabs.challenges',
+  queue: 'admin.tabs.queue',
 };
 
 const STATIC_LABELS: Record<Tab, string> = {
@@ -44,6 +46,7 @@ const STATIC_LABELS: Record<Tab, string> = {
   import: 'Import-Log',
   matches: 'Matches',
   challenges: 'Challenges',
+  queue: 'Queue Activity',
 };
 
 function StatsTab() {
@@ -163,6 +166,7 @@ export function AdminPage() {
         {tab === 'users' && <UserBanTab />}
         {tab === 'matches' && <AdminMatchesTab />}
         {tab === 'challenges' && <AdminScheduledMatchupsTab />}
+        {tab === 'queue' && <QueueActivityTable />}
         {tab === 'presets' && <PresetLibraryAdmin />}
         {tab === 'stats' && <StatsTab />}
         {tab === 'settings' && <SettingsTab />}

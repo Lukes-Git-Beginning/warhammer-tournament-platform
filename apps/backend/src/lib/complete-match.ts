@@ -11,6 +11,7 @@ import { Prisma, type BracketSide } from '@rizzotto/db';
 import { slotForFeeder, type FeederEvent } from './bracket.js';
 import { invalidate } from './cache.js';
 import { emitMatchResult, emitBracketUpdate } from './emit.js';
+import { logQueueActivity } from './queue-activity.js';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -151,6 +152,7 @@ export async function completeMatch(
     where: { id: matchId, deleted_at: null },
     select: {
       id: true,
+      type: true,
       tournament_id: true,
       player1_id: true,
       player2_id: true,
@@ -334,6 +336,20 @@ export async function completeMatch(
       },
     });
   });
+
+  // Open Play: record the result in the queue activity log (best-effort, post-commit
+  // so a logging failure can never roll back the match result)
+  if (match.type === 'OPEN_PLAY') {
+    if (winnerId !== null && loserId !== null) {
+      await logQueueActivity(fastify.prisma, 'WIN', winnerId, { matchId, opponentId: loserId });
+      await logQueueActivity(fastify.prisma, 'LOSE', loserId, { matchId, opponentId: winnerId });
+    } else {
+      if (match.player1_id)
+        await logQueueActivity(fastify.prisma, 'DRAW', match.player1_id, { matchId, opponentId: match.player2_id });
+      if (match.player2_id)
+        await logQueueActivity(fastify.prisma, 'DRAW', match.player2_id, { matchId, opponentId: match.player1_id });
+    }
+  }
 
   if (fastify.redis) {
     await Promise.all([

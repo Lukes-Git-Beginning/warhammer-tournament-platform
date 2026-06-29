@@ -152,6 +152,16 @@ enum MatchType {
   OPEN_PLAY
 }
 
+enum QueueEventType {
+  JOIN // entered the Open Play queue
+  LEAVE // left the queue before being matched
+  MATCH // matched with an opponent
+  CANCEL // an Open Play match was cancelled
+  WIN // won an Open Play match
+  LOSE // lost an Open Play match
+  DRAW // Open Play match ended in a draw
+}
+
 enum AvailabilityContext {
   TOURNAMENT
   MATCHMAKING
@@ -212,6 +222,8 @@ model User {
   availability_slots    AvailabilitySlot[]
   proposed_matchups     ScheduledMatchup[]      @relation("MatchupProposer")
   accepted_matchups     ScheduledMatchup[]      @relation("MatchupAcceptor")
+  queue_activity          QueueActivityLog[]    @relation("QueueActivityUser")
+  queue_activity_opponent QueueActivityLog[]    @relation("QueueActivityOpponent")
 
   @@index([role])
   @@index([deleted_at])
@@ -867,6 +879,26 @@ model AuditLog {
 
   @@index([entity_type, entity_id])
   @@index([actor_id])
+  @@index([created_at])
+}
+
+// -----------------------------------------------------------------------------
+// Queue Activity Log (M8 — persistent Open Play queue/match lifecycle, admin view)
+// -----------------------------------------------------------------------------
+
+model QueueActivityLog {
+  id          String         @id @default(uuid()) @db.Uuid
+  user_id     String         @db.Uuid
+  event       QueueEventType
+  match_id    String?        @db.Uuid // set for MATCH/CANCEL/WIN/LOSE/DRAW
+  opponent_id String?        @db.Uuid // the other player, when known
+  created_at  DateTime       @default(now())
+
+  user     User  @relation("QueueActivityUser", fields: [user_id], references: [id])
+  opponent User? @relation("QueueActivityOpponent", fields: [opponent_id], references: [id])
+
+  @@index([user_id])
+  @@index([event])
   @@index([created_at])
 }
 

@@ -25,6 +25,11 @@ const AuditLogQuerySchema = PaginationSchema.extend({
   actor_id: z.string().uuid().optional(),
 });
 
+const QueueActivityQuerySchema = PaginationSchema.extend({
+  user_id: z.string().uuid().optional(),
+  event: z.enum(['JOIN', 'LEAVE', 'MATCH', 'CANCEL', 'WIN', 'LOSE', 'DRAW']).optional(),
+});
+
 // ---------------------------------------------------------------------------
 // Validation Schemas
 // ---------------------------------------------------------------------------
@@ -135,6 +140,50 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         actor_avatar_url: e.actor?.avatar_url ?? null,
         old_value: e.old_value,
         new_value: e.new_value,
+        created_at: e.created_at.toISOString(),
+      })),
+      total,
+      page,
+      pageSize,
+    };
+  });
+
+  // GET /api/admin/queue-activity — persistent Open Play queue/match lifecycle log
+  fastify.get('/api/admin/queue-activity', async (request, reply) => {
+    const parsed = QueueActivityQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { page, pageSize, user_id, event } = parsed.data;
+
+    const where: Record<string, unknown> = {};
+    if (user_id) where.user_id = user_id;
+    if (event) where.event = event;
+
+    const [total, entries] = await Promise.all([
+      fastify.prisma.queueActivityLog.count({ where }),
+      fastify.prisma.queueActivityLog.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          user: { select: { id: true, username: true, avatar_url: true } },
+          opponent: { select: { id: true, username: true, avatar_url: true } },
+        },
+      }),
+    ]);
+
+    return {
+      entries: entries.map((e) => ({
+        id: e.id,
+        event: e.event,
+        user_id: e.user?.id ?? null,
+        user_username: e.user?.username ?? null,
+        user_avatar_url: e.user?.avatar_url ?? null,
+        opponent_id: e.opponent?.id ?? null,
+        opponent_username: e.opponent?.username ?? null,
+        match_id: e.match_id,
         created_at: e.created_at.toISOString(),
       })),
       total,

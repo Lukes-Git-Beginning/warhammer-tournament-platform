@@ -587,6 +587,35 @@ export function getAdminAuditLog(opts?: {
   return apiFetch(`/api/admin/audit-log${qs ? `?${qs}` : ''}`);
 }
 
+export type QueueActivityEvent = 'JOIN' | 'LEAVE' | 'MATCH' | 'CANCEL' | 'WIN' | 'LOSE' | 'DRAW';
+
+export interface QueueActivityEntry {
+  id: string;
+  event: QueueActivityEvent;
+  user_id: string | null;
+  user_username: string | null;
+  user_avatar_url: string | null;
+  opponent_id: string | null;
+  opponent_username: string | null;
+  match_id: string | null;
+  created_at: string;
+}
+
+export function getAdminQueueActivity(opts?: {
+  page?: number;
+  pageSize?: number;
+  user_id?: string;
+  event?: QueueActivityEvent;
+}): Promise<{ entries: QueueActivityEntry[]; total: number; page: number; pageSize: number }> {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
+  if (opts?.user_id) params.set('user_id', opts.user_id);
+  if (opts?.event) params.set('event', opts.event);
+  const qs = params.toString();
+  return apiFetch(`/api/admin/queue-activity${qs ? `?${qs}` : ''}`);
+}
+
 export function getAdminStats(): Promise<AdminStats> {
   return apiFetch('/api/admin/stats');
 }

@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { notifyMatchFoundWithButtons, notifyAvailabilityPing } from '../lib/discord-notify.js';
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
+import { logQueueActivity } from '../lib/queue-activity.js';
 
 const QUEUE_KEY = 'rizzotto:queue:open_play';
 
@@ -80,6 +81,11 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
           ));
         }
 
+        await Promise.all([
+          logQueueActivity(fastify.prisma, 'MATCH', p1Id, { matchId, opponentId: p2Id }),
+          logQueueActivity(fastify.prisma, 'MATCH', p2Id, { matchId, opponentId: p1Id }),
+        ]);
+
         return reply.code(200).send({ matched: true, match_id: matchId });
       }
 
@@ -118,6 +124,8 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
         })());
       }
 
+      await logQueueActivity(fastify.prisma, 'JOIN', userId);
+
       return reply.code(200).send({ matched: false, position });
     },
   );
@@ -128,7 +136,8 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user.sub;
-      if (fastify.redis) await fastify.redis.lrem(QUEUE_KEY, 0, userId);
+      const removed = fastify.redis ? await fastify.redis.lrem(QUEUE_KEY, 0, userId) : 0;
+      if (removed > 0) await logQueueActivity(fastify.prisma, 'LEAVE', userId);
       return reply.code(204).send();
     },
   );
@@ -182,6 +191,15 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
           where: { match_id: id, status: 'PENDING', winner_id: null },
           data: { status: 'COMPLETED', counts_for_leaderboard: true },
         }),
+      ]);
+
+      await Promise.all([
+        match.player1_id
+          ? logQueueActivity(fastify.prisma, 'CANCEL', match.player1_id, { matchId: id, opponentId: match.player2_id })
+          : Promise.resolve(),
+        match.player2_id
+          ? logQueueActivity(fastify.prisma, 'CANCEL', match.player2_id, { matchId: id, opponentId: match.player1_id })
+          : Promise.resolve(),
       ]);
 
       return reply.code(200).send({ ok: true });
