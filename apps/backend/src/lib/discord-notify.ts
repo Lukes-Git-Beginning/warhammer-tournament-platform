@@ -151,7 +151,7 @@ export async function notifyMatchFoundWithButtons(
  */
 export async function notifyResultPending(
   opponentDiscordId: string,
-  declarerUsername: string,
+  declarerDiscordId: string,
   matchId: string,
   winnerId: string,
 ): Promise<void> {
@@ -160,7 +160,7 @@ export async function notifyResultPending(
 
   await sendDmWithComponents(
     opponentDiscordId,
-    `**${declarerUsername}** has reported a win for this match. Confirm or dispute?`,
+    `<@${declarerDiscordId}> has reported a win for this match. Confirm or dispute?`,
     [
       actionRow([
         button('Confirm', `op_confirm:${matchId}:${winnerId}`, BTN_SUCCESS),
@@ -176,7 +176,7 @@ export async function notifyResultPending(
  */
 export async function notifyCancelPending(
   opponentDiscordId: string,
-  declarerUsername: string,
+  declarerDiscordId: string,
   matchId: string,
 ): Promise<void> {
   const token = getToken();
@@ -184,7 +184,7 @@ export async function notifyCancelPending(
 
   await sendDmWithComponents(
     opponentDiscordId,
-    `**${declarerUsername}** wants to cancel this match without recording a result. Accept or dispute?`,
+    `<@${declarerDiscordId}> wants to cancel this match without recording a result. Accept or dispute?`,
     [
       actionRow([
         button('Accept', `op_cancel_accept:${matchId}`, BTN_SUCCESS),
@@ -230,7 +230,7 @@ export async function notifyScheduledMatchReminder(
   const ts = Math.floor(proposedAt.getTime() / 1000);
 
   const buildDm = (forPlayer: typeof proposer, opponent: typeof proposer) => ({
-    content: `⏰ Your **${format}** match with **${opponent.username}** starts <t:${ts}:R> (<t:${ts}:t>)! Let your opponent know you'll be there:`,
+    content: `⏰ Your **${format}** match with <@${opponent.discordId}> starts <t:${ts}:R> (<t:${ts}:t>)! Let your opponent know you'll be there:`,
     components: [
       actionRow([
         button("✅ I'm Ready", `sc_ready:${matchupId}:${forPlayer.discordId}`, BTN_SUCCESS),
@@ -265,11 +265,11 @@ export async function notifyChallengeMatchFound(
   await Promise.allSettled([
     sendDm(
       proposer.discordId,
-      `⚔️ Your **${format}** challenge was accepted by **${acceptor.username}**${mapLine} → ${matchUrl}`,
+      `⚔️ Your **${format}** challenge was accepted by <@${acceptor.discordId}>${mapLine} → ${matchUrl}`,
     ),
     sendDm(
       acceptor.discordId,
-      `⚔️ You accepted **${proposer.username}**'s **${format}** challenge${mapLine} → ${matchUrl}`,
+      `⚔️ You accepted <@${proposer.discordId}>'s **${format}** challenge${mapLine} → ${matchUrl}`,
     ),
   ]);
 }
@@ -316,7 +316,7 @@ export async function notifyReQueuePrompt(discordId: string): Promise<void> {
 /**
  * DM moderators about an Open Play dispute (no tournament host to notify).
  */
-export async function notifyOpenPlayDispute(matchId: string, reporterUsername: string): Promise<void> {
+export async function notifyOpenPlayDispute(matchId: string, reporterDiscordId: string): Promise<void> {
   const token = getToken();
   if (!token) return;
 
@@ -333,7 +333,7 @@ export async function notifyOpenPlayDispute(matchId: string, reporterUsername: s
     const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
     const message =
       `**[RizzOtto's Arena] ⚠️ Open Play Dispute**\n\n` +
-      `Match ID: \`${matchId}\`\nReported by: **${reporterUsername}**\n\n` +
+      `Match ID: \`${matchId}\`\nReported by: <@${reporterDiscordId}>\n\n` +
       `Please review at ${matchUrl}`;
 
     const recipients = [...new Set([...moderators, ...admins].map((u) => u.discord_id))];
@@ -344,7 +344,12 @@ export async function notifyOpenPlayDispute(matchId: string, reporterUsername: s
 }
 
 async function sendEmbed(channelId: string, embed: object): Promise<void> {
-  await discordRequest('POST', `/channels/${channelId}/messages`, { embeds: [embed] });
+  // parse: [] keeps any <@id> mentions in the embed clickable but silent — no
+  // notification spam when a pairing list names the whole field.
+  await discordRequest('POST', `/channels/${channelId}/messages`, {
+    embeds: [embed],
+    allowed_mentions: { parse: [] },
+  });
 }
 
 async function getAdminConfig(): Promise<Record<string, string>> {
@@ -467,7 +472,7 @@ export async function notifyRoundPairings(
     const pairingLines = pairings
       .map(
         (p) =>
-          `• **${p.player1.username}** vs **${p.player2.username}**` +
+          `• <@${p.player1.discord_id}> vs <@${p.player2.discord_id}>` +
           (p.map ? ` on *${p.map}*` : ''),
       )
       .join('\n');
@@ -575,7 +580,7 @@ export async function notifyHostsOfWithdrawal(
         where: { id: tournamentId },
         select: { name: true, slug: true, host_id: true, co_hosts: { select: { user_id: true } } },
       }),
-      prisma.user.findUnique({ where: { id: userId }, select: { username: true } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { username: true, discord_id: true } }),
     ]);
     if (!tournament || !user) return;
 
@@ -588,7 +593,7 @@ export async function notifyHostsOfWithdrawal(
     });
     const msg =
       `**[RizzOtto's Arena] Player dropped — ${tournament.name}**\n` +
-      `**${user.username}** is no longer in the tournament. ` +
+      `<@${user.discord_id}> is no longer in the tournament. ` +
       `Review the bracket at ${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}.`;
     await Promise.allSettled(hosts.map((h) => sendDm(h.discord_id, msg)));
   } catch (err) {
@@ -625,7 +630,7 @@ export async function notifyDispute(
     const message =
       `**[RizzOtto's Arena] ⚠️ Match Dispute — ${match.tournament.name}**\n\n` +
       `Match ID: \`${match.id}\`\n` +
-      `Reported by: **${reporter.username}**\n\n` +
+      `Reported by: <@${reporter.discord_id}>\n\n` +
       `Please review and resolve the dispute at ${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${match.tournament.slug}`;
 
     const recipients: string[] = moderators.map((m) => m.discord_id);

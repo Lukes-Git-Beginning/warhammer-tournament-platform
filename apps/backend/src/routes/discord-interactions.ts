@@ -170,12 +170,12 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         if (outcome === 'cancel') {
-          setImmediate(() => void notifyCancelPending(opponent.discord_id!, actor.username, matchId));
+          setImmediate(() => void notifyCancelPending(opponent.discord_id!, discordId, matchId));
           return reply.code(200).send(ephemeral(`Cancellation request sent to **${opponent.username}**. Waiting for their response.`));
         }
 
         const winnerId = outcome === 'win' ? actor.id : opponentId;
-        setImmediate(() => void notifyResultPending(opponent.discord_id!, actor.username, matchId, winnerId));
+        setImmediate(() => void notifyResultPending(opponent.discord_id!, discordId, matchId, winnerId));
         return reply.code(200).send(ephemeral(`Result reported. Waiting for **${opponent.username}** to confirm.`));
       }
 
@@ -244,7 +244,7 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
         if (!disputer) return reply.code(200).send(ephemeral('You need to log in at rizzotto.gg first.'));
 
         await fastify.prisma.match.update({ where: { id: matchId }, data: { status: 'DISPUTED' } });
-        setImmediate(() => void notifyOpenPlayDispute(matchId, disputer.username));
+        setImmediate(() => void notifyOpenPlayDispute(matchId, discordId));
 
         return reply.code(200).send(ephemeral('Dispute submitted. A moderator has been notified and will review the match.'));
       }
