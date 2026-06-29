@@ -6,6 +6,8 @@ import {
   getMyAvailability,
   setMyAvailability,
   getAvailabilityHeatmap,
+  getAvailabilityNow,
+  getQueueStatus,
   getScheduledMatchups,
   createScheduledMatchup,
   acceptScheduledMatchup,
@@ -44,13 +46,48 @@ export function OpenPlayPage() {
     refetchInterval: 15_000,
   });
 
+  const { data: queueStatus } = useQuery({
+    queryKey: ['queue-status'],
+    queryFn: getQueueStatus,
+    refetchInterval: 30_000,
+    enabled: !!me,
+  });
+
+  const { data: availabilityNow } = useQuery({
+    queryKey: ['availability-now'],
+    queryFn: getAvailabilityNow,
+    refetchInterval: 60_000,
+    staleTime: 60_000,
+  });
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-stone-100">Open Play</h1>
-        <p className="text-sm text-stone-400 mt-1">
-          Ranked matches outside of tournaments — all results count towards the leaderboard.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-stone-100">Open Play</h1>
+          <p className="text-sm text-stone-400 mt-1">
+            Ranked matches outside of tournaments — all results count towards the leaderboard.
+          </p>
+        </div>
+        {(queueStatus !== undefined || availabilityNow !== undefined) && (
+          <div className="flex items-center gap-2 rounded border border-stone-800 bg-stone-900/60 px-3 py-1.5 text-xs text-stone-400">
+            {queueStatus !== undefined && (
+              <span>
+                <span className="font-semibold text-stone-200">{queueStatus.total}</span>{' '}
+                in queue
+              </span>
+            )}
+            {queueStatus !== undefined && availabilityNow !== undefined && (
+              <span className="text-stone-700">·</span>
+            )}
+            {availabilityNow !== undefined && (
+              <span>
+                <span className="font-semibold text-stone-200">{availabilityNow.count}</span>{' '}
+                available now
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <QueueStatusCard />
