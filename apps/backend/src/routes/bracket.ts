@@ -531,17 +531,29 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           ? Math.max(...existingMatches.map((m) => m.round))
           : 0;
 
-      // Pair only CHECKED_IN players (B14): REGISTERED-but-never-checked-in must not
-      // enter pairing in later rounds. WITHDREW is kept for correct Buchholz (they
-      // contribute to opponents' BH) but is excluded from pairing via withdrawnIds.
-      const participants = await fastify.prisma.tournamentParticipant.findMany({
+      // B14: in later rounds, exclude REGISTERED players who never showed up — but
+      // only the genuine no-shows. A REGISTERED player who already played a prior
+      // round (e.g. a tournament started without enforced check-in) must stay in;
+      // dropping them would collapse the field in round 2. CHECKED_IN is always
+      // kept; WITHDREW is kept for correct Buchholz but filtered from pairing via
+      // withdrawnIds.
+      const allParticipants = await fastify.prisma.tournamentParticipant.findMany({
         where: {
           tournament_id: tournament.id,
-          status: { in: ['CHECKED_IN', 'WITHDREW'] },
+          status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
           deleted_at: null,
         },
         select: { user_id: true, faction_id: true, status: true },
       });
+
+      const playedIds = new Set<string>();
+      for (const m of existingMatches) {
+        if (m.player1_id) playedIds.add(m.player1_id);
+        if (m.player2_id) playedIds.add(m.player2_id);
+      }
+      const participants = allParticipants.filter(
+        (p) => p.status !== 'REGISTERED' || playedIds.has(p.user_id),
+      );
 
       const participantIds = participants.map((p) => p.user_id);
       const withdrawnIds = new Set(
