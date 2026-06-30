@@ -8,13 +8,10 @@ import type { UserMe } from '@rizzotto/types';
 import { GameHistoryTable } from '../components/match/GameHistoryTable.js';
 import { PlayerFactionProficiencyCard } from '../components/meta/PlayerFactionProficiencyCard.js';
 import { useAuthQuery } from '@/lib/auth.js';
-import { useOnboarding } from '@/lib/onboarding.js';
 import { formatInUserTimezone } from '@/lib/timezone.js';
 import { Button } from '@/components/ui/button.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 import { PageShell } from '@/components/layout/PageShell.js';
-import { ArmyListList } from '../components/tournament/ArmyListList.js';
-import { ArmyListUpload } from '../components/tournament/ArmyListUpload.js';
 
 /** Map deprecated IANA aliases to their current canonical name (e.g. Kiev → Kyiv). */
 function normalizeTimezone(tz: string): string {
@@ -282,7 +279,6 @@ export function UserProfilePage() {
   const { t } = useTranslation();
   const { id } = useParams({ from: '/users/$id' });
   const { data: me } = useAuthQuery();
-  const { reset, isResetting } = useOnboarding();
   const isOwnProfile = me?.id === id;
 
   const { data, isLoading, error } = useQuery({
@@ -447,35 +443,6 @@ export function UserProfilePage() {
       {/* Timezone (own profile only) */}
       {isOwnProfile && me && <TimezoneSection user={me} />}
 
-      {/* Army-Listen */}
-      <section>
-        <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          {t('user_profile.army_lists')}
-        </h2>
-        <div className="space-y-4">
-          <ArmyListList />
-          <ArmyListUpload factionId="" />
-        </div>
-      </section>
-
-      {/* The Workshop — only on own profile */}
-      {isOwnProfile && (
-        <section
-          aria-labelledby="workshop-heading"
-          className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-6"
-        >
-          <h2
-            id="workshop-heading"
-            className="font-display text-lg font-semibold text-rizzotto-gold-400 mb-2"
-          >
-            {t('user_profile.workshop_title')}
-          </h2>
-          <p className="text-sm text-rizzotto-stone-300 mb-4">{t('user_profile.workshop_body')}</p>
-          <Button variant="etched" size="sm" onClick={() => void reset()} disabled={isResetting}>
-            {isResetting ? t('user_profile.workshop_cta_loading') : t('user_profile.workshop_cta')}
-          </Button>
-        </section>
-      )}
 
       {/* Recent Games */}
       <section>
