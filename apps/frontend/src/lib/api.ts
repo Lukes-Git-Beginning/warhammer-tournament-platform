@@ -1457,8 +1457,11 @@ export interface ScheduledMatchup {
   expires_at: string;
 }
 
-export function getAvailabilityHeatmap(): Promise<{ slots: HeatmapSlot[] }> {
-  return apiFetch<{ slots: HeatmapSlot[] }>('/api/availability/heatmap');
+export function getAvailabilityHeatmap(
+  context?: 'TOURNAMENT' | 'MATCHMAKING',
+): Promise<{ slots: HeatmapSlot[] }> {
+  const qs = context ? `?context=${context}` : '';
+  return apiFetch<{ slots: HeatmapSlot[] }>(`/api/availability/heatmap${qs}`);
 }
 
 export function getMyAvailability(): Promise<{ slots: AvailabilitySlot[] }> {

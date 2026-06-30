@@ -8,12 +8,12 @@ const ROW_H = 28;
 const VISIBLE_ROWS = 16;
 const START_HOUR = 8;
 
-function intensityColor(count: number, max: number): string {
+function intensityColor(count: number, max: number, hue: number): string {
   if (max === 0 || count === 0) return 'hsl(20,3%,13%)';
   const ratio = Math.min(count / max, 1);
   const lightness = 13 + 45 * ratio;
   const saturation = 8 + 62 * ratio;
-  return `hsl(38,${saturation.toFixed(0)}%,${lightness.toFixed(0)}%)`;
+  return `hsl(${hue},${saturation.toFixed(0)}%,${lightness.toFixed(0)}%)`;
 }
 
 function utcToLocal(dayUtc: number, hourUtc: number, offset: number): { day: number; hour: number } {
@@ -26,9 +26,11 @@ function utcToLocal(dayUtc: number, hourUtc: number, offset: number): { day: num
 interface AvailabilityHeatmapProps {
   slots: HeatmapSlot[];
   userTimezone?: string;
+  /** HSL hue for the density colour. 38 = amber (matchmaking), 199 = sky (tournament). */
+  hue?: number;
 }
 
-export function AvailabilityHeatmap({ slots, userTimezone }: AvailabilityHeatmapProps) {
+export function AvailabilityHeatmap({ slots, userTimezone, hue = 38 }: AvailabilityHeatmapProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const offset = userTimezone ? getUtcOffsetHours(userTimezone) : 0;
 
@@ -80,7 +82,7 @@ export function AvailabilityHeatmap({ slots, userTimezone }: AvailabilityHeatmap
                 return (
                   <div
                     key={`${day}-${hour}`}
-                    style={{ height: ROW_H, background: intensityColor(count, max) }}
+                    style={{ height: ROW_H, background: intensityColor(count, max, hue) }}
                     className="border-b border-r border-stone-700/30"
                     title={count > 0 ? `${count} player${count === 1 ? '' : 's'} available` : undefined}
                   />
@@ -95,7 +97,7 @@ export function AvailabilityHeatmap({ slots, userTimezone }: AvailabilityHeatmap
         <span>Less</span>
         <div className="flex gap-0.5">
           {[0, 0.2, 0.4, 0.6, 0.8, 1].map((r) => (
-            <div key={r} className="h-3 w-5 rounded-sm" style={{ background: intensityColor(Math.round(r * 10), 10) }} />
+            <div key={r} className="h-3 w-5 rounded-sm" style={{ background: intensityColor(Math.round(r * 10), 10, hue) }} />
           ))}
         </div>
         <span>More</span>

@@ -150,7 +150,7 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
 
   const { data: heatmapData } = useQuery({
     queryKey: ['availability-heatmap'],
-    queryFn: getAvailabilityHeatmap,
+    queryFn: () => getAvailabilityHeatmap(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -198,7 +198,7 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
 
 function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: string; userTimezone?: string }) {
   const [editContext, setEditContext] = useState<AvailabilityContext>('MATCHMAKING');
-  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [view, setView] = useState<'mine' | 'matchmaking' | 'tournament'>('mine');
   const [localSlots, setLocalSlots] = useState<AvailabilitySlot[] | null>(null);
   const qc = useQueryClient();
 
@@ -208,10 +208,17 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
     enabled: !!currentUserId,
   });
 
-  const { data: heatmapData } = useQuery({
-    queryKey: ['availability-heatmap'],
-    queryFn: getAvailabilityHeatmap,
-    enabled: showHeatmap,
+  const { data: mmHeatmap } = useQuery({
+    queryKey: ['availability-heatmap', 'MATCHMAKING'],
+    queryFn: () => getAvailabilityHeatmap('MATCHMAKING'),
+    enabled: view === 'matchmaking',
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: tournHeatmap } = useQuery({
+    queryKey: ['availability-heatmap', 'TOURNAMENT'],
+    queryFn: () => getAvailabilityHeatmap('TOURNAMENT'),
+    enabled: view === 'tournament',
+    staleTime: 5 * 60 * 1000,
   });
 
   const save = useMutation({
@@ -254,13 +261,35 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
           ))}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowHeatmap((v) => !v)}
-          className="text-xs text-stone-400 hover:text-stone-200 underline"
-        >
-          {showHeatmap ? 'My availability' : 'Community heatmap'}
-        </button>
+        {/* small visual gap between the edit-context buttons and the view toggle */}
+        <div aria-hidden className="w-2" />
+
+        {/* View selector — own availability or either community heatmap */}
+        <div className="flex gap-1 rounded border border-stone-700 bg-stone-900 p-0.5">
+          {([
+            ['mine', 'My Availability'],
+            ['matchmaking', 'Matchmaking Heatmap'],
+            ['tournament', 'Tournament Heatmap'],
+          ] as const).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              className={[
+                'rounded px-3 py-1 text-xs font-medium transition-colors',
+                view === v
+                  ? v === 'matchmaking'
+                    ? 'bg-amber-500/20 text-amber-400'
+                    : v === 'tournament'
+                      ? 'bg-sky-500/20 text-sky-400'
+                      : 'bg-stone-700 text-stone-100'
+                  : 'text-stone-400 hover:text-stone-200',
+              ].join(' ')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {isDirty && (
           <Button size="sm" onClick={() => save.mutate(slots)} disabled={save.isPending}>
@@ -269,15 +298,17 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
         )}
       </div>
 
-      {showHeatmap ? (
-        <AvailabilityHeatmap slots={heatmapData?.slots ?? []} userTimezone={userTimezone} />
-      ) : (
+      {view === 'mine' ? (
         <WeekAvailabilityGrid
           slots={slots}
           editContext={editContext}
           onChange={setLocalSlots}
           userTimezone={userTimezone}
         />
+      ) : view === 'matchmaking' ? (
+        <AvailabilityHeatmap slots={mmHeatmap?.slots ?? []} userTimezone={userTimezone} hue={38} />
+      ) : (
+        <AvailabilityHeatmap slots={tournHeatmap?.slots ?? []} userTimezone={userTimezone} hue={199} />
       )}
     </div>
   );
@@ -296,7 +327,7 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
 
   const { data: heatmapData } = useQuery({
     queryKey: ['availability-heatmap'],
-    queryFn: getAvailabilityHeatmap,
+    queryFn: () => getAvailabilityHeatmap(),
     staleTime: 5 * 60 * 1000,
   });
 

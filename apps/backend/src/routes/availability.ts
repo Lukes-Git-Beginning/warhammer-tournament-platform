@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { Prisma } from '@rizzotto/db';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
 
 const SlotSchema = z.object({
@@ -13,17 +14,24 @@ const BulkUpsertSchema = z.object({
 });
 
 const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/availability/heatmap — public, anonymous aggregate
-  fastify.get('/api/availability/heatmap', async (_request, reply) => {
+  // GET /api/availability/heatmap?context=TOURNAMENT|MATCHMAKING — public, anonymous aggregate.
+  // No context → combined (any availability). With context → that calendar only.
+  fastify.get('/api/availability/heatmap', async (request, reply) => {
+    const q = z.object({ context: z.enum(['TOURNAMENT', 'MATCHMAKING']).optional() }).safeParse(request.query);
+    const context = q.success ? q.data.context : undefined;
+    const whereClause = context
+      ? Prisma.sql`WHERE context = ${context}::"AvailabilityContext"`
+      : Prisma.empty;
     const data = await cached(
       fastify.redis,
-      cacheKey('availability:heatmap', {}),
+      cacheKey('availability:heatmap', { context: context ?? 'all' }),
       async () => {
         const rows = await fastify.prisma.$queryRaw<
           { day_of_week: number; hour_utc: number; count: bigint }[]
         >`
           SELECT day_of_week, hour_utc, COUNT(DISTINCT user_id)::int AS count
           FROM "AvailabilitySlot"
+          ${whereClause}
           GROUP BY day_of_week, hour_utc
         `;
         return rows.map((r) => ({

@@ -211,8 +211,8 @@ export function TournamentCreateForm() {
   // the host can choose a slot when most players are around.
   const { data: me } = useAuthQuery();
   const { data: heatmapData } = useQuery({
-    queryKey: ['availability-heatmap'],
-    queryFn: getAvailabilityHeatmap,
+    queryKey: ['availability-heatmap', 'TOURNAMENT'],
+    queryFn: () => getAvailabilityHeatmap('TOURNAMENT'),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -455,7 +455,7 @@ export function TournamentCreateForm() {
         <p className="text-xs text-stone-500">
           Community availability — brighter means more players have marked this time as free. Pick a start time when most can attend.
         </p>
-        <AvailabilityHeatmap slots={heatmapData?.slots ?? []} userTimezone={me?.timezone ?? undefined} />
+        <AvailabilityHeatmap slots={heatmapData?.slots ?? []} userTimezone={me?.timezone ?? undefined} hue={199} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
