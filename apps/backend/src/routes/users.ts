@@ -310,56 +310,63 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
       }
 
-      // All-time win/loss counts (separate from history so the limit of 20 doesn't skew stats)
-      const playerWhere = {
-        status: { in: ['COMPLETED' as const, 'FORFEIT' as const] },
-        OR: [{ player1_id: id }, { player2_id: id }],
-        deleted_at: null as null,
+      // All-time win/loss counts on the GAME level (games are the statistical unit).
+      // A BoN match contributes one row per game; FORFEIT/BYE containers have no game row
+      // and so never count as wins/losses here. Draws (winner_id null) count as neither.
+      const playerGameWhere = {
+        status: 'COMPLETED' as const,
+        match: { deleted_at: null, OR: [{ player1_id: id }, { player2_id: id }] },
       };
-      const [totalWins, decidedCount] = await Promise.all([
-        fastify.prisma.match.count({ where: { ...playerWhere, winner_id: id } }),
-        fastify.prisma.match.count({ where: { ...playerWhere, winner_id: { not: null } } }),
+      const [totalWins, totalLosses] = await Promise.all([
+        fastify.prisma.matchGame.count({ where: { ...playerGameWhere, winner_id: id } }),
+        fastify.prisma.matchGame.count({
+          where: { ...playerGameWhere, winner_id: { not: null }, NOT: { winner_id: id } },
+        }),
       ]);
-      const totalLosses = decidedCount - totalWins;
 
-      // Match history — last 20 for context (faction/map data)
-      const recentMatches = await fastify.prisma.match.findMany({
-        where: {
-          status: { in: ['COMPLETED', 'FORFEIT'] },
-          OR: [{ player1_id: id }, { player2_id: id }],
-          deleted_at: null,
-        },
-        orderBy: { updated_at: 'desc' },
+      // Recent games — last 20 for context (faction/map data), newest first.
+      const factionList = await fastify.prisma.faction.findMany({ select: { id: true, name: true } });
+      const factionName = new Map(factionList.map((f) => [f.id, f.name]));
+      const fchip = (fid: string | null) => (fid ? { id: fid, name: factionName.get(fid) ?? fid } : null);
+
+      const recentGames = await fastify.prisma.matchGame.findMany({
+        where: playerGameWhere,
+        orderBy: { played_at: 'desc' },
         take: 20,
-        include: {
-          tournament: { select: { slug: true } },
-          player1: { select: { id: true, username: true } },
-          player2: { select: { id: true, username: true } },
-          player1_faction: { select: { id: true, name: true } },
-          player2_faction: { select: { id: true, name: true } },
-          games: {
-            where: { game_number: 1 },
-            select: { map_decision: { select: { picked_map_id: true } } },
-            take: 1,
+        select: {
+          winner_id: true,
+          player1_faction_id: true,
+          player2_faction_id: true,
+          played_at: true,
+          map_decision: { select: { picked_map_id: true } },
+          match: {
+            select: {
+              player1_id: true,
+              player2_id: true,
+              tournament: { select: { slug: true } },
+              player1: { select: { id: true, username: true } },
+              player2: { select: { id: true, username: true } },
+            },
           },
         },
       });
 
-      const matchHistory = recentMatches.map((m) => {
+      const matchHistory = recentGames.map((g) => {
+        const m = g.match;
         const isPlayer1 = m.player1_id === id;
         const opponentUser = isPlayer1 ? m.player2 : m.player1;
-        const myFaction = isPlayer1 ? m.player1_faction : m.player2_faction;
-        const opponentFaction = isPlayer1 ? m.player2_faction : m.player1_faction;
-        const won = m.winner_id === id;
+        const myFactionId = isPlayer1 ? g.player1_faction_id : g.player2_faction_id;
+        const opponentFactionId = isPlayer1 ? g.player2_faction_id : g.player1_faction_id;
+        const won = g.winner_id === id;
         return {
           tournament_slug: m.tournament?.slug ?? null,
           opponent_username: opponentUser?.username ?? null,
           my_score: won ? 1 : 0,
           opponent_score: won ? 0 : 1,
-          my_faction: myFaction ? { id: myFaction.id, name: myFaction.name } : null,
-          opponent_faction: opponentFaction ? { id: opponentFaction.id, name: opponentFaction.name } : null,
-          map_id: m.games[0]?.map_decision?.picked_map_id ?? null,
-          played_at: m.updated_at.toISOString(),
+          my_faction: fchip(myFactionId),
+          opponent_faction: fchip(opponentFactionId),
+          map_id: g.map_decision?.picked_map_id ?? null,
+          played_at: g.played_at?.toISOString() ?? null,
           won,
         };
       });

@@ -42,73 +42,38 @@ interface PlayerAgg {
 }
 
 /**
- * Load confirmed games of a season. Mirrors All-Games logic: load via Match,
- * expand to MatchGame records where they exist, synthesise a single game for
- * matches that have no game records (pre-GL-fix data).
+ * Load the decisive confirmed games of a season. Games are the statistical unit:
+ * read the MatchGame rows directly (a Bo3 contributes up to three games), keyed by
+ * the leaderboard-eligible match filter. No synthetic fallback — every confirmed
+ * match now carries its game rows (see the games-only backfill migration). Draws
+ * (winner_id null) award no leaderboard points and are excluded.
  */
 export async function loadConfirmedGames(
   prisma: PrismaClient,
   seasonId: string,
 ): Promise<ConfirmedGame[]> {
-  const matches = await prisma.match.findMany({
-    where: confirmedMatchWhere(seasonId),
+  const games = await prisma.matchGame.findMany({
+    where: {
+      status: 'COMPLETED',
+      winner_id: { not: null },
+      counts_for_leaderboard: true,
+      match: confirmedMatchWhere(seasonId),
+    },
     select: {
-      player1_id: true,
-      player2_id: true,
       winner_id: true,
       player1_faction_id: true,
       player2_faction_id: true,
-      tournament_id: true,
-      games: {
-        select: {
-          winner_id: true,
-          player1_faction_id: true,
-          player2_faction_id: true,
-        },
-      },
+      match: { select: { player1_id: true, player2_id: true } },
     },
   });
 
-  const tournamentIds = [...new Set(matches.map((m) => m.tournament_id).filter((id): id is string => id !== null))];
-  const participants = tournamentIds.length
-    ? await prisma.tournamentParticipant.findMany({
-        where: { tournament_id: { in: tournamentIds }, deleted_at: null },
-        select: { tournament_id: true, user_id: true, faction_id: true },
-      })
-    : [];
-  const pfMap = new Map(
-    participants.map((p) => [`${p.tournament_id}:${p.user_id}`, p.faction_id]),
-  );
-  const pf = (tid: string, uid: string) => pfMap.get(`${tid}:${uid}`) ?? null;
-
-  return matches.flatMap((m): ConfirmedGame[] => {
-    const p1 = m.player1_id!;
-    const p2 = m.player2_id!;
-    const matchFX = m.player1_faction_id ?? (m.tournament_id ? pf(m.tournament_id, p1) : null);
-    const matchFY = m.player2_faction_id ?? (m.tournament_id ? pf(m.tournament_id, p2) : null);
-
-    const decisiveGames = m.games.filter((g) => g.winner_id !== null);
-
-    if (decisiveGames.length > 0) {
-      return decisiveGames.map((g) => ({
-        player1_id: p1,
-        player2_id: p2,
-        winner_id: g.winner_id!,
-        player1_faction_id: g.player1_faction_id ?? matchFX,
-        player2_faction_id: g.player2_faction_id ?? matchFY,
-      }));
-    }
-
-    // No game records — treat the match as a single synthetic game
-    if (!m.winner_id) return [];
-    return [{
-      player1_id: p1,
-      player2_id: p2,
-      winner_id: m.winner_id,
-      player1_faction_id: matchFX,
-      player2_faction_id: matchFY,
-    }];
-  });
+  return games.map((g): ConfirmedGame => ({
+    player1_id: g.match.player1_id!,
+    player2_id: g.match.player2_id!,
+    winner_id: g.winner_id!,
+    player1_faction_id: g.player1_faction_id,
+    player2_faction_id: g.player2_faction_id,
+  }));
 }
 
 /**

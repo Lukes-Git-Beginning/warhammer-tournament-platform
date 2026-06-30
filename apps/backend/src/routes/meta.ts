@@ -57,23 +57,23 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('meta:overview', { seasonId: resolvedSeasonId }),
       async () => {
-        // Identical filter to /api/meta/games so the counter matches the list:
-        // a draw IS a played game (no winner_id filter), but admin-voided matches
-        // (counts_for_leaderboard = false) are excluded.
+        // Identical filter to /api/meta/games so the counter matches the list. Games are
+        // the statistical unit: count COMPLETED MatchGame rows directly (every real match
+        // now has game rows — no synthetic fallback). A draw IS a played game (no winner_id
+        // filter); admin-voided matches (counts_for_leaderboard = false) are excluded. The
+        // match's lifecycle status is intentionally NOT filtered — a real game stays counted
+        // even if its container was later cancelled.
         const globalMatchWhere = {
-          status: 'COMPLETED' as const,
           player1_id: { not: null },
           player2_id: { not: null },
           counts_for_leaderboard: true,
           deleted_at: null,
         };
 
-        const [allFactions, realGameCount, syntheticGameCount] = await Promise.all([
+        const [allFactions, total_games] = await Promise.all([
           getFactionsWithStats(fastify.prisma, resolvedSeasonId),
-          fastify.prisma.matchGame.count({ where: { match: globalMatchWhere } }),
-          fastify.prisma.match.count({ where: { ...globalMatchWhere, games: { none: {} } } }),
+          fastify.prisma.matchGame.count({ where: { status: 'COMPLETED', match: globalMatchWhere } }),
         ]);
-        const total_games = realGameCount + syntheticGameCount;
 
         // Coverage × Evenness:
         //   coverage = played_factions / total_factions  (penalises unplayed factions)
@@ -207,124 +207,85 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const { page, limit, tournamentSlug, factionId, opponentFactionId, playerId } = parsed.data;
     const skip = (page - 1) * limit;
 
-    // When both factionId and opponentFactionId are provided, filter to games
-    // where one side is factionId and the other is opponentFactionId.
-    const factionFilter = factionId && opponentFactionId
+    // Faction filter at the game level — games are the statistical unit and now always
+    // carry their own factions (no participant/match fallback). When both factionId and
+    // opponentFactionId are given, match either orientation within a single game.
+    const gameFactionFilter = factionId && opponentFactionId
       ? {
           OR: [
-            {
-              AND: [
-                { OR: [{ player1_faction_id: factionId }, { games: { some: { player1_faction_id: factionId } } }] },
-                { OR: [{ player2_faction_id: opponentFactionId }, { games: { some: { player2_faction_id: opponentFactionId } } }] },
-              ],
-            },
-            {
-              AND: [
-                { OR: [{ player2_faction_id: factionId }, { games: { some: { player2_faction_id: factionId } } }] },
-                { OR: [{ player1_faction_id: opponentFactionId }, { games: { some: { player1_faction_id: opponentFactionId } } }] },
-              ],
-            },
+            { player1_faction_id: factionId, player2_faction_id: opponentFactionId },
+            { player2_faction_id: factionId, player1_faction_id: opponentFactionId },
           ],
         }
       : factionId
-        ? {
-            OR: [
-              { player1_faction_id: factionId },
-              { player2_faction_id: factionId },
-              { games: { some: { player1_faction_id: factionId } } },
-              { games: { some: { player2_faction_id: factionId } } },
-            ],
-          }
+        ? { OR: [{ player1_faction_id: factionId }, { player2_faction_id: factionId }] }
         : {};
 
-    const matchWhere = {
+    // Source set: COMPLETED games on real, non-voided, non-deleted matches. Draws count
+    // (no winner_id filter); admin-voided matches (counts_for_leaderboard = false) are
+    // excluded. The match's lifecycle status is intentionally not filtered — a real game
+    // stays listed even if its container was later cancelled.
+    const gameWhere = {
       status: 'COMPLETED' as const,
-      // Draws count as played games (no winner_id filter); admin-voided matches
-      // (counts_for_leaderboard = false) are excluded.
-      player1_id: { not: null },
-      player2_id: { not: null },
-      counts_for_leaderboard: true,
-      ...(tournamentSlug ? { tournament: { slug: tournamentSlug, deleted_at: null } } : { deleted_at: null }),
-      ...factionFilter,
-      ...(playerId ? { OR: [{ player1_id: playerId }, { player2_id: playerId }] } : {}),
+      ...gameFactionFilter,
+      match: {
+        player1_id: { not: null },
+        player2_id: { not: null },
+        counts_for_leaderboard: true,
+        ...(tournamentSlug ? { tournament: { slug: tournamentSlug, deleted_at: null } } : { deleted_at: null }),
+        ...(playerId ? { OR: [{ player1_id: playerId }, { player2_id: playerId }] } : {}),
+      },
     };
 
-    const [completedMatches, total] = await Promise.all([
-      fastify.prisma.match.findMany({
-        where: matchWhere,
+    const [games, total] = await Promise.all([
+      fastify.prisma.matchGame.findMany({
+        where: gameWhere,
         select: {
           id: true,
-          round: true,
-          match_number: true,
+          game_number: true,
           winner_id: true,
-          result: true,
-          counts_for_leaderboard: true,
           player1_faction_id: true,
           player2_faction_id: true,
           played_at: true,
-          player1: { select: { id: true, username: true, avatar_url: true } },
-          player2: { select: { id: true, username: true, avatar_url: true } },
-          tournament: { select: { id: true, name: true, slug: true } },
-          games: {
+          replay_url: true,
+          counts_for_leaderboard: true,
+          map_decision: { select: { picked_map_id: true } },
+          match: {
             select: {
               id: true,
-              game_number: true,
-              winner_id: true,
-              player1_faction_id: true,
-              player2_faction_id: true,
+              round: true,
+              match_number: true,
               played_at: true,
-              replay_url: true,
-              counts_for_leaderboard: true,
-              map_decision: { select: { picked_map_id: true } },
+              player1: { select: { id: true, username: true, avatar_url: true } },
+              player2: { select: { id: true, username: true, avatar_url: true } },
+              tournament: { select: { id: true, name: true, slug: true } },
             },
-            orderBy: { game_number: 'asc' },
           },
         },
         orderBy: { played_at: 'desc' },
         skip,
         take: limit,
       }),
-      // Game-level total: MatchGames + synthetic rows for matches with no games
-      fastify.prisma.matchGame.count({ where: { match: matchWhere } })
-        .then(async (gameCount) => {
-          const syntheticCount = await fastify.prisma.match.count({ where: { ...matchWhere, games: { none: {} } } });
-          return gameCount + syntheticCount;
-        }),
+      fastify.prisma.matchGame.count({ where: gameWhere }),
     ]);
 
-    // Load participant factions for the tournaments on this page (SFT fallback)
-    const tournamentIds = [...new Set(completedMatches.map((m) => m.tournament?.id).filter(Boolean) as string[])];
-    const participantsRaw = tournamentIds.length
-      ? await fastify.prisma.tournamentParticipant.findMany({
-          where: { tournament_id: { in: tournamentIds }, deleted_at: null },
-          select: { tournament_id: true, user_id: true, faction_id: true },
-        })
-      : [];
-    // key: `${tournamentId}:${userId}` → faction_id
-    const participantFaction = new Map(
-      participantsRaw.map((p) => [`${p.tournament_id}:${p.user_id}`, p.faction_id]),
-    );
-    const pFaction = (tournamentId: string, userId: string | null | undefined) =>
-      userId ? (participantFaction.get(`${tournamentId}:${userId}`) ?? null) : null;
-
-    const rows = completedMatches.flatMap((m) => {
-      const base = { round: m.round, matchNumber: m.match_number, player1: m.player1 ?? null, player2: m.player2 ?? null, tournament: m.tournament, matchId: m.id };
-      if (m.games.length > 0) {
-        return m.games.map((g) => ({
-          ...base,
-          id: g.id,
-          gameNumber: g.game_number,
-          playedAt: (g.played_at ?? m.played_at)?.toISOString() ?? null,
-          winnerId: g.winner_id ?? m.winner_id,
-          player1FactionId: g.player1_faction_id ?? m.player1_faction_id ?? pFaction(m.tournament?.id ?? '', m.player1?.id),
-          player2FactionId: g.player2_faction_id ?? m.player2_faction_id ?? pFaction(m.tournament?.id ?? '', m.player2?.id),
-          mapPickedId: g.map_decision?.picked_map_id ?? null,
-          replayUrl: g.replay_url,
-          countsForLeaderboard: g.counts_for_leaderboard,
-        }));
-      }
-      return [{ ...base, id: m.id, gameNumber: 1, playedAt: m.played_at?.toISOString() ?? null, winnerId: m.winner_id, player1FactionId: m.player1_faction_id ?? pFaction(m.tournament?.id ?? '', m.player1?.id), player2FactionId: m.player2_faction_id ?? pFaction(m.tournament?.id ?? '', m.player2?.id), mapPickedId: null, replayUrl: null, countsForLeaderboard: m.counts_for_leaderboard }];
-    });
+    const rows = games.map((g) => ({
+      round: g.match.round,
+      matchNumber: g.match.match_number,
+      player1: g.match.player1 ?? null,
+      player2: g.match.player2 ?? null,
+      tournament: g.match.tournament,
+      matchId: g.match.id,
+      id: g.id,
+      gameNumber: g.game_number,
+      playedAt: (g.played_at ?? g.match.played_at)?.toISOString() ?? null,
+      winnerId: g.winner_id,
+      player1FactionId: g.player1_faction_id,
+      player2FactionId: g.player2_faction_id,
+      mapPickedId: g.map_decision?.picked_map_id ?? null,
+      replayUrl: g.replay_url,
+      countsForLeaderboard: g.counts_for_leaderboard,
+    }));
 
     rows.sort((a, b) => (b.playedAt ?? '').localeCompare(a.playedAt ?? ''));
 

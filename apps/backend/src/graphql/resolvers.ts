@@ -105,14 +105,19 @@ export const resolvers = {
       const season = await resolveActiveSeason(ctx.prisma, args.seasonId);
       if (!season) return null;
 
+      // total_matches now counts GAMES (the statistical unit) — kept the field name for
+      // GraphQL schema compatibility. Game-keyed: a real game counts regardless of its
+      // match container's lifecycle status.
       const [allFactions, total_matches] = await Promise.all([
         getFactionsWithStats(ctx.prisma, season.id),
-        ctx.prisma.match.count({
+        ctx.prisma.matchGame.count({
           where: {
             status: 'COMPLETED',
-            deleted_at: null,
-            season_id: season.id,
-            tournament: { counts_for_leaderboard: true },
+            match: {
+              deleted_at: null,
+              season_id: season.id,
+              tournament: { counts_for_leaderboard: true },
+            },
           },
         }),
       ]);
