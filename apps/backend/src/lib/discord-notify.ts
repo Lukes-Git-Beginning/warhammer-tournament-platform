@@ -458,6 +458,7 @@ export async function notifyRoundPairings(
   tournament: TournamentForNotify,
   round: number,
   pairings: PairingForNotify[],
+  roundLabel?: string,
 ): Promise<void> {
   const token = getToken();
   if (!token) {
@@ -468,6 +469,7 @@ export async function notifyRoundPairings(
   try {
     const config = await getAdminConfig();
     const channelId = config['discord_announce_channel_id'];
+    const label = roundLabel ?? `Round ${round}`;
 
     const pairingLines = pairings
       .map(
@@ -479,7 +481,7 @@ export async function notifyRoundPairings(
 
     if (channelId) {
       const embed = {
-        title: `⚔️ Round ${round} Pairings — ${tournament.name}`,
+        title: `⚔️ ${label} Pairings — ${tournament.name}`,
         description: pairingLines,
         color: 0xc8a96e,
         timestamp: new Date().toISOString(),
@@ -492,12 +494,12 @@ export async function notifyRoundPairings(
     // DM each player with their specific opponent
     const dmPromises = pairings.flatMap((p) => {
       const p1Msg =
-        `**[RizzOtto's Arena] Round ${round} Pairing — ${tournament.name}**\n` +
+        `**[RizzOtto's Arena] ${label} Pairing — ${tournament.name}**\n` +
         `You are playing against <@${p.player2.discord_id}>` +
         (p.map ? ` on *${p.map}*` : '') +
         `.`;
       const p2Msg =
-        `**[RizzOtto's Arena] Round ${round} Pairing — ${tournament.name}**\n` +
+        `**[RizzOtto's Arena] ${label} Pairing — ${tournament.name}**\n` +
         `You are playing against <@${p.player1.discord_id}>` +
         (p.map ? ` on *${p.map}*` : '') +
         `.`;
@@ -512,6 +514,16 @@ export async function notifyRoundPairings(
   } catch (err) {
     console.warn('[discord-notify] Round pairings error (non-fatal):', err);
   }
+}
+
+/** Map the round's match phases to a human label; null for Swiss/group (caller uses "Round N"). */
+function playoffRoundLabel(phases: (string | null)[]): string | null {
+  if (phases.includes('PLAYOFF_FINAL')) return 'Final';
+  if (phases.includes('PLAYOFF_SF')) return 'Semi-Finals';
+  if (phases.includes('PLAYOFF_QF')) return 'Quarter-Finals';
+  if (phases.length > 0 && phases.every((p) => p === 'PLAYOFF_THIRD_PLACE')) return 'Third-Place Match';
+  if (phases.some((p) => typeof p === 'string' && p.startsWith('PLAYOFF'))) return 'Playoffs';
+  return null;
 }
 
 /**
@@ -558,7 +570,13 @@ export async function notifyMatchesCreated(
     }
     if (pairings.length === 0) return;
 
-    await notifyRoundPairings(tournament, round, pairings);
+    const phaseRows = await prisma.match.findMany({
+      where: { id: { in: playable.map((m) => m.id) } },
+      select: { phase: true },
+    });
+    const roundLabel = playoffRoundLabel(phaseRows.map((r) => r.phase));
+
+    await notifyRoundPairings(tournament, round, pairings, roundLabel ?? undefined);
   } catch (err) {
     console.warn('[discord-notify] notifyMatchesCreated error (non-fatal):', err);
   }
@@ -594,7 +612,7 @@ export async function notifyHostsOfWithdrawal(
     const msg =
       `**[RizzOtto's Arena] Player dropped — ${tournament.name}**\n` +
       `<@${user.discord_id}> is no longer in the tournament. ` +
-      `Review the bracket at ${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}.`;
+      `Review the bracket at <${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}>.`;
     await Promise.allSettled(hosts.map((h) => sendDm(h.discord_id, msg)));
   } catch (err) {
     console.warn('[discord-notify] notifyHostsOfWithdrawal error (non-fatal):', err);
@@ -631,7 +649,7 @@ export async function notifyDispute(
       `**[RizzOtto's Arena] ⚠️ Match Dispute — ${match.tournament.name}**\n\n` +
       `Match ID: \`${match.id}\`\n` +
       `Reported by: <@${reporter.discord_id}>\n\n` +
-      `Please review and resolve the dispute at ${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${match.tournament.slug}`;
+      `Please review and resolve the dispute at <${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${match.tournament.slug}>`;
 
     const recipients: string[] = moderators.map((m) => m.discord_id);
     if (tournament?.host.discord_id) {
