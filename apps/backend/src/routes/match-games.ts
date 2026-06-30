@@ -508,8 +508,9 @@ const openPlayReplayRoutes: FastifyPluginAsync = async (fastify) => {
       if (match.status !== 'COMPLETED') {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not completed', statusCode: 422 });
       }
-      if (match.winner_id !== userId) {
-        return reply.code(403).send({ error: 'Forbidden', message: 'Only the winner can upload a replay', statusCode: 403 });
+      const isStaff = await canManageTournament(fastify.prisma, '', userId, request.user.role);
+      if (match.winner_id !== userId && !isStaff) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the winner or staff can upload a replay', statusCode: 403 });
       }
 
       const data = await request.file();
