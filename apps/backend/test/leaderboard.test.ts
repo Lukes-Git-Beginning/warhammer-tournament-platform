@@ -88,7 +88,7 @@ async function completedMatch(
   pf2: string,
   winner: string,
 ): Promise<void> {
-  await prisma.match.create({
+  const m = await prisma.match.create({
     data: {
       tournament_id: tournamentId,
       round: 1,
@@ -102,6 +102,19 @@ async function completedMatch(
       result: winner === p1 ? 'PLAYER1_WIN' : 'PLAYER2_WIN',
       season_id: seasonId,
       played_at: new Date('2026-06-01'),
+    },
+  });
+  // Games are the statistical unit — every real completed match carries a game row.
+  await prisma.matchGame.create({
+    data: {
+      match_id: m.id,
+      game_number: 1,
+      status: 'COMPLETED',
+      winner_id: winner,
+      player1_faction_id: pf1,
+      player2_faction_id: pf2,
+      played_at: new Date('2026-06-01'),
+      counts_for_leaderboard: true,
     },
   });
 }
@@ -261,7 +274,8 @@ describe('GET /api/users/:id', () => {
     expect(body.all_time.wins).toBe(2);
     expect(body.all_time.losses).toBe(0);
     expect(body.all_time.total_points).toBeCloseTo(expected!.totalFinalPoints, 6);
-    expect(body.all_time.tournaments_played).toBe(0);
+    // Alpha played real (game-backed) matches in one tournament — counts as 1.
+    expect(body.all_time.tournaments_played).toBe(1);
 
     expect(Array.isArray(body.recent_results)).toBe(true);
     expect(Array.isArray(body.recent_matches)).toBe(true);

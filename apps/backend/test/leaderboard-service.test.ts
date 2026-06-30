@@ -90,6 +90,19 @@ async function completedMatch(
       played_at: new Date('2026-06-01'),
     },
   });
+  // Games are the statistical unit — every real completed match carries a game row.
+  await prisma.matchGame.create({
+    data: {
+      match_id: m.id,
+      game_number: 1,
+      status: 'COMPLETED',
+      winner_id: winner,
+      player1_faction_id: pf1,
+      player2_faction_id: pf2,
+      played_at: new Date('2026-06-01'),
+      counts_for_leaderboard: true,
+    },
+  });
   return m.id;
 }
 
