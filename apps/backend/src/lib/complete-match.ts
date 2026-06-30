@@ -12,6 +12,7 @@ import { slotForFeeder, type FeederEvent } from './bracket.js';
 import { invalidate } from './cache.js';
 import { emitMatchResult, emitBracketUpdate } from './emit.js';
 import { logQueueActivity } from './queue-activity.js';
+import { recomputeFactionStats } from './recompute-faction-stats.js';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -173,19 +174,6 @@ export async function completeMatch(
 
   const loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
 
-  const winnerFactionId =
-    winnerId === null
-      ? null
-      : winnerId === match.player1_id
-        ? player1FactionId
-        : player2FactionId;
-  const loserFactionId =
-    winnerId === null
-      ? null
-      : loserId === match.player1_id
-        ? player1FactionId
-        : player2FactionId;
-
   const activeSeason = await fastify.prisma.season.findFirst({
     where: { is_active: true },
     select: { id: true },
@@ -245,62 +233,27 @@ export async function completeMatch(
       await handleGrandFinalProgression(tx, match, winnerId, loserId);
     }
 
-    if (activeSeason && !opts.skipStats) {
-      const seasonId = activeSeason.id;
-      const factionIdsToUpdate = [winnerFactionId, loserFactionId].filter(
-        (f): f is string => f !== null,
-      );
-      for (const factionId of factionIdsToUpdate) {
-        const isWinner = factionId === winnerFactionId;
-        await tx.factionStats.upsert({
-          where: { faction_id_season_id: { faction_id: factionId, season_id: seasonId } },
-          create: {
-            faction_id: factionId,
-            season_id: seasonId,
-            matches_played: 1,
-            wins: isWinner ? 1 : 0,
-            losses: isWinner ? 0 : 1,
-            draws: 0,
-            pick_count: 1,
-            ban_count: 0,
-          },
-          update: {
-            matches_played: { increment: 1 },
-            pick_count: { increment: 1 },
-            ...(isWinner ? { wins: { increment: 1 } } : { losses: { increment: 1 } }),
-          },
-        });
+    // Ensure a game-level record exists so all statistics derive from MatchGame rows
+    // (games are the statistical unit; the match is just a container). BoN flows write
+    // their own per-game rows upstream and pass skipStats=true, so only single-game
+    // completions create/refresh game 1 here. FactionStats/MatchupStats are rebuilt from
+    // these rows by recomputeFactionStats() after the transaction — never incrementally —
+    // so re-editing a completed match can never double-count.
+    if (!opts.skipStats) {
+      const existingGames = await tx.matchGame.count({ where: { match_id: matchId } });
+      const gameData = {
+        status: 'COMPLETED' as const,
+        winner_id: winnerId,
+        player1_faction_id: player1FactionId,
+        player2_faction_id: player2FactionId,
+        played_at: new Date(),
+        counts_for_leaderboard: match.tournament?.counts_for_leaderboard ?? true,
+      };
+      if (existingGames === 0) {
+        await tx.matchGame.create({ data: { match_id: matchId, game_number: 1, ...gameData } });
+      } else {
+        await tx.matchGame.updateMany({ where: { match_id: matchId, game_number: 1 }, data: gameData });
       }
-    }
-
-    if (activeSeason && !opts.skipStats && player1FactionId && player2FactionId) {
-      const sorted = [player1FactionId, player2FactionId].sort();
-      const aId = sorted[0]!;
-      const bId = sorted[1]!;
-      const isDraw = winnerId === null;
-      const winnerIsA = winnerFactionId === aId;
-      await tx.matchupStats.upsert({
-        where: {
-          faction_a_id_faction_b_id_season_id: {
-            faction_a_id: aId,
-            faction_b_id: bId,
-            season_id: activeSeason.id,
-          },
-        },
-        create: {
-          faction_a_id: aId,
-          faction_b_id: bId,
-          season_id: activeSeason.id,
-          faction_a_wins: !isDraw && winnerIsA ? 1 : 0,
-          faction_b_wins: !isDraw && !winnerIsA ? 1 : 0,
-          draws: isDraw ? 1 : 0,
-        },
-        update: isDraw
-          ? { draws: { increment: 1 } }
-          : winnerIsA
-            ? { faction_a_wins: { increment: 1 } }
-            : { faction_b_wins: { increment: 1 } },
-      });
     }
 
     // LeaderboardEntry — mirrors resolveMatchResult so GameTile matches count on the leaderboard
@@ -336,6 +289,12 @@ export async function completeMatch(
       },
     });
   });
+
+  // Rebuild faction/matchup stats from the COMPLETED game rows (idempotent). Skipped
+  // for BoN (skipStats) — finalizeGameResult runs its own recompute after the series.
+  if (activeSeason && !opts.skipStats) {
+    await recomputeFactionStats(fastify.prisma, activeSeason.id);
+  }
 
   // Open Play: record the result in the queue activity log (best-effort, post-commit
   // so a logging failure can never roll back the match result)

@@ -9,6 +9,7 @@ import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
 import { emitBracketUpdate } from '../lib/emit.js';
 import { addLateParticipant, setParticipantFactionOp, createManualMatch } from '../lib/tournament-management.js';
+import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM, OPPONENT_SHARE_WARN } from '../lib/scoring-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -407,17 +408,6 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           dateFilter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
         }
 
-        // Build tournament filter
-        const tournamentWhere: Record<string, unknown> = { deleted_at: null };
-        if (format) tournamentWhere.format = format;
-        if (mode) tournamentWhere.mode = mode;
-
-        const matchWhere: Record<string, unknown> = {
-          status: 'COMPLETED',
-          deleted_at: null,
-        };
-        if (dateFilter) matchWhere.updated_at = { gte: dateFilter };
-
         // If season filter: restrict to tournaments in that season
         if (resolvedSeasonId) {
           // Tournaments count_for_leaderboard with active_season — join via TournamentResult
@@ -437,61 +427,86 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           }));
         }
 
-        // No season: aggregate from Match records directly
-        const factions = await fastify.prisma.faction.findMany({
-          select: { id: true, name: true },
-        });
+        // No season: aggregate game-level win rates directly from MatchGame rows
+        // (games are the statistical unit — mirrors recomputeFactionStats' source set:
+        // COMPLETED games on non-deleted matches, regardless of match container status).
+        const tournamentFilter =
+          format && mode
+            ? Prisma.sql`AND m.tournament_id IN (SELECT id FROM "Tournament" WHERE deleted_at IS NULL AND format::text = ${format} AND mode::text = ${mode})`
+            : format
+              ? Prisma.sql`AND m.tournament_id IN (SELECT id FROM "Tournament" WHERE deleted_at IS NULL AND format::text = ${format})`
+              : mode
+                ? Prisma.sql`AND m.tournament_id IN (SELECT id FROM "Tournament" WHERE deleted_at IS NULL AND mode::text = ${mode})`
+                : Prisma.empty;
+        const dateClause = dateFilter ? Prisma.sql`AND mg.played_at >= ${dateFilter}` : Prisma.empty;
 
-        const results = await Promise.all(
-          factions.map(async (faction) => {
-            const [wins, losses] = await Promise.all([
-              fastify.prisma.match.count({
-                where: {
-                  ...matchWhere,
-                  winner_id: { not: null },
-                  OR: [
-                    { player1_faction_id: faction.id, winner_id: { not: null } },
-                    { player2_faction_id: faction.id, winner_id: { not: null } },
-                  ],
-                  AND: [
-                    {
-                      OR: [
-                        { player1_faction_id: faction.id },
-                        { player2_faction_id: faction.id },
-                      ],
-                    },
-                  ],
-                },
-              }),
-              fastify.prisma.match.count({
-                where: {
-                  ...matchWhere,
-                  OR: [
-                    { player1_faction_id: faction.id },
-                    { player2_faction_id: faction.id },
-                  ],
-                },
-              }),
-            ]);
+        const rows = await fastify.prisma.$queryRaw<
+          Array<{ faction_id: string; name: string; wins: bigint; total: bigint }>
+        >`
+          SELECT
+            f.id AS faction_id,
+            f.name AS name,
+            COUNT(mg.id) AS total,
+            COUNT(CASE
+              WHEN mg.winner_id IS NOT NULL AND (
+                (mg.player1_faction_id = f.id AND mg.winner_id = m.player1_id) OR
+                (mg.player2_faction_id = f.id AND mg.winner_id = m.player2_id)
+              ) THEN 1 END) AS wins
+          FROM "Faction" f
+          JOIN "MatchGame" mg
+            ON (mg.player1_faction_id = f.id OR mg.player2_faction_id = f.id)
+            AND mg.status = 'COMPLETED'
+          JOIN "Match" m
+            ON mg.match_id = m.id AND m.deleted_at IS NULL
+          WHERE TRUE
+            ${tournamentFilter}
+            ${dateClause}
+          GROUP BY f.id, f.name
+        `;
 
-            const total = losses; // count is total matches where faction appeared
-            const actualWins = wins;
+        return rows
+          .map((r) => {
+            const total = Number(r.total);
+            const wins = Number(r.wins);
             return {
-              faction_id: faction.id,
-              slug: faction.id,
-              name: faction.name,
-              wins: actualWins,
-              losses: Math.max(0, total - actualWins),
-              win_rate: total > 0 ? actualWins / total : 0,
+              faction_id: r.faction_id,
+              slug: r.faction_id,
+              name: r.name,
+              wins,
+              losses: Math.max(0, total - wins),
+              win_rate: total > 0 ? wins / total : 0,
               sample_size: total,
             };
-          }),
-        );
-
-        return results.sort((a, b) => b.win_rate - a.win_rate);
+          })
+          .sort((a, b) => b.win_rate - a.win_rate);
       },
       { ttlSeconds: 120 },
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /api/admin/recompute-faction-stats
+  // Rebuilds FactionStats + MatchupStats for the active season from the COMPLETED
+  // MatchGame rows. Run once after the games-only backfill migration, or any time to
+  // clear historical incremental drift. Idempotent.
+  // -------------------------------------------------------------------------
+  fastify.post('/api/admin/recompute-faction-stats', async (_request, reply) => {
+    const activeSeason = await fastify.prisma.season.findFirst({
+      where: { is_active: true },
+      select: { id: true },
+    });
+    if (!activeSeason) {
+      return reply.code(422).send({ error: 'UnprocessableEntity', message: 'No active season', statusCode: 422 });
+    }
+    const result = await recomputeFactionStats(fastify.prisma, activeSeason.id);
+    if (fastify.redis) {
+      await Promise.all([
+        invalidate(fastify.redis, 'factions:*'),
+        invalidate(fastify.redis, 'meta:*'),
+        invalidate(fastify.redis, 'admin:*'),
+      ]);
+    }
+    return reply.code(200).send(result);
   });
 
   // -------------------------------------------------------------------------

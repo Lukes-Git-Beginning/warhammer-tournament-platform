@@ -104,12 +104,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (map_id && match.player1_id && match.player2_id) {
-        // Upsert MatchGame as COMPLETED so GL computation uses it correctly
-        await fastify.prisma.matchGame.upsert({
-          where: { match_id_game_number: { match_id: matchId, game_number: 1 } },
-          create: { match_id: matchId, game_number: 1, status: 'COMPLETED', winner_id: winnerId, played_at: new Date(), counts_for_leaderboard: match.tournament?.counts_for_leaderboard ?? true },
-          update: { status: 'COMPLETED', winner_id: winnerId, played_at: new Date() },
-        });
+        // completeMatch already wrote game 1 (with factions) — just attach the map decision.
         const game = await fastify.prisma.matchGame.findUniqueOrThrow({
           where: { match_id_game_number: { match_id: matchId, game_number: 1 } },
           select: { id: true },

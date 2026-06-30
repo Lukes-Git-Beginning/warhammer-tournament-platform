@@ -23,6 +23,7 @@ import type {
 } from '@rizzotto/types';
 import { tournamentRoom } from './emit.js';
 import { invalidate } from './cache.js';
+import { recomputeFactionStats } from './recompute-faction-stats.js';
 
 type Io =
   | Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>
@@ -121,14 +122,14 @@ export async function resolveMatchResult(
   const p1Points = opts.player1_points ?? defaultPts.player1;
   const p2Points = opts.player2_points ?? defaultPts.player2;
 
-  await prisma.$transaction(async (tx) => {
-    // Active season — tags the match (for the dynamic leaderboard) and gates
-    // the legacy LeaderboardEntry update below.
-    const activeSeason = await tx.season.findFirst({
-      where: { is_active: true },
-      select: { id: true },
-    });
+  // Active season — tags the match (for the dynamic leaderboard), gates the
+  // LeaderboardEntry update, and drives the post-transaction stats recompute.
+  const activeSeason = await prisma.season.findFirst({
+    where: { is_active: true },
+    select: { id: true },
+  });
 
+  await prisma.$transaction(async (tx) => {
     const p1FactionId = opts.player1FactionId ?? match.player1_faction_id ?? null;
     const p2FactionId = opts.player2FactionId ?? match.player2_faction_id ?? null;
 
@@ -303,87 +304,25 @@ export async function resolveMatchResult(
       }
     }
 
-    // 4. FactionStats + MatchupStats — mirrors the logic in routes/matches.ts.
-    //    Only written when an active season exists and faction IDs are set on the match.
-    //    These feed the 24×24 faction heatmap and per-faction analytics.
-    const effectiveP1FactionId = p1FactionId;
-    const effectiveP2FactionId = p2FactionId;
-
-    const isDraw = result === 'DRAW' || result === 'DOUBLE_LOSS';
-
-    // Winner/loser faction IDs (null for draw/double-loss)
-    const winnerFactionId: string | null = isDraw
-      ? null
-      : result === 'PLAYER1_WIN'
-        ? effectiveP1FactionId
-        : effectiveP2FactionId;
-    const loserFactionId: string | null = isDraw
-      ? null
-      : result === 'PLAYER1_WIN'
-        ? effectiveP2FactionId
-        : effectiveP1FactionId;
-
-    if (activeSeason) {
-      const seasonId = activeSeason.id;
-
-      // 4a. FactionStats — increment per-faction wins/losses/draws/matches_played
-      const factionIdsToUpdate = [winnerFactionId, loserFactionId].filter(
-        (f): f is string => f !== null,
-      );
-
-      for (const factionId of factionIdsToUpdate) {
-        const isWinner = factionId === winnerFactionId;
-        await tx.factionStats.upsert({
-          where: { faction_id_season_id: { faction_id: factionId, season_id: seasonId } },
-          create: {
-            faction_id: factionId,
-            season_id: seasonId,
-            matches_played: 1,
-            wins: isWinner ? 1 : 0,
-            losses: isWinner ? 0 : 1,
-            draws: 0,
-            pick_count: 1,
-            ban_count: 0,
-          },
-          update: {
-            matches_played: { increment: 1 },
-            pick_count: { increment: 1 },
-            ...(isWinner ? { wins: { increment: 1 } } : { losses: { increment: 1 } }),
-          },
-        });
-      }
-
-      // 4b. MatchupStats — alphabetical symmetry: faction_a_id < faction_b_id by string sort.
-      //    Mirrored exactly from routes/matches.ts to ensure heatmap parity across both
-      //    completion paths (legacy POST /:id/result and Welle-D dual-submit).
-      if (effectiveP1FactionId && effectiveP2FactionId) {
-        const sorted = [effectiveP1FactionId, effectiveP2FactionId].sort();
-        const aId = sorted[0]!;
-        const bId = sorted[1]!;
-        const winnerIsA = winnerFactionId === aId;
-
-        await tx.matchupStats.upsert({
-          where: {
-            faction_a_id_faction_b_id_season_id: {
-              faction_a_id: aId,
-              faction_b_id: bId,
-              season_id: seasonId,
-            },
-          },
-          create: {
-            faction_a_id: aId,
-            faction_b_id: bId,
-            season_id: seasonId,
-            faction_a_wins: !isDraw && winnerIsA ? 1 : 0,
-            faction_b_wins: !isDraw && !winnerIsA ? 1 : 0,
-            draws: isDraw ? 1 : 0,
-          },
-          update: isDraw
-            ? { draws: { increment: 1 } }
-            : winnerIsA
-              ? { faction_a_wins: { increment: 1 } }
-              : { faction_b_wins: { increment: 1 } },
-        });
+    // 4. Game-level record — all faction/matchup stats derive from MatchGame rows
+    //    (games are the statistical unit; the match is just a container). Single-game
+    //    completion: create or refresh game 1 with the result + factions. FactionStats
+    //    and MatchupStats are rebuilt from these rows by recomputeFactionStats() after
+    //    the transaction — never incrementally — so overrides never double-count.
+    {
+      const existingGames = await tx.matchGame.count({ where: { match_id: matchId } });
+      const gameData = {
+        status: 'COMPLETED' as const,
+        winner_id: winnerId,
+        player1_faction_id: p1FactionId,
+        player2_faction_id: p2FactionId,
+        played_at: new Date(),
+        counts_for_leaderboard: match.tournament?.counts_for_leaderboard ?? true,
+      };
+      if (existingGames === 0) {
+        await tx.matchGame.create({ data: { match_id: matchId, game_number: 1, ...gameData } });
+      } else {
+        await tx.matchGame.updateMany({ where: { match_id: matchId, game_number: 1 }, data: gameData });
       }
     }
 
@@ -404,6 +343,12 @@ export async function resolveMatchResult(
       },
     });
   });
+
+  // Rebuild faction/matchup stats from the COMPLETED game rows (idempotent) so a
+  // re-edit/override can never double-count.
+  if (activeSeason) {
+    await recomputeFactionStats(prisma, activeSeason.id);
+  }
 
   // Cache invalidation for FactionStats/MatchupStats keys — only when a redis
   // handle is provided. match-reports.ts already calls invalidateScoringCaches()
