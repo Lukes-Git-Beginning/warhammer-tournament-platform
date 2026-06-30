@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import { ActiveMatchIndicator } from './ActiveMatchIndicator';
 
 const NAV_LINK_CLASS =
-  'font-display text-[13px] uppercase tracking-wider text-rizzotto-stone-300 hover:text-rizzotto-gold-400 transition-colors';
+  'font-display text-[13px] uppercase tracking-wider whitespace-nowrap text-rizzotto-stone-300 hover:text-rizzotto-gold-400 transition-colors';
 const NAV_LINK_ACTIVE_PROPS = { className: 'text-rizzotto-gold-400' };
 
 export function Header() {
@@ -105,7 +105,7 @@ export function Header() {
         </Link>
 
         {/* Desktop Nav */}
-        <nav aria-label="Primary" className="hidden items-center gap-6 lg:flex">
+        <nav aria-label="Primary" className="hidden items-center gap-5 xl:flex">
           {navLinks}
         </nav>
 
@@ -152,7 +152,7 @@ export function Header() {
           <button
             type="button"
             className={cn(
-              'lg:hidden p-2 text-rizzotto-stone-300 hover:text-rizzotto-gold-400 transition-colors rounded-sm',
+              'xl:hidden p-2 text-rizzotto-stone-300 hover:text-rizzotto-gold-400 transition-colors rounded-sm',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rizzotto-gold-500',
             )}
             aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
@@ -172,7 +172,7 @@ export function Header() {
       {mobileMenuOpen && (
         <nav
           aria-label="Mobile"
-          className="lg:hidden border-t border-rizzotto-iron-700 bg-rizzotto-iron-950 px-4 py-4 flex flex-col gap-3"
+          className="xl:hidden border-t border-rizzotto-iron-700 bg-rizzotto-iron-950 px-4 py-4 flex flex-col gap-3"
           data-testid="mobile-menu"
         >
           {navLinks}

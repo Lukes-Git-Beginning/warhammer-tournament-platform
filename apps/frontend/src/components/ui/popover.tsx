@@ -28,7 +28,7 @@ function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "z-50 w-72 origin-(--radix-popover-content-transform-origin) rounded-md border border-oklch(0.923 0.003 48.717) bg-oklch(1 0 0) p-4 text-oklch(0.147 0.004 49.25) shadow-md outline-hidden data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 dark:border-oklch(1 0 0 / 10%) dark:bg-oklch(0.216 0.006 56.043) dark:text-oklch(0.985 0.001 106.423)",
+          "z-50 w-72 origin-(--radix-popover-content-transform-origin) rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-950 p-4 text-rizzotto-stone-200 shadow-md outline-hidden data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
           className
         )}
         {...props}
@@ -70,7 +70,7 @@ function PopoverDescription({
   return (
     <p
       data-slot="popover-description"
-      className={cn("text-oklch(0.553 0.013 58.071) dark:text-oklch(0.709 0.01 56.259)", className)}
+      className={cn("text-rizzotto-stone-400", className)}
       {...props}
     />
   )

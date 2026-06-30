@@ -59,7 +59,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-oklch(0.923 0.003 48.717) bg-oklch(1 0 0) p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg dark:border-oklch(1 0 0 / 10%) dark:bg-oklch(0.147 0.004 49.25)",
+          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-rizzotto-iron-700 bg-rizzotto-iron-950 p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className
         )}
         {...props}
@@ -68,7 +68,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-oklch(1 0 0) transition-opacity hover:opacity-100 focus:ring-2 focus:ring-oklch(0.709 0.01 56.259) focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-oklch(0.97 0.001 106.424) data-[state=open]:text-oklch(0.553 0.013 58.071) [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 dark:ring-offset-oklch(0.147 0.004 49.25) dark:focus:ring-oklch(0.553 0.013 58.071) dark:data-[state=open]:bg-oklch(0.268 0.007 34.298) dark:data-[state=open]:text-oklch(0.709 0.01 56.259)"
+            className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-rizzotto-iron-950 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-rizzotto-gold-500 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-rizzotto-iron-800 data-[state=open]:text-rizzotto-stone-400 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
             <span className="sr-only">Close</span>
@@ -136,7 +136,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-sm text-oklch(0.553 0.013 58.071) dark:text-oklch(0.709 0.01 56.259)", className)}
+      className={cn("text-sm text-rizzotto-stone-400", className)}
       {...props}
     />
   )
