@@ -34,6 +34,10 @@ export function AvailabilityHeatmap({ slots, userTimezone, hue = 38 }: Availabil
   const scrollRef = useRef<HTMLDivElement>(null);
   const offset = userTimezone ? getUtcOffsetHours(userTimezone) : 0;
 
+  // Current local day/hour for the "now" marker
+  const now = new Date();
+  const nowCell = utcToLocal((now.getUTCDay() + 6) % 7, now.getUTCHours(), offset);
+
   // Aggregate into local-time buckets
   const lookup = new Map<string, number>();
   for (const s of slots) {
@@ -59,7 +63,7 @@ export function AvailabilityHeatmap({ slots, userTimezone, hue = 38 }: Availabil
           <div
             key={d}
             style={{ height: ROW_H, background: i >= 5 ? 'hsl(22,6%,13%)' : 'hsl(20,3%,11%)' }}
-            className="flex items-center justify-center text-xs font-medium text-stone-400 border-b border-stone-700"
+            className={`flex items-center justify-center text-xs border-b border-stone-700 ${i === nowCell.day ? 'font-semibold text-rizzotto-gold-400' : 'font-medium text-stone-400'}`}
           >
             {d}
           </div>
@@ -73,17 +77,18 @@ export function AvailabilityHeatmap({ slots, userTimezone, hue = 38 }: Availabil
               <div
                 key={`label-${hour}`}
                 style={{ height: ROW_H, background: 'hsl(20,3%,11%)' }}
-                className="flex items-center justify-end pr-2 text-xs text-stone-500 border-b border-stone-700/50"
+                className={`flex items-center justify-end pr-2 text-xs border-b border-stone-700/50 ${hour === nowCell.hour ? 'font-semibold text-rizzotto-gold-400' : 'text-stone-500'}`}
               >
                 {String(hour).padStart(2, '0')}
               </div>
               {Array.from({ length: 7 }, (_, day) => {
                 const count = lookup.get(`${day}:${hour}`) ?? 0;
+                const isNow = day === nowCell.day && hour === nowCell.hour;
                 return (
                   <div
                     key={`${day}-${hour}`}
                     style={{ height: ROW_H, background: intensityColor(count, max, hue) }}
-                    className="border-b border-r border-stone-700/30"
+                    className={`border-b border-r border-stone-700/30 ${isNow ? 'ring-2 ring-inset ring-rizzotto-gold-400' : ''}`}
                     title={count > 0 ? `${count} player${count === 1 ? '' : 's'} available` : undefined}
                   />
                 );
