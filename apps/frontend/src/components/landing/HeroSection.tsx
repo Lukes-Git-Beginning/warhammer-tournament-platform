@@ -6,7 +6,7 @@ import { useAuthQuery } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Picture } from '@/components/ui/picture';
 import { ScrollCue } from './ScrollCue';
-import { LaunchCountdown } from './LaunchCountdown';
+import { QueuePulse } from './QueuePulse';
 
 /**
  * Section 1 — Hero. Cinematic photo backdrop + animated wordmark reveal +
@@ -94,10 +94,8 @@ export function HeroSection() {
               visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
             }}
           >
-            {/* TEMPORARY: launch-day countdown CTA — replaces the leaderboard
-               button until the Grand Launch Tournament is over. Revert by
-               restoring this Button + deleting LaunchCountdown.tsx. */}
-            <LaunchCountdown />
+            {/* Live Open Play activity pulse — funnels visitors into the queue. */}
+            <QueuePulse />
           </motion.div>
         </motion.div>
 
