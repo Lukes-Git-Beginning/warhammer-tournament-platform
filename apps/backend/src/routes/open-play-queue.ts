@@ -160,7 +160,9 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // POST /api/open-play/matches/:id/cancel — either player can cancel; recorded as a draw
+  // POST /api/open-play/matches/:id/cancel — either player can cancel.
+  // A game with a reported result is statistically real and is finalized to that
+  // result; only games without a reported result are recorded as draws.
   fastify.post(
     '/api/open-play/matches/:id/cancel',
     { preHandler: fastify.authenticate },
@@ -181,17 +183,30 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your match', statusCode: 403 });
       }
 
-      await fastify.prisma.$transaction([
-        fastify.prisma.match.update({
+      await fastify.prisma.$transaction(async (tx) => {
+        await tx.match.update({
           where: { id },
           data: { status: 'CANCELLED' },
-        }),
-        // Pending games become completed draws — counts for leaderboard so cancel ≠ free pass
-        fastify.prisma.matchGame.updateMany({
-          where: { match_id: id, status: 'PENDING', winner_id: null },
+        });
+        // A reported-but-unconfirmed game is statistically real — finalize it to its
+        // reported result instead of overwriting it with a draw.
+        const reportedGames = await tx.matchGame.findMany({
+          where: { match_id: id, status: 'PENDING', winner_id: null, reported_winner_id: { not: null } },
+          select: { id: true, reported_winner_id: true },
+        });
+        for (const game of reportedGames) {
+          await tx.matchGame.update({
+            where: { id: game.id },
+            data: { winner_id: game.reported_winner_id, status: 'COMPLETED', counts_for_leaderboard: true, played_at: new Date() },
+          });
+        }
+        // Remaining games without a reported result become completed draws —
+        // counts for leaderboard so cancel ≠ free pass.
+        await tx.matchGame.updateMany({
+          where: { match_id: id, status: 'PENDING', winner_id: null, reported_winner_id: null },
           data: { status: 'COMPLETED', counts_for_leaderboard: true },
-        }),
-      ]);
+        });
+      });
 
       await Promise.all([
         match.player1_id
