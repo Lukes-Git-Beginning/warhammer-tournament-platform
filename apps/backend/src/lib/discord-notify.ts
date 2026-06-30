@@ -620,6 +620,45 @@ export async function notifyHostsOfWithdrawal(
 }
 
 /**
+ * P9: DM the tournament host + co-hosts when a match participant reports an issue
+ * with their match (e.g. wrong result, wrong factions). Fire-and-forget safe.
+ */
+export async function notifyHostsOfMatchReport(
+  tournamentId: string,
+  matchId: string,
+  reporterId: string,
+  comment: string,
+): Promise<void> {
+  if (!getToken()) return;
+  try {
+    const [tournament, reporter] = await Promise.all([
+      prisma.tournament.findFirst({
+        where: { id: tournamentId },
+        select: { name: true, slug: true, host_id: true, co_hosts: { select: { user_id: true } } },
+      }),
+      prisma.user.findUnique({ where: { id: reporterId }, select: { username: true, discord_id: true } }),
+    ]);
+    if (!tournament || !reporter) return;
+
+    const hostIds = [...new Set([tournament.host_id, ...tournament.co_hosts.map((h) => h.user_id)])];
+    if (hostIds.length === 0) return;
+    const hosts = await prisma.user.findMany({
+      where: { id: { in: hostIds } },
+      select: { discord_id: true },
+    });
+    const base = process.env.FRONTEND_URL ?? 'https://rizzotto.gg';
+    const msg =
+      `**[RizzOtto's Arena] Match issue reported — ${tournament.name}**\n` +
+      `<@${reporter.discord_id}> reported an issue with their match:\n` +
+      `> ${comment.replace(/\n/g, '\n> ')}\n` +
+      `Review the match at <${base}/matches/${matchId}>.`;
+    await Promise.allSettled(hosts.map((h) => sendDm(h.discord_id, msg)));
+  } catch (err) {
+    console.warn('[discord-notify] notifyHostsOfMatchReport error (non-fatal):', err);
+  }
+}
+
+/**
  * Notify host + all moderators about a match dispute via DM.
  */
 export async function notifyDispute(

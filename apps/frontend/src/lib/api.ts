@@ -468,6 +468,13 @@ export function reportMatchResult(
   });
 }
 
+export function reportMatchIssue(matchId: string, comment: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/report`, {
+    method: 'POST',
+    body: JSON.stringify({ comment }),
+  });
+}
+
 export function overrideMatchResult(
   matchId: string,
   body: {

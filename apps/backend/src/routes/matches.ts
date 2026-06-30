@@ -4,6 +4,7 @@ import { emitStatusChange } from '../lib/emit.js';
 import { InvalidActionError } from '../lib/draft-service.js';
 import { completeMatch } from '../lib/complete-match.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
+import { notifyHostsOfMatchReport } from '../lib/discord-notify.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -15,6 +16,10 @@ const ReportResultSchema = z.object({
   player1FactionId: z.string().min(1).optional(),
   player2FactionId: z.string().min(1).optional(),
   map_id: z.string().min(1).optional(),
+});
+
+const ReportIssueSchema = z.object({
+  comment: z.string().trim().min(1).max(2000),
 });
 
 // ---------------------------------------------------------------------------
@@ -533,6 +538,51 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         data: { status: 'CANCELLED', winner_id: null, result: null, score: null, player1_points: null, player2_points: null, played_at: null },
       });
       return reply.code(200).send({ matchId, status: 'CANCELLED' });
+    },
+  );
+
+  // POST /api/matches/:id/report — a match participant flags an issue with their
+  // match (wrong result, wrong factions, …). DMs the host + co-hosts and writes an
+  // audit log entry. Player-only: staff use the edit modal instead.
+  fastify.post(
+    '/api/matches/:id/report',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const parsed = ReportIssueSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+      }
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: { id: true, player1_id: true, player2_id: true, tournament_id: true },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+
+      const userId = request.user.sub;
+      const isParticipant = match.player1_id === userId || match.player2_id === userId;
+      if (!isParticipant) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the match participants can report an issue', statusCode: 403 });
+      }
+
+      const { comment } = parsed.data;
+      await fastify.prisma.auditLog.create({
+        data: {
+          entity_type: 'Match',
+          entity_id: matchId,
+          action: 'match_issue_report',
+          actor_id: userId,
+          new_value: { comment, tournamentId: match.tournament_id },
+        },
+      });
+
+      if (match.tournament_id) {
+        const tournamentId = match.tournament_id;
+        setImmediate(() => void notifyHostsOfMatchReport(tournamentId, matchId, userId, comment));
+      }
+
+      return reply.code(200).send({ ok: true });
     },
   );
 

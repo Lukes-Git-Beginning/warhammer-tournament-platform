@@ -9,6 +9,7 @@ import { sortStandingsByPlayoffResult, getFinalistIds } from '@/lib/bracketStand
 import { computeBracketLayout } from './computeBracketLayout';
 import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
+import { MatchReadOnlyModal } from './MatchReadOnlyModal';
 import { SwissStandings } from './SwissStandings';
 
 interface BracketViewProps {
@@ -21,6 +22,7 @@ interface BracketViewProps {
 
 export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false, playoffFormat }: BracketViewProps) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [readOnlyMatchId, setReadOnlyMatchId] = useState<string | null>(null);
   const [byeMatchId, setByeMatchId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
@@ -412,11 +414,17 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                   tournamentMode={data.mode}
                   onMatchClick={(matchId) => {
                     const m = data.matches.find((x) => x.matchId === matchId);
-                    if (!canManage) return;
-                    if (m?.status === 'BYE') {
-                      setByeMatchId(matchId);
-                    } else {
-                      setSelectedMatchId(matchId);
+                    if (canManage) {
+                      if (m?.status === 'BYE') {
+                        setByeMatchId(matchId);
+                      } else {
+                        setSelectedMatchId(matchId);
+                      }
+                      return;
+                    }
+                    // Non-staff: open a read-only modal for real matches (skip empty/BYE slots).
+                    if (m && m.status !== 'BYE' && (m.player1Id || m.player2Id)) {
+                      setReadOnlyMatchId(matchId);
                     }
                   }}
                 />
@@ -454,6 +462,20 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
               }
               canManage={canManage}
               onClose={() => setSelectedMatchId(null)}
+            />
+          );
+        })()}
+
+        {readOnlyMatchId && (() => {
+          const m = data.matches.find((x) => x.matchId === readOnlyMatchId);
+          if (!m) return null;
+          return (
+            <MatchReadOnlyModal
+              match={m}
+              slug={slug}
+              players={players}
+              factionMap={factionMap}
+              onClose={() => setReadOnlyMatchId(null)}
             />
           );
         })()}
