@@ -152,6 +152,13 @@ enum MatchType {
   OPEN_PLAY
 }
 
+// Open Play origin: matched from the live queue (ladder) vs a posted challenge.
+// null for TOURNAMENT matches.
+enum MatchSource {
+  QUEUE
+  CHALLENGE
+}
+
 enum QueueEventType {
   JOIN // entered the Open Play queue
   LEAVE // left the queue before being matched
@@ -395,6 +402,7 @@ model Match {
   id                  String           @id @default(uuid()) @db.Uuid
   tournament_id       String?          @db.Uuid
   type                MatchType        @default(TOURNAMENT)
+  source              MatchSource? // QUEUE | CHALLENGE for OPEN_PLAY; null for TOURNAMENT
   round               Int
   match_number        Int
   player1_id          String?          @db.Uuid

@@ -68,7 +68,7 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       if (Array.isArray(result) && result.length === 2) {
         const [p1Id, p2Id] = result;
 
-        const { matchId, mapName } = await createOpenPlayMatch(fastify.prisma, p1Id, p2Id);
+        const { matchId, mapName } = await createOpenPlayMatch(fastify.prisma, p1Id, p2Id, 'QUEUE');
 
         const [p1, p2] = await Promise.all([
           fastify.prisma.user.findUnique({ where: { id: p1Id }, select: { username: true, discord_id: true } }),

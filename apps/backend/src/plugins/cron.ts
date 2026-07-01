@@ -488,6 +488,7 @@ export default fp(
               fastify.prisma,
               matchup.proposer_id,
               matchup.accepted_by_id,
+              'CHALLENGE',
             );
 
             await fastify.prisma.scheduledMatchup.update({

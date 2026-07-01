@@ -175,4 +175,6 @@ export interface GameHistoryEntry {
   replayUrl: string | null;
   countsForLeaderboard?: boolean;
   tournament?: GameHistoryTournament;
+  /** Open Play origin: 'QUEUE' (ladder) or 'CHALLENGE'; null/undefined for tournament games */
+  matchSource?: 'QUEUE' | 'CHALLENGE' | null;
 }
