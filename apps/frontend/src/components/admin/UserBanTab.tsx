@@ -183,9 +183,11 @@ export function UserBanTab() {
                     </Link>
                   </td>
                   <td className="px-4 py-3"><CopyIdButton id={user.id} /></td>
-                  <td className="px-4 py-3 font-mono text-xs text-stone-400 select-all">{user.discord_id}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-stone-400 select-all">
-                    {user.steam_id ?? <span className="text-stone-600 not-italic">—</span>}
+                  <td className="px-4 py-3">
+                    {user.discord_id ? <CopyIdButton id={user.discord_id} /> : <span className="text-stone-600">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    {user.steam_id ? <CopyIdButton id={user.steam_id} /> : <span className="text-stone-600">—</span>}
                   </td>
                   <td className="px-4 py-3 text-xs text-stone-400 select-all">
                     {user.email ?? <span className="text-stone-600">—</span>}
