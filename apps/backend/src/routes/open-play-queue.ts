@@ -4,6 +4,9 @@ import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 import { logQueueActivity } from '../lib/queue-activity.js';
 
 const QUEUE_KEY = 'rizzotto:queue:open_play';
+// userId → epoch-ms join time. Lets the cleanup cron measure real time-in-queue
+// instead of the (unrelated) User.updated_at timestamp.
+const JOINED_AT_KEY = 'rizzotto:queue:open_play:joined_at';
 
 const FOR_GRABS_PREFIX = 'rizzotto:availability:for_grabs:';
 const FOR_GRABS_TTL = 60;
@@ -86,10 +89,12 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
           logQueueActivity(fastify.prisma, 'MATCH', p2Id, { matchId, opponentId: p1Id }),
         ]);
 
+        await fastify.redis.hdel(JOINED_AT_KEY, p1Id, p2Id);
         return reply.code(200).send({ matched: true, match_id: matchId });
       }
 
       const position = await fastify.redis.llen(QUEUE_KEY);
+      await fastify.redis.hset(JOINED_AT_KEY, userId, Date.now());
 
       // When the first player enters an empty queue, DM users who have MATCHMAKING
       // availability for the current UTC hour (and aren't snoozed or already queued).
@@ -137,6 +142,7 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const userId = request.user.sub;
       const removed = fastify.redis ? await fastify.redis.lrem(QUEUE_KEY, 0, userId) : 0;
+      if (fastify.redis) await fastify.redis.hdel(JOINED_AT_KEY, userId);
       if (removed > 0) await logQueueActivity(fastify.prisma, 'LEAVE', userId);
       return reply.code(204).send();
     },

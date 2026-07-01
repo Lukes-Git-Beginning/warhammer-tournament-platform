@@ -240,15 +240,16 @@ export default fp(
         if (!fastify.redis) return;
         try {
           const key = 'rizzotto:queue:open_play';
+          const joinedAtKey = 'rizzotto:queue:open_play:joined_at';
           const items = await fastify.redis.lrange(key, 0, -1);
-          const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+          const cutoffMs = Date.now() - 30 * 60 * 1000;
           for (const userId of items) {
-            const user = await fastify.prisma.user.findUnique({
-              where: { id: userId },
-              select: { updated_at: true },
-            });
-            if (!user || user.updated_at < cutoff) {
+            const joinedAt = await fastify.redis.hget(joinedAtKey, userId);
+            // Evict when in the queue for 30+ min, or when the join time is unknown
+            // (orphaned entry, e.g. from before this timestamp tracking existed).
+            if (joinedAt === null || Number(joinedAt) < cutoffMs) {
               await fastify.redis.lrem(key, 0, userId);
+              await fastify.redis.hdel(joinedAtKey, userId);
             }
           }
         } catch (err) {
@@ -268,16 +269,21 @@ export default fp(
         if (!fastify.redis) return;
         try {
           const key = 'rizzotto:queue:open_play';
+          const joinedAtKey = 'rizzotto:queue:open_play:joined_at';
           const items = await fastify.redis.lrange(key, 0, -1);
-          const lowerCutoff = new Date(Date.now() - 30 * 60 * 1000); // 30 min ago
-          const upperCutoff = new Date(Date.now() - 25 * 60 * 1000); // 25 min ago
+          const now = Date.now();
+          const lowerMs = now - 30 * 60 * 1000; // joined 30 min ago
+          const upperMs = now - 25 * 60 * 1000; // joined 25 min ago
           for (const userId of items) {
-            const user = await fastify.prisma.user.findUnique({
-              where: { id: userId },
-              select: { discord_id: true, updated_at: true },
-            });
-            if (user && user.updated_at >= lowerCutoff && user.updated_at < upperCutoff) {
-              await notifyReQueuePrompt(user.discord_id).catch(() => {});
+            const joinedAt = await fastify.redis.hget(joinedAtKey, userId);
+            if (joinedAt === null) continue;
+            const t = Number(joinedAt);
+            if (t >= lowerMs && t < upperMs) {
+              const user = await fastify.prisma.user.findUnique({
+                where: { id: userId },
+                select: { discord_id: true },
+              });
+              if (user) await notifyReQueuePrompt(user.discord_id).catch(() => {});
             }
           }
         } catch (err) {
