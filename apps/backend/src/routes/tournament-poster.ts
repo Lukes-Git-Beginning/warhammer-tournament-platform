@@ -16,7 +16,11 @@ const EXT_BY_MIME: Record<string, string> = {
 };
 
 const tournamentPosterRoutes: FastifyPluginAsync = async (fastify) => {
-  await mkdir(POSTER_DIR, { recursive: true });
+  // Best-effort: a poster-dir creation failure must never crash app startup.
+  // The per-request handler re-creates the dir before writing anyway.
+  await mkdir(POSTER_DIR, { recursive: true }).catch((err) => {
+    fastify.log.warn({ err, dir: POSTER_DIR }, 'Could not pre-create poster upload dir');
+  });
 
   // POST /api/tournaments/:slug/poster — host / co-host / admin uploads a poster image.
   fastify.post(
