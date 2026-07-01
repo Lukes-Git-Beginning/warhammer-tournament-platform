@@ -305,6 +305,14 @@ export function TournamentDetail() {
 
   return (
     <PageShell variant="narrow">
+      {tournament.poster_url && (
+        <img
+          src={tournament.poster_url}
+          alt={`${tournament.name} poster`}
+          className="mb-6 max-h-72 w-full rounded-lg border border-stone-800 object-cover"
+          loading="lazy"
+        />
+      )}
       <div className="flex flex-wrap items-start gap-3 mb-6">
         <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500 flex-1">
           {tournament.name}

@@ -26,6 +26,7 @@ import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { Select } from '@/components/ui/select';
 import { Label, FieldError, FieldHint } from '@/components/ui/label';
 import { PageShell } from '@/components/layout/PageShell';
+import { PosterUploadField } from '@/components/tournament/PosterUploadField';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
 
 // ---------------------------------------------------------------------------
@@ -697,6 +698,8 @@ export function TournamentEditPage() {
             {(mutation.error as Error).message}
           </div>
         )}
+
+        <PosterUploadField slug={slug} posterUrl={tournament.poster_url} />
 
         {/* ── Format & Mode ─────────────────────────────────────────────── */}
         <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">

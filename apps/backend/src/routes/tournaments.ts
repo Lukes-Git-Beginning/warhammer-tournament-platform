@@ -249,6 +249,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
             select: {
               id: true,
               slug: true,
+              poster_url: true,
               name: true,
               format: true,
               mode: true,
@@ -617,6 +618,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       select: {
         id: true,
         slug: true,
+        poster_url: true,
         name: true,
         description: true,
         format: true,

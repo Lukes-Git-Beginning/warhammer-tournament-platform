@@ -58,6 +58,7 @@ export interface Tournament {
   slug: string;
   name: string;
   description: string | null;
+  poster_url?: string | null;
   format: 'SINGLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN';
   has_third_place_match?: boolean;
   mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
@@ -1280,6 +1281,27 @@ export function adminCheckIn(slug: string, userId: string): Promise<{ ok: true }
 // ---------------------------------------------------------------------------
 // Army Lists
 // ---------------------------------------------------------------------------
+
+export async function uploadTournamentPoster(slug: string, file: File): Promise<{ poster_url: string }> {
+  const formData = new FormData();
+  formData.append('poster', file);
+  const res = await fetch(`/api/tournaments/${slug}/poster`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = (await res.json()) as { error?: string; message?: string };
+      message = body.message ?? body.error ?? message;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+  return res.json() as Promise<{ poster_url: string }>;
+}
 
 export async function uploadArmyList(
   slug: string,

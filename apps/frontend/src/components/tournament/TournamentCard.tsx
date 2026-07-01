@@ -7,6 +7,7 @@ interface TournamentCardProps {
   tournament: {
     slug: string;
     name: string;
+    poster_url?: string | null;
     format: string;
     mode?: string | null;
     status: string;
@@ -81,6 +82,14 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
       params={{ slug: tournament.slug }}
       className="block rounded-lg border border-stone-800 bg-stone-900 p-5 transition-colors hover:border-rizzotto-gold-500 hover:bg-stone-800"
     >
+      {tournament.poster_url && (
+        <img
+          src={tournament.poster_url}
+          alt=""
+          className="mb-3 h-28 w-full rounded object-cover"
+          loading="lazy"
+        />
+      )}
       <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">
         {tournament.name}
       </h3>
