@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthQuery } from '@/lib/auth.js';
 import { AuditLogTable } from '@/components/admin/AuditLogTable.js';
@@ -94,20 +94,14 @@ export function AdminPage() {
   const { t } = useTranslation();
   const { data: user } = useAuthQuery();
 
-  // Derive initial tab from search param (for deep-links like /admin?tab=stats)
-  const searchParams = new URLSearchParams(
-    typeof window !== 'undefined' ? window.location.search : '',
-  );
-  const initialTab = (searchParams.get('tab') as Tab | null) ?? 'dashboard';
-  const [tab, setTab] = useState<Tab>(
-    ALL_TABS.includes(initialTab as Tab) ? initialTab : 'dashboard',
-  );
+  // Tab is fully URL-driven (?tab=…) so it is deep-linkable, survives the browser
+  // back/forward buttons, and re-clicking "Admin" in the navbar resets to the dashboard.
+  const search = useSearch({ from: '/admin' });
+  const navigate = useNavigate({ from: '/admin' });
+  const tab: Tab = ALL_TABS.includes(search.tab as Tab) ? (search.tab as Tab) : 'dashboard';
 
   function changeTab(t: Tab) {
-    setTab(t);
-    const url = new URL(window.location.href);
-    url.searchParams.set('tab', t);
-    window.history.replaceState({}, '', url.toString());
+    void navigate({ search: { tab: t } });
   }
 
   function getLabel(tabKey: Tab): string {

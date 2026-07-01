@@ -147,6 +147,9 @@ const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin',
   component: AdminPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: typeof search.tab === 'string' ? search.tab : 'dashboard',
+  }),
 });
 
 const steamConnectRoute = createRoute({

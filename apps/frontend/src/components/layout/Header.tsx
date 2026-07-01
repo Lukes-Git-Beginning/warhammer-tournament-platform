@@ -83,6 +83,7 @@ export function Header() {
       {user?.role === 'ADMIN' && (
         <Link
           to="/admin"
+          search={{ tab: 'dashboard' }}
           className={NAV_LINK_CLASS}
           activeProps={NAV_LINK_ACTIVE_PROPS}
         >
