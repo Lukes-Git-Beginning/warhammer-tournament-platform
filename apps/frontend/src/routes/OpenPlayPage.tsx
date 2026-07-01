@@ -25,6 +25,7 @@ import { QueueStatusCard } from '../components/open-play/QueueStatusCard';
 import { WeekAvailabilityGrid } from '../components/open-play/WeekAvailabilityGrid';
 import { AvailabilityHeatmap } from '../components/open-play/AvailabilityHeatmap';
 import { ChallengeCalendar } from '../components/open-play/ChallengeCalendar';
+import { StandardRulesetCard } from '../components/tournament/StandardRulesetCard';
 
 type Tab = 'queue' | 'availability' | 'challenges';
 
@@ -164,6 +165,7 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
           drawn and both players pick their faction blind — you'll receive a Discord DM when your
           match is found.
         </p>
+        <StandardRulesetCard compact />
         <Button size="lg" onClick={() => join.mutate()} disabled={join.isPending}>
           {join.isPending ? 'Joining...' : 'Join Queue'}
         </Button>
@@ -373,6 +375,7 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
 
   return (
     <div className="space-y-4">
+      <StandardRulesetCard compact />
       <div className="flex items-center gap-2">
         <span className="text-xs text-stone-400">Format</span>
         <Select
