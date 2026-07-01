@@ -351,7 +351,12 @@ export function MatchDetailPage() {
   const isPrivileged = !!match.can_manage;
   const canReport = !!(user && (isPlayer1 || isPlayer2 || isPrivileged));
 
-  const reportable = match.status === 'ONGOING' || match.status === 'PENDING';
+  // Hosts/admins can also resolve a DISPUTED match (the dual-submit flow is stuck);
+  // regular players only report ONGOING/PENDING.
+  const reportable =
+    match.status === 'ONGOING' ||
+    match.status === 'PENDING' ||
+    (isPrivileged && match.status === 'DISPUTED');
 
   // ---------------------------------------------------------------------------
   // Decision gate state
@@ -724,10 +729,15 @@ export function MatchDetailPage() {
       {showScoreModal && (
         <MatchScoreModal
           matchId={matchId}
+          matchStatus={match.status}
+          canManage={match.can_manage}
           player1Id={match.player1_id}
           player2Id={match.player2_id}
           player1Name={match.player1?.username}
           player2Name={match.player2?.username}
+          initialWinnerId={match.winner_id}
+          initialP1FactionId={match.player1_faction_id ?? undefined}
+          initialP2FactionId={match.player2_faction_id ?? undefined}
           onClose={() => {
             setShowScoreModal(false);
             // Ensure match detail is fresh after result is reported.

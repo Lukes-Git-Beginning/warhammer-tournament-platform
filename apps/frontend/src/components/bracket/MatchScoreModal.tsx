@@ -76,6 +76,10 @@ export function MatchScoreModal({
 }: MatchScoreModalProps) {
   const queryClient = useQueryClient();
   const isCompleted = matchStatus === 'COMPLETED';
+  const isDisputed = matchStatus === 'DISPUTED';
+  // Both go through the host/admin override endpoint (result + factions + map),
+  // which bypasses the dual-submit flow.
+  const isOverride = isCompleted || isDisputed;
   const isPending = matchStatus === 'PENDING';
   const isBo1 = matchFormat === 'BO1';
 
@@ -194,7 +198,7 @@ export function MatchScoreModal({
           player2FactionId: p2FactionId || undefined,
         });
       }
-      if (isCompleted) {
+      if (isOverride) {
         const result =
           winnerId === player1Id ? 'PLAYER1_WIN'
           : winnerId === player2Id ? 'PLAYER2_WIN'
@@ -226,7 +230,7 @@ export function MatchScoreModal({
     },
   });
 
-  const canSubmit = (!!winnerId || isDraw) && (!isCompleted || isDraw || reason.trim().length > 0);
+  const canSubmit = (!!winnerId || isDraw) && (!isOverride || isDraw || reason.trim().length > 0);
 
   const scoreWinnerId =
     p1Score > p2Score ? player1Id
@@ -246,14 +250,19 @@ export function MatchScoreModal({
     >
       <div className="bg-stone-900 border border-stone-700 rounded-lg p-6 w-full max-w-sm shadow-xl">
         <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-1">
-          {isCompleted ? 'Override Result' : 'Enter Result'}
+          {isDisputed ? 'Resolve Dispute' : isCompleted ? 'Override Result' : 'Enter Result'}
         </h2>
         {isCompleted && (
           <p className="text-xs text-amber-400 mb-4">
             This match is already complete. Changes will overwrite the existing result.
           </p>
         )}
-        {!isCompleted && <div className="mb-4" />}
+        {isDisputed && (
+          <p className="text-xs text-amber-400 mb-4">
+            This match is disputed. Setting the result here resolves it — check the factions and map.
+          </p>
+        )}
+        {!isOverride && <div className="mb-4" />}
 
         {/* Match admin actions — Cancel available for COMPLETED+FORFEIT, Restore for FORFEIT+CANCELLED */}
         {(canCancel || canRestore) && (
@@ -520,10 +529,10 @@ export function MatchScoreModal({
           </fieldset>
         )}
 
-        {(isCompleted || isDraw) && (
+        {(isOverride || isDraw) && (
           <div className="mb-4">
             <label className="text-xs text-stone-400 block mb-1" htmlFor="override-reason">
-              Reason {isCompleted && !isDraw && <span className="text-rizzotto-danger">*</span>}
+              Reason {isOverride && !isDraw && <span className="text-rizzotto-danger">*</span>}
             </label>
             <input
               id="override-reason"
@@ -562,7 +571,7 @@ export function MatchScoreModal({
             onClick={() => mutation.mutate()}
             className="px-4 py-1.5 text-sm rounded bg-rizzotto-blood-500 text-white font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
           >
-            {mutation.isPending ? 'Saving…' : isCompleted ? 'Override' : 'Save'}
+            {mutation.isPending ? 'Saving…' : isDisputed ? 'Resolve' : isCompleted ? 'Override' : 'Save'}
           </button>
         </div>
       </div>
