@@ -292,7 +292,7 @@ export function FactionDetailPage() {
 
   if (isLoading) {
     return (
-      <main className="mx-auto max-w-5xl px-4 py-10">
+      <main className="mx-auto max-w-7xl px-4 py-10">
         <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>
       </main>
     );
@@ -300,7 +300,7 @@ export function FactionDetailPage() {
 
   if (error || !data) {
     return (
-      <main className="mx-auto max-w-5xl px-4 py-10">
+      <main className="mx-auto max-w-7xl px-4 py-10">
         <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
           Failed to load faction.
         </div>
@@ -311,7 +311,7 @@ export function FactionDetailPage() {
   const { faction, stats } = data;
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-10 space-y-8">
+    <main className="mx-auto max-w-7xl px-4 py-10 space-y-8">
       {/* Header */}
       <div className="flex items-center gap-5">
         <FactionBadge
@@ -349,7 +349,7 @@ export function FactionDetailPage() {
       )}
 
       {/* Two-column layout: Matchups + Top Players */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Matchup grid */}
         <section className="rounded-md border border-stone-800 bg-stone-900/40 p-5">
           <SectionHeader title="Matchup Win Rates" />

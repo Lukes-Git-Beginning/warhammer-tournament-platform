@@ -134,7 +134,7 @@ export function AdminPage() {
   }
 
   return (
-    <PageShell variant="wide" spacing="tight">
+    <PageShell variant="full" spacing="tight">
       <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500 mb-6">
         {t('admin.title') !== 'admin.title' ? t('admin.title') : 'Conclave — Admin'}
       </h1>

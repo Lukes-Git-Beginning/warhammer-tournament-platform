@@ -318,7 +318,7 @@ export function UserProfilePage() {
   const roleColor = ROLE_COLORS[user.role] ?? 'bg-stone-700 text-stone-300';
 
   return (
-    <PageShell variant="narrow" className="space-y-8">
+    <PageShell variant="wide" className="space-y-8">
       {/* Header Card */}
       <div className="flex items-center gap-5 rounded-md border border-stone-800 bg-stone-900/40 p-6">
         <Avatar url={user.avatar_url} username={user.username} large />
