@@ -10,14 +10,30 @@ import {
 import type { FactionWithStatsDto } from '@rizzotto/types';
 
 /**
+ * Single-line y-axis label. A plain SVG <text> never wraps (unlike recharts'
+ * default tick, which wraps when the name is wider than the axis), so every
+ * faction name stays on exactly one line.
+ */
+function FactionTick({ x, y, payload }: { x?: number; y?: number; payload?: { value?: string } }) {
+  return (
+    <text x={x} y={y} dy={4} textAnchor="end" fill="#d1d5db" fontSize={11}>
+      {payload?.value ?? ''}
+    </text>
+  );
+}
+
+/**
  * Faction popularity by games actually played (matches_played is the game count
  * since the games-only switch). Horizontal bars, descending — the readable layout
  * for ~24 factions. Factions with 0 games sink to the bottom (shows what's unplayed).
+ * Every bar carries its own single-line label (interval={0} + wide axis).
  */
 export function FactionPopularityChart({ factions }: { factions: FactionWithStatsDto[] }) {
   const chartData = factions
     .map((e) => ({
-      name: e.faction.name.length > 14 ? `${e.faction.name.slice(0, 14)}…` : e.faction.name,
+      // Safety cap only — the axis is wide enough for the real faction names
+      // (longest is "Warriors of Chaos"), so this rarely truncates.
+      name: e.faction.name.length > 20 ? `${e.faction.name.slice(0, 20)}…` : e.faction.name,
       games: e.stats?.matches_played ?? 0,
     }))
     .sort((a, b) => b.games - a.games);
@@ -30,15 +46,16 @@ export function FactionPopularityChart({ factions }: { factions: FactionWithStat
       <p className="mb-4 text-xs uppercase tracking-wider text-stone-500">
         Popularity — games played
       </p>
-      <ResponsiveContainer width="100%" height={Math.max(300, chartData.length * 22)}>
+      <ResponsiveContainer width="100%" height={Math.max(300, chartData.length * 24)}>
         <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 24 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
           <XAxis type="number" allowDecimals={false} tick={{ fill: '#9ca3af', fontSize: 11 }} />
           <YAxis
             type="category"
             dataKey="name"
-            tick={{ fill: '#d1d5db', fontSize: 11 }}
-            width={110}
+            interval={0}
+            tick={<FactionTick />}
+            width={140}
           />
           <Tooltip
             formatter={(v) => [v, 'Games']}
