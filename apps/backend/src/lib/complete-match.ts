@@ -13,6 +13,7 @@ import { invalidate } from './cache.js';
 import { emitMatchResult, emitBracketUpdate } from './emit.js';
 import { logQueueActivity } from './queue-activity.js';
 import { recomputeFactionStats } from './recompute-faction-stats.js';
+import { resetContactedSet, runMatchmakingTick } from './matchmaking-tick.js';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -329,5 +330,11 @@ export async function completeMatch(
       nextMatchId: match.next_match_id ?? null,
     });
     emitBracketUpdate(fastify.io, match.tournament_id);
+  }
+
+  // Open Play match ended → free both players for a fresh wait-cycle DM wave.
+  if (match.type === 'OPEN_PLAY') {
+    await resetContactedSet(fastify);
+    setImmediate(() => void runMatchmakingTick(fastify));
   }
 }

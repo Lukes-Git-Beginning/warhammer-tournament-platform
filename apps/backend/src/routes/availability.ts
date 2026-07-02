@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { Prisma } from '@rizzotto/db';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
+import { runMatchmakingTick } from '../lib/matchmaking-tick.js';
 
 const SlotSchema = z.object({
   day_of_week: z.number().int().min(0).max(6),
@@ -95,6 +96,18 @@ const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
       ]);
 
       if (fastify.redis) await invalidate(fastify.redis, 'availability:heatmap*');
+
+      // If the user just added MATCHMAKING availability for the current UTC hour,
+      // they may now be an eligible recipient for a waiting queue — nudge the tick.
+      const now = new Date();
+      const day = (now.getUTCDay() + 6) % 7; // 0=Mon..6=Sun
+      const hour = now.getUTCHours();
+      const addedCurrentHour = parsed.data.slots.some(
+        (s) => s.context === 'MATCHMAKING' && s.day_of_week === day && s.hour_utc === hour,
+      );
+      if (addedCurrentHour && fastify.redis) {
+        setImmediate(() => void runMatchmakingTick(fastify));
+      }
 
       const slots = await fastify.prisma.availabilitySlot.findMany({
         where: { user_id: userId },

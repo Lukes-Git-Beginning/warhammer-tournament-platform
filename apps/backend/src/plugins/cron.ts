@@ -9,6 +9,7 @@ import { autoResolveStaleMatrixActions } from '../lib/matrix-auto-resolve.js';
 import { startAutoSwiss, advanceAutoSwissRound, repairBrokenAutoSwiss } from '../lib/auto-swiss-service.js';
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 import { notifyChallengeMatchFound, notifyScheduledMatchReminder, notifyReQueuePrompt } from '../lib/discord-notify.js';
+import { runMatchmakingTick } from '../lib/matchmaking-tick.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -411,6 +412,21 @@ export default fp(
     }, 15_000);
 
     // -----------------------------------------------------------------------
+    // Open Play matchmaking tick — every 10 seconds via setInterval.
+    // Fallback for the hour roll-over (fresh availability slots become active)
+    // and for FIFO-matching two waiting players once the 60s hold expires with
+    // no new event. Event triggers (join, match end, live availability) handle
+    // the common case immediately; this is the safety net.
+    // -----------------------------------------------------------------------
+    const matchmakingInterval = setInterval(async () => {
+      try {
+        await runMatchmakingTick(fastify);
+      } catch (err) {
+        fastify.log.error({ err }, 'Matchmaking tick failed');
+      }
+    }, 10_000);
+
+    // -----------------------------------------------------------------------
     // Scheduled matchup reminder — every 5 minutes
     // Sends a "1 hour to go" DM with a ready-check button to both players of
     // ACCEPTED challenges whose proposed_at is within the next hour.
@@ -536,6 +552,7 @@ export default fp(
       matchupReminderTask.stop();
       scheduledMatchupActivationTask.stop();
       clearInterval(matrixInterval);
+      clearInterval(matchmakingInterval);
     });
   },
   { name: 'cron', dependencies: ['db'] },

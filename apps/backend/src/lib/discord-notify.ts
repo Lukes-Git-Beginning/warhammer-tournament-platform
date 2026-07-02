@@ -704,18 +704,18 @@ export async function notifyDispute(
 }
 
 /**
- * DM a user when someone joins the Open Play queue during their availability window.
- * Includes snooze buttons (1h / 4h / today) and a direct Join Queue button.
+ * DM a user while players are waiting in the Open Play queue during their
+ * availability window. [Match Now] pairs the clicker with the oldest player in
+ * the queue (resolved when clicked, so the link stays valid indefinitely).
+ * Includes snooze buttons (1h / 4h / today). No player name is shared.
  */
 export async function notifyAvailabilityPing(
   discordUserId: string,
   queueSize: number,
-  originUserId: string,
 ): Promise<void> {
   const token = getToken();
   if (!token) return;
   try {
-    const baseUrl = process.env.FRONTEND_URL ?? 'https://rizzotto.gg';
     const ch = await openDmChannel(discordUserId);
     if (!ch) return;
     const playerWord = queueSize === 1 ? 'player is' : 'players are';
@@ -723,10 +723,10 @@ export async function notifyAvailabilityPing(
       content: `**${queueSize}** ${playerWord} in the Open Play queue right now — it's a great time to play! 🎮`,
       components: [
         actionRow([
-          button('Match Now',    `av_join:${discordUserId}:${originUserId}`, BTN_SUCCESS),
-          button('Snooze 1h',    `av_snooze:1h:${discordUserId}`,           BTN_SECONDARY),
-          button('Snooze 4h',    `av_snooze:4h:${discordUserId}`,           BTN_SECONDARY),
-          button('Snooze Today', `av_snooze:today:${discordUserId}`,        BTN_SECONDARY),
+          button('Match Now',    `av_join:${discordUserId}`,         BTN_SUCCESS),
+          button('Snooze 1h',    `av_snooze:1h:${discordUserId}`,    BTN_SECONDARY),
+          button('Snooze 4h',    `av_snooze:4h:${discordUserId}`,    BTN_SECONDARY),
+          button('Snooze Today', `av_snooze:today:${discordUserId}`, BTN_SECONDARY),
         ]),
       ],
     });
