@@ -108,6 +108,14 @@ interface ChallengeCalendarProps {
   onCancel?: (id: string) => void;
 }
 
+// Local-time bucket for a UTC (weekday, hour) slot. day: Mon=0 … Sun=6.
+function utcToLocal(dayUtc: number, hourUtc: number, offset: number): { day: number; hour: number } {
+  const total = dayUtc * 24 + hourUtc + offset;
+  const day = ((Math.floor(total / 24) % 7) + 7) % 7;
+  const hour = ((total % 24) + 24) % 24;
+  return { day, hour };
+}
+
 export function ChallengeCalendar({
   format,
   slots,
@@ -121,11 +129,19 @@ export function ChallengeCalendar({
   const scrollRef = useRef<HTMLDivElement>(null);
   const durationRows = FORMAT_ROWS[format];
 
+  // Slots are stored in UTC (day_of_week + hour_utc). Convert to the viewer's
+  // local weekday+hour so the heat lines up with the (local) day columns and
+  // hour rows — previously it keyed on raw hour_utc and ignored the weekday.
+  const offset = -new Date().getTimezoneOffset() / 60;
   const heatLookup = useMemo(() => {
-    const m = new Map<number, number>();
-    for (const s of slots) m.set(s.hour_utc, (m.get(s.hour_utc) ?? 0) + s.count);
+    const m = new Map<string, number>();
+    for (const s of slots) {
+      const { day, hour } = utcToLocal(s.day_of_week, s.hour_utc, offset);
+      const key = `${day}:${hour}`;
+      m.set(key, (m.get(key) ?? 0) + s.count);
+    }
     return m;
-  }, [slots]);
+  }, [slots, offset]);
   const heatMax = Math.max(0, ...heatLookup.values());
 
   const days = useMemo<Date[]>(() => {
@@ -179,7 +195,8 @@ export function ChallengeCalendar({
   function cellStyle(day: Date, hour: number): React.CSSProperties {
     const past = isPast(day, hour);
     const role = selRole(day, hour);
-    const heat = heatLookup.get(hour) ?? 0;
+    const localDay = (day.getDay() + 6) % 7; // Mon=0 … Sun=6
+    const heat = heatLookup.get(`${localDay}:${hour}`) ?? 0;
     if (past) return { background: 'hsl(20,3%,9%)', opacity: 0.5 };
     if (role === 'start') return { background: 'rgba(56,189,248,0.85)', boxShadow: 'inset 0 0 0 2px rgba(186,230,253,0.8)' };
     if (role === 'span')  return { background: 'rgba(56,189,248,0.30)' };
