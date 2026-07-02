@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { getFactions } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
+import { FactionPopularityChart } from '@/components/meta/FactionPopularityChart';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { FactionWithStatsDto } from '@rizzotto/types';
@@ -95,6 +96,12 @@ export function FactionListPage() {
           {data.data.map((entry) => (
             <FactionCard key={entry.faction.id} entry={entry} />
           ))}
+        </div>
+      )}
+
+      {hasData && data && (
+        <div className="mt-8">
+          <FactionPopularityChart factions={data.data} />
         </div>
       )}
     </PageShell>
