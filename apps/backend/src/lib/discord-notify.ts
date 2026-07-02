@@ -244,7 +244,7 @@ export async function notifyOpenPlayDispute(matchId: string, reporterDiscordId: 
     const message =
       `**[RizzOtto's Arena] ⚠️ Open Play Dispute**\n\n` +
       `Match ID: \`${matchId}\`\nReported by: <@${reporterDiscordId}>\n\n` +
-      `Please review at ${matchUrl}`;
+      `Please review at <${matchUrl}>`;
 
     const recipients = [...new Set([...moderators, ...admins].map((u) => u.discord_id))];
     await Promise.allSettled(recipients.map((id) => sendDm(id, message)));
