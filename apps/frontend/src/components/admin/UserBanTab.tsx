@@ -1,8 +1,53 @@
 import { useState, useCallback, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { searchUsers, updateUserRole, type AdminUser } from '@/lib/api';
+import { searchUsers, updateUserRole, resetUserSteam, type AdminUser } from '@/lib/api';
 import { UserBanModal } from './UserBanModal';
+import { UserEditModal } from './UserEditModal';
+
+function ResetSteamModal({ user, onClose }: { user: AdminUser; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: () => resetUserSteam(user.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      onClose();
+    },
+  });
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-lg border border-stone-700 bg-stone-950 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-2 text-lg font-semibold text-stone-100">Reset Steam verification</h3>
+        <p className="mb-4 text-sm text-stone-400">
+          Remove <span className="text-stone-200">{user.username}</span>&rsquo;s Steam link
+          {user.steam_id ? <> (<span className="font-mono text-xs">{user.steam_id}</span>)</> : null}? They
+          keep their account and history but must re-link Steam on their next visit.
+        </p>
+        {mutation.isError && <p className="mb-3 text-xs text-red-400">Failed. Try again.</p>}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-stone-700 px-3 py-1.5 text-sm text-stone-300 hover:bg-stone-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate()}
+            className="rounded bg-amber-600 px-3 py-1.5 text-sm font-semibold text-stone-950 hover:bg-amber-500 disabled:opacity-50"
+          >
+            {mutation.isPending ? 'Resetting…' : 'Reset Steam'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function tzOffsetMinutes(tz: string): number {
   const now = new Date();
@@ -99,6 +144,8 @@ function CopyIdButton({ id }: { id: string }) {
 export function UserBanTab() {
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
+  const [resetSteamUser, setResetSteamUser] = useState<AdminUser | null>(null);
   const [sortBy, setSortBy] = useState<SortCol>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -209,17 +256,35 @@ export function UserBanTab() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedUser(user)}
-                      className={`rounded px-3 py-1 text-xs font-semibold transition-colors ${
-                        user.is_banned
-                          ? 'border border-emerald-700 text-emerald-300 hover:bg-emerald-900/30'
-                          : 'border border-red-700 text-red-300 hover:bg-red-900/30'
-                      }`}
-                    >
-                      {user.is_banned ? 'Unban' : 'Ban'}
-                    </button>
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => setEditUser(user)}
+                        className="rounded border border-stone-700 px-2 py-1 text-xs font-semibold text-stone-300 transition-colors hover:bg-stone-800"
+                      >
+                        Edit
+                      </button>
+                      {user.steam_id && (
+                        <button
+                          type="button"
+                          onClick={() => setResetSteamUser(user)}
+                          className="rounded border border-amber-700 px-2 py-1 text-xs font-semibold text-amber-300 transition-colors hover:bg-amber-900/30"
+                        >
+                          Reset Steam
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedUser(user)}
+                        className={`rounded px-2 py-1 text-xs font-semibold transition-colors ${
+                          user.is_banned
+                            ? 'border border-emerald-700 text-emerald-300 hover:bg-emerald-900/30'
+                            : 'border border-red-700 text-red-300 hover:bg-red-900/30'
+                        }`}
+                      >
+                        {user.is_banned ? 'Unban' : 'Ban'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -234,6 +299,8 @@ export function UserBanTab() {
       )}
 
       {selectedUser && <UserBanModal user={selectedUser} onClose={() => setSelectedUser(null)} />}
+      {editUser && <UserEditModal user={editUser} onClose={() => setEditUser(null)} />}
+      {resetSteamUser && <ResetSteamModal user={resetSteamUser} onClose={() => setResetSteamUser(null)} />}
     </div>
   );
 }

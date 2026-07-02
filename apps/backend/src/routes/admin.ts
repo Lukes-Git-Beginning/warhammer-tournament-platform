@@ -374,6 +374,91 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // DELETE /api/admin/users/:id/steam — reset Steam verification. Removes the
+  // SteamLink so the user must re-link Steam on their next visit (keeps the account
+  // and all history). Fixes "signed up with the wrong Steam account".
+  fastify.delete<{ Params: { id: string } }>('/api/admin/users/:id/steam', async (request, reply) => {
+    const userId = request.params.id;
+    const link = await fastify.prisma.steamLink.findUnique({
+      where: { user_id: userId },
+      select: { steam_id: true, persona: true },
+    });
+    if (!link) return reply.code(404).send({ error: 'NotFound', message: 'User has no Steam link to reset', statusCode: 404 });
+
+    await fastify.prisma.$transaction(async (tx) => {
+      await tx.steamLink.delete({ where: { user_id: userId } });
+      await tx.auditLog.create({
+        data: {
+          entity_type: 'User',
+          entity_id: userId,
+          action: 'STEAM_RESET',
+          actor_id: request.user.sub,
+          old_value: { steam_id: link.steam_id, persona: link.persona },
+          new_value: { steam_id: null },
+        },
+      });
+    });
+
+    return { id: userId, steam_reset: true };
+  });
+
+  // PATCH /api/admin/users/:id — edit basic profile fields (admin correction).
+  fastify.patch<{ Params: { id: string }; Body: { username?: string; email?: string | null; timezone?: string | null } }>(
+    '/api/admin/users/:id',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            username: { type: 'string', minLength: 1, maxLength: 64 },
+            email: { type: ['string', 'null'], maxLength: 255 },
+            timezone: { type: ['string', 'null'], maxLength: 64 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = request.params.id;
+      const body = request.body;
+
+      const user = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, username: true, email: true, timezone: true },
+      });
+      if (!user) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
+
+      const data: { username?: string; email?: string | null; timezone?: string | null } = {};
+      if (body.username !== undefined) data.username = body.username;
+      if (body.email !== undefined) data.email = body.email;
+      if (body.timezone !== undefined) data.timezone = body.timezone;
+      if (Object.keys(data).length === 0) {
+        return { id: user.id, username: user.username, email: user.email, timezone: user.timezone };
+      }
+
+      const updated = await fastify.prisma.$transaction(async (tx) => {
+        const u = await tx.user.update({
+          where: { id: userId },
+          data,
+          select: { id: true, username: true, email: true, timezone: true },
+        });
+        await tx.auditLog.create({
+          data: {
+            entity_type: 'User',
+            entity_id: u.id,
+            action: 'USER_EDIT',
+            actor_id: request.user.sub,
+            old_value: { username: user.username, email: user.email, timezone: user.timezone },
+            new_value: { username: u.username, email: u.email, timezone: u.timezone },
+          },
+        });
+        return u;
+      });
+
+      return { id: updated.id, username: updated.username, email: updated.email, timezone: updated.timezone };
+    },
+  );
+
   // -------------------------------------------------------------------------
   // GET /api/admin/stats/faction-winrates
   // -------------------------------------------------------------------------

@@ -693,6 +693,24 @@ export function updateUserRole(userId: string, role: string): Promise<{ id: stri
   });
 }
 
+// Reset a user's Steam verification — removes the SteamLink so they must re-link
+// Steam on their next visit (keeps the account and all history).
+export function resetUserSteam(userId: string): Promise<{ id: string; steam_reset: boolean }> {
+  return apiFetch(`/api/admin/users/${userId}/steam`, { method: 'DELETE' });
+}
+
+// Edit basic profile fields (admin correction).
+export function updateUser(
+  userId: string,
+  fields: { username?: string; email?: string | null; timezone?: string | null },
+): Promise<{ id: string; username: string; email: string | null; timezone: string | null }> {
+  return apiFetch(`/api/admin/users/${userId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Admin — Stats
 // ---------------------------------------------------------------------------
