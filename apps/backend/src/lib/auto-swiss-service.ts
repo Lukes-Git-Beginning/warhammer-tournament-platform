@@ -14,7 +14,7 @@ import {
   computeSwissStandings,
   sortSwissStandings,
 } from './swiss.js';
-import { notifyRoundPairings, notifyMatchesCreated } from './discord-notify.js';
+import { notifyRoundPairings, notifyMatchesCreated, notifyBye } from './discord-notify.js';
 
 // ---------------------------------------------------------------------------
 // Config: derive rounds + playoff format from check-in count
@@ -163,7 +163,7 @@ export async function advanceAutoSwissRound(prisma: PrismaClient, tournamentId: 
 
 async function generateNextSwissRound(
   prisma: PrismaClient,
-  tournament: { id: string; name: string; slug: string; start_date: Date },
+  tournament: { id: string; name: string; slug: string; start_date: Date; rounds_count: number | null; playoff_format: string | null },
   swissMatches: { id: string; round: number; phase: string | null; status: string; player1_id: string | null; player2_id: string | null; winner_id: string | null; match_number: number }[],
   targetRound: number,
 ): Promise<void> {
@@ -272,6 +272,38 @@ async function generateNextSwissRound(
         targetRound,
         pairings,
       );
+    }
+
+    // Bye DM for this round's bye player — encouraging, or "your run is over" on the
+    // final Swiss round when a playoff spot is out of reach. Safe check: only mark as
+    // eliminated when at least `cutoff` players are guaranteed to finish strictly above
+    // them (bye = +1 already applied), so we never falsely tell someone it's over.
+    const byeMatch = newMatches.find((m) => m.status === 'BYE');
+    if (byeMatch?.player1_id) {
+      const byeUserId = byeMatch.player1_id;
+      const byePost = (swissPlayers.find((p) => p.userId === byeUserId)?.score ?? 0) + 1;
+      const cutoff =
+        tournament.playoff_format === 'TOP8' ? 8 :
+        tournament.playoff_format === 'TOP4' ? 4 :
+        tournament.playoff_format === 'TOP2' ? 2 : 0;
+      let eliminated = false;
+      if (targetRound === tournament.rounds_count) {
+        eliminated = cutoff === 0
+          ? true // no playoffs → the tournament ends for everyone after this round
+          : swissPlayers.filter((p) => p.userId !== byeUserId && p.score > byePost).length >= cutoff;
+      }
+      const byeUser = await prisma.user.findUnique({
+        where: { id: byeUserId },
+        select: { discord_id: true, username: true },
+      });
+      if (byeUser?.discord_id) {
+        await notifyBye(
+          { name: tournament.name, slug: tournament.slug },
+          targetRound,
+          { discord_id: byeUser.discord_id, username: byeUser.username },
+          { eliminated },
+        );
+      }
     }
   } catch { /* non-fatal */ }
 }
