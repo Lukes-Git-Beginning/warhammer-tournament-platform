@@ -5,7 +5,10 @@ import { computeSeasonLeaderboard } from '../lib/leaderboard-service.js';
 
 const PaginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  // Cap raised to 1000 so the leaderboard page can load every rank in one request
+  // (the server computes the full list and slices anyway). Pagination is a fallback
+  // only past 1000 entries.
+  pageSize: z.coerce.number().int().min(1).max(1000).default(50),
 });
 
 const SeasonLeaderboardQuerySchema = PaginationSchema.extend({
