@@ -485,6 +485,54 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // -------------------------------------------------------------------------
+  // GET /api/admin/stats/games-over-time?days=30
+  // Daily game counts split by source: tournament / ladder (queue) / challenge.
+  // Game-level (a Bo3 counts as up to 3). Returns a continuous daily series so
+  // the lines never jump over empty days.
+  // -------------------------------------------------------------------------
+  fastify.get('/api/admin/stats/games-over-time', async (request) => {
+    const days = Math.min(
+      365,
+      Math.max(1, Math.floor(Number((request.query as { days?: string }).days) || 30)),
+    );
+    return cached(
+      fastify.redis,
+      cacheKey('admin:games-over-time', { days }),
+      async () => {
+        const since = new Date(Date.now() - (days - 1) * 86_400_000);
+        since.setUTCHours(0, 0, 0, 0);
+        const rows = await fastify.prisma.$queryRaw<
+          { day: Date; tournament: bigint; ladder: bigint; challenge: bigint }[]
+        >`
+          SELECT date_trunc('day', mg.played_at)::date AS day,
+            COUNT(*) FILTER (WHERE m.type = 'TOURNAMENT') AS tournament,
+            COUNT(*) FILTER (WHERE m.type = 'OPEN_PLAY' AND m.source = 'QUEUE') AS ladder,
+            COUNT(*) FILTER (WHERE m.type = 'OPEN_PLAY' AND m.source = 'CHALLENGE') AS challenge
+          FROM "MatchGame" mg
+          JOIN "Match" m ON m.id = mg.match_id
+          WHERE mg.status = 'COMPLETED' AND mg.played_at IS NOT NULL AND mg.played_at >= ${since}
+          GROUP BY day
+          ORDER BY day
+        `;
+        const byDay = new Map(rows.map((r) => [new Date(r.day).toISOString().slice(0, 10), r]));
+        const series: { day: string; tournament: number; ladder: number; challenge: number }[] = [];
+        for (let i = 0; i < days; i++) {
+          const key = new Date(since.getTime() + i * 86_400_000).toISOString().slice(0, 10);
+          const r = byDay.get(key);
+          series.push({
+            day: key,
+            tournament: r ? Number(r.tournament) : 0,
+            ladder: r ? Number(r.ladder) : 0,
+            challenge: r ? Number(r.challenge) : 0,
+          });
+        }
+        return { data: series };
+      },
+      { ttlSeconds: 300 },
+    );
+  });
+
+  // -------------------------------------------------------------------------
   // POST /api/admin/recompute-faction-stats
   // Rebuilds FactionStats + MatchupStats for the active season from the COMPLETED
   // MatchGame rows. Run once after the games-only backfill migration, or any time to

@@ -725,6 +725,17 @@ export function getAdminFactionWinRates(opts?: {
   return apiFetch(`/api/admin/stats/faction-winrates${qs ? `?${qs}` : ''}`);
 }
 
+export interface GamesOverTimeEntry {
+  day: string;
+  tournament: number;
+  ladder: number;
+  challenge: number;
+}
+
+export function getAdminGamesOverTime(days = 30): Promise<{ data: GamesOverTimeEntry[] }> {
+  return apiFetch<{ data: GamesOverTimeEntry[] }>(`/api/admin/stats/games-over-time?days=${days}`);
+}
+
 
 export interface DropOffFunnelStage {
   label: string;
