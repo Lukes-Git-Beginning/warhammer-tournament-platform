@@ -459,6 +459,57 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // DELETE /api/admin/users/:id — delete a user by anonymizing + releasing them.
+  // Rotates the unique discord_id to a tombstone (frees the real one for a fresh
+  // signup), drops the Steam link, scrubs PII, and marks the account inactive —
+  // while keeping their match/leaderboard rows intact (no FK breakage). For a clean
+  // spam/test account this is effectively a delete; for a player their history
+  // survives anonymized as "Deleted user".
+  fastify.delete<{ Params: { id: string } }>('/api/admin/users/:id', async (request, reply) => {
+    const userId = request.params.id;
+    if (userId === request.user.sub) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'You cannot delete your own account', statusCode: 400 });
+    }
+
+    const user = await fastify.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, discord_id: true },
+    });
+    if (!user) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
+    if (user.discord_id.startsWith('deleted:')) {
+      return reply.code(409).send({ error: 'Conflict', message: 'User is already deleted', statusCode: 409 });
+    }
+
+    await fastify.prisma.$transaction(async (tx) => {
+      await tx.steamLink.deleteMany({ where: { user_id: userId } });
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          discord_id: `deleted:${userId}`,
+          username: 'Deleted user',
+          email: null,
+          avatar_url: null,
+          deleted_at: new Date(),
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          entity_type: 'User',
+          entity_id: userId,
+          action: 'USER_DELETE',
+          actor_id: request.user.sub,
+          old_value: { username: user.username, discord_id: user.discord_id },
+          new_value: { username: 'Deleted user', discord_id: `deleted:${userId}` },
+        },
+      });
+    });
+
+    if (fastify.redis) await invalidate(fastify.redis, `user:role:${userId}`);
+    await invalidate(fastify.redis, cacheKey('admin:stats', {}));
+
+    return { id: userId, deleted: true };
+  });
+
   // -------------------------------------------------------------------------
   // GET /api/admin/stats/faction-winrates
   // -------------------------------------------------------------------------

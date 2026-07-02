@@ -711,6 +711,12 @@ export function updateUser(
   });
 }
 
+// Delete a user by anonymizing + releasing them (frees their Discord ID for a fresh
+// signup; keeps match/leaderboard history anonymized as "Deleted user").
+export function deleteUser(userId: string): Promise<{ id: string; deleted: boolean }> {
+  return apiFetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+}
+
 // ---------------------------------------------------------------------------
 // Admin — Stats
 // ---------------------------------------------------------------------------

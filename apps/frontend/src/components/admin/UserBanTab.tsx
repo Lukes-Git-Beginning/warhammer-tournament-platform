@@ -1,9 +1,58 @@
 import { useState, useCallback, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { searchUsers, updateUserRole, resetUserSteam, type AdminUser } from '@/lib/api';
+import { searchUsers, updateUserRole, resetUserSteam, deleteUser, type AdminUser } from '@/lib/api';
 import { UserBanModal } from './UserBanModal';
 import { UserEditModal } from './UserEditModal';
+
+// A deleted (anonymized) account carries a tombstone discord_id.
+function isDeletedUser(u: AdminUser): boolean {
+  return u.discord_id?.startsWith('deleted:') ?? false;
+}
+
+function DeleteUserModal({ user, onClose }: { user: AdminUser; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: () => deleteUser(user.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      onClose();
+    },
+  });
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-lg border border-red-900 bg-stone-950 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-2 text-lg font-semibold text-red-300">Delete user</h3>
+        <p className="mb-4 text-sm text-stone-400">
+          Permanently delete <span className="text-stone-200">{user.username}</span>? This frees their
+          Discord/Steam for a fresh signup and scrubs their name &amp; email. Their match &amp;
+          leaderboard history stays, anonymized as &ldquo;Deleted user&rdquo;. This cannot be undone.
+        </p>
+        {mutation.isError && <p className="mb-3 text-xs text-red-400">Failed. Try again.</p>}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-stone-700 px-3 py-1.5 text-sm text-stone-300 hover:bg-stone-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate()}
+            className="rounded bg-red-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50"
+          >
+            {mutation.isPending ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ResetSteamModal({ user, onClose }: { user: AdminUser; onClose: () => void }) {
   const queryClient = useQueryClient();
@@ -146,6 +195,7 @@ export function UserBanTab() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [resetSteamUser, setResetSteamUser] = useState<AdminUser | null>(null);
+  const [deleteTargetUser, setDeleteTargetUser] = useState<AdminUser | null>(null);
   const [sortBy, setSortBy] = useState<SortCol>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -249,42 +299,55 @@ export function UserBanTab() {
                     {new Date(user.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
                   <td className="px-4 py-3">
-                    {user.is_banned ? (
+                    {isDeletedUser(user) ? (
+                      <span className="rounded bg-stone-800 px-2 py-0.5 text-xs font-medium text-stone-400">Deleted</span>
+                    ) : user.is_banned ? (
                       <span className="rounded bg-red-900/50 px-2 py-0.5 text-xs font-medium text-red-300">Banned</span>
                     ) : (
                       <span className="rounded bg-emerald-900/40 px-2 py-0.5 text-xs font-medium text-emerald-300">Active</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => setEditUser(user)}
-                        className="rounded border border-stone-700 px-2 py-1 text-xs font-semibold text-stone-300 transition-colors hover:bg-stone-800"
-                      >
-                        Edit
-                      </button>
-                      {user.steam_id && (
+                    {isDeletedUser(user) ? (
+                      <span className="text-xs text-stone-600">—</span>
+                    ) : (
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
                         <button
                           type="button"
-                          onClick={() => setResetSteamUser(user)}
-                          className="rounded border border-amber-700 px-2 py-1 text-xs font-semibold text-amber-300 transition-colors hover:bg-amber-900/30"
+                          onClick={() => setEditUser(user)}
+                          className="rounded border border-stone-700 px-2 py-1 text-xs font-semibold text-stone-300 transition-colors hover:bg-stone-800"
                         >
-                          Reset Steam
+                          Edit
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedUser(user)}
-                        className={`rounded px-2 py-1 text-xs font-semibold transition-colors ${
-                          user.is_banned
-                            ? 'border border-emerald-700 text-emerald-300 hover:bg-emerald-900/30'
-                            : 'border border-red-700 text-red-300 hover:bg-red-900/30'
-                        }`}
-                      >
-                        {user.is_banned ? 'Unban' : 'Ban'}
-                      </button>
-                    </div>
+                        {user.steam_id && (
+                          <button
+                            type="button"
+                            onClick={() => setResetSteamUser(user)}
+                            className="rounded border border-amber-700 px-2 py-1 text-xs font-semibold text-amber-300 transition-colors hover:bg-amber-900/30"
+                          >
+                            Reset Steam
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedUser(user)}
+                          className={`rounded px-2 py-1 text-xs font-semibold transition-colors ${
+                            user.is_banned
+                              ? 'border border-emerald-700 text-emerald-300 hover:bg-emerald-900/30'
+                              : 'border border-red-700 text-red-300 hover:bg-red-900/30'
+                          }`}
+                        >
+                          {user.is_banned ? 'Unban' : 'Ban'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTargetUser(user)}
+                          className="rounded border border-red-800 px-2 py-1 text-xs font-semibold text-red-400 transition-colors hover:bg-red-950/50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -301,6 +364,7 @@ export function UserBanTab() {
       {selectedUser && <UserBanModal user={selectedUser} onClose={() => setSelectedUser(null)} />}
       {editUser && <UserEditModal user={editUser} onClose={() => setEditUser(null)} />}
       {resetSteamUser && <ResetSteamModal user={resetSteamUser} onClose={() => setResetSteamUser(null)} />}
+      {deleteTargetUser && <DeleteUserModal user={deleteTargetUser} onClose={() => setDeleteTargetUser(null)} />}
     </div>
   );
 }
