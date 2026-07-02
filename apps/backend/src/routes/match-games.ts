@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { ensureMatchGame, finalizeGameResult } from '../lib/match-games.js';
 import { REPLAY_DIR } from '../lib/replays.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
+import { notifyOpenPlayDispute } from '../lib/discord-notify.js';
 
 const LobbyCodeBodySchema = z.object({
   lobby_code: z.string().max(64).nullable(),
@@ -463,6 +464,18 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       fastify.log.warn({ matchId, gameId }, 'Game result disputed — host must resolve');
+
+      // Open Play has no tournament host — notify mods/admins so on-site disputes
+      // don't go unnoticed (replaces the removed Discord dispute button).
+      if (!match.tournament_id) {
+        const reporter = await fastify.prisma.user.findUnique({
+          where: { id: userId },
+          select: { discord_id: true },
+        });
+        if (reporter?.discord_id) {
+          setImmediate(() => void notifyOpenPlayDispute(matchId, reporter.discord_id!));
+        }
+      }
 
       if (fastify.io) {
         fastify.io.to(`match_decision_${matchId}`).emit('match.game.updated', {
