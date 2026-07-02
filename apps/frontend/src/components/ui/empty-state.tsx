@@ -58,7 +58,7 @@ export function EmptyState({
   }
 
   const headingAndCopy = (
-    <div className={variant === 'banner' ? 'text-center sm:text-left' : 'text-center'}>
+    <div className={variant === 'banner' ? 'text-left' : 'text-center'}>
       <h3 className="font-display text-2xl font-semibold text-rizzotto-stone-100">
         {title}
       </h3>
@@ -77,7 +77,7 @@ export function EmptyState({
         <div
           className={cn(
             'mt-6 flex',
-            variant === 'banner' ? 'justify-center sm:justify-start' : 'justify-center',
+            variant === 'banner' ? 'justify-start' : 'justify-center',
           )}
         >
           {cta}
