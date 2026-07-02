@@ -16,8 +16,8 @@ export const STANDARD_RULESET = {
 
 function Row({ label, items }: { label: string; items: readonly string[] }) {
   return (
-    <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
-      <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80">
+    <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
+      <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80 sm:w-24">
         {label}
       </span>
       <span className="text-stone-300">{items.join(' · ')}</span>
