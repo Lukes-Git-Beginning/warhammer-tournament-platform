@@ -98,7 +98,6 @@ async function sendDmWithComponents(discordUserId: string, content: string, comp
 
 // Button styles
 const BTN_SUCCESS = 3; // green
-const BTN_DANGER = 4;  // red
 const BTN_SECONDARY = 2; // grey
 
 function actionRow(buttons: object[]) {
@@ -109,9 +108,15 @@ function button(label: string, customId: string, style: number) {
   return { type: 2, style, label, custom_id: customId };
 }
 
+// Link button (style 5) — opens a URL, does NOT fire an interaction.
+function linkButton(label: string, url: string) {
+  return { type: 2, style: 5, label, url };
+}
+
 /**
- * DM both players when an Open Play match is created, with result buttons.
- * custom_id format: op_declare:<win|loss|cancel>:<matchId>:<playerId>
+ * DM both players when an Open Play match is created. Result reporting happens on
+ * the website (a replay is mandatory there), so this is a notification with a link
+ * button to the match page — no result/cancel buttons.
  */
 export async function notifyMatchFoundWithButtons(
   matchId: string,
@@ -126,93 +131,19 @@ export async function notifyMatchFoundWithButtons(
   const matchUrl = `${baseUrl}/matches/${matchId}`;
   const mapLine = mapName ? ` · Map: **${mapName}**` : '';
 
-  const buildDm = (forPlayer: typeof p1, opponent: typeof p1) => ({
-    content: `Match found! Open Play vs <@${opponent.discordId}>${mapLine}\nPick your faction → ${matchUrl}`,
-    components: [
-      actionRow([
-        button('Declare Win', `op_declare:win:${matchId}:${forPlayer.discordId}`, BTN_SUCCESS),
-        button('Cancel Match', `op_declare:cancel:${matchId}:${forPlayer.discordId}`, BTN_SECONDARY),
-        button('Declare Loss', `op_declare:loss:${matchId}:${forPlayer.discordId}`, BTN_DANGER),
-      ]),
-    ],
+  const buildDm = (opponent: typeof p1) => ({
+    content: `⚔️ Match found! Open Play vs <@${opponent.discordId}>${mapLine}\nPick your faction and report the result with your replay on the website:`,
+    components: [actionRow([linkButton('Open match', matchUrl)])],
   });
 
   const [ch1, ch2] = await Promise.all([openDmChannel(p1.discordId), openDmChannel(p2.discordId)]);
 
   await Promise.allSettled([
-    ch1 ? discordRequest('POST', `/channels/${ch1}/messages`, buildDm(p1, p2)) : Promise.resolve(),
-    ch2 ? discordRequest('POST', `/channels/${ch2}/messages`, buildDm(p2, p1)) : Promise.resolve(),
+    ch1 ? discordRequest('POST', `/channels/${ch1}/messages`, buildDm(p2)) : Promise.resolve(),
+    ch2 ? discordRequest('POST', `/channels/${ch2}/messages`, buildDm(p1)) : Promise.resolve(),
   ]);
 }
 
-/**
- * DM the opponent when a player declares a win, asking them to confirm or dispute.
- * custom_id format: op_confirm:<matchId>:<winnerId> / op_dispute:<matchId>:<winnerId>
- */
-export async function notifyResultPending(
-  opponentDiscordId: string,
-  declarerDiscordId: string,
-  matchId: string,
-  winnerId: string,
-): Promise<void> {
-  const token = getToken();
-  if (!token) return;
-
-  await sendDmWithComponents(
-    opponentDiscordId,
-    `<@${declarerDiscordId}> has reported a win for this match. Confirm or dispute?`,
-    [
-      actionRow([
-        button('Confirm', `op_confirm:${matchId}:${winnerId}`, BTN_SUCCESS),
-        button('Dispute', `op_dispute:${matchId}:${winnerId}`, BTN_DANGER),
-      ]),
-    ],
-  ).catch((e) => console.warn('[discord-notify] notifyResultPending error:', e));
-}
-
-/**
- * DM the opponent when a player requests to cancel the match without a result.
- * custom_id format: op_cancel_accept:<matchId> / op_cancel_dispute:<matchId>:<opponentDiscordId>
- */
-export async function notifyCancelPending(
-  opponentDiscordId: string,
-  declarerDiscordId: string,
-  matchId: string,
-): Promise<void> {
-  const token = getToken();
-  if (!token) return;
-
-  await sendDmWithComponents(
-    opponentDiscordId,
-    `<@${declarerDiscordId}> wants to cancel this match without recording a result. Accept or dispute?`,
-    [
-      actionRow([
-        button('Accept', `op_cancel_accept:${matchId}`, BTN_SUCCESS),
-        button('Dispute', `op_cancel_dispute:${matchId}:${opponentDiscordId}`, BTN_DANGER),
-      ]),
-    ],
-  ).catch((e) => console.warn('[discord-notify] notifyCancelPending error:', e));
-}
-
-/**
- * DM the winner after match confirmation, reminding them to upload a replay for leaderboard credit.
- */
-export async function notifyReplayReminder(winnerDiscordId: string, matchId: string): Promise<void> {
-  const token = getToken();
-  if (!token) return;
-
-  const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
-  await sendDmWithComponents(
-    winnerDiscordId,
-    `✅ Result recorded! Upload your replay at ${matchUrl} to have this win count for the leaderboard.`,
-    [actionRow([button('Queue Again', `op_queue:${winnerDiscordId}`, BTN_SUCCESS)])],
-  ).catch((e) => console.warn('[discord-notify] notifyReplayReminder error:', e));
-}
-
-/**
- * DM both players when a scheduled challenge match starts — no result buttons
- * since BO3/BO5 matches are played out on the website.
- */
 /**
  * DM both players ~1h before their scheduled match with a ready-check button.
  * custom_id format: sc_ready:<matchupId>:<receiverDiscordId>
@@ -272,27 +203,6 @@ export async function notifyChallengeMatchFound(
       `⚔️ You accepted <@${proposer.discordId}>'s **${format}** challenge${mapLine} → ${matchUrl}`,
     ),
   ]);
-}
-
-export async function notifyMatchCancelledBothPlayers(
-  p1DiscordId: string,
-  p2DiscordId: string,
-): Promise<void> {
-  const token = getToken();
-  if (!token) return;
-
-  const msg = 'Match cancelled. No result recorded.';
-  const components = [actionRow([button('Queue Again', `op_queue:PLACEHOLDER`, BTN_SUCCESS)])];
-
-  await Promise.allSettled([
-    sendDmWithComponents(p1DiscordId, msg, [
-      actionRow([button('Queue Again', `op_queue:${p1DiscordId}`, BTN_SUCCESS)]),
-    ]),
-    sendDmWithComponents(p2DiscordId, msg, [
-      actionRow([button('Queue Again', `op_queue:${p2DiscordId}`, BTN_SUCCESS)]),
-    ]),
-  ]);
-  void components; // suppress unused warning
 }
 
 /**

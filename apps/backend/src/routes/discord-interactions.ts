@@ -1,16 +1,10 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { verify as cryptoVerify, createPublicKey } from 'crypto';
 import {
-  notifyResultPending,
-  notifyCancelPending,
-  notifyReplayReminder,
-  notifyMatchCancelledBothPlayers,
-  notifyOpenPlayDispute,
   notifyMatchFoundWithButtons,
   sendDm,
 } from '../lib/discord-notify.js';
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
-import { invalidate } from '../lib/cache.js';
 import { logQueueActivity } from '../lib/queue-activity.js';
 import {
   QUEUE_KEY,
@@ -18,7 +12,6 @@ import {
   JOIN_SCRIPT,
   POP_OLDEST_SCRIPT,
   runMatchmakingTick,
-  resetContactedSet,
 } from '../lib/matchmaking-tick.js';
 
 const PING = 1;
@@ -52,16 +45,6 @@ function verifyDiscordSignature(publicKey: string, signature: string, timestamp:
 
 function ephemeral(content: string) {
   return { type: CHANNEL_MESSAGE_WITH_SOURCE, data: { content, flags: 64 } };
-}
-
-async function invalidateScoringCaches(redis: import('ioredis').Redis | undefined): Promise<void> {
-  if (!redis) return;
-  await Promise.all([
-    invalidate(redis, 'leaderboard:*'),
-    invalidate(redis, 'factions:*'),
-    invalidate(redis, 'meta:*'),
-    invalidate(redis, 'rating-model:*'),
-  ]);
 }
 
 // Join the Open Play queue from a Discord interaction (Queue Again / opt-in),
@@ -161,166 +144,6 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
       const parts = customId.split(':');
       const action = parts[0];
 
-      // op_declare:<win|loss|cancel>:<matchId>:<actorDiscordId>
-      if (action === 'op_declare') {
-        const [, outcome, matchId, actorDiscordId] = parts;
-        if (!outcome || !matchId || !actorDiscordId) return reply.code(200).send(ephemeral('Invalid button.'));
-        if (actorDiscordId !== discordId) return reply.code(200).send(ephemeral('This button is not for you.'));
-
-        const match = await fastify.prisma.match.findFirst({
-          where: { id: matchId, type: 'OPEN_PLAY', deleted_at: null },
-          select: { id: true, status: true, player1_id: true, player2_id: true },
-        });
-        if (!match) return reply.code(200).send(ephemeral('Match not found.'));
-        if (match.status !== 'ONGOING') {
-          return reply.code(200).send(ephemeral('This match has already been resolved or is awaiting confirmation.'));
-        }
-
-        const actor = await fastify.prisma.user.findFirst({
-          where: { discord_id: discordId, deleted_at: null },
-          select: { id: true, username: true },
-        });
-        if (!actor) return reply.code(200).send(ephemeral('You need to log in at rizzotto.gg first.'));
-
-        const isPlayer1 = match.player1_id === actor.id;
-        const isPlayer2 = match.player2_id === actor.id;
-        if (!isPlayer1 && !isPlayer2) return reply.code(200).send(ephemeral('You are not a player in this match.'));
-
-        const opponentId = isPlayer1 ? match.player2_id : match.player1_id;
-        if (!opponentId) return reply.code(200).send(ephemeral('Opponent not found.'));
-
-        const opponent = await fastify.prisma.user.findUnique({
-          where: { id: opponentId },
-          select: { discord_id: true, username: true },
-        });
-        if (!opponent?.discord_id) return reply.code(200).send(ephemeral('Opponent has no Discord linked.'));
-
-        await fastify.prisma.match.update({
-          where: { id: matchId },
-          data: { status: 'AWAITING_CONFIRMATION' },
-        });
-
-        if (outcome === 'cancel') {
-          setImmediate(() => void notifyCancelPending(opponent.discord_id!, discordId, matchId));
-          return reply.code(200).send(ephemeral(`Cancellation request sent to **${opponent.username}**. Waiting for their response.`));
-        }
-
-        const winnerId = outcome === 'win' ? actor.id : opponentId;
-        setImmediate(() => void notifyResultPending(opponent.discord_id!, discordId, matchId, winnerId));
-        return reply.code(200).send(ephemeral(`Result reported. Waiting for **${opponent.username}** to confirm.`));
-      }
-
-      // op_confirm:<matchId>:<winnerId>
-      if (action === 'op_confirm') {
-        const [, matchId, winnerId] = parts;
-        if (!matchId || !winnerId) return reply.code(200).send(ephemeral('Invalid button.'));
-
-        const match = await fastify.prisma.match.findFirst({
-          where: { id: matchId, type: 'OPEN_PLAY', deleted_at: null },
-          select: { id: true, status: true },
-        });
-        if (!match || match.status !== 'AWAITING_CONFIRMATION') {
-          return reply.code(200).send(ephemeral('This match is not awaiting confirmation.'));
-        }
-
-        const confirmer = await fastify.prisma.user.findFirst({
-          where: { discord_id: discordId, deleted_at: null },
-          select: { id: true },
-        });
-        if (!confirmer) return reply.code(200).send(ephemeral('You need to log in at rizzotto.gg first.'));
-        if (confirmer.id === winnerId) return reply.code(200).send(ephemeral('You cannot confirm your own result.'));
-
-        const winner = await fastify.prisma.user.findUnique({
-          where: { id: winnerId },
-          select: { discord_id: true },
-        });
-
-        await fastify.prisma.$transaction(async (tx) => {
-          await tx.match.update({
-            where: { id: matchId },
-            data: { status: 'COMPLETED', winner_id: winnerId, played_at: new Date() },
-          });
-          await tx.matchGame.updateMany({
-            where: { match_id: matchId },
-            data: { winner_id: winnerId, counts_for_leaderboard: false, status: 'COMPLETED', played_at: new Date() },
-          });
-        });
-
-        await invalidateScoringCaches(fastify.redis);
-
-        // Match ended → free both players for a fresh wait-cycle DM wave.
-        await resetContactedSet(fastify);
-        setImmediate(() => void runMatchmakingTick(fastify));
-
-        if (winner?.discord_id) {
-          setImmediate(() => void notifyReplayReminder(winner.discord_id!, matchId));
-        }
-
-        return reply.code(200).send(ephemeral('Match confirmed! The winner has been notified to upload their replay.'));
-      }
-
-      // op_dispute:<matchId>:<winnerId>
-      if (action === 'op_dispute') {
-        const [, matchId] = parts;
-        if (!matchId) return reply.code(200).send(ephemeral('Invalid button.'));
-
-        const match = await fastify.prisma.match.findFirst({
-          where: { id: matchId, type: 'OPEN_PLAY', deleted_at: null },
-          select: { id: true, status: true },
-        });
-        if (!match || match.status !== 'AWAITING_CONFIRMATION') {
-          return reply.code(200).send(ephemeral('Nothing to dispute right now.'));
-        }
-
-        const disputer = await fastify.prisma.user.findFirst({
-          where: { discord_id: discordId, deleted_at: null },
-          select: { id: true, username: true },
-        });
-        if (!disputer) return reply.code(200).send(ephemeral('You need to log in at rizzotto.gg first.'));
-
-        await fastify.prisma.match.update({ where: { id: matchId }, data: { status: 'DISPUTED' } });
-        setImmediate(() => void notifyOpenPlayDispute(matchId, discordId));
-
-        return reply.code(200).send(ephemeral('Dispute submitted. A moderator has been notified and will review the match.'));
-      }
-
-      // op_cancel_accept:<matchId>
-      if (action === 'op_cancel_accept') {
-        const [, matchId] = parts;
-        if (!matchId) return reply.code(200).send(ephemeral('Invalid button.'));
-
-        const match = await fastify.prisma.match.findFirst({
-          where: { id: matchId, type: 'OPEN_PLAY', deleted_at: null },
-          select: { id: true, status: true, player1_id: true, player2_id: true },
-        });
-        if (!match || match.status !== 'AWAITING_CONFIRMATION') {
-          return reply.code(200).send(ephemeral('Nothing to accept right now.'));
-        }
-
-        await fastify.prisma.$transaction(async (tx) => {
-          await tx.match.update({ where: { id: matchId }, data: { status: 'CANCELLED' } });
-          await tx.matchGame.updateMany({
-            where: { match_id: matchId },
-            data: { counts_for_leaderboard: false, status: 'COMPLETED' },
-          });
-        });
-
-        // Notify both players with Queue Again button
-        const [p1, p2] = await Promise.all([
-          match.player1_id ? fastify.prisma.user.findUnique({ where: { id: match.player1_id }, select: { discord_id: true } }) : null,
-          match.player2_id ? fastify.prisma.user.findUnique({ where: { id: match.player2_id }, select: { discord_id: true } }) : null,
-        ]);
-        if (p1?.discord_id && p2?.discord_id) {
-          setImmediate(() => void notifyMatchCancelledBothPlayers(p1.discord_id!, p2.discord_id!));
-        }
-
-        // Match ended → free both players for a fresh wait-cycle DM wave.
-        await resetContactedSet(fastify);
-        setImmediate(() => void runMatchmakingTick(fastify));
-
-        return reply.code(200).send(ephemeral('Match cancelled. No result has been recorded.'));
-      }
-
       // op_queue:<actorDiscordId> — Queue Again button
       if (action === 'op_queue') {
         const [, actorDiscordId] = parts;
@@ -334,23 +157,6 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
         if (!user) return reply.code(200).send(ephemeral('You need to log in at rizzotto.gg first.'));
 
         return reply.code(200).send(await joinQueueViaDiscord(fastify, user.id));
-      }
-
-      // op_cancel_dispute:<matchId>:<opponentDiscordId>
-      if (action === 'op_cancel_dispute') {
-        const [, matchId] = parts;
-        if (!matchId) return reply.code(200).send(ephemeral('Invalid button.'));
-
-        const match = await fastify.prisma.match.findFirst({
-          where: { id: matchId, type: 'OPEN_PLAY', deleted_at: null },
-          select: { id: true, status: true },
-        });
-        if (!match || match.status !== 'AWAITING_CONFIRMATION') {
-          return reply.code(200).send(ephemeral('Nothing to dispute right now.'));
-        }
-
-        await fastify.prisma.match.update({ where: { id: matchId }, data: { status: 'ONGOING' } });
-        return reply.code(200).send(ephemeral('Cancel rejected. Match is still active — report the result on the website if needed.'));
       }
 
       // sc_ready:<matchupId>:<clickerDiscordId> — "I'm Ready" button from 1h reminder
