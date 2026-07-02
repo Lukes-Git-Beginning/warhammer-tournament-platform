@@ -179,7 +179,7 @@ export function ActiveMustersSection() {
             body={t('musters.empty_body')}
             motto={t('musters.empty_motto')}
             mottoTitle="Remember the fight"
-            image={{ src: '/img/empty-musters', alt: '', width: 1448, height: 1086 }}
+            image={{ src: '/img/cole-desolation', alt: '', width: 1061, height: 796 }}
           />
         )}
         {hasTournaments && (
