@@ -30,6 +30,8 @@ interface SVGBracketProps {
   tournamentMode?: string;
   /** Tournament format (e.g. 'BALANCED_LIECHTENSTEIN') — distinct from match mode */
   format?: string;
+  /** userId → skillBand (1..5) — present for BALANCED_LIECHTENSTEIN */
+  bandByUser?: Map<string, number>;
   onMatchClick?: (matchId: string) => void;
 }
 
@@ -128,7 +130,7 @@ export function computeSlotLabels(
   return slotLabels;
 }
 
-export function SVGBracket({ data, players, factionMap, tournamentMode, format, onMatchClick }: SVGBracketProps) {
+export function SVGBracket({ data, players, factionMap, tournamentMode, format, bandByUser, onMatchClick }: SVGBracketProps) {
   const isSft = tournamentMode === 'SFT';
   const layout = computeBracketLayout(data.matches);
 
@@ -184,6 +186,8 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, format, 
         // Show faction logo for SFT (fixed faction per event) or BPT Bo1 (single game → faction is unambiguous).
         const showFaction = isSft || m.matchFormat === 'BO1';
         const labels = slotLabels.get(m.matchId);
+        const p1Band = m.player1Id ? bandByUser?.get(m.player1Id) : undefined;
+        const p2Band = m.player2Id ? bandByUser?.get(m.player2Id) : undefined;
 
         return (
           <foreignObject
@@ -209,6 +213,8 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, format, 
                 p1SlotLabel={labels?.p1}
                 p2SlotLabel={labels?.p2}
                 tournamentMode={format}
+                player1Band={p1Band}
+                player2Band={p2Band}
               />
             </div>
           </foreignObject>

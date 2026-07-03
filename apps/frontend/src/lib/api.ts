@@ -1486,11 +1486,12 @@ export function getParticipants(slug: string): Promise<TournamentParticipantsRes
 
 export function registerForTournament(
   slug: string,
-  opts?: { factionId?: string; factionIds?: string[] },
+  opts?: { factionId?: string; factionIds?: string[]; requested_band?: number },
 ): Promise<{ id: string; status: ParticipantStatus }> {
   const body: Record<string, unknown> = {};
   if (opts?.factionId) body.faction_id = opts.factionId;
   if (opts?.factionIds) body.faction_ids = opts.factionIds;
+  if (opts?.requested_band != null) body.requested_band = opts.requested_band;
   return apiFetch<{ id: string; status: ParticipantStatus }>(
     `/api/tournaments/${slug}/register`,
     { method: 'POST', body: JSON.stringify(body) },

@@ -543,6 +543,7 @@ export function TournamentDetail() {
             tournament={tournament}
             participantStatus={participantStatus}
             isLoggedIn={!!user}
+            userId={user?.id}
           />
         </section>
       )}
