@@ -286,6 +286,10 @@ export function planPairings(
 // players, and a level with fewer than 4 borrows the best players of the level(s)
 // below until it reaches 4 (the borrowed player is promoted out of their level).
 // A trailing bottom pool that still can't reach 4 is merged into the pool above.
+//
+// Final seats: seat 1 is reserved for the best player of the pool's OWN band (so a
+// real top-band player always makes the final, never displaced by a borrowed
+// lower-band player who happened to outscore them); seat 2 is the best of the rest.
 // ---------------------------------------------------------------------------
 
 /** Minimum players a division pool needs before it stands on its own. */
@@ -343,11 +347,21 @@ export function formDivisionPools(players: RankedPlayer[]): DivisionPool[] {
     pools[pools.length - 1]!.players.push(...last.players);
   }
 
-  // Top 2 of each pool (by rank) contest the division final.
+  // Division final seats (Alex-Spec 2026-07-03):
+  //  - Seat 1 is RESERVED for the best-ranked player of the pool's OWN (highest)
+  //    band — so a genuine top-band player always reaches the final even when a
+  //    borrowed lower-band player outscored them in the group phase. This keeps a
+  //    "top division" final from degrading into two promoted lower-band players.
+  //  - Seat 2 goes to the best-ranked of everyone else in the pool, any band.
   for (const pool of pools) {
     pool.players.sort((a, b) => a.rank - b.rank);
-    pool.finalists =
-      pool.players.length >= 2 ? [pool.players[0]!.userId, pool.players[1]!.userId] : null;
+    if (pool.players.length < 2) {
+      pool.finalists = null;
+      continue;
+    }
+    const seat1 = pool.players.find((p) => p.band === pool.band) ?? pool.players[0]!;
+    const seat2 = pool.players.find((p) => p.userId !== seat1.userId)!;
+    pool.finalists = [seat1.userId, seat2.userId];
   }
 
   return pools;

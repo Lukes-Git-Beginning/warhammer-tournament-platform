@@ -260,4 +260,17 @@ describe('formDivisionPools', () => {
     expect(pools).toHaveLength(1);
     expect(pools[0]!.finalists).toEqual(['a', 'b']);
   });
+
+  it('reserves final seat 1 for the best of the pool own-band, even if a borrowed player outranks them', () => {
+    // Top band (4) has 2 weak-scoring players; the pool borrows 2 higher-ranked
+    // band-3 players to reach the minimum. Seat 1 must still be the best band-4
+    // player (adv1), NOT the higher-ranked promoted intermediate.
+    const players = [R('int1', 3, 1), R('int2', 3, 2), R('adv1', 4, 3), R('adv2', 4, 4)];
+    const pools = formDivisionPools(players);
+    expect(pools).toHaveLength(1);
+    const pool = pools[0]!;
+    expect(pool.band).toBe(4);
+    // Seat 1 = best band-4 player; seat 2 = best of the rest (the top-ranked intermediate).
+    expect(pool.finalists).toEqual(['adv1', 'int1']);
+  });
 });
