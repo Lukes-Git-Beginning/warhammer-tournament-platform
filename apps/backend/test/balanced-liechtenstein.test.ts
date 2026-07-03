@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   planPairings,
   formDivisionPools,
+  divisionPlayoffFormat,
   type BalancedParticipant,
   type BalancedMatchRow,
   type RankedPlayer,
@@ -272,5 +273,29 @@ describe('formDivisionPools', () => {
     expect(pool.band).toBe(4);
     // Seat 1 = best band-4 player; seat 2 = best of the rest (the top-ranked intermediate).
     expect(pool.finalists).toEqual(['adv1', 'int1']);
+  });
+
+  it('exposes the full seed order: top-band best first, then the rest by rank', () => {
+    const players = [R('int1', 3, 1), R('int2', 3, 2), R('adv1', 4, 3), R('adv2', 4, 4)];
+    const pools = formDivisionPools(players);
+    // adv1 (best of the own band 4) leads; the rest follow by Swiss rank.
+    expect(pools[0]!.seeds).toEqual(['adv1', 'int1', 'int2', 'adv2']);
+  });
+
+  it('a pure single-band pool seeds strictly by rank', () => {
+    const players = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => R(`p${r}`, 3, r));
+    const pools = formDivisionPools(players);
+    expect(pools[0]!.seeds).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']);
+  });
+});
+
+describe('divisionPlayoffFormat', () => {
+  it('maps division size to bracket format (thresholds 4 / 8 / 16)', () => {
+    expect(divisionPlayoffFormat(4)).toBe('TOP2');
+    expect(divisionPlayoffFormat(7)).toBe('TOP2');
+    expect(divisionPlayoffFormat(8)).toBe('TOP4');
+    expect(divisionPlayoffFormat(15)).toBe('TOP4');
+    expect(divisionPlayoffFormat(16)).toBe('TOP8');
+    expect(divisionPlayoffFormat(20)).toBe('TOP8');
   });
 });

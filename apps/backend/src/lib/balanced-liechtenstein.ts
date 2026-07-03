@@ -307,8 +307,25 @@ export interface DivisionPool {
   band: number;
   /** Members, best rank first. Includes any players promoted from below. */
   players: RankedPlayer[];
-  /** The two best-ranked members who play the division final (null if < 2). */
+  /**
+   * Full playoff seed order (userIds). Seed 1 is the best of the pool's OWN
+   * (highest) band; the rest follow by Swiss rank. Drives both the bracket size
+   * (via its length) and the seeding (1v4, 1v8, …).
+   */
+  seeds: string[];
+  /** The two top seeds — convenience for the TOP2 (final-only) case (null if < 2). */
   finalists: [string, string] | null;
+}
+
+/**
+ * Playoff bracket size for a division of the given size, mirroring Auto Swiss
+ * (thresholds 4 / 8 / 16). A division is always at least MIN_POOL_SIZE, so the
+ * floor is TOP2 (final only). Alex-Spec 2026-07-03.
+ */
+export function divisionPlayoffFormat(poolSize: number): 'TOP2' | 'TOP4' | 'TOP8' {
+  if (poolSize >= 16) return 'TOP8';
+  if (poolSize >= 8) return 'TOP4';
+  return 'TOP2';
 }
 
 /**
@@ -338,7 +355,7 @@ export function formDivisionPools(players: RankedPlayer[]): DivisionPool[] {
         }
       }
     }
-    pools.push({ band, players: members, finalists: null });
+    pools.push({ band, players: members, seeds: [], finalists: null });
   }
 
   // A trailing pool that never reached the minimum joins the pool above it.
@@ -347,21 +364,20 @@ export function formDivisionPools(players: RankedPlayer[]): DivisionPool[] {
     pools[pools.length - 1]!.players.push(...last.players);
   }
 
-  // Division final seats (Alex-Spec 2026-07-03):
-  //  - Seat 1 is RESERVED for the best-ranked player of the pool's OWN (highest)
-  //    band — so a genuine top-band player always reaches the final even when a
+  // Playoff seed order (Alex-Spec 2026-07-03):
+  //  - Seed 1 is RESERVED for the best-ranked player of the pool's OWN (highest)
+  //    band — so a genuine top-band player always tops the bracket even when a
   //    borrowed lower-band player outscored them in the group phase. This keeps a
-  //    "top division" final from degrading into two promoted lower-band players.
-  //  - Seat 2 goes to the best-ranked of everyone else in the pool, any band.
+  //    "top division" from being headed by a promoted lower-band player.
+  //  - Seeds 2..N are the rest of the pool, best Swiss rank first, any band.
+  // The bracket size then follows from the pool's size (divisionPlayoffFormat).
   for (const pool of pools) {
     pool.players.sort((a, b) => a.rank - b.rank);
-    if (pool.players.length < 2) {
-      pool.finalists = null;
-      continue;
-    }
     const seat1 = pool.players.find((p) => p.band === pool.band) ?? pool.players[0]!;
-    const seat2 = pool.players.find((p) => p.userId !== seat1.userId)!;
-    pool.finalists = [seat1.userId, seat2.userId];
+    pool.seeds = seat1
+      ? [seat1.userId, ...pool.players.filter((p) => p.userId !== seat1.userId).map((p) => p.userId)]
+      : [];
+    pool.finalists = pool.seeds.length >= 2 ? [pool.seeds[0]!, pool.seeds[1]!] : null;
   }
 
   return pools;

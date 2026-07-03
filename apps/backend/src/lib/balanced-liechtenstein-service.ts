@@ -14,9 +14,10 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import type { Prisma, MatchStatus, MatchPhase } from '@rizzotto/db';
-import { planPairings, formDivisionPools, DEFAULT_BAND } from './balanced-liechtenstein.js';
+import { planPairings, formDivisionPools, divisionPlayoffFormat, DEFAULT_BAND } from './balanced-liechtenstein.js';
 import { computeSwissStandings, sortSwissStandings, type CompletedMatchRecord } from './swiss.js';
 import { getPlayerClassification } from './skill-classification-service.js';
+import { autoSwissConfig } from './auto-swiss-service.js';
 import { emitBracketUpdate } from './emit.js';
 import { notifyMatchesCreated } from './discord-notify.js';
 
@@ -72,6 +73,38 @@ export async function assignSkillBandsForTournament(
       fastify.log.warn({ err, userId: p.user_id }, 'balanced skill-band assignment failed');
     }
   }
+}
+
+/**
+ * Derive the round count + playoff format from the total check-in count at start,
+ * exactly like Auto Swiss (thresholds 4 / 8 / 16). The stored `playoff_format` is
+ * only a "playoffs exist" flag for the UI — the real per-division bracket size is
+ * chosen from each division's own size in startBalancedPlayoffs. Below 4 players a
+ * minimal fallback keeps the tournament runnable. Called once at Start.
+ */
+export async function applyBalancedStartConfig(
+  fastify: FastifyInstance,
+  tournamentId: string,
+): Promise<void> {
+  const roster = await fastify.prisma.tournamentParticipant.findMany({
+    where: {
+      tournament_id: tournamentId,
+      deleted_at: null,
+      status: { in: ['REGISTERED', 'CHECKED_IN'] },
+    },
+    select: { status: true },
+  });
+  const anyCheckedIn = roster.some((p) => p.status === 'CHECKED_IN');
+  const count = anyCheckedIn ? roster.filter((p) => p.status === 'CHECKED_IN').length : roster.length;
+
+  const config = autoSwissConfig(count);
+  const rounds = config?.rounds ?? Math.max(1, Math.min(3, count - 1));
+  const playoffFormat = config?.playoffFormat ?? 'TOP2';
+
+  await fastify.prisma.tournament.update({
+    where: { id: tournamentId },
+    data: { rounds_count: rounds, playoff_format: playoffFormat },
+  });
 }
 
 /**
@@ -228,10 +261,100 @@ export interface BalancedPlayoffResult {
   finals: number;
 }
 
+type PlayoffPhase = 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL' | 'PLAYOFF_THIRD_PLACE';
+
+/**
+ * Build the playoff match rows for ONE division from its seed order. The bracket
+ * size follows the division size (divisionPlayoffFormat): TOP2 = final only,
+ * TOP4 = SF→final, TOP8 = QF→SF→final — each with a third-place match. All rounds
+ * are created up front with next_match_id / loser_next_match_id wiring, so
+ * completeMatch() advances winners (and SF losers into the small final) on its own
+ * (Nicht-DE fills the first empty slot). Seeding is standard: 1v4, and 1v8/4v5/3v6/2v7.
+ */
+function buildDivisionBracket(
+  seeds: string[],
+  tournamentId: string,
+  playoffRound: number,
+  startMatchNumber: number,
+): {
+  rows: Prisma.MatchCreateManyInput[];
+  playable: Array<{ id: string; round: number; player1_id: string; player2_id: string }>;
+  nextMatchNumber: number;
+} {
+  const fmt = divisionPlayoffFormat(seeds.length);
+  const rows: Prisma.MatchCreateManyInput[] = [];
+  let n = startMatchNumber;
+
+  const row = (
+    id: string,
+    round: number,
+    player1_id: string | null,
+    player2_id: string | null,
+    phase: PlayoffPhase,
+    next_match_id: string | null,
+    loser_next_match_id: string | null,
+  ): Prisma.MatchCreateManyInput => ({
+    id,
+    tournament_id: tournamentId,
+    round,
+    match_number: n++,
+    player1_id,
+    player2_id,
+    status: 'PENDING' as MatchStatus,
+    phase: phase as MatchPhase,
+    next_match_id,
+    loser_next_match_id,
+  });
+
+  if (fmt === 'TOP2') {
+    rows.push(row(randomUUID(), playoffRound, seeds[0] ?? null, seeds[1] ?? null, 'PLAYOFF_FINAL', null, null));
+    if (seeds[2] && seeds[3]) {
+      rows.push(row(randomUUID(), playoffRound, seeds[2], seeds[3], 'PLAYOFF_THIRD_PLACE', null, null));
+    }
+  } else if (fmt === 'TOP4') {
+    const gfId = randomUUID();
+    const thirdId = randomUUID();
+    rows.push(
+      row(randomUUID(), playoffRound, seeds[0]!, seeds[3]!, 'PLAYOFF_SF', gfId, thirdId),
+      row(randomUUID(), playoffRound, seeds[1]!, seeds[2]!, 'PLAYOFF_SF', gfId, thirdId),
+      row(gfId, playoffRound + 1, null, null, 'PLAYOFF_FINAL', null, null),
+      row(thirdId, playoffRound + 1, null, null, 'PLAYOFF_THIRD_PLACE', null, null),
+    );
+  } else {
+    // TOP8 — QF (round N), SF (N+1), GF + 3rd (N+2). Seeding 1v8 / 4v5 / 3v6 / 2v7.
+    const gfId = randomUUID();
+    const thirdId = randomUUID();
+    const sf1Id = randomUUID();
+    const sf2Id = randomUUID();
+    rows.push(
+      row(randomUUID(), playoffRound, seeds[0]!, seeds[7]!, 'PLAYOFF_QF', sf1Id, null),
+      row(randomUUID(), playoffRound, seeds[3]!, seeds[4]!, 'PLAYOFF_QF', sf1Id, null),
+      row(randomUUID(), playoffRound, seeds[1]!, seeds[6]!, 'PLAYOFF_QF', sf2Id, null),
+      row(randomUUID(), playoffRound, seeds[2]!, seeds[5]!, 'PLAYOFF_QF', sf2Id, null),
+      row(sf1Id, playoffRound + 1, null, null, 'PLAYOFF_SF', gfId, thirdId),
+      row(sf2Id, playoffRound + 1, null, null, 'PLAYOFF_SF', gfId, thirdId),
+      row(gfId, playoffRound + 2, null, null, 'PLAYOFF_FINAL', null, null),
+      row(thirdId, playoffRound + 2, null, null, 'PLAYOFF_THIRD_PLACE', null, null),
+    );
+  }
+
+  const playable = rows
+    .filter((r) => r.player1_id && r.player2_id)
+    .map((r) => ({
+      id: r.id as string,
+      round: r.round,
+      player1_id: r.player1_id as string,
+      player2_id: r.player2_id as string,
+    }));
+
+  return { rows, playable, nextMatchNumber: n };
+}
+
 /**
  * Start the division playoffs once a Balanced Liechtenstein group phase is done:
  * rank players by Swiss standing, form skill-division pools (>=4, filled top-down
- * per §7), and create one PLAYOFF_FINAL per division between its top 2. Returns an
+ * per §7), and create ONE playoff bracket per division whose size follows the
+ * division size (TOP2/TOP4/TOP8, each with a third-place match). Returns an
  * `{ error }` on precondition failure; guarded against double-generation.
  */
 export async function startBalancedPlayoffs(
@@ -327,28 +450,29 @@ export async function startBalancedPlayoffs(
   const playoffRound = matches.reduce((mx, m) => Math.max(mx, m.round), 0) + 1;
   let nextNumber = matches.reduce((mx, m) => Math.max(mx, m.match_number), 0) + 1;
   const rows: Prisma.MatchCreateManyInput[] = [];
-  const created: Array<{ id: string; player1_id: string; player2_id: string }> = [];
+  const allPlayable: Array<{ id: string; round: number; player1_id: string; player2_id: string }> = [];
+  let brackets = 0;
+
+  // One playoff bracket per division; its size follows the division's own size.
   for (const pool of pools) {
-    if (!pool.finalists) continue; // a lone champion needs no final
-    const id = randomUUID();
-    rows.push({
-      id,
-      tournament_id: tournamentId,
-      round: playoffRound,
-      match_number: nextNumber++,
-      player1_id: pool.finalists[0],
-      player2_id: pool.finalists[1],
-      status: 'PENDING' as MatchStatus,
-      phase: 'PLAYOFF_FINAL' as MatchPhase,
-    });
-    created.push({ id, player1_id: pool.finalists[0], player2_id: pool.finalists[1] });
+    if (pool.seeds.length < 2) continue; // a lone champion needs no bracket
+    const built = buildDivisionBracket(pool.seeds, tournamentId, playoffRound, nextNumber);
+    rows.push(...built.rows);
+    allPlayable.push(...built.playable);
+    nextNumber = built.nextMatchNumber;
+    brackets += 1;
   }
 
   if (rows.length > 0) {
     await fastify.prisma.match.createMany({ data: rows });
     emitBracketUpdate(fastify.io, tournamentId);
-    await notifyMatchesCreated(tournamentId, playoffRound, created);
+    // Announce only the first playoff round's ready matches (both players present).
+    const firstRound = Math.min(...allPlayable.map((m) => m.round));
+    const firstRoundPlayable = allPlayable.filter((m) => m.round === firstRound);
+    if (firstRoundPlayable.length > 0) {
+      await notifyMatchesCreated(tournamentId, firstRound, firstRoundPlayable);
+    }
   }
 
-  return { pools: pools.length, finals: rows.length };
+  return { pools: pools.length, finals: brackets };
 }

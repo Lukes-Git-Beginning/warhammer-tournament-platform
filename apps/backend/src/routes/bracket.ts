@@ -6,6 +6,7 @@ import { generateSingleElim, generateDoubleElim } from '../lib/bracket.js';
 import { generateRoundRobin } from '../lib/round-robin.js';
 import { generateLiechtensteinSchedule } from '../lib/liechtenstein.js';
 import {
+  applyBalancedStartConfig,
   assignSkillBandsForTournament,
   runBalancedPairingTick,
   startBalancedPlayoffs,
@@ -460,6 +461,9 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       // division, then create round 1 (and notify) via the incremental pairing
       // tick now that the tournament is ONGOING.
       if (tournament.format === TournamentFormat.BALANCED_LIECHTENSTEIN) {
+        // Derive round count + playoff flag from the check-in count (like Auto
+        // Swiss) before pairing, then fix skill bands and pair round 1.
+        await applyBalancedStartConfig(fastify, tournament.id);
         await assignSkillBandsForTournament(fastify, tournament.id);
         await runBalancedPairingTick(fastify, tournament.id);
       }
