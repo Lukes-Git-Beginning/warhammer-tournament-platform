@@ -17,6 +17,13 @@
 //  - Pair within the skill band; the surplus ascends (weaker player takes the
 //    up-play, never a stronger one reaching down to stomp) → process from below,
 //    smallest skill distance first.
+//  - Pair the earliest COMPATIBLE opponent, not merely the earliest available: a
+//    cross-band jump of two or more bands is DEFERRED while a strictly-closer
+//    opponent is still due to arrive in this pool (finishing the previous round).
+//    Two New players who just met wait for a Beginner to free up instead of being
+//    shoved three bands into the lone Advanced player. The hold resolves over the
+//    next ticks as the pool fills; a big jump only happens once nothing closer can
+//    still arrive.
 //  - Only the immediately-previous opponent is excluded (no full rematch-free
 //    guarantee) — small fields alternate cleanly (B, C, B, C …).
 //  - Pairing happens WITHIN a round pool only (both players at k-1 games).
@@ -110,13 +117,16 @@ function greedyPair(candidates: Waiter[]): { pairs: [Waiter, Waiter][]; leftover
 }
 
 /**
- * Pair one round pool. Same-band first (from below), then a cross-band ascending
- * fallback for the surplus. A lone leftover waits when more players are still due
- * to arrive in this pool (`hasIncoming`); otherwise it takes a bye.
+ * Pair one round pool. Same-band first (gap 0 is always ideal), then a nearest-band
+ * cross-band pass for the surplus — but a jump of two or more bands is DEFERRED
+ * while a strictly-closer opponent for either player is still due to arrive in this
+ * pool (`incomingBands` = the bands of players finishing the previous round). That
+ * makes the pool pair the earliest COMPATIBLE player rather than merely the earliest.
+ * A lone straggler holds while anyone is still incoming; otherwise the lowest band byes.
  */
 function pairPool(
   waiting: Waiter[],
-  hasIncoming: boolean,
+  incomingBands: number[],
 ): { pairs: [Waiter, Waiter][]; byes: Waiter[] } {
   const pairs: [Waiter, Waiter][] = [];
 
@@ -134,16 +144,44 @@ function pairPool(
     leftovers.push(...l);
   }
 
-  // Pass 2 — cross-band ascending fallback for the surplus.
-  leftovers.sort((a, b) => a.band - b.band);
-  const { pairs: crossPairs, leftovers: stuck } = greedyPair(leftovers);
-  pairs.push(...crossPairs);
+  // Pass 2 — cross-band, nearest gap first. Defer a gap of >= 2 bands while a
+  // strictly-closer opponent for either player is still on the way (an incoming
+  // player finishing the previous round can never be an immediate rematch, so it
+  // is always a valid future partner). The deferred player holds and re-evaluates
+  // on the next tick, once the pool has filled a little more.
+  const incDist = (band: number): number =>
+    incomingBands.length === 0
+      ? Infinity
+      : Math.min(...incomingBands.map((ib) => Math.abs(ib - band)));
 
-  // Whatever remains: hold if reinforcements are coming, else bye (Swiss odd-out).
+  const candidates: Array<{ i: number; j: number; gap: number }> = [];
+  for (let i = 0; i < leftovers.length; i++) {
+    for (let j = i + 1; j < leftovers.length; j++) {
+      if (isRematch(leftovers[i]!, leftovers[j]!)) continue;
+      candidates.push({ i, j, gap: Math.abs(leftovers[i]!.band - leftovers[j]!.band) });
+    }
+  }
+  // Nearest band gap first; tie-break by lower band for deterministic output.
+  candidates.sort((a, b) => a.gap - b.gap || leftovers[a.i]!.band - leftovers[b.i]!.band);
+
+  const used = new Set<number>();
+  for (const { i, j, gap } of candidates) {
+    if (used.has(i) || used.has(j)) continue;
+    if (gap >= 2 && (incDist(leftovers[i]!.band) < gap || incDist(leftovers[j]!.band) < gap)) {
+      continue; // a strictly-closer opponent is still incoming → wait for them
+    }
+    used.add(i);
+    used.add(j);
+    pairs.push([leftovers[i]!, leftovers[j]!]);
+  }
+
+  const stuck = leftovers.filter((_, i) => !used.has(i));
+
+  // Whatever remains: hold if reinforcements are still coming (a closer partner
+  // may yet arrive), else the lowest-band straggler takes the bye (Swiss odd-out).
   const byes: Waiter[] = [];
-  if (stuck.length > 0 && !hasIncoming) {
-    // No one else will join this pool → the lowest-band straggler takes a bye.
-    // (A rematch-locked pair with no incoming resolves over successive ticks.)
+  if (stuck.length > 0 && incomingBands.length === 0) {
+    stuck.sort((a, b) => a.band - b.band);
     byes.push(stuck[0]!);
   }
   return { pairs, byes };
@@ -206,12 +244,16 @@ export function planPairings(
 
   // Bucket players by the round pool they are waiting for / incoming to.
   const waitingByRound = new Map<number, Waiter[]>();
-  const incomingByRound = new Map<number, number>();
+  const incomingByRound = new Map<number, number[]>(); // pool round → bands still arriving
   for (const pr of progress.values()) {
     if (pr.activeRound !== null) {
       // Currently playing round `activeRound` → will join pool activeRound+1 next.
       const next = pr.activeRound + 1;
-      if (next <= roundsCount) incomingByRound.set(next, (incomingByRound.get(next) ?? 0) + 1);
+      if (next <= roundsCount) {
+        const arr = incomingByRound.get(next) ?? [];
+        arr.push(pr.band);
+        incomingByRound.set(next, arr);
+      }
       continue;
     }
     if (pr.completed >= roundsCount) continue; // done — no more pairing
@@ -224,7 +266,7 @@ export function planPairings(
   const pairings: PlannedPairing[] = [];
   const byes: PlannedBye[] = [];
   for (const [round, waiting] of waitingByRound) {
-    const { pairs, byes: poolByes } = pairPool(waiting, (incomingByRound.get(round) ?? 0) > 0);
+    const { pairs, byes: poolByes } = pairPool(waiting, incomingByRound.get(round) ?? []);
     for (const [a, b] of pairs) {
       pairings.push({ round, player1_id: a.userId, player2_id: b.userId });
     }

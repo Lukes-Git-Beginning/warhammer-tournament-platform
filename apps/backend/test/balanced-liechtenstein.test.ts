@@ -100,6 +100,66 @@ describe('planPairings — incremental next round', () => {
   });
 });
 
+describe('planPairings — earliest COMPATIBLE, not earliest', () => {
+  const bandOf: Record<string, number> = {
+    a: 1, b: 1, // New
+    g: 2, h: 2, // Beginner
+    p: 3, q: 3, // Intermediate
+    r: 4, // Advanced
+  };
+
+  it('holds two New players rather than shoving one three bands up to the lone Advanced', () => {
+    // The reported bug: a,b (New) just played each other and r (Advanced) is free
+    // after a bye, but the Beginners are still in round 1. Pairing a↔r (gap 3) now
+    // is wrong — hold everyone and wait for a closer opponent to free up.
+    const matches: BalancedMatchRow[] = [
+      done(1, 'a', 'b', 'a'), // New vs New
+      done(1, 'r', null, 'r'), // Advanced bye
+      ongoing(1, 'g', 'h'), // Beginners still playing → incoming to pool 2
+    ];
+    const plan = planPairings(
+      [P('a', 1), P('b', 1), P('r', 4), P('g', 2), P('h', 2)],
+      matches,
+      3,
+    );
+    expect(plan.pairings).toHaveLength(0);
+    expect(plan.byes).toHaveLength(0); // held, not byed
+  });
+
+  it('pairs the New players with Beginners (gap 1), never the Advanced, once Beginners are free', () => {
+    // a,b (New) and g,h (Beginner) are all free (each pair rematch-locked); r
+    // (Advanced) is free too but Intermediates (p,q) are still incoming. The New
+    // players take the Beginners at gap 1; r waits for a closer (Intermediate).
+    const matches: BalancedMatchRow[] = [
+      done(1, 'a', 'b', 'a'),
+      done(1, 'g', 'h', 'g'),
+      done(1, 'r', null, 'r'),
+      ongoing(1, 'p', 'q'),
+    ];
+    const plan = planPairings(
+      [P('a', 1), P('b', 1), P('g', 2), P('h', 2), P('r', 4), P('p', 3), P('q', 3)],
+      matches,
+      3,
+    );
+    expect(plan.pairings).toHaveLength(2);
+    // r is held, not paired with anyone.
+    expect(plan.pairings.flatMap((pp) => [pp.player1_id, pp.player2_id])).not.toContain('r');
+    // Every pairing is exactly one band apart (New↔Beginner).
+    for (const pp of plan.pairings) {
+      expect(Math.abs(bandOf[pp.player1_id]! - bandOf[pp.player2_id]!)).toBe(1);
+    }
+  });
+
+  it('still makes an unavoidable big jump when nothing closer is available or incoming', () => {
+    // Only a (New) and r (Advanced) remain, both idle after byes, nobody else
+    // coming → the gap-3 pairing must happen rather than deadlock.
+    const matches: BalancedMatchRow[] = [done(1, 'a', null, 'a'), done(1, 'r', null, 'r')];
+    const plan = planPairings([P('a', 1), P('r', 4)], matches, 3);
+    expect(plan.pairings).toHaveLength(1);
+    expect(plan.byes).toHaveLength(0);
+  });
+});
+
 describe('planPairings — completion', () => {
   it('reports complete when everyone has played all rounds', () => {
     const matches: BalancedMatchRow[] = [done(1, 'a', 'b', 'a')];
