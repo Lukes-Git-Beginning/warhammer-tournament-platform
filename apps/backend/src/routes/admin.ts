@@ -11,6 +11,12 @@ import { emitBracketUpdate } from '../lib/emit.js';
 import { addLateParticipant, setParticipantFactionOp, createManualMatch } from '../lib/tournament-management.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM, OPPONENT_SHARE_WARN } from '../lib/scoring-service.js';
+import {
+  loadCalibrationQuestions,
+  CalibrationQuestionsSchema,
+  CALIBRATION_CONFIG_KEY,
+} from '../lib/skill-classification-service.js';
+import { CALIBRATION_QUESTIONS } from '../lib/skill-classification.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -1181,6 +1187,40 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (fastify.redis) await invalidate(fastify.redis, 'admin:config:*');
     return config;
+  });
+
+  // -------------------------------------------------------------------------
+  // Calibration questionnaire (admin-editable). GET returns the active catalog
+  // plus the built-in defaults (for a "reset" affordance); PUT validates the
+  // whole catalog and persists it to AdminConfig. Takes effect immediately.
+  // -------------------------------------------------------------------------
+  fastify.get('/api/admin/calibration-questions', async () => {
+    const questions = await loadCalibrationQuestions(fastify.prisma);
+    return { questions, defaults: CALIBRATION_QUESTIONS };
+  });
+
+  fastify.put('/api/admin/calibration-questions', async (request, reply) => {
+    const parsed = CalibrationQuestionsSchema.safeParse(
+      (request.body as { questions?: unknown } | null)?.questions,
+    );
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    await fastify.prisma.adminConfig.upsert({
+      where: { key: CALIBRATION_CONFIG_KEY },
+      create: { key: CALIBRATION_CONFIG_KEY, value: parsed.data as never, updated_by: request.user.sub },
+      update: { value: parsed.data as never, updated_by: request.user.sub },
+    });
+    await fastify.prisma.auditLog.create({
+      data: {
+        entity_type: 'AdminConfig',
+        entity_id: CALIBRATION_CONFIG_KEY,
+        action: 'config_update',
+        actor_id: request.user.sub,
+      },
+    });
+    if (fastify.redis) await invalidate(fastify.redis, 'admin:config:*');
+    return { questions: parsed.data };
   });
 
   // POST /api/admin/tournaments/:id/repair-auto-swiss

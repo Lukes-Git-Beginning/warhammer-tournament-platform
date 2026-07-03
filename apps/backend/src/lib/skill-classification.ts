@@ -175,17 +175,20 @@ export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
   },
 ];
 
-const QUESTION_BY_ID = new Map(CALIBRATION_QUESTIONS.map((q) => [q.id, q]));
-
 /**
  * Questionnaire floor = the highest band any answer implies (conservative-up),
  * default 1. Unknown question ids / option values are ignored. `answers` maps
- * question id → chosen option value.
+ * question id → chosen option value. Pass a custom `questions` catalog (e.g. the
+ * admin-edited one from the DB); defaults to the built-in catalog.
  */
-export function questionnaireFloor(answers: Record<string, string>): number {
+export function questionnaireFloor(
+  answers: Record<string, string>,
+  questions: readonly CalibrationQuestion[] = CALIBRATION_QUESTIONS,
+): number {
+  const byId = new Map(questions.map((q) => [q.id, q]));
   let floor = 1;
   for (const [qid, value] of Object.entries(answers)) {
-    const opt = QUESTION_BY_ID.get(qid)?.options.find((o) => o.value === value);
+    const opt = byId.get(qid)?.options.find((o) => o.value === value);
     if (opt?.floor != null && opt.floor > floor) floor = opt.floor;
   }
   return floor;

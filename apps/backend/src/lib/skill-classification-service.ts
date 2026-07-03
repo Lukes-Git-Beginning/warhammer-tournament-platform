@@ -10,6 +10,7 @@
 
 import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
+import { z } from 'zod';
 import { getRatingModel } from './rating-model-service.js';
 import {
   classify,
@@ -18,7 +19,54 @@ import {
   BAND_NAMES,
   CALIBRATION_QUESTIONS,
   type Classification,
+  type CalibrationQuestion,
 } from './skill-classification.js';
+
+// ---------------------------------------------------------------------------
+// Admin-editable calibration catalog (stored in AdminConfig, falls back to the
+// built-in default). Validated on read so a bad admin edit can never break
+// classification — it just reverts to the default catalog.
+// ---------------------------------------------------------------------------
+
+export const CALIBRATION_CONFIG_KEY = 'calibration_questions';
+
+export const CalibrationOptionSchema = z.object({
+  value: z.string().min(1).max(60),
+  label: z.string().min(1).max(200),
+  floor: z.number().int().min(1).max(5).nullable(),
+});
+export const CalibrationQuestionSchema = z.object({
+  id: z.string().min(1).max(60),
+  prompt: z.string().min(1).max(300),
+  options: z.array(CalibrationOptionSchema).min(1).max(12),
+});
+export const CalibrationQuestionsSchema = z
+  .array(CalibrationQuestionSchema)
+  .min(1)
+  .max(40)
+  .superRefine((qs, ctx) => {
+    const ids = new Set<string>();
+    for (const q of qs) {
+      if (ids.has(q.id)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate question id "${q.id}"` });
+      ids.add(q.id);
+      const values = new Set<string>();
+      for (const o of q.options) {
+        if (values.has(o.value)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate option "${o.value}" in "${q.id}"` });
+        values.add(o.value);
+      }
+    }
+  });
+
+/** The active calibration catalog: the admin-edited one (AdminConfig) or the built-in default. */
+export async function loadCalibrationQuestions(prisma: PrismaClient): Promise<CalibrationQuestion[]> {
+  const row = await prisma.adminConfig.findUnique({
+    where: { key: CALIBRATION_CONFIG_KEY },
+    select: { value: true },
+  });
+  if (!row) return [...CALIBRATION_QUESTIONS];
+  const parsed = CalibrationQuestionsSchema.safeParse(row.value);
+  return parsed.success ? parsed.data : [...CALIBRATION_QUESTIONS];
+}
 
 export interface PlayerClassification extends Classification {
   /** Raw general skill (log-odds) and its SE; null when the player has no games. */
@@ -56,7 +104,8 @@ export async function getPlayerClassification(
   playerId: string,
 ): Promise<PlayerClassification> {
   const answers = await loadAnswers(prisma, playerId);
-  const qFloor = questionnaireFloor(answers);
+  const questions = await loadCalibrationQuestions(prisma);
+  const qFloor = questionnaireFloor(answers, questions);
 
   // Always use the hierarchical model for the general skill (see file header).
   const model = await getRatingModel(prisma, redis, {

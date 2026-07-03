@@ -11,10 +11,10 @@
 
 import type { FastifyPluginAsync, FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CALIBRATION_QUESTIONS } from '../lib/skill-classification.js';
 import {
   getPlayerClassification,
   saveCalibrationAnswers,
+  loadCalibrationQuestions,
 } from '../lib/skill-classification-service.js';
 
 async function resolveSeasonId(
@@ -38,8 +38,10 @@ const err = (code: number, message: string): { error: string; message: string; s
 });
 
 const skillRoutes: FastifyPluginAsync = async (fastify) => {
-  // The questionnaire catalog for the calibration wizard (public, static).
-  fastify.get('/api/calibration/questions', async () => ({ questions: CALIBRATION_QUESTIONS }));
+  // The questionnaire catalog for the calibration wizard (public; admin-editable).
+  fastify.get('/api/calibration/questions', async () => ({
+    questions: await loadCalibrationQuestions(fastify.prisma),
+  }));
 
   // A player's classification (public — the band is shown on profiles).
   fastify.get('/api/players/:id/classification', async (request, reply) => {
