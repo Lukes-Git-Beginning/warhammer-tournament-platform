@@ -219,6 +219,21 @@ describe('computeBracketLayout', () => {
       expect(sizes).toEqual([1, 4]);
     });
 
+    it('keeps a TOP2 division (final + orphan third place) as ONE group', () => {
+      // TOP2: the final and the third-place are not linked by next_match_id, but
+      // belong to the same division. Emitted consecutively (final #1, third #2).
+      const matches: BracketNode[] = [
+        makeMatch('finA', 3, 1, null, null, null, 'PLAYOFF_FINAL'),
+        makeMatch('thirdA', 3, 2, null, null, null, 'PLAYOFF_THIRD_PLACE'),
+        makeMatch('finB', 3, 3, null, null, null, 'PLAYOFF_FINAL'),
+        makeMatch('thirdB', 3, 4, null, null, null, 'PLAYOFF_THIRD_PLACE'),
+      ];
+      const layout = computeBracketLayout(matches);
+      // Two divisions, each = {final, third place} — not four singletons.
+      expect(layout.groups).toHaveLength(2);
+      expect(layout.groups!.every((g) => g.matchIds.length === 2)).toBe(true);
+    });
+
     it('places division brackets to the right of the Swiss columns', () => {
       const matches: BracketNode[] = [
         makeMatch('s1', 1, 1, null, null, null, 'SWISS'),

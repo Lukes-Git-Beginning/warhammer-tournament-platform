@@ -149,6 +149,21 @@ function groupPlayoffDivisions(playoff: BracketNode[]): BracketNode[][] {
     if (m.nextMatchId && ids.has(m.nextMatchId)) union(m.matchId, m.nextMatchId);
     if (m.loserNextMatchId && ids.has(m.loserNextMatchId)) union(m.matchId, m.loserNextMatchId);
   }
+  // A TOP2 division's third-place match has no feeders (no SFs point at it), so it
+  // is not linked to its final. Attach each such orphan to the final numbered just
+  // before it (buildDivisionBracket emits final then third place, consecutively).
+  const hasFeeder = new Set<string>();
+  for (const m of playoff) {
+    if (m.nextMatchId) hasFeeder.add(m.nextMatchId);
+    if (m.loserNextMatchId) hasFeeder.add(m.loserNextMatchId);
+  }
+  const byNumber = new Map(playoff.map((m) => [m.matchNumber, m]));
+  for (const m of playoff) {
+    if (m.phase === 'PLAYOFF_THIRD_PLACE' && !hasFeeder.has(m.matchId)) {
+      const finalBefore = byNumber.get(m.matchNumber - 1);
+      if (finalBefore) union(m.matchId, finalBefore.matchId);
+    }
+  }
   const groups = new Map<string, BracketNode[]>();
   for (const m of playoff) {
     const root = find(m.matchId);

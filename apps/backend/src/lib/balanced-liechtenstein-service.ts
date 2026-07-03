@@ -271,7 +271,7 @@ type PlayoffPhase = 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL' | 'PLAYOFF_THI
  * completeMatch() advances winners (and SF losers into the small final) on its own
  * (Nicht-DE fills the first empty slot). Seeding is standard: 1v4, and 1v8/4v5/3v6/2v7.
  */
-function buildDivisionBracket(
+export function buildDivisionBracket(
   seeds: string[],
   tournamentId: string,
   playoffRound: number,
