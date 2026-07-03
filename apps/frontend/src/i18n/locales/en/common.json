@@ -178,6 +178,10 @@
           "liechtenstein": {
             "name": "Liechtenstein",
             "desc": "A pre-drawn Swiss-style schedule with faction-spread pairings to avoid mirror matchups."
+          },
+          "balanced_liechtenstein": {
+            "name": "Balanced Liechtenstein",
+            "desc": "Swiss-style incremental rounds with skill-balanced pairing — players are matched by division each round, with division playoffs for the top finishers."
           }
         },
         "mode_label": "Mode — how factions are chosen",
@@ -240,7 +244,8 @@
       "swiss": "Swiss",
       "round_robin": "Round Robin",
       "double_elim": "Double Elimination",
-      "liechtenstein": "Liechtenstein"
+      "liechtenstein": "Liechtenstein",
+      "balanced_liechtenstein": "Balanced Liechtenstein"
     },
     "detail": {
       "not_found": "Tournament not found or unreachable.",

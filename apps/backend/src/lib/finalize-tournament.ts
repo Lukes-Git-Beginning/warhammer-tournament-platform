@@ -275,6 +275,7 @@ const RANKED_FORMATS = new Set([
   'ROUND_ROBIN',
   'DOUBLE_ROUND_ROBIN',
   'LIECHTENSTEIN',
+  'BALANCED_LIECHTENSTEIN',
 ]);
 
 export async function finalizeTournament(

@@ -210,7 +210,7 @@ enum Role {
 }
 
 enum TournamentFormat {
-  SWISS | SINGLE_ELIMINATION | DOUBLE_ELIMINATION | ROUND_ROBIN | DOUBLE_ROUND_ROBIN | LIECHTENSTEIN
+  SWISS | SINGLE_ELIMINATION | DOUBLE_ELIMINATION | ROUND_ROBIN | DOUBLE_ROUND_ROBIN | LIECHTENSTEIN | BALANCED_LIECHTENSTEIN
 }
 
 enum TournamentMode {
@@ -314,6 +314,7 @@ Das Seed-Script liegt bei `packages/db/prisma/seed.ts` und wird via `tsx` ausgef
 | `20260606000000_external_game_archive` | `MatchGame.external_archive_url` für Replay-Links |
 | `20260607074927_remove_elo` | `LeaderboardEntry.elo_rating` + `TournamentResult.elo_change` gedroppt |
 | `20260607121006_add_liechtenstein_format` | `LIECHTENSTEIN` zu `TournamentFormat`-Enum |
+| `20260703110000_add_balanced_liechtenstein_format` | `BALANCED_LIECHTENSTEIN` zu `TournamentFormat`-Enum |
 | `20260607173753_add_third_place_match` | `Tournament.has_third_place_match Boolean @default(false)` + `PLAYOFF_THIRD_PLACE` zu `MatchPhase` |
 | `20260608000000_match_game_counts_for_leaderboard` | `MatchGame.counts_for_leaderboard Boolean @default(true)` + Backfill aus Tournament via Match-JOIN |
 

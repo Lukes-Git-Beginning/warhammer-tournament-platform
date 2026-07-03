@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   fitRatingModel,
   createRatingModel,
+  skillToBand,
   type MatchObservation,
 } from '../src/lib/rating-model.js';
 import { rawPoints } from '../src/lib/scoring-service.js';
@@ -168,6 +169,7 @@ describe('dynamic recalculation', () => {
   it('the same match is worth different points under different matchup effects', () => {
     const base = {
       playerFactionSkills: [],
+      generalSkills: [],
       fitIterations: 0,
       finalLoss: 0,
       totalMatches: 1,
@@ -188,5 +190,112 @@ describe('dynamic recalculation', () => {
     expect(pFavoured).toBeGreaterThan(0.5);
     // A favoured win is worth fewer raw points than a coin-flip win.
     expect(rawPoints(pFavoured)).toBeLessThan(rawPoints(pNeutral));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Hierarchical model — general skill (GS) + faction offset (FO), partial pooling
+// ---------------------------------------------------------------------------
+
+const HIER = { hierarchical: true } as const;
+
+describe('hierarchical model — partial pooling', () => {
+  it("pulls a strong player's thin new-faction skill toward their general skill, not the global average", () => {
+    const obs = [
+      ...dominate('strong', 'x', 'y', 15), // clearly strong on x
+      win('strong', 'z', 'newbie', 'y'), // ...one lone game on z
+    ];
+    const flat = fitRatingModel(obs);
+    const hier = fitRatingModel(obs, HIER);
+
+    const flatZ = flat.getPlayerFactionSkill('strong', 'z');
+    const hierZ = hier.getPlayerFactionSkill('strong', 'z');
+    const gs = hier.getGeneralSkill('strong')!;
+
+    // The flat model shrinks the thin z cell toward 0 (the global average).
+    // The hierarchical model borrows strength from the high general skill.
+    expect(gs.skill).toBeGreaterThan(0);
+    expect(hierZ).toBeGreaterThan(flatZ);
+    expect(hierZ).toBeGreaterThan(0);
+  });
+});
+
+describe('hierarchical model — skill decomposition', () => {
+  it('separates general skill from faction offsets for a versatile player', () => {
+    // Wins equally on x and y → offsets ~equal → both factions sit near GS.
+    const obs = [...dominate('vers', 'x', 'w', 8), ...dominate('vers', 'y', 'w', 8)];
+    const hier = fitRatingModel(obs, HIER);
+    const gs = hier.getGeneralSkill('vers')!;
+    const sx = hier.getPlayerFactionSkill('vers', 'x');
+    const sy = hier.getPlayerFactionSkill('vers', 'y');
+
+    expect(Math.abs(sx - sy)).toBeLessThan(0.15);
+    expect(Math.abs(sx - gs.skill)).toBeLessThan(0.35);
+  });
+
+  it('collapses general skill onto the single faction for a one-faction player', () => {
+    const obs = dominate('spec', 'x', 'y', 12);
+    const hier = fitRatingModel(obs, HIER);
+    const gs = hier.getGeneralSkill('spec')!;
+    const sx = hier.getPlayerFactionSkill('spec', 'x');
+
+    // Peak (GS + max FO) is exactly the single faction's skill.
+    expect(gs.peakSkill).toBeCloseTo(sx, 8);
+    expect(gs.peakFactionId).toBe('x');
+    // GS absorbs most of it (FO strongly regularised), staying just below sx.
+    expect(gs.skill).toBeLessThan(sx);
+    expect(gs.skill).toBeGreaterThan(sx * 0.7);
+    expect(gs.factionsPlayed).toBe(1);
+  });
+});
+
+describe('hierarchical model — confidence', () => {
+  it('shrinks the general-skill standard error as a player accumulates games', () => {
+    const obs = [
+      // vet plays 20 balanced games against an anchored rival → high information.
+      ...Array.from({ length: 10 }, () => win('vet', 'x', 'riv', 'y')),
+      ...Array.from({ length: 10 }, () => win('riv', 'y', 'vet', 'x')),
+      // rook plays just two.
+      win('rook', 'x', 'opp', 'y'),
+      win('opp', 'y', 'rook', 'x'),
+    ];
+    const hier = fitRatingModel(obs, HIER);
+    const vetSe = hier.getGeneralSkill('vet')!.se;
+    const rookSe = hier.getGeneralSkill('rook')!.se;
+
+    expect(vetSe).toBeGreaterThan(0);
+    expect(vetSe).toBeLessThan(rookSe);
+    // Higher information ⇒ higher precision.
+    expect(hier.getGeneralSkill('vet')!.confidence).toBeGreaterThan(
+      hier.getGeneralSkill('rook')!.confidence,
+    );
+  });
+});
+
+describe('hierarchical model — determinism', () => {
+  it('produces an identical fit on repeated runs', () => {
+    const obs = [...dominate('a', 'x', 'y', 6), ...dominate('b', 'y', 'x', 4)];
+    const m1 = fitRatingModel(obs, HIER);
+    const m2 = fitRatingModel(obs, HIER);
+    expect(m1.getGeneralSkill('a')!.skill).toBe(m2.getGeneralSkill('a')!.skill);
+    expect(m1.getPlayerFactionSkill('a', 'x')).toBe(m2.getPlayerFactionSkill('a', 'x'));
+  });
+
+  it('leaves the flat model as the default (no general-skill decomposition)', () => {
+    const obs = dominate('a', 'x', 'y', 5);
+    const flat = fitRatingModel(obs);
+    expect(flat.generalSkills).toEqual([]);
+    expect(flat.getGeneralSkill('a')).toBeNull();
+    expect(flat.getPeakFactionSkill('a')).toBeNull();
+  });
+});
+
+describe('skillToBand', () => {
+  it('maps a log-odds skill to a 1..5 band at the calibrated cut-points (20/35/75/90%)', () => {
+    expect(skillToBand(-2)).toBe(1); // ~12% → below 20%
+    expect(skillToBand(-1)).toBe(2); // ~27% → 20–35%
+    expect(skillToBand(0)).toBe(3); // 50% → 35–75%
+    expect(skillToBand(1.5)).toBe(4); // ~82% → 75–90%
+    expect(skillToBand(2.5)).toBe(5); // ~92% → above 90%
   });
 });

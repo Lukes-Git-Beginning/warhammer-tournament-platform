@@ -18,9 +18,10 @@ interface BracketViewProps {
   canManage?: boolean;
   hideStandings?: boolean;
   playoffFormat?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' | null;
+  format?: string;
 }
 
-export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false, playoffFormat }: BracketViewProps) {
+export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false, playoffFormat, format }: BracketViewProps) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [readOnlyMatchId, setReadOnlyMatchId] = useState<string | null>(null);
   const [byeMatchId, setByeMatchId] = useState<string | null>(null);
@@ -180,7 +181,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
 
   const swiss = data.swiss;
   const showNextRoundButton =
-    canManage && swiss !== undefined && swiss.currentRound < swiss.recommendedRounds;
+    canManage && swiss !== undefined && swiss.currentRound < swiss.recommendedRounds && format !== 'BALANCED_LIECHTENSTEIN';
 
   // Show "Advance to Playoffs" after last Swiss round is fully complete and playoffs not yet generated.
   const hasPlayoffMatches = swiss !== undefined && data.matches.some((m) => m.round > swiss.recommendedRounds);

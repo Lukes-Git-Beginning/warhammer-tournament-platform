@@ -21,6 +21,7 @@ const FORMAT_LABELS: Record<string, string> = {
   SWISS: 'Swiss',
   ROUND_ROBIN: 'Round Robin',
   LIECHTENSTEIN: 'Liechtenstein',
+  BALANCED_LIECHTENSTEIN: 'Balanced Liechtenstein',
 };
 
 const MODE_LABELS: Record<string, string> = {

@@ -108,6 +108,7 @@ function maxPlayerGames(form: Partial<EditFormData>): number {
   switch (form.format) {
     case 'SWISS':
     case 'LIECHTENSTEIN':
+    case 'BALANCED_LIECHTENSTEIN':
       return (form.rounds_count ?? 5) * swissGames + playoffExtra;
     case 'ROUND_ROBIN':
       return (participants > 1 ? participants - 1 : 7) * swissGames + playoffExtra;
@@ -137,9 +138,9 @@ function buildRoundKeys(form: Partial<EditFormData>): { key: string; label: stri
   const playoffGames = formatToMaxGames(form.playoff_match_format);
   const finaleGames = formatToMaxGames(form.finale_match_format);
 
-  if (form.format === 'SWISS' || form.format === 'LIECHTENSTEIN') {
+  if (form.format === 'SWISS' || form.format === 'LIECHTENSTEIN' || form.format === 'BALANCED_LIECHTENSTEIN') {
     const rounds = form.rounds_count ?? 5;
-    const roundLabel = form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Round' : 'Swiss Round';
+    const roundLabel = form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Round' : form.format === 'BALANCED_LIECHTENSTEIN' ? 'Balanced Liechtenstein Round' : 'Swiss Round';
     for (let i = 1; i <= rounds; i++) {
       keys.push({ key: `swiss_${i}`, label: `${roundLabel} ${i}`, maxGames: swissGames });
     }
@@ -646,7 +647,7 @@ export function TournamentEditPage() {
   // Render
   // ---------------------------------------------------------------------------
 
-  const isSwissFamily = form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN';
+  const isSwissFamily = form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN' || form.format === 'BALANCED_LIECHTENSTEIN';
   const isAutoSwiss = form.format === 'AUTO_SWISS';
 
   const actionButtons = (
@@ -724,6 +725,7 @@ export function TournamentEditPage() {
                   <option value="SWISS">{t('tournament.format.swiss')}</option>
                   <option value="ROUND_ROBIN">{t('tournament.format.round_robin')}</option>
                   <option value="LIECHTENSTEIN">{t('tournament.format.liechtenstein')}</option>
+                  <option value="BALANCED_LIECHTENSTEIN">{t('tournament.format.balanced_liechtenstein')}</option>
                 </Select>
               )}
             </div>
@@ -838,10 +840,10 @@ export function TournamentEditPage() {
 
           {isSwissFamily ? (
             <>
-              {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN') && (
+              {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN' || form.format === 'BALANCED_LIECHTENSTEIN') && (
                 <div>
                   <Label htmlFor="tef-rounds">
-                    {form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : 'Swiss Rounds'}
+                    {form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : form.format === 'BALANCED_LIECHTENSTEIN' ? 'Balanced Liechtenstein Rounds' : 'Swiss Rounds'}
                   </Label>
                   <div className="flex items-center gap-3 mt-1">
                     <input
@@ -900,7 +902,7 @@ export function TournamentEditPage() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <Label htmlFor="tef-swiss-fmt">
-                    {form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Format' : 'Swiss Format'}
+                    {form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Format' : form.format === 'BALANCED_LIECHTENSTEIN' ? 'Balanced Liechtenstein Format' : 'Swiss Format'}
                   </Label>
                   <Select id="tef-swiss-fmt" name="swiss_match_format" value={form.swiss_match_format} onChange={handleChange} disabled={ongoingLocked}>
                     <option value="BO1">Best of 1</option>

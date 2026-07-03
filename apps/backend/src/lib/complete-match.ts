@@ -14,6 +14,7 @@ import { emitMatchResult, emitBracketUpdate } from './emit.js';
 import { logQueueActivity } from './queue-activity.js';
 import { recomputeFactionStats } from './recompute-faction-stats.js';
 import { resetContactedSet, runMatchmakingTick } from './matchmaking-tick.js';
+import { runBalancedPairingTick } from './balanced-liechtenstein-service.js';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -330,6 +331,11 @@ export async function completeMatch(
       nextMatchId: match.next_match_id ?? null,
     });
     emitBracketUpdate(fastify.io, match.tournament_id);
+
+    // Balanced Liechtenstein: a finished match frees both players — try to pair
+    // them into their next round. No-ops for every other format.
+    const tid = match.tournament_id;
+    setImmediate(() => void runBalancedPairingTick(fastify, tid));
   }
 
   // Open Play match ended → free both players for a fresh wait-cycle DM wave.

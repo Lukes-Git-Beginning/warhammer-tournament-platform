@@ -16,7 +16,7 @@ import { Label, FieldError, FieldHint } from '@/components/ui/label';
 const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
-  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'AUTO_SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN']),
+  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'AUTO_SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
   mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE']).default('BPT'),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
@@ -82,6 +82,7 @@ function maxPlayerGames(form: Partial<FormData>): number {
   switch (form.format) {
     case 'SWISS':
     case 'LIECHTENSTEIN':
+    case 'BALANCED_LIECHTENSTEIN':
       return (form.rounds_count ?? 5) * swissGames + playoffExtra;
     case 'ROUND_ROBIN':
       return (participants > 1 ? participants - 1 : 7) * swissGames + playoffExtra;
@@ -100,9 +101,9 @@ function buildRoundKeys(form: Partial<FormData>): { key: string; label: string; 
   const playoffGames = formatToMaxGames(form.playoff_match_format);
   const finaleGames = formatToMaxGames(form.finale_match_format);
 
-  if (form.format === 'SWISS' || form.format === 'LIECHTENSTEIN') {
+  if (form.format === 'SWISS' || form.format === 'LIECHTENSTEIN' || form.format === 'BALANCED_LIECHTENSTEIN') {
     const rounds = form.rounds_count ?? 5;
-    const roundLabel = form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Round' : 'Swiss Round';
+    const roundLabel = form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Round' : form.format === 'BALANCED_LIECHTENSTEIN' ? 'Balanced Liechtenstein Round' : 'Swiss Round';
     for (let i = 1; i <= rounds; i++) {
       keys.push({ key: `swiss_${i}`, label: `${roundLabel} ${i}`, maxGames: swissGames });
     }
@@ -394,6 +395,7 @@ export function TournamentCreateForm() {
               <option value="SWISS">{t('tournament.format.swiss')}</option>
               <option value="ROUND_ROBIN">{t('tournament.format.round_robin')}</option>
               <option value="LIECHTENSTEIN">{t('tournament.format.liechtenstein')}</option>
+              <option value="BALANCED_LIECHTENSTEIN">{t('tournament.format.balanced_liechtenstein')}</option>
             </optgroup>
             <optgroup label="── Automated ──">
               <option value="AUTO_SWISS">Auto Swiss — self-running</option>
@@ -545,11 +547,11 @@ export function TournamentCreateForm() {
           Match Mechanics
         </legend>
 
-        {(form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN') ? (
+        {(form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN' || form.format === 'BALANCED_LIECHTENSTEIN') ? (
           <>
-            {/* Rounds count — for Swiss and Liechtenstein; Round Robin rounds are determined by participant count */}
-            {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN') && <div>
-              <Label htmlFor="tcf-rounds">{form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : 'Swiss Rounds'}</Label>
+            {/* Rounds count — for Swiss, Liechtenstein, and Balanced Liechtenstein; Round Robin rounds are determined by participant count */}
+            {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN' || form.format === 'BALANCED_LIECHTENSTEIN') && <div>
+              <Label htmlFor="tcf-rounds">{form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : form.format === 'BALANCED_LIECHTENSTEIN' ? 'Balanced Liechtenstein Rounds' : 'Swiss Rounds'}</Label>
               <div className="flex items-center gap-3 mt-1">
                 <input
                   id="tcf-rounds"
@@ -609,7 +611,7 @@ export function TournamentCreateForm() {
             {/* Match formats */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
-                <Label htmlFor="tcf-swiss-fmt">{form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Format' : 'Swiss Format'}</Label>
+                <Label htmlFor="tcf-swiss-fmt">{form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Format' : form.format === 'BALANCED_LIECHTENSTEIN' ? 'Balanced Liechtenstein Format' : 'Swiss Format'}</Label>
                 <Select
                   id="tcf-swiss-fmt"
                   name="swiss_match_format"
