@@ -19,10 +19,11 @@ import { PageShell } from '@/components/layout/PageShell.js';
 import { ImportLogTable } from '@/components/admin/ImportLogTable.js';
 import { AdminMatchesTab } from '@/components/admin/AdminMatchesTab.js';
 import { AdminScheduledMatchupsTab } from '@/components/admin/AdminScheduledMatchupsTab.js';
+import { SkillCalibrationTab } from '@/components/admin/SkillCalibrationTab.js';
 
-type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings' | 'import' | 'matches' | 'challenges' | 'queue';
+type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings' | 'import' | 'matches' | 'challenges' | 'queue' | 'skill_calibration';
 
-const ALL_TABS: Tab[] = ['dashboard', 'stats', 'settings', 'users', 'matches', 'challenges', 'queue', 'presets', 'audit', 'import'];
+const ALL_TABS: Tab[] = ['dashboard', 'stats', 'settings', 'skill_calibration', 'users', 'matches', 'challenges', 'queue', 'presets', 'audit', 'import'];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard: 'admin.tabs.dashboard',
@@ -35,6 +36,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
   matches: 'admin.tabs.matches',
   challenges: 'admin.tabs.challenges',
   queue: 'admin.tabs.queue',
+  skill_calibration: 'admin.tabs.skill_calibration',
 };
 
 const STATIC_LABELS: Record<Tab, string> = {
@@ -48,6 +50,7 @@ const STATIC_LABELS: Record<Tab, string> = {
   matches: 'Matches',
   challenges: 'Challenges',
   queue: 'Queue Activity',
+  skill_calibration: 'Skill Calibration',
 };
 
 function StatsTab() {
@@ -167,6 +170,7 @@ export function AdminPage() {
         {tab === 'stats' && <StatsTab />}
         {tab === 'settings' && <SettingsTab />}
         {tab === 'import' && <ImportLogTable />}
+        {tab === 'skill_calibration' && <SkillCalibrationTab />}
       </div>
     </PageShell>
   );

@@ -1,0 +1,301 @@
+import { describe, it, expect } from 'vitest';
+import {
+  planPairings,
+  formDivisionPools,
+  divisionPlayoffFormat,
+  type BalancedParticipant,
+  type BalancedMatchRow,
+  type RankedPlayer,
+} from '../src/lib/balanced-liechtenstein.js';
+
+const R = (userId: string, band: number, rank: number): RankedPlayer => ({ userId, band, rank });
+
+const P = (userId: string, band: number | null): BalancedParticipant => ({ userId, band });
+const done = (round: number, a: string, b: string | null, winner: string): BalancedMatchRow => ({
+  round,
+  player1_id: a,
+  player2_id: b,
+  status: b === null ? 'BYE' : 'COMPLETED',
+  // winner unused by the planner; kept for readability
+  ...(winner ? {} : {}),
+});
+const ongoing = (round: number, a: string, b: string): BalancedMatchRow => ({
+  round,
+  player1_id: a,
+  player2_id: b,
+  status: 'ONGOING',
+});
+
+describe('planPairings — round 1 (batch)', () => {
+  it('pairs every waiting player when the count is even', () => {
+    const plan = planPairings([P('a', 3), P('b', 3), P('c', 3), P('d', 3)], [], 3);
+    expect(plan.pairings).toHaveLength(2);
+    expect(plan.byes).toHaveLength(0);
+    expect(plan.complete).toBe(false);
+    // all in round 1
+    expect(plan.pairings.every((p) => p.round === 1)).toBe(true);
+  });
+
+  it('gives one bye when the count is odd', () => {
+    const plan = planPairings([P('a', 3), P('b', 3), P('c', 3)], [], 3);
+    expect(plan.pairings).toHaveLength(1);
+    expect(plan.byes).toHaveLength(1);
+    expect(plan.byes[0]!.round).toBe(1);
+  });
+});
+
+describe('planPairings — skill banding', () => {
+  it('prefers same-band pairings over cross-band', () => {
+    // 2× band 2, 2× band 4 → must pair 2-2 and 4-4, never crossing.
+    const plan = planPairings([P('a', 2), P('b', 2), P('c', 4), P('d', 4)], [], 3);
+    expect(plan.pairings).toHaveLength(2);
+    const bandOf: Record<string, number> = { a: 2, b: 2, c: 4, d: 4 };
+    for (const p of plan.pairings) {
+      expect(bandOf[p.player1_id]).toBe(bandOf[p.player2_id]);
+    }
+  });
+
+  it('falls back to the nearest band (ascending) when no same-band partner exists', () => {
+    const plan = planPairings([P('a', 2), P('b', 4)], [], 3);
+    expect(plan.pairings).toHaveLength(1);
+    expect(plan.byes).toHaveLength(0);
+  });
+
+  it('treats a null band as the default division', () => {
+    const plan = planPairings([P('a', null), P('b', null)], [], 3);
+    expect(plan.pairings).toHaveLength(1);
+  });
+});
+
+describe('planPairings — incremental next round', () => {
+  it('holds finished players when their pool still has incoming players', () => {
+    // a,b played round 1 (done); c,d still playing round 1 (incoming to pool 2).
+    // a and b just played each other → cannot rematch, and must wait for c/d.
+    const matches: BalancedMatchRow[] = [done(1, 'a', 'b', 'a'), ongoing(1, 'c', 'd')];
+    const plan = planPairings([P('a', 3), P('b', 3), P('c', 3), P('d', 3)], matches, 3);
+    expect(plan.pairings).toHaveLength(0);
+    expect(plan.byes).toHaveLength(0); // held, not byed — reinforcements are coming
+    expect(plan.complete).toBe(false);
+  });
+
+  it('pairs across the pool once enough players have arrived, excluding the last opponent', () => {
+    // Round 1 fully done: a-b and c-d. Pool 2 = {a,b,c,d}. a must not rematch b,
+    // c must not rematch d → the only valid pairing is a-c and b-d (or a-d, b-c).
+    const matches: BalancedMatchRow[] = [done(1, 'a', 'b', 'a'), done(1, 'c', 'd', 'c')];
+    const plan = planPairings([P('a', 3), P('b', 3), P('c', 3), P('d', 3)], matches, 3);
+    expect(plan.pairings).toHaveLength(2);
+    expect(plan.pairings.every((p) => p.round === 2)).toBe(true);
+    for (const p of plan.pairings) {
+      const pair = new Set([p.player1_id, p.player2_id]);
+      expect(pair).not.toEqual(new Set(['a', 'b']));
+      expect(pair).not.toEqual(new Set(['c', 'd']));
+    }
+  });
+
+  it('byes a straggler who is rematch-locked with no incoming players', () => {
+    // Only a,b; they played round 1. Pool 2 = {a,b} but they just met → one byes.
+    const matches: BalancedMatchRow[] = [done(1, 'a', 'b', 'a')];
+    const plan = planPairings([P('a', 3), P('b', 3)], matches, 3);
+    expect(plan.pairings).toHaveLength(0);
+    expect(plan.byes).toHaveLength(1);
+  });
+});
+
+describe('planPairings — earliest COMPATIBLE, not earliest', () => {
+  const bandOf: Record<string, number> = {
+    a: 1, b: 1, // New
+    g: 2, h: 2, // Beginner
+    p: 3, q: 3, // Intermediate
+    r: 4, // Advanced
+  };
+
+  it('holds two New players rather than shoving one three bands up to the lone Advanced', () => {
+    // The reported bug: a,b (New) just played each other and r (Advanced) is free
+    // after a bye, but the Beginners are still in round 1. Pairing a↔r (gap 3) now
+    // is wrong — hold everyone and wait for a closer opponent to free up.
+    const matches: BalancedMatchRow[] = [
+      done(1, 'a', 'b', 'a'), // New vs New
+      done(1, 'r', null, 'r'), // Advanced bye
+      ongoing(1, 'g', 'h'), // Beginners still playing → incoming to pool 2
+    ];
+    const plan = planPairings(
+      [P('a', 1), P('b', 1), P('r', 4), P('g', 2), P('h', 2)],
+      matches,
+      3,
+    );
+    expect(plan.pairings).toHaveLength(0);
+    expect(plan.byes).toHaveLength(0); // held, not byed
+  });
+
+  it('pairs the New players with Beginners (gap 1), never the Advanced, once Beginners are free', () => {
+    // a,b (New) and g,h (Beginner) are all free (each pair rematch-locked); r
+    // (Advanced) is free too but Intermediates (p,q) are still incoming. The New
+    // players take the Beginners at gap 1; r waits for a closer (Intermediate).
+    const matches: BalancedMatchRow[] = [
+      done(1, 'a', 'b', 'a'),
+      done(1, 'g', 'h', 'g'),
+      done(1, 'r', null, 'r'),
+      ongoing(1, 'p', 'q'),
+    ];
+    const plan = planPairings(
+      [P('a', 1), P('b', 1), P('g', 2), P('h', 2), P('r', 4), P('p', 3), P('q', 3)],
+      matches,
+      3,
+    );
+    expect(plan.pairings).toHaveLength(2);
+    // r is held, not paired with anyone.
+    expect(plan.pairings.flatMap((pp) => [pp.player1_id, pp.player2_id])).not.toContain('r');
+    // Every pairing is exactly one band apart (New↔Beginner).
+    for (const pp of plan.pairings) {
+      expect(Math.abs(bandOf[pp.player1_id]! - bandOf[pp.player2_id]!)).toBe(1);
+    }
+  });
+
+  it('still makes an unavoidable big jump when nothing closer is available or incoming', () => {
+    // Only a (New) and r (Advanced) remain, both idle after byes, nobody else
+    // coming → the gap-3 pairing must happen rather than deadlock.
+    const matches: BalancedMatchRow[] = [done(1, 'a', null, 'a'), done(1, 'r', null, 'r')];
+    const plan = planPairings([P('a', 1), P('r', 4)], matches, 3);
+    expect(plan.pairings).toHaveLength(1);
+    expect(plan.byes).toHaveLength(0);
+  });
+});
+
+describe('planPairings — eventual rematch vs playing up', () => {
+  // History helpers: a,b (New) met in round 1, then each played up in round 2, so by
+  // round 3 they are an *eventual* (not immediate) rematch of each other.
+  const pairSet = (pl: { player1_id: string; player2_id: string }) =>
+    new Set([pl.player1_id, pl.player2_id]);
+
+  it('prefers a fresh one-band play-up over replaying an earlier opponent', () => {
+    // Round 3 pool {a,b,c}: a↔b met in round 1 (eventual rematch, cost 1.5); c is a
+    // fresh Beginner one band up (cost 1). The cheaper fresh play-up must win.
+    const matches: BalancedMatchRow[] = [
+      done(1, 'a', 'b', 'a'),
+      done(1, 'c', null, 'c'),
+      done(2, 'a', 'c', 'a'),
+      done(2, 'b', null, 'b'),
+    ];
+    const plan = planPairings([P('a', 1), P('b', 1), P('c', 2)], matches, 3);
+    expect(plan.pairings).toHaveLength(1);
+    expect(pairSet(plan.pairings[0]!)).toEqual(new Set(['b', 'c'])); // fresh gap-1
+    expect(pairSet(plan.pairings[0]!)).not.toEqual(new Set(['a', 'b'])); // not the repeat
+  });
+
+  it('prefers replaying an earlier opponent over a two-band play-up', () => {
+    // Round 3 pool {a,b,d}: a↔b eventual rematch (cost 1.5); the only fresh option for
+    // b is d, two bands up (cost 2). The repeat is now the cheaper, better game.
+    const matches: BalancedMatchRow[] = [
+      done(1, 'a', 'b', 'a'),
+      done(1, 'd', null, 'd'),
+      done(2, 'a', 'd', 'a'),
+      done(2, 'b', null, 'b'),
+    ];
+    const plan = planPairings([P('a', 1), P('b', 1), P('d', 3)], matches, 3);
+    expect(plan.pairings).toHaveLength(1);
+    expect(pairSet(plan.pairings[0]!)).toEqual(new Set(['a', 'b'])); // the eventual rematch
+    expect(plan.byes.map((x) => x.player_id)).toEqual(['d']);
+  });
+
+  it('still blocks an immediate rematch outright, even to avoid a three-band jump', () => {
+    // a,b just played each other (round 1); r is idle after a bye. An immediate
+    // rematch is forbidden, so one New plays up to Advanced rather than replay.
+    const matches: BalancedMatchRow[] = [done(1, 'a', 'b', 'a'), done(1, 'r', null, 'r')];
+    const plan = planPairings([P('a', 1), P('b', 1), P('r', 4)], matches, 3);
+    expect(plan.pairings).toHaveLength(1);
+    expect(pairSet(plan.pairings[0]!)).not.toEqual(new Set(['a', 'b'])); // no immediate rematch
+    expect(pairSet(plan.pairings[0]!).has('r')).toBe(true); // the play-up happened
+  });
+});
+
+describe('planPairings — completion', () => {
+  it('reports complete when everyone has played all rounds', () => {
+    const matches: BalancedMatchRow[] = [done(1, 'a', 'b', 'a')];
+    const plan = planPairings([P('a', 3), P('b', 3)], matches, 1);
+    expect(plan.complete).toBe(true);
+    expect(plan.pairings).toHaveLength(0);
+    expect(plan.byes).toHaveLength(0);
+  });
+
+  it('is not complete while a match is still ongoing', () => {
+    const matches: BalancedMatchRow[] = [ongoing(1, 'a', 'b')];
+    const plan = planPairings([P('a', 3), P('b', 3)], matches, 1);
+    expect(plan.complete).toBe(false);
+  });
+});
+
+describe('formDivisionPools', () => {
+  it('keeps one level as a single pool and picks the top 2 as finalists', () => {
+    const players = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => R(`p${r}`, 3, r));
+    const pools = formDivisionPools(players);
+    expect(pools).toHaveLength(1);
+    expect(pools[0]!.band).toBe(3);
+    expect(pools[0]!.players).toHaveLength(8);
+    expect(pools[0]!.finalists).toEqual(['p1', 'p2']);
+  });
+
+  it('borrows the best of the level below to fill a short top level', () => {
+    // 3 level-5 (best ranks) + 5 level-3 → level5 pool = 3 own + best level-3.
+    const players = [R('a', 5, 1), R('b', 5, 2), R('c', 5, 3), R('d', 3, 4), R('e', 3, 5), R('f', 3, 6), R('g', 3, 7), R('h', 3, 8)];
+    const pools = formDivisionPools(players);
+    expect(pools).toHaveLength(2);
+    const top = pools.find((p) => p.band === 5)!;
+    expect(top.players.map((p) => p.userId).sort()).toEqual(['a', 'b', 'c', 'd']); // d promoted
+    expect(top.finalists).toEqual(['a', 'b']);
+    const bottom = pools.find((p) => p.band === 3)!;
+    expect(bottom.players).toHaveLength(4);
+    expect(bottom.finalists).toEqual(['e', 'f']);
+  });
+
+  it('merges a trailing sub-minimum pool into the pool above', () => {
+    // 4 level-5 + 2 level-3, nothing below to fill → the 2 join the level-5 pool.
+    const players = [R('a', 5, 1), R('b', 5, 2), R('c', 5, 3), R('d', 5, 4), R('e', 3, 5), R('f', 3, 6)];
+    const pools = formDivisionPools(players);
+    expect(pools).toHaveLength(1);
+    expect(pools[0]!.players).toHaveLength(6);
+    expect(pools[0]!.finalists).toEqual(['a', 'b']);
+  });
+
+  it('handles a tiny field (single pool, whatever its size)', () => {
+    const pools = formDivisionPools([R('a', 3, 1), R('b', 3, 2), R('c', 3, 3)]);
+    expect(pools).toHaveLength(1);
+    expect(pools[0]!.finalists).toEqual(['a', 'b']);
+  });
+
+  it('reserves final seat 1 for the best of the pool own-band, even if a borrowed player outranks them', () => {
+    // Top band (4) has 2 weak-scoring players; the pool borrows 2 higher-ranked
+    // band-3 players to reach the minimum. Seat 1 must still be the best band-4
+    // player (adv1), NOT the higher-ranked promoted intermediate.
+    const players = [R('int1', 3, 1), R('int2', 3, 2), R('adv1', 4, 3), R('adv2', 4, 4)];
+    const pools = formDivisionPools(players);
+    expect(pools).toHaveLength(1);
+    const pool = pools[0]!;
+    expect(pool.band).toBe(4);
+    // Seat 1 = best band-4 player; seat 2 = best of the rest (the top-ranked intermediate).
+    expect(pool.finalists).toEqual(['adv1', 'int1']);
+  });
+
+  it('exposes the full seed order: top-band best first, then the rest by rank', () => {
+    const players = [R('int1', 3, 1), R('int2', 3, 2), R('adv1', 4, 3), R('adv2', 4, 4)];
+    const pools = formDivisionPools(players);
+    // adv1 (best of the own band 4) leads; the rest follow by Swiss rank.
+    expect(pools[0]!.seeds).toEqual(['adv1', 'int1', 'int2', 'adv2']);
+  });
+
+  it('a pure single-band pool seeds strictly by rank', () => {
+    const players = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => R(`p${r}`, 3, r));
+    const pools = formDivisionPools(players);
+    expect(pools[0]!.seeds).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']);
+  });
+});
+
+describe('divisionPlayoffFormat', () => {
+  it('maps division size to bracket format (thresholds 4 / 8 / 16)', () => {
+    expect(divisionPlayoffFormat(4)).toBe('TOP2');
+    expect(divisionPlayoffFormat(7)).toBe('TOP2');
+    expect(divisionPlayoffFormat(8)).toBe('TOP4');
+    expect(divisionPlayoffFormat(15)).toBe('TOP4');
+    expect(divisionPlayoffFormat(16)).toBe('TOP8');
+    expect(divisionPlayoffFormat(20)).toBe('TOP8');
+  });
+});

@@ -6,6 +6,12 @@ import { generateSingleElim, generateDoubleElim } from '../lib/bracket.js';
 import { generateRoundRobin } from '../lib/round-robin.js';
 import { generateLiechtensteinSchedule } from '../lib/liechtenstein.js';
 import {
+  applyBalancedStartConfig,
+  assignSkillBandsForTournament,
+  runBalancedPairingTick,
+  startBalancedPlayoffs,
+} from '../lib/balanced-liechtenstein-service.js';
+import {
   generateSwissRound,
   computeSwissStandings,
   sortSwissStandings,
@@ -146,8 +152,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         })),
       };
 
-      // Augment with standings for Swiss, Round Robin, and Auto Swiss
-      if (tournament.format === TournamentFormat.SWISS || tournament.format === TournamentFormat.ROUND_ROBIN || tournament.format === TournamentFormat.LIECHTENSTEIN || tournament.format === TournamentFormat.AUTO_SWISS) {
+      // Augment with standings for Swiss, Round Robin, Auto Swiss, and (Balanced) Liechtenstein
+      if (tournament.format === TournamentFormat.SWISS || tournament.format === TournamentFormat.ROUND_ROBIN || tournament.format === TournamentFormat.LIECHTENSTEIN || tournament.format === TournamentFormat.BALANCED_LIECHTENSTEIN || tournament.format === TournamentFormat.AUTO_SWISS) {
         const participants = await fastify.prisma.tournamentParticipant.findMany({
           where: {
             tournament_id: tournament.id,
@@ -157,12 +163,14 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           select: {
             user_id: true,
             status: true,
+            skill_band: true,
             user: { select: { id: true, username: true, avatar_url: true } },
           },
         });
 
         const participantIds = participants.map((p) => p.user_id);
         const userMap = new Map(participants.map((p) => [p.user_id, p.user]));
+        const bandByUser = new Map(participants.map((p) => [p.user_id, p.skill_band]));
         const withdrawnIds = new Set(
           participants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id),
         );
@@ -205,6 +213,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             buchholz: s.buchholz,
             solkoff: s.solkoff,
             dropped: (s.dropped || withdrawnIds.has(s.userId)) || undefined,
+            skillBand: bandByUser.get(s.userId) ?? null,
           };
         });
 
@@ -375,6 +384,14 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           break;
         }
 
+        case TournamentFormat.BALANCED_LIECHTENSTEIN: {
+          // Balanced Liechtenstein pairs incrementally (skill-based, match by match).
+          // There is no batch schedule — round 1 (and every later match) is created by
+          // the pairing tick, run right after the tournament flips to ONGOING below.
+          bracketMatches = [];
+          break;
+        }
+
         default: {
           return reply.code(501).send({
             error: 'NotImplemented',
@@ -439,6 +456,17 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         1,
         bracketMatches.filter((m) => m.round === 1),
       );
+
+      // Balanced Liechtenstein has no batch schedule — fix each player's skill
+      // division, then create round 1 (and notify) via the incremental pairing
+      // tick now that the tournament is ONGOING.
+      if (tournament.format === TournamentFormat.BALANCED_LIECHTENSTEIN) {
+        // Derive round count + playoff flag from the check-in count (like Auto
+        // Swiss) before pairing, then fix skill bands and pair round 1.
+        await applyBalancedStartConfig(fastify, tournament.id);
+        await assignSkillBandsForTournament(fastify, tournament.id);
+        await runBalancedPairingTick(fastify, tournament.id);
+      }
 
       const responseBody: Record<string, unknown> = {
         tournamentId: tournament.id,
@@ -721,6 +749,16 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Only the host can start playoffs', statusCode: 403 });
+      }
+
+      // Balanced Liechtenstein uses division playoffs (one final per skill level),
+      // not a single shared bracket — handled by its own service.
+      if (tournament.format === TournamentFormat.BALANCED_LIECHTENSTEIN) {
+        const result = await startBalancedPlayoffs(fastify, id);
+        if ('error' in result) {
+          return reply.code(400).send({ error: 'BadRequest', message: result.error, statusCode: 400 });
+        }
+        return reply.code(200).send({ tournamentId: id, ...result });
       }
 
       if (

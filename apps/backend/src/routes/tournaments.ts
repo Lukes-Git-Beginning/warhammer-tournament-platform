@@ -70,6 +70,7 @@ function maxPlayerGames(data: {
   switch (data.format) {
     case 'SWISS':
     case 'LIECHTENSTEIN':
+    case 'BALANCED_LIECHTENSTEIN':
       return (data.rounds_count ?? 5) * swissGames + playoffExtra;
     case 'ROUND_ROBIN':
       return (participants > 1 ? participants - 1 : 7) * swissGames + playoffExtra;
@@ -125,7 +126,7 @@ function refineMapPool(
 
 const CreateTournamentSchema = z.object({
   name: z.string().min(3).max(120),
-  format: z.enum(['SWISS', 'AUTO_SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN']),
+  format: z.enum(['SWISS', 'AUTO_SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
   mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE']).optional(),
   start_date: z.string().datetime(),
   timezone: z.string().min(1).max(64),
@@ -180,7 +181,7 @@ const PatchTournamentSchema = z.object({
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   is_major: z.boolean().optional(),
   // Fields added for full edit-form support
-  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN']).optional(),
+  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']).optional(),
   mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE']).optional(),
   has_third_place_match: z.boolean().optional(),
   counts_for_leaderboard: z.boolean().optional(),

@@ -2,18 +2,39 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { registerForTournament, withdrawFromTournament, getFactions } from '@/lib/api';
+import {
+  registerForTournament,
+  withdrawFromTournament,
+  getFactions,
+  getPlayerClassification,
+} from '@/lib/api';
 import type { Tournament, ParticipantStatus } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { FactionBadge } from '@/components/meta/FactionBadge';
+import { CalibrationWizard } from '@/components/meta/CalibrationWizard';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
-export interface RegisterButtonProps {
-  tournament: Tournament;
-  participantStatus: ParticipantStatus | null;
-  isLoggedIn: boolean;
-}
+// ---------------------------------------------------------------------------
+// Band map — mirrors PlayerLevelScale.tsx but kept local to avoid coupling
+// ---------------------------------------------------------------------------
+const BANDS: { name: string; color: string; text: string }[] = [
+  { name: 'New',          color: 'bg-stone-100',           text: 'text-stone-100'          },
+  { name: 'Beginner',     color: 'bg-orange-800',          text: 'text-orange-600'         },
+  { name: 'Intermediate', color: 'bg-[#c17f38]',           text: 'text-[#cd9557]'          },
+  { name: 'Advanced',     color: 'bg-slate-400',           text: 'text-slate-300'          },
+  { name: 'Top',          color: 'bg-rizzotto-gold-400',   text: 'text-rizzotto-gold-400'  },
+];
 
+// ---------------------------------------------------------------------------
+// Faction grid (unchanged)
+// ---------------------------------------------------------------------------
 function FactionSelectGrid({
   selected,
   onToggle,
@@ -92,15 +113,184 @@ function FactionSelectGrid({
   );
 }
 
-export function RegisterButton({ tournament, participantStatus, isLoggedIn }: RegisterButtonProps) {
+// ---------------------------------------------------------------------------
+// Band picker dialog for BALANCED_LIECHTENSTEIN
+// ---------------------------------------------------------------------------
+function BandPickerDialog({
+  open,
+  onOpenChange,
+  userId,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  userId: string;
+  onConfirm: (band: number) => void;
+}) {
+  const [calibrationOpen, setCalibrationOpen] = useState(false);
+  const [selectedBand, setSelectedBand] = useState<number | null>(null);
+
+  const { data: classification, refetch } = useQuery({
+    queryKey: ['player-classification', userId],
+    queryFn: () => getPlayerClassification(userId),
+    enabled: open,
+    retry: false,
+  });
+
+  // After calibration wizard closes, refresh classification and keep band picker open
+  function handleCalibrationClose(isOpen: boolean) {
+    setCalibrationOpen(isOpen);
+    if (!isOpen) {
+      void refetch();
+    }
+  }
+
+  // matchmakingBand is 1-based (1..5); BANDS array is 0-based
+  const currentBand = classification?.matchmakingBand ?? 1;
+  const bandName   = classification?.bandName ?? 'New';
+  const needsCalibration = classification != null && !classification.hasQuestionnaire;
+
+  // Pre-select currentBand when data arrives (only if not manually chosen yet)
+  const effectiveBand = selectedBand ?? currentBand;
+
+  function handleOpen() {
+    if (needsCalibration && !calibrationOpen) {
+      setCalibrationOpen(true);
+      return;
+    }
+  }
+
+  // Sync when dialog opens: show calibration if needed, otherwise show picker
+  // We derive via render — if calibration is needed we show CalibrationWizard and
+  // suppress the band picker body.
+  const showPicker = !calibrationOpen;
+
+  return (
+    <>
+      <CalibrationWizard
+        userId={userId}
+        open={calibrationOpen}
+        onOpenChange={handleCalibrationClose}
+      />
+
+      <Dialog open={open && showPicker} onOpenChange={(o) => {
+        if (!o) {
+          setSelectedBand(null);
+          onOpenChange(false);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Choose your division</DialogTitle>
+            <DialogDescription>
+              {classification == null
+                ? 'Loading your classification…'
+                : needsCalibration
+                  ? 'Complete a quick calibration first to set your starting level.'
+                  : `You are rated as ${bandName}. You can compete at your level or higher — higher means stronger opponents and a higher division. You cannot play below your rated level.`
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          {classification == null ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-rizzotto-gold-500 border-t-transparent" />
+            </div>
+          ) : needsCalibration ? (
+            <div className="flex flex-col gap-3 py-2">
+              <p className="text-sm text-rizzotto-stone-400">
+                We need a few quick answers to set your starting band before you can register.
+              </p>
+              <Button variant="etched" size="sm" onClick={handleOpen}>
+                Answer a few questions →
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2 py-2">
+              {BANDS.map((band, i) => {
+                // i is 0-based; currentBand is 1-based → compare i+1 vs currentBand
+                const bandNumber = i + 1;
+                const isDisabled = bandNumber < currentBand;
+                const isSelected = effectiveBand === bandNumber;
+                return (
+                  <button
+                    key={band.name}
+                    type="button"
+                    disabled={isDisabled}
+                    onClick={() => !isDisabled && setSelectedBand(bandNumber)}
+                    className={cn(
+                      'flex w-full items-center gap-3 rounded-md border px-4 py-2.5 text-left text-sm transition-colors',
+                      isDisabled
+                        ? 'cursor-not-allowed border-rizzotto-iron-700 bg-rizzotto-iron-900 opacity-40'
+                        : isSelected
+                          ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/10'
+                          : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60 hover:bg-rizzotto-iron-800',
+                    )}
+                  >
+                    <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', band.color)} />
+                    <span className={cn('font-semibold', isSelected ? 'text-rizzotto-gold-300' : band.text)}>
+                      {band.name}
+                    </span>
+                    {bandNumber === currentBand && (
+                      <span className="ml-auto text-xs text-rizzotto-stone-500">your level</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {classification != null && !needsCalibration && (
+            <div className="flex items-center gap-3 pt-2">
+              <Button
+                variant="forge"
+                size="md"
+                onClick={() => {
+                  onConfirm(effectiveBand);
+                  setSelectedBand(null);
+                  onOpenChange(false);
+                }}
+              >
+                Confirm Registration
+              </Button>
+              <button
+                type="button"
+                onClick={() => { setSelectedBand(null); onOpenChange(false); }}
+                className="text-sm text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export interface RegisterButtonProps {
+  tournament: Tournament;
+  participantStatus: ParticipantStatus | null;
+  isLoggedIn: boolean;
+  /** Required for BALANCED_LIECHTENSTEIN band selection. */
+  userId?: string;
+}
+
+export function RegisterButton({ tournament, participantStatus, isLoggedIn, userId }: RegisterButtonProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
   const [pickingFaction, setPickingFaction] = useState(false);
   const [selectedFactions, setSelectedFactions] = useState<string[]>([]);
+  const [pickingBand, setPickingBand] = useState(false);
 
   const needsFactionPick = tournament.mode === 'SFT' || tournament.mode === 'TWO_D_THREE';
   const pickCount = tournament.mode === 'TWO_D_THREE' ? 3 : 1;
+  const isBalancedLiechtenstein = tournament.format === 'BALANCED_LIECHTENSTEIN';
 
   const toggleFaction = (id: string) =>
     setSelectedFactions((prev) => {
@@ -111,10 +301,10 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
     });
 
   const register = useMutation({
-    mutationFn: () =>
+    mutationFn: (opts?: { requested_band?: number }) =>
       pickCount > 1
-        ? registerForTournament(tournament.slug, { factionIds: selectedFactions })
-        : registerForTournament(tournament.slug, selectedFactions[0] ? { factionId: selectedFactions[0] } : undefined),
+        ? registerForTournament(tournament.slug, { factionIds: selectedFactions, ...opts })
+        : registerForTournament(tournament.slug, selectedFactions[0] ? { factionId: selectedFactions[0], ...opts } : opts),
     onSuccess: () => {
       setPickingFaction(false);
       setSelectedFactions([]);
@@ -225,7 +415,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
             variant="forge"
             size="md"
             disabled={selectedFactions.length !== pickCount || register.isPending}
-            onClick={() => register.mutate()}
+            onClick={() => register.mutate(undefined)}
           >
             {register.isPending ? t('tournament.register.pending') : 'Confirm Registration'}
           </Button>
@@ -238,24 +428,38 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn }: Re
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <Button
-        variant="forge"
-        size="md"
-        disabled={register.isPending}
-        onClick={() => {
-          if (needsFactionPick) {
-            setPickingFaction(true);
-          } else {
-            register.mutate();
-          }
-        }}
-      >
-        {register.isPending ? t('tournament.register.pending') : t('tournament.register.cta')}
-      </Button>
-      {register.isError && (
-        <span className="text-xs text-rizzotto-danger">{(register.error as Error).message}</span>
+    <>
+      {/* Band picker dialog for BALANCED_LIECHTENSTEIN */}
+      {isBalancedLiechtenstein && userId && (
+        <BandPickerDialog
+          open={pickingBand}
+          onOpenChange={setPickingBand}
+          userId={userId}
+          onConfirm={(band) => register.mutate({ requested_band: band })}
+        />
       )}
-    </div>
+
+      <div className="flex items-center gap-3">
+        <Button
+          variant="forge"
+          size="md"
+          disabled={register.isPending}
+          onClick={() => {
+            if (isBalancedLiechtenstein && userId) {
+              setPickingBand(true);
+            } else if (needsFactionPick) {
+              setPickingFaction(true);
+            } else {
+              register.mutate(undefined);
+            }
+          }}
+        >
+          {register.isPending ? t('tournament.register.pending') : t('tournament.register.cta')}
+        </Button>
+        {register.isError && (
+          <span className="text-xs text-rizzotto-danger">{(register.error as Error).message}</span>
+        )}
+      </div>
+    </>
   );
 }

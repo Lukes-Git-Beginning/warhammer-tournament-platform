@@ -1,6 +1,7 @@
 import type { BracketNode, BracketResponse, FactionDto } from '@rizzotto/types';
 import { computeBracketLayout, MATCH_WIDTH, MATCH_HEIGHT, ROUND_GAP } from './computeBracketLayout';
 import { MatchNode } from './MatchNode';
+import { SKILL_BAND_META } from './skillBandMeta';
 
 // Playoff phases that feed into each other (used when next_match_id is null in the DB).
 const PHASE_FEEDS_INTO: Record<string, string> = {
@@ -28,6 +29,10 @@ interface SVGBracketProps {
   players?: Map<string, BracketPlayerInfo>;
   factionMap?: Map<string, FactionDto>;
   tournamentMode?: string;
+  /** Tournament format (e.g. 'BALANCED_LIECHTENSTEIN') — distinct from match mode */
+  format?: string;
+  /** userId → skillBand (1..5) — present for BALANCED_LIECHTENSTEIN */
+  bandByUser?: Map<string, number>;
   onMatchClick?: (matchId: string) => void;
 }
 
@@ -126,7 +131,7 @@ export function computeSlotLabels(
   return slotLabels;
 }
 
-export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchClick }: SVGBracketProps) {
+export function SVGBracket({ data, players, factionMap, tournamentMode, format, bandByUser, onMatchClick }: SVGBracketProps) {
   const isSft = tournamentMode === 'SFT';
   const layout = computeBracketLayout(data.matches);
 
@@ -170,6 +175,33 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
       })}
 
 
+      {/* Division band labels — one per stacked Balanced division bracket */}
+      {layout.groups?.map((g, i) => {
+        // The division is named after the highest band among its players.
+        let band = 0;
+        for (const mid of g.matchIds) {
+          const m = data.matches.find((x) => x.matchId === mid);
+          for (const pid of [m?.player1Id, m?.player2Id]) {
+            const b = pid ? bandByUser?.get(pid) : undefined;
+            if (b && b > band) band = b;
+          }
+        }
+        const meta = band ? SKILL_BAND_META[band] : null;
+        return (
+          <foreignObject key={`grp-${i}`} x={g.x + PAD} y={g.y + PAD} width={MATCH_WIDTH * 2} height={28}>
+            { }
+            <div {...({ xmlns: 'http://www.w3.org/1999/xhtml' } as any)} style={{ width: '100%', height: '100%' }}>
+              <div className="flex items-center gap-2">
+                <span className={`h-2 w-2 rounded-full shrink-0 ${meta?.dotCls ?? 'bg-stone-500'}`} />
+                <span className={`text-xs font-bold uppercase tracking-widest ${meta?.textCls ?? 'text-stone-400'}`}>
+                  {meta?.name ?? 'Division'} Division
+                </span>
+              </div>
+            </div>
+          </foreignObject>
+        );
+      })}
+
       {/* Match nodes as foreignObjects */}
       {data.matches.map((m) => {
         const pos = layout.positions.get(m.matchId);
@@ -182,6 +214,8 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
         // Show faction logo for SFT (fixed faction per event) or BPT Bo1 (single game → faction is unambiguous).
         const showFaction = isSft || m.matchFormat === 'BO1';
         const labels = slotLabels.get(m.matchId);
+        const p1Band = m.player1Id ? bandByUser?.get(m.player1Id) : undefined;
+        const p2Band = m.player2Id ? bandByUser?.get(m.player2Id) : undefined;
 
         return (
           <foreignObject
@@ -206,6 +240,9 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
                 onClick={onMatchClick ? () => onMatchClick(m.matchId) : undefined}
                 p1SlotLabel={labels?.p1}
                 p2SlotLabel={labels?.p2}
+                tournamentMode={format}
+                player1Band={p1Band}
+                player2Band={p2Band}
               />
             </div>
           </foreignObject>

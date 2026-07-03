@@ -275,6 +275,7 @@ const RANKED_FORMATS = new Set([
   'ROUND_ROBIN',
   'DOUBLE_ROUND_ROBIN',
   'LIECHTENSTEIN',
+  'BALANCED_LIECHTENSTEIN',
 ]);
 
 export async function finalizeTournament(
@@ -322,7 +323,15 @@ export async function finalizeTournament(
 
   // Compute placements
   let placements: Map<string, number>;
-  if (RANKED_FORMATS.has(tournament.format)) {
+  if (tournament.format === 'BALANCED_LIECHTENSTEIN') {
+    // Division playoffs are several parallel finals (one champion per skill level),
+    // not a single bracket — so the OVERALL placement is by Swiss standing. The
+    // per-division champions are the PLAYOFF_FINAL winners (surfaced separately).
+    const swissMatches = matches.filter(
+      (m) => m.phase === null || m.phase === undefined || m.phase === 'SWISS',
+    );
+    placements = computeRankedPlacements(participantIds, swissMatches as MatchLike[]);
+  } else if (RANKED_FORMATS.has(tournament.format)) {
     placements = computeSwissPlayoffPlacements(participantIds, matches as MatchLike[]);
   } else if (tournament.format === 'DOUBLE_ELIMINATION') {
     placements = computeDoubleElimPlacements(matches as MatchLike[]);

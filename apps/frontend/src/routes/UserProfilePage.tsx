@@ -7,6 +7,8 @@ import { patchMePreferences } from '@/lib/onboarding.js';
 import type { UserMe } from '@rizzotto/types';
 import { GameHistoryTable } from '../components/match/GameHistoryTable.js';
 import { PlayerFactionProficiencyCard } from '../components/meta/PlayerFactionProficiencyCard.js';
+import { PlayerLevelScale } from '../components/meta/PlayerLevelScale.js';
+import { CalibrationWizard } from '../components/meta/CalibrationWizard.js';
 import { useAuthQuery } from '@/lib/auth.js';
 import { formatInUserTimezone } from '@/lib/timezone.js';
 import { Button } from '@/components/ui/button.js';
@@ -280,6 +282,7 @@ export function UserProfilePage() {
   const { id } = useParams({ from: '/users/$id' });
   const { data: me } = useAuthQuery();
   const isOwnProfile = me?.id === id;
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['user-profile', id],
@@ -332,6 +335,16 @@ export function UserProfilePage() {
           <p className="text-xs text-stone-500">{t('user_profile.joined', { date: joinedDate })}</p>
         </div>
       </div>
+
+      {/* Skill standing */}
+      <PlayerLevelScale
+        userId={id}
+        isOwnProfile={isOwnProfile}
+        onCalibrate={() => setWizardOpen(true)}
+      />
+      {isOwnProfile && (
+        <CalibrationWizard userId={id} open={wizardOpen} onOpenChange={setWizardOpen} />
+      )}
 
       {/* Aktuelle Season */}
       <section>

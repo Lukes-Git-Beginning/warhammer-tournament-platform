@@ -137,16 +137,21 @@ export function sortStandingsByPlayoffResult(
 }
 
 /**
- * Returns the IDs of the two Grand Final participants.
- * Falls back to SF winners when the GF match hasn't been created yet, so the
+ * Returns the IDs of every Grand / division final participant. Standard formats
+ * have a single PLAYOFF_FINAL; Balanced Liechtenstein has one final per division,
+ * so we collect the participants of ALL of them (not just the first).
+ * Falls back to SF winners when no final match has been created yet, so the
  * "Advance to Grand Final" divider in SwissStandings highlights correctly.
  */
 export function getFinalistIds(matches: BracketNode[]): Set<string> {
-  const gfMatch = matches.find((m) => m.phase === 'PLAYOFF_FINAL');
-  if (gfMatch) {
-    return new Set(
-      [gfMatch.player1Id, gfMatch.player2Id].filter((id): id is string => id !== null),
-    );
+  const gfMatches = matches.filter((m) => m.phase === 'PLAYOFF_FINAL');
+  if (gfMatches.length > 0) {
+    const ids = new Set<string>();
+    for (const gf of gfMatches) {
+      if (gf.player1Id) ids.add(gf.player1Id);
+      if (gf.player2Id) ids.add(gf.player2Id);
+    }
+    return ids;
   }
   const sfWinners = matches
     .filter((m) => m.phase === 'PLAYOFF_SF' && m.status === 'COMPLETED' && m.winnerId)

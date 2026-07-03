@@ -8,6 +8,7 @@ const FORMAT_KEYS = [
   'auto_swiss',
   'round_robin',
   'liechtenstein',
+  'balanced_liechtenstein',
 ] as const;
 
 const MODE_KEYS = ['bpt', 'sft', 'slt', 'matrix'] as const;

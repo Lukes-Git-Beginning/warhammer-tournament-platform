@@ -18,9 +18,10 @@ interface BracketViewProps {
   canManage?: boolean;
   hideStandings?: boolean;
   playoffFormat?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' | null;
+  format?: string;
 }
 
-export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false, playoffFormat }: BracketViewProps) {
+export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false, playoffFormat, format }: BracketViewProps) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [readOnlyMatchId, setReadOnlyMatchId] = useState<string | null>(null);
   const [byeMatchId, setByeMatchId] = useState<string | null>(null);
@@ -68,6 +69,27 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     () => getFinalistIds(data?.matches ?? []),
     [data?.matches],
   );
+
+  // BALANCED_LIECHTENSTEIN: map userId → skillBand from swiss standings.
+  const bandByUser = useMemo<Map<string, number>>(() => {
+    const map = new Map<string, number>();
+    for (const entry of data?.swiss?.standings ?? []) {
+      if (entry.skillBand != null) map.set(entry.userId, entry.skillBand);
+    }
+    return map;
+  }, [data?.swiss?.standings]);
+
+  // Division finalist IDs: both players from every PLAYOFF_FINAL match.
+  const divisionFinalistIds = useMemo<ReadonlySet<string>>(() => {
+    const ids = new Set<string>();
+    for (const m of data?.matches ?? []) {
+      if (m.phase === 'PLAYOFF_FINAL') {
+        if (m.player1Id) ids.add(m.player1Id);
+        if (m.player2Id) ids.add(m.player2Id);
+      }
+    }
+    return ids;
+  }, [data?.matches]);
 
   const sortedStandings = useMemo(
     () => (data?.swiss?.standings && data?.matches
@@ -180,7 +202,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
 
   const swiss = data.swiss;
   const showNextRoundButton =
-    canManage && swiss !== undefined && swiss.currentRound < swiss.recommendedRounds;
+    canManage && swiss !== undefined && swiss.currentRound < swiss.recommendedRounds && format !== 'BALANCED_LIECHTENSTEIN';
 
   // Show "Advance to Playoffs" after last Swiss round is fully complete and playoffs not yet generated.
   const hasPlayoffMatches = swiss !== undefined && data.matches.some((m) => m.round > swiss.recommendedRounds);
@@ -197,7 +219,11 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     lastSwissRoundDone &&
     !hasPlayoffMatches;
   const advanceLabel =
-    playoffFormat === 'TOP8' ? 'Advance to Quarterfinals' : 'Advance to Semifinals';
+    format === 'BALANCED_LIECHTENSTEIN'
+      ? 'Start Division Playoffs'
+      : playoffFormat === 'TOP8'
+        ? 'Advance to Quarterfinals'
+        : 'Advance to Semifinals';
 
   // Advance to next playoff round (QF→SF or SF→Final): shown when current playoff
   // round is fully done and no Final match exists yet.
@@ -211,8 +237,12 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
       .every((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT');
   const currentPlayoffPhase = playoffPhases.find((m) => m.round === lastPlayoffRound)?.phase ?? null;
   const nextPlayoffLabel = currentPlayoffPhase === 'PLAYOFF_QF' ? 'Advance to Semifinals' : 'Advance to Grand Final';
+  // Balanced Liechtenstein generates every playoff round up front with
+  // next_match_id wiring (winners advance automatically), so its brackets never
+  // need the manual "advance" / "add small final" controls.
+  const isBalanced = format === 'BALANCED_LIECHTENSTEIN';
   const showAdvanceToNextPlayoffRound =
-    canManage && hasPlayoffMatches && lastPlayoffRoundDone && !hasFinalMatch;
+    canManage && !isBalanced && hasPlayoffMatches && lastPlayoffRoundDone && !hasFinalMatch;
 
   // For SE: the final has phase=null; detect it as the non-TP match with no next pointer.
   const seMatches = data.matches.filter((m) => !m.phase && !m.bracketSide);
@@ -227,6 +257,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   const thirdPlaceNeedsRepair = !!thirdPlaceNode && !thirdPlaceNode.player1Id && !thirdPlaceNode.player2Id;
   const showAddThirdPlaceButton =
     canManage &&
+    !isBalanced &&
     (hasFinalMatch || seSFsDone) &&
     (!hasThirdPlaceMatch || thirdPlaceNeedsRepair);
 
@@ -256,7 +287,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           playerFactionMap={playerFactionMap}
           tournamentMode={data.mode}
           playoffFormat={playoffFormat}
-          finalistIds={finalistIds}
+          finalistIds={format === 'BALANCED_LIECHTENSTEIN' ? divisionFinalistIds : finalistIds}
           tournamentSlug={slug}
           canManage={canManage}
           isCompleted={data.status === 'COMPLETED'}
@@ -412,6 +443,8 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                   players={players}
                   factionMap={factionMap}
                   tournamentMode={data.mode}
+                  format={format}
+                  bandByUser={bandByUser}
                   onMatchClick={(matchId) => {
                     const m = data.matches.find((x) => x.matchId === matchId);
                     if (canManage) {

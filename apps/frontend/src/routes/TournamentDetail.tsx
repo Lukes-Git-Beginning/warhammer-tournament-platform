@@ -44,6 +44,7 @@ const FORMAT_KEY_MAP: Record<string, string> = {
   ROUND_ROBIN: 'tournament.format.round_robin',
   DOUBLE_ELIMINATION: 'tournament.format.double_elim',
   LIECHTENSTEIN: 'tournament.format.liechtenstein',
+  BALANCED_LIECHTENSTEIN: 'tournament.format.balanced_liechtenstein',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -542,6 +543,7 @@ export function TournamentDetail() {
             tournament={tournament}
             participantStatus={participantStatus}
             isLoggedIn={!!user}
+            userId={user?.id}
           />
         </section>
       )}
@@ -654,7 +656,7 @@ export function TournamentDetail() {
             <div>
               <span className="text-stone-500">Format:</span>{' '}
               <span className="text-stone-200">
-                {({ AUTO_SWISS: 'Auto Swiss', SWISS: 'Swiss', SINGLE_ELIMINATION: 'Single Elimination', DOUBLE_ELIMINATION: 'Double Elimination', ROUND_ROBIN: 'Round Robin', LIECHTENSTEIN: 'Liechtenstein' } as Record<string, string>)[tournament.format] ?? tournament.format}
+                {({ AUTO_SWISS: 'Auto Swiss', SWISS: 'Swiss', SINGLE_ELIMINATION: 'Single Elimination', DOUBLE_ELIMINATION: 'Double Elimination', ROUND_ROBIN: 'Round Robin', LIECHTENSTEIN: 'Liechtenstein', BALANCED_LIECHTENSTEIN: 'Balanced Liechtenstein' } as Record<string, string>)[tournament.format] ?? tournament.format}
                 {tournament.format !== 'AUTO_SWISS' && tournament.rounds_count ? ` · ${tournament.rounds_count} Rounds` : ''}
                 {tournament.format === 'AUTO_SWISS' && tournament.status === 'ONGOING' && tournament.rounds_count ? ` · ${tournament.rounds_count} Rounds` : ''}
                 {tournament.format === 'AUTO_SWISS' && tournament.status !== 'ONGOING' && tournament.status !== 'COMPLETED' ? ' · Rounds TBD' : ''}
@@ -930,6 +932,7 @@ export function TournamentDetail() {
             canManage={!!canManage}
             hideStandings
             playoffFormat={tournament.playoff_format ?? 'NONE'}
+            format={tournament.format}
           />
         </section>
       )}

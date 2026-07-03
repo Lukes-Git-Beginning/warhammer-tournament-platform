@@ -5,10 +5,22 @@ export interface MatchPosition {
   y: number;
 }
 
+/** A visually separated bracket section (e.g. one Balanced Liechtenstein division). */
+export interface BracketGroup {
+  /** Match IDs belonging to this section (used to derive a band label). */
+  matchIds: string[];
+  /** Left x of the section (label anchor). */
+  x: number;
+  /** Top y of the section, including the label strip. */
+  y: number;
+}
+
 export interface BracketLayout {
   positions: Map<string, MatchPosition>;
   width: number;
   height: number;
+  /** Present when the bracket is split into labelled sections (Balanced divisions). */
+  groups?: BracketGroup[];
 }
 
 export const MATCH_WIDTH = 200;
@@ -17,6 +29,8 @@ export const ROUND_GAP = 100;
 export const ROW_GAP = 24;
 
 const SECTION_GAP = 80;
+/** Vertical space reserved above each Balanced division bracket for its band label. */
+const DIVISION_LABEL_HEIGHT = 32;
 
 interface LinearLayoutOpts {
   xBase?: number;
@@ -115,6 +129,89 @@ function computeLinearLayout(
   return { positions, width: maxX, height: maxY };
 }
 
+/**
+ * Group playoff matches into connected components — one per Balanced division —
+ * following next_match_id and loser_next_match_id links.
+ */
+function groupPlayoffDivisions(playoff: BracketNode[]): BracketNode[][] {
+  const ids = new Set(playoff.map((m) => m.matchId));
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    let r = x;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    return r;
+  };
+  const union = (a: string, b: string) => {
+    parent.set(find(a), find(b));
+  };
+  for (const m of playoff) parent.set(m.matchId, m.matchId);
+  for (const m of playoff) {
+    if (m.nextMatchId && ids.has(m.nextMatchId)) union(m.matchId, m.nextMatchId);
+    if (m.loserNextMatchId && ids.has(m.loserNextMatchId)) union(m.matchId, m.loserNextMatchId);
+  }
+  // A TOP2 division's third-place match has no feeders (no SFs point at it), so it
+  // is not linked to its final. Attach each such orphan to the final numbered just
+  // before it (buildDivisionBracket emits final then third place, consecutively).
+  const hasFeeder = new Set<string>();
+  for (const m of playoff) {
+    if (m.nextMatchId) hasFeeder.add(m.nextMatchId);
+    if (m.loserNextMatchId) hasFeeder.add(m.loserNextMatchId);
+  }
+  const byNumber = new Map(playoff.map((m) => [m.matchNumber, m]));
+  for (const m of playoff) {
+    if (m.phase === 'PLAYOFF_THIRD_PLACE' && !hasFeeder.has(m.matchId)) {
+      const finalBefore = byNumber.get(m.matchNumber - 1);
+      if (finalBefore) union(m.matchId, finalBefore.matchId);
+    }
+  }
+  const groups = new Map<string, BracketNode[]>();
+  for (const m of playoff) {
+    const root = find(m.matchId);
+    const arr = groups.get(root);
+    if (arr) arr.push(m);
+    else groups.set(root, [m]);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * Balanced Liechtenstein playoffs: the (optional) Swiss matches on the left, then
+ * each division's own bracket stacked vertically on the right, every division
+ * getting a label strip. Divisions are ordered by their earliest match number
+ * (top division — highest band — first).
+ */
+function computeBalancedPlayoffLayout(swiss: BracketNode[], playoff: BracketNode[]): BracketLayout {
+  const positions = new Map<string, MatchPosition>();
+
+  const swissLayout = computeLinearLayout(swiss, { xBase: 0, yBase: 0 });
+  for (const [id, pos] of swissLayout.positions) positions.set(id, pos);
+
+  const xBase = swissLayout.width > 0 ? swissLayout.width + SECTION_GAP : 0;
+
+  const divisions = groupPlayoffDivisions(playoff).sort(
+    (a, b) =>
+      Math.min(...a.map((m) => m.matchNumber)) - Math.min(...b.map((m) => m.matchNumber)),
+  );
+
+  const groups: BracketGroup[] = [];
+  let yOffset = 0;
+  for (const div of divisions) {
+    const sub = computeLinearLayout(div, { xBase, yBase: yOffset + DIVISION_LABEL_HEIGHT });
+    for (const [id, pos] of sub.positions) positions.set(id, pos);
+    groups.push({ matchIds: div.map((m) => m.matchId), x: xBase, y: yOffset });
+    yOffset += DIVISION_LABEL_HEIGHT + sub.height + SECTION_GAP;
+  }
+
+  let maxX = 0;
+  let maxY = yOffset;
+  for (const pos of positions.values()) {
+    if (pos.x + MATCH_WIDTH > maxX) maxX = pos.x + MATCH_WIDTH;
+    if (pos.y + MATCH_HEIGHT > maxY) maxY = pos.y + MATCH_HEIGHT;
+  }
+
+  return { positions, width: maxX, height: maxY, groups };
+}
+
 export function computeBracketLayout(matches: BracketNode[]): BracketLayout {
   if (matches.length === 0) {
     return { positions: new Map(), width: 0, height: 0 };
@@ -123,6 +220,15 @@ export function computeBracketLayout(matches: BracketNode[]): BracketLayout {
   const hasDE = matches.some((m) => m.bracketSide !== null);
 
   if (!hasDE) {
+    // Balanced Liechtenstein division playoffs: more than one final = several
+    // parallel division brackets → stack them vertically with labels.
+    const playoff = matches.filter((m) => m.phase?.startsWith('PLAYOFF'));
+    const finalCount = playoff.filter((m) => m.phase === 'PLAYOFF_FINAL').length;
+    if (finalCount > 1) {
+      const swiss = matches.filter((m) => !m.phase || m.phase === 'SWISS');
+      return computeBalancedPlayoffLayout(swiss, playoff);
+    }
+
     // SE / Swiss / RR — identical behaviour to the original implementation.
     return computeLinearLayout(matches);
   }

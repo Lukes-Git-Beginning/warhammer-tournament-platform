@@ -119,6 +119,9 @@ export async function loadRatingModelConfig(
           'rating_model_lambda_me',
           'rating_model_low_sample',
           'rating_model_max_iter',
+          'rating_model_hierarchical',
+          'rating_model_lambda_gs',
+          'rating_model_lambda_fo',
         ],
       },
     },
@@ -129,16 +132,27 @@ export async function loadRatingModelConfig(
     const n = typeof row.value === 'number' ? row.value : Number(row.value);
     return Number.isFinite(n) ? n : undefined;
   };
+  const bool = (key: string): boolean | undefined => {
+    const row = rows.find((r) => r.key === key);
+    if (!row) return undefined;
+    return row.value === true || row.value === 'true' || row.value === 1;
+  };
 
   const cfg: Partial<RatingModelConfig> = {};
   const lpfs = num('rating_model_lambda_pfs');
   const lme = num('rating_model_lambda_me');
   const low = num('rating_model_low_sample');
   const iter = num('rating_model_max_iter');
+  const hier = bool('rating_model_hierarchical');
+  const lgs = num('rating_model_lambda_gs');
+  const lfo = num('rating_model_lambda_fo');
   if (lpfs !== undefined) cfg.lambdaPlayerFaction = lpfs;
   if (lme !== undefined) cfg.lambdaMatchup = lme;
   if (low !== undefined) cfg.lowSampleThreshold = low;
   if (iter !== undefined) cfg.maxIterations = iter;
+  if (hier !== undefined) cfg.hierarchical = hier;
+  if (lgs !== undefined) cfg.lambdaGeneralSkill = lgs;
+  if (lfo !== undefined) cfg.lambdaFactionOffset = lfo;
   return cfg;
 }
 
@@ -146,6 +160,7 @@ function toData(m: RatingModel): RatingModelData {
   return {
     playerFactionSkills: m.playerFactionSkills,
     matchupEffects: m.matchupEffects,
+    generalSkills: m.generalSkills,
     fitIterations: m.fitIterations,
     finalLoss: m.finalLoss,
     totalMatches: m.totalMatches,
@@ -182,6 +197,9 @@ export async function getRatingModel(
       lme: cfg.lambdaMatchup,
       iter: cfg.maxIterations,
       low: cfg.lowSampleThreshold,
+      hier: cfg.hierarchical,
+      lgs: cfg.lambdaGeneralSkill,
+      lfo: cfg.lambdaFactionOffset,
     }),
     async () => {
       const observations = await loadSeasonObservations(prisma, seasonId);

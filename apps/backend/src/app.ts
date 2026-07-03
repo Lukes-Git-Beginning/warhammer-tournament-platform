@@ -41,6 +41,7 @@ import availabilityRoutes from './routes/availability.js';
 import scheduledMatchupsRoutes from './routes/scheduled-matchups.js';
 import discordInteractionsRoutes from './routes/discord-interactions.js';
 import activeMatchesRoutes from './routes/active-matches.js';
+import skillRoutes from './routes/skill.js';
 
 export interface BuildAppOptions {
   /** Skip socket plugin during unit tests (avoids redis adapter init). */
@@ -144,6 +145,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(scheduledMatchupsRoutes);
   await app.register(discordInteractionsRoutes);
   await app.register(activeMatchesRoutes);
+  await app.register(skillRoutes);
   if (withGraphql) await app.register(graphqlPlugin);
 
   app.get('/health', async () => ({

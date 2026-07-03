@@ -1,4 +1,5 @@
 import type { BracketNode, FactionDto } from '@rizzotto/types';
+import { SKILL_BAND_META } from './skillBandMeta.js';
 
 interface MatchNodeProps {
   match: BracketNode;
@@ -14,6 +15,12 @@ interface MatchNodeProps {
   p1SlotLabel?: string | null;
   /** Label shown in slot 2 when player is not yet determined */
   p2SlotLabel?: string | null;
+  /** Tournament format — used to customise phase labels (e.g. "Division Final" for BALANCED_LIECHTENSTEIN) */
+  tournamentMode?: string;
+  /** Skill band (1..5) for player 1 — BALANCED_LIECHTENSTEIN only */
+  player1Band?: number;
+  /** Skill band (1..5) for player 2 — BALANCED_LIECHTENSTEIN only */
+  player2Band?: number;
 }
 
 /** Tiny avatar with initials fallback, sized for the cramped match node rows. */
@@ -58,6 +65,37 @@ function FactionIndicator({ faction }: { faction?: FactionDto | null }) {
   );
 }
 
+/**
+ * Coloured dot indicating a player's skill band in BALANCED_LIECHTENSTEIN matches.
+ * Shows a small filled circle in the band colour with a tooltip.
+ */
+function BandDot({ band }: { band: number }) {
+  const meta = SKILL_BAND_META[band];
+  if (!meta) return null;
+  return (
+    <span
+      title={`${meta.name} division`}
+      className={`ml-1 inline-block h-2 w-2 shrink-0 rounded-full ${meta.dotCls}`}
+    />
+  );
+}
+
+/**
+ * Upward arrows shown next to the lower-band player in a cross-band match.
+ * N = (higher band − lower band); arrow count visualises the gap magnitude.
+ */
+function UpArrows({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className="ml-1 shrink-0 text-[9px] text-stone-400 leading-none"
+      title={`${count} band${count > 1 ? 's' : ''} underdog`}
+    >
+      {'↑'.repeat(count)}
+    </span>
+  );
+}
+
 export const statusColors: Record<string, string> = {
   ONGOING:   'border-green-600 bg-green-900/40',
   COMPLETED: 'border-stone-600 bg-stone-800/60',
@@ -79,6 +117,9 @@ export function MatchNode({
   onClick,
   p1SlotLabel,
   p2SlotLabel,
+  tournamentMode,
+  player1Band,
+  player2Band,
 }: MatchNodeProps) {
   const isBye = match.status === 'BYE';
   const isForfeit = match.status === 'FORFEIT';
@@ -136,6 +177,14 @@ export function MatchNode({
       }`
     : '';
 
+  // Band markers + upward-arrows for BALANCED_LIECHTENSTEIN cross-band matches.
+  // Show only when both players have known bands.
+  const hasBands = player1Band != null && player2Band != null;
+  const bandDiff = hasBands ? player1Band - player2Band : 0;
+  // p1UpArrows > 0 → p1 is the underdog (lower band than p2)
+  const p1UpArrows = hasBands && bandDiff < 0 ? Math.abs(bandDiff) : 0;
+  const p2UpArrows = hasBands && bandDiff > 0 ? Math.abs(bandDiff) : 0;
+
   return (
     <div
       className={`w-full h-full ${outlineCls} rounded flex flex-col overflow-hidden ${hoverCls} relative`}
@@ -143,7 +192,7 @@ export function MatchNode({
     >
       {isGrandFinal && (
         <div className="absolute top-0 right-0 bg-rizzotto-gold-500/20 text-rizzotto-gold-400 text-[8px] font-bold uppercase tracking-wider px-1 rounded-bl border-l border-b border-rizzotto-gold-500/40">
-          Grand Final
+          {tournamentMode === 'BALANCED_LIECHTENSTEIN' ? 'Division Final' : 'Grand Final'}
         </div>
       )}
       {isSemiFinal && (
@@ -157,7 +206,7 @@ export function MatchNode({
         </div>
       )}
       {/* Player 1 row */}
-      <div className={`flex-1 flex items-center px-2 border-b border-stone-800`}>
+      <div className="flex-1 flex items-center px-2 border-b border-stone-800">
         {match.player1Id && <PlayerAvatar name={player1Name} avatarUrl={player1AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
@@ -177,6 +226,9 @@ export function MatchNode({
         {p1Dropped && (
           <span className="text-[9px] text-red-400 uppercase tracking-wider ml-1 font-semibold">out</span>
         )}
+        {/* Band dot + upward arrows for BALANCED_LIECHTENSTEIN */}
+        {player1Band != null && match.player1Id && <BandDot band={player1Band} />}
+        {p1UpArrows > 0 && <UpArrows count={p1UpArrows} />}
         {showFaction && match.player1Id && <FactionIndicator faction={player1Faction} />}
         {score1 && !p1Dropped && (
           <span
@@ -188,7 +240,7 @@ export function MatchNode({
       </div>
 
       {/* Player 2 row */}
-      <div className={`flex-1 flex items-center px-2`}>
+      <div className="flex-1 flex items-center px-2">
         {match.player2Id && <PlayerAvatar name={player2Name} avatarUrl={player2AvatarUrl} />}
         <span
           className={`flex-1 text-xs truncate ${
@@ -208,6 +260,9 @@ export function MatchNode({
         {p2Dropped && (
           <span className="text-[9px] text-red-400 uppercase tracking-wider ml-1 font-semibold">out</span>
         )}
+        {/* Band dot + upward arrows for BALANCED_LIECHTENSTEIN */}
+        {player2Band != null && match.player2Id && <BandDot band={player2Band} />}
+        {p2UpArrows > 0 && <UpArrows count={p2UpArrows} />}
         {showFaction && match.player2Id && <FactionIndicator faction={player2Faction} />}
         {score2 && !p2Dropped && (
           <span

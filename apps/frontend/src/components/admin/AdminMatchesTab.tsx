@@ -16,6 +16,7 @@ const FORMAT_LABELS: Record<string, string> = {
   SINGLE_ELIMINATION: 'SE',
   DOUBLE_ELIMINATION: 'DE',
   LIECHTENSTEIN: 'RR',
+  BALANCED_LIECHTENSTEIN: 'Bal.Liecht.',
 };
 
 function VoidButton({ match }: { match: AdminMatchRow }) {

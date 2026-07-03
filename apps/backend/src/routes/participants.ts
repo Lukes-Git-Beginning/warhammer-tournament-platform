@@ -12,6 +12,10 @@ import { addLateParticipant, setParticipantFactionOp } from '../lib/tournament-m
 const RegisterSchema = z.object({
   faction_id: z.string().min(1).optional(),
   faction_ids: z.array(z.string().min(1)).optional(), // TWO_D_THREE: exactly 3 distinct
+  // BALANCED_LIECHTENSTEIN: the division the player opts into (play-up). Never
+  // takes effect below their computed band — the effective band is max(computed,
+  // requested) at Start — so a too-low value here is simply ignored.
+  requested_band: z.number().int().min(1).max(5).optional(),
 });
 
 const CheckinSchema = z.object({
@@ -140,6 +144,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         faction_id: parsed.data.faction_id ?? null,
         faction_ids: factionIds,
         status: initialStatus,
+        requested_band: parsed.data.requested_band ?? null,
       };
       const participantSelect = {
         id: true,

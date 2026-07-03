@@ -59,7 +59,7 @@ export interface Tournament {
   name: string;
   description: string | null;
   poster_url?: string | null;
-  format: 'SINGLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN';
+  format: 'SINGLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN' | 'BALANCED_LIECHTENSTEIN';
   has_third_place_match?: boolean;
   mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
   status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
@@ -164,7 +164,7 @@ export interface MatchDecisionState {
 
 export interface TournamentCreate {
   name: string;
-  format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN';
+  format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN' | 'BALANCED_LIECHTENSTEIN';
   has_third_place_match?: boolean;
   mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
   start_date: string;
@@ -306,6 +306,66 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
 export function getMe(): Promise<UserMe> {
   return apiFetch<UserMe>('/api/users/me');
+}
+
+// --- Skill classification (N2) ---------------------------------------------
+
+export interface PlayerClassificationDto {
+  matchmakingSkill: number;
+  matchmakingBand: number;
+  gatingBand: number;
+  questionnaireFloor: number;
+  posteriorSe: number;
+  smurfSuspected: boolean;
+  generalSkill: number | null;
+  generalSkillSe: number | null;
+  matchmakingWinChance: number;
+  bandName: string;
+  hasQuestionnaire: boolean;
+}
+
+export interface CalibrationOption {
+  value: string;
+  label: string;
+  floor: number | null;
+}
+export interface CalibrationQuestionDto {
+  id: string;
+  prompt: string;
+  options: CalibrationOption[];
+}
+
+export function getPlayerClassification(id: string): Promise<PlayerClassificationDto> {
+  return apiFetch<PlayerClassificationDto>(`/api/players/${id}/classification`);
+}
+
+export function getCalibrationQuestions(): Promise<{ questions: CalibrationQuestionDto[] }> {
+  return apiFetch<{ questions: CalibrationQuestionDto[] }>('/api/calibration/questions');
+}
+
+export function saveCalibrationAnswers(
+  answers: Record<string, string>,
+): Promise<{ answers: Record<string, string>; classification?: PlayerClassificationDto }> {
+  return apiFetch('/api/me/calibration', {
+    method: 'POST',
+    body: JSON.stringify({ answers }),
+  });
+}
+
+export function getAdminCalibrationQuestions(): Promise<{
+  questions: CalibrationQuestionDto[];
+  defaults: CalibrationQuestionDto[];
+}> {
+  return apiFetch('/api/admin/calibration-questions');
+}
+
+export function putAdminCalibrationQuestions(
+  questions: CalibrationQuestionDto[],
+): Promise<{ questions: CalibrationQuestionDto[] }> {
+  return apiFetch('/api/admin/calibration-questions', {
+    method: 'PUT',
+    body: JSON.stringify({ questions }),
+  });
 }
 
 export function listTournaments(
@@ -1426,11 +1486,12 @@ export function getParticipants(slug: string): Promise<TournamentParticipantsRes
 
 export function registerForTournament(
   slug: string,
-  opts?: { factionId?: string; factionIds?: string[] },
+  opts?: { factionId?: string; factionIds?: string[]; requested_band?: number },
 ): Promise<{ id: string; status: ParticipantStatus }> {
   const body: Record<string, unknown> = {};
   if (opts?.factionId) body.faction_id = opts.factionId;
   if (opts?.factionIds) body.faction_ids = opts.factionIds;
+  if (opts?.requested_band != null) body.requested_band = opts.requested_band;
   return apiFetch<{ id: string; status: ParticipantStatus }>(
     `/api/tournaments/${slug}/register`,
     { method: 'POST', body: JSON.stringify(body) },

@@ -36,6 +36,7 @@ enum TournamentFormat {
   ROUND_ROBIN
   DOUBLE_ROUND_ROBIN
   LIECHTENSTEIN
+  BALANCED_LIECHTENSTEIN
 }
 
 enum TournamentMode {
@@ -197,6 +198,10 @@ model User {
   last_login         DateTime?
   onboarded_at       DateTime?
   onboarding_stage   Int       @default(0)
+  // Skill classification (N2): incrementally-built calibration questionnaire
+  // answers as a map of question id → chosen option value. The band is derived
+  // on-read from these + the current rating model, not stored.
+  calibration_answers Json?
   created_at         DateTime  @default(now())
   updated_at         DateTime  @updatedAt
   deleted_at         DateTime?
@@ -381,6 +386,12 @@ model TournamentParticipant {
   status          ParticipantStatus @default(REGISTERED)
   registered_at   DateTime          @default(now())
   lists_locked_at DateTime? // Q3: after host locks lists, army_list_id becomes immutable
+  // BALANCED_LIECHTENSTEIN: the player's skill division (1..5), fixed at Start.
+  // skill_band is the EFFECTIVE band (max of the computed band and requested_band);
+  // requested_band is the division the player opted into at registration (never
+  // below their computed band — play-up only). Both null for non-balanced formats.
+  skill_band      Int? // effective division, set at Start
+  requested_band  Int? // player's chosen division at registration (play-up)
   deleted_at      DateTime?
 
   tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
