@@ -225,23 +225,50 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
     const { page, pageSize, status, is_major, date_from, date_to } = parsed.data;
     const skip = (page - 1) * pageSize;
 
+    // Optional auth: identify the viewer so a host or co-host (and staff) can see
+    // their own unpublished drafts in the normal list. Anonymous → published only.
+    let viewerId: string | null = null;
+    let isStaff = false;
+    try {
+      await request.jwtVerify();
+      viewerId = request.user.sub;
+      isStaff = request.user.role === 'ADMIN' || request.user.role === 'MODERATOR';
+    } catch {
+      /* anonymous viewer — sees only published public tournaments */
+    }
+    const viewerKey = isStaff ? 'staff' : (viewerId ?? 'anon');
+
     const result = await cached(
       fastify.redis,
-      cacheKey('tournaments:list', { page, pageSize, status, is_major, date_from, date_to }),
+      cacheKey('tournaments:list', { page, pageSize, status, is_major, date_from, date_to, viewer: viewerKey }),
       async () => {
-        const where = {
-          deleted_at: null,
-          visibility: 'PUBLIC' as const,
-          ...(status !== undefined ? { status } : {}),
-          ...(is_major !== undefined ? { is_major } : {}),
-          ...(date_from !== undefined || date_to !== undefined
+        const dateFilter =
+          date_from !== undefined || date_to !== undefined
             ? {
                 start_date: {
                   ...(date_from !== undefined ? { gte: new Date(date_from) } : {}),
                   ...(date_to !== undefined ? { lte: new Date(date_to) } : {}),
                 },
               }
-            : {}),
+            : {};
+        // Everyone sees published PUBLIC tournaments; a signed-in host/co-host also
+        // sees their own (any status, incl. DRAFT); staff see everything.
+        const visibility = isStaff
+          ? {}
+          : {
+              OR: [
+                { visibility: 'PUBLIC' as const, status: { not: 'DRAFT' as const } },
+                ...(viewerId
+                  ? [{ host_id: viewerId }, { co_hosts: { some: { user_id: viewerId } } }]
+                  : []),
+              ],
+            };
+        const where = {
+          deleted_at: null,
+          ...(status !== undefined ? { status } : {}),
+          ...(is_major !== undefined ? { is_major } : {}),
+          ...dateFilter,
+          ...visibility,
         };
         const [tournaments, total] = await Promise.all([
           fastify.prisma.tournament.findMany({
