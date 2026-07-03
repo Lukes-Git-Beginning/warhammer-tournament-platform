@@ -434,6 +434,13 @@ export function TournamentCreateForm() {
         </div>
       )}
 
+      {form.format === 'BALANCED_LIECHTENSTEIN' && (
+        <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">
+          <p className="font-semibold text-rizzotto-gold-400">Balanced Liechtenstein — skill-matched, self-running</p>
+          <p>Each round, players are paired against others in their own skill division. The round count is set automatically from how many players check in (4–7: 3R, 8–15: 5R, 16+: 4R). When the group stage ends, every division runs its own playoff bracket sized to that division (TOP 2 / 4 / 8, each with a third-place match). All matches: BO1.</p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="min-w-0">
           <Label htmlFor="tcf-start" required>
@@ -547,11 +554,11 @@ export function TournamentCreateForm() {
           Match Mechanics
         </legend>
 
-        {(form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN' || form.format === 'BALANCED_LIECHTENSTEIN') ? (
+        {(form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN') ? (
           <>
-            {/* Rounds count — for Swiss, Liechtenstein, and Balanced Liechtenstein; Round Robin rounds are determined by participant count */}
-            {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN' || form.format === 'BALANCED_LIECHTENSTEIN') && <div>
-              <Label htmlFor="tcf-rounds">{form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : form.format === 'BALANCED_LIECHTENSTEIN' ? 'Balanced Liechtenstein Rounds' : 'Swiss Rounds'}</Label>
+            {/* Rounds count — for Swiss and Liechtenstein; Round Robin rounds are determined by participant count */}
+            {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN') && <div>
+              <Label htmlFor="tcf-rounds">{form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : 'Swiss Rounds'}</Label>
               <div className="flex items-center gap-3 mt-1">
                 <input
                   id="tcf-rounds"
@@ -611,7 +618,7 @@ export function TournamentCreateForm() {
             {/* Match formats */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
-                <Label htmlFor="tcf-swiss-fmt">{form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Format' : form.format === 'BALANCED_LIECHTENSTEIN' ? 'Balanced Liechtenstein Format' : 'Swiss Format'}</Label>
+                <Label htmlFor="tcf-swiss-fmt">{form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Format' : 'Swiss Format'}</Label>
                 <Select
                   id="tcf-swiss-fmt"
                   name="swiss_match_format"
@@ -651,7 +658,7 @@ export function TournamentCreateForm() {
               </div>
             </div>
           </>
-        ) : form.format !== 'AUTO_SWISS' ? (
+        ) : form.format !== 'AUTO_SWISS' && form.format !== 'BALANCED_LIECHTENSTEIN' ? (
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
