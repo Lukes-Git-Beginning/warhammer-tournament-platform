@@ -24,8 +24,11 @@
 //    shoved three bands into the lone Advanced player. The hold resolves over the
 //    next ticks as the pool fills; a big jump only happens once nothing closer can
 //    still arrive.
-//  - Only the immediately-previous opponent is excluded (no full rematch-free
-//    guarantee) — small fields alternate cleanly (B, C, B, C …).
+//  - Rematch vs. play-up is a cost trade-off: the immediately-previous opponent is
+//    excluded outright, but an EVENTUAL rematch (a repeat from an earlier round) is
+//    allowed at a cost of ~1.5 bands — a fresh one-band play-up beats a repeat, while
+//    a repeat beats a jump of two or more bands. This stops a tiny band (e.g. two New
+//    players) from cycling the same matchup every other round.
 //  - Pairing happens WITHIN a round pool only (both players at k-1 games).
 // ---------------------------------------------------------------------------
 
@@ -75,8 +78,10 @@ interface Progress {
   completed: number;
   /** Round of the current non-terminal match, or null when idle/waiting. */
   activeRound: number | null;
-  /** Opponent of the highest-round played match (for immediate-rematch exclusion). */
+  /** Opponent of the highest-round played match (the immediate-rematch hard block). */
   lastOpponentId: string | null;
+  /** Every opponent this player has faced (drives the soft eventual-rematch penalty). */
+  pastOpponents: Set<string>;
   lastPlayedRound: number;
 }
 
@@ -85,100 +90,82 @@ interface Waiter {
   userId: string;
   band: number;
   lastOpponentId: string | null;
+  pastOpponents: Set<string>;
 }
 
-function isRematch(a: Waiter, b: Waiter): boolean {
+/** How many bands of play-up an EVENTUAL rematch — a repeat of an opponent from an
+ *  earlier, non-consecutive round — is considered "worth". At 1.5 a player prefers a
+ *  fresh opponent one band up over replaying someone, but prefers replaying over a
+ *  jump of two or more bands. The immediately-previous opponent is never a candidate
+ *  at all (strict no-immediate-rematch). Alex-Spec 2026-07-03. */
+export const EVENTUAL_REMATCH_COST = 1.5;
+
+/** True when a and b faced each other in the round each just finished (hard block). */
+function isImmediateRematch(a: Waiter, b: Waiter): boolean {
   return a.lastOpponentId === b.userId || b.lastOpponentId === a.userId;
 }
 
-/**
- * Greedily pair a candidate list. For same-band pairing pass the band group; for
- * the cross-band fallback pass the leftovers sorted by band ascending, so the
- * first non-rematch partner found is always the nearest higher band (the weaker
- * player ascends). Returns the pairs plus whoever could not be paired.
- */
-function greedyPair(candidates: Waiter[]): { pairs: [Waiter, Waiter][]; leftovers: Waiter[] } {
-  const used = new Set<number>();
-  const pairs: [Waiter, Waiter][] = [];
-  for (let i = 0; i < candidates.length; i++) {
-    if (used.has(i)) continue;
-    for (let j = i + 1; j < candidates.length; j++) {
-      if (used.has(j)) continue;
-      if (!isRematch(candidates[i]!, candidates[j]!)) {
-        used.add(i);
-        used.add(j);
-        pairs.push([candidates[i]!, candidates[j]!]);
-        break;
-      }
-    }
-  }
-  const leftovers = candidates.filter((_, i) => !used.has(i));
-  return { pairs, leftovers };
+/** True when a and b have ever met — drives the soft eventual-rematch penalty. */
+function metBefore(a: Waiter, b: Waiter): boolean {
+  return a.pastOpponents.has(b.userId) || b.pastOpponents.has(a.userId);
 }
 
 /**
- * Pair one round pool. Same-band first (gap 0 is always ideal), then a nearest-band
- * cross-band pass for the surplus — but a jump of two or more bands is DEFERRED
- * while a strictly-closer opponent for either player is still due to arrive in this
- * pool (`incomingBands` = the bands of players finishing the previous round). That
- * makes the pool pair the earliest COMPATIBLE player rather than merely the earliest.
+ * Pair one round pool by minimum cost, where a pairing's cost is the band distance
+ * plus a penalty (EVENTUAL_REMATCH_COST) when the two have met before. That weighs
+ * the two soft constraints — repeating an opponent vs. playing up a band:
+ *   same band, fresh   0        1 band up, fresh   1
+ *   eventual rematch   1.5      2 bands up, fresh  2 …
+ * so a fresh one-band play-up beats a repeat, but a repeat beats a >=2-band jump.
+ * The immediately-previous opponent is excluded outright (strict no-rematch).
+ *
+ * A candidate pairing is DEFERRED while either player could still get a strictly
+ * cheaper one from a player finishing the previous round and joining this pool
+ * (`incomingBands`) — the pool pairs the earliest COMPATIBLE player, not the earliest.
  * A lone straggler holds while anyone is still incoming; otherwise the lowest band byes.
  */
 function pairPool(
   waiting: Waiter[],
   incomingBands: number[],
 ): { pairs: [Waiter, Waiter][]; byes: Waiter[] } {
-  const pairs: [Waiter, Waiter][] = [];
+  const cost = (a: Waiter, b: Waiter): number =>
+    Math.abs(a.band - b.band) + (metBefore(a, b) ? EVENTUAL_REMATCH_COST : 0);
 
-  // Pass 1 — within-band, lowest band first.
-  const byBand = new Map<number, Waiter[]>();
-  for (const w of waiting) {
-    const g = byBand.get(w.band) ?? [];
-    g.push(w);
-    byBand.set(w.band, g);
-  }
-  const leftovers: Waiter[] = [];
-  for (const band of [...byBand.keys()].sort((a, b) => a - b)) {
-    const { pairs: p, leftovers: l } = greedyPair(byBand.get(band)!);
-    pairs.push(...p);
-    leftovers.push(...l);
-  }
-
-  // Pass 2 — cross-band, nearest gap first. Defer a gap of >= 2 bands while a
-  // strictly-closer opponent for either player is still on the way (an incoming
-  // player finishing the previous round can never be an immediate rematch, so it
-  // is always a valid future partner). The deferred player holds and re-evaluates
-  // on the next tick, once the pool has filled a little more.
-  const incDist = (band: number): number =>
+  // Cheapest pairing either player could still get from an incoming opponent. An
+  // incoming player already finished this pool's round, so it is never an immediate
+  // rematch and (bar a rarer eventual rematch) fresh → approximate by band gap only.
+  const incBest = (band: number): number =>
     incomingBands.length === 0
       ? Infinity
       : Math.min(...incomingBands.map((ib) => Math.abs(ib - band)));
 
-  const candidates: Array<{ i: number; j: number; gap: number }> = [];
-  for (let i = 0; i < leftovers.length; i++) {
-    for (let j = i + 1; j < leftovers.length; j++) {
-      if (isRematch(leftovers[i]!, leftovers[j]!)) continue;
-      candidates.push({ i, j, gap: Math.abs(leftovers[i]!.band - leftovers[j]!.band) });
+  // All eligible pairs (immediate rematch excluded), cheapest first.
+  const candidates: Array<{ i: number; j: number; c: number }> = [];
+  for (let i = 0; i < waiting.length; i++) {
+    for (let j = i + 1; j < waiting.length; j++) {
+      if (isImmediateRematch(waiting[i]!, waiting[j]!)) continue;
+      candidates.push({ i, j, c: cost(waiting[i]!, waiting[j]!) });
     }
   }
-  // Nearest band gap first; tie-break by lower band for deterministic output.
-  candidates.sort((a, b) => a.gap - b.gap || leftovers[a.i]!.band - leftovers[b.i]!.band);
+  // Cheapest first; tie-break by lower band so the weaker surplus is placed first.
+  candidates.sort((a, b) => a.c - b.c || waiting[a.i]!.band - waiting[b.i]!.band);
 
+  const pairs: [Waiter, Waiter][] = [];
   const used = new Set<number>();
-  for (const { i, j, gap } of candidates) {
+  for (const { i, j, c } of candidates) {
     if (used.has(i) || used.has(j)) continue;
-    if (gap >= 2 && (incDist(leftovers[i]!.band) < gap || incDist(leftovers[j]!.band) < gap)) {
-      continue; // a strictly-closer opponent is still incoming → wait for them
+    if (incBest(waiting[i]!.band) < c || incBest(waiting[j]!.band) < c) {
+      continue; // a strictly cheaper opponent is still on the way → wait for them
     }
     used.add(i);
     used.add(j);
-    pairs.push([leftovers[i]!, leftovers[j]!]);
+    pairs.push([waiting[i]!, waiting[j]!]);
   }
 
-  const stuck = leftovers.filter((_, i) => !used.has(i));
+  const stuck = waiting.filter((_, i) => !used.has(i));
 
-  // Whatever remains: hold if reinforcements are still coming (a closer partner
-  // may yet arrive), else the lowest-band straggler takes the bye (Swiss odd-out).
+  // Whatever remains: hold if reinforcements are still coming (a cheaper partner may
+  // yet arrive), else the lowest-band straggler takes the bye (Swiss odd-out).
   const byes: Waiter[] = [];
   if (stuck.length > 0 && incomingBands.length === 0) {
     stuck.sort((a, b) => a.band - b.band);
@@ -212,6 +199,7 @@ export function planPairings(
         completed: 0,
         activeRound: null,
         lastOpponentId: null,
+        pastOpponents: new Set<string>(),
         lastPlayedRound: 0,
       };
       progress.set(userId, pr);
@@ -231,6 +219,7 @@ export function planPairings(
       const pr = ensure(me);
       if (ADVANCING.has(m.status)) {
         pr.completed += 1;
+        if (opp && roster.has(opp)) pr.pastOpponents.add(opp);
         if (m.round >= pr.lastPlayedRound) {
           pr.lastPlayedRound = m.round;
           pr.lastOpponentId = opp && roster.has(opp) ? opp : null;
@@ -259,7 +248,12 @@ export function planPairings(
     if (pr.completed >= roundsCount) continue; // done — no more pairing
     const round = pr.completed + 1;
     const list = waitingByRound.get(round) ?? [];
-    list.push({ userId: pr.userId, band: pr.band, lastOpponentId: pr.lastOpponentId });
+    list.push({
+      userId: pr.userId,
+      band: pr.band,
+      lastOpponentId: pr.lastOpponentId,
+      pastOpponents: pr.pastOpponents,
+    });
     waitingByRound.set(round, list);
   }
 

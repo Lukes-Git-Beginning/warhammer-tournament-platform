@@ -160,6 +160,53 @@ describe('planPairings — earliest COMPATIBLE, not earliest', () => {
   });
 });
 
+describe('planPairings — eventual rematch vs playing up', () => {
+  // History helpers: a,b (New) met in round 1, then each played up in round 2, so by
+  // round 3 they are an *eventual* (not immediate) rematch of each other.
+  const pairSet = (pl: { player1_id: string; player2_id: string }) =>
+    new Set([pl.player1_id, pl.player2_id]);
+
+  it('prefers a fresh one-band play-up over replaying an earlier opponent', () => {
+    // Round 3 pool {a,b,c}: a↔b met in round 1 (eventual rematch, cost 1.5); c is a
+    // fresh Beginner one band up (cost 1). The cheaper fresh play-up must win.
+    const matches: BalancedMatchRow[] = [
+      done(1, 'a', 'b', 'a'),
+      done(1, 'c', null, 'c'),
+      done(2, 'a', 'c', 'a'),
+      done(2, 'b', null, 'b'),
+    ];
+    const plan = planPairings([P('a', 1), P('b', 1), P('c', 2)], matches, 3);
+    expect(plan.pairings).toHaveLength(1);
+    expect(pairSet(plan.pairings[0]!)).toEqual(new Set(['b', 'c'])); // fresh gap-1
+    expect(pairSet(plan.pairings[0]!)).not.toEqual(new Set(['a', 'b'])); // not the repeat
+  });
+
+  it('prefers replaying an earlier opponent over a two-band play-up', () => {
+    // Round 3 pool {a,b,d}: a↔b eventual rematch (cost 1.5); the only fresh option for
+    // b is d, two bands up (cost 2). The repeat is now the cheaper, better game.
+    const matches: BalancedMatchRow[] = [
+      done(1, 'a', 'b', 'a'),
+      done(1, 'd', null, 'd'),
+      done(2, 'a', 'd', 'a'),
+      done(2, 'b', null, 'b'),
+    ];
+    const plan = planPairings([P('a', 1), P('b', 1), P('d', 3)], matches, 3);
+    expect(plan.pairings).toHaveLength(1);
+    expect(pairSet(plan.pairings[0]!)).toEqual(new Set(['a', 'b'])); // the eventual rematch
+    expect(plan.byes.map((x) => x.player_id)).toEqual(['d']);
+  });
+
+  it('still blocks an immediate rematch outright, even to avoid a three-band jump', () => {
+    // a,b just played each other (round 1); r is idle after a bye. An immediate
+    // rematch is forbidden, so one New plays up to Advanced rather than replay.
+    const matches: BalancedMatchRow[] = [done(1, 'a', 'b', 'a'), done(1, 'r', null, 'r')];
+    const plan = planPairings([P('a', 1), P('b', 1), P('r', 4)], matches, 3);
+    expect(plan.pairings).toHaveLength(1);
+    expect(pairSet(plan.pairings[0]!)).not.toEqual(new Set(['a', 'b'])); // no immediate rematch
+    expect(pairSet(plan.pairings[0]!).has('r')).toBe(true); // the play-up happened
+  });
+});
+
 describe('planPairings — completion', () => {
   it('reports complete when everyone has played all rounds', () => {
     const matches: BalancedMatchRow[] = [done(1, 'a', 'b', 'a')];
