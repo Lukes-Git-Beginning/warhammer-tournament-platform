@@ -263,6 +263,37 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const userId = request.user.sub;
 
+    const appReturnTo = query['app_return_to'];
+    const redirectTarget =
+      appReturnTo && appReturnTo.startsWith('/') ? `${frontendUrl}${appReturnTo}` : frontendUrl;
+
+    // Steam links are sticky: once a user has verified a Steam account we don't let them
+    // silently swap it for a different one (an audit-free account-switch is a policy/integrity
+    // hole). Switching now requires an admin Steam reset (DELETE /api/admin/users/:id/steam),
+    // after which the user re-links. Re-verifying the SAME account (refresh) stays allowed.
+    const existingLink = await fastify.prisma.steamLink.findUnique({
+      where: { user_id: userId },
+      select: { steam_id: true },
+    });
+    if (existingLink && existingLink.steam_id !== steamId) {
+      request.log.warn(
+        { userId, existingSteamId: existingLink.steam_id, attemptedSteamId: steamId },
+        'Steam re-link blocked: account already linked to a different Steam ID',
+      );
+      await fastify.prisma.auditLog.create({
+        data: {
+          entity_type: 'User',
+          entity_id: userId,
+          action: 'STEAM_LINK_BLOCKED',
+          actor_id: userId,
+          old_value: { steam_id: existingLink.steam_id },
+          new_value: { attempted_steam_id: steamId },
+        },
+      });
+      const sep = redirectTarget.includes('?') ? '&' : '?';
+      return reply.redirect(`${redirectTarget}${sep}steam_error=already_linked`);
+    }
+
     // Optionally fetch Steam profile via Web API
     let persona = `Steam User ${steamId}`;
     let avatarUrl: string | null = null;
@@ -296,7 +327,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    // Persist SteamLink (upsert — user may re-link)
+    // Persist SteamLink. At this point it's either the first link or a refresh of the same
+    // account (a different account was already rejected above).
     await fastify.prisma.steamLink.upsert({
       where: { user_id: userId },
       create: {
@@ -316,11 +348,21 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
 
-    request.log.info({ userId, steamId }, 'Steam account linked');
+    // Audit the first-time link so admins have a trail of when the account was established.
+    if (!existingLink) {
+      await fastify.prisma.auditLog.create({
+        data: {
+          entity_type: 'User',
+          entity_id: userId,
+          action: 'STEAM_LINK',
+          actor_id: userId,
+          old_value: { steam_id: null },
+          new_value: { steam_id: steamId },
+        },
+      });
+    }
 
-    const appReturnTo = query['app_return_to'];
-    const redirectTarget =
-      appReturnTo && appReturnTo.startsWith('/') ? `${frontendUrl}${appReturnTo}` : frontendUrl;
+    request.log.info({ userId, steamId }, 'Steam account linked');
 
     return reply.redirect(redirectTarget);
   });

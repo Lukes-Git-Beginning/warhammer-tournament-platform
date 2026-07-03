@@ -65,7 +65,6 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
             select: {
               mode: true,
               faction_allowlist: { select: { faction_id: true } },
-              restricted_factions: { select: { faction_id: true } },
             },
           },
           games: {
@@ -93,13 +92,11 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in MATRIX mode', statusCode: 422 });
       }
 
-      // Validate faction picks against tournament restrictions
+      // Validate faction picks against the tournament allowlist. Note: restricted_factions
+      // are NOT banned — they remain playable but don't count for the leaderboard (enforced
+      // at game finalization in match-games.ts). Only a non-empty allowlist is a hard ban.
       const allowlist = (match.tournament?.faction_allowlist ?? []).map((f) => f.faction_id);
-      const restricted = (match.tournament?.restricted_factions ?? []).map((f) => f.faction_id);
       for (const factionId of factions) {
-        if (restricted.includes(factionId)) {
-          return reply.code(400).send({ error: 'BadRequest', message: `Faction "${factionId}" is banned in this tournament`, statusCode: 400 });
-        }
         if (allowlist.length > 0 && !allowlist.includes(factionId)) {
           return reply.code(400).send({ error: 'BadRequest', message: `Faction "${factionId}" is not permitted in this tournament`, statusCode: 400 });
         }
