@@ -352,6 +352,22 @@ export function saveCalibrationAnswers(
   });
 }
 
+export function getAdminCalibrationQuestions(): Promise<{
+  questions: CalibrationQuestionDto[];
+  defaults: CalibrationQuestionDto[];
+}> {
+  return apiFetch('/api/admin/calibration-questions');
+}
+
+export function putAdminCalibrationQuestions(
+  questions: CalibrationQuestionDto[],
+): Promise<{ questions: CalibrationQuestionDto[] }> {
+  return apiFetch('/api/admin/calibration-questions', {
+    method: 'PUT',
+    body: JSON.stringify({ questions }),
+  });
+}
+
 export function listTournaments(
   page = 1,
   pageSize = 20,
