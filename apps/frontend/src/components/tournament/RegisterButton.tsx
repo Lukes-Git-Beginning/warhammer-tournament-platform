@@ -207,6 +207,8 @@ function BandPickerDialog({
             </div>
           ) : (
             <div className="space-y-2 py-2">
+              {/* Highest division first (Top → New); each row keeps its own level via
+                  the original index, only the display order is reversed. */}
               {BANDS.map((band, i) => {
                 // i is 0-based; currentBand is 1-based → compare i+1 vs currentBand
                 const bandNumber = i + 1;
@@ -236,7 +238,7 @@ function BandPickerDialog({
                     )}
                   </button>
                 );
-              })}
+              }).reverse()}
             </div>
           )}
 

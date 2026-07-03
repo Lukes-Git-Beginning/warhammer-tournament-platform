@@ -647,7 +647,7 @@ export function TournamentEditPage() {
   // Render
   // ---------------------------------------------------------------------------
 
-  const isSwissFamily = form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN' || form.format === 'BALANCED_LIECHTENSTEIN';
+  const isSwissFamily = form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN';
   const isAutoSwiss = form.format === 'AUTO_SWISS';
 
   const actionButtons = (
@@ -840,10 +840,10 @@ export function TournamentEditPage() {
 
           {isSwissFamily ? (
             <>
-              {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN' || form.format === 'BALANCED_LIECHTENSTEIN') && (
+              {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN') && (
                 <div>
                   <Label htmlFor="tef-rounds">
-                    {form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : form.format === 'BALANCED_LIECHTENSTEIN' ? 'Balanced Liechtenstein Rounds' : 'Swiss Rounds'}
+                    {form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : 'Swiss Rounds'}
                   </Label>
                   <div className="flex items-center gap-3 mt-1">
                     <input
@@ -902,7 +902,7 @@ export function TournamentEditPage() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <Label htmlFor="tef-swiss-fmt">
-                    {form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Format' : form.format === 'BALANCED_LIECHTENSTEIN' ? 'Balanced Liechtenstein Format' : 'Swiss Format'}
+                    {form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Format' : 'Swiss Format'}
                   </Label>
                   <Select id="tef-swiss-fmt" name="swiss_match_format" value={form.swiss_match_format} onChange={handleChange} disabled={ongoingLocked}>
                     <option value="BO1">Best of 1</option>
@@ -928,6 +928,11 @@ export function TournamentEditPage() {
                 </div>
               </div>
             </>
+          ) : form.format === 'BALANCED_LIECHTENSTEIN' ? (
+            <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">
+              <p className="font-semibold text-rizzotto-gold-400">Balanced Liechtenstein — skill-matched, self-running</p>
+              <p>Each round, players are paired against others in their own skill division. The round count is set automatically from how many players check in (4–7: 3R, 8–15: 5R, 16+: 4R). When the group stage ends, every division runs its own playoff bracket sized to that division (TOP 2 / 4 / 8, each with a third-place match). All matches: BO1.</p>
+            </div>
           ) : !isAutoSwiss ? (
             <>
               <div>
