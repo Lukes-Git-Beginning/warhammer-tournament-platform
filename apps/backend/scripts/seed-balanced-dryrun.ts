@@ -6,11 +6,21 @@
 
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@rizzotto/db';
-import { planPairings, type BalancedMatchRow } from '../src/lib/balanced-liechtenstein.js';
+import {
+  planPairings,
+  formDivisionPools,
+  DEFAULT_BAND,
+  type BalancedMatchRow,
+} from '../src/lib/balanced-liechtenstein.js';
+import {
+  computeSwissStandings,
+  sortSwissStandings,
+  type CompletedMatchRecord,
+} from '../src/lib/swiss.js';
 
 const SLUG = 'dev-balanced-demo';
 const ROUNDS = 3;
-const BANDS = [1, 1, 2, 2, 4, 4];
+const BANDS = [4, 4, 4, 4, 2, 2, 2, 2]; // two even divisions
 
 async function main() {
   const prior = await prisma.tournament.findUnique({ where: { slug: SLUG }, select: { id: true } });
@@ -69,9 +79,11 @@ async function main() {
     return ms.map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, status: m.status }));
   }
 
-  async function createFromPlan(finish: boolean) {
+  async function createFromPlan(): Promise<number> {
     const plan = planPairings(participants, await readMatches(), ROUNDS);
     for (const p of plan.pairings) {
+      // Winner alternates a bit so the standings are not a straight column.
+      const winner = matchNo % 3 === 0 ? p.player2_id : p.player1_id;
       await prisma.match.create({
         data: {
           id: randomUUID(),
@@ -80,8 +92,8 @@ async function main() {
           match_number: ++matchNo,
           player1_id: p.player1_id,
           player2_id: p.player2_id,
-          status: finish ? 'COMPLETED' : 'PENDING',
-          winner_id: finish ? p.player1_id : null,
+          status: 'COMPLETED',
+          winner_id: winner,
         },
       });
     }
@@ -99,14 +111,48 @@ async function main() {
         },
       });
     }
+    return plan.pairings.length + plan.byes.length;
   }
 
-  await createFromPlan(true); // round 1 → completed
-  await createFromPlan(true); // round 2 → completed
-  await createFromPlan(false); // round 3 → in progress
+  // Play the whole group phase to completion.
+  while ((await createFromPlan()) > 0) {
+    /* keep pairing + finishing rounds until everyone has played all rounds */
+  }
+
+  // Division playoffs: rank by Swiss standings, form pools, create the finals.
+  const full = await prisma.match.findMany({
+    where: { tournament_id: tournament.id },
+    select: { round: true, player1_id: true, player2_id: true, winner_id: true, status: true },
+  });
+  const records: CompletedMatchRecord[] = full
+    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE')
+    .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
+  const sorted = sortSwissStandings(
+    computeSwissStandings(users.map((u) => u.id), records),
+    records,
+  );
+  const bandByUser = new Map(users.map((u, i) => [u.id, BANDS[i] ?? DEFAULT_BAND]));
+  const ranked = sorted.map((s, i) => ({ userId: s.userId, band: bandByUser.get(s.userId) ?? DEFAULT_BAND, rank: i + 1 }));
+  const pools = formDivisionPools(ranked);
+  const playoffRound = ROUNDS + 1;
+  for (const pool of pools) {
+    if (!pool.finalists) continue;
+    await prisma.match.create({
+      data: {
+        id: randomUUID(),
+        tournament_id: tournament.id,
+        round: playoffRound,
+        match_number: ++matchNo,
+        player1_id: pool.finalists[0],
+        player2_id: pool.finalists[1],
+        status: 'PENDING',
+        phase: 'PLAYOFF_FINAL',
+      },
+    });
+  }
 
   const total = await prisma.match.count({ where: { tournament_id: tournament.id } });
-  console.log(`Seeded '${SLUG}' (${total} matches across up to ${ROUNDS} rounds).`);
+  console.log(`Seeded '${SLUG}' (${total} matches, ${pools.length} divisions, ${pools.filter((p) => p.finalists).length} finals).`);
   await prisma.$disconnect();
 }
 

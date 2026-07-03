@@ -198,7 +198,11 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     lastSwissRoundDone &&
     !hasPlayoffMatches;
   const advanceLabel =
-    playoffFormat === 'TOP8' ? 'Advance to Quarterfinals' : 'Advance to Semifinals';
+    format === 'BALANCED_LIECHTENSTEIN'
+      ? 'Start Division Playoffs'
+      : playoffFormat === 'TOP8'
+        ? 'Advance to Quarterfinals'
+        : 'Advance to Semifinals';
 
   // Advance to next playoff round (QF→SF or SF→Final): shown when current playoff
   // round is fully done and no Final match exists yet.
@@ -413,6 +417,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                   players={players}
                   factionMap={factionMap}
                   tournamentMode={data.mode}
+                  format={format}
                   onMatchClick={(matchId) => {
                     const m = data.matches.find((x) => x.matchId === matchId);
                     if (canManage) {

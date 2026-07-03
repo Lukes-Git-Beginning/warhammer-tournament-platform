@@ -28,6 +28,8 @@ interface SVGBracketProps {
   players?: Map<string, BracketPlayerInfo>;
   factionMap?: Map<string, FactionDto>;
   tournamentMode?: string;
+  /** Tournament format (e.g. 'BALANCED_LIECHTENSTEIN') — distinct from match mode */
+  format?: string;
   onMatchClick?: (matchId: string) => void;
 }
 
@@ -126,7 +128,7 @@ export function computeSlotLabels(
   return slotLabels;
 }
 
-export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchClick }: SVGBracketProps) {
+export function SVGBracket({ data, players, factionMap, tournamentMode, format, onMatchClick }: SVGBracketProps) {
   const isSft = tournamentMode === 'SFT';
   const layout = computeBracketLayout(data.matches);
 
@@ -206,6 +208,7 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, onMatchC
                 onClick={onMatchClick ? () => onMatchClick(m.matchId) : undefined}
                 p1SlotLabel={labels?.p1}
                 p2SlotLabel={labels?.p2}
+                tournamentMode={format}
               />
             </div>
           </foreignObject>

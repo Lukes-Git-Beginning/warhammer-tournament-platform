@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import type { FactionDto, SwissMeta } from '@rizzotto/types';
@@ -10,6 +10,17 @@ const PLACEMENT_BADGE: Record<1 | 2 | 3, { label: string; className: string }> =
   1: { label: '1ST', className: 'text-rizzotto-gold-400 border-rizzotto-gold-500/50 bg-rizzotto-gold-500/10' },
   2: { label: '2ND', className: 'text-stone-300 border-stone-500/40 bg-stone-700/20' },
   3: { label: '3RD', className: 'text-orange-500 border-orange-700/40 bg-orange-950/30' },
+};
+
+// Skill band 1..5 → display name + Tailwind colour classes.
+// Colour progression: iron (1) → bronze (2) → muted gold (3) → bright gold (4) → forge glow (5).
+// Consistent with PlayerLevelScale.tsx BANDS array.
+const SKILL_BAND_META: Record<number, { name: string; textCls: string; borderCls: string; bgCls: string }> = {
+  1: { name: 'New',          textCls: 'text-stone-400',             borderCls: 'border-stone-600/60',            bgCls: 'bg-stone-700/20' },
+  2: { name: 'Beginner',     textCls: 'text-amber-700',             borderCls: 'border-amber-800/60',            bgCls: 'bg-amber-950/30' },
+  3: { name: 'Intermediate', textCls: 'text-rizzotto-gold-600',     borderCls: 'border-rizzotto-gold-600/50',    bgCls: 'bg-rizzotto-gold-600/10' },
+  4: { name: 'Advanced',     textCls: 'text-rizzotto-gold-400',     borderCls: 'border-rizzotto-gold-400/60',    bgCls: 'bg-rizzotto-gold-500/10' },
+  5: { name: 'Top',          textCls: 'text-orange-300',            borderCls: 'border-orange-400/60',           bgCls: 'bg-orange-500/10' },
 };
 
 interface SwissStandingsProps {
@@ -211,8 +222,10 @@ export function SwissStandings({
               const placementKey = (isCompleted && rank <= 3 && !isDropped ? rank : undefined) as 1 | 2 | 3 | undefined;
               const badge = placementKey ? PLACEMENT_BADGE[placementKey] : null;
 
+              const skillBandMeta = entry.skillBand != null ? SKILL_BAND_META[entry.skillBand] : null;
+
               return (
-                <>
+                <Fragment key={entry.userId}>
                   {/* GF divider: after confirmed finalists */}
                   {showFinalsDivider && rank === finalsDividerAfterRank + 1 && (
                     <Divider label="Advance to Grand Final" colSpan={colCount} />
@@ -226,7 +239,6 @@ export function SwissStandings({
                     <Divider label="Advance to Quarterfinals" colSpan={colCount} />
                   )}
                   <tr
-                    key={entry.userId}
                     className={`hover:bg-stone-800/30 transition-colors ${isFinalist ? 'bg-rizzotto-gold-500/5' : ''} ${isDropped || isNeverCheckedIn ? 'opacity-50' : ''}`}
                   >
                     <td className="px-4 py-2 text-stone-500">{rank}</td>
@@ -243,6 +255,14 @@ export function SwissStandings({
                         {badge && (
                           <span className={`ml-0.5 rounded border px-1.5 py-px text-[10px] font-bold uppercase tracking-wider ${badge.className}`}>
                             {badge.label}
+                          </span>
+                        )}
+                        {skillBandMeta && (
+                          <span
+                            className={`ml-0.5 rounded border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wider ${skillBandMeta.textCls} ${skillBandMeta.borderCls} ${skillBandMeta.bgCls}`}
+                            title={`Skill band: ${skillBandMeta.name}`}
+                          >
+                            {skillBandMeta.name}
                           </span>
                         )}
                         {isDropped && (
@@ -354,7 +374,7 @@ export function SwissStandings({
                     <td className="px-4 py-2 text-right text-stone-400 tabular-nums">{entry.gamesLost}</td>
                     <td className="px-4 py-2 text-right text-stone-500 tabular-nums text-xs">{entry.buchholz.toFixed(1)}</td>
                   </tr>
-                </>
+                </Fragment>
               );
             })}
           </tbody>

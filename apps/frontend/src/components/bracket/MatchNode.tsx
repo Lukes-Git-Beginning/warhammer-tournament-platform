@@ -14,6 +14,8 @@ interface MatchNodeProps {
   p1SlotLabel?: string | null;
   /** Label shown in slot 2 when player is not yet determined */
   p2SlotLabel?: string | null;
+  /** Tournament format — used to customise phase labels (e.g. "Division Final" for BALANCED_LIECHTENSTEIN) */
+  tournamentMode?: string;
 }
 
 /** Tiny avatar with initials fallback, sized for the cramped match node rows. */
@@ -79,6 +81,7 @@ export function MatchNode({
   onClick,
   p1SlotLabel,
   p2SlotLabel,
+  tournamentMode,
 }: MatchNodeProps) {
   const isBye = match.status === 'BYE';
   const isForfeit = match.status === 'FORFEIT';
@@ -143,7 +146,7 @@ export function MatchNode({
     >
       {isGrandFinal && (
         <div className="absolute top-0 right-0 bg-rizzotto-gold-500/20 text-rizzotto-gold-400 text-[8px] font-bold uppercase tracking-wider px-1 rounded-bl border-l border-b border-rizzotto-gold-500/40">
-          Grand Final
+          {tournamentMode === 'BALANCED_LIECHTENSTEIN' ? 'Division Final' : 'Grand Final'}
         </div>
       )}
       {isSemiFinal && (
