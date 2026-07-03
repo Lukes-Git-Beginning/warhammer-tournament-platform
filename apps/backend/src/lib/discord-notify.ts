@@ -456,9 +456,13 @@ export async function notifyMatchesCreated(
     if (!tournament) return;
 
     const playable = matches.filter((m) => m.player1_id && m.player2_id);
-    if (playable.length === 0) return;
+    const byeMatches = matches.filter((m) => m.player1_id && !m.player2_id);
+    if (playable.length === 0 && byeMatches.length === 0) return;
 
-    const userIds = [...new Set(playable.flatMap((m) => [m.player1_id as string, m.player2_id as string]))];
+    const userIds = [...new Set([
+      ...playable.flatMap((m) => [m.player1_id as string, m.player2_id as string]),
+      ...byeMatches.map((m) => m.player1_id as string),
+    ])];
     const users = await prisma.user.findMany({
       where: { id: { in: userIds } },
       select: { id: true, discord_id: true, username: true },
@@ -478,17 +482,63 @@ export async function notifyMatchesCreated(
         map: null,
       });
     }
-    if (pairings.length === 0) return;
 
     const phaseRows = await prisma.match.findMany({
-      where: { id: { in: playable.map((m) => m.id) } },
+      where: { id: { in: matches.map((m) => m.id) } },
       select: { phase: true },
     });
     const roundLabel = playoffRoundLabel(phaseRows.map((r) => r.phase));
 
-    await notifyRoundPairings(tournament, round, pairings, roundLabel ?? undefined);
+    if (pairings.length > 0) {
+      await notifyRoundPairings(tournament, round, pairings, roundLabel ?? undefined);
+    }
+
+    // Bye players advance automatically — encouraging DM. Elimination on the final
+    // Swiss round is handled in auto-swiss-service (it has the standings), so here
+    // (round 1 / playoff byes) it's always "you advance".
+    for (const m of byeMatches) {
+      const p = byId.get(m.player1_id as string);
+      if (p?.discord_id) {
+        await notifyBye(
+          { name: tournament.name, slug: tournament.slug },
+          round,
+          { discord_id: p.discord_id, username: p.username },
+          { eliminated: false, roundLabel: roundLabel ?? undefined },
+        );
+      }
+    }
   } catch (err) {
     console.warn('[discord-notify] notifyMatchesCreated error (non-fatal):', err);
+  }
+}
+
+/**
+ * DM the player who drew a bye this round. Encouraging by default; if it's the final
+ * Swiss round and they can no longer reach the playoffs, gently tell them their run is
+ * over and point them at the ongoing tournament (to catch a stream of the rest).
+ */
+export async function notifyBye(
+  tournament: { name: string; slug: string },
+  round: number,
+  byePlayer: { discord_id: string; username: string },
+  opts: { eliminated: boolean; roundLabel?: string },
+): Promise<void> {
+  const token = getToken();
+  if (!token) return;
+  const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
+  const label = opts.roundLabel ?? `Round ${round}`;
+  const msg = opts.eliminated
+    ? `**[RizzOtto's Arena] Bye — ${tournament.name}**\n` +
+      `You drew a bye in ${label}, and that's a wrap on your run this time — a playoff spot is just out of reach now. ` +
+      `No shame in it at all: the pairings roll the dice, and someone always draws the short straw. 🎲 Thanks for battling — GG!\n` +
+      `The tournament rolls on without you in the fight — see if the remaining matches are being streamed and enjoy the show: <${url}>`
+    : `**[RizzOtto's Arena] Bye — ${tournament.name}**\n` +
+      `You drew a bye in ${label} — a free win, and honestly a well-earned breather. ☕ ` +
+      `You advance automatically, so rest up and sharpen your blades — you're back in the fray next round. Standings: <${url}>`;
+  try {
+    await sendDm(byePlayer.discord_id, msg);
+  } catch (err) {
+    console.warn('[discord-notify] notifyBye error (non-fatal):', err);
   }
 }
 
