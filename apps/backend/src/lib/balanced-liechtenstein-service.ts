@@ -40,7 +40,6 @@ export async function assignSkillBandsForTournament(
     where: { is_active: true },
     select: { id: true },
   });
-  if (!season) return; // no active season → bands stay null → DEFAULT_BAND at pairing
 
   const participants = await fastify.prisma.tournamentParticipant.findMany({
     where: {
@@ -48,16 +47,27 @@ export async function assignSkillBandsForTournament(
       deleted_at: null,
       status: { in: ['REGISTERED', 'CHECKED_IN'] },
     },
-    select: { id: true, user_id: true },
+    select: { id: true, user_id: true, requested_band: true },
   });
 
   for (const p of participants) {
     try {
-      const cls = await getPlayerClassification(fastify.prisma, fastify.redis, season.id, p.user_id);
-      await fastify.prisma.tournamentParticipant.update({
-        where: { id: p.id },
-        data: { skill_band: cls.matchmakingBand },
-      });
+      // Computed band from the classification (needs an active season); when there
+      // is none, fall back to the player's own choice.
+      let computed = 0;
+      if (season) {
+        const cls = await getPlayerClassification(fastify.prisma, fastify.redis, season.id, p.user_id);
+        computed = cls.matchmakingBand;
+      }
+      // Effective band = the higher of the computed band and the requested one —
+      // play-up only, so a player can enter a higher division but never a lower one.
+      const effective = Math.max(computed, p.requested_band ?? 0);
+      if (effective > 0) {
+        await fastify.prisma.tournamentParticipant.update({
+          where: { id: p.id },
+          data: { skill_band: effective },
+        });
+      }
     } catch (err) {
       fastify.log.warn({ err, userId: p.user_id }, 'balanced skill-band assignment failed');
     }

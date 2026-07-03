@@ -386,9 +386,12 @@ model TournamentParticipant {
   status          ParticipantStatus @default(REGISTERED)
   registered_at   DateTime          @default(now())
   lists_locked_at DateTime? // Q3: after host locks lists, army_list_id becomes immutable
-  // BALANCED_LIECHTENSTEIN: the player's skill division (matchmakingBand 1..5),
-  // fixed at registration. Drives skill-based pairing + division playoffs.
-  skill_band      Int? // null for non-balanced formats
+  // BALANCED_LIECHTENSTEIN: the player's skill division (1..5), fixed at Start.
+  // skill_band is the EFFECTIVE band (max of the computed band and requested_band);
+  // requested_band is the division the player opted into at registration (never
+  // below their computed band — play-up only). Both null for non-balanced formats.
+  skill_band      Int? // effective division, set at Start
+  requested_band  Int? // player's chosen division at registration (play-up)
   deleted_at      DateTime?
 
   tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
