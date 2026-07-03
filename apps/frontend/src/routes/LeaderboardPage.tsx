@@ -17,7 +17,34 @@ import { EmptyState } from '@/components/ui/empty-state.js';
 
 type Tab = 'season' | 'all-time' | 'winrate';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 1000; // load every rank on one page; pagination is a fallback past 1000
+
+function normalize(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+function LeaderboardSearch({
+  value,
+  onChange,
+  count,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  count: number;
+}) {
+  return (
+    <div className="mb-4 flex items-center gap-3">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search player…"
+        className="w-full max-w-sm rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 placeholder:text-stone-500 focus:border-rizzotto-gold-500 focus:outline-none"
+      />
+      <span className="whitespace-nowrap text-xs text-stone-500">{count} shown</span>
+    </div>
+  );
+}
 
 function Avatar({ url, username }: { url: string | null; username: string }) {
   if (!url) {
@@ -61,12 +88,17 @@ function SeasonTab() {
   const activeSeason = seasons.find((s) => s.is_active);
   const effectiveSeasonId = selectedSeasonId ?? activeSeason?.id;
 
+  const [search, setSearch] = useState('');
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['leaderboard', effectiveSeasonId, page],
     queryFn: () => getLeaderboard({ seasonId: effectiveSeasonId, page, pageSize: PAGE_SIZE }),
   });
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+  const seasonFiltered = (data?.entries ?? []).filter((e) =>
+    normalize(e.displayName).includes(normalize(search)),
+  );
 
   return (
     <div>
@@ -95,8 +127,10 @@ function SeasonTab() {
         </select>
       </div>
 
+      <LeaderboardSearch value={search} onChange={setSearch} count={seasonFiltered.length} />
+
       <DynamicLeaderboardTable
-        entries={data?.entries ?? []}
+        entries={seasonFiltered}
         isLoading={isLoading}
         error={error}
         page={page}
@@ -261,6 +295,7 @@ function DynamicLeaderboardTable({
 
 function AllTimeTab() {
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['leaderboard-all-time', page],
@@ -268,17 +303,23 @@ function AllTimeTab() {
   });
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+  const allTimeFiltered = (data?.entries ?? []).filter((e) =>
+    normalize(e.user.username).includes(normalize(search)),
+  );
 
   return (
-    <LeaderboardTable
-      entries={data?.entries ?? []}
-      isLoading={isLoading}
-      error={error}
-      extraColumn="seasons_participated"
-      page={page}
-      totalPages={totalPages}
-      onPageChange={setPage}
-    />
+    <div>
+      <LeaderboardSearch value={search} onChange={setSearch} count={allTimeFiltered.length} />
+      <LeaderboardTable
+        entries={allTimeFiltered}
+        isLoading={isLoading}
+        error={error}
+        extraColumn="seasons_participated"
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+      />
+    </div>
   );
 }
 
@@ -303,6 +344,8 @@ function ModeTab({ mode }: ModeTabProps) {
   const activeSeason = seasons.find((s) => s.is_active);
   const effectiveSeasonId = selectedSeasonId ?? activeSeason?.id;
 
+  const [search, setSearch] = useState('');
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['leaderboard-mode', mode, effectiveSeasonId, page],
     queryFn: () =>
@@ -311,6 +354,7 @@ function ModeTab({ mode }: ModeTabProps) {
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
   const entries = data?.entries ?? [];
+  const filtered = entries.filter((e) => normalize(e.user.username).includes(normalize(search)));
 
   const rateKey: keyof ExtendedLeaderboardEntry = 'win_rate';
 
@@ -343,6 +387,8 @@ function ModeTab({ mode }: ModeTabProps) {
         </span>
       </div>
 
+      <LeaderboardSearch value={search} onChange={setSearch} count={filtered.length} />
+
       {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>}
 
       {error && (
@@ -351,7 +397,7 @@ function ModeTab({ mode }: ModeTabProps) {
         </div>
       )}
 
-      {!isLoading && !error && entries.length === 0 && (
+      {!isLoading && !error && filtered.length === 0 && (
         <EmptyState
           variant="sigil"
           title="No entries"
@@ -360,7 +406,7 @@ function ModeTab({ mode }: ModeTabProps) {
         />
       )}
 
-      {!isLoading && !error && entries.length > 0 && (
+      {!isLoading && !error && filtered.length > 0 && (
         <div>
           <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 backdrop-blur-sm">
             <table className="min-w-full text-sm">
@@ -374,7 +420,7 @@ function ModeTab({ mode }: ModeTabProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-800/60">
-                {entries.map((entry) => {
+                {filtered.map((entry) => {
                   const isFirst = entry.rank === 1;
                   const rowClass = isFirst
                     ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10'
