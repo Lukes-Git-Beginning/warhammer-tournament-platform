@@ -922,7 +922,6 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           tournament: {
             select: {
               mode: true,
-              restricted_factions: { select: { faction_id: true } },
               faction_allowlist: { select: { faction_id: true } },
             },
           },
@@ -972,16 +971,10 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Validate faction against tournament restrictions
-      const restrictedFactions = match.tournament?.restricted_factions.map((r) => r.faction_id) ?? [];
+      // Validate faction against the tournament allowlist. Note: restricted_factions are
+      // NOT banned — they stay playable but don't count for the leaderboard (enforced at
+      // game finalization in match-games.ts). Only a non-empty allowlist is a hard ban.
       const factionAllowlist = match.tournament?.faction_allowlist.map((r) => r.faction_id) ?? [];
-      if (restrictedFactions.includes(faction_id)) {
-        return reply.code(422).send({
-          error: 'UnprocessableEntity',
-          message: 'This faction is banned for this tournament',
-          statusCode: 422,
-        });
-      }
       if (factionAllowlist.length > 0 && !factionAllowlist.includes(faction_id)) {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
