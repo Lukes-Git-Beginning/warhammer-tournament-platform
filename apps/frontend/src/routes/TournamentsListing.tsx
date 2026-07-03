@@ -35,6 +35,7 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
   const { data: me } = useAuthQuery();
   const isLive = tournament.status === 'ONGOING';
   const isCompleted = tournament.status === 'COMPLETED';
+  const isDraft = tournament.status === 'DRAFT';
   const startDate = formatInUserTimezone(tournament.start_date, me?.timezone ?? undefined);
 
   return (
@@ -43,15 +44,27 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
       params={{ slug: tournament.slug }}
       className="block group"
     >
-    <Card variant="banner" interactive className="flex h-full flex-col">
+    <Card
+      variant="banner"
+      interactive
+      className={`flex h-full flex-col${isDraft ? ' border-2 border-dashed border-rizzotto-gold-500/40' : ''}`}
+    >
       <CardHeader>
+        {isDraft && (
+          <Badge
+            variant="default"
+            className="self-start border border-dashed border-rizzotto-gold-500/60 text-rizzotto-gold-300"
+          >
+            Draft · not published
+          </Badge>
+        )}
         {isLive && (
           <Badge variant="forge" className="self-start">
             <span className="size-1.5 animate-rizzotto-pulse rounded-full bg-rizzotto-forge-400" />
             {t('musters.status_live')}
           </Badge>
         )}
-        {!isLive && !isCompleted && (
+        {!isLive && !isCompleted && !isDraft && (
           <Badge variant="gold" className="self-start">
             {t('musters.status_upcoming')}
           </Badge>
@@ -135,6 +148,10 @@ export function TournamentsListing() {
   const { t } = useTranslation();
   const navigate = useNavigate({ from: '/tournaments' });
   const search = useSearch({ from: '/tournaments' });
+  // Viewer identity is part of the query key so the list (which now includes the
+  // viewer's own drafts) refetches when they sign in or out.
+  const { data: me } = useAuthQuery();
+  const viewerKey = me?.id ?? 'anon';
 
   const page = search.page ?? 1;
   const majorOnly = search.major === true;
@@ -151,14 +168,14 @@ export function TournamentsListing() {
 
   // Active tournaments (live + upcoming) — fetched without status filter, split client-side
   const { data: activeData, isLoading: activeLoading } = useQuery({
-    queryKey: ['tournaments-active', majorOnly],
+    queryKey: ['tournaments-active', majorOnly, viewerKey],
     queryFn: () => listTournaments(1, 50, undefined, majorOnly || undefined),
     retry: false,
   });
 
   // Archive — paginated
   const { data: archiveData, isLoading: archiveLoading } = useQuery({
-    queryKey: ['tournaments-archive', page, majorOnly],
+    queryKey: ['tournaments-archive', page, majorOnly, viewerKey],
     queryFn: () =>
       listTournaments(page, PAGE_SIZE, 'COMPLETED' as Tournament['status'], majorOnly || undefined),
     retry: false,
@@ -166,8 +183,10 @@ export function TournamentsListing() {
 
   const allActive = activeData?.data ?? [];
   const live = allActive.filter((t) => t.status === 'ONGOING');
+  // Drafts appear here too, but the backend only returns a viewer's own drafts
+  // (host/co-host) or — for staff — all of them, so they stay author-only.
   const upcoming = allActive.filter(
-    (t) => t.status !== 'ONGOING' && t.status !== 'COMPLETED' && t.status !== 'DRAFT',
+    (t) => t.status !== 'ONGOING' && t.status !== 'COMPLETED',
   );
   const archive = archiveData?.data ?? [];
   const archiveTotal = archiveData?.total ?? 0;
