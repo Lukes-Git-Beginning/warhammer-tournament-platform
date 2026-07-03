@@ -14,7 +14,8 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import type { Prisma, MatchStatus, MatchPhase } from '@rizzotto/db';
-import { planPairings } from './balanced-liechtenstein.js';
+import { planPairings, formDivisionPools, DEFAULT_BAND } from './balanced-liechtenstein.js';
+import { computeSwissStandings, sortSwissStandings, type CompletedMatchRecord } from './swiss.js';
 import { getPlayerClassification } from './skill-classification-service.js';
 import { emitBracketUpdate } from './emit.js';
 import { notifyMatchesCreated } from './discord-notify.js';
@@ -210,4 +211,134 @@ export async function runBalancedPairingTick(
       }
     }
   }
+}
+
+export interface BalancedPlayoffResult {
+  pools: number;
+  finals: number;
+}
+
+/**
+ * Start the division playoffs once a Balanced Liechtenstein group phase is done:
+ * rank players by Swiss standing, form skill-division pools (>=4, filled top-down
+ * per §7), and create one PLAYOFF_FINAL per division between its top 2. Returns an
+ * `{ error }` on precondition failure; guarded against double-generation.
+ */
+export async function startBalancedPlayoffs(
+  fastify: FastifyInstance,
+  tournamentId: string,
+): Promise<BalancedPlayoffResult | { error: string }> {
+  const tournament = await fastify.prisma.tournament.findFirst({
+    where: { id: tournamentId, deleted_at: null },
+    select: { format: true, status: true, rounds_count: true },
+  });
+  if (!tournament || tournament.format !== 'BALANCED_LIECHTENSTEIN') {
+    return { error: 'Not a Balanced Liechtenstein tournament' };
+  }
+  if (tournament.status !== 'ONGOING') return { error: 'Tournament is not ONGOING' };
+  const roundsCount = tournament.rounds_count ?? 5;
+
+  const matches = await fastify.prisma.match.findMany({
+    where: { tournament_id: tournamentId, deleted_at: null },
+    select: {
+      round: true,
+      match_number: true,
+      player1_id: true,
+      player2_id: true,
+      winner_id: true,
+      status: true,
+      phase: true,
+      games: { select: { status: true, winner_id: true } },
+    },
+  });
+  if (matches.some((m) => m.phase && m.phase !== 'SWISS')) {
+    return { error: 'Playoffs have already been generated' };
+  }
+
+  const roster = await fastify.prisma.tournamentParticipant.findMany({
+    where: {
+      tournament_id: tournamentId,
+      deleted_at: null,
+      status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
+    },
+    select: { user_id: true, skill_band: true, status: true },
+  });
+  const withdrawnIds = new Set(roster.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
+  const active = roster.filter((p) => p.status !== 'WITHDREW');
+  const anyCheckedIn = active.some((p) => p.status === 'CHECKED_IN');
+  const contenders = anyCheckedIn ? active.filter((p) => p.status === 'CHECKED_IN') : active;
+
+  // The group phase must be complete: every contender has played all rounds.
+  const plan = planPairings(
+    contenders.map((p) => ({ userId: p.user_id, band: p.skill_band })),
+    matches.map((m) => ({
+      round: m.round,
+      player1_id: m.player1_id,
+      player2_id: m.player2_id,
+      status: m.status,
+    })),
+    roundsCount,
+  );
+  if (!plan.complete) return { error: 'Group phase is not complete yet' };
+
+  // Final Swiss standings → global rank (best = 1).
+  const participantIds = roster.map((p) => p.user_id);
+  const completed: CompletedMatchRecord[] = matches
+    .filter(
+      (m) =>
+        (m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST') &&
+        (m.phase === null || m.phase === 'SWISS'),
+    )
+    .map((m) => ({
+      round: m.round,
+      player1_id: m.player1_id,
+      player2_id: m.player2_id,
+      winner_id: m.winner_id,
+      status: m.status,
+      player1_game_wins: m.games.some((g) => g.status === 'COMPLETED')
+        ? m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length
+        : undefined,
+      player2_game_wins: m.games.some((g) => g.status === 'COMPLETED')
+        ? m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length
+        : undefined,
+    }));
+  const sorted = sortSwissStandings(
+    computeSwissStandings(participantIds, completed, withdrawnIds),
+    completed,
+  );
+
+  const bandByUser = new Map(roster.map((p) => [p.user_id, p.skill_band ?? DEFAULT_BAND]));
+  const ranked = sorted
+    .filter((s) => !withdrawnIds.has(s.userId))
+    .map((s, i) => ({ userId: s.userId, band: bandByUser.get(s.userId) ?? DEFAULT_BAND, rank: i + 1 }));
+
+  const pools = formDivisionPools(ranked);
+
+  const playoffRound = matches.reduce((mx, m) => Math.max(mx, m.round), 0) + 1;
+  let nextNumber = matches.reduce((mx, m) => Math.max(mx, m.match_number), 0) + 1;
+  const rows: Prisma.MatchCreateManyInput[] = [];
+  const created: Array<{ id: string; player1_id: string; player2_id: string }> = [];
+  for (const pool of pools) {
+    if (!pool.finalists) continue; // a lone champion needs no final
+    const id = randomUUID();
+    rows.push({
+      id,
+      tournament_id: tournamentId,
+      round: playoffRound,
+      match_number: nextNumber++,
+      player1_id: pool.finalists[0],
+      player2_id: pool.finalists[1],
+      status: 'PENDING' as MatchStatus,
+      phase: 'PLAYOFF_FINAL' as MatchPhase,
+    });
+    created.push({ id, player1_id: pool.finalists[0], player2_id: pool.finalists[1] });
+  }
+
+  if (rows.length > 0) {
+    await fastify.prisma.match.createMany({ data: rows });
+    emitBracketUpdate(fastify.io, tournamentId);
+    await notifyMatchesCreated(tournamentId, playoffRound, created);
+  }
+
+  return { pools: pools.length, finals: rows.length };
 }

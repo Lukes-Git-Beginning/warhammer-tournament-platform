@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   planPairings,
+  formDivisionPools,
   type BalancedParticipant,
   type BalancedMatchRow,
+  type RankedPlayer,
 } from '../src/lib/balanced-liechtenstein.js';
+
+const R = (userId: string, band: number, rank: number): RankedPlayer => ({ userId, band, rank });
 
 const P = (userId: string, band: number | null): BalancedParticipant => ({ userId, band });
 const done = (round: number, a: string, b: string | null, winner: string): BalancedMatchRow => ({
@@ -109,5 +113,44 @@ describe('planPairings — completion', () => {
     const matches: BalancedMatchRow[] = [ongoing(1, 'a', 'b')];
     const plan = planPairings([P('a', 3), P('b', 3)], matches, 1);
     expect(plan.complete).toBe(false);
+  });
+});
+
+describe('formDivisionPools', () => {
+  it('keeps one level as a single pool and picks the top 2 as finalists', () => {
+    const players = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => R(`p${r}`, 3, r));
+    const pools = formDivisionPools(players);
+    expect(pools).toHaveLength(1);
+    expect(pools[0]!.band).toBe(3);
+    expect(pools[0]!.players).toHaveLength(8);
+    expect(pools[0]!.finalists).toEqual(['p1', 'p2']);
+  });
+
+  it('borrows the best of the level below to fill a short top level', () => {
+    // 3 level-5 (best ranks) + 5 level-3 → level5 pool = 3 own + best level-3.
+    const players = [R('a', 5, 1), R('b', 5, 2), R('c', 5, 3), R('d', 3, 4), R('e', 3, 5), R('f', 3, 6), R('g', 3, 7), R('h', 3, 8)];
+    const pools = formDivisionPools(players);
+    expect(pools).toHaveLength(2);
+    const top = pools.find((p) => p.band === 5)!;
+    expect(top.players.map((p) => p.userId).sort()).toEqual(['a', 'b', 'c', 'd']); // d promoted
+    expect(top.finalists).toEqual(['a', 'b']);
+    const bottom = pools.find((p) => p.band === 3)!;
+    expect(bottom.players).toHaveLength(4);
+    expect(bottom.finalists).toEqual(['e', 'f']);
+  });
+
+  it('merges a trailing sub-minimum pool into the pool above', () => {
+    // 4 level-5 + 2 level-3, nothing below to fill → the 2 join the level-5 pool.
+    const players = [R('a', 5, 1), R('b', 5, 2), R('c', 5, 3), R('d', 5, 4), R('e', 3, 5), R('f', 3, 6)];
+    const pools = formDivisionPools(players);
+    expect(pools).toHaveLength(1);
+    expect(pools[0]!.players).toHaveLength(6);
+    expect(pools[0]!.finalists).toEqual(['a', 'b']);
+  });
+
+  it('handles a tiny field (single pool, whatever its size)', () => {
+    const pools = formDivisionPools([R('a', 3, 1), R('b', 3, 2), R('c', 3, 3)]);
+    expect(pools).toHaveLength(1);
+    expect(pools[0]!.finalists).toEqual(['a', 'b']);
   });
 });

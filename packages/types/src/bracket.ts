@@ -43,6 +43,8 @@ export interface SwissStandingEntry {
   solkoff: number;
   /** True when this player withdrew mid-tournament (FORFEIT loss) */
   dropped?: boolean;
+  /** Skill division 1..5 (BALANCED_LIECHTENSTEIN only) — drives level colouring. */
+  skillBand?: number | null;
 }
 
 export interface SwissMeta {

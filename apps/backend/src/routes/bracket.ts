@@ -8,6 +8,7 @@ import { generateLiechtensteinSchedule } from '../lib/liechtenstein.js';
 import {
   assignSkillBandsForTournament,
   runBalancedPairingTick,
+  startBalancedPlayoffs,
 } from '../lib/balanced-liechtenstein-service.js';
 import {
   generateSwissRound,
@@ -161,12 +162,14 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           select: {
             user_id: true,
             status: true,
+            skill_band: true,
             user: { select: { id: true, username: true, avatar_url: true } },
           },
         });
 
         const participantIds = participants.map((p) => p.user_id);
         const userMap = new Map(participants.map((p) => [p.user_id, p.user]));
+        const bandByUser = new Map(participants.map((p) => [p.user_id, p.skill_band]));
         const withdrawnIds = new Set(
           participants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id),
         );
@@ -209,6 +212,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             buchholz: s.buchholz,
             solkoff: s.solkoff,
             dropped: (s.dropped || withdrawnIds.has(s.userId)) || undefined,
+            skillBand: bandByUser.get(s.userId) ?? null,
           };
         });
 
@@ -741,6 +745,16 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Only the host can start playoffs', statusCode: 403 });
+      }
+
+      // Balanced Liechtenstein uses division playoffs (one final per skill level),
+      // not a single shared bracket — handled by its own service.
+      if (tournament.format === TournamentFormat.BALANCED_LIECHTENSTEIN) {
+        const result = await startBalancedPlayoffs(fastify, id);
+        if ('error' in result) {
+          return reply.code(400).send({ error: 'BadRequest', message: result.error, statusCode: 400 });
+        }
+        return reply.code(200).send({ tournamentId: id, ...result });
       }
 
       if (

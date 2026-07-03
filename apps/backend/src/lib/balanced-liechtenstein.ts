@@ -237,3 +237,82 @@ export function planPairings(
 
   return { pairings, byes, complete };
 }
+
+// ---------------------------------------------------------------------------
+// Division playoffs (Alex-Spec §7)
+//
+// Because balanced pairing makes every game ~50/50, a record carries no absolute
+// skill info (a 5-0 in level 2 == a 5-0 in level 4) — so there is NO shared
+// playoff. Instead each skill level gets its own division; the top 2 of each
+// division play a final for that level's champion.
+//
+// Pools are formed from the TOP, player by player: a level keeps all its own
+// players, and a level with fewer than 4 borrows the best players of the level(s)
+// below until it reaches 4 (the borrowed player is promoted out of their level).
+// A trailing bottom pool that still can't reach 4 is merged into the pool above.
+// ---------------------------------------------------------------------------
+
+/** Minimum players a division pool needs before it stands on its own. */
+export const MIN_POOL_SIZE = 4;
+
+export interface RankedPlayer {
+  userId: string;
+  band: number;
+  /** Final Swiss placement, 1 = best. Drives pool fill order + finalist choice. */
+  rank: number;
+}
+
+export interface DivisionPool {
+  /** The level this pool belongs to (its own players' band). */
+  band: number;
+  /** Members, best rank first. Includes any players promoted from below. */
+  players: RankedPlayer[];
+  /** The two best-ranked members who play the division final (null if < 2). */
+  finalists: [string, string] | null;
+}
+
+/**
+ * Group ranked players into division pools of at least MIN_POOL_SIZE, top down,
+ * borrowing the best of the levels below to fill short levels. Pure.
+ */
+export function formDivisionPools(players: RankedPlayer[]): DivisionPool[] {
+  // Best of the highest level first; within a level, best rank first.
+  const ordered = [...players].sort((a, b) => b.band - a.band || a.rank - b.rank);
+  const assigned = new Set<string>();
+  const bandsDesc = [...new Set(ordered.map((p) => p.band))].sort((a, b) => b - a);
+
+  const pools: DivisionPool[] = [];
+  for (const band of bandsDesc) {
+    const own = ordered.filter((p) => p.band === band && !assigned.has(p.userId));
+    if (own.length === 0) continue;
+    const members = [...own];
+    own.forEach((p) => assigned.add(p.userId));
+
+    // Borrow the best available players from the levels below to reach the minimum.
+    if (members.length < MIN_POOL_SIZE) {
+      for (const c of ordered) {
+        if (members.length >= MIN_POOL_SIZE) break;
+        if (c.band < band && !assigned.has(c.userId)) {
+          members.push(c);
+          assigned.add(c.userId);
+        }
+      }
+    }
+    pools.push({ band, players: members, finalists: null });
+  }
+
+  // A trailing pool that never reached the minimum joins the pool above it.
+  if (pools.length >= 2 && pools[pools.length - 1]!.players.length < MIN_POOL_SIZE) {
+    const last = pools.pop()!;
+    pools[pools.length - 1]!.players.push(...last.players);
+  }
+
+  // Top 2 of each pool (by rank) contest the division final.
+  for (const pool of pools) {
+    pool.players.sort((a, b) => a.rank - b.rank);
+    pool.finalists =
+      pool.players.length >= 2 ? [pool.players[0]!.userId, pool.players[1]!.userId] : null;
+  }
+
+  return pools;
+}

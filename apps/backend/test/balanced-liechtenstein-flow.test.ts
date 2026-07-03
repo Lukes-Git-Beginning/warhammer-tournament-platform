@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
-import { runBalancedPairingTick } from '../src/lib/balanced-liechtenstein-service.js';
+import { runBalancedPairingTick, startBalancedPlayoffs } from '../src/lib/balanced-liechtenstein-service.js';
 import { createTestUser, cleanupTournament, cleanupUsers, type TestUser } from './helpers/db-fixtures.js';
 
 let app: FastifyInstance;
@@ -148,5 +148,50 @@ describe('Balanced Liechtenstein — incremental pairing flow', () => {
 
     const matches = await liveMatches(tournamentId);
     expect(matches.filter((m) => m.status === 'PENDING')).toHaveLength(2);
+  });
+});
+
+/** Run the whole group phase to completion (finish every pending match, re-tick). */
+async function runGroupPhase(tournamentId: string, rounds: number): Promise<void> {
+  await runBalancedPairingTick(app, tournamentId);
+  for (let r = 1; r <= rounds; r++) {
+    const pending = (await liveMatches(tournamentId)).filter((m) => m.status === 'PENDING');
+    for (const m of pending) await finish(m.id, m.player1_id!);
+    await runBalancedPairingTick(app, tournamentId);
+  }
+}
+
+describe('Balanced Liechtenstein — division playoffs', () => {
+  it('refuses playoffs while the group phase is unfinished', async () => {
+    const { tournamentId } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
+    await runBalancedPairingTick(app, tournamentId); // only round 1 exists
+    const result = await startBalancedPlayoffs(app, tournamentId);
+    expect('error' in result).toBe(true);
+  });
+
+  it('creates one final per division once the group phase is complete', async () => {
+    const { tournamentId } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
+    await runGroupPhase(tournamentId, 2);
+
+    const result = await startBalancedPlayoffs(app, tournamentId);
+    expect('finals' in result).toBe(true);
+
+    const finals = await prisma.match.findMany({
+      where: { tournament_id: tournamentId, phase: 'PLAYOFF_FINAL', deleted_at: null },
+      select: { round: true, player1_id: true, player2_id: true, status: true },
+    });
+    // Two even divisions (4 level-5 + 4 level-3) → two division finals.
+    expect(finals).toHaveLength(2);
+    expect(finals.every((m) => m.status === 'PENDING' && m.player1_id && m.player2_id)).toBe(true);
+    const players = new Set(finals.flatMap((m) => [m.player1_id, m.player2_id]));
+    expect(players.size).toBe(4); // four distinct finalists
+  });
+
+  it('refuses to generate playoffs twice', async () => {
+    const { tournamentId } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
+    await runGroupPhase(tournamentId, 2);
+    await startBalancedPlayoffs(app, tournamentId);
+    const second = await startBalancedPlayoffs(app, tournamentId);
+    expect('error' in second).toBe(true);
   });
 });
