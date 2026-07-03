@@ -42,45 +42,48 @@ export interface CalibrationQuestion {
 }
 
 /**
- * Strongest-first: Q3 (verifiable results) and Q2 (tournament tier) classify
- * experienced players in 1–2 clicks. Volume/proxy questions cap at band 3 —
- * bands 4–5 are only reachable via Q3 (achievements) or Q12 (self-claim), so no
- * one can grind/proxy their way to Advanced/Elite.
+ * Strongest-first: the achievement question (best_result) and tournament tier
+ * classify experienced players in 1–2 clicks. Most volume/proxy questions cap at
+ * band 3; the only routes to band 4 are a real achievement (best_result),
+ * top-of-ladder ranked play (ranked_level), or the self-rating, and band 5 is only
+ * reachable via best_result or the self-rating — so no one can grind low-signal
+ * volume answers up to Advanced/Top.
  */
 export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
   {
     id: 'best_result',
-    prompt: 'Your best competitive tournament result?',
+    prompt: 'What is your highest competitive achievement?',
     options: [
-      { value: 'none', label: 'Never made semifinals', floor: null },
-      { value: 'semis_npt_ipt', label: 'Semis or win at a new-player / intermediate tournament', floor: 3 },
-      { value: 'won_open', label: 'Won an open tournament (top players active)', floor: 4 },
-      { value: 'tt_top16', label: 'Finished a TT season in the Top 16 / Grand Finals', floor: 5 },
+      { value: 'none', label: 'Never made semifinals.', floor: null },
+      { value: 'semis_npt', label: 'Reached semis in a New Player Tournament.', floor: 2 },
+      { value: 'semis_npt_ipt', label: 'Won a New Player Tournament / made semis in an Intermediate Tournament.', floor: 3 },
+      { value: 'won_open', label: "Won an unrestricted tournament on Total Tavern or RizzOtto's Arena.", floor: 4 },
+      { value: 'tt_top16', label: 'Finished a TT season in the Top 16 and/or made Grand Finals.', floor: 5 },
     ],
   },
   {
     id: 'tournament_types',
-    prompt: 'What kind of tournaments have you played?',
+    prompt: 'What kinds of tournaments have you played?',
     options: [
       { value: 'none', label: 'None yet', floor: null },
-      { value: 'npt', label: 'New-player tournaments (NPT)', floor: 1 },
-      { value: 'ipt', label: 'Intermediate tournaments (IPT)', floor: 2 },
-      { value: 'open', label: 'Open / competitive tournaments', floor: 3 },
+      { value: 'npt', label: 'New Player Tournaments (NPT)', floor: 1 },
+      { value: 'ipt', label: 'Intermediate Player Tournaments (IPT)', floor: 2 },
+      { value: 'open', label: 'Open / unrestricted tournaments', floor: 3 },
     ],
   },
   {
     id: 'ranked_level',
-    prompt: 'Your highest in-game ranked level?',
+    prompt: "Your performance on CA's Ranked Matchmaking?",
     options: [
       { value: 'never_casual', label: 'Never ranked / casual only', floor: 1 },
-      { value: 'lower_mid', label: 'Lower to mid ranked', floor: 2 },
-      { value: 'high', label: 'High ranked', floor: 3 },
-      { value: 'top_ladder', label: 'Top of the ladder', floor: 3 },
+      { value: 'lower_mid', label: 'Lower to mid-ranked', floor: 2 },
+      { value: 'high', label: 'High-ranked', floor: 3 },
+      { value: 'top_ladder', label: 'Top of the ladder (just below the cheaters)', floor: 4 },
     ],
   },
   {
     id: 'total_battles',
-    prompt: 'Total multiplayer battles (Land Battle + Domination + Custom)?',
+    prompt: 'Total multiplayer battles played (Land Battle + Domination + Conquest)?',
     options: [
       { value: 'lt50', label: 'Fewer than 50', floor: null },
       { value: '50_200', label: '50–200', floor: 2 },
@@ -90,7 +93,7 @@ export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
   },
   {
     id: 'domination_battles',
-    prompt: 'Domination-specific battles?',
+    prompt: 'Total multiplayer battles played (Domination only)?',
     options: [
       { value: 'lt10', label: 'Fewer than 10', floor: null },
       { value: '10_50', label: '10–50', floor: 1 },
@@ -157,20 +160,10 @@ export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
     prompt: 'Where would you place yourself?',
     options: [
       { value: '1', label: 'New — barely any PvP experience', floor: 1 },
-      { value: '2', label: 'Beginner — some PvP, never made semis', floor: 2 },
-      { value: '3', label: 'Intermediate — semis/wins at NPT/IPT level', floor: 3 },
-      { value: '4', label: 'Advanced — won open tournaments', floor: 4 },
+      { value: '2', label: 'Beginner — some PvP, some tournament experience', floor: 2 },
+      { value: '3', label: 'Intermediate — semis at IPT/wins at NPT/IPT level', floor: 3 },
+      { value: '4', label: 'Advanced — won open/unrestricted tournaments', floor: 4 },
       { value: '5', label: 'Top — TT-season Top 16', floor: 5 },
-    ],
-  },
-  {
-    // UX-only: intent doesn't affect the band, but tailors messaging.
-    id: 'intent',
-    prompt: 'What are you here for?',
-    options: [
-      { value: 'learn', label: 'Learn and improve', floor: null },
-      { value: 'compete', label: 'Compete seriously', floor: null },
-      { value: 'casual', label: 'Casual fun', floor: null },
     ],
   },
 ];

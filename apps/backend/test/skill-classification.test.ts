@@ -19,7 +19,7 @@ describe('questionnaireFloor', () => {
 
   it('defaults to band 1 with no (scoring) answers', () => {
     expect(questionnaireFloor({})).toBe(1);
-    expect(questionnaireFloor({ intent: 'compete' })).toBe(1); // intent has no floor
+    expect(questionnaireFloor({ nonsense: 'x' })).toBe(1); // non-scoring / unknown answer
   });
 
   it('caps volume/proxy questions at band 3 — cannot grind to Advanced/Elite', () => {
@@ -34,10 +34,15 @@ describe('questionnaireFloor', () => {
     expect(maxedOut).toBe(3);
   });
 
-  it('only verifiable results (Q3) or self-rating (Q12) reach bands 4–5', () => {
+  it('scores a semis-only NPT result as Beginner (band 2)', () => {
+    expect(questionnaireFloor({ best_result: 'semis_npt' })).toBe(2);
+  });
+
+  it('reaches band 4 via achievement, top-of-ladder ranked, or self-rating; band 5 only via achievement or self-rating', () => {
     expect(questionnaireFloor({ best_result: 'won_open' })).toBe(4);
-    expect(questionnaireFloor({ best_result: 'tt_top16' })).toBe(5);
+    expect(questionnaireFloor({ ranked_level: 'top_ladder' })).toBe(4);
     expect(questionnaireFloor({ self_rating: '4' })).toBe(4);
+    expect(questionnaireFloor({ best_result: 'tt_top16' })).toBe(5);
     expect(questionnaireFloor({ self_rating: '5' })).toBe(5);
   });
 
