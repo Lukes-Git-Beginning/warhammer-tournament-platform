@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCalibrationQuestions, saveCalibrationAnswers } from '@/lib/api.js';
+import { nextCalibrationQuestion } from '@/lib/calibrationFlow.js';
 import {
   Dialog,
   DialogContent,
@@ -11,9 +12,10 @@ import {
 import { Button } from '@/components/ui/button.js';
 
 /**
- * Calibration questionnaire dialog. Questions are strongest-first, so experienced
- * players can save after a click or two; the player answers what they can and
- * skips the rest. Answers merge into their stored profile on save.
+ * Calibration questionnaire dialog. Questions are strongest-first AND adaptive: only
+ * questions that could still raise the player's floor are asked, so a strong player
+ * finishes in one or two clicks (see `calibrationFlow.ts`). Answers merge into their
+ * stored profile on save.
  */
 export function CalibrationWizard({
   userId,
@@ -32,8 +34,8 @@ export function CalibrationWizard({
     enabled: open,
   });
 
-  const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [dismissed, setDismissed] = useState<Record<string, boolean>>({});
 
   const save = useMutation({
     mutationFn: () => saveCalibrationAnswers(answers),
@@ -44,14 +46,14 @@ export function CalibrationWizard({
   });
 
   const questions = data?.questions ?? [];
-  const question = questions[step];
+  // Next question worth asking, given what's been answered/dismissed. Undefined once
+  // no remaining question could raise the floor → the level is already decided.
+  const question = nextCalibrationQuestion(questions, answers, dismissed);
   const answeredCount = Object.keys(answers).length;
   const done = questions.length > 0 && !question;
 
   function choose(value: string) {
-    if (!question) return;
-    setAnswers((a) => ({ ...a, [question.id]: value }));
-    setStep((s) => s + 1);
+    if (question) setAnswers((a) => ({ ...a, [question.id]: value }));
   }
 
   return (
@@ -67,7 +69,7 @@ export function CalibrationWizard({
         {done ? (
           <p className="py-2 text-sm text-stone-300">
             {answeredCount > 0
-              ? "That's everything — save to set your level."
+              ? "That's everything we need — save to set your level."
               : 'No answers yet. You can save and come back anytime.'}
           </p>
         ) : question ? (
@@ -78,18 +80,14 @@ export function CalibrationWizard({
                 <button
                   key={opt.value}
                   onClick={() => choose(opt.value)}
-                  className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-                    answers[question.id] === opt.value
-                      ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/10 text-rizzotto-gold-300'
-                      : 'border-stone-800 bg-stone-900/60 text-stone-300 hover:border-stone-700'
-                  }`}
+                  className="w-full rounded-md border border-stone-800 bg-stone-900/60 px-3 py-2 text-left text-sm text-stone-300 transition-colors hover:border-stone-700"
                 >
                   {opt.label}
                 </button>
               ))}
             </div>
             <button
-              onClick={() => setStep((s) => s + 1)}
+              onClick={() => setDismissed((d) => ({ ...d, [question.id]: true }))}
               className="text-xs text-stone-500 transition-colors hover:text-stone-400"
             >
               Skip this question →
