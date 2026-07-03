@@ -14,6 +14,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
 import { runBalancedPairingTick, startBalancedPlayoffs } from '../src/lib/balanced-liechtenstein-service.js';
+import { finalizeTournament } from '../src/lib/finalize-tournament.js';
 import { createTestUser, cleanupTournament, cleanupUsers, type TestUser } from './helpers/db-fixtures.js';
 
 let app: FastifyInstance;
@@ -33,7 +34,12 @@ const createdUserIds: string[] = [];
 
 afterEach(async () => {
   for (const id of createdTournamentIds) await cleanupTournament(id);
-  if (createdUserIds.length) await cleanupUsers(createdUserIds);
+  if (createdUserIds.length) {
+    // finalizeTournament writes LeaderboardEntry rows on the active season; clear
+    // them (FK to User) before deleting the test users.
+    await prisma.leaderboardEntry.deleteMany({ where: { user_id: { in: createdUserIds } } });
+    await cleanupUsers(createdUserIds);
+  }
   createdTournamentIds.length = 0;
   createdUserIds.length = 0;
 });
@@ -193,5 +199,35 @@ describe('Balanced Liechtenstein — division playoffs', () => {
     await startBalancedPlayoffs(app, tournamentId);
     const second = await startBalancedPlayoffs(app, tournamentId);
     expect('error' in second).toBe(true);
+  });
+
+  it('finalizes to complete, distinct placements after division finals', async () => {
+    const { tournamentId, users } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
+    await runGroupPhase(tournamentId, 2);
+    await startBalancedPlayoffs(app, tournamentId);
+
+    // Play out the division finals.
+    const finals = await prisma.match.findMany({
+      where: { tournament_id: tournamentId, phase: 'PLAYOFF_FINAL', deleted_at: null },
+      select: { id: true, player1_id: true },
+    });
+    for (const f of finals) await finish(f.id, f.player1_id!);
+
+    const result = await finalizeTournament(prisma, tournamentId, users[0]!.id);
+    expect(result.resultCount).toBe(8);
+
+    // Overall placement is Swiss-based: one row per player, a clean 1..8 ranking
+    // (no duplicate "1st places" from the parallel division finals).
+    const rows = await prisma.tournamentResult.findMany({
+      where: { tournament_id: tournamentId },
+      select: { user_id: true, placement: true },
+    });
+    expect(rows).toHaveLength(8); // one result per player
+    const placements = rows.map((r) => r.placement);
+    // A single coherent ranking (Swiss-based) — someone is 1st, all within range,
+    // and it's a real spread rather than the "every division champion is 1st" bug.
+    expect(Math.min(...placements)).toBe(1);
+    expect(Math.max(...placements)).toBeLessThanOrEqual(8);
+    expect(new Set(placements).size).toBeGreaterThan(1);
   });
 });
