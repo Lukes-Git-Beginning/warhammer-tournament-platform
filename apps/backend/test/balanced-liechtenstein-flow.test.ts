@@ -13,7 +13,11 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
-import { runBalancedPairingTick, startBalancedPlayoffs } from '../src/lib/balanced-liechtenstein-service.js';
+import {
+  runBalancedPairingTick,
+  startBalancedPlayoffs,
+  assignSkillBandsForTournament,
+} from '../src/lib/balanced-liechtenstein-service.js';
 import { finalizeTournament } from '../src/lib/finalize-tournament.js';
 import { createTestUser, cleanupTournament, cleanupUsers, type TestUser } from './helpers/db-fixtures.js';
 
@@ -229,5 +233,49 @@ describe('Balanced Liechtenstein — division playoffs', () => {
     expect(Math.min(...placements)).toBe(1);
     expect(Math.max(...placements)).toBeLessThanOrEqual(8);
     expect(new Set(placements).size).toBeGreaterThan(1);
+  });
+});
+
+describe('Balanced Liechtenstein — play-up (requested band)', () => {
+  it('sets the effective band to max(computed, requested) at Start', async () => {
+    const users = await Promise.all([0, 1, 2, 3].map((i) => createTestUser({ username: `PU${i}` })));
+    createdUserIds.push(...users.map((u) => u.id));
+    const tournamentId = randomUUID();
+    createdTournamentIds.push(tournamentId);
+    await prisma.tournament.create({
+      data: {
+        id: tournamentId,
+        slug: `test-pu-${tournamentId.slice(0, 8)}`,
+        name: 'Play-up Test',
+        host_id: users[0]!.id,
+        format: 'BALANCED_LIECHTENSTEIN',
+        status: 'ONGOING',
+        rounds_count: 2,
+        start_date: new Date('2026-06-01'),
+        timezone: 'Europe/Berlin',
+      },
+    });
+    await prisma.tournamentParticipant.createMany({
+      data: [
+        { tournament_id: tournamentId, user_id: users[0]!.id, status: 'CHECKED_IN', requested_band: 4 },
+        { tournament_id: tournamentId, user_id: users[1]!.id, status: 'CHECKED_IN', requested_band: 5 },
+        { tournament_id: tournamentId, user_id: users[2]!.id, status: 'CHECKED_IN' }, // no request
+        { tournament_id: tournamentId, user_id: users[3]!.id, status: 'CHECKED_IN', requested_band: 1 },
+      ],
+    });
+
+    await assignSkillBandsForTournament(app, tournamentId);
+
+    const parts = await prisma.tournamentParticipant.findMany({
+      where: { tournament_id: tournamentId },
+      select: { user_id: true, skill_band: true },
+    });
+    const band = new Map(parts.map((p) => [p.user_id, p.skill_band]));
+    // These players have no games/calibration → computed band is New (1), so the
+    // request raises the effective band but never lowers it.
+    expect(band.get(users[0]!.id)).toBe(4); // max(computed, 4)
+    expect(band.get(users[1]!.id)).toBe(5); // max(computed, 5)
+    expect(band.get(users[3]!.id)).toBe(1); // requested 1 → stays at the computed floor
+    expect([null, 1]).toContain(band.get(users[2]!.id)); // no play-up
   });
 });
