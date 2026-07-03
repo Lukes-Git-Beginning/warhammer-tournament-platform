@@ -237,8 +237,12 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
       .every((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT');
   const currentPlayoffPhase = playoffPhases.find((m) => m.round === lastPlayoffRound)?.phase ?? null;
   const nextPlayoffLabel = currentPlayoffPhase === 'PLAYOFF_QF' ? 'Advance to Semifinals' : 'Advance to Grand Final';
+  // Balanced Liechtenstein generates every playoff round up front with
+  // next_match_id wiring (winners advance automatically), so its brackets never
+  // need the manual "advance" / "add small final" controls.
+  const isBalanced = format === 'BALANCED_LIECHTENSTEIN';
   const showAdvanceToNextPlayoffRound =
-    canManage && hasPlayoffMatches && lastPlayoffRoundDone && !hasFinalMatch;
+    canManage && !isBalanced && hasPlayoffMatches && lastPlayoffRoundDone && !hasFinalMatch;
 
   // For SE: the final has phase=null; detect it as the non-TP match with no next pointer.
   const seMatches = data.matches.filter((m) => !m.phase && !m.bracketSide);
@@ -253,6 +257,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   const thirdPlaceNeedsRepair = !!thirdPlaceNode && !thirdPlaceNode.player1Id && !thirdPlaceNode.player2Id;
   const showAddThirdPlaceButton =
     canManage &&
+    !isBalanced &&
     (hasFinalMatch || seSFsDone) &&
     (!hasThirdPlaceMatch || thirdPlaceNeedsRepair);
 

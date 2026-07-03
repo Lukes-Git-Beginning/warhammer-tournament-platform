@@ -15,6 +15,7 @@ function makeMatch(
   nextMatchId: string | null = null,
   bracketSide: BracketNode['bracketSide'] = null,
   loserNextMatchId: string | null = null,
+  phase: BracketNode['phase'] = null,
 ): BracketNode {
   return {
     matchId,
@@ -31,6 +32,7 @@ function makeMatch(
     nextMatchId,
     loserNextMatchId,
     bracketSide,
+    phase,
     player1FactionId: null,
     player2FactionId: null,
     player1GameWins: 0,
@@ -156,6 +158,16 @@ describe('computeBracketLayout', () => {
       expect(gf1.x).toBeGreaterThanOrEqual(wb2.x + MATCH_WIDTH + ROUND_GAP);
     });
 
+    it('single PLAYOFF_FINAL (one division / normal format) uses the linear path, no groups', () => {
+      const matches: BracketNode[] = [
+        makeMatch('sf1', 1, 1, 'gf', null, null, 'PLAYOFF_SF'),
+        makeMatch('sf2', 1, 2, 'gf', null, null, 'PLAYOFF_SF'),
+        makeMatch('gf', 2, 1, null, null, null, 'PLAYOFF_FINAL'),
+      ];
+      const layout = computeBracketLayout(matches);
+      expect(layout.groups).toBeUndefined();
+    });
+
     it('bracketSide=null matches are unaffected (SE path)', () => {
       // Existing SE test should still pass — no bracketSide set
       const seMatches: BracketNode[] = [
@@ -173,6 +185,51 @@ describe('computeBracketLayout', () => {
       // SE x-positions: col = round - 1, col 0 → x=0, col 1 → x=MATCH_WIDTH+ROUND_GAP
       expect(r1m1.x).toBe(0);
       expect(r2m1.x).toBe(MATCH_WIDTH + ROUND_GAP);
+    });
+  });
+
+  describe('Balanced Liechtenstein division layout', () => {
+    it('stacks two division finals into separate, vertically-offset labelled groups', () => {
+      const matches: BracketNode[] = [
+        makeMatch('finA', 3, 1, null, null, null, 'PLAYOFF_FINAL'),
+        makeMatch('finB', 3, 2, null, null, null, 'PLAYOFF_FINAL'),
+      ];
+      const layout = computeBracketLayout(matches);
+      expect(layout.groups).toHaveLength(2);
+      const a = layout.positions.get('finA')!;
+      const b = layout.positions.get('finB')!;
+      // Same column, but stacked vertically (separate divisions).
+      expect(a.x).toBe(b.x);
+      expect(a.y).not.toBe(b.y);
+    });
+
+    it('keeps a TOP4 division and a TOP2 division as separate connected groups', () => {
+      const matches: BracketNode[] = [
+        // Division A — TOP4: two SFs feed a final; SF losers feed the third place.
+        makeMatch('sf1', 3, 1, 'gfA', null, 'thirdA', 'PLAYOFF_SF'),
+        makeMatch('sf2', 3, 2, 'gfA', null, 'thirdA', 'PLAYOFF_SF'),
+        makeMatch('gfA', 4, 1, null, null, null, 'PLAYOFF_FINAL'),
+        makeMatch('thirdA', 4, 2, null, null, null, 'PLAYOFF_THIRD_PLACE'),
+        // Division B — TOP2: a lone final.
+        makeMatch('gfB', 3, 3, null, null, null, 'PLAYOFF_FINAL'),
+      ];
+      const layout = computeBracketLayout(matches);
+      expect(layout.groups).toHaveLength(2);
+      const sizes = layout.groups!.map((g) => g.matchIds.length).sort((x, y) => x - y);
+      expect(sizes).toEqual([1, 4]);
+    });
+
+    it('places division brackets to the right of the Swiss columns', () => {
+      const matches: BracketNode[] = [
+        makeMatch('s1', 1, 1, null, null, null, 'SWISS'),
+        makeMatch('s2', 1, 2, null, null, null, 'SWISS'),
+        makeMatch('finA', 2, 3, null, null, null, 'PLAYOFF_FINAL'),
+        makeMatch('finB', 2, 4, null, null, null, 'PLAYOFF_FINAL'),
+      ];
+      const layout = computeBracketLayout(matches);
+      const swissX = layout.positions.get('s1')!.x;
+      const finX = layout.positions.get('finA')!.x;
+      expect(finX).toBeGreaterThan(swissX);
     });
   });
 });
