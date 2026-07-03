@@ -63,8 +63,8 @@ export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
     prompt: 'What kind of tournaments have you played?',
     options: [
       { value: 'none', label: 'None yet', floor: null },
-      { value: 'npt', label: 'New-player tournaments (NPT)', floor: 2 },
-      { value: 'ipt', label: 'Intermediate tournaments (IPT)', floor: 3 },
+      { value: 'npt', label: 'New-player tournaments (NPT)', floor: 1 },
+      { value: 'ipt', label: 'Intermediate tournaments (IPT)', floor: 2 },
       { value: 'open', label: 'Open / competitive tournaments', floor: 3 },
     ],
   },
@@ -93,7 +93,7 @@ export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
     prompt: 'Domination-specific battles?',
     options: [
       { value: 'lt10', label: 'Fewer than 10', floor: null },
-      { value: '10_50', label: '10–50', floor: 2 },
+      { value: '10_50', label: '10–50', floor: 1 },
       { value: '50_200', label: '50–200', floor: 2 },
       { value: 'gt200', label: '200+', floor: 3 },
     ],
