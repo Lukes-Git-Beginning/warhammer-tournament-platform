@@ -199,3 +199,122 @@ describe('POST /auth/test-login (NODE_ENV=test only)', () => {
     expect(body.user.username).toBe('TestLoginUser');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Steam re-link is sticky: block a silent swap to a different account, but allow
+// re-verifying the same account. Switching accounts must go through an admin reset.
+// ---------------------------------------------------------------------------
+
+describe('Steam re-link (sticky)', () => {
+  const createdUserIds: string[] = [];
+
+  function returnUrl(steamId: string): string {
+    const params = new URLSearchParams({
+      'openid.ns': 'http://specs.openid.net/auth/2.0',
+      'openid.mode': 'id_res',
+      'openid.claimed_id': `https://steamcommunity.com/openid/id/${steamId}`,
+      'openid.identity': `https://steamcommunity.com/openid/id/${steamId}`,
+    });
+    return `/auth/steam/return?${params.toString()}`;
+  }
+
+  async function makeUser(discordId: string): Promise<{ id: string; token: string }> {
+    await prisma.user.deleteMany({ where: { discord_id: discordId } });
+    const user = await prisma.user.create({
+      data: { discord_id: discordId, username: 'Steam Relink Tester', email: null },
+      select: { id: true, username: true, role: true },
+    });
+    createdUserIds.push(user.id);
+    const token = app.jwt.sign({ sub: user.id, username: user.username, role: user.role });
+    return { id: user.id, token };
+  }
+
+  beforeEach(() => {
+    // Steam OpenID assertion always verifies as valid; profile lookup returns nothing.
+    msw.use(
+      http.post('https://steamcommunity.com/openid/login', () =>
+        HttpResponse.text('ns:http://specs.openid.net/auth/2.0\nis_valid:true\n'),
+      ),
+      http.get('https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/', () =>
+        HttpResponse.json({ response: { players: [] } }),
+      ),
+    );
+  });
+
+  afterEach(async () => {
+    if (createdUserIds.length === 0) return;
+    await prisma.auditLog.deleteMany({ where: { entity_id: { in: createdUserIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+    createdUserIds.length = 0;
+  });
+
+  it('blocks re-linking a different Steam account and keeps the original link', async () => {
+    const { id, token } = await makeUser('steam-relink-block');
+    await prisma.steamLink.create({
+      data: { user_id: id, steam_id: '76561190000000001', persona: 'Original' },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: returnUrl('76561190000000999'),
+      cookies: { auth_token: token },
+    });
+
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toContain('steam_error=already_linked');
+
+    const link = await prisma.steamLink.findUnique({ where: { user_id: id } });
+    expect(link!.steam_id).toBe('76561190000000001'); // unchanged
+
+    const blocked = await prisma.auditLog.findFirst({
+      where: { entity_id: id, action: 'STEAM_LINK_BLOCKED' },
+    });
+    expect(blocked).not.toBeNull();
+  });
+
+  it('allows re-verifying the same Steam account (refresh)', async () => {
+    const { id, token } = await makeUser('steam-relink-refresh');
+    await prisma.steamLink.create({
+      data: { user_id: id, steam_id: '76561190000000002', persona: 'Same' },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: returnUrl('76561190000000002'),
+      cookies: { auth_token: token },
+    });
+
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).not.toContain('steam_error');
+
+    const link = await prisma.steamLink.findUnique({ where: { user_id: id } });
+    expect(link!.steam_id).toBe('76561190000000002');
+
+    const blocked = await prisma.auditLog.findFirst({
+      where: { entity_id: id, action: 'STEAM_LINK_BLOCKED' },
+    });
+    expect(blocked).toBeNull();
+  });
+
+  it('creates the link and an audit trail on first-time link', async () => {
+    const { id, token } = await makeUser('steam-relink-first');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: returnUrl('76561190000000003'),
+      cookies: { auth_token: token },
+    });
+
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).not.toContain('steam_error');
+
+    const link = await prisma.steamLink.findUnique({ where: { user_id: id } });
+    expect(link).not.toBeNull();
+    expect(link!.steam_id).toBe('76561190000000003');
+
+    const linked = await prisma.auditLog.findFirst({
+      where: { entity_id: id, action: 'STEAM_LINK' },
+    });
+    expect(linked).not.toBeNull();
+  });
+});
