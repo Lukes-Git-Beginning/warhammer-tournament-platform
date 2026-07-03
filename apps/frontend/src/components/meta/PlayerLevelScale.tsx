@@ -3,14 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { getPlayerClassification } from '@/lib/api.js';
 import { Button } from '@/components/ui/button.js';
 
-// Five skill bands, low → high, with a grimdark colour progression
-// (resting iron → bronze → muted gold → bright gold → forge glow).
+// Five skill bands, low → high, as distinct metals: white → dark rust → bronze
+// → silver → gold. Kept in sync with SKILL_BAND_META (bracket/standings).
 const BANDS = [
-  { name: 'New', color: 'bg-rizzotto-iron-600', text: 'text-rizzotto-stone-400' },
-  { name: 'Beginner', color: 'bg-rizzotto-bronze', text: 'text-rizzotto-stone-300' },
-  { name: 'Intermediate', color: 'bg-rizzotto-gold-600', text: 'text-rizzotto-gold-400' },
-  { name: 'Advanced', color: 'bg-rizzotto-gold-400', text: 'text-rizzotto-gold-300' },
-  { name: 'Top', color: 'bg-rizzotto-forge-500', text: 'text-rizzotto-forge-400' },
+  { name: 'New', color: 'bg-stone-100', text: 'text-stone-100' },
+  { name: 'Beginner', color: 'bg-orange-800', text: 'text-orange-600' },
+  { name: 'Intermediate', color: 'bg-[#c17f38]', text: 'text-[#cd9557]' },
+  { name: 'Advanced', color: 'bg-slate-400', text: 'text-slate-300' },
+  { name: 'Top', color: 'bg-rizzotto-gold-400', text: 'text-rizzotto-gold-400' },
 ] as const;
 
 // Must match the backend SKILL_BAND_THRESHOLDS (rating-model.ts): the log-odds
