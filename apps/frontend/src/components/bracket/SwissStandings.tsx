@@ -407,29 +407,39 @@ export function SwissStandings({
             Standings (Round {displayRound}/{recommendedRounds})
           </h3>
         </div>
-        {bandNumbers.map((band) => {
-          const meta = SKILL_BAND_META[band];
-          const entries = byBand.get(band) ?? [];
-          const currentOffset = offset;
-          offset += entries.length;
-          return (
-            <div key={band} className="overflow-x-auto">
-              {/* Band division header */}
-              <div className={`flex items-center gap-2 px-4 py-2 border-b border-stone-800 ${meta?.bgCls ?? 'bg-stone-800/20'}`}>
-                <span className={`h-2 w-2 rounded-full shrink-0 ${meta?.dotCls ?? 'bg-stone-500'}`} />
-                <span className={`text-xs font-bold uppercase tracking-widest ${meta?.textCls ?? 'text-stone-400'}`}>
-                  {meta?.name ?? `Band ${band}`} Division
-                </span>
-              </div>
-              <table className="min-w-full text-sm">
-                <TableHead />
-                <tbody className="divide-y divide-stone-800/60">
-                  {renderRows(entries, currentOffset)}
-                </tbody>
-              </table>
-            </div>
-          );
-        })}
+        {/* One shared table so every division's columns line up identically — the
+            band divisions are full-width section-header rows, not separate tables. */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <TableHead />
+            <tbody className="divide-y divide-stone-800/60">
+              {bandNumbers.map((band) => {
+                const meta = SKILL_BAND_META[band];
+                const entries = byBand.get(band) ?? [];
+                const currentOffset = offset;
+                offset += entries.length;
+                return (
+                  <Fragment key={band}>
+                    <tr>
+                      <td
+                        colSpan={colCount}
+                        className={`px-4 py-2 border-y border-stone-800 ${meta?.bgCls ?? 'bg-stone-800/20'}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`h-2 w-2 rounded-full shrink-0 ${meta?.dotCls ?? 'bg-stone-500'}`} />
+                          <span className={`text-xs font-bold uppercase tracking-widest ${meta?.textCls ?? 'text-stone-400'}`}>
+                            {meta?.name ?? `Band ${band}`} Division
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                    {renderRows(entries, currentOffset)}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         <Dialog open={factionPickTarget !== null} onOpenChange={(open) => { if (!open) setFactionPickTarget(null); }}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
