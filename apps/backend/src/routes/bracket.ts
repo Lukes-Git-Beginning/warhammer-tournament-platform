@@ -505,6 +505,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           status: true,
           format: true,
           host_id: true,
+          rounds_count: true,
         },
       });
 
@@ -591,7 +592,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         participants.map((p) => [p.user_id, p.faction_id]),
       );
       const targetRound = currentRound + 1;
-      const recommendedRounds = recommendNumberOfRounds(participantIds.length);
+      // The host-configured rounds_count is authoritative; fall back to the
+      // participant-count heuristic only when it is unset (mirrors the
+      // start-playoffs guard). Without this, a field that shrinks below the
+      // heuristic through drops — or a host who simply wants more rounds than the
+      // heuristic recommends — gets wrongly blocked from the next round.
+      const recommendedRounds = tournament.rounds_count ?? recommendNumberOfRounds(participantIds.length);
 
       if (targetRound > recommendedRounds) {
         return reply.code(400).send({
