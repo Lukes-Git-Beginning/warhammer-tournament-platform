@@ -95,23 +95,23 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-rizzotto-iron-700 bg-rizzotto-iron-950/92 backdrop-blur-md">
-      <div className="mx-auto flex max-w-[80rem] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8 xl:px-12">
+      <div className="mx-auto flex max-w-[80rem] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8 xl:px-12">
         {/* Logo lockup */}
         <Link
           to="/"
           aria-label="RizzOtto's Arena — home"
-          className="inline-flex items-center transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rizzotto-gold-500 focus-visible:ring-offset-2 focus-visible:ring-offset-rizzotto-iron-950 rounded-sm"
+          className="inline-flex shrink-0 items-center transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rizzotto-gold-500 focus-visible:ring-offset-2 focus-visible:ring-offset-rizzotto-iron-950 rounded-sm"
         >
           <RizzottoWordmarkImage className="h-12 w-auto sm:h-14" />
         </Link>
 
         {/* Desktop Nav */}
-        <nav aria-label="Primary" className="hidden items-center gap-5 xl:flex">
+        <nav aria-label="Primary" className="hidden min-w-0 items-center gap-4 xl:flex">
           {navLinks}
         </nav>
 
         {/* Auth area + Hamburger */}
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2.5">
           {user ? (
             <>
               <ActiveMatchIndicator />

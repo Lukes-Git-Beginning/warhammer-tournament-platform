@@ -2,8 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { randomBytes, randomInt } from 'node:crypto';
 
 const BLIND_TIMEOUT_MS = 2 * 60 * 1000;   // 2 min for blind faction picks
-const BAN_TIMEOUT_MS = 15 * 1000;          // 15s per ban/pick action (bans 2–8 and pick)
-const FIRST_BAN_TIMEOUT_MS = 30 * 1000;    // 30s for the very first ban (players need to orient)
+const BAN_TIMEOUT_MS = 30 * 1000;          // 30s per ban/pick action (all bans + the final pick)
+const FIRST_BAN_TIMEOUT_MS = 30 * 1000;    // 30s for the very first ban (same as the rest now)
 
 function cellKey(row: number, col: number): string {
   return `${row},${col}`;
@@ -88,7 +88,14 @@ export async function autoResolveStaleMatrixActions(fastify: FastifyInstance): P
       game: {
         select: {
           id: true,
-          match: { select: { id: true, player1_id: true, player2_id: true } },
+          match: {
+            select: {
+              id: true,
+              player1_id: true,
+              player2_id: true,
+              tournament: { select: { faction_allowlist: { select: { faction_id: true } } } },
+            },
+          },
           map_decision: { select: { picked_map_id: true } },
         },
       },
@@ -105,7 +112,10 @@ export async function autoResolveStaleMatrixActions(fastify: FastifyInstance): P
     if (p1Locked && p2Locked) continue; // both locked, should have revealed — skip
 
     try {
-      const pool = allFactions.map((f) => f.id);
+      // #4: honour the tournament faction allowlist (if any); restricted factions
+      // stay pickable. Open Play (no tournament) has no allowlist → full pool.
+      const allowlist = matrix.game.match.tournament?.faction_allowlist.map((f) => f.faction_id) ?? [];
+      const pool = (allowlist.length > 0 ? allFactions.filter((f) => allowlist.includes(f.id)) : allFactions).map((f) => f.id);
       const existingIds = [...(matrix.p1_factions as string[]), ...(matrix.p2_factions as string[])];
       const available = pool.filter((id) => !existingIds.includes(id));
 

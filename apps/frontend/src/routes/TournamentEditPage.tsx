@@ -883,6 +883,12 @@ export function TournamentEditPage() {
                     </label>
                   ))}
                 </div>
+                {form.playoff_format === 'TOP8' && (
+                  <FieldHint>TOP8 requires ≥16 participants at playoff start. Auto-falls back to TOP4 if below threshold.</FieldHint>
+                )}
+                {form.playoff_format === 'TOP4' && (
+                  <FieldHint>TOP4 requires ≥8 participants at playoff start. Auto-falls back to TOP2 if below threshold.</FieldHint>
+                )}
               </div>
 
               {form.playoff_format !== 'NONE' && (

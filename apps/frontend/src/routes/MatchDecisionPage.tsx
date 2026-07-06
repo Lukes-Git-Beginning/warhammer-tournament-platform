@@ -800,9 +800,11 @@ interface FactionMatrixPhaseProps {
   colPlayer?: PlayerRef;
   restrictedFactions?: string[];
   factionAllowlist?: string[];
+  pickedMapName?: string | null;
+  pickedMapImageUrl?: string | null;
 }
 
-function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer, restrictedFactions = [], factionAllowlist = [] }: FactionMatrixPhaseProps) {
+function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer, restrictedFactions = [], factionAllowlist = [], pickedMapName = null, pickedMapImageUrl = null }: FactionMatrixPhaseProps) {
   const queryClient = useQueryClient();
   const [selectedFactions, setSelectedFactions] = useState<string[]>([]);
   const [locking, setLocking] = useState(false);
@@ -829,7 +831,11 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
     if (!mx || !revealed || decided) return false;
     const isPick = bans.length === 7;
     if (isPick) return currentUserId === mx.bottomPlayerId;
-    return bans.length % 2 === 0 ? currentUserId === mx.topPlayerId : currentUserId === mx.bottomPlayerId;
+    // Balanced 1-2-2-2 ban order (mirrors backend faction-matrix.ts).
+    const BAN_ACTOR_IS_TOP = [true, false, false, true, true, false, false] as const;
+    return BAN_ACTOR_IS_TOP[bans.length]
+      ? currentUserId === mx.topPlayerId
+      : currentUserId === mx.bottomPlayerId;
   };
   const isMyTurn = myTurn();
   const isPick = bans.length >= 7;
@@ -920,6 +926,21 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
           <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">3×3 Faction Matrix</h2>
           <p className="mt-1 text-sm text-rizzotto-stone-400">{whoseTurnLabel} · {turnLabel}</p>
           {isMyTurn && mx.lastActionAt && <MatrixCountdown lastActionAt={mx.lastActionAt} bansCount={mx.bans.length} />}
+          {pickedMapName && (
+            <div className="mt-2 flex flex-col items-center gap-1">
+              <p className="text-xs text-rizzotto-stone-500">
+                Battlefield: <span className="font-semibold text-rizzotto-stone-300">{pickedMapName}</span>
+              </p>
+              {pickedMapImageUrl && (
+                <img
+                  src={pickedMapImageUrl}
+                  alt={pickedMapName}
+                  className="max-w-[220px] rounded border border-rizzotto-iron-600 object-contain"
+                  loading="lazy"
+                />
+              )}
+            </div>
+          )}
         </div>
 
         <div className="max-w-[660px] mx-auto">
@@ -1484,6 +1505,8 @@ export function MatchDecisionPage() {
                 colPlayer={matrixColPlayer}
                 restrictedFactions={decision.restrictedFactions ?? []}
                 factionAllowlist={decision.factionAllowlist ?? []}
+                pickedMapName={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.name ?? null}
+                pickedMapImageUrl={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.image_url ?? null}
               />
             </motion.div>
           )}

@@ -39,7 +39,7 @@ function scalePercent(skill: number): number {
   return 0;
 }
 
-function ScaleTrack({ markerPercent, activeBand }: { markerPercent: number | null; activeBand: number | null }) {
+function ScaleTrack({ markerPercent, dataPercent, activeBand }: { markerPercent: number | null; dataPercent?: number | null; activeBand: number | null }) {
   return (
     <div className="relative">
       <div className="flex h-2 overflow-hidden rounded-full">
@@ -52,6 +52,14 @@ function ScaleTrack({ markerPercent, activeBand }: { markerPercent: number | nul
           />
         ))}
       </div>
+      {/* #17: data-only marker — where the player's games alone place them. */}
+      {dataPercent != null && (
+        <div
+          className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-stone-400 bg-stone-900"
+          style={{ left: `${dataPercent}%` }}
+          title="Where your games alone place you"
+        />
+      )}
       {markerPercent !== null && (
         <div
           className="absolute top-1/2 h-4 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-rizzotto-stone-100 shadow-rizzotto-gold-glow"
@@ -133,6 +141,11 @@ export function PlayerLevelScale({
   const bi = bandIndex(displaySkill);
   const pct = scalePercent(displaySkill);
   const winPct = Math.round((1 / (1 + Math.exp(-displaySkill))) * 100);
+  // #17: when a questionnaire is blended in, also surface where the games alone place
+  // the player — showing which way real results are correcting the rating.
+  const dataPct = data.hasQuestionnaire && data.generalSkill != null ? scalePercent(data.generalSkill) : null;
+  const dataBandName =
+    data.hasQuestionnaire && data.generalSkill != null ? BANDS[bandIndex(data.generalSkill)]!.name : null;
 
   return (
     <Frame>
@@ -142,7 +155,13 @@ export function PlayerLevelScale({
         </span>
         <span className="text-xs text-stone-500">{winPct}% vs. average player</span>
       </div>
-      <ScaleTrack markerPercent={pct} activeBand={bi} />
+      <ScaleTrack markerPercent={pct} dataPercent={dataPct} activeBand={bi} />
+      {dataPct != null && (
+        <p className="mt-2 flex items-center gap-1.5 text-[11px] text-stone-500">
+          <span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-stone-400 bg-stone-900" />
+          From your games only: <span className="text-stone-400">{dataBandName}</span>
+        </p>
+      )}
       {isOwnProfile && !data.hasQuestionnaire && (
         <button
           onClick={onCalibrate}
