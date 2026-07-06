@@ -113,6 +113,17 @@ export function GameTile({
   const myId = isPlayer1 ? player1Id : isPlayer2 ? player2Id : null;
   const opponentId = isPlayer1 ? player2Id : isPlayer2 ? player1Id : null;
 
+  // #7: the viewer always sits on the left — swap sides when the current user is player2.
+  const swap = isPlayer2 && !isPlayer1;
+  const leftId = swap ? player2Id : player1Id;
+  const leftName = swap ? player2Name : player1Name;
+  const leftAvatarUrl = swap ? player2AvatarUrl : player1AvatarUrl;
+  const leftFaction = swap ? p2Faction : p1Faction;
+  const rightId = swap ? player1Id : player2Id;
+  const rightName = swap ? player1Name : player2Name;
+  const rightAvatarUrl = swap ? player1AvatarUrl : player2AvatarUrl;
+  const rightFaction = swap ? p1Faction : p2Faction;
+
   // Blind pick is required for BPT tournaments and for any match that has a
   // MatchBlindPick row (Open Play matches always get one on creation).
   const needsBlindPick = tournamentMode === 'BPT' || !!game.blindPick;
@@ -154,21 +165,25 @@ export function GameTile({
       {game.status === 'COMPLETED' && (
         <div className="flex items-start justify-between gap-3">
           <PlayerInfo
-            name={player1Name}
-            avatarUrl={player1AvatarUrl}
-            faction={p1Faction}
-            isWinner={game.winnerId === player1Id}
+            name={leftName}
+            avatarUrl={leftAvatarUrl}
+            faction={leftFaction}
+            isWinner={game.winnerId === leftId}
           />
           <div className="flex-1 flex flex-col items-center gap-2 pt-1 min-w-0">
             <div className="h-10 w-10 rounded-full border-2 border-rizzotto-gold-400 flex items-center justify-center text-rizzotto-gold-400 text-lg">
               ⚔
             </div>
-            <p className="text-xs font-semibold text-rizzotto-gold-400 text-center">
-              Winner:{' '}
-              <span className="text-rizzotto-stone-100">
-                {game.winnerId === player1Id ? player1Name : player2Name}
-              </span>
-            </p>
+            {game.winnerId ? (
+              <p className="text-xs font-semibold text-rizzotto-gold-400 text-center">
+                Winner:{' '}
+                <span className="text-rizzotto-stone-100">
+                  {game.winnerId === player1Id ? player1Name : player2Name}
+                </span>
+              </p>
+            ) : (
+              <p className="text-xs font-semibold text-rizzotto-stone-400 text-center">Draw</p>
+            )}
             {pickedMap && (
               <div className="flex flex-col items-center gap-1 w-full">
                 <p className="text-xs text-rizzotto-stone-500 text-center">
@@ -202,10 +217,10 @@ export function GameTile({
             )}
           </div>
           <PlayerInfo
-            name={player2Name}
-            avatarUrl={player2AvatarUrl}
-            faction={p2Faction}
-            isWinner={game.winnerId === player2Id}
+            name={rightName}
+            avatarUrl={rightAvatarUrl}
+            faction={rightFaction}
+            isWinner={game.winnerId === rightId}
           />
         </div>
       )}
@@ -225,9 +240,9 @@ export function GameTile({
               surfaces the per-game roll before map selection, like an SFT faction. */}
           {!decisionComplete && !needsBlindPick && (p1Faction || p2Faction) && (
             <div className="flex items-start justify-center gap-6">
-              <PlayerInfo name={player1Name} avatarUrl={player1AvatarUrl} faction={p1Faction} />
+              <PlayerInfo name={leftName} avatarUrl={leftAvatarUrl} faction={leftFaction} />
               <span className="self-center text-xs uppercase tracking-wider text-rizzotto-stone-500">vs</span>
-              <PlayerInfo name={player2Name} avatarUrl={player2AvatarUrl} faction={p2Faction} />
+              <PlayerInfo name={rightName} avatarUrl={rightAvatarUrl} faction={rightFaction} />
             </div>
           )}
 
@@ -307,7 +322,7 @@ export function GameTile({
             <div className="flex flex-col gap-4">
               {/* Player info + Map (3-column layout) */}
               <div className="flex items-start justify-between gap-3">
-                <PlayerInfo name={player1Name} avatarUrl={player1AvatarUrl} faction={p1Faction} />
+                <PlayerInfo name={leftName} avatarUrl={leftAvatarUrl} faction={leftFaction} />
                 {pickedMap ? (
                   <div className="flex-1 flex flex-col items-center gap-1 min-w-0">
                     <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider">Battlefield</span>
@@ -333,7 +348,7 @@ export function GameTile({
                 ) : (
                   <div className="flex-1" />
                 )}
-                <PlayerInfo name={player2Name} avatarUrl={player2AvatarUrl} faction={p2Faction} />
+                <PlayerInfo name={rightName} avatarUrl={rightAvatarUrl} faction={rightFaction} />
               </div>
 
               {/* Lobby code */}
