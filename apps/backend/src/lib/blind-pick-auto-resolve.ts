@@ -23,7 +23,7 @@ export async function autoResolveStaleBlindPicks(fastify: FastifyInstance): Prom
         select: {
           id: true,
           map_decision: { select: { picked_map_id: true } },
-          match: { select: { id: true, tournament: { select: { faction_allowlist: { select: { faction_id: true } } } } } },
+          match: { select: { id: true } },
         },
       },
     },
@@ -39,11 +39,8 @@ export async function autoResolveStaleBlindPicks(fastify: FastifyInstance): Prom
 
   for (const pick of stale) {
     const lockedFactionId = pick.player1_faction_id ?? pick.player2_faction_id;
-    // #4: honour the tournament faction allowlist (if any); restricted stay pickable.
-    const allowlist = pick.game.match.tournament?.faction_allowlist.map((f) => f.faction_id) ?? [];
-    const allowed = allowlist.length > 0 ? allFactions.filter((f) => allowlist.includes(f.id)) : allFactions;
-    const pool = allowed.filter((f) => f.id !== lockedFactionId);
-    const randomFaction = pool[Math.floor(Math.random() * pool.length)] ?? allowed[0];
+    const pool = allFactions.filter((f) => f.id !== lockedFactionId);
+    const randomFaction = pool[Math.floor(Math.random() * pool.length)];
     if (!randomFaction) continue;
 
     try {

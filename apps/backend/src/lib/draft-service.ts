@@ -228,11 +228,7 @@ export class DraftService {
         throw new InvalidActionError(`User ${userId} is not a player in this draft`);
       }
 
-      const allFactionsRaw = await this.getAllFactionIds();
-      // #4: honour the tournament faction allowlist (if any); restricted factions
-      // stay pickable. No allowlist / Open Play → full pool.
-      const allowlist = await this.loadFactionAllowlist(snapshot.matchId);
-      const allFactions = allowlist.length > 0 ? allFactionsRaw.filter((id) => allowlist.includes(id)) : allFactionsRaw;
+      const allFactions = await this.getAllFactionIds();
       const ctx: ApplyContext = {
         allFactions,
         categoryLimits: snapshot.categoryLimits,
@@ -274,11 +270,7 @@ export class DraftService {
       const turn = this.currentTurn(snapshot);
       if (!turn) return;
 
-      const allFactionsRaw = await this.getAllFactionIds();
-      // #4: honour the tournament faction allowlist (if any); restricted factions
-      // stay pickable. No allowlist / Open Play → full pool.
-      const allowlist = await this.loadFactionAllowlist(snapshot.matchId);
-      const allFactions = allowlist.length > 0 ? allFactionsRaw.filter((id) => allowlist.includes(id)) : allFactionsRaw;
+      const allFactions = await this.getAllFactionIds();
       const ctx: ApplyContext = {
         allFactions,
         categoryLimits: snapshot.categoryLimits,
@@ -987,16 +979,6 @@ export class DraftService {
   // ---------------------------------------------------------------------------
   // Private: faction IDs cache
   // ---------------------------------------------------------------------------
-
-  /** The tournament's faction allowlist for a match, or [] when none / Open Play. */
-  private async loadFactionAllowlist(matchId: string): Promise<string[]> {
-    if (!matchId) return [];
-    const match = await this.prisma.match.findUnique({
-      where: { id: matchId },
-      select: { tournament: { select: { faction_allowlist: { select: { faction_id: true } } } } },
-    });
-    return match?.tournament?.faction_allowlist.map((f) => f.faction_id) ?? [];
-  }
 
   private async getAllFactionIds(): Promise<string[]> {
     if (this.cachedFactionIds) return this.cachedFactionIds;

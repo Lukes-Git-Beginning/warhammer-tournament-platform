@@ -23,7 +23,7 @@ const TournamentCreateSchema = z.object({
   max_participants: z.coerce.number().int().positive().optional().or(z.literal('')),
   registration_deadline: z.string().optional(),
   rules: z.string().max(10000).optional(),
-  standard_rules_enabled: z.boolean().default(true),
+  standard_rules_enabled: z.boolean().default(false),
   restrictions: z.string().max(10000).optional(),
   discord_link: z.string().url().optional().or(z.literal('')),
   draft_enabled: z.boolean().default(false),
@@ -163,7 +163,7 @@ export function TournamentCreateForm() {
     start_date: nextRoundHour(),
     registration_deadline: nextRoundHour(),
     draft_enabled: false,
-    standard_rules_enabled: true,
+    standard_rules_enabled: false,
     rounds_count: 5,
     has_third_place_match: false,
     playoff_format: 'NONE',
@@ -598,9 +598,6 @@ export function TournamentCreateForm() {
               </div>
               {form.playoff_format === 'TOP8' && (
                 <FieldHint>TOP8 requires ≥16 participants at playoff start. Auto-falls back to TOP4 if below threshold.</FieldHint>
-              )}
-              {form.playoff_format === 'TOP4' && (
-                <FieldHint>TOP4 requires ≥8 participants at playoff start. Auto-falls back to TOP2 if below threshold.</FieldHint>
               )}
             </div>
 
