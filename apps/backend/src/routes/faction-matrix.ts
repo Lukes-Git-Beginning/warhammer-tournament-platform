@@ -271,12 +271,16 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
       const bottomPlayer = matrix.bottom_player_id;
       const isPick = bans.length === 7;
 
-      // Determine whose turn it is
+      // Determine whose turn it is.
+      // Balanced 1-2-2-2 ban order (bans.length → actor): Top bans 1, then the sides
+      // alternate in pairs (Bottom 2, Top 2, Bottom 2) to blunt the first-mover edge;
+      // the coin-flip loser (Bottom) picks last from the two remaining cells.
+      const BAN_ACTOR_IS_TOP = [true, false, false, true, true, false, false] as const; // by bans.length 0..6
       let expectedActorId: string;
       if (isPick) {
-        expectedActorId = bottomPlayer; // loser picks from remaining 2
+        expectedActorId = bottomPlayer; // coin-flip loser picks from remaining 2
       } else {
-        expectedActorId = bans.length % 2 === 0 ? topPlayer : bottomPlayer;
+        expectedActorId = BAN_ACTOR_IS_TOP[bans.length] ? topPlayer : bottomPlayer;
       }
 
       if (!isStaff && actorId !== expectedActorId) {
