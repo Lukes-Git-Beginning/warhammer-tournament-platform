@@ -183,9 +183,7 @@ describe('Balanced Liechtenstein — division playoffs', () => {
     const { tournamentId } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
     await runGroupPhase(tournamentId, 2);
 
-    const result = await startBalancedPlayoffs(app, tournamentId);
-    expect('finals' in result).toBe(true);
-
+    // The pairing tick auto-launches the division playoffs when the group finishes.
     const finals = await prisma.match.findMany({
       where: { tournament_id: tournamentId, phase: 'PLAYOFF_FINAL', deleted_at: null },
       select: { round: true, player1_id: true, player2_id: true, status: true },
@@ -199,16 +197,14 @@ describe('Balanced Liechtenstein — division playoffs', () => {
 
   it('refuses to generate playoffs twice', async () => {
     const { tournamentId } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
-    await runGroupPhase(tournamentId, 2);
-    await startBalancedPlayoffs(app, tournamentId);
-    const second = await startBalancedPlayoffs(app, tournamentId);
-    expect('error' in second).toBe(true);
+    await runGroupPhase(tournamentId, 2); // auto-launches the division playoffs
+    const again = await startBalancedPlayoffs(app, tournamentId);
+    expect('error' in again).toBe(true);
   });
 
   it('finalizes to complete, distinct placements after division finals', async () => {
     const { tournamentId, users } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
-    await runGroupPhase(tournamentId, 2);
-    await startBalancedPlayoffs(app, tournamentId);
+    await runGroupPhase(tournamentId, 2); // auto-launches the division playoffs
 
     // Play out the division finals.
     const finals = await prisma.match.findMany({

@@ -242,6 +242,21 @@ export async function runBalancedPairingTick(
           ms.map((m) => ({ id: m.id, player1_id: m.player1_id, player2_id: m.player2_id })),
         );
       }
+    } else {
+      // No new pairings this tick → the group phase may be complete. Auto-launch
+      // the division playoffs (previously host-only). startBalancedPlayoffs is the
+      // authority: it only proceeds when every contender has played all rounds.
+      // Cheap guard first so we don't re-query on every post-playoff match tick.
+      const playoffExists = await fastify.prisma.match.count({
+        where: { tournament_id: tournamentId, deleted_at: null, phase: { not: null } },
+      });
+      if (playoffExists === 0) {
+        const result = await startBalancedPlayoffs(fastify, tournamentId);
+        if (!('error' in result)) {
+          emitBracketUpdate(fastify.io, tournamentId);
+          fastify.log.info({ tournamentId, ...result }, 'balanced playoffs auto-started');
+        }
+      }
     }
   } catch (err) {
     fastify.log.error({ err, tournamentId }, 'balanced pairing tick failed');
