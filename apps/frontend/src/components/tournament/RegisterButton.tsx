@@ -293,6 +293,9 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
   // match-by-match; 'fixed' then flows into the normal faction picker.
   const [freePickChoice, setFreePickChoice] = useState<'fixed' | 'later' | null>(null);
   const [choosingFreePick, setChoosingFreePick] = useState(false);
+  // Balanced Liechtenstein + Free Pick: the skill band is chosen first, then the
+  // Free Pick choice — carry the band through so the final register call keeps it.
+  const [requestedBand, setRequestedBand] = useState<number | null>(null);
 
   const isFreePick = tournament.mode === 'FREE_PICK';
   const needsFactionPick =
@@ -320,6 +323,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
       setSelectedFactions([]);
       setChoosingFreePick(false);
       setFreePickChoice(null);
+      setRequestedBand(null);
       void queryClient.invalidateQueries({ queryKey: ['tournament', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['participant-me', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['tournament-participants', tournament.slug] });
@@ -414,7 +418,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
           <button
             type="button"
             disabled={register.isPending}
-            onClick={() => { setFreePickChoice('later'); register.mutate(undefined); }}
+            onClick={() => { setFreePickChoice('later'); register.mutate(requestedBand != null ? { requested_band: requestedBand } : undefined); }}
             className="rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-3 text-left transition-colors hover:border-rizzotto-gold-500/60 disabled:opacity-50"
           >
             <p className="text-sm font-semibold text-rizzotto-stone-100">Pick match by match</p>
@@ -467,7 +471,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
             variant="forge"
             size="md"
             disabled={selectedFactions.length !== pickCount || register.isPending}
-            onClick={() => register.mutate(undefined)}
+            onClick={() => register.mutate(requestedBand != null ? { requested_band: requestedBand } : undefined)}
           >
             {register.isPending ? t('tournament.register.pending') : 'Confirm Registration'}
           </Button>
@@ -487,7 +491,17 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
           open={pickingBand}
           onOpenChange={setPickingBand}
           userId={userId}
-          onConfirm={(band) => register.mutate({ requested_band: band })}
+          onConfirm={(band) => {
+            // BaLi + Free Pick: after the band, ask the Free Pick choice before
+            // registering. Plain BaLi registers straight away.
+            if (isFreePick) {
+              setRequestedBand(band);
+              setPickingBand(false);
+              setChoosingFreePick(true);
+            } else {
+              register.mutate({ requested_band: band });
+            }
+          }}
         />
       )}
 
