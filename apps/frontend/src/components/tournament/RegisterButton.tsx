@@ -492,12 +492,15 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
           onOpenChange={setPickingBand}
           userId={userId}
           onConfirm={(band) => {
-            // BaLi + Free Pick: after the band, ask the Free Pick choice before
-            // registering. Plain BaLi registers straight away.
+            // After the skill band, continue any faction step the mode needs
+            // (Free Pick choice, or the SFT/2D3 faction picker) before registering;
+            // plain BaLi registers straight away. Carry the band through.
+            setRequestedBand(band);
+            setPickingBand(false);
             if (isFreePick) {
-              setRequestedBand(band);
-              setPickingBand(false);
               setChoosingFreePick(true);
+            } else if (needsFactionPick) {
+              setPickingFaction(true);
             } else {
               register.mutate({ requested_band: band });
             }
