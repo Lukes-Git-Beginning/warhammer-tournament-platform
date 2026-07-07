@@ -83,7 +83,7 @@ async function setup(bands: number[], roundsCount: number): Promise<{ tournament
 async function liveMatches(tournamentId: string) {
   return prisma.match.findMany({
     where: { tournament_id: tournamentId, deleted_at: null },
-    select: { id: true, round: true, player1_id: true, player2_id: true, status: true },
+    select: { id: true, round: true, player1_id: true, player2_id: true, status: true, phase: true },
     orderBy: [{ round: 'asc' }, { match_number: 'asc' }],
   });
 }
@@ -145,10 +145,12 @@ describe('Balanced Liechtenstein — incremental pairing flow', () => {
     await runBalancedPairingTick(app, tournamentId);
 
     const matches = await liveMatches(tournamentId);
-    // Exactly two rounds × two matches, nothing more generated.
-    expect(matches.filter((m) => m.round === 1)).toHaveLength(2);
-    expect(matches.filter((m) => m.round === 2)).toHaveLength(2);
-    expect(matches.filter((m) => m.round === 3)).toHaveLength(0);
+    // Group phase is exactly two rounds × two matches — no third GROUP round.
+    // (Round 3 now holds the auto-launched division playoffs, phase != null.)
+    const group = matches.filter((m) => m.phase === null);
+    expect(group.filter((m) => m.round === 1)).toHaveLength(2);
+    expect(group.filter((m) => m.round === 2)).toHaveLength(2);
+    expect(group.filter((m) => m.round === 3)).toHaveLength(0);
   });
 
   it('keeps same-band players together and ascends the surplus', async () => {
