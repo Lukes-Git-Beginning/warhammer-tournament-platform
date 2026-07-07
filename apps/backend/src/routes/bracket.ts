@@ -23,6 +23,7 @@ import {
   InsufficientPlayersError,
 } from '../lib/playoff-generator.js';
 import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
+import { autoSwissConfig } from '../lib/auto-swiss-service.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
 import { createManualMatch } from '../lib/tournament-management.js';
 import { notifyMatchesCreated } from '../lib/discord-notify.js';
@@ -258,6 +259,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           format: true,
           host_id: true,
           rounds_count: true,
+          playoff_format: true,
+          auto_sizing: true,
           has_third_place_match: true,
           start_date: true,
         },
@@ -310,6 +313,21 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           message: 'At least 2 participants required',
           statusCode: 400,
         });
+      }
+
+      // #37 auto-sizing: derive the round count + playoff format from the actual
+      // check-in count at start (same thresholds AUTO_SWISS uses), then persist so
+      // round advancement + playoff generation use the sized values.
+      if (tournament.auto_sizing) {
+        const sized = autoSwissConfig(participants.length);
+        if (sized) {
+          await fastify.prisma.tournament.update({
+            where: { id: tournament.id },
+            data: { rounds_count: sized.rounds, playoff_format: sized.playoffFormat },
+          });
+          tournament.rounds_count = sized.rounds;
+          tournament.playoff_format = sized.playoffFormat;
+        }
       }
 
       const participantIds = participants.map((p) => p.user_id);

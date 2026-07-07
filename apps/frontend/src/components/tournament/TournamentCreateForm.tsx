@@ -33,6 +33,8 @@ const TournamentCreateSchema = z.object({
   rounds_count: z.coerce.number().int().min(3).max(6).default(5),
   has_third_place_match: z.boolean().default(false),
   playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).default('NONE'),
+  auto_sizing: z.boolean().default(false),
+  auto_advance: z.boolean().default(false),
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
@@ -168,6 +170,8 @@ export function TournamentCreateForm() {
     rounds_count: 5,
     has_third_place_match: false,
     playoff_format: 'NONE',
+    auto_sizing: false,
+    auto_advance: false,
     swiss_match_format: 'BO1',
     playoff_match_format: 'BO1',
     finale_match_format: 'BO1',
@@ -410,9 +414,6 @@ export function TournamentCreateForm() {
               <option value="LIECHTENSTEIN">{t('tournament.format.liechtenstein')}</option>
               <option value="BALANCED_LIECHTENSTEIN">{t('tournament.format.balanced_liechtenstein')}</option>
             </optgroup>
-            <optgroup label="── Automated ──">
-              <option value="AUTO_SWISS">Auto Swiss — self-running</option>
-            </optgroup>
           </Select>
         </div>
 
@@ -441,6 +442,27 @@ export function TournamentCreateForm() {
           </FieldHint>
         </div>
       </div>
+
+      {form.format === 'SWISS' && (
+        <fieldset className="space-y-2 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+          <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">Automation</legend>
+          <p className="text-xs text-rizzotto-stone-500">Turn both on for a fully self-running tournament (what &ldquo;Auto Swiss&rdquo; used to be).</p>
+          <label className="flex items-start gap-2 text-sm text-rizzotto-stone-300">
+            <input type="checkbox" name="auto_sizing" checked={form.auto_sizing ?? false} onChange={handleChange} className="mt-0.5" />
+            <span>
+              <span className="font-medium text-rizzotto-stone-200">Auto-size from check-in</span>
+              <span className="block text-xs text-rizzotto-stone-500">Set the round count and playoff size automatically from how many players check in (4–7: 3R + Final · 8–15: 5R + Top 4 · 16+: 4R + Top 8), instead of the fixed values above.</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-rizzotto-stone-300">
+            <input type="checkbox" name="auto_advance" checked={form.auto_advance ?? false} onChange={handleChange} className="mt-0.5" />
+            <span>
+              <span className="font-medium text-rizzotto-stone-200">Auto-advance rounds &amp; playoffs</span>
+              <span className="block text-xs text-rizzotto-stone-500">Advance to the next round and generate the playoffs automatically once every match in a round is complete, instead of the host doing it by hand.</span>
+            </span>
+          </label>
+        </fieldset>
+      )}
 
       {form.format === 'AUTO_SWISS' && (
         <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">

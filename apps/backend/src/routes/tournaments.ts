@@ -145,6 +145,8 @@ const CreateTournamentSchema = z.object({
   // Welle 2 — Tournament mechanics
   rounds_count: z.number().int().min(3).max(6).optional(),
   playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).optional(),
+  auto_sizing: z.boolean().optional(),
+  auto_advance: z.boolean().optional(),
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
@@ -173,6 +175,8 @@ const PatchTournamentSchema = z.object({
   // Welle 2 — Tournament mechanics
   rounds_count: z.number().int().min(3).max(6).optional(),
   playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).optional(),
+  auto_sizing: z.boolean().optional(),
+  auto_advance: z.boolean().optional(),
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
@@ -418,6 +422,9 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           // Welle 2
           rounds_count: isAutoConfigured ? undefined : data.rounds_count,
           playoff_format: isAutoConfigured ? undefined : data.playoff_format,
+          // #37: opt-in auto-sizing / auto-advancement (any format)
+          auto_sizing: data.auto_sizing ?? false,
+          auto_advance: data.auto_advance ?? false,
           swiss_match_format: isAutoConfigured ? 'BO1' : data.swiss_match_format,
           playoff_match_format: isAutoConfigured ? 'BO1' : data.playoff_match_format,
           finale_match_format: isAutoConfigured ? 'BO1' : (data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' ? 'BO3' : undefined)),

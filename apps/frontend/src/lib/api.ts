@@ -185,6 +185,8 @@ export interface TournamentCreate {
   // Welle 2 fields
   rounds_count?: number;
   playoff_format?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
+  auto_sizing?: boolean;
+  auto_advance?: boolean;
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
   finale_match_format?: 'BO1' | 'BO3' | 'BO5';
@@ -218,6 +220,8 @@ export interface TournamentPatchInput {
   // until-ongoing fields
   rounds_count?: number;
   playoff_format?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
+  auto_sizing?: boolean;
+  auto_advance?: boolean;
   has_third_place_match?: boolean;
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5';

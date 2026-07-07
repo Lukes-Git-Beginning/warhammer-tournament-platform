@@ -381,9 +381,14 @@ export default fp(
           );
         }
 
-        // Phase 3: advance rounds for ongoing tournaments
+        // Phase 3: advance rounds for ongoing tournaments — AUTO_SWISS, plus any
+        // format that opted into auto-advancement (#37).
         const ongoingTournaments = await fastify.prisma.tournament.findMany({
-          where: { format: 'AUTO_SWISS', status: 'ONGOING', deleted_at: null },
+          where: {
+            OR: [{ format: 'AUTO_SWISS' }, { auto_advance: true }],
+            status: 'ONGOING',
+            deleted_at: null,
+          },
           select: { id: true },
         });
         for (const t of ongoingTournaments) {

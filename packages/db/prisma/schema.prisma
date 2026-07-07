@@ -307,6 +307,11 @@ model Tournament {
   rounds_count           Int                  @default(5) // 3–6 via constraint
   has_third_place_match  Boolean              @default(false)
   playoff_format         PlayoffFormat        @default(NONE)
+  // #37: the two behaviours that used to be baked into AUTO_SWISS, now opt-in for
+  // any format. auto_sizing = derive rounds + playoff from the check-in count at
+  // start; auto_advance = the cron advances rounds + generates playoffs.
+  auto_sizing            Boolean              @default(false)
+  auto_advance           Boolean              @default(false)
   swiss_match_format     MatchFormat          @default(BO1)
   playoff_match_format   MatchFormat          @default(BO1) // Bo3/Bo5 re-enable with series support
   finale_match_format    MatchFormat          @default(BO1)
