@@ -430,7 +430,7 @@ export function TournamentCreateForm() {
             <option value="SLT">SLT — Single List Tournament</option>
             <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
             <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
-            <option value="FREE_PICK">Free Pick — Fixed Faction or Pick Match-by-Match</option>
+            <option value="FREE_PICK">Enticity&apos;s Free Pick — SFT/Matrix Hybrid</option>
           </Select>
           <FieldHint>
             {(form.mode === 'BPT' || !form.mode) && 'Every match includes a blind faction pick phase.'}

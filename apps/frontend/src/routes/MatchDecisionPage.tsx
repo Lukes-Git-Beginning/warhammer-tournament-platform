@@ -1176,7 +1176,7 @@ function FreePickMiniPhase({ matchId, decision, currentUserId, factions, rowPlay
   return (
     <div className="flex flex-col items-center gap-6">
       <div className="text-center">
-        <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">Free Pick — Mixed Matchup</h2>
+        <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">Enticity&apos;s Free Pick — Mixed Matchup</h2>
         <p className="mt-1 text-sm text-rizzotto-stone-400">
           {fixedEntry ? `${fixedEntry.faction.name} (fixed) vs a faction they choose from three` : 'One player is committed, one offers three.'}
         </p>
