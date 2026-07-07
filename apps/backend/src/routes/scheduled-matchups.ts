@@ -1,6 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
+// A scheduled matchup stops being acceptable shortly after its proposed play
+// time — you cannot claim a match whose start time has already passed. This
+// grace lets a late accepter still grab a slot right around its start, and caps
+// how long a challenge lingers in the list past its proposed time.
+const ACCEPT_GRACE_MS = 60 * 60 * 1000; // 1h past proposed_at
+
 const CreateMatchupSchema = z.object({
   format: z.enum(['BO1', 'BO3', 'BO5']),
   proposed_at: z.string().datetime(),
@@ -21,12 +27,21 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
     const page = Math.max(1, parseInt(query.page ?? '1', 10));
     const pageSize = 20;
 
+    // Hard floor: never surface a matchup whose proposed play time has already
+    // passed (beyond the grace) — even if its stored expires_at still lies in
+    // the future (e.g. legacy rows created with a long expires_in_hours window).
+    const graceFloor = new Date(Date.now() - ACCEPT_GRACE_MS);
+    const afterDate = query.after ? new Date(query.after) : null;
+    const proposedGte = afterDate && afterDate > graceFloor ? afterDate : graceFloor;
+
     const where = {
       status: 'OPEN' as const,
       expires_at: { gt: new Date() },
       ...(query.format ? { format: query.format as 'BO1' | 'BO3' | 'BO5' } : {}),
-      ...(query.after ? { proposed_at: { gte: new Date(query.after) } } : {}),
-      ...(query.before ? { proposed_at: { lte: new Date(query.before) } } : {}),
+      proposed_at: {
+        gte: proposedGte,
+        ...(query.before ? { lte: new Date(query.before) } : {}),
+      },
     };
 
     const [matchups, total] = await Promise.all([
@@ -71,7 +86,11 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const { format, proposed_at, notes, expires_in_hours } = parsed.data;
       const proposedTime = new Date(proposed_at);
-      const expiresAt = new Date(proposedTime.getTime() + expires_in_hours * 60 * 60 * 1000);
+      // Cap the offer window so a challenge never stays acceptable long past its
+      // proposed play time. Immediate challenges (short expires_in_hours) keep
+      // their own shorter window; scheduled ones are capped at proposed + grace.
+      const requestedExpiry = proposedTime.getTime() + expires_in_hours * 60 * 60 * 1000;
+      const expiresAt = new Date(Math.min(requestedExpiry, proposedTime.getTime() + ACCEPT_GRACE_MS));
 
       const matchup = await fastify.prisma.scheduledMatchup.create({
         data: {
@@ -109,7 +128,13 @@ const scheduledMatchupsRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      if (!matchup || matchup.status !== 'OPEN' || matchup.expires_at < new Date()) {
+      const graceFloor = new Date(Date.now() - ACCEPT_GRACE_MS);
+      if (
+        !matchup ||
+        matchup.status !== 'OPEN' ||
+        matchup.expires_at < new Date() ||
+        matchup.proposed_at < graceFloor
+      ) {
         return reply.code(404).send({ error: 'NotFound', message: 'Matchup not found or no longer open', statusCode: 404 });
       }
 
