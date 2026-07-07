@@ -14,6 +14,7 @@ import {
 } from '@/lib/api';
 import type { MatchDecisionState, MapDto } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
+import { toActualCell } from '@/lib/matrix';
 import { PageShell } from '@/components/layout/PageShell';
 import { Button } from '@/components/ui/button';
 import { FactionBadge } from '@/components/meta/FactionBadge';
@@ -360,7 +361,7 @@ function PickBanPhase({
       </div>
 
       {/* Map grid */}
-      <div className="grid grid-cols-3 gap-3 w-full max-w-lg">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-4xl">
         {mapPool.map((map) => {
           const isBanned = allBannedIds.includes(map.id);
           const isPicked = map.id === decision.pickedMapId;
@@ -378,13 +379,13 @@ function PickBanPhase({
                 whileHover={isClickable ? { scale: 1.03, y: -2 } : {}}
                 whileTap={isClickable ? { scale: 0.97 } : {}}
                 className={[
-                  'relative overflow-hidden rounded-md border aspect-[4/3] flex flex-col items-center justify-center text-center transition-all',
+                  'relative overflow-hidden rounded-md border aspect-[4/3] transition-all',
                   isBanned
-                    ? 'border-rizzotto-blood-500/40 bg-rizzotto-iron-900/60 grayscale'
+                    ? 'border-rizzotto-iron-700 bg-rizzotto-iron-900/60 grayscale'
                     : isPicked
-                      ? 'border-rizzotto-gold-400 bg-rizzotto-gold-500/10 shadow-rizzotto-emboss'
+                      ? 'border-rizzotto-iron-700 bg-rizzotto-iron-900 shadow-rizzotto-emboss'
                       : isClickable
-                        ? 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-blood-500 cursor-pointer'
+                        ? 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-iron-500 cursor-pointer'
                         : 'border-rizzotto-iron-700 bg-rizzotto-iron-900/80 cursor-default',
                 ].join(' ')}
               >
@@ -392,58 +393,56 @@ function PickBanPhase({
                   <img
                     src={map.image_url}
                     alt=""
-                    className="absolute inset-0 w-full h-full object-cover opacity-20"
+                    className={`absolute inset-0 h-full w-full object-cover ${
+                      isBanned ? 'opacity-40' : 'opacity-90'
+                    }`}
                   />
                 )}
-                <div className="relative z-10 px-2">
+                {/* Name sits on a bottom scrim so it stays legible over the map */}
+                <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-rizzotto-iron-950 via-rizzotto-iron-950/80 to-transparent px-2.5 pb-2 pt-6">
                   <p
-                    className={`text-xs font-semibold leading-tight font-display ${
-                      isBanned
-                        ? 'text-rizzotto-stone-500'
-                        : isPicked
-                          ? 'text-rizzotto-gold-400'
-                          : 'text-rizzotto-stone-200'
+                    className={`text-sm font-semibold leading-tight font-display ${
+                      isBanned ? 'text-rizzotto-stone-400' : 'text-rizzotto-stone-100'
                     }`}
                   >
                     {map.name}
                   </p>
                 </div>
 
-                {/* Diagonal BANNED overlay */}
+                {/* Banned: red vignette (glow from the edges) + faint cross-out */}
                 {isBanned && (
-                  <div className="absolute inset-0 z-20 overflow-hidden bg-rizzotto-iron-950/90 flex items-center justify-center">
-                    <span
-                      className="font-display font-black tracking-widest text-red-400 uppercase pointer-events-none select-none"
-                      style={{ transform: 'rotate(-35deg)', fontSize: '1.15rem' }}
-                    >
-                      BANNED
-                    </span>
+                  <div
+                    className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-md"
+                    style={{ boxShadow: 'inset 0 0 34px 8px rgba(190,40,40,0.6)' }}
+                  >
+                    <div className="absolute left-1/2 top-1/2 h-px w-[150%] -translate-x-1/2 -translate-y-1/2 -rotate-[30deg] bg-rizzotto-blood-500/50" />
                   </div>
                 )}
 
+                {/* Picked: persistent green vignette + neutral label */}
                 {isPicked && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="absolute inset-0 flex items-center justify-center bg-rizzotto-gold-500/10"
+                    className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center rounded-md pt-2"
+                    style={{ boxShadow: 'inset 0 0 34px 8px rgba(16,185,129,0.6)' }}
                   >
-                    <span className="font-display text-xs font-bold tracking-widest text-rizzotto-gold-400 uppercase">
+                    <span className="rounded bg-rizzotto-iron-950/70 px-2 py-0.5 font-display text-xs font-bold uppercase tracking-widest text-rizzotto-stone-100">
                       Picked
                     </span>
                   </motion.div>
                 )}
 
-                {/* Hover action label — BAN (red) or PICK (gold) */}
+                {/* Hover: red vignette while banning, green while picking */}
                 {isClickable && isHovered && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.1 }}
-                    className="absolute inset-0 flex items-center justify-center bg-rizzotto-iron-900/75 z-20"
+                    className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-md"
+                    style={{ boxShadow: `inset 0 0 34px 9px ${phase === 'banning' ? 'rgba(190,40,40,0.6)' : 'rgba(16,185,129,0.6)'}` }}
                   >
-                    <span className={`font-display text-sm font-black tracking-widest uppercase ${
-                      phase === 'banning' ? 'text-rizzotto-blood-400' : 'text-rizzotto-gold-400'
-                    }`}>
+                    <span className="rounded bg-rizzotto-iron-950/70 px-2 py-0.5 font-display text-sm font-black uppercase tracking-widest text-rizzotto-stone-100">
                       {actionLabel}
                     </span>
                   </motion.div>
@@ -914,6 +913,19 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
     const turnLabel = isPick ? 'Pick your matchup' : `${bansLeft} ban${bansLeft !== 1 ? 's' : ''} left`;
     const whoseTurnLabel = isMyTurn ? 'Your turn' : "Opponent's turn";
 
+    // #7: the viewer always sees themselves on the left (rows). The matrix model
+    // fixes rows = matchPlayer1 (p1Factions), cols = player2 (p2Factions). When the
+    // viewer is player 2 we transpose the display — their factions run down the
+    // left — and remap every ban/pick click back to the real (row,col) so bans
+    // still land on the correct cell. Spectators keep the default (player 1 left).
+    const transpose = !!colPlayer && currentUserId === colPlayer.id;
+    const rowFactionIds = transpose ? p2Factions : p1Factions;
+    const colFactionIds = transpose ? p1Factions : p2Factions;
+    const axisRowPlayer = transpose ? colPlayer : rowPlayer;
+    const axisColPlayer = transpose ? rowPlayer : colPlayer;
+    const toActual = (dispRow: number, dispCol: number): [number, number] =>
+      toActualCell(transpose, dispRow, dispCol);
+
     return (
       <div className="flex flex-col items-center gap-6">
         <div className="text-center">
@@ -922,14 +934,47 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
           {isMyTurn && mx.lastActionAt && <MatrixCountdown lastActionAt={mx.lastActionAt} bansCount={mx.bans.length} />}
         </div>
 
-        <div className="max-w-[660px] mx-auto">
+        <div className="mx-auto grid max-w-[720px] gap-x-3 gap-y-2" style={{ gridTemplateColumns: '3.5rem minmax(0, 1fr)' }}>
+          {/* empty top-left corner */}
+          <div aria-hidden />
+          {/* Top axis — opponent (column player), centered over the grid column (middle cell) */}
+          <div className="flex flex-col items-center gap-1">
+            {axisColPlayer?.avatar_url ? (
+              <img src={axisColPlayer.avatar_url} alt="" className="rounded-full object-cover border border-rizzotto-iron-600" style={{ width: 44, height: 44 }} />
+            ) : (
+              <span className="rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-lg font-semibold text-rizzotto-stone-300 select-none" style={{ width: 44, height: 44 }}>
+                {(axisColPlayer?.username ?? '?').slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            <span className="max-w-[9rem] truncate text-xs font-semibold text-rizzotto-stone-200">
+              {axisColPlayer?.id === currentUserId ? 'You' : (axisColPlayer?.username ?? '—')}
+            </span>
+          </div>
+          {/* Left axis — viewer (row player), vertically centered beside the grid */}
+          <div className="flex flex-col items-center justify-center gap-1">
+            {axisRowPlayer?.avatar_url ? (
+              <img src={axisRowPlayer.avatar_url} alt="" className="rounded-full object-cover border border-rizzotto-iron-600" style={{ width: 44, height: 44 }} />
+            ) : (
+              <span className="rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-lg font-semibold text-rizzotto-stone-300 select-none" style={{ width: 44, height: 44 }}>
+                {(axisRowPlayer?.username ?? '?').slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            <span className="w-full truncate text-center text-[11px] font-semibold text-rizzotto-stone-200">
+              {axisRowPlayer?.id === currentUserId ? 'You' : (axisRowPlayer?.username ?? '—')}
+            </span>
+          </div>
+          {/* Grid of matchup cells */}
           <div className="grid grid-cols-3 gap-[3px] bg-rizzotto-stone-400 rounded overflow-hidden">
-          {[0, 1, 2].map((row) =>
-            [0, 1, 2].map((col) => {
-              const cell = `${row},${col}`;
+          {[0, 1, 2].map((dispRow) =>
+            [0, 1, 2].map((dispCol) => {
+              // Map the displayed position back to the real (row,col) so bans/picks
+              // hit the correct cell regardless of transpose.
+              const [aRow, aCol] = toActual(dispRow, dispCol);
+              const cell = `${aRow},${aCol}`;
               const isBanned = bans.includes(cell);
-              const p1Entry = factions.find((f) => f.faction.id === p1Factions[row]);
-              const p2Entry = factions.find((f) => f.faction.id === p2Factions[col]);
+              // Left sub-cell = viewer's (row) faction, right = opponent's (col) faction.
+              const p1Entry = factions.find((f) => f.faction.id === rowFactionIds[dispRow]);
+              const p2Entry = factions.find((f) => f.faction.id === colFactionIds[dispCol]);
               const isHovered = hoveredCell === cell && isMyTurn && !isBanned;
               const actionLabel = isPick ? 'PICK' : 'BAN';
 
@@ -938,70 +983,60 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
                   key={cell}
                   type="button"
                   disabled={isBanned || !isMyTurn}
-                  onClick={() => void handleCellAction(row, col)}
+                  onClick={() => void handleCellAction(aRow, aCol)}
                   onMouseEnter={() => setHoveredCell(cell)}
                   onMouseLeave={() => setHoveredCell(null)}
                   className={[
                     'relative grid grid-cols-[1fr_auto_1fr] overflow-hidden',
                     'transition-[box-shadow,background-color,opacity] duration-150',
                     isBanned
-                      ? 'bg-rizzotto-iron-900/40 opacity-40 cursor-default'
+                      ? 'bg-rizzotto-iron-900/40 opacity-50 cursor-default'
                       : isHovered
-                        ? 'bg-rizzotto-iron-800 cursor-pointer ring-1 ring-inset ring-rizzotto-gold-500/80'
+                        ? 'bg-rizzotto-iron-800 cursor-pointer'
                         : isMyTurn
                           ? 'bg-rizzotto-iron-900 cursor-pointer'
                           : 'bg-rizzotto-iron-900 cursor-default',
                   ].join(' ')}
                 >
+                  {/* Banned: red vignette (glow from the edges) + faint cross-out */}
                   {isBanned && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden rounded z-20">
-                      <div className="absolute w-[141%] h-px bg-rizzotto-iron-500 rotate-45" />
+                    <div
+                      className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded"
+                      style={{ boxShadow: 'inset 0 0 22px 6px rgba(190,40,40,0.55)' }}
+                    >
+                      <div className="absolute left-1/2 top-1/2 h-px w-[141%] -translate-x-1/2 -translate-y-1/2 rotate-45 bg-rizzotto-blood-500/60" />
                     </div>
                   )}
+                  {/* Hover: red vignette while banning, green while picking */}
                   {isHovered && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-rizzotto-iron-800/85 rounded z-10">
-                      <span className="font-display text-sm font-bold text-rizzotto-gold-400 tracking-widest uppercase">{actionLabel}</span>
+                    <div
+                      className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded"
+                      style={{ boxShadow: `inset 0 0 26px 7px ${isPick ? 'rgba(16,185,129,0.6)' : 'rgba(190,40,40,0.6)'}` }}
+                    >
+                      <span className="rounded bg-rizzotto-iron-950/70 px-2 py-0.5 font-display text-sm font-bold uppercase tracking-widest text-rizzotto-stone-100">
+                        {actionLabel}
+                      </span>
                     </div>
                   )}
-                  {/* Left column — row player (P1): grid rows keep items height-synced with P2 */}
-                  <div className="grid grid-rows-[60px_2rem_60px_2rem] gap-y-1.5 items-center justify-items-center p-2">
-                    {rowPlayer?.avatar_url ? (
-                      <img src={rowPlayer.avatar_url} alt="" className="rounded-full object-cover border border-rizzotto-iron-600" style={{ width: 60, height: 60 }} />
-                    ) : (
-                      <span className="rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-xl font-semibold text-rizzotto-stone-300 select-none" style={{ width: 60, height: 60 }}>
-                        {(rowPlayer?.username ?? '?').slice(0, 1).toUpperCase()}
-                      </span>
-                    )}
-                    <span className="text-xs text-rizzotto-stone-300 text-center leading-tight line-clamp-2 w-full self-center">
-                      {rowPlayer?.id === currentUserId ? 'You' : (rowPlayer?.username ?? '—')}
-                    </span>
+                  {/* Row player's faction for this row */}
+                  <div className="flex flex-col items-center justify-center gap-1 p-2">
                     {p1Entry
                       ? <FactionBadge colorHex={p1Entry.faction.color_hex} initials={p1Entry.faction.initials} name={p1Entry.faction.name} size="lg" iconUrl={p1Entry.faction.icon_url} />
                       : <span style={{ width: 60, height: 60 }} />}
-                    <span className="text-xs text-rizzotto-stone-400 text-center leading-tight line-clamp-2 w-full self-center">{p1Entry?.faction.name ?? '?'}</span>
+                    <span className="text-[11px] text-rizzotto-stone-300 text-center leading-tight line-clamp-2 w-full">{p1Entry?.faction.name ?? '?'}</span>
                   </div>
                   {/* Vertical divider with "vs" in the middle */}
-                  <div className="flex flex-col items-center self-stretch py-2">
+                  <div className="flex flex-col items-center self-stretch py-3">
                     <div className="flex-1 w-px bg-rizzotto-iron-500" />
                     <span className="text-[9px] font-semibold text-rizzotto-stone-500 tracking-wide py-1 select-none">vs</span>
                     <div className="flex-1 w-px bg-rizzotto-iron-500" />
                   </div>
-                  {/* Right column — col player (P2) */}
-                  <div className="grid grid-rows-[60px_2rem_60px_2rem] gap-y-1.5 items-center justify-items-center p-2">
-                    {colPlayer?.avatar_url ? (
-                      <img src={colPlayer.avatar_url} alt="" className="rounded-full object-cover border border-rizzotto-iron-600" style={{ width: 60, height: 60 }} />
-                    ) : (
-                      <span className="rounded-full bg-rizzotto-iron-600 inline-flex items-center justify-center text-xl font-semibold text-rizzotto-stone-300 select-none" style={{ width: 60, height: 60 }}>
-                        {(colPlayer?.username ?? '?').slice(0, 1).toUpperCase()}
-                      </span>
-                    )}
-                    <span className="text-xs text-rizzotto-stone-300 text-center leading-tight line-clamp-2 w-full self-center">
-                      {colPlayer?.id === currentUserId ? 'You' : (colPlayer?.username ?? '—')}
-                    </span>
+                  {/* Col player's faction for this col */}
+                  <div className="flex flex-col items-center justify-center gap-1 p-2">
                     {p2Entry
                       ? <FactionBadge colorHex={p2Entry.faction.color_hex} initials={p2Entry.faction.initials} name={p2Entry.faction.name} size="lg" iconUrl={p2Entry.faction.icon_url} />
                       : <span style={{ width: 60, height: 60 }} />}
-                    <span className="text-xs text-rizzotto-stone-400 text-center leading-tight line-clamp-2 w-full self-center">{p2Entry?.faction.name ?? '?'}</span>
+                    <span className="text-[11px] text-rizzotto-stone-300 text-center leading-tight line-clamp-2 w-full">{p2Entry?.faction.name ?? '?'}</span>
                   </div>
                 </button>
               );
