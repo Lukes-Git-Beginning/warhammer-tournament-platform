@@ -76,7 +76,7 @@ type EditFormData = {
   map_pool: string[];
   map_preset_config: MapPresetConfig | null;
   format: Tournament['format'];
-  mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
+  mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK';
   faction_pool: string[];
   restricted_factions: string[];
   visibility: 'PUBLIC' | 'PRIVATE';
@@ -229,7 +229,7 @@ function buildInitialForm(t: Tournament): EditFormData {
     map_pool: (t.map_pool ?? []).map((m) => m.id),
     map_preset_config: (t.map_preset_config as MapPresetConfig | null) ?? null,
     format: t.format,
-    mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX' || t.mode === 'TWO_D_THREE') ? t.mode : 'BPT',
+    mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX' || t.mode === 'TWO_D_THREE' || t.mode === 'FREE_PICK') ? t.mode : 'BPT',
     faction_pool: t.faction_allowlist ?? [],
     restricted_factions: t.restricted_factions ?? [],
     visibility: t.visibility ?? 'PUBLIC',
@@ -745,6 +745,7 @@ export function TournamentEditPage() {
                   <option value="SLT">SLT — Single List Tournament</option>
                   <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
                   <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
+                  <option value="FREE_PICK">Free Pick — Fixed Faction or Pick Match-by-Match</option>
                 </Select>
               )}
             </div>

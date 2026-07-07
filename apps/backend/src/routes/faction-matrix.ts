@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
 
@@ -25,6 +25,38 @@ function matchDecisionRoom(matchId: string): string {
 
 function cellKey(row: number, col: number): string {
   return `${row},${col}`;
+}
+
+type MatrixRecord = {
+  p1_locked_at: Date | null; p2_locked_at: Date | null; first_locked_at: Date | null;
+  revealed_at: Date | null; p1_factions: string[]; p2_factions: string[]; bans: unknown;
+  picked_cell: string | null; last_action_at: Date | null; decided_at: Date | null;
+  top_player_id: string; bottom_player_id: string;
+};
+
+/** Broadcast a faction-matrix record to the match decision room (shared by the
+ * 3×3 matrix and the Free Pick mini-pick, which reuse the same record). */
+function emitMatrixUpdate(fastify: FastifyInstance, matchId: string, m: MatrixRecord): void {
+  if (!fastify.io) return;
+  const pickedRow = m.picked_cell ? Number(m.picked_cell.split(',')[0]) : null;
+  const pickedCol = m.picked_cell ? Number(m.picked_cell.split(',')[1]) : null;
+  fastify.io.to(matchDecisionRoom(matchId)).emit('match.matrix.update', {
+    matchId,
+    p1Locked: Boolean(m.p1_locked_at),
+    p2Locked: Boolean(m.p2_locked_at),
+    firstLockedAt: m.first_locked_at?.toISOString() ?? null,
+    revealedAt: m.revealed_at?.toISOString() ?? null,
+    p1Factions: m.revealed_at ? m.p1_factions : [],
+    p2Factions: m.revealed_at ? m.p2_factions : [],
+    bans: (m.bans as string[]) ?? [],
+    pickedCell: m.picked_cell,
+    lastActionAt: m.last_action_at?.toISOString() ?? null,
+    decidedAt: m.decided_at?.toISOString() ?? null,
+    p1FactionId: m.decided_at && pickedRow !== null ? (m.p1_factions[pickedRow] ?? null) : null,
+    p2FactionId: m.decided_at && pickedCol !== null ? (m.p2_factions[pickedCol] ?? null) : null,
+    topPlayerId: m.top_player_id,
+    bottomPlayerId: m.bottom_player_id,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -88,8 +120,8 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
       if (!match) {
         return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       }
-      if (match.tournament?.mode !== 'MATRIX') {
-        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in MATRIX mode', statusCode: 422 });
+      if (match.tournament?.mode !== 'MATRIX' && match.tournament?.mode !== 'FREE_PICK') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in a faction-matrix mode', statusCode: 422 });
       }
 
       // Validate faction picks against the tournament allowlist. Note: restricted_factions
@@ -190,6 +222,146 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // -------------------------------------------------------------------------
+  // POST /api/matches/:id/free-pick/offer
+  // Free Pick mixed matchup (one fixed faction, one pick-later): the pick-later
+  // player submits 3 factions for the fixed opponent to choose from. Stored in the
+  // faction_matrix record — fixed side = [their faction] — so the game finalization
+  // resolves it via picked_cell exactly like the 3×3 matrix.
+  // -------------------------------------------------------------------------
+  fastify.post(
+    '/api/matches/:id/free-pick/offer',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const actorId = request.user.sub;
+      const body = LockBodySchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: body.error.issues[0]?.message ?? 'Invalid body', statusCode: 400 });
+      }
+      const { factions } = body.data;
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: {
+          id: true, player1_id: true, player2_id: true, tournament_id: true,
+          tournament: { select: { mode: true, faction_allowlist: { select: { faction_id: true } } } },
+          games: {
+            where: { map_decision: { picked_map_id: { not: null } }, OR: [{ faction_matrix: null }, { faction_matrix: { decided_at: null } }] },
+            orderBy: { game_number: 'asc' }, select: { id: true, faction_matrix: true }, take: 1,
+          },
+        },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      if (match.tournament?.mode !== 'FREE_PICK') return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in Free Pick mode', statusCode: 422 });
+      const isStaff = ['HOST', 'MODERATOR', 'ADMIN'].includes(request.user.role);
+      if (actorId !== match.player1_id && actorId !== match.player2_id && !isStaff) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'You are not a participant of this match', statusCode: 403 });
+      }
+      const game = match.games[0];
+      if (!game) return reply.code(404).send({ error: 'NotFound', message: 'No active game awaiting factions', statusCode: 404 });
+
+      const parts = await fastify.prisma.tournamentParticipant.findMany({
+        where: { tournament_id: match.tournament_id ?? '', user_id: { in: [match.player1_id, match.player2_id].filter((x): x is string => x != null) } },
+        select: { user_id: true, faction_id: true },
+      });
+      const p1Fixed = parts.find((p) => p.user_id === match.player1_id)?.faction_id ?? null;
+      const p2Fixed = parts.find((p) => p.user_id === match.player2_id)?.faction_id ?? null;
+      const isMixed = (p1Fixed == null) !== (p2Fixed == null);
+      if (!isMixed) return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Offering only applies to a fixed vs pick-later match', statusCode: 422 });
+      const fixedIsP1 = p1Fixed != null;
+      const pickLaterPlayerId = fixedIsP1 ? match.player2_id : match.player1_id;
+      const fixedFaction = (fixedIsP1 ? p1Fixed : p2Fixed) as string;
+      if (actorId !== pickLaterPlayerId && !isStaff) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Only the pick-later player offers factions', statusCode: 422 });
+      }
+
+      const allowlist = (match.tournament?.faction_allowlist ?? []).map((f) => f.faction_id);
+      for (const f of factions) {
+        if (allowlist.length > 0 && !allowlist.includes(f)) {
+          return reply.code(400).send({ error: 'BadRequest', message: `Faction "${f}" is not permitted in this tournament`, statusCode: 400 });
+        }
+      }
+
+      const now = new Date();
+      const sides = fixedIsP1
+        ? { p1_factions: [fixedFaction], p2_factions: factions }
+        : { p1_factions: factions, p2_factions: [fixedFaction] };
+      const updated = game.faction_matrix
+        ? await fastify.prisma.matchFactionMatrix.update({ where: { game_id: game.id }, data: { ...sides, p1_locked_at: now, p2_locked_at: now, revealed_at: now, last_action_at: now } })
+        : await fastify.prisma.matchFactionMatrix.create({ data: { game_id: game.id, ...sides, p1_locked_at: now, p2_locked_at: now, first_locked_at: now, revealed_at: now, last_action_at: now } });
+
+      emitMatrixUpdate(fastify, matchId, updated);
+      return reply.code(200).send({ ok: true });
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // POST /api/matches/:id/free-pick/select
+  // The fixed-faction player chooses one of the opponent's 3 offered factions.
+  // -------------------------------------------------------------------------
+  fastify.post(
+    '/api/matches/:id/free-pick/select',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const actorId = request.user.sub;
+      const body = z.object({ factionId: z.string().min(1) }).safeParse(request.body);
+      if (!body.success) return reply.code(400).send({ error: 'BadRequest', message: 'Invalid body', statusCode: 400 });
+      const { factionId } = body.data;
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: {
+          id: true, player1_id: true, player2_id: true, tournament_id: true,
+          tournament: { select: { mode: true } },
+          games: {
+            where: { map_decision: { picked_map_id: { not: null } }, faction_matrix: { decided_at: null } },
+            orderBy: { game_number: 'asc' }, select: { id: true, faction_matrix: true }, take: 1,
+          },
+        },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      if (match.tournament?.mode !== 'FREE_PICK') return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in Free Pick mode', statusCode: 422 });
+      const isStaff = ['HOST', 'MODERATOR', 'ADMIN'].includes(request.user.role);
+      if (actorId !== match.player1_id && actorId !== match.player2_id && !isStaff) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'You are not a participant of this match', statusCode: 403 });
+      }
+      const game = match.games[0];
+      const matrix = game?.faction_matrix;
+      if (!game || !matrix || !matrix.revealed_at) {
+        return reply.code(404).send({ error: 'NotFound', message: 'No offered factions to choose from yet', statusCode: 404 });
+      }
+
+      const parts = await fastify.prisma.tournamentParticipant.findMany({
+        where: { tournament_id: match.tournament_id ?? '', user_id: { in: [match.player1_id, match.player2_id].filter((x): x is string => x != null) } },
+        select: { user_id: true, faction_id: true },
+      });
+      const p1Fixed = parts.find((p) => p.user_id === match.player1_id)?.faction_id ?? null;
+      const p2Fixed = parts.find((p) => p.user_id === match.player2_id)?.faction_id ?? null;
+      const isMixed = (p1Fixed == null) !== (p2Fixed == null);
+      if (!isMixed) return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Choosing only applies to a fixed vs pick-later match', statusCode: 422 });
+      const fixedIsP1 = p1Fixed != null;
+      const fixedPlayerId = fixedIsP1 ? match.player1_id : match.player2_id;
+      if (actorId !== fixedPlayerId && !isStaff) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Only the fixed-faction player chooses', statusCode: 422 });
+      }
+
+      const offered = (fixedIsP1 ? matrix.p2_factions : matrix.p1_factions) as string[];
+      const idx = offered.indexOf(factionId);
+      if (idx < 0) return reply.code(400).send({ error: 'BadRequest', message: 'That faction is not among the three offered', statusCode: 400 });
+
+      const now = new Date();
+      const pickedCell = fixedIsP1 ? cellKey(0, idx) : cellKey(idx, 0);
+      const updated = await fastify.prisma.matchFactionMatrix.update({
+        where: { game_id: game.id },
+        data: { picked_cell: pickedCell, decided_at: now, last_action_at: now },
+      });
+      emitMatrixUpdate(fastify, matchId, updated);
+      return reply.code(200).send({ ok: true });
+    },
+  );
+
+  // -------------------------------------------------------------------------
   // POST /api/matches/:id/matrix/ban
   // Ban a cell (first 7 actions) or pick from remaining (8th action by bottom player).
   // -------------------------------------------------------------------------
@@ -239,8 +411,8 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
       if (!match) {
         return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       }
-      if (match.tournament?.mode !== 'MATRIX') {
-        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in MATRIX mode', statusCode: 422 });
+      if (match.tournament?.mode !== 'MATRIX' && match.tournament?.mode !== 'FREE_PICK') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in a faction-matrix mode', statusCode: 422 });
       }
 
       const isParticipant = actorId === match.player1_id || actorId === match.player2_id;

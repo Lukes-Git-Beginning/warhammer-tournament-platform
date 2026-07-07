@@ -59,7 +59,7 @@ function Avatar({ url, username }: { url: string | null; username: string }) {
   );
 }
 
-const FACTION_MODES = new Set(['SFT', '2FT', 'DFT', '3FT', 'TFT', 'TWO_D_THREE']);
+const FACTION_MODES = new Set(['SFT', '2FT', 'DFT', '3FT', 'TFT', 'TWO_D_THREE', 'FREE_PICK']);
 
 function Divider({ label, colSpan }: { label: string; colSpan: number }) {
   return (
@@ -143,6 +143,7 @@ export function SwissStandings({
 
   const showFactionColumn = tournamentMode ? FACTION_MODES.has(tournamentMode) : false;
   const is2D3 = tournamentMode === 'TWO_D_THREE';
+  const isFreePick = tournamentMode === 'FREE_PICK';
   const colCount = 5 + (showFactionColumn ? 1 : 0) + 1; // # + Player + [Faction] + Score + W/D/L/B + GL + BH
 
   // Cap displayed round at the Swiss phase — don't count playoff rounds.
@@ -331,6 +332,8 @@ export function SwissStandings({
                     />
                     <span className="text-xs text-stone-300 hover:text-rizzotto-gold-400 transition-colors">{faction.name}</span>
                   </Link>
+                ) : isFreePick ? (
+                  <span className="rounded border border-rizzotto-iron-600 px-2 py-0.5 text-[10px] uppercase tracking-wide text-rizzotto-stone-500">Free Pick</span>
                 ) : canManage && tournamentSlug ? (
                   <button
                     type="button"

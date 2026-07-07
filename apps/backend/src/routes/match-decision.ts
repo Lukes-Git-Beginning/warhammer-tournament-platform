@@ -330,6 +330,8 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           id: true,
           player1_id: true,
+          player2_id: true,
+          tournament_id: true,
           tournament: {
             select: {
               mode: true,
@@ -363,10 +365,25 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      // Free Pick: expose each player's registration choice (fixed faction id, or
+      // null for pick-later) so the client can resolve the per-match sub-flow.
+      let freePick: { p1FactionId: string | null; p2FactionId: string | null } | null = null;
+      if (match.tournament?.mode === 'FREE_PICK' && match.tournament_id) {
+        const parts = await fastify.prisma.tournamentParticipant.findMany({
+          where: { tournament_id: match.tournament_id, user_id: { in: [match.player1_id, match.player2_id].filter((x): x is string => x != null) } },
+          select: { user_id: true, faction_id: true },
+        });
+        freePick = {
+          p1FactionId: parts.find((p) => p.user_id === match.player1_id)?.faction_id ?? null,
+          p2FactionId: parts.find((p) => p.user_id === match.player2_id)?.faction_id ?? null,
+        };
+      }
+
       return reply.code(200).send({
         ...serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? 'BPT', match.player1_id, game.faction_matrix ?? null),
         restrictedFactions: match.tournament?.restricted_factions.map((r) => r.faction_id) ?? [],
         factionAllowlist: match.tournament?.faction_allowlist.map((r) => r.faction_id) ?? [],
+        freePick,
       });
     },
   );

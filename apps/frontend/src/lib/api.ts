@@ -61,7 +61,7 @@ export interface Tournament {
   poster_url?: string | null;
   format: 'SINGLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN' | 'BALANCED_LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
+  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK';
   status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
   start_date: string;
   timezone: string;
@@ -136,6 +136,10 @@ export interface MatchDecisionState {
   matchPlayer1Id?: string | null;
   restrictedFactions?: string[];
   factionAllowlist?: string[];
+  // FREE_PICK: each player's registration choice — a fixed faction id, or null
+  // for pick-later. Drives the per-match sub-flow (both fixed → play; both
+  // pick-later → 3×3 matrix; mixed → mini-pick).
+  freePick?: { p1FactionId: string | null; p2FactionId: string | null } | null;
   blindPick?: {
     player1Locked: boolean;
     player2Locked: boolean;
@@ -166,7 +170,7 @@ export interface TournamentCreate {
   name: string;
   format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN' | 'BALANCED_LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
+  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK';
   start_date: string;
   timezone: string;
   max_participants?: number;
@@ -208,7 +212,7 @@ export interface TournamentPatchInput {
   draft_preset_id?: string | null;
   // draft-only (backend enforces, frontend disables after DRAFT)
   format?: Tournament['format'];
-  mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE';
+  mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK';
   faction_pool?: string[];
   restricted_factions?: string[];
   // until-ongoing fields
@@ -1278,6 +1282,22 @@ export function banMatrixCell(matchId: string, row: number, col: number): Promis
   return apiFetch<{ ok: true }>(`/api/matches/${matchId}/matrix/ban`, {
     method: 'POST',
     body: JSON.stringify({ row, col }),
+  });
+}
+
+// Free Pick mixed matchup: the pick-later player offers 3 factions.
+export function offerFreePickFactions(matchId: string, factions: string[]): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/free-pick/offer`, {
+    method: 'POST',
+    body: JSON.stringify({ factions }),
+  });
+}
+
+// Free Pick mixed matchup: the fixed-faction player chooses one of the offered 3.
+export function selectFreePickFaction(matchId: string, factionId: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/free-pick/select`, {
+    method: 'POST',
+    body: JSON.stringify({ factionId }),
   });
 }
 

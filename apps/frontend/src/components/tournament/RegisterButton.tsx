@@ -289,8 +289,16 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
   const [pickingFaction, setPickingFaction] = useState(false);
   const [selectedFactions, setSelectedFactions] = useState<string[]>([]);
   const [pickingBand, setPickingBand] = useState(false);
+  // FREE_PICK: first the player chooses a fixed faction (SFT-like) or to pick
+  // match-by-match; 'fixed' then flows into the normal faction picker.
+  const [freePickChoice, setFreePickChoice] = useState<'fixed' | 'later' | null>(null);
+  const [choosingFreePick, setChoosingFreePick] = useState(false);
 
-  const needsFactionPick = tournament.mode === 'SFT' || tournament.mode === 'TWO_D_THREE';
+  const isFreePick = tournament.mode === 'FREE_PICK';
+  const needsFactionPick =
+    tournament.mode === 'SFT' ||
+    tournament.mode === 'TWO_D_THREE' ||
+    (isFreePick && freePickChoice === 'fixed');
   const pickCount = tournament.mode === 'TWO_D_THREE' ? 3 : 1;
   const isBalancedLiechtenstein = tournament.format === 'BALANCED_LIECHTENSTEIN';
 
@@ -310,6 +318,8 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
     onSuccess: () => {
       setPickingFaction(false);
       setSelectedFactions([]);
+      setChoosingFreePick(false);
+      setFreePickChoice(null);
       void queryClient.invalidateQueries({ queryKey: ['tournament', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['participant-me', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['tournament-participants', tournament.slug] });
@@ -380,6 +390,44 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
     );
   }
 
+  if (isFreePick && choosingFreePick) {
+    return (
+      <div className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4 space-y-4">
+        <div>
+          <p className="text-sm font-semibold text-rizzotto-stone-200 mb-1">How do you want to play?</p>
+          <p className="text-xs text-rizzotto-stone-500">
+            Free Pick — commit to one faction for the whole event, or decide match by match.
+          </p>
+        </div>
+        {register.isError && (
+          <p className="text-xs text-rizzotto-danger">{(register.error as Error).message}</p>
+        )}
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => { setFreePickChoice('fixed'); setChoosingFreePick(false); setPickingFaction(true); }}
+            className="rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-3 text-left transition-colors hover:border-rizzotto-gold-500/60"
+          >
+            <p className="text-sm font-semibold text-rizzotto-stone-100">Fixed faction</p>
+            <p className="mt-0.5 text-xs text-rizzotto-stone-500">Play one faction all tournament — shown in the standings.</p>
+          </button>
+          <button
+            type="button"
+            disabled={register.isPending}
+            onClick={() => { setFreePickChoice('later'); register.mutate(undefined); }}
+            className="rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-3 text-left transition-colors hover:border-rizzotto-gold-500/60 disabled:opacity-50"
+          >
+            <p className="text-sm font-semibold text-rizzotto-stone-100">Pick match by match</p>
+            <p className="mt-0.5 text-xs text-rizzotto-stone-500">Choose your faction per opponent when the match starts.</p>
+          </button>
+        </div>
+        <button type="button" onClick={() => setChoosingFreePick(false)} className="text-sm text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors">
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
   if (needsFactionPick && pickingFaction) {
     const is2D3 = tournament.mode === 'TWO_D_THREE';
     return (
@@ -391,7 +439,9 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
           <p className="text-xs text-rizzotto-stone-500">
             {is2D3
               ? 'Pick exactly 3 factions. One of them is drawn at random for you before each game.'
-              : 'SFT — Single Faction Tournament. Your faction is locked for the entire event.'}
+              : isFreePick
+                ? 'Free Pick — this faction is locked for the whole event and shown in the standings.'
+                : 'SFT — Single Faction Tournament. Your faction is locked for the entire event.'}
           </p>
           {is2D3 && (
             <p className="mt-1 text-xs">
@@ -449,6 +499,8 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
           onClick={() => {
             if (isBalancedLiechtenstein && userId) {
               setPickingBand(true);
+            } else if (isFreePick) {
+              setChoosingFreePick(true);
             } else if (needsFactionPick) {
               setPickingFaction(true);
             } else {

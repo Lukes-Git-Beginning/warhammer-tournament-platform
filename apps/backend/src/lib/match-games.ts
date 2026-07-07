@@ -190,6 +190,24 @@ export async function finalizeGameResult(
     // 2D3: faction was drawn per game at creation (drawTwoD3GameFactions) — keep it.
     p1FactionId = game.player1_faction_id ?? null;
     p2FactionId = game.player2_faction_id ?? null;
+  } else if (mode === 'FREE_PICK') {
+    // Free Pick: each player registered either a fixed faction (faction_id set)
+    // or pick-later (null). Both fixed → play their factions. Otherwise the
+    // pick flow (3×3 matrix for two pick-later players, or the mixed mini-pick)
+    // stored its result in the faction_matrix record; a fixed player's side holds
+    // just their one faction, so the picked_cell resolves both correctly.
+    const participants = game.match.tournament?.participants ?? [];
+    const p1Fixed = participants.find((p) => p.user_id === game.match.player1_id)?.faction?.id ?? null;
+    const p2Fixed = participants.find((p) => p.user_id === game.match.player2_id)?.faction?.id ?? null;
+    const matrix = game.faction_matrix;
+    if (matrix?.decided_at && matrix.picked_cell) {
+      const [row, col] = matrix.picked_cell.split(',').map(Number);
+      p1FactionId = matrix.p1_factions[row ?? 0] ?? p1Fixed ?? null;
+      p2FactionId = matrix.p2_factions[col ?? 0] ?? p2Fixed ?? null;
+    } else {
+      p1FactionId = p1Fixed ?? game.match.player1_faction_id ?? null;
+      p2FactionId = p2Fixed ?? game.match.player2_faction_id ?? null;
+    }
   } else if (!game.match.tournament && game.blind_pick?.revealed_at) {
     // Open Play: factions come from the blind pick
     p1FactionId = game.blind_pick.player1_faction_id ?? null;

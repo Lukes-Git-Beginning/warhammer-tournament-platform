@@ -10,6 +10,8 @@ import {
   lockBlindPick,
   lockFactionMatrix,
   banMatrixCell,
+  offerFreePickFactions,
+  selectFreePickFaction,
   getFactions,
 } from '@/lib/api';
 import type { MatchDecisionState, MapDto } from '@/lib/api';
@@ -1106,6 +1108,175 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
 }
 
 // ---------------------------------------------------------------------------
+// Free Pick — mixed matchup mini-pick (pick-later offers 3, fixed chooses 1)
+// ---------------------------------------------------------------------------
+
+interface FreePickMiniPhaseProps {
+  matchId: string;
+  decision: MatchDecisionState;
+  currentUserId: string;
+  factions: FactionWithStatsDto[];
+  rowPlayer?: PlayerRef;
+  colPlayer?: PlayerRef;
+  restrictedFactions?: string[];
+  factionAllowlist?: string[];
+}
+
+function FreePickMiniPhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer, restrictedFactions = [], factionAllowlist = [] }: FreePickMiniPhaseProps) {
+  const queryClient = useQueryClient();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const fp = decision.freePick;
+  const mx = decision.factionMatrix;
+  const fixedIsP1 = fp?.p1FactionId != null;
+  const viewerIsP1 = currentUserId === rowPlayer?.id;
+  const viewerIsP2 = currentUserId === colPlayer?.id;
+  const viewerIsPlayer = viewerIsP1 || viewerIsP2;
+  const viewerIsFixed = viewerIsPlayer && viewerIsP1 === fixedIsP1;
+  const viewerIsPickLater = viewerIsPlayer && !viewerIsFixed;
+
+  const revealed = Boolean(mx?.revealedAt);
+  const fixedFactionId = fixedIsP1 ? fp?.p1FactionId : fp?.p2FactionId;
+  const offered = (fixedIsP1 ? mx?.p2Factions : mx?.p1Factions) ?? [];
+  const fixedEntry = factions.find((f) => f.faction.id === fixedFactionId);
+
+  const toggle = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : prev.length >= 3 ? prev : [...prev, id]));
+
+  async function submitOffer() {
+    if (selected.length !== 3) return;
+    setActing(true);
+    setErr(null);
+    try {
+      await offerFreePickFactions(matchId, selected);
+      await queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Offer failed — try again.');
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function choose(factionId: string) {
+    setActing(true);
+    setErr(null);
+    try {
+      await selectFreePickFaction(matchId, factionId);
+      await queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Pick failed — try again.');
+    } finally {
+      setActing(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-6">
+      <div className="text-center">
+        <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">Free Pick — Mixed Matchup</h2>
+        <p className="mt-1 text-sm text-rizzotto-stone-400">
+          {fixedEntry ? `${fixedEntry.faction.name} (fixed) vs a faction they choose from three` : 'One player is committed, one offers three.'}
+        </p>
+      </div>
+
+      {/* Pick-later player offers 3 */}
+      {!revealed && viewerIsPickLater && (
+        <>
+          <p className="max-w-sm text-center text-sm text-rizzotto-stone-400">
+            Offer 3 factions — your opponent will choose which one you play. ({selected.length}/3)
+          </p>
+          <div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+            {factions.map(({ faction }) => {
+              const isSel = selected.includes(faction.id);
+              const banned = factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id);
+              const disabled = banned || (!isSel && selected.length >= 3);
+              return (
+                <button
+                  key={faction.id}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => toggle(faction.id)}
+                  title={restrictedFactions.includes(faction.id) && !banned ? 'Restricted (nerfed) — does not count toward the leaderboard' : undefined}
+                  className={[
+                    'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center transition-[border-color,background-color,opacity]',
+                    isSel
+                      ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800'
+                      : disabled
+                        ? 'cursor-default border-rizzotto-iron-700 bg-rizzotto-iron-900/40 opacity-40'
+                        : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60',
+                  ].join(' ')}
+                >
+                  <FactionBadge colorHex={faction.color_hex} initials={faction.initials} name={faction.name} size="lg" iconUrl={faction.icon_url} />
+                  <span className={['line-clamp-2 font-display text-[10px] uppercase leading-tight tracking-wide', isSel ? 'text-rizzotto-gold-300' : 'text-rizzotto-stone-300'].join(' ')}>
+                    {faction.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <Button variant="forge" size="md" disabled={selected.length !== 3 || acting} onClick={submitOffer}>
+            {acting ? 'Offering…' : 'Offer 3 Factions'}
+          </Button>
+          {err && <p className="text-sm text-red-400">{err}</p>}
+        </>
+      )}
+
+      {/* Fixed player waits for the offer */}
+      {!revealed && !viewerIsPickLater && (
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-rizzotto-gold-400 border-t-transparent" />
+          <p className="text-sm text-rizzotto-stone-400">Waiting for your opponent to offer 3 factions…</p>
+        </div>
+      )}
+
+      {/* Fixed player chooses one of the offered 3 */}
+      {revealed && viewerIsFixed && (
+        <>
+          <p className="text-center text-sm text-rizzotto-stone-200">Choose the faction your opponent will field:</p>
+          <div className="grid w-full max-w-lg grid-cols-3 gap-3">
+            {offered.map((fid) => {
+              const entry = factions.find((f) => f.faction.id === fid);
+              const isH = hovered === fid;
+              return (
+                <button
+                  key={fid}
+                  type="button"
+                  disabled={acting}
+                  onClick={() => choose(fid)}
+                  onMouseEnter={() => setHovered(fid)}
+                  onMouseLeave={() => setHovered(null)}
+                  className="relative flex flex-col items-center gap-2 rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-3 transition-colors hover:border-emerald-400/50"
+                >
+                  <FactionBadge colorHex={entry?.faction.color_hex ?? '#666'} initials={entry?.faction.initials ?? '?'} name={entry?.faction.name ?? '?'} size="lg" iconUrl={entry?.faction.icon_url} />
+                  <span className="font-display text-xs uppercase tracking-wide text-rizzotto-stone-200">{entry?.faction.name ?? '?'}</span>
+                  {isH && (
+                    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-md" style={{ boxShadow: 'inset 0 0 24px 6px rgba(16,185,129,0.6)' }}>
+                      <span className="rounded bg-rizzotto-iron-950/70 px-2 py-0.5 font-display text-sm font-bold uppercase tracking-widest text-rizzotto-stone-100">Pick</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {err && <p className="text-sm text-red-400">{err}</p>}
+        </>
+      )}
+
+      {/* Pick-later player waits for the choice */}
+      {revealed && !viewerIsFixed && (
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-rizzotto-gold-400 border-t-transparent" />
+          <p className="text-sm text-rizzotto-stone-400">You offered 3 factions — waiting for your opponent to choose which you play…</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -1116,6 +1287,7 @@ type DecisionPhase =
   | 'map_pick_ban'
   | 'blind_pick'
   | 'faction_matrix'
+  | 'free_pick_mini'
   | 'ready';
 
 function BlindPickCountdown({ firstLockedAt, timeoutMs }: { firstLockedAt: string | null; timeoutMs: number }) {
@@ -1151,6 +1323,14 @@ const BAN_MODES = new Set(['PICK_BAN', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN'
 function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
   if (!d) return 'loading';
   if (d.pickedMapId) {
+    // FREE_PICK resolves per match from both players' registration choices.
+    if (d.tournamentMode === 'FREE_PICK') {
+      const p1Fixed = d.freePick?.p1FactionId != null;
+      const p2Fixed = d.freePick?.p2FactionId != null;
+      if (p1Fixed && p2Fixed) return 'ready'; // both play their registration faction
+      if (!p1Fixed && !p2Fixed) return d.factionMatrix?.decidedAt ? 'ready' : 'faction_matrix';
+      return d.factionMatrix?.decidedAt ? 'ready' : 'free_pick_mini'; // mixed
+    }
     // MATRIX mode: faction pick/ban after map decision
     if (d.tournamentMode === 'MATRIX') {
       if (!d.factionMatrix?.decidedAt) return 'faction_matrix';
@@ -1511,6 +1691,27 @@ export function MatchDecisionPage() {
               transition={{ duration: 0.4 }}
             >
               <FactionMatrixPhase
+                matchId={matchId}
+                decision={decision}
+                currentUserId={user.id}
+                factions={factions}
+                rowPlayer={matrixRowPlayer}
+                colPlayer={matrixColPlayer}
+                restrictedFactions={decision.restrictedFactions ?? []}
+                factionAllowlist={decision.factionAllowlist ?? []}
+              />
+            </motion.div>
+          )}
+
+          {phase === 'free_pick_mini' && (
+            <motion.div
+              key="free_pick_mini"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              <FreePickMiniPhase
                 matchId={matchId}
                 decision={decision}
                 currentUserId={user.id}
