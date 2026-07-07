@@ -375,7 +375,10 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
     );
   }
 
-  if (participantStatus === 'WITHDREW' || participantStatus === 'DISQUALIFIED') return null;
+  // Disqualified players can't rejoin; withdrawn players may re-register before
+  // start (the register endpoint reactivates their row) — fall through below.
+  if (participantStatus === 'DISQUALIFIED') return null;
+  const isReRegister = participantStatus === 'WITHDREW';
 
   if (!isLoggedIn) {
     return (
@@ -508,6 +511,11 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
         />
       )}
 
+      {isReRegister && (
+        <p className="mb-2 text-xs text-rizzotto-stone-400">
+          You&apos;ve withdrawn — you can sign up again (e.g. to change your faction choice).
+        </p>
+      )}
       <div className="flex items-center gap-3">
         <Button
           variant="forge"
@@ -525,7 +533,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
             }
           }}
         >
-          {register.isPending ? t('tournament.register.pending') : t('tournament.register.cta')}
+          {register.isPending ? t('tournament.register.pending') : isReRegister ? 'Register again' : t('tournament.register.cta')}
         </Button>
         {register.isError && (
           <span className="text-xs text-rizzotto-danger">{(register.error as Error).message}</span>
