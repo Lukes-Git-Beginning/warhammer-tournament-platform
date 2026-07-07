@@ -3,10 +3,11 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { createTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap } from '@/lib/api';
+import { createTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
 import { AvailabilityHeatmap } from '@/components/open-play/AvailabilityHeatmap';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
+import { PosterPickField } from '@/components/tournament/PosterPickField';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MarkdownEditor } from '@/components/ui/markdown-editor';
@@ -246,9 +247,21 @@ export function TournamentCreateForm() {
       ? Math.max(3, maxPlayerGames(form))
       : Math.max(3, maxFormatGames);
 
+  const [posterFile, setPosterFile] = useState<File | null>(null);
+
   const mutation = useMutation({
     mutationFn: createTournament,
     onSuccess: async (tournament) => {
+      // The poster upload needs an existing tournament (its slug), so it runs
+      // here after creation. A failed upload is non-fatal — the tournament
+      // exists and the host can add the poster later on the edit page.
+      if (posterFile) {
+        try {
+          await uploadTournamentPoster(tournament.slug, posterFile);
+        } catch {
+          // swallow — tournament is created, poster is optional
+        }
+      }
       await router.navigate({ to: '/tournaments/$slug', params: { slug: tournament.slug } });
     },
   });
@@ -547,6 +560,8 @@ export function TournamentCreateForm() {
         />
         <FieldError message={errors.discord_link} />
       </div>
+
+      <PosterPickField file={posterFile} onPick={setPosterFile} />
 
       {/* ─── Match Mechanics ───────────────────────────────────────────── */}
       <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
