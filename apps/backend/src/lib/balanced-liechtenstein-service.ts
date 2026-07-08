@@ -256,8 +256,18 @@ export async function runBalancedPairingTick(
       // the division playoffs (previously host-only). startBalancedPlayoffs is the
       // authority: it only proceeds when every contender has played all rounds.
       // Cheap guard first so we don't re-query on every post-playoff match tick.
+      //
+      // Only REAL playoff matches (phase 'PLAYOFF_*') count as "already generated".
+      // A group match can carry phase 'SWISS' (e.g. a manually-created or forfeit
+      // match, which stamps 'SWISS' unconditionally) — that must NOT be mistaken for
+      // a playoff, or the auto-launch is suppressed forever. Mirror startBalancedPlayoffs'
+      // own guard (`phase && phase !== 'SWISS'`).
       const playoffExists = await fastify.prisma.match.count({
-        where: { tournament_id: tournamentId, deleted_at: null, phase: { not: null } },
+        where: {
+          tournament_id: tournamentId,
+          deleted_at: null,
+          phase: { not: null, notIn: ['SWISS'] },
+        },
       });
       if (playoffExists === 0) {
         const result = await startBalancedPlayoffs(fastify, tournamentId);

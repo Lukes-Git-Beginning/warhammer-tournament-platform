@@ -205,6 +205,31 @@ describe('Balanced Liechtenstein — division playoffs', () => {
     expect('error' in again).toBe(true);
   });
 
+  it('auto-launches playoffs even when a group match carries phase SWISS', async () => {
+    // A manually-created / forfeit group match stamps phase 'SWISS' (not null). The
+    // auto-launch guard must not mistake it for an existing playoff, or the division
+    // playoffs never generate. (Regression: a live tournament whose group phase was
+    // complete but whose playoffs never auto-started because of one SWISS-phase match.)
+    const { tournamentId } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
+    await runBalancedPairingTick(app, tournamentId); // round 1
+
+    // Poison one group match with phase 'SWISS', as the create-match/forfeit path does.
+    const r1 = (await liveMatches(tournamentId)).filter((m) => m.round === 1);
+    await prisma.match.update({ where: { id: r1[0]!.id }, data: { phase: 'SWISS' } });
+
+    // Finish the group phase; the final tick should still auto-launch the playoffs.
+    for (const m of (await liveMatches(tournamentId)).filter((m) => m.round === 1)) await finish(m.id, m.player1_id!);
+    await runBalancedPairingTick(app, tournamentId);
+    for (const m of (await liveMatches(tournamentId)).filter((m) => m.round === 2)) await finish(m.id, m.player1_id!);
+    await runBalancedPairingTick(app, tournamentId);
+
+    const finals = await prisma.match.findMany({
+      where: { tournament_id: tournamentId, phase: 'PLAYOFF_FINAL', deleted_at: null },
+      select: { id: true },
+    });
+    expect(finals).toHaveLength(2); // playoffs launched despite the SWISS group match
+  });
+
   it('finalizes to complete, distinct placements after division finals', async () => {
     const { tournamentId, users } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
     await runGroupPhase(tournamentId, 2); // auto-launches the division playoffs
