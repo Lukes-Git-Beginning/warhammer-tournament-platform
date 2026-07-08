@@ -13,7 +13,7 @@ export interface ParticipantsListProps {
  * Public participant roster for a tournament.
  * Shows avatar/initials, username (links to profile), faction and status.
  * Withdrawn/disqualified entries render dimmed with strikethrough.
- * When canManage=true and tournament is ONGOING, shows a Drop button per active participant.
+ * When canManage=true and the tournament is not completed, shows Drop/Undrop buttons per participant.
  */
 export function ParticipantsList({ slug, canManage = false, tournamentStatus }: ParticipantsListProps) {
   const { t } = useTranslation();
@@ -43,7 +43,9 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus }: 
 
   if (isLoading || !data) return null;
 
-  const showDropButtons = canManage && tournamentStatus === 'ONGOING';
+  // Host can drop/undrop before start (so a stuck player doesn't wreck the bracket)
+  // and while ongoing — never once completed (#41/#30b).
+  const showDropButtons = canManage && tournamentStatus !== 'COMPLETED';
 
   return (
     <section className="mb-8">
@@ -107,7 +109,10 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus }: 
                     disabled={dropMutation.isPending}
                     className="ml-2 rounded border border-red-900 px-2 py-0.5 text-xs text-red-500 hover:border-red-600 hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => {
-                      if (confirm(`Drop ${p.user.username} from the tournament? Any open matches will be awarded to their opponent.`)) {
+                      const msg = tournamentStatus === 'ONGOING'
+                        ? `Drop ${p.user.username} from the tournament? Any open matches will be awarded to their opponent.`
+                        : `Drop ${p.user.username} from the tournament? They won't be paired when it starts.`;
+                      if (confirm(msg)) {
                         dropMutation.mutate(p.user.id);
                       }
                     }}

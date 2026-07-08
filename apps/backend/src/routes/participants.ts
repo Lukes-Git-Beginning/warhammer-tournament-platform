@@ -4,6 +4,7 @@ import { emitParticipantChange, emitBracketUpdate } from '../lib/emit.js';
 import { canManageTournament, createLateJoinerBye } from '../lib/tournament-utils.js';
 import { notifyHostsOfWithdrawal } from '../lib/discord-notify.js';
 import { addLateParticipant, setParticipantFactionOp } from '../lib/tournament-management.js';
+import { reapplyDynamicSizing } from '../lib/auto-swiss-service.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -406,6 +407,11 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.warn({ err, slug }, 'Failed to create late-joiner BYE');
       }
 
+      // #40: a late join grows the active pool — re-size the auto-sized bracket live.
+      if (await reapplyDynamicSizing(fastify.prisma, tournament.id)) {
+        emitBracketUpdate(fastify.io, tournament.id);
+      }
+
       request.log.info({ slug, targetUserId: parsed.data.user_id }, 'Participant checked in');
       return reply.code(200).send({ message: 'Check-in successful' });
     },
@@ -635,6 +641,10 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
       }
       const r = await addLateParticipant(fastify.prisma, fastify.io, slug, request.body, request.log);
+      // #40: a host-added late participant grows the active pool — re-size live.
+      if (r.status < 300 && (await reapplyDynamicSizing(fastify.prisma, t.id))) {
+        emitBracketUpdate(fastify.io, t.id);
+      }
       return reply.code(r.status).send(r.body);
     },
   );
@@ -657,9 +667,10 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ---------------------------------------------------------------------------
   // POST /api/tournaments/:slug/participants/:userId/drop
-  // Drop a participant mid-tournament. Callable by the player themselves OR by
-  // host/moderator/admin. Sets status WITHDREW, forfeits any open match,
-  // and voids (deletes) unfinished MatchGames with no winner yet.
+  // Drop a participant. Callable by the player themselves OR by host/moderator/
+  // admin, at any point before the tournament completes — including pre-start, so
+  // a host can remove a player who can't self-drop before the bracket is built
+  // (#41/#30b). Sets status WITHDREW; ONGOING match handling is unchanged.
   // ---------------------------------------------------------------------------
   fastify.post(
     '/api/tournaments/:slug/participants/:userId/drop',
@@ -683,8 +694,8 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       }
-      if (tournament.status !== 'ONGOING') {
-        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Can only drop participants from an ongoing tournament', statusCode: 422 });
+      if (tournament.status === 'COMPLETED') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Cannot drop participants from a completed tournament', statusCode: 422 });
       }
       if (!isSelf && !(await canManageTournament(fastify.prisma, tournament.id, callerId, callerRole))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
@@ -724,6 +735,11 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       // B20: let the host(s) know a player dropped — excluding the actor.
       void notifyHostsOfWithdrawal(tournament.id, userId, callerId);
+
+      // #40: a drop shrinks the active pool — re-size the auto-sized bracket live.
+      if (await reapplyDynamicSizing(fastify.prisma, tournament.id)) {
+        emitBracketUpdate(fastify.io, tournament.id);
+      }
 
       return reply.code(200).send({ dropped: true });
     },

@@ -361,6 +361,24 @@ export async function notifyCheckInReminder(tournament: TournamentForNotify): Pr
   }
 }
 
+/** Per-player pairing DM text — playoff rounds get a special, celebratory line. */
+function pairingDmText(name: string, label: string, opponentDiscordId: string, map: string | null | undefined, url: string): string {
+  const vs = `<@${opponentDiscordId}>` + (map ? ` on *${map}*` : '');
+  if (label === 'Final') {
+    return `**[RizzOtto's Arena] The Grand Final — ${name}** 🏆\n` +
+      `This is it — the last match of the tournament. You face ${vs}. Leave nothing on the field; the title is decided here. GG in advance, and may the best general win. <${url}>`;
+  }
+  if (label === 'Third-Place Match') {
+    return `**[RizzOtto's Arena] The Third-Place Match — ${name}** 🥉\n` +
+      `One last battle to close out the tournament — you face ${vs} for the bronze. Finish strong. GG! <${url}>`;
+  }
+  if (label === 'Semi-Finals' || label === 'Quarter-Finals' || label === 'Playoffs') {
+    return `**[RizzOtto's Arena] ${label} — ${name}** 🏆\n` +
+      `Congratulations on reaching the ${label}! You face ${vs}. This is where legends are forged — good luck, and may your dice run hot. <${url}>`;
+  }
+  return `**[RizzOtto's Arena] ${label} Pairing — ${name}**\nYou are playing against ${vs}.`;
+}
+
 /**
  * Notify round pairings to the tournament channel + DM each player.
  */
@@ -401,24 +419,12 @@ export async function notifyRoundPairings(
       );
     }
 
-    // DM each player with their specific opponent
-    const dmPromises = pairings.flatMap((p) => {
-      const p1Msg =
-        `**[RizzOtto's Arena] ${label} Pairing — ${tournament.name}**\n` +
-        `You are playing against <@${p.player2.discord_id}>` +
-        (p.map ? ` on *${p.map}*` : '') +
-        `.`;
-      const p2Msg =
-        `**[RizzOtto's Arena] ${label} Pairing — ${tournament.name}**\n` +
-        `You are playing against <@${p.player1.discord_id}>` +
-        (p.map ? ` on *${p.map}*` : '') +
-        `.`;
-
-      return [
-        sendDm(p.player1.discord_id, p1Msg),
-        sendDm(p.player2.discord_id, p2Msg),
-      ];
-    });
+    const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
+    // DM each player their specific opponent — playoff rounds get a special text.
+    const dmPromises = pairings.flatMap((p) => [
+      sendDm(p.player1.discord_id, pairingDmText(tournament.name, label, p.player2.discord_id, p.map, url)),
+      sendDm(p.player2.discord_id, pairingDmText(tournament.name, label, p.player1.discord_id, p.map, url)),
+    ]);
 
     await Promise.allSettled(dmPromises);
   } catch (err) {
@@ -539,6 +545,98 @@ export async function notifyBye(
     await sendDm(byePlayer.discord_id, msg);
   } catch (err) {
     console.warn('[discord-notify] notifyBye error (non-fatal):', err);
+  }
+}
+
+/**
+ * P1/P2 (#23): at playoff start, congratulate the qualifiers and give everyone else
+ * a warm "your run ends here". Fire-and-forget safe.
+ */
+export async function notifyPlayoffResults(
+  tournamentId: string,
+  qualifierIds: string[],
+  eliminatedIds: string[],
+): Promise<void> {
+  if (!getToken()) return;
+  try {
+    const tournament = await prisma.tournament.findFirst({
+      where: { id: tournamentId },
+      select: { name: true, slug: true },
+    });
+    if (!tournament) return;
+    const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
+    const users = await prisma.user.findMany({
+      where: { id: { in: [...qualifierIds, ...eliminatedIds] } },
+      select: { id: true, discord_id: true },
+    });
+    const disc = new Map(users.map((u) => [u.id, u.discord_id]));
+    const p1 = `**[RizzOtto's Arena] You're in the Playoffs — ${tournament.name}** 🏆\n` +
+      `The Swiss rounds are done, and you've fought your way through — congratulations, you've qualified for the playoffs! Sharpen your blades; the real battle begins now. Your bracket + next match: <${url}>`;
+    const p2 = `**[RizzOtto's Arena] Your run ends here — ${tournament.name}**\n` +
+      `The final Swiss round is in the books, and a playoff spot slipped just out of reach this time. You fought well — GG! The tournament rolls on; if the remaining matches are streamed, grab a drink and enjoy the show: <${url}>`;
+    const dms = [
+      ...qualifierIds.map((id) => disc.get(id)).filter((d): d is string => !!d).map((d) => sendDm(d, p1)),
+      ...eliminatedIds.map((id) => disc.get(id)).filter((d): d is string => !!d).map((d) => sendDm(d, p2)),
+    ];
+    await Promise.allSettled(dms);
+  } catch (err) {
+    console.warn('[discord-notify] notifyPlayoffResults error (non-fatal):', err);
+  }
+}
+
+/**
+ * P5 (#23): a tournament with no playoffs just finished its last round — thank the
+ * players and point them at the final standings.
+ */
+export async function notifyNoPlayoffComplete(tournamentId: string, playerIds: string[]): Promise<void> {
+  if (!getToken() || playerIds.length === 0) return;
+  try {
+    const tournament = await prisma.tournament.findFirst({
+      where: { id: tournamentId },
+      select: { name: true, slug: true },
+    });
+    if (!tournament) return;
+    const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
+    const users = await prisma.user.findMany({
+      where: { id: { in: playerIds } },
+      select: { discord_id: true },
+    });
+    const msg = `**[RizzOtto's Arena] That's a wrap — ${tournament.name}**\n` +
+      `You've played your final round — thanks for battling through the whole event! Final standings are up: <${url}>. GG, and see you at the next muster. ⚔️`;
+    await Promise.allSettled(users.map((u) => sendDm(u.discord_id, msg)));
+  } catch (err) {
+    console.warn('[discord-notify] notifyNoPlayoffComplete error (non-fatal):', err);
+  }
+}
+
+/**
+ * P6 (#40): the auto-sizing changed the round count / playoff size during the round
+ * that just finished — tell the active players once, at round-end.
+ */
+export async function notifyAutoSizeChanged(
+  tournamentId: string,
+  activeCount: number,
+  rounds: number,
+  playoffFormat: string,
+): Promise<void> {
+  if (!getToken()) return;
+  try {
+    const tournament = await prisma.tournament.findFirst({
+      where: { id: tournamentId },
+      select: { name: true, slug: true },
+    });
+    if (!tournament) return;
+    const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
+    const players = await prisma.tournamentParticipant.findMany({
+      where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN'] } },
+      select: { user: { select: { discord_id: true } } },
+    });
+    const playoffText = playoffFormat === 'NONE' ? ' · no playoffs' : ` · **${playoffFormat}** playoffs`;
+    const msg = `**[RizzOtto's Arena] Bracket updated — ${tournament.name}**\n` +
+      `The field is now at ${activeCount} players, so the tournament has been re-sized: **${rounds} rounds**${playoffText}. Next-round pairings are up: <${url}>`;
+    await Promise.allSettled(players.map((p) => sendDm(p.user.discord_id, msg)));
+  } catch (err) {
+    console.warn('[discord-notify] notifyAutoSizeChanged error (non-fatal):', err);
   }
 }
 

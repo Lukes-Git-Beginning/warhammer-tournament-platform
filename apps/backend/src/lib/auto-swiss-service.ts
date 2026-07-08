@@ -14,7 +14,14 @@ import {
   computeSwissStandings,
   sortSwissStandings,
 } from './swiss.js';
-import { notifyRoundPairings, notifyMatchesCreated, notifyBye } from './discord-notify.js';
+import {
+  notifyRoundPairings,
+  notifyMatchesCreated,
+  notifyBye,
+  notifyPlayoffResults,
+  notifyNoPlayoffComplete,
+  notifyAutoSizeChanged,
+} from './discord-notify.js';
 
 // ---------------------------------------------------------------------------
 // Config: derive rounds + playoff format from check-in count
@@ -28,6 +35,76 @@ export function autoSwissConfig(checkInCount: number): {
   if (checkInCount >= 8)  return { rounds: 5, playoffFormat: 'TOP4' };
   if (checkInCount >= 4)  return { rounds: 3, playoffFormat: 'TOP2' };
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// #40: dynamic re-sizing while a tournament is running
+// ---------------------------------------------------------------------------
+
+/**
+ * Pure sizing given the current active count and the highest round already
+ * generated. Never shrinks below the current round (a played round can't be
+ * un-generated). Below 4 active players there are no more rounds and no playoffs
+ * — the current round finishes the event.
+ */
+export function computeDynamicSize(
+  active: number,
+  currentRound: number,
+): { rounds: number; playoffFormat: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' } {
+  const config = autoSwissConfig(active);
+  return {
+    rounds: Math.max(config?.rounds ?? currentRound, currentRound),
+    playoffFormat: config?.playoffFormat ?? 'NONE',
+  };
+}
+
+/**
+ * Re-size an auto-sized tournament when its active pool changes mid-event (a drop
+ * or a late join). Recomputes rounds_count + playoff_format from the current active
+ * count, but never once the playoffs exist. Returns true if anything changed so the
+ * caller can emit a bracket update for the live display. The round-end DM is sent
+ * separately by the round-advance flow. Applies to Auto Swiss + auto-sized Swiss +
+ * auto-sized Balanced Liechtenstein.
+ */
+export async function reapplyDynamicSizing(
+  prisma: PrismaClient,
+  tournamentId: string,
+): Promise<boolean> {
+  const t = await prisma.tournament.findFirst({
+    where: { id: tournamentId, deleted_at: null },
+    select: { format: true, status: true, auto_sizing: true, rounds_count: true, playoff_format: true },
+  });
+  if (!t || t.status !== 'ONGOING') return false;
+  const eligible =
+    t.format === 'AUTO_SWISS' ||
+    ((t.format === 'SWISS' || t.format === 'BALANCED_LIECHTENSTEIN') && t.auto_sizing);
+  if (!eligible) return false;
+
+  const matches = await prisma.match.findMany({
+    where: { tournament_id: tournamentId, deleted_at: null },
+    select: { round: true, phase: true },
+  });
+  // Once the playoffs exist we never re-size (a PLAYOFF_* phase, i.e. not null/SWISS).
+  if (matches.some((m) => m.phase != null && m.phase !== 'SWISS')) return false;
+
+  // Active pairing pool — dropped / disqualified excluded; BYE and forfeit don't
+  // change membership.
+  const active = await prisma.tournamentParticipant.count({
+    where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN'] } },
+  });
+  const currentRound = matches
+    .filter((m) => m.phase == null || m.phase === 'SWISS')
+    .reduce((max, m) => Math.max(max, m.round), 0);
+
+  const { rounds, playoffFormat } = computeDynamicSize(active, currentRound);
+  if (rounds === (t.rounds_count ?? 0) && playoffFormat === t.playoff_format) return false;
+
+  await prisma.tournament.update({
+    where: { id: tournamentId },
+    // Flag the change so the round-advance flow DMs players once, at round-end.
+    data: { rounds_count: rounds, playoff_format: playoffFormat, pending_resize_notice: true },
+  });
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +195,7 @@ export async function advanceAutoSwissRound(prisma: PrismaClient, tournamentId: 
     select: {
       id: true, name: true, slug: true, start_date: true,
       rounds_count: true, playoff_format: true, has_third_place_match: true,
+      pending_resize_notice: true,
     },
   });
   if (!tournament?.rounds_count) return;
@@ -150,6 +228,15 @@ export async function advanceAutoSwissRound(prisma: PrismaClient, tournamentId: 
   // More Swiss rounds to play
   if (maxSwissRound < tournament.rounds_count) {
     await generateNextSwissRound(prisma, tournament, swissMatches, maxSwissRound + 1);
+    // P6 (#40): if dynamic sizing changed the bracket during the round that just
+    // finished, tell the active players once — now that the next pairings are up.
+    if (tournament.pending_resize_notice) {
+      const active = await prisma.tournamentParticipant.count({
+        where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN'] } },
+      });
+      void notifyAutoSizeChanged(tournamentId, active, tournament.rounds_count, tournament.playoff_format ?? 'NONE');
+      await prisma.tournament.update({ where: { id: tournamentId }, data: { pending_resize_notice: false } });
+    }
     return;
   }
 
@@ -344,6 +431,15 @@ async function startPlayoffs(
     await prisma.tournament.update({ where: { id: tournament.id }, data: { playoff_format: effectiveConfig.playoffFormat } });
   }
   const fmt = effectiveConfig?.playoffFormat ?? tournament.playoff_format;
+
+  // P1/P2/P5 (#23): congratulate the qualifiers, or thank everyone if there are no
+  // playoffs. Qualifiers = the top `cutoff` of the final standings.
+  const cutoff = fmt === 'TOP8' ? 8 : fmt === 'TOP4' ? 4 : fmt === 'TOP2' ? 2 : 0;
+  if (cutoff > 0) {
+    void notifyPlayoffResults(tournament.id, ranked.slice(0, cutoff), ranked.slice(cutoff));
+  } else {
+    void notifyNoPlayoffComplete(tournament.id, ranked);
+  }
 
   type PlayoffPhase = 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL' | 'PLAYOFF_THIRD_PLACE';
   const matches: {
