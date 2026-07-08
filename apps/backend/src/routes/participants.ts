@@ -600,8 +600,14 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     const started = tournament.status === 'ONGOING' || tournament.status === 'COMPLETED';
+    // Hide committed factions until the tournament starts so nobody can counter-pick
+    // during registration. FREE_PICK is included: a committed Free Pick faction is a
+    // strategic choice that must stay secret while others are still choosing (like SFT).
     const maskFactions =
-      (tournament.mode === 'SFT' || tournament.mode === 'BPT' || tournament.mode === 'TWO_D_THREE') &&
+      (tournament.mode === 'SFT' ||
+        tournament.mode === 'BPT' ||
+        tournament.mode === 'TWO_D_THREE' ||
+        tournament.mode === 'FREE_PICK') &&
       !started;
 
     const data = maskFactions

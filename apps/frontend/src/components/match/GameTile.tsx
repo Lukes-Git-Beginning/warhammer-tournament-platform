@@ -127,10 +127,13 @@ export function GameTile({
   // Blind pick is required for BPT tournaments and for any match that has a
   // MatchBlindPick row (Open Play matches always get one on creation).
   const needsBlindPick = tournamentMode === 'BPT' || !!game.blindPick;
+  const isFreePick = tournamentMode === 'FREE_PICK';
   const decisionComplete = Boolean(
     game.decision?.pickedMapId &&
       (!needsBlindPick || game.blindPick?.revealedAt) &&
-      (tournamentMode !== 'MATRIX' || (game.player1FactionId != null && game.player2FactionId != null)),
+      // MATRIX + FREE_PICK need both factions resolved (not just the map) — so a
+      // random/auto map can't mark the match "done" before the faction is picked.
+      ((tournamentMode !== 'MATRIX' && !isFreePick) || (p1FactionId != null && p2FactionId != null)),
   );
 
   const _isReporter = game.reportedWinnerId !== null && game.reporterId === currentUserId;
@@ -253,7 +256,7 @@ export function GameTile({
                 isParticipant ? (
                   <div className="flex flex-col items-center gap-3">
                     <p className="text-sm text-rizzotto-stone-400 text-center">
-                      Map and faction selection not started yet.
+                      {isFreePick ? 'Faction and map selection not started yet.' : 'Map and faction selection not started yet.'}
                     </p>
                     <Button
                       variant="forge"
@@ -263,9 +266,11 @@ export function GameTile({
                     >
                       {startDecisionMutation.isPending
                         ? 'Rolling…'
-                        : needsBlindPick
-                          ? 'Choose Map & Faction'
-                          : 'Choose Battlefield'}
+                        : isFreePick
+                          ? 'Choose Faction & Battlefield'
+                          : needsBlindPick
+                            ? 'Choose Map & Faction'
+                            : 'Choose Battlefield'}
                     </Button>
                   </div>
                 ) : (
@@ -305,11 +310,13 @@ export function GameTile({
                   )}
                   <Button variant="forge" size="sm" asChild>
                     <Link to="/matches/$matchId/decision" params={{ matchId }}>
-                      {game.decision?.pickedMapId && tournamentMode === 'MATRIX'
-                        ? 'Continue Faction Picking'
-                        : game.decision?.pickedMapId && needsBlindPick
-                          ? 'Pick Your Faction'
-                          : 'Go to Map Selection'}
+                      {isFreePick
+                        ? 'Continue Setup'
+                        : game.decision?.pickedMapId && tournamentMode === 'MATRIX'
+                          ? 'Continue Faction Picking'
+                          : game.decision?.pickedMapId && needsBlindPick
+                            ? 'Pick Your Faction'
+                            : 'Go to Map Selection'}
                     </Link>
                   </Button>
                 </div>

@@ -100,8 +100,10 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
             },
           },
           games: {
+            // No map-first precondition: the faction step can run before the map
+            // (Free Pick is faction-first). The step order is enforced by the
+            // frontend per mode; the faction pick never depends on the map.
             where: {
-              map_decision: { picked_map_id: { not: null } },
               OR: [
                 { faction_matrix: null },
                 { faction_matrix: { decided_at: null } },
@@ -246,7 +248,7 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
           id: true, player1_id: true, player2_id: true, tournament_id: true,
           tournament: { select: { mode: true, faction_allowlist: { select: { faction_id: true } } } },
           games: {
-            where: { map_decision: { picked_map_id: { not: null } }, OR: [{ faction_matrix: null }, { faction_matrix: { decided_at: null } }] },
+            where: { OR: [{ faction_matrix: null }, { faction_matrix: { decided_at: null } }] },
             orderBy: { game_number: 'asc' }, select: { id: true, faction_matrix: true }, take: 1,
           },
         },
@@ -315,7 +317,7 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
           id: true, player1_id: true, player2_id: true, tournament_id: true,
           tournament: { select: { mode: true } },
           games: {
-            where: { map_decision: { picked_map_id: { not: null } }, faction_matrix: { decided_at: null } },
+            where: { faction_matrix: { decided_at: null } },
             orderBy: { game_number: 'asc' }, select: { id: true, faction_matrix: true }, take: 1,
           },
         },
@@ -356,6 +358,16 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
         where: { game_id: game.id },
         data: { picked_cell: pickedCell, decided_at: now, last_action_at: now },
       });
+      // Write the resolved factions onto the game so they show on the tile /
+      // bracket immediately: the fixed player keeps their registration faction,
+      // the pick-later player plays the chosen one.
+      await fastify.prisma.matchGame.update({
+        where: { id: game.id },
+        data: {
+          player1_faction_id: fixedIsP1 ? p1Fixed : factionId,
+          player2_faction_id: fixedIsP1 ? factionId : p2Fixed,
+        },
+      });
       emitMatrixUpdate(fastify, matchId, updated);
       return reply.code(200).send({ ok: true });
     },
@@ -363,7 +375,7 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // POST /api/matches/:id/matrix/ban
-  // Ban a cell (first 7 actions) or pick from remaining (8th action by bottom player).
+  // Ban a cell (first 7 actions) or pick from remaining (8th action by the top player).
   // -------------------------------------------------------------------------
   fastify.post(
     '/api/matches/:id/matrix/ban',
@@ -444,13 +456,13 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
       const isPick = bans.length === 7;
 
       // Determine whose turn it is.
-      // Balanced 1-2-2-2 ban order (bans.length → actor): Top bans 1, then the sides
-      // alternate in pairs (Bottom 2, Top 2, Bottom 2) to blunt the first-mover edge;
-      // the coin-flip loser (Bottom) picks last from the two remaining cells.
+      // Balanced 1-2-2-2 ban order (bans.length → actor): Top (coin-toss winner) bans 1,
+      // then Bottom 2 / Top 2 / Bottom 2 — Bottom makes the last ban. Top then PICKS the
+      // final matchup, so one player never bans-last AND picks.
       const BAN_ACTOR_IS_TOP = [true, false, false, true, true, false, false] as const; // by bans.length 0..6
       let expectedActorId: string;
       if (isPick) {
-        expectedActorId = bottomPlayer; // coin-flip loser picks from remaining 2
+        expectedActorId = topPlayer; // coin-toss winner picks from the remaining 2
       } else {
         expectedActorId = BAN_ACTOR_IS_TOP[bans.length] ? topPlayer : bottomPlayer;
       }

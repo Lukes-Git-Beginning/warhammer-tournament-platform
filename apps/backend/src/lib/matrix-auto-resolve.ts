@@ -65,7 +65,7 @@ function emitUpdate(fastify: FastifyInstance, matchId: string, matrix: {
 /**
  * Scans for stale matrix actions and auto-resolves them:
  * Phase 1 — Blind-pick timeout (2 min): one player locked but opponent hasn't.
- * Phase 2 — Ban/pick timeout: 30s for the first ban, 15s for all subsequent bans/pick.
+ * Phase 2 — Ban/pick timeout: 30s for every ban and the final pick.
  * Called every 15 seconds by the cron plugin.
  */
 export async function autoResolveStaleMatrixActions(fastify: FastifyInstance): Promise<number> {

@@ -41,12 +41,16 @@ function FactionSelectGrid({
   pickCount,
   allowedFactionIds,
   restrictedFactionIds,
+  onSetSelected,
 }: {
   selected: string[];
   onToggle: (id: string) => void;
   pickCount: number;
   allowedFactionIds?: string[];
   restrictedFactionIds?: string[];
+  /** When provided, enables a "Random" button that fills the selection with
+   *  `pickCount` random pickable factions (respecting the allowlist). */
+  onSetSelected?: (ids: string[]) => void;
 }) {
   const { data } = useQuery({
     queryKey: ['factions'],
@@ -60,8 +64,34 @@ function FactionSelectGrid({
   // Empty allowlist means all factions are permitted
   const hasRestriction = allowedFactionIds != null && allowedFactionIds.length > 0;
 
+  // Pickable pool for "Random" — allowlist is respected, but restricted factions
+  // stay eligible (they are nerfed, not banned).
+  const pickable = factions.filter((f) => !(hasRestriction && !allowedFactionIds!.includes(f.id)));
+
+  function pickRandom() {
+    if (pickable.length === 0) return;
+    const pool = [...pickable];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+    }
+    onSetSelected?.(pool.slice(0, Math.min(pickCount, pool.length)).map((f) => f.id));
+  }
+
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+    <div className="space-y-2">
+      {onSetSelected && pickable.length > 0 && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={pickRandom}
+            className="rounded-sm border border-rizzotto-iron-600 bg-rizzotto-iron-900 px-2.5 py-1 text-xs font-semibold text-rizzotto-stone-300 transition-colors hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-300"
+          >
+            🎲 {pickCount > 1 ? `Random ${pickCount}` : 'Random'}
+          </button>
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
       {factions.map((f) => {
         const isSelected = selected.includes(f.id);
         // Restricted factions are nerfed, not banned — keep them pickable; only
@@ -109,6 +139,7 @@ function FactionSelectGrid({
           </button>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -397,44 +428,6 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
     );
   }
 
-  if (isFreePick && choosingFreePick) {
-    return (
-      <div className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4 space-y-4">
-        <div>
-          <p className="text-sm font-semibold text-rizzotto-stone-200 mb-1">How do you want to play?</p>
-          <p className="text-xs text-rizzotto-stone-500">
-            Free Pick — commit to one faction for the whole event, or decide match by match.
-          </p>
-        </div>
-        {register.isError && (
-          <p className="text-xs text-rizzotto-danger">{(register.error as Error).message}</p>
-        )}
-        <div className="grid gap-2 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => { setFreePickChoice('fixed'); setChoosingFreePick(false); setPickingFaction(true); }}
-            className="rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-3 text-left transition-colors hover:border-rizzotto-gold-500/60"
-          >
-            <p className="text-sm font-semibold text-rizzotto-stone-100">Fixed faction</p>
-            <p className="mt-0.5 text-xs text-rizzotto-stone-500">Play one faction all tournament — shown in the standings.</p>
-          </button>
-          <button
-            type="button"
-            disabled={register.isPending}
-            onClick={() => { setFreePickChoice('later'); register.mutate(requestedBand != null ? { requested_band: requestedBand } : undefined); }}
-            className="rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-3 text-left transition-colors hover:border-rizzotto-gold-500/60 disabled:opacity-50"
-          >
-            <p className="text-sm font-semibold text-rizzotto-stone-100">Pick match by match</p>
-            <p className="mt-0.5 text-xs text-rizzotto-stone-500">Choose your faction per opponent when the match starts.</p>
-          </button>
-        </div>
-        <button type="button" onClick={() => setChoosingFreePick(false)} className="text-sm text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors">
-          Cancel
-        </button>
-      </div>
-    );
-  }
-
   if (needsFactionPick && pickingFaction) {
     const is2D3 = tournament.mode === 'TWO_D_THREE';
     return (
@@ -447,7 +440,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
             {is2D3
               ? 'Pick exactly 3 factions. One of them is drawn at random for you before each game.'
               : isFreePick
-                ? 'Free Pick — this faction is locked for the whole event and shown in the standings.'
+                ? 'Free Pick — this faction is locked for the whole event and revealed to others at start.'
                 : 'SFT — Single Faction Tournament. Your faction is locked for the entire event.'}
           </p>
           {is2D3 && (
@@ -465,6 +458,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
           pickCount={pickCount}
           allowedFactionIds={tournament.faction_allowlist}
           restrictedFactionIds={tournament.restricted_factions}
+          onSetSelected={setSelectedFactions}
         />
         {register.isError && (
           <p className="text-xs text-rizzotto-danger">{(register.error as Error).message}</p>
@@ -509,6 +503,42 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
             }
           }}
         />
+      )}
+
+      {/* Free Pick: choose a fixed faction or pick-per-match, in a modal like the band picker */}
+      {isFreePick && (
+        <Dialog open={choosingFreePick} onOpenChange={(o) => { if (!o) setChoosingFreePick(false); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>How do you want to play?</DialogTitle>
+              <DialogDescription>
+                Free Pick — commit to one faction for the whole event, or decide match by match.
+              </DialogDescription>
+            </DialogHeader>
+            {register.isError && (
+              <p className="text-xs text-rizzotto-danger">{(register.error as Error).message}</p>
+            )}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => { setFreePickChoice('fixed'); setChoosingFreePick(false); setPickingFaction(true); }}
+                className="rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-3 text-left transition-colors hover:border-rizzotto-gold-500/60"
+              >
+                <p className="text-sm font-semibold text-rizzotto-stone-100">Fixed faction</p>
+                <p className="mt-0.5 text-xs text-rizzotto-stone-500">Play one faction all tournament — revealed to others at start.</p>
+              </button>
+              <button
+                type="button"
+                disabled={register.isPending}
+                onClick={() => { setFreePickChoice('later'); register.mutate(requestedBand != null ? { requested_band: requestedBand } : undefined); }}
+                className="rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-3 text-left transition-colors hover:border-rizzotto-gold-500/60 disabled:opacity-50"
+              >
+                <p className="text-sm font-semibold text-rizzotto-stone-100">Pick match by match</p>
+                <p className="mt-0.5 text-xs text-rizzotto-stone-500">Choose your faction per opponent when the match starts.</p>
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {isReRegister && (

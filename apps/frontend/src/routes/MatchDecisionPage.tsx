@@ -774,7 +774,7 @@ function MatrixCountdown({ lastActionAt, bansCount }: { lastActionAt: string; ba
   const [label, setLabel] = useState<string | null>(null);
 
   useEffect(() => {
-    const windowMs = bansCount === 0 ? 30_000 : 15_000;
+    const windowMs = 30_000; // 30s for every ban and the final pick (matches the backend)
     const deadline = new Date(new Date(lastActionAt).getTime() + windowMs);
     function tick() {
       const diff = deadline.getTime() - Date.now();
@@ -826,11 +826,14 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
   else if (myLocked) subPhase = 'waiting';
   else subPhase = 'blind';
 
+  // Balanced 1-2-2-2 ban order (must match the backend, faction-matrix.ts):
+  // Top (coin-toss winner) bans 1, then Bottom 2 / Top 2 / Bottom 2 — Bottom makes
+  // the last ban, then TOP picks the final matchup (so no one bans-last AND picks).
+  const BAN_ACTOR_IS_TOP = [true, false, false, true, true, false, false] as const;
   const myTurn = (): boolean => {
     if (!mx || !revealed || decided) return false;
-    const isPick = bans.length === 7;
-    if (isPick) return currentUserId === mx.bottomPlayerId;
-    return bans.length % 2 === 0 ? currentUserId === mx.topPlayerId : currentUserId === mx.bottomPlayerId;
+    if (bans.length >= 7) return currentUserId === mx.topPlayerId; // coin-toss winner picks
+    return BAN_ACTOR_IS_TOP[bans.length] ? currentUserId === mx.topPlayerId : currentUserId === mx.bottomPlayerId;
   };
   const isMyTurn = myTurn();
   const isPick = bans.length >= 7;
@@ -865,6 +868,19 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
       if (prev.length >= 3) return prev;
       return [...prev, id];
     });
+  }
+
+  // #43: fill the selection with 3 random pickable factions (allowlist respected,
+  // restricted stay eligible).
+  function pickRandom3() {
+    const pool = factions
+      .map((f) => f.faction.id)
+      .filter((id) => factionAllowlist.length === 0 || factionAllowlist.includes(id));
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+    }
+    setSelectedFactions(pool.slice(0, 3));
   }
 
   const p1Factions = mx?.p1Factions ?? [];
@@ -1099,9 +1115,18 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
         })}
       </div>
 
-      <Button variant="forge" size="md" disabled={selectedFactions.length !== 3 || locking} onClick={handleLock}>
-        {locking ? 'Locking…' : 'Lock In (3 Factions)'}
-      </Button>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={pickRandom3}
+          className="rounded-sm border border-rizzotto-iron-600 bg-rizzotto-iron-900 px-3 py-2 text-xs font-semibold text-rizzotto-stone-300 transition-colors hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-300"
+        >
+          🎲 Random 3
+        </button>
+        <Button variant="forge" size="md" disabled={selectedFactions.length !== 3 || locking} onClick={handleLock}>
+          {locking ? 'Locking…' : 'Lock In (3 Factions)'}
+        </Button>
+      </div>
       {lockError && <p className="text-sm text-red-400 text-center">{lockError}</p>}
     </div>
   );
@@ -1145,6 +1170,18 @@ function FreePickMiniPhase({ matchId, decision, currentUserId, factions, rowPlay
 
   const toggle = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : prev.length >= 3 ? prev : [...prev, id]));
+
+  // #43: offer 3 random pickable factions (allowlist respected, restricted eligible).
+  const pickRandom3 = () => {
+    const pool = factions
+      .map((f) => f.faction.id)
+      .filter((id) => factionAllowlist.length === 0 || factionAllowlist.includes(id));
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+    }
+    setSelected(pool.slice(0, 3));
+  };
 
   async function submitOffer() {
     if (selected.length !== 3) return;
@@ -1217,9 +1254,18 @@ function FreePickMiniPhase({ matchId, decision, currentUserId, factions, rowPlay
               );
             })}
           </div>
-          <Button variant="forge" size="md" disabled={selected.length !== 3 || acting} onClick={submitOffer}>
-            {acting ? 'Offering…' : 'Offer 3 Factions'}
-          </Button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={pickRandom3}
+              className="rounded-sm border border-rizzotto-iron-600 bg-rizzotto-iron-900 px-3 py-2 text-xs font-semibold text-rizzotto-stone-300 transition-colors hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-300"
+            >
+              🎲 Random 3
+            </button>
+            <Button variant="forge" size="md" disabled={selected.length !== 3 || acting} onClick={submitOffer}>
+              {acting ? 'Offering…' : 'Offer 3 Factions'}
+            </Button>
+          </div>
           {err && <p className="text-sm text-red-400">{err}</p>}
         </>
       )}
@@ -1261,6 +1307,14 @@ function FreePickMiniPhase({ matchId, decision, currentUserId, factions, rowPlay
               );
             })}
           </div>
+          <button
+            type="button"
+            disabled={acting || offered.length === 0}
+            onClick={() => offered.length > 0 && void choose(offered[Math.floor(Math.random() * offered.length)]!)}
+            className="rounded-sm border border-rizzotto-iron-600 bg-rizzotto-iron-900 px-3 py-2 text-xs font-semibold text-rizzotto-stone-300 transition-colors hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-300 disabled:opacity-50"
+          >
+            🎲 Random
+          </button>
           {err && <p className="text-sm text-red-400">{err}</p>}
         </>
       )}
@@ -1320,17 +1374,36 @@ function BlindPickCountdown({ firstLockedAt, timeoutMs }: { firstLockedAt: strin
 const RANDOM_MODES = new Set(['RANDOM', 'RANDOM_NO_REPEAT', 'HOST_PRESET']);
 const BAN_MODES = new Set(['PICK_BAN', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']);
 
+/** The map sub-phase (coin flip → ban/pick or random draw). */
+function mapPhase(d: MatchDecisionState): DecisionPhase {
+  if (RANDOM_MODES.has(d.mode)) return 'map_random';
+  if (BAN_MODES.has(d.mode)) {
+    // Show coin flip briefly first if neither ban has happened
+    if (d.bansTop.length === 0 && d.bansBottom.length === 0) return 'coin_flip';
+    return 'map_pick_ban';
+  }
+  return 'coin_flip';
+}
+
+// Per-mode match-step order: which step (faction / map) runs first. A step whose
+// result is already fixed is simply skipped. Only FREE_PICK is faction-first for
+// now; MATRIX stays map-first (its current behaviour) until that is confirmed.
 function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
   if (!d) return 'loading';
-  if (d.pickedMapId) {
-    // FREE_PICK resolves per match from both players' registration choices.
-    if (d.tournamentMode === 'FREE_PICK') {
-      const p1Fixed = d.freePick?.p1FactionId != null;
-      const p2Fixed = d.freePick?.p2FactionId != null;
-      if (p1Fixed && p2Fixed) return 'ready'; // both play their registration faction
-      if (!p1Fixed && !p2Fixed) return d.factionMatrix?.decidedAt ? 'ready' : 'faction_matrix';
-      return d.factionMatrix?.decidedAt ? 'ready' : 'free_pick_mini'; // mixed
+
+  // FREE_PICK is faction-first: the faction defines the matchup, so it is resolved
+  // before the map. A committed player's faction is fixed (no step); pick-later /
+  // mixed players resolve it via the matrix / mini pick first, THEN the map.
+  if (d.tournamentMode === 'FREE_PICK') {
+    const p1Fixed = d.freePick?.p1FactionId != null;
+    const p2Fixed = d.freePick?.p2FactionId != null;
+    if (!(p1Fixed && p2Fixed) && !d.factionMatrix?.decidedAt) {
+      return !p1Fixed && !p2Fixed ? 'faction_matrix' : 'free_pick_mini';
     }
+    return d.pickedMapId ? 'ready' : mapPhase(d);
+  }
+
+  if (d.pickedMapId) {
     // MATRIX mode: faction pick/ban after map decision
     if (d.tournamentMode === 'MATRIX') {
       if (!d.factionMatrix?.decidedAt) return 'faction_matrix';
@@ -1343,13 +1416,7 @@ function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
     if (d.tournamentMode === 'BPT') return 'blind_pick';
     return 'ready';
   }
-  if (RANDOM_MODES.has(d.mode)) return 'map_random';
-  if (BAN_MODES.has(d.mode)) {
-    // Show coin flip briefly first if neither ban has happened
-    if (d.bansTop.length === 0 && d.bansBottom.length === 0) return 'coin_flip';
-    return 'map_pick_ban';
-  }
-  return 'coin_flip';
+  return mapPhase(d);
 }
 
 export function MatchDecisionPage() {
@@ -1589,7 +1656,7 @@ export function MatchDecisionPage() {
   }
 
   return (
-    <PageShell variant={decision.tournamentMode === 'MATRIX' ? 'wide' : 'tight'} spacing="base">
+    <PageShell variant={decision.tournamentMode === 'MATRIX' || decision.tournamentMode === 'FREE_PICK' ? 'wide' : 'tight'} spacing="base">
       <div className="mb-8 text-center relative">
         {matchDetail?.tournament_slug && (
           <Link

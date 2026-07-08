@@ -25,7 +25,7 @@ const FORMAT_LABELS: Record<string, string> = {
 };
 
 const MODE_LABELS: Record<string, string> = {
-  SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', TWO_D_THREE: '2D3',
+  SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', TWO_D_THREE: '2D3', FREE_PICK: 'Free Pick',
   BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3',
 };
 
