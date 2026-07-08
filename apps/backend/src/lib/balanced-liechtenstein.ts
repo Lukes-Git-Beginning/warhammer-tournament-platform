@@ -32,8 +32,15 @@
 //  - Pairing happens WITHIN a round pool only (both players at k-1 games).
 // ---------------------------------------------------------------------------
 
+import blossom from 'edmonds-blossom';
+
 /** Default division when a participant has no skill_band yet (Intermediate). */
 export const DEFAULT_BAND = 3;
+
+/** #18: an immediate rematch must never be chosen — a penalty that dwarfs any
+ *  reachable band + eventual-rematch cost, so Blossom only picks it when a player
+ *  has literally no other partner (then it's filtered out below → wait / bye). */
+const IMMEDIATE_REMATCH_PENALTY = 1_000_000;
 
 /** Terminal statuses that count as a played round toward a player's progress. */
 const ADVANCING = new Set(['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST']);
@@ -139,27 +146,41 @@ function pairPool(
       ? Infinity
       : Math.min(...incomingBands.map((ib) => Math.abs(ib - band)));
 
-  // All eligible pairs (immediate rematch excluded), cheapest first.
-  const candidates: Array<{ i: number; j: number; c: number }> = [];
-  for (let i = 0; i < waiting.length; i++) {
-    for (let j = i + 1; j < waiting.length; j++) {
-      if (isImmediateRematch(waiting[i]!, waiting[j]!)) continue;
-      candidates.push({ i, j, c: cost(waiting[i]!, waiting[j]!) });
-    }
+  // #18: global minimum-cost matching over the whole pool (Edmonds' Blossom, like
+  // regular Swiss B8), so we never strand a player who has a valid same-band partner
+  // just because a greedy pass took it first. Immediate rematches carry a dominating
+  // penalty so they're only chosen when a player has no other partner at all.
+  const n = waiting.length;
+  const mate = new Array<number>(n).fill(-1);
+  if (n >= 2) {
+    // Scale by 2 so EVENTUAL_REMATCH_COST (1.5) stays integral for the matcher.
+    const w = (a: Waiter, b: Waiter): number =>
+      Math.round((cost(a, b) + (isImmediateRematch(a, b) ? IMMEDIATE_REMATCH_PENALTY : 0)) * 2);
+    let maxW = 0;
+    for (let i = 0; i < n; i++)
+      for (let j = i + 1; j < n; j++) maxW = Math.max(maxW, w(waiting[i]!, waiting[j]!));
+    const K = maxW + 1; // offset so max-weight matching == min-cost matching
+    const edges: Array<[number, number, number]> = [];
+    for (let i = 0; i < n; i++)
+      for (let j = i + 1; j < n; j++) edges.push([i, j, K - w(waiting[i]!, waiting[j]!)]);
+    const result = blossom(edges);
+    for (let i = 0; i < n; i++) mate[i] = result[i] ?? -1;
   }
-  // Cheapest first; tie-break by lower band so the weaker surplus is placed first.
-  candidates.sort((a, b) => a.c - b.c || waiting[a.i]!.band - waiting[b.i]!.band);
 
   const pairs: [Waiter, Waiter][] = [];
   const used = new Set<number>();
-  for (const { i, j, c } of candidates) {
-    if (used.has(i) || used.has(j)) continue;
-    if (incBest(waiting[i]!.band) < c || incBest(waiting[j]!.band) < c) {
-      continue; // a strictly cheaper opponent is still on the way → wait for them
-    }
+  for (let i = 0; i < n; i++) {
+    const j = mate[i]!;
+    if (j < 0 || j <= i || used.has(i) || used.has(j)) continue;
+    const a = waiting[i]!, b = waiting[j]!;
+    // Never create a forced immediate rematch — those players wait / bye instead.
+    if (isImmediateRematch(a, b)) continue;
+    const c = cost(a, b);
+    // Defer if a strictly cheaper opponent is still on the way for either player.
+    if (incBest(a.band) < c || incBest(b.band) < c) continue;
     used.add(i);
     used.add(j);
-    pairs.push([waiting[i]!, waiting[j]!]);
+    pairs.push([a, b]);
   }
 
   const stuck = waiting.filter((_, i) => !used.has(i));

@@ -99,6 +99,28 @@ describe('planPairings — incremental next round', () => {
     expect(plan.pairings).toHaveLength(0);
     expect(plan.byes).toHaveLength(1);
   });
+
+  it('pairs everyone globally instead of stranding a rematch-locked pair (#18)', () => {
+    // Round 1: a-b, c-d, e-f all played, so for round 2 those three pairs are immediate
+    // rematches. A greedy pass would take a-c + b-d and strand e+f (a rematch) into a
+    // bye; the global (Blossom) matching finds a-c / b-e / d-f — all fresh, nobody
+    // stranded. This is the Ponti case from trial-by-fire.
+    const players = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => P(id, 2));
+    const matches: BalancedMatchRow[] = [
+      done(1, 'a', 'b', 'a'),
+      done(1, 'c', 'd', 'c'),
+      done(1, 'e', 'f', 'e'),
+    ];
+    const plan = planPairings(players, matches, 3);
+    expect(plan.byes).toHaveLength(0);
+    expect(plan.pairings).toHaveLength(3);
+    // No round-2 pairing repeats a round-1 opponent.
+    const r1 = new Set(['a|b', 'c|d', 'e|f']);
+    for (const p of plan.pairings) {
+      const key = [p.player1_id, p.player2_id].sort().join('|');
+      expect(r1.has(key)).toBe(false);
+    }
+  });
 });
 
 describe('planPairings — earliest COMPATIBLE, not earliest', () => {
