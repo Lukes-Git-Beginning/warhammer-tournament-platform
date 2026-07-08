@@ -3,9 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getAdminCalibrationQuestions,
   putAdminCalibrationQuestions,
+  searchUsers,
   type CalibrationQuestionDto,
   type CalibrationOption,
 } from '@/lib/api.js';
+import { CalibrationAuditPanel } from './CalibrationAuditPanel.js';
 
 // ---------------------------------------------------------------------------
 // Floor helpers
@@ -164,6 +166,88 @@ function QuestionCard({
         + Add option
       </button>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Player audit — search a player and inspect their answers + classification.
+// ---------------------------------------------------------------------------
+
+function CalibrationAuditSection() {
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<{ id: string; username: string } | null>(null);
+
+  const canSearch = search.trim().length >= 2;
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin-users', search, 'username', 'asc'],
+    queryFn: () => searchUsers(search, 'username', 'asc'),
+    enabled: canSearch,
+  });
+  const users = data?.users ?? [];
+
+  return (
+    <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4 space-y-4">
+      <div className="space-y-0.5">
+        <p className="text-sm font-semibold text-stone-300">Player calibration audit</p>
+        <p className="text-xs text-stone-500">
+          Search a player to see their questionnaire answers and full skill classification.
+        </p>
+      </div>
+
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setSelected(null);
+        }}
+        placeholder="Search by username or Discord ID…"
+        className="w-full max-w-sm rounded border border-rizzotto-iron-600 bg-rizzotto-iron-950 px-3 py-1.5 text-sm text-stone-200 placeholder:text-stone-600 focus:outline-none focus:ring-1 focus:ring-rizzotto-gold-500"
+      />
+
+      {canSearch && !selected && (
+        <div className="max-h-60 max-w-sm overflow-y-auto rounded border border-rizzotto-iron-700 divide-y divide-rizzotto-iron-800/60">
+          {isLoading && <div className="px-3 py-2 text-xs text-stone-500">Searching…</div>}
+          {!isLoading && users.length === 0 && (
+            <div className="px-3 py-2 text-xs text-stone-500">No players found.</div>
+          )}
+          {users.map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => setSelected({ id: u.id, username: u.username })}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-stone-200 hover:bg-rizzotto-iron-800/50 transition-colors"
+            >
+              {u.avatar_url ? (
+                <img
+                  src={u.avatar_url}
+                  alt={u.username}
+                  className="h-6 w-6 rounded-full border border-stone-700 object-cover shrink-0"
+                />
+              ) : (
+                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-stone-700 text-[10px] font-medium text-stone-200">
+                  {u.username[0]?.toUpperCase() ?? '?'}
+                </span>
+              )}
+              {u.username}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selected && (
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setSelected(null)}
+            className="text-xs text-rizzotto-gold-500 hover:text-rizzotto-gold-300 transition-colors"
+          >
+            ← Back to search
+          </button>
+          <CalibrationAuditPanel userId={selected.id} username={selected.username} />
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -327,6 +411,9 @@ export function SkillCalibrationTab() {
           </div>
         </>
       )}
+
+      {/* Player calibration audit (#27) */}
+      <CalibrationAuditSection />
     </div>
   );
 }
