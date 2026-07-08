@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
@@ -28,6 +28,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   const queryClient = useQueryClient();
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [viewportH, setViewportH] = useState<number | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['bracket', slug],
@@ -98,22 +99,40 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     [data?.swiss?.standings, data?.matches],
   );
 
-  // Auto-fit: center and scale the bracket to fill the container whenever
-  // the layout dimensions change (initial load or new round added).
+  // #25: fit the bracket to the container WIDTH (never upscale past 1:1) and grow
+  // the viewport to the bracket's full scaled height, so the whole bracket is
+  // visible and the PAGE scrolls — no fixed-height window that clips the bottom.
   const layout = data && data.matches.length > 0 ? computeBracketLayout(data.matches) : null;
-  useEffect(() => {
-    if (!transformRef.current || !containerRef.current || !layout) return;
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+
+  const fitToWidth = useCallback((animationMs: number) => {
+    const l = layoutRef.current;
+    if (!transformRef.current || !containerRef.current || !l) return;
     const containerW = containerRef.current.clientWidth;
-    const PAD = 20;
-    const svgW = layout.width + PAD * 2;
-    // #25: fit to WIDTH so the bracket stays readable (full width) and grows tall
-    // rather than shrinking to the viewport height; never upscale past 1:1. The
-    // extra height is reachable by panning within the taller viewport below.
-    const fitted = Math.min(containerW / svgW, 1);
-    transformRef.current.centerView(fitted, 0);
-    // Re-fit only when the bracket's dimensions change, not on every new
-    // layout object identity.
-  }, [layout?.width, layout?.height]);
+    const PAD = 20; // baked-in SVG margin
+    const CONTENT_PAD = 16; // TransformComponent contentStyle padding (per side)
+    const contentW = l.width + PAD * 2 + CONTENT_PAD * 2;
+    const contentH = l.height + PAD * 2 + CONTENT_PAD * 2;
+    const fitted = Math.min(containerW / contentW, 1);
+    const scaledW = contentW * fitted;
+    const scaledH = contentH * fitted;
+    const x = Math.max(0, (containerW - scaledW) / 2); // centre horizontally
+    // Top-align (y=0) and size the viewport to the scaled height so nothing clips.
+    transformRef.current.setTransform(x, 0, fitted, animationMs);
+    setViewportH(Math.ceil(scaledH));
+  }, []);
+
+  // Re-fit whenever the bracket's dimensions change (new round) or the window resizes.
+  useEffect(() => {
+    fitToWidth(0);
+  }, [layout?.width, layout?.height, fitToWidth]);
+
+  useEffect(() => {
+    const onResize = () => fitToWidth(0);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [fitToWidth]);
 
   useLiveBracket(tournamentId);
 
@@ -416,15 +435,11 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                 <button
                   type="button"
                   onClick={() => {
-                    if (!transformRef.current || !containerRef.current || !layout) {
+                    if (!layout) {
                       resetTransform();
                       return;
                     }
-                    const containerW = containerRef.current.clientWidth;
-                    const PAD = 20;
-                    const svgW = layout.width + PAD * 2;
-                    const fitted = Math.min(containerW / svgW, 1);
-                    transformRef.current.centerView(fitted, 200);
+                    fitToWidth(200);
                   }}
                   aria-label="Reset zoom"
                   className="rounded bg-stone-800 px-2 py-1 text-xs text-stone-200 hover:bg-stone-700 transition-colors select-none"
@@ -434,7 +449,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
               </div>
 
               <TransformComponent
-                wrapperStyle={{ width: '100%', height: 'max(600px, 82vh)' }}
+                wrapperStyle={{ width: '100%', height: viewportH != null ? `${viewportH}px` : 'max(400px, 60vh)' }}
                 contentStyle={{ padding: '16px' }}
               >
                 <SVGBracket

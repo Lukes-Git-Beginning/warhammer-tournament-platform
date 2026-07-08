@@ -857,7 +857,7 @@ export function TournamentEditPage() {
                       type="range"
                       name="rounds_count"
                       min={3}
-                      max={6}
+                      max={8}
                       step={1}
                       value={form.rounds_count}
                       onChange={handleChange}
@@ -966,7 +966,7 @@ export function TournamentEditPage() {
                       type="range"
                       name="rounds_count"
                       min={3}
-                      max={6}
+                      max={8}
                       step={1}
                       value={form.rounds_count}
                       onChange={handleChange}

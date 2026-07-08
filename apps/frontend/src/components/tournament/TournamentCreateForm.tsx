@@ -30,7 +30,7 @@ const TournamentCreateSchema = z.object({
   draft_enabled: z.boolean().default(false),
   draft_preset_id: z.string().uuid().nullable().optional(),
   // Welle 2 fields
-  rounds_count: z.coerce.number().int().min(3).max(6).default(5),
+  rounds_count: z.coerce.number().int().min(3).max(8).default(5),
   has_third_place_match: z.boolean().default(false),
   playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).default('NONE'),
   auto_sizing: z.boolean().default(false),
@@ -633,7 +633,7 @@ export function TournamentCreateForm() {
                   type="range"
                   name="rounds_count"
                   min={3}
-                  max={6}
+                  max={8}
                   step={1}
                   value={form.rounds_count ?? 5}
                   onChange={handleChange}
@@ -643,7 +643,7 @@ export function TournamentCreateForm() {
                   {form.rounds_count ?? 5}
                 </span>
               </div>
-              <FieldHint>Number of rounds (3–6). All rounds pre-generated randomly at start. Default: 5.</FieldHint>
+              <FieldHint>Number of rounds (3–8). All rounds pre-generated randomly at start. Default: 5.</FieldHint>
             </div>}
 
             {/* Playoff format + third-place — hidden for Balanced Liechtenstein,

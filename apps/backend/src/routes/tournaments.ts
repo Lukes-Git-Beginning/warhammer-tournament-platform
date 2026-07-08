@@ -143,7 +143,7 @@ const CreateTournamentSchema = z.object({
   standard_rules_enabled: z.boolean().optional(),
   restrictions: z.string().max(20000).optional(),
   // Welle 2 — Tournament mechanics
-  rounds_count: z.number().int().min(3).max(6).optional(),
+  rounds_count: z.number().int().min(3).max(8).optional(),
   playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).optional(),
   auto_sizing: z.boolean().optional(),
   auto_advance: z.boolean().optional(),
@@ -173,7 +173,7 @@ const PatchTournamentSchema = z.object({
   draft_enabled: z.boolean().optional(),
   draft_preset_id: z.string().uuid().nullable().optional(),
   // Welle 2 — Tournament mechanics
-  rounds_count: z.number().int().min(3).max(6).optional(),
+  rounds_count: z.number().int().min(3).max(8).optional(),
   playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).optional(),
   auto_sizing: z.boolean().optional(),
   auto_advance: z.boolean().optional(),
