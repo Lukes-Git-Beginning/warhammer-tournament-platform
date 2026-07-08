@@ -86,6 +86,15 @@ export async function applyBalancedStartConfig(
   fastify: FastifyInstance,
   tournamentId: string,
 ): Promise<void> {
+  // A fixed-round Balanced tournament (auto_sizing = false) keeps the host's
+  // stored rounds_count + playoff_format — only auto-sized tournaments derive
+  // them from the check-in count here. Balanced defaults auto_sizing ON.
+  const t = await fastify.prisma.tournament.findFirst({
+    where: { id: tournamentId, deleted_at: null },
+    select: { auto_sizing: true },
+  });
+  if (t && !t.auto_sizing) return;
+
   const roster = await fastify.prisma.tournamentParticipant.findMany({
     where: {
       tournament_id: tournamentId,
@@ -453,6 +462,7 @@ export async function startBalancedPlayoffs(
   const sorted = sortSwissStandings(
     computeSwissStandings(participantIds, completed, withdrawnIds),
     completed,
+    tournamentId,
   );
 
   const bandByUser = new Map(roster.map((p) => [p.user_id, p.skill_band ?? DEFAULT_BAND]));

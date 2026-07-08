@@ -196,7 +196,7 @@ async function generateNextSwissRound(
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
 
   const rawStandings = computeSwissStandings(participantIds, completed, withdrawnIds);
-  const standings = sortSwissStandings(rawStandings, completed);
+  const standings = sortSwissStandings(rawStandings, completed, tournament.id);
 
   const avoidMap = new Map<string, string[]>(participantIds.map((id) => [id, []]));
   const byeMap = new Map<string, boolean>();
@@ -333,7 +333,7 @@ async function startPlayoffs(
     .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST')
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
   const rawStandings = computeSwissStandings(participantIds, completed, withdrawnIds);
-  const standings = sortSwissStandings(rawStandings, completed);
+  const standings = sortSwissStandings(rawStandings, completed, tournament.id);
   const ranked = standings.filter((s) => !s.dropped).map((s) => s.userId);
 
   // Re-evaluate playoff format based on active player count at Swiss end.

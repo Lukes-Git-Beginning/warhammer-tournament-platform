@@ -16,7 +16,7 @@ import {
   CalibrationQuestionsSchema,
   CALIBRATION_CONFIG_KEY,
 } from '../lib/skill-classification-service.js';
-import { CALIBRATION_QUESTIONS } from '../lib/skill-classification.js';
+import { CALIBRATION_QUESTIONS, questionnaireFloor } from '../lib/skill-classification.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -1221,6 +1221,50 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     });
     if (fastify.redis) await invalidate(fastify.redis, 'admin:config:*');
     return { questions: parsed.data };
+  });
+
+  // -------------------------------------------------------------------------
+  // #27: audit a player's calibration answers. Read-only: returns each stored
+  // answer with its prompt, chosen option label and the band floor it implies,
+  // plus the resulting questionnaire floor and the player's effective band, so
+  // an admin can see WHY someone was placed up (e.g. a floor above their real
+  // results). Uses the admin-edited catalog so labels/floors match what the
+  // player actually saw.
+  // -------------------------------------------------------------------------
+  fastify.get('/api/admin/players/:id/calibration-answers', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = await fastify.prisma.user.findFirst({
+      where: { id, deleted_at: null },
+      select: { id: true, username: true, calibration_answers: true },
+    });
+    if (!user) {
+      return reply.code(404).send({ error: 'NotFound', message: 'Player not found', statusCode: 404 });
+    }
+
+    const questions = await loadCalibrationQuestions(fastify.prisma);
+    const byId = new Map(questions.map((q) => [q.id, q]));
+    const rawAnswers = (user.calibration_answers as Record<string, string> | null) ?? {};
+    const hasQuestionnaire = Object.keys(rawAnswers).length > 0;
+
+    const answers = Object.entries(rawAnswers).map(([questionId, value]) => {
+      const question = byId.get(questionId);
+      const option = question?.options.find((o) => o.value === value);
+      return {
+        questionId,
+        prompt: question?.prompt ?? questionId,
+        value,
+        optionLabel: option?.label ?? value,
+        floor: option?.floor ?? null,
+      };
+    });
+
+    return {
+      userId: user.id,
+      username: user.username,
+      hasQuestionnaire,
+      questionnaireFloor: hasQuestionnaire ? questionnaireFloor(rawAnswers, questions) : null,
+      answers,
+    };
   });
 
   // POST /api/admin/tournaments/:id/repair-auto-swiss

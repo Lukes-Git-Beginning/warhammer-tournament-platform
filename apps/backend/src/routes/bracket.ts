@@ -196,7 +196,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           }));
 
         const computedStandings = computeSwissStandings(participantIds, completedMatches, withdrawnIds);
-        const rawStandings = sortSwissStandings(computedStandings, completedMatches);
+        const rawStandings = sortSwissStandings(computedStandings, completedMatches, tournament.id);
 
         const standings: SwissStandingEntry[] = rawStandings.map((s) => {
           const user = userMap.get(s.userId);
@@ -651,7 +651,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         }));
 
       const rawStandings = computeSwissStandings(participantIds, completedMatchRecords, withdrawnIds);
-      const standings = sortSwissStandings(rawStandings, completedMatchRecords);
+      const standings = sortSwissStandings(rawStandings, completedMatchRecords, tournament.id);
 
       // Build avoid maps: each player avoids all previous opponents
       const avoidMap = new Map<string, string[]>();
@@ -874,7 +874,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         }));
 
       const rawStandings = computeSwissStandings(participantIds, completedMatchRecords, withdrawnIds);
-      const standings = sortSwissStandings(rawStandings, completedMatchRecords);
+      const standings = sortSwissStandings(rawStandings, completedMatchRecords, tournament.id);
       const activeStandings = standings.filter((s) => !s.dropped);
 
       let playoffFallbackApplied: string | undefined;

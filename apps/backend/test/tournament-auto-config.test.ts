@@ -91,15 +91,24 @@ async function createAndFetch(overrides: Record<string, unknown>) {
 }
 
 describe('POST /api/tournaments — auto-configured formats ignore manual round/playoff/format', () => {
-  it('BALANCED_LIECHTENSTEIN forces BO1 and drops the manual rounds/playoff values', async () => {
+  it('BALANCED_LIECHTENSTEIN auto-sizes rounds/playoff by default but keeps the host match format', async () => {
     const t = await createAndFetch({ format: 'BALANCED_LIECHTENSTEIN' });
-    // rounds + playoff are derived from check-in at start → DB defaults here, not the sent 6/TOP8.
+    // Auto-sizing defaults ON for Balanced → rounds + playoff are derived from
+    // check-in at start, so the sent 6/TOP8 are dropped to the DB defaults here.
     expect(t.rounds_count).toBe(5);
     expect(t.playoff_format).toBe('NONE');
-    // All matches run BO1 like Auto Swiss, regardless of the sent BO3.
-    expect(t.swiss_match_format).toBe('BO1');
-    expect(t.playoff_match_format).toBe('BO1');
-    expect(t.finale_match_format).toBe('BO1');
+    // Match format is host-configurable for Balanced (unlike Auto Swiss's BO1).
+    expect(t.swiss_match_format).toBe('BO3');
+    expect(t.playoff_match_format).toBe('BO3');
+    expect(t.finale_match_format).toBe('BO3');
+  });
+
+  it('BALANCED_LIECHTENSTEIN with auto_sizing off keeps the host round count', async () => {
+    const t = await createAndFetch({ format: 'BALANCED_LIECHTENSTEIN', auto_sizing: false });
+    // Fixed-round Balanced: the host's round count survives (start won't override).
+    expect(t.rounds_count).toBe(6);
+    expect(t.playoff_format).toBe('TOP4'); // cosmetic "playoffs exist" flag; real bracket is per-division
+    expect(t.swiss_match_format).toBe('BO3');
   });
 
   it('AUTO_SWISS behaves identically (parity guard)', async () => {

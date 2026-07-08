@@ -389,11 +389,16 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const isAutoSwiss = data.format === 'AUTO_SWISS';
-      // Balanced Liechtenstein derives its round count + playoff size from the
-      // check-in count at start (applyBalancedStartConfig) and runs BO1 like Auto
-      // Swiss, so create-time values for these fields are ignored/forced here.
+      const isBalanced = data.format === 'BALANCED_LIECHTENSTEIN';
+      // Balanced Liechtenstein auto-sizes its round count + playoff size from the
+      // check-in count at start (applyBalancedStartConfig), unless the host opts
+      // out via auto_sizing=false for a fixed-round tournament. Auto-sizing
+      // defaults ON for Balanced. Match format is host-configurable (unlike Auto
+      // Swiss, which forces BO1). Its playoff bracket is always per-division, so
+      // the stored playoff_format is only a cosmetic "playoffs exist" flag.
       // Map decision stays host-configurable for Balanced (unlike Auto Swiss).
-      const isAutoConfigured = isAutoSwiss || data.format === 'BALANCED_LIECHTENSTEIN';
+      const balancedAutoSized = isBalanced && (data.auto_sizing ?? true);
+      const autoSized = isAutoSwiss || balancedAutoSized;
 
       const tournament = await fastify.prisma.tournament.create({
         data: {
@@ -420,14 +425,15 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           restrictions: data.restrictions ?? '',
           host_id: request.user.sub,
           // Welle 2
-          rounds_count: isAutoConfigured ? undefined : data.rounds_count,
-          playoff_format: isAutoConfigured ? undefined : data.playoff_format,
-          // #37: opt-in auto-sizing / auto-advancement (any format)
-          auto_sizing: data.auto_sizing ?? false,
+          rounds_count: autoSized ? undefined : data.rounds_count,
+          playoff_format: autoSized ? undefined : isBalanced ? 'TOP4' : data.playoff_format,
+          // #37: opt-in auto-sizing / auto-advancement (any format). Balanced
+          // defaults auto-sizing ON; every other format defaults OFF.
+          auto_sizing: isBalanced ? (data.auto_sizing ?? true) : (data.auto_sizing ?? false),
           auto_advance: data.auto_advance ?? false,
-          swiss_match_format: isAutoConfigured ? 'BO1' : data.swiss_match_format,
-          playoff_match_format: isAutoConfigured ? 'BO1' : data.playoff_match_format,
-          finale_match_format: isAutoConfigured ? 'BO1' : (data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' ? 'BO3' : undefined)),
+          swiss_match_format: isAutoSwiss ? 'BO1' : data.swiss_match_format,
+          playoff_match_format: isAutoSwiss ? 'BO1' : data.playoff_match_format,
+          finale_match_format: isAutoSwiss ? 'BO1' : (data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' ? 'BO3' : undefined)),
           map_decision_mode: isAutoSwiss ? 'RANDOM_PICK_BAN' : data.map_decision_mode,
           map_preset_config: data.map_preset_config != null ? (data.map_preset_config as Prisma.InputJsonValue) : undefined,
         },
@@ -683,6 +689,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         swiss_match_format: true,
         playoff_match_format: true,
         finale_match_format: true,
+        auto_sizing: true,
+        auto_advance: true,
         map_decision_mode: true,
         map_preset_config: true,
         created_at: true,

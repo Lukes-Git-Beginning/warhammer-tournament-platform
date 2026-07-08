@@ -280,7 +280,14 @@ export function TournamentCreateForm() {
       ...prev,
       [name]: newValue,
       ...(name === 'draft_enabled' && !checked ? { draft_preset_id: null } : {}),
-      ...(name === 'format' ? { finale_match_format: value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO1' } : {}),
+      ...(name === 'format'
+        ? {
+            finale_match_format: value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO1',
+            // Balanced Liechtenstein auto-sizes by default; every other format
+            // starts with auto-sizing off (the host opts in via the checkbox).
+            auto_sizing: value === 'BALANCED_LIECHTENSTEIN',
+          }
+        : {}),
       ...(name === 'start_date' ? { registration_deadline: value } : {}),
     }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
@@ -359,6 +366,10 @@ export function TournamentCreateForm() {
         : {}),
     });
   }
+
+  const isBalanced = form.format === 'BALANCED_LIECHTENSTEIN';
+  // Balanced defaults to auto-sizing; the host can turn it off for fixed rounds.
+  const balancedAutoSized = isBalanced && (form.auto_sizing ?? true);
 
   return (
     <form onSubmit={handleSubmit} className="w-full space-y-6">
@@ -443,24 +454,34 @@ export function TournamentCreateForm() {
         </div>
       </div>
 
-      {form.format === 'SWISS' && (
+      {(form.format === 'SWISS' || form.format === 'BALANCED_LIECHTENSTEIN') && (
         <fieldset className="space-y-2 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
           <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">Automation</legend>
-          <p className="text-xs text-rizzotto-stone-500">Turn both on for a fully self-running tournament (what &ldquo;Auto Swiss&rdquo; used to be).</p>
+          <p className="text-xs text-rizzotto-stone-500">
+            {form.format === 'SWISS'
+              ? 'Turn both on for a fully self-running tournament (what “Auto Swiss” used to be).'
+              : 'Balanced Liechtenstein advances itself — you only choose whether the round count is auto-sized from the check-in count.'}
+          </p>
           <label className="flex items-start gap-2 text-sm text-rizzotto-stone-300">
             <input type="checkbox" name="auto_sizing" checked={form.auto_sizing ?? false} onChange={handleChange} className="mt-0.5" />
             <span>
               <span className="font-medium text-rizzotto-stone-200">Auto-size from check-in</span>
-              <span className="block text-xs text-rizzotto-stone-500">Set the round count and playoff size automatically from how many players check in (4–7: 3R + Final · 8–15: 5R + Top 4 · 16+: 4R + Top 8), instead of the fixed values above.</span>
+              <span className="block text-xs text-rizzotto-stone-500">
+                {form.format === 'SWISS'
+                  ? 'Set the round count and playoff size automatically from how many players check in (4–7: 3R + Final · 8–15: 5R + Top 4 · 16+: 4R + Top 8), instead of the fixed values above.'
+                  : 'Set the round count automatically from how many players check in (4–7: 3R · 8–15: 5R · 16+: 4R). Turn off to fix the round count yourself.'}
+              </span>
             </span>
           </label>
-          <label className="flex items-start gap-2 text-sm text-rizzotto-stone-300">
-            <input type="checkbox" name="auto_advance" checked={form.auto_advance ?? false} onChange={handleChange} className="mt-0.5" />
-            <span>
-              <span className="font-medium text-rizzotto-stone-200">Auto-advance rounds &amp; playoffs</span>
-              <span className="block text-xs text-rizzotto-stone-500">Advance to the next round and generate the playoffs automatically once every match in a round is complete, instead of the host doing it by hand.</span>
-            </span>
-          </label>
+          {form.format === 'SWISS' && (
+            <label className="flex items-start gap-2 text-sm text-rizzotto-stone-300">
+              <input type="checkbox" name="auto_advance" checked={form.auto_advance ?? false} onChange={handleChange} className="mt-0.5" />
+              <span>
+                <span className="font-medium text-rizzotto-stone-200">Auto-advance rounds &amp; playoffs</span>
+                <span className="block text-xs text-rizzotto-stone-500">Advance to the next round and generate the playoffs automatically once every match in a round is complete, instead of the host doing it by hand.</span>
+              </span>
+            </label>
+          )}
         </fieldset>
       )}
 
@@ -474,7 +495,13 @@ export function TournamentCreateForm() {
       {form.format === 'BALANCED_LIECHTENSTEIN' && (
         <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">
           <p className="font-semibold text-rizzotto-gold-400">Balanced Liechtenstein — skill-matched, self-running</p>
-          <p>Each round, players are paired against others in their own skill division. The round count is set automatically from how many players check in (4–7: 3R, 8–15: 5R, 16+: 4R). When the group stage ends, every division runs its own playoff bracket sized to that division (TOP 2 / 4 / 8, each with a third-place match). All matches: BO1.</p>
+          <p>
+            Each round, players are paired against others in their own skill division.{' '}
+            {(form.auto_sizing ?? true)
+              ? 'The round count is set automatically from how many players check in (4–7: 3R, 8–15: 5R, 16+: 4R).'
+              : 'You set a fixed round count below.'}{' '}
+            When the group stage ends, every division runs its own playoff bracket sized to that division (TOP 2 / 4 / 8, each with a third-place match).
+          </p>
         </div>
       )}
 
@@ -593,11 +620,13 @@ export function TournamentCreateForm() {
           Match Mechanics
         </legend>
 
-        {(form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN') ? (
+        {(form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN' || isBalanced) ? (
           <>
-            {/* Rounds count — for Swiss and Liechtenstein; Round Robin rounds are determined by participant count */}
-            {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN') && <div>
-              <Label htmlFor="tcf-rounds">{form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : 'Swiss Rounds'}</Label>
+            {/* Rounds count — Swiss/Liechtenstein always; Balanced only when the
+                host turned auto-sizing off (fixed rounds). Round Robin rounds are
+                determined by participant count. */}
+            {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN' || (isBalanced && !balancedAutoSized)) && <div>
+              <Label htmlFor="tcf-rounds">{form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : isBalanced ? 'Balanced Liechtenstein Rounds' : 'Swiss Rounds'}</Label>
               <div className="flex items-center gap-3 mt-1">
                 <input
                   id="tcf-rounds"
@@ -617,6 +646,10 @@ export function TournamentCreateForm() {
               <FieldHint>Number of rounds (3–6). All rounds pre-generated randomly at start. Default: 5.</FieldHint>
             </div>}
 
+            {/* Playoff format + third-place — hidden for Balanced Liechtenstein,
+                whose playoff bracket is sized per skill division automatically. */}
+            {!isBalanced && (
+              <>
             {/* Playoff format */}
             <div>
               <Label htmlFor="tcf-playoff">Playoff Format</Label>
@@ -656,11 +689,13 @@ export function TournamentCreateForm() {
                 <span className="text-sm text-rizzotto-stone-300">Third-place match (Small Final)</span>
               </label>
             )}
+              </>
+            )}
 
             {/* Match formats */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
-                <Label htmlFor="tcf-swiss-fmt">{form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Format' : 'Swiss Format'}</Label>
+                <Label htmlFor="tcf-swiss-fmt">{form.format === 'ROUND_ROBIN' ? 'Round Robin Format' : form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Format' : isBalanced ? 'Group Format' : 'Swiss Format'}</Label>
                 <Select
                   id="tcf-swiss-fmt"
                   name="swiss_match_format"

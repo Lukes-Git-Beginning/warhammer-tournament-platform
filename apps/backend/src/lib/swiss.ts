@@ -442,9 +442,29 @@ export function recommendNumberOfRounds(participantCount: number): number {
  * @param allMatches All completed matches for the tournament (used for H2H lookup).
  * @returns A new array sorted with the full tiebreaker hierarchy.
  */
+/**
+ * Stable 32-bit FNV-1a hash of a string → a deterministic pseudo-random ordering
+ * key. Used as the final Swiss tiebreak so a total tie resolves reproducibly
+ * (and independently of array order) rather than by arbitrary insertion order.
+ */
+function hashId(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/**
+ * @param seed  Per-tournament salt (the tournament id) mixed into the final
+ *   tiebreak hash, so a total tie is a fresh, reproducible "coin flip" for THIS
+ *   tournament rather than a fixed per-player bias across every tournament.
+ */
 export function sortSwissStandings(
   standings: SwissStanding[],
   allMatches: CompletedMatchRecord[],
+  seed = '',
 ): SwissStanding[] {
   // Build a head-to-head winner lookup: "playerA|playerB" → winner userId
   const h2hMap = new Map<string, string | null>();
@@ -476,6 +496,13 @@ export function sortSwissStandings(
     const winner = getH2HWinner(a.userId, b.userId);
     if (winner === a.userId) return -1;
     if (winner === b.userId) return 1;
-    return 0;
+    // 6. Deterministic final tiebreak — a stable pseudo-random order from a hash
+    // of the tournament seed + each player's id, so a total tie (equal score/BH/
+    // gamesLost/solkoff and no head-to-head) resolves as a fresh, reproducible
+    // per-tournament coin flip instead of by arbitrary array order.
+    const ha = hashId(`${seed}:${a.userId}`);
+    const hb = hashId(`${seed}:${b.userId}`);
+    if (ha !== hb) return ha - hb;
+    return a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0;
   });
 }

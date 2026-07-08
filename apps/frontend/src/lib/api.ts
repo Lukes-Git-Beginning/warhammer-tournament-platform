@@ -89,6 +89,8 @@ export interface Tournament {
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
   finale_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
+  auto_sizing?: boolean;
+  auto_advance?: boolean;
   map_decision_mode?: MapDecisionMode | null;
   map_preset_config?: MapPresetConfig | null;
   map_pool?: MapDto[];

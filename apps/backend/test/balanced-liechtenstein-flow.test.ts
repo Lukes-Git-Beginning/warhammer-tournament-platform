@@ -17,6 +17,7 @@ import {
   runBalancedPairingTick,
   startBalancedPlayoffs,
   assignSkillBandsForTournament,
+  applyBalancedStartConfig,
 } from '../src/lib/balanced-liechtenstein-service.js';
 import { finalizeTournament } from '../src/lib/finalize-tournament.js';
 import { createTestUser, cleanupTournament, cleanupUsers, type TestUser } from './helpers/db-fixtures.js';
@@ -275,5 +276,48 @@ describe('Balanced Liechtenstein — play-up (requested band)', () => {
     expect(band.get(users[1]!.id)).toBe(5); // max(computed, 5)
     expect(band.get(users[3]!.id)).toBe(1); // requested 1 → stays at the computed floor
     expect([null, 1]).toContain(band.get(users[2]!.id)); // no play-up
+  });
+});
+
+describe('Balanced Liechtenstein — auto-sizing gate', () => {
+  it('keeps the fixed round count when auto_sizing is off, and derives it when on', async () => {
+    const users = await Promise.all([0, 1, 2, 3].map((i) => createTestUser({ username: `AS${i}` })));
+    createdUserIds.push(...users.map((u) => u.id));
+    const tournamentId = randomUUID();
+    createdTournamentIds.push(tournamentId);
+    await prisma.tournament.create({
+      data: {
+        id: tournamentId,
+        slug: `test-as-${tournamentId.slice(0, 8)}`,
+        name: 'Auto-size Gate Test',
+        host_id: users[0]!.id,
+        format: 'BALANCED_LIECHTENSTEIN',
+        status: 'ONGOING',
+        rounds_count: 6,
+        auto_sizing: false,
+        start_date: new Date('2026-06-01'),
+        timezone: 'Europe/Berlin',
+      },
+    });
+    await prisma.tournamentParticipant.createMany({
+      data: users.map((u) => ({ tournament_id: tournamentId, user_id: u.id, status: 'CHECKED_IN' as const })),
+    });
+
+    // auto_sizing off → the host's fixed round count is preserved (gate returns early).
+    await applyBalancedStartConfig(app, tournamentId);
+    let t = await prisma.tournament.findUniqueOrThrow({
+      where: { id: tournamentId },
+      select: { rounds_count: true },
+    });
+    expect(t.rounds_count).toBe(6);
+
+    // Flip auto_sizing on → round count is derived from the 4 checked-in players (→ 3).
+    await prisma.tournament.update({ where: { id: tournamentId }, data: { auto_sizing: true } });
+    await applyBalancedStartConfig(app, tournamentId);
+    t = await prisma.tournament.findUniqueOrThrow({
+      where: { id: tournamentId },
+      select: { rounds_count: true },
+    });
+    expect(t.rounds_count).toBe(3);
   });
 });

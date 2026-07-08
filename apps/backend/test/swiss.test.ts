@@ -379,7 +379,7 @@ describe('sortSwissStandings — head-to-head tiebreaker', () => {
     expect(sorted[1]!.userId).toBe(loser);
   });
 
-  it('3 players all equal (no H2H possible between all) → stable order preserved', () => {
+  it('3 players all equal (no H2H) → deterministic order, independent of input order (#26)', () => {
     const ids = fakeIds(3);
     const makeStanding = (id: string) => ({
       userId: id,
@@ -393,18 +393,15 @@ describe('sortSwissStandings — head-to-head tiebreaker', () => {
       opponentsBeaten: [],
     });
 
-    const input = ids.map(makeStanding);
-    // No completed matches → H2H cannot decide
-    const sorted = sortSwissStandings(input, []);
+    // No completed matches → H2H cannot decide; the deterministic hash tiebreak
+    // (#26) must resolve the total tie the same way regardless of input order,
+    // instead of leaving it to arbitrary insertion order.
+    const forward = sortSwissStandings(ids.map(makeStanding), []).map((s) => s.userId);
+    const reversed = sortSwissStandings([...ids].reverse().map(makeStanding), []).map((s) => s.userId);
 
-    // All three have identical stats → order must not arbitrarily change
-    // (stable sort: the relative order from input is preserved when comparator returns 0)
-    const sortedIds = sorted.map((s) => s.userId);
-    expect(sortedIds).toHaveLength(3);
-    // All original IDs must still be present
-    for (const id of ids) {
-      expect(sortedIds).toContain(id);
-    }
+    expect(forward).toEqual(reversed); // order does not depend on input order
+    expect(new Set(forward).size).toBe(3); // all three present, distinct
+    for (const id of ids) expect(forward).toContain(id);
   });
 });
 

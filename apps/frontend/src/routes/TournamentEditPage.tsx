@@ -72,6 +72,7 @@ type EditFormData = {
   swiss_match_format: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format: 'BO1' | 'BO3' | 'BO5';
   finale_match_format: 'BO1' | 'BO3' | 'BO5';
+  auto_sizing: boolean;
   map_decision_mode: MapDecisionMode;
   map_pool: string[];
   map_preset_config: MapPresetConfig | null;
@@ -225,6 +226,7 @@ function buildInitialForm(t: Tournament): EditFormData {
     swiss_match_format: t.swiss_match_format ?? 'BO1',
     playoff_match_format: t.playoff_match_format ?? 'BO1',
     finale_match_format: t.finale_match_format ?? 'BO1',
+    auto_sizing: t.auto_sizing ?? t.format === 'BALANCED_LIECHTENSTEIN',
     map_decision_mode: t.map_decision_mode ?? 'RANDOM_PICK_BAN',
     map_pool: (t.map_pool ?? []).map((m) => m.id),
     map_preset_config: (t.map_preset_config as MapPresetConfig | null) ?? null,
@@ -294,6 +296,7 @@ function buildPatchBody(
   if (form.swiss_match_format !== (current.swiss_match_format ?? 'BO1')) body.swiss_match_format = form.swiss_match_format;
   if (form.playoff_match_format !== (current.playoff_match_format ?? 'BO1')) body.playoff_match_format = form.playoff_match_format;
   if (form.finale_match_format !== (current.finale_match_format ?? 'BO1')) body.finale_match_format = form.finale_match_format;
+  if (form.auto_sizing !== (current.auto_sizing ?? current.format === 'BALANCED_LIECHTENSTEIN')) body.auto_sizing = form.auto_sizing;
   if (form.map_decision_mode !== (current.map_decision_mode ?? 'RANDOM_PICK_BAN')) body.map_decision_mode = form.map_decision_mode;
 
   if (!arraysEqual(form.map_pool, initialMapIds)) body.map_pool = form.map_pool;
@@ -649,6 +652,8 @@ export function TournamentEditPage() {
 
   const isSwissFamily = form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN';
   const isAutoSwiss = form.format === 'AUTO_SWISS';
+  const isBalanced = form.format === 'BALANCED_LIECHTENSTEIN';
+  const balancedAutoSized = isBalanced && form.auto_sizing;
 
   const actionButtons = (
     <div className="flex gap-3">
@@ -935,11 +940,77 @@ export function TournamentEditPage() {
                 </div>
               </div>
             </>
-          ) : form.format === 'BALANCED_LIECHTENSTEIN' ? (
-            <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">
-              <p className="font-semibold text-rizzotto-gold-400">Balanced Liechtenstein — skill-matched, self-running</p>
-              <p>Each round, players are paired against others in their own skill division. The round count is set automatically from how many players check in (4–7: 3R, 8–15: 5R, 16+: 4R). When the group stage ends, every division runs its own playoff bracket sized to that division (TOP 2 / 4 / 8, each with a third-place match). All matches: BO1.</p>
-            </div>
+          ) : isBalanced ? (
+            <>
+              <label className="flex items-start gap-2 text-sm text-rizzotto-stone-300">
+                <input
+                  type="checkbox"
+                  name="auto_sizing"
+                  checked={form.auto_sizing}
+                  onChange={handleChange}
+                  disabled={ongoingLocked}
+                  className="mt-0.5 disabled:opacity-50"
+                />
+                <span>
+                  <span className="font-medium text-rizzotto-stone-200">Auto-size round count from check-in</span>
+                  <span className="block text-xs text-rizzotto-stone-500">On: the round count is set automatically (4–7: 3R · 8–15: 5R · 16+: 4R). Off: fix the round count yourself below.</span>
+                </span>
+              </label>
+
+              {!balancedAutoSized && (
+                <div>
+                  <Label htmlFor="tef-bali-rounds">Balanced Liechtenstein Rounds</Label>
+                  <div className="flex items-center gap-3 mt-1">
+                    <input
+                      id="tef-bali-rounds"
+                      type="range"
+                      name="rounds_count"
+                      min={3}
+                      max={6}
+                      step={1}
+                      value={form.rounds_count}
+                      onChange={handleChange}
+                      disabled={ongoingLocked}
+                      className="w-full accent-rizzotto-gold-400 disabled:opacity-50"
+                    />
+                    <span className="w-6 text-center font-semibold text-rizzotto-stone-200 tabular-nums">
+                      {form.rounds_count}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <Label htmlFor="tef-bali-swiss-fmt">Group Format</Label>
+                  <Select id="tef-bali-swiss-fmt" name="swiss_match_format" value={form.swiss_match_format} onChange={handleChange} disabled={ongoingLocked}>
+                    <option value="BO1">Best of 1</option>
+                    <option value="BO3">Best of 3</option>
+                    <option value="BO5">Best of 5</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="tef-bali-playoff-fmt">Playoffs Format</Label>
+                  <Select id="tef-bali-playoff-fmt" name="playoff_match_format" value={form.playoff_match_format} onChange={handleChange} disabled={ongoingLocked}>
+                    <option value="BO1">Best of 1</option>
+                    <option value="BO3">Best of 3</option>
+                    <option value="BO5">Best of 5</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="tef-bali-finale-fmt">Finale Format</Label>
+                  <Select id="tef-bali-finale-fmt" name="finale_match_format" value={form.finale_match_format} onChange={handleChange} disabled={ongoingLocked}>
+                    <option value="BO1">Best of 1</option>
+                    <option value="BO3">Best of 3</option>
+                    <option value="BO5">Best of 5</option>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-3 text-sm text-rizzotto-stone-300">
+                <p>Players are paired within their own skill division each round. When the group stage ends, every division runs its own playoff bracket sized to that division (TOP 2 / 4 / 8, each with a third-place match).</p>
+              </div>
+            </>
           ) : !isAutoSwiss ? (
             <>
               <div>
