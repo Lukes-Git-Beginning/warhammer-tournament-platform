@@ -73,6 +73,7 @@ type EditFormData = {
   playoff_match_format: 'BO1' | 'BO3' | 'BO5';
   finale_match_format: 'BO1' | 'BO3' | 'BO5';
   auto_sizing: boolean;
+  allow_late_join_requests: boolean;
   map_decision_mode: MapDecisionMode;
   map_pool: string[];
   map_preset_config: MapPresetConfig | null;
@@ -227,6 +228,7 @@ function buildInitialForm(t: Tournament): EditFormData {
     playoff_match_format: t.playoff_match_format ?? 'BO1',
     finale_match_format: t.finale_match_format ?? 'BO1',
     auto_sizing: t.auto_sizing ?? t.format === 'BALANCED_LIECHTENSTEIN',
+    allow_late_join_requests: t.allow_late_join_requests ?? false,
     map_decision_mode: t.map_decision_mode ?? 'RANDOM_PICK_BAN',
     map_pool: (t.map_pool ?? []).map((m) => m.id),
     map_preset_config: (t.map_preset_config as MapPresetConfig | null) ?? null,
@@ -297,6 +299,7 @@ function buildPatchBody(
   if (form.playoff_match_format !== (current.playoff_match_format ?? 'BO1')) body.playoff_match_format = form.playoff_match_format;
   if (form.finale_match_format !== (current.finale_match_format ?? 'BO1')) body.finale_match_format = form.finale_match_format;
   if (form.auto_sizing !== (current.auto_sizing ?? current.format === 'BALANCED_LIECHTENSTEIN')) body.auto_sizing = form.auto_sizing;
+  if (form.allow_late_join_requests !== (current.allow_late_join_requests ?? false)) body.allow_late_join_requests = form.allow_late_join_requests;
   if (form.map_decision_mode !== (current.map_decision_mode ?? 'RANDOM_PICK_BAN')) body.map_decision_mode = form.map_decision_mode;
 
   if (!arraysEqual(form.map_pool, initialMapIds)) body.map_pool = form.map_pool;
@@ -1037,6 +1040,23 @@ export function TournamentEditPage() {
             </>
           ) : null}
         </fieldset>
+
+        <label className="flex items-start gap-2 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4 text-sm text-rizzotto-stone-300">
+          <input
+            type="checkbox"
+            name="allow_late_join_requests"
+            checked={form.allow_late_join_requests}
+            onChange={handleChange}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-medium text-rizzotto-stone-200">Allow late-join requests</span>
+            <span className="block text-xs text-rizzotto-stone-500">
+              Players can request to join after the tournament has started; you approve or decline each request
+              (a Discord DM plus a panel on the tournament page). Can be toggled during an ongoing tournament.
+            </span>
+          </span>
+        </label>
 
         {/* ── Map Pool ──────────────────────────────────────────────────── */}
         <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">

@@ -35,6 +35,7 @@ const TournamentCreateSchema = z.object({
   playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).default('NONE'),
   auto_sizing: z.boolean().default(false),
   auto_advance: z.boolean().default(false),
+  allow_late_join_requests: z.boolean().default(false),
   swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
   playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
   finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
@@ -172,6 +173,7 @@ export function TournamentCreateForm() {
     playoff_format: 'NONE',
     auto_sizing: false,
     auto_advance: false,
+    allow_late_join_requests: false,
     swiss_match_format: 'BO1',
     playoff_match_format: 'BO1',
     finale_match_format: 'BO1',
@@ -484,6 +486,17 @@ export function TournamentCreateForm() {
           )}
         </fieldset>
       )}
+
+      <label className="flex items-start gap-2 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4 text-sm text-rizzotto-stone-300">
+        <input type="checkbox" name="allow_late_join_requests" checked={form.allow_late_join_requests ?? false} onChange={handleChange} className="mt-0.5" />
+        <span>
+          <span className="font-medium text-rizzotto-stone-200">Allow late-join requests</span>
+          <span className="block text-xs text-rizzotto-stone-500">
+            Players can request to join after the tournament has started; you approve or decline each request
+            (a Discord DM plus a panel on the tournament page). They fill in everything a normal sign-up needs first.
+          </span>
+        </span>
+      </label>
 
       {form.format === 'AUTO_SWISS' && (
         <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">

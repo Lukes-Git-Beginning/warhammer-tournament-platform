@@ -91,6 +91,7 @@ export interface Tournament {
   finale_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
   auto_sizing?: boolean;
   auto_advance?: boolean;
+  allow_late_join_requests?: boolean;
   map_decision_mode?: MapDecisionMode | null;
   map_preset_config?: MapPresetConfig | null;
   map_pool?: MapDto[];
@@ -110,7 +111,7 @@ export interface MapDto {
   deleted_at?: string | null;
 }
 
-export type ParticipantStatus = 'REGISTERED' | 'CHECKED_IN' | 'WITHDREW' | 'DISQUALIFIED';
+export type ParticipantStatus = 'REGISTERED' | 'CHECKED_IN' | 'WITHDREW' | 'DISQUALIFIED' | 'JOIN_REQUESTED';
 
 export interface TournamentArmyList {
   id: string;
@@ -189,6 +190,7 @@ export interface TournamentCreate {
   playoff_format?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   auto_sizing?: boolean;
   auto_advance?: boolean;
+  allow_late_join_requests?: boolean;
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
   finale_match_format?: 'BO1' | 'BO3' | 'BO5';
@@ -224,6 +226,7 @@ export interface TournamentPatchInput {
   playoff_format?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   auto_sizing?: boolean;
   auto_advance?: boolean;
+  allow_late_join_requests?: boolean;
   has_third_place_match?: boolean;
   swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
@@ -1526,6 +1529,40 @@ export function registerForTournament(
 
 export function withdrawFromTournament(slug: string): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/tournaments/${slug}/withdraw`, { method: 'POST' });
+}
+
+// --- Late join (host-approved) ---------------------------------------------
+
+export function requestJoinTournament(
+  slug: string,
+  opts?: { factionId?: string; factionIds?: string[]; requested_band?: number },
+): Promise<{ id: string; status: ParticipantStatus }> {
+  const body: Record<string, unknown> = {};
+  if (opts?.factionId) body.faction_id = opts.factionId;
+  if (opts?.factionIds) body.faction_ids = opts.factionIds;
+  if (opts?.requested_band != null) body.requested_band = opts.requested_band;
+  return apiFetch(`/api/tournaments/${slug}/request-join`, { method: 'POST', body: JSON.stringify(body) });
+}
+
+export interface JoinRequest {
+  user_id: string;
+  faction_id: string | null;
+  faction_ids: string[];
+  requested_band: number | null;
+  registered_at: string;
+  user: { id: string; username: string; avatar_url: string | null };
+}
+
+export function getJoinRequests(slug: string): Promise<{ requests: JoinRequest[] }> {
+  return apiFetch(`/api/tournaments/${slug}/join-requests`);
+}
+
+export function approveJoinRequest(slug: string, userId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/tournaments/${slug}/participants/${userId}/approve-join`, { method: 'POST' });
+}
+
+export function declineJoinRequest(slug: string, userId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/tournaments/${slug}/participants/${userId}/decline-join`, { method: 'POST' });
 }
 
 export function dropParticipant(

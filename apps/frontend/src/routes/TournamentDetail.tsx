@@ -31,6 +31,7 @@ import { CheckInButton } from '@/components/tournament/CheckInButton';
 import { RegisterButton } from '@/components/tournament/RegisterButton';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton';
 import { ParticipantsList } from '@/components/tournament/ParticipantsList';
+import { LateJoinRequestsPanel } from '@/components/tournament/LateJoinRequestsPanel';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
 import { ArmyListUploader } from '@/components/tournament/ArmyListUploader';
 import { MyMatchSection } from '@/components/match/MyMatchSection';
@@ -845,6 +846,11 @@ export function TournamentDetail() {
             )}
           </div>
         </section>
+      )}
+
+      {/* ─── Late-join requests (host-only, sits above whichever live view is shown) ─── */}
+      {canManage && tournament.status === 'ONGOING' && tournament.allow_late_join_requests && (
+        <LateJoinRequestsPanel slug={tournament.slug} />
       )}
 
       {/* ─── Participants or Standings ─── */}
