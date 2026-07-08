@@ -1139,12 +1139,15 @@ export function swapPlayer(
 export function createMatchNode(
   slug: string,
   player1Id: string,
-  player2Id: string,
+  player2Id: string | null | undefined,
   round: number,
 ): Promise<{ match: { id: string; round: number; match_number: number } }> {
+  // Omit player2Id entirely when empty → backend creates a BYE node (free win for player1).
+  const body: { player1Id: string; round: number; player2Id?: string } = { player1Id, round };
+  if (player2Id) body.player2Id = player2Id;
   return apiFetch(`/api/tournaments/${slug}/create-match`, {
     method: 'POST',
-    body: JSON.stringify({ player1Id, player2Id, round }),
+    body: JSON.stringify(body),
   });
 }
 
