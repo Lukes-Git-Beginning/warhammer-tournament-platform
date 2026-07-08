@@ -229,7 +229,9 @@ export function AdminMatchesTab() {
                             View
                           </Link>
                           <VoidButton match={m} />
-                          {(m.status === 'CANCELLED' || m.status === 'PENDING') && (
+                          {(m.status === 'CANCELLED' ||
+                            m.status === 'PENDING' ||
+                            (m.status === 'COMPLETED' && !m.countsForLeaderboard)) && (
                             <DeleteButton match={m} />
                           )}
                         </div>

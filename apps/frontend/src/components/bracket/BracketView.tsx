@@ -104,11 +104,12 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   useEffect(() => {
     if (!transformRef.current || !containerRef.current || !layout) return;
     const containerW = containerRef.current.clientWidth;
-    const containerH = containerRef.current.clientHeight;
     const PAD = 20;
     const svgW = layout.width + PAD * 2;
-    const svgH = layout.height + PAD * 2;
-    const fitted = Math.min(containerW / svgW, containerH / svgH);
+    // #25: fit to WIDTH so the bracket stays readable (full width) and grows tall
+    // rather than shrinking to the viewport height; never upscale past 1:1. The
+    // extra height is reachable by panning within the taller viewport below.
+    const fitted = Math.min(containerW / svgW, 1);
     transformRef.current.centerView(fitted, 0);
     // Re-fit only when the bracket's dimensions change, not on every new
     // layout object identity.
@@ -420,11 +421,9 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                       return;
                     }
                     const containerW = containerRef.current.clientWidth;
-                    const containerH = containerRef.current.clientHeight;
                     const PAD = 20;
                     const svgW = layout.width + PAD * 2;
-                    const svgH = layout.height + PAD * 2;
-                    const fitted = Math.min(containerW / svgW, containerH / svgH);
+                    const fitted = Math.min(containerW / svgW, 1);
                     transformRef.current.centerView(fitted, 200);
                   }}
                   aria-label="Reset zoom"
@@ -435,7 +434,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
               </div>
 
               <TransformComponent
-                wrapperStyle={{ width: '100%', height: 'max(480px, 70vh)' }}
+                wrapperStyle={{ width: '100%', height: 'max(600px, 82vh)' }}
                 contentStyle={{ padding: '16px' }}
               >
                 <SVGBracket
