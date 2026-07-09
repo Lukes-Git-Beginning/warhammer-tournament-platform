@@ -21,7 +21,13 @@ _Nothing staged._
   the Users tab) to see their questionnaire answers, the band floor each answer
   implies, and their full skill classification. (#27)
 - **Skill-level distribution chart** in Admin › Statistics — how many players sit
-  in each skill band (New … Top).
+  in each skill band (New … Top), **stacked** by whether they filled in the
+  questionnaire or are rated from games alone. Players with neither stay
+  "unclassified" (never counted as New).
+- **Reset a player's questionnaire** — admins clear a botched questionnaire from
+  the player's profile (an *Admin · skill calibration* panel with a Reset button),
+  so the player re-takes it fresh. The calibration audit now lives on user profiles
+  (moved off the Users admin tab).
 
 ### Fixed
 - **Manually created matches & byes now stamp the format-correct phase** (only
