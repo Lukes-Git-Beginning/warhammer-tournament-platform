@@ -6,7 +6,7 @@ import { sendDm } from '../lib/discord-notify.js';
 import { autoConfirmExpiredGameResults } from '../lib/match-games.js';
 import { autoResolveStaleBlindPicks } from '../lib/blind-pick-auto-resolve.js';
 import { autoResolveStaleMatrixActions } from '../lib/matrix-auto-resolve.js';
-import { startAutoSwiss, advanceAutoSwissRound, repairBrokenAutoSwiss } from '../lib/auto-swiss-service.js';
+import { advanceAutoSwissRound, repairBrokenAutoSwiss } from '../lib/auto-swiss-service.js';
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 import { notifyChallengeMatchFound, notifyScheduledMatchReminder, notifyReQueuePrompt } from '../lib/discord-notify.js';
 import { runMatchmakingTick } from '../lib/matchmaking-tick.js';
@@ -99,8 +99,7 @@ export default fp(
     // the current schema) and start_date within the next hour:
     //   - Send check-in reminder DMs once per tournament.
     //
-    // For tournaments where start_date has passed:
-    //   - Transition status to ONGOING (i.e. LIVE).
+    // #49: tournaments are NEVER auto-started — no auto REGISTRATION_CLOSED → ONGOING.
     // -----------------------------------------------------------------------
     const checkinTask = cron.schedule(
       '*/5 * * * *',
@@ -126,45 +125,10 @@ export default fp(
             await sendPerUserCheckInReminders(fastify, tournament, now);
           }
 
-          // Tournaments that have started — transition REGISTRATION_CLOSED → ONGOING
-          const startedTournaments = await fastify.prisma.tournament.findMany({
-            where: {
-              status: 'REGISTRATION_CLOSED',
-              start_date: { lte: now },
-              deleted_at: null,
-            },
-            select: { id: true, name: true, slug: true },
-          });
-
-          for (const tournament of startedTournaments) {
-            fastify.log.info(
-              { tournamentId: tournament.id, slug: tournament.slug },
-              'Auto-transitioning tournament to ONGOING',
-            );
-            await fastify.prisma.tournament
-              .update({
-                where: { id: tournament.id },
-                data: { status: 'ONGOING' },
-              })
-              .catch((err) => {
-                fastify.log.warn({ err, tournamentId: tournament.id }, 'Auto-transition failed');
-              });
-
-            await fastify.prisma.auditLog
-              .create({
-                data: {
-                  entity_type: 'Tournament',
-                  entity_id: tournament.slug,
-                  action: 'auto_status_transition',
-                  actor_id: null,
-                  old_value: { status: 'REGISTRATION_CLOSED' },
-                  new_value: { status: 'ONGOING' },
-                },
-              })
-              .catch(() => {
-                /* non-fatal */
-              });
-          }
+          // #49: tournaments are NEVER auto-started. The host closes registration and
+          // starts the tournament manually — no automation triggers those transitions
+          // (there's often still something to fix pre-start). Round/playoff advancement
+          // AFTER a manual start still runs (see autoSwissTask / auto_advance).
         } catch (err) {
           fastify.log.error({ err }, 'Check-in cron job failed');
         }
@@ -327,28 +291,18 @@ export default fp(
     );
 
     // -----------------------------------------------------------------------
-    // Auto Swiss — check-in opener + starter + round progression
-    // Runs every minute. Handles three phases:
-    //   1. OPEN_REGISTRATION → REGISTRATION_CLOSED (1h before start_date)
-    //   2. REGISTRATION_CLOSED → ONGOING at start_date (starts tournament + round 1)
-    //   3. ONGOING → advance rounds when current round is complete
+    // Auto Swiss — check-in reminders + post-start round progression.
+    // Runs every minute. #49: NO auto close-registration / auto-start — the host does
+    // those manually; this only reminds about check-in and advances rounds once a
+    // manually-started tournament's current round is complete.
     // -----------------------------------------------------------------------
     const autoSwissTask = cron.schedule('* * * * *', async () => {
       const now = new Date();
       const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
 
       try {
-        // Phase 1: open check-in 1h before start
-        // Emergency fix: reopen any AUTO_SWISS stuck in REGISTRATION_CLOSED before start_date
-        // (registration stays open until start_date — closing it early was a bug)
-        const stuckTournaments = await fastify.prisma.tournament.findMany({
-          where: { format: 'AUTO_SWISS', status: 'REGISTRATION_CLOSED', start_date: { gt: now }, deleted_at: null },
-          select: { id: true },
-        });
-        for (const t of stuckTournaments) {
-          await fastify.prisma.tournament.update({ where: { id: t.id }, data: { status: 'OPEN_REGISTRATION' } });
-          fastify.log.info({ tournamentId: t.id }, 'Auto Swiss: reopened registration (was closed early)');
-        }
+        // #49: no auto close-registration / auto-start / auto-reopen — the host does
+        // those manually. Only check-in reminders + post-start round advancement here.
 
         // Check-in reminder at start_date - 1h (no status change — registration stays open)
         const reminderTournaments = await fastify.prisma.tournament.findMany({
@@ -364,24 +318,7 @@ export default fp(
           await sendPerUserCheckInReminders(fastify, t, now);
         }
 
-        // Phase 2: start tournament at start_date (registration was open until now)
-        const startingTournaments = await fastify.prisma.tournament.findMany({
-          where: {
-            format: 'AUTO_SWISS',
-            status: 'OPEN_REGISTRATION',
-            start_date: { lte: now },
-            deleted_at: null,
-          },
-          select: { id: true },
-        });
-        for (const t of startingTournaments) {
-          fastify.log.info({ tournamentId: t.id }, 'Auto Swiss: starting tournament');
-          await startAutoSwiss(fastify.prisma, t.id).catch((err) =>
-            fastify.log.error({ err, tournamentId: t.id }, 'Auto Swiss start failed'),
-          );
-        }
-
-        // Phase 3: advance rounds for ongoing tournaments — AUTO_SWISS, plus any
+        // Advance rounds for ongoing tournaments — AUTO_SWISS, plus any
         // format that opted into auto-advancement (#37).
         const ongoingTournaments = await fastify.prisma.tournament.findMany({
           where: {
