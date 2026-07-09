@@ -861,6 +861,44 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // ---------------------------------------------------------------------------
+  // DELETE /api/tournaments/:slug/participants/:userId
+  // #30b: host/mod/admin fully REMOVE a participant pre-start (as if they never
+  // registered) — frees them to sign up fresh. Only before the tournament starts,
+  // to protect played results; during/after, use drop (WITHDREW) instead.
+  fastify.delete(
+    '/api/tournaments/:slug/participants/:userId',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug, userId } = request.params as { slug: string; userId: string };
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { slug, deleted_at: null },
+        select: { id: true, status: true },
+      });
+      if (!tournament) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      }
+      if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the host can remove participants', statusCode: 403 });
+      }
+      if (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Participants can only be removed before the tournament starts — use drop instead', statusCode: 422 });
+      }
+      const existing = await fastify.prisma.tournamentParticipant.findFirst({
+        where: { tournament_id: tournament.id, user_id: userId },
+        select: { id: true },
+      });
+      if (!existing) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Participant not found', statusCode: 404 });
+      }
+      await fastify.prisma.tournamentParticipant.delete({ where: { id: existing.id } });
+      await fastify.prisma.auditLog.create({
+        data: { entity_type: 'TournamentParticipant', entity_id: existing.id, action: 'participant_removed', actor_id: request.user.sub, new_value: { tournament_id: tournament.id, user_id: userId } },
+      });
+      emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'withdrew' });
+      return reply.send({ ok: true });
+    },
+  );
+
   // POST /api/tournaments/:slug/participants/:userId/drop
   // Drop a participant. Callable by the player themselves OR by host/moderator/
   // admin, at any point before the tournament completes — including pre-start, so

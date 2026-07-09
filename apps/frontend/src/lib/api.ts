@@ -71,6 +71,7 @@ export interface Tournament {
   standard_rules_enabled?: boolean;
   restrictions?: string | null;
   discord_link: string | null;
+  stream_url: string | null;
   host?: {
     id: string;
     username: string;
@@ -180,6 +181,7 @@ export interface TournamentCreate {
   registration_deadline?: string;
   rules?: string;
   discord_link?: string;
+  stream_url?: string;
   description?: string;
   standard_rules_enabled?: boolean;
   restrictions?: string;
@@ -208,6 +210,7 @@ export interface TournamentPatchInput {
   standard_rules_enabled?: boolean;
   restrictions?: string | null;
   discord_link?: string | null;
+  stream_url?: string | null;
   start_date?: string;
   timezone?: string;
   registration_deadline?: string | null;
@@ -1230,12 +1233,16 @@ export function addLateJoiner(
 export function setParticipantFaction(
   slug: string,
   userId: string,
-  factionId: string,
-): Promise<{ participant: { id: string; user_id: string; faction_id: string; status: string } }> {
+  factionId: string | null,
+): Promise<{ participant: { id: string; user_id: string; faction_id: string | null; status: string } }> {
   return apiFetch(`/api/tournaments/${slug}/participants/${userId}/faction`, {
     method: 'PATCH',
     body: JSON.stringify({ faction_id: factionId }),
   });
+}
+
+export function removeParticipant(slug: string, userId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/tournaments/${slug}/participants/${userId}`, { method: 'DELETE' });
 }
 
 export function fillByeMatch(

@@ -57,6 +57,7 @@ function statusLabel(status: Tournament['status']): string {
 type EditFormData = {
   name: string;
   discord_link: string;
+  stream_url: string;
   is_major: boolean;
   counts_for_leaderboard: boolean;
   description: string;
@@ -212,6 +213,7 @@ function buildInitialForm(t: Tournament): EditFormData {
   return {
     name: t.name,
     discord_link: t.discord_link ?? '',
+    stream_url: t.stream_url ?? '',
     is_major: t.is_major ?? false,
     counts_for_leaderboard: t.counts_for_leaderboard ?? true,
     description: t.description ?? '',
@@ -264,6 +266,8 @@ function buildPatchBody(
   if (form.name !== current.name) body.name = form.name;
   const discordNorm = form.discord_link.trim() || null;
   if (discordNorm !== (current.discord_link ?? null)) body.discord_link = discordNorm;
+  const streamNorm = form.stream_url.trim() || null;
+  if (streamNorm !== (current.stream_url ?? null)) body.stream_url = streamNorm;
   if (form.is_major !== (current.is_major ?? false)) body.is_major = form.is_major;
   if (form.counts_for_leaderboard !== (current.counts_for_leaderboard ?? true)) {
     body.counts_for_leaderboard = form.counts_for_leaderboard;
@@ -1483,6 +1487,16 @@ export function TournamentEditPage() {
             placeholder="https://discord.gg/…"
           />
           <FieldError message={errors.discord_link} />
+        </div>
+        <div>
+          <Label htmlFor="tef-stream">Stream link</Label>
+          <Input
+            id="tef-stream"
+            name="stream_url"
+            value={form.stream_url}
+            onChange={handleChange}
+            placeholder="https://twitch.tv/…"
+          />
         </div>
 
         {/* ── Settings ──────────────────────────────────────────────────── */}

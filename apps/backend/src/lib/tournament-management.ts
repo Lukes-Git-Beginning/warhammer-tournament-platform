@@ -28,7 +28,7 @@ export const AddLateSchema = z.object({
   userId: z.string().uuid(),
   faction_id: z.string().min(1).optional(),
 });
-export const SetFactionSchema = z.object({ faction_id: z.string().min(1) });
+export const SetFactionSchema = z.object({ faction_id: z.string().min(1).nullable() });
 export const CreateMatchSchema = z.object({
   player1Id: z.string().uuid(),
   player2Id: z.string().uuid().optional(), // B18: omit → BYE node
@@ -119,13 +119,16 @@ export async function setParticipantFactionOp(
   });
   if (!tournament) return { status: 404, body: { error: 'NotFound', message: 'Tournament not found', statusCode: 404 } };
 
-  const faction = await prisma.faction.findUnique({ where: { id: parsed.data.faction_id }, select: { id: true } });
-  if (!faction) {
-    return { status: 400, body: { error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" does not exist`, statusCode: 400 } };
-  }
-  const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
-  if (allowlist.length > 0 && !allowlist.includes(parsed.data.faction_id)) {
-    return { status: 400, body: { error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" is not in the tournament allowlist`, statusCode: 400 } };
+  // #29: null = set the player to "Free Pick" / pick-later (no fixed faction).
+  if (parsed.data.faction_id !== null) {
+    const faction = await prisma.faction.findUnique({ where: { id: parsed.data.faction_id }, select: { id: true } });
+    if (!faction) {
+      return { status: 400, body: { error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" does not exist`, statusCode: 400 } };
+    }
+    const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
+    if (allowlist.length > 0 && !allowlist.includes(parsed.data.faction_id)) {
+      return { status: 400, body: { error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" is not in the tournament allowlist`, statusCode: 400 } };
+    }
   }
 
   const participant = await prisma.tournamentParticipant.update({

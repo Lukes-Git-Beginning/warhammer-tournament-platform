@@ -27,6 +27,7 @@ const TournamentCreateSchema = z.object({
   standard_rules_enabled: z.boolean().default(true),
   restrictions: z.string().max(10000).optional(),
   discord_link: z.string().url().optional().or(z.literal('')),
+  stream_url: z.string().url().optional().or(z.literal('')),
   draft_enabled: z.boolean().default(false),
   draft_preset_id: z.string().uuid().nullable().optional(),
   // Welle 2 fields
@@ -327,6 +328,7 @@ export function TournamentCreateForm() {
     const {
       max_participants,
       discord_link,
+      stream_url,
       registration_deadline,
       description,
       rules,
@@ -351,6 +353,7 @@ export function TournamentCreateForm() {
       start_date: toIsoOrInvalid(start_date),
       ...(max_participants ? { max_participants: Number(max_participants) } : {}),
       ...(discord_link ? { discord_link } : {}),
+      ...(stream_url ? { stream_url } : {}),
       ...(registration_deadline
         ? { registration_deadline: toIsoOrInvalid(registration_deadline) }
         : {}),
@@ -623,6 +626,17 @@ export function TournamentCreateForm() {
           placeholder="https://discord.gg/…"
         />
         <FieldError message={errors.discord_link} />
+      </div>
+
+      <div>
+        <Label htmlFor="tcf-stream">Stream link (optional)</Label>
+        <Input
+          id="tcf-stream"
+          name="stream_url"
+          value={form.stream_url ?? ''}
+          onChange={handleChange}
+          placeholder="https://twitch.tv/…"
+        />
       </div>
 
       <PosterPickField file={posterFile} onPick={setPosterFile} />

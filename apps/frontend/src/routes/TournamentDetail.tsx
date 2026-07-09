@@ -708,6 +708,18 @@ export function TournamentDetail() {
               </a>
             </div>
           )}
+          {tournament.stream_url && (
+            <div>
+              <a
+                href={tournament.stream_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-rizzotto-gold-400 hover:underline"
+              >
+                📺 Watch the stream
+              </a>
+            </div>
+          )}
         </div>
       </div>
 
@@ -899,7 +911,7 @@ export function TournamentDetail() {
             />
           );
         }
-        return <ParticipantsList slug={tournament.slug} canManage={!!canManage} tournamentStatus={tournament.status} />;
+        return <ParticipantsList slug={tournament.slug} canManage={!!canManage} tournamentStatus={tournament.status} tournamentMode={tournament.mode} />;
       })()}
 
       {/* ─── Game History link — below standings/participants ─── */}
