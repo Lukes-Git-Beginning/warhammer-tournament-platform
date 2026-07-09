@@ -47,6 +47,11 @@ function getToken(): string | null {
   return process.env.DISCORD_BOT_TOKEN ?? null;
 }
 
+/** P7 (#50): append the host's stream link to spectator-facing DMs, if one is set. */
+function streamLine(url?: string | null): string {
+  return url ? `\n📺 Watch the action live: <${url}>` : '';
+}
+
 async function discordRequest(
   method: string,
   path: string,
@@ -524,7 +529,7 @@ export async function notifyMatchesCreated(
  * over and point them at the ongoing tournament (to catch a stream of the rest).
  */
 export async function notifyBye(
-  tournament: { name: string; slug: string },
+  tournament: { name: string; slug: string; stream_url?: string | null },
   round: number,
   byePlayer: { discord_id: string; username: string },
   opts: { eliminated: boolean; roundLabel?: string },
@@ -533,14 +538,19 @@ export async function notifyBye(
   if (!token) return;
   const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
   const label = opts.roundLabel ?? `Round ${round}`;
-  const msg = opts.eliminated
+  const streamUrl =
+    tournament.stream_url ??
+    (await prisma.tournament.findFirst({ where: { slug: tournament.slug }, select: { stream_url: true } }))?.stream_url ??
+    null;
+  const msg = (opts.eliminated
     ? `**[RizzOtto's Arena] Bye — ${tournament.name}**\n` +
       `You drew a bye in ${label}, and that's a wrap on your run this time — a playoff spot is just out of reach now. ` +
       `No shame in it at all: the pairings roll the dice, and someone always draws the short straw. 🎲 Thanks for battling — GG!\n` +
       `The tournament rolls on without you in the fight — see if the remaining matches are being streamed and enjoy the show: <${url}>`
     : `**[RizzOtto's Arena] Bye — ${tournament.name}**\n` +
       `You drew a bye in ${label} — a free win, and honestly a well-earned breather. ☕ ` +
-      `You advance automatically, so rest up and sharpen your blades — you're back in the fray next round. Standings: <${url}>`;
+      `You advance automatically, so rest up and sharpen your blades — you're back in the fray next round. Standings: <${url}>`)
+    + streamLine(streamUrl);
   try {
     await sendDm(byePlayer.discord_id, msg);
   } catch (err) {
@@ -561,7 +571,7 @@ export async function notifyPlayoffResults(
   try {
     const tournament = await prisma.tournament.findFirst({
       where: { id: tournamentId },
-      select: { name: true, slug: true },
+      select: { name: true, slug: true, stream_url: true },
     });
     if (!tournament) return;
     const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
@@ -573,7 +583,8 @@ export async function notifyPlayoffResults(
     const p1 = `**[RizzOtto's Arena] You're in the Playoffs — ${tournament.name}** 🏆\n` +
       `The Swiss rounds are done, and you've fought your way through — congratulations, you've qualified for the playoffs! Sharpen your blades; the real battle begins now. Your bracket + next match: <${url}>`;
     const p2 = `**[RizzOtto's Arena] Your run ends here — ${tournament.name}**\n` +
-      `The final Swiss round is in the books, and a playoff spot slipped just out of reach this time. You fought well — GG! The tournament rolls on; if the remaining matches are streamed, grab a drink and enjoy the show: <${url}>`;
+      `The final Swiss round is in the books, and a playoff spot slipped just out of reach this time. You fought well — GG! The tournament rolls on; if the remaining matches are streamed, grab a drink and enjoy the show: <${url}>` +
+      streamLine(tournament.stream_url);
     const dms = [
       ...qualifierIds.map((id) => disc.get(id)).filter((d): d is string => !!d).map((d) => sendDm(d, p1)),
       ...eliminatedIds.map((id) => disc.get(id)).filter((d): d is string => !!d).map((d) => sendDm(d, p2)),
@@ -593,7 +604,7 @@ export async function notifyNoPlayoffComplete(tournamentId: string, playerIds: s
   try {
     const tournament = await prisma.tournament.findFirst({
       where: { id: tournamentId },
-      select: { name: true, slug: true },
+      select: { name: true, slug: true, stream_url: true },
     });
     if (!tournament) return;
     const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
@@ -602,7 +613,8 @@ export async function notifyNoPlayoffComplete(tournamentId: string, playerIds: s
       select: { discord_id: true },
     });
     const msg = `**[RizzOtto's Arena] That's a wrap — ${tournament.name}**\n` +
-      `You've played your final round — thanks for battling through the whole event! Final standings are up: <${url}>. GG, and see you at the next muster. ⚔️`;
+      `You've played your final round — thanks for battling through the whole event! Final standings are up: <${url}>. GG, and see you at the next muster. ⚔️` +
+      streamLine(tournament.stream_url);
     await Promise.allSettled(users.map((u) => sendDm(u.discord_id, msg)));
   } catch (err) {
     console.warn('[discord-notify] notifyNoPlayoffComplete error (non-fatal):', err);
