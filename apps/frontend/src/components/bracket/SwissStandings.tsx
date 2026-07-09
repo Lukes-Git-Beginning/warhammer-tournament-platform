@@ -511,6 +511,18 @@ export function SwissStandings({
             <DialogTitle>Set Faction</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-3 gap-2 pt-2">
+            {isFreePick && (
+              <button
+                type="button"
+                disabled={setFactionMutation.isPending}
+                onClick={() => {
+                  if (factionPickTarget) setFactionMutation.mutate({ userId: factionPickTarget, factionId: null });
+                }}
+                className="col-span-3 rounded border border-dashed border-stone-600 px-2 py-1.5 text-xs text-stone-400 hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-400 transition-colors disabled:opacity-40"
+              >
+                — Free Pick (pick-later) —
+              </button>
+            )}
             {pickerFactions.map((f) => (
               <button
                 key={f.id}
