@@ -537,8 +537,9 @@ export function TournamentDetail() {
         </div>
       )}
 
-      {/* ─── Registration CTA ─── */}
-      {tournament.status === 'OPEN_REGISTRATION' && (
+      {/* ─── Registration / late-join CTA ─── */}
+      {(tournament.status === 'OPEN_REGISTRATION' ||
+        (tournament.status === 'ONGOING' && tournament.allow_late_join_requests)) && (
         <section className="mb-6">
           <RegisterButton
             tournament={tournament}
