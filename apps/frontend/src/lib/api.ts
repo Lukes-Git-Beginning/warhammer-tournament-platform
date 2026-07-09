@@ -810,6 +810,9 @@ export interface AdminCalibrationAudit {
 export function getAdminPlayerCalibrationAnswers(userId: string): Promise<AdminCalibrationAudit> {
   return apiFetch(`/api/admin/players/${userId}/calibration-answers`);
 }
+export function resetPlayerCalibration(userId: string): Promise<{ ok: true; userId: string; username: string }> {
+  return apiFetch(`/api/admin/players/${userId}/calibration-answers`, { method: 'DELETE' });
+}
 
 // ---------------------------------------------------------------------------
 // Admin — Stats
@@ -846,7 +849,8 @@ export function getAdminFactionWinRates(opts?: {
 export interface SkillDistributionEntry {
   band: number;
   name: string;
-  count: number;
+  withQuestionnaire: number;
+  dataOnly: number;
 }
 export interface SkillDistributionResponse {
   seasonId: string | null;

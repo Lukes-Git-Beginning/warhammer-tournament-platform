@@ -9,6 +9,7 @@ import { GameHistoryTable } from '../components/match/GameHistoryTable.js';
 import { PlayerFactionProficiencyCard } from '../components/meta/PlayerFactionProficiencyCard.js';
 import { PlayerLevelScale } from '../components/meta/PlayerLevelScale.js';
 import { CalibrationWizard } from '../components/meta/CalibrationWizard.js';
+import { CalibrationAuditPanel } from '../components/admin/CalibrationAuditPanel.js';
 import { useAuthQuery } from '@/lib/auth.js';
 import { formatInUserTimezone } from '@/lib/timezone.js';
 import { Button } from '@/components/ui/button.js';
@@ -344,6 +345,18 @@ export function UserProfilePage() {
       />
       {isOwnProfile && (
         <CalibrationWizard userId={id} open={wizardOpen} onOpenChange={setWizardOpen} />
+      )}
+
+      {/* Admin: inspect + reset this player's questionnaire (right where the take-questionnaire CTA sits) */}
+      {me?.role === 'ADMIN' && (
+        <div className="mt-4">
+          <p className="mb-2 text-[10px] font-mono uppercase tracking-wider text-stone-500">
+            Admin · skill calibration
+          </p>
+          <div className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/40 p-4">
+            <CalibrationAuditPanel userId={id} />
+          </div>
+        </div>
       )}
 
       {/* Aktuelle Season */}

@@ -554,7 +554,11 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           loadCalibrationQuestions(fastify.prisma),
         ]);
 
-        const counts = [0, 0, 0, 0, 0, 0]; // indices 1..5 = bands
+        // Split each band into players classified via the questionnaire vs by their
+        // game data alone. Players with NEITHER a questionnaire nor fitted data are
+        // NOT put in band 1 — they are counted separately as "unclassified".
+        const withQuestionnaire = [0, 0, 0, 0, 0, 0]; // band → count with a questionnaire
+        const dataOnly = [0, 0, 0, 0, 0, 0]; // band → count from games only (no questionnaire)
         let unclassified = 0;
         for (const u of users) {
           const answers = (u.calibration_answers as Record<string, string> | null) ?? {};
@@ -566,14 +570,20 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           }
           const qFloor = questionnaireFloor(answers, questions);
           const { gatingBand } = classify(qFloor, { generalSkill: gs?.skill ?? null, stdError: gs?.se ?? null });
-          counts[gatingBand] = (counts[gatingBand] ?? 0) + 1;
+          if (hasQ) withQuestionnaire[gatingBand] = (withQuestionnaire[gatingBand] ?? 0) + 1;
+          else dataOnly[gatingBand] = (dataOnly[gatingBand] ?? 0) + 1;
         }
 
         return {
           seasonId: resolvedSeasonId,
           total: users.length,
           unclassified,
-          distribution: [1, 2, 3, 4, 5].map((band) => ({ band, name: BAND_NAMES[band], count: counts[band] ?? 0 })),
+          distribution: [1, 2, 3, 4, 5].map((band) => ({
+            band,
+            name: BAND_NAMES[band],
+            withQuestionnaire: withQuestionnaire[band] ?? 0,
+            dataOnly: dataOnly[band] ?? 0,
+          })),
         };
       },
       { ttlSeconds: 300 },
@@ -1325,6 +1335,38 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       questionnaireFloor: hasQuestionnaire ? questionnaireFloor(rawAnswers, questions) : null,
       answers,
     };
+  });
+
+  // DELETE /api/admin/players/:id/calibration-answers — reset a player's questionnaire.
+  // The wizard is incremental (only asks unknown questions) and its entry point is
+  // hidden once completed, so a full clear is the only way to correct an already-given
+  // answer. After this the player's "take the questionnaire" CTA reappears and they
+  // answer fresh. hasQuestionnaire flips back to false, so their band reverts to
+  // data-only until they redo it.
+  fastify.delete('/api/admin/players/:id/calibration-answers', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = await fastify.prisma.user.findFirst({
+      where: { id, deleted_at: null },
+      select: { id: true, username: true },
+    });
+    if (!user) {
+      return reply.code(404).send({ error: 'NotFound', message: 'Player not found', statusCode: 404 });
+    }
+    await fastify.prisma.user.update({
+      where: { id: user.id },
+      data: { calibration_answers: Prisma.DbNull },
+    });
+    await fastify.prisma.auditLog.create({
+      data: {
+        entity_type: 'User',
+        entity_id: user.id,
+        action: 'calibration_reset',
+        actor_id: request.user.sub,
+        new_value: { username: user.username },
+      },
+    });
+    if (fastify.redis) await invalidate(fastify.redis, 'admin:skill-distribution:*');
+    return { ok: true, userId: user.id, username: user.username };
   });
 
   // POST /api/admin/tournaments/:id/repair-auto-swiss

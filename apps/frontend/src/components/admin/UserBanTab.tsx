@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { searchUsers, updateUserRole, resetUserSteam, deleteUser, type AdminUser } from '@/lib/api';
 import { UserBanModal } from './UserBanModal';
 import { UserEditModal } from './UserEditModal';
-import { CalibrationAuditPanel } from './CalibrationAuditPanel';
 
 // A deleted (anonymized) account carries a tombstone discord_id.
 function isDeletedUser(u: AdminUser): boolean {
@@ -94,30 +93,6 @@ function ResetSteamModal({ user, onClose }: { user: AdminUser; onClose: () => vo
             {mutation.isPending ? 'Resetting…' : 'Reset Steam'}
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function CalibrationAuditModal({ user, onClose }: { user: AdminUser; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div
-        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-stone-700 bg-stone-950 p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <h3 className="text-lg font-semibold text-stone-100">Calibration audit</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="text-xl leading-none text-stone-500 transition-colors hover:text-stone-300"
-          >
-            ×
-          </button>
-        </div>
-        <CalibrationAuditPanel userId={user.id} username={user.username} />
       </div>
     </div>
   );
@@ -219,7 +194,6 @@ export function UserBanTab() {
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
-  const [calibrationUser, setCalibrationUser] = useState<AdminUser | null>(null);
   const [resetSteamUser, setResetSteamUser] = useState<AdminUser | null>(null);
   const [deleteTargetUser, setDeleteTargetUser] = useState<AdminUser | null>(null);
   const [sortBy, setSortBy] = useState<SortCol>('created_at');
@@ -345,13 +319,6 @@ export function UserBanTab() {
                         >
                           Edit
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setCalibrationUser(user)}
-                          className="rounded border border-stone-700 px-2 py-1 text-xs font-semibold text-stone-300 transition-colors hover:bg-stone-800"
-                        >
-                          Calibration
-                        </button>
                         {user.steam_id && (
                           <button
                             type="button"
@@ -396,9 +363,6 @@ export function UserBanTab() {
 
       {selectedUser && <UserBanModal user={selectedUser} onClose={() => setSelectedUser(null)} />}
       {editUser && <UserEditModal user={editUser} onClose={() => setEditUser(null)} />}
-      {calibrationUser && (
-        <CalibrationAuditModal user={calibrationUser} onClose={() => setCalibrationUser(null)} />
-      )}
       {resetSteamUser && <ResetSteamModal user={resetSteamUser} onClose={() => setResetSteamUser(null)} />}
       {deleteTargetUser && <DeleteUserModal user={deleteTargetUser} onClose={() => setDeleteTargetUser(null)} />}
     </div>
