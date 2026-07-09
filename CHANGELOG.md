@@ -7,6 +7,29 @@ Entries are grouped by deploy wave (the platform ships continuously to `main`).
 ## [Unreleased]
 _Nothing staged._
 
+## 2026-07-09 — Manual-match safety, late join, calibration audit & skill stats
+
+### Added
+- **Host-approved late join** — hosts can enable *Allow late-join requests* per
+  tournament (create + edit forms). After start, a player runs the normal sign-up
+  (faction / band / free pick) to send a join **request** instead of entering. The
+  host approves or declines it from a Discord DM and a requests panel above the
+  live view; approved players are folded in (a bye for the current Swiss round, or
+  the Balanced Liechtenstein pairing tick).
+- **Create a bye match** from the Create Match UI — leave Player 2 empty.
+- **Admin calibration audit** — search a player in the Skill Calibration tab (or
+  the Users tab) to see their questionnaire answers, the band floor each answer
+  implies, and their full skill classification. (#27)
+- **Skill-level distribution chart** in Admin › Statistics — how many players sit
+  in each skill band (New … Top).
+
+### Fixed
+- **Manually created matches & byes now stamp the format-correct phase** (only
+  Swiss group matches are `SWISS`; every other format is `null`), so a manual
+  Balanced Liechtenstein match/bye no longer lands outside the division group.
+- **Balanced Liechtenstein playoffs auto-launch** even when a group match carries
+  a stray `SWISS` phase — a manual/forfeit match no longer blocks playoff generation.
+
 ## 2026-06-30 — Phase-2 feature batch
 
 ### Added
