@@ -4,6 +4,7 @@ import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import {
   registerForTournament,
+  requestJoinTournament,
   withdrawFromTournament,
   getFactions,
   getPlayerClassification,
@@ -344,11 +345,16 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
       return [...prev, id];
     });
 
+  // Late-join: after start, when the host enabled it, the same sign-up flow submits
+  // a join REQUEST (pending host approval) instead of entering directly.
+  const lateJoinMode = tournament.status === 'ONGOING' && !!tournament.allow_late_join_requests;
   const register = useMutation({
-    mutationFn: (opts?: { requested_band?: number }) =>
-      pickCount > 1
-        ? registerForTournament(tournament.slug, { factionIds: selectedFactions, ...opts })
-        : registerForTournament(tournament.slug, selectedFactions[0] ? { factionId: selectedFactions[0], ...opts } : opts),
+    mutationFn: (opts?: { requested_band?: number }) => {
+      const submit = lateJoinMode ? requestJoinTournament : registerForTournament;
+      return pickCount > 1
+        ? submit(tournament.slug, { factionIds: selectedFactions, ...opts })
+        : submit(tournament.slug, selectedFactions[0] ? { factionId: selectedFactions[0], ...opts } : opts);
+    },
     onSuccess: () => {
       setPickingFaction(false);
       setSelectedFactions([]);
@@ -371,7 +377,22 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
     },
   });
 
-  if (tournament.status !== 'OPEN_REGISTRATION') return null;
+  if (tournament.status !== 'OPEN_REGISTRATION' && !lateJoinMode) return null;
+
+  // Late-join (tournament already running): existing participants need no CTA; a
+  // pending requester sees a note; everyone else falls through to the request flow.
+  if (lateJoinMode) {
+    if (participantStatus === 'REGISTERED' || participantStatus === 'CHECKED_IN' || participantStatus === 'DISQUALIFIED') {
+      return null;
+    }
+    if (participantStatus === 'JOIN_REQUESTED') {
+      return (
+        <div className="flex items-center gap-2 rounded-md border border-rizzotto-gold-500/40 bg-rizzotto-gold-500/10 px-4 py-2.5">
+          <span className="text-sm font-semibold text-rizzotto-gold-300">Join request pending host approval…</span>
+        </div>
+      );
+    }
+  }
 
   if (participantStatus === 'REGISTERED' || participantStatus === 'CHECKED_IN') {
     return (
@@ -563,7 +584,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
             }
           }}
         >
-          {register.isPending ? t('tournament.register.pending') : isReRegister ? 'Register again' : t('tournament.register.cta')}
+          {register.isPending ? t('tournament.register.pending') : lateJoinMode ? 'Request to join' : isReRegister ? 'Register again' : t('tournament.register.cta')}
         </Button>
         {register.isError && (
           <span className="text-xs text-rizzotto-danger">{(register.error as Error).message}</span>

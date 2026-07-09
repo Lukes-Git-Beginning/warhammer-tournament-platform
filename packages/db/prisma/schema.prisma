@@ -91,6 +91,7 @@ enum ParticipantStatus {
   CHECKED_IN
   DISQUALIFIED
   WITHDREW
+  JOIN_REQUESTED // late-join request pending host approval (not yet playing)
 }
 
 enum MatchStatus {
@@ -312,6 +313,9 @@ model Tournament {
   // start; auto_advance = the cron advances rounds + generates playoffs.
   auto_sizing            Boolean              @default(false)
   auto_advance           Boolean              @default(false)
+  // Late-join: when on, users may request to join AFTER the tournament has started;
+  // the host approves each request (Discord DM button + in-app panel) before entry.
+  allow_late_join_requests Boolean            @default(false)
   // #40: set when dynamic re-sizing changed the bracket during a round; the round-
   // advance flow sends the size-change DM once and clears it.
   pending_resize_notice  Boolean              @default(false)

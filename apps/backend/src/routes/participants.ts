@@ -2,9 +2,10 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { emitParticipantChange, emitBracketUpdate } from '../lib/emit.js';
 import { canManageTournament, createLateJoinerBye } from '../lib/tournament-utils.js';
-import { notifyHostsOfWithdrawal } from '../lib/discord-notify.js';
+import { notifyHostsOfWithdrawal, notifyHostsLateJoinRequest, notifyLateJoinDecision } from '../lib/discord-notify.js';
 import { addLateParticipant, setParticipantFactionOp } from '../lib/tournament-management.js';
 import { reapplyDynamicSizing } from '../lib/auto-swiss-service.js';
+import { runBalancedPairingTick } from '../lib/balanced-liechtenstein-service.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -217,6 +218,200 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         }
         throw err;
       }
+    },
+  );
+
+  // POST /api/tournaments/:slug/request-join
+  // Late-join: a user runs the normal registration flow (faction / band / free-pick)
+  // AFTER the tournament has started; instead of entering, this records a pending
+  // JOIN_REQUESTED row and alerts the host, who approves/declines it. Gated behind
+  // the tournament's allow_late_join_requests flag.
+  fastify.post(
+    '/api/tournaments/:slug/request-join',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      const parsed = RegisterSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+      }
+
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { slug, deleted_at: null },
+        select: {
+          id: true,
+          status: true,
+          mode: true,
+          allow_late_join_requests: true,
+          faction_allowlist: { select: { faction_id: true } },
+        },
+      });
+      if (!tournament) {
+        return reply.code(404).send({ error: 'NotFound', message: `Tournament "${slug}" not found`, statusCode: 404 });
+      }
+      if (tournament.status !== 'ONGOING' || !tournament.allow_late_join_requests) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'This tournament is not accepting late-join requests', statusCode: 422 });
+      }
+
+      // Validate faction(s), mirroring /register.
+      if (parsed.data.faction_id) {
+        const faction = await fastify.prisma.faction.findUnique({ where: { id: parsed.data.faction_id }, select: { id: true } });
+        if (!faction) return reply.code(400).send({ error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" does not exist`, statusCode: 400 });
+        const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
+        if (allowlist.length > 0 && !allowlist.includes(parsed.data.faction_id)) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'Faction is not permitted in this tournament', statusCode: 400 });
+        }
+      }
+      let factionIds: string[] = [];
+      if (tournament.mode === 'TWO_D_THREE') {
+        factionIds = parsed.data.faction_ids ?? [];
+        if (factionIds.length !== 3 || new Set(factionIds).size !== 3) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'This mode requires exactly 3 distinct factions', statusCode: 400 });
+        }
+        const found = await fastify.prisma.faction.findMany({ where: { id: { in: factionIds } }, select: { id: true } });
+        if (found.length !== 3) return reply.code(400).send({ error: 'BadRequest', message: 'One or more selected factions do not exist', statusCode: 400 });
+        const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
+        if (allowlist.length > 0 && factionIds.some((id) => !allowlist.includes(id))) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'One or more selected factions are not permitted', statusCode: 400 });
+        }
+      }
+
+      const requestData = {
+        faction_id: parsed.data.faction_id ?? null,
+        faction_ids: factionIds,
+        requested_band: parsed.data.requested_band ?? null,
+        status: 'JOIN_REQUESTED' as const,
+      };
+
+      const existing = await fastify.prisma.tournamentParticipant.findFirst({
+        where: { tournament_id: tournament.id, user_id: request.user.sub },
+        select: { id: true, status: true },
+      });
+      // Already actively in — a re-request (JOIN_REQUESTED) or prior WITHDREW is fine.
+      if (existing && existing.status !== 'WITHDREW' && existing.status !== 'JOIN_REQUESTED') {
+        return reply.code(409).send({ error: 'Conflict', message: 'You are already part of this tournament', statusCode: 409 });
+      }
+
+      const participant = existing
+        ? await fastify.prisma.tournamentParticipant.update({ where: { id: existing.id }, data: { ...requestData, registered_at: new Date() }, select: { id: true, status: true } })
+        : await fastify.prisma.tournamentParticipant.create({ data: { tournament_id: tournament.id, user_id: request.user.sub, ...requestData }, select: { id: true, status: true } });
+
+      await fastify.prisma.auditLog.create({
+        data: { entity_type: 'TournamentParticipant', entity_id: participant.id, action: 'late_join_request', actor_id: request.user.sub, new_value: { tournament_id: tournament.id, user_id: request.user.sub } },
+      });
+      emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId: request.user.sub, action: 'registered' });
+      void notifyHostsLateJoinRequest(tournament.id, request.user.sub);
+
+      return reply.code(201).send(participant);
+    },
+  );
+
+  // GET /api/tournaments/:slug/join-requests — host-only list of pending late-join requests.
+  fastify.get(
+    '/api/tournaments/:slug/join-requests',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      const tournament = await fastify.prisma.tournament.findFirst({ where: { slug, deleted_at: null }, select: { id: true } });
+      if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the host can view join requests', statusCode: 403 });
+      }
+      const requests = await fastify.prisma.tournamentParticipant.findMany({
+        where: { tournament_id: tournament.id, status: 'JOIN_REQUESTED', deleted_at: null },
+        orderBy: { registered_at: 'asc' },
+        select: {
+          user_id: true,
+          faction_id: true,
+          faction_ids: true,
+          requested_band: true,
+          registered_at: true,
+          user: { select: { id: true, username: true, avatar_url: true } },
+        },
+      });
+      return reply.send({ requests });
+    },
+  );
+
+  // POST /api/tournaments/:slug/participants/:userId/approve-join — host admits a request.
+  fastify.post(
+    '/api/tournaments/:slug/participants/:userId/approve-join',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug, userId } = request.params as { slug: string; userId: string };
+      const tournament = await fastify.prisma.tournament.findFirst({ where: { slug, deleted_at: null }, select: { id: true, status: true, format: true } });
+      if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the host can approve join requests', statusCode: 403 });
+      }
+      const pending = await fastify.prisma.tournamentParticipant.findFirst({
+        where: { tournament_id: tournament.id, user_id: userId, status: 'JOIN_REQUESTED', deleted_at: null },
+        select: { id: true, requested_band: true },
+      });
+      if (!pending) return reply.code(404).send({ error: 'NotFound', message: 'No pending join request for this user', statusCode: 404 });
+
+      // Admit them: CHECKED_IN, and (Balanced Liechtenstein) fix their skill band so
+      // the pairing tick can slot them in.
+      await fastify.prisma.tournamentParticipant.update({
+        where: { id: pending.id },
+        data: {
+          status: 'CHECKED_IN',
+          ...(tournament.format === 'BALANCED_LIECHTENSTEIN' && pending.requested_band != null
+            ? { skill_band: pending.requested_band }
+            : {}),
+        },
+      });
+      await fastify.prisma.auditLog.create({
+        data: { entity_type: 'TournamentParticipant', entity_id: pending.id, action: 'late_join_approved', actor_id: request.user.sub, new_value: { tournament_id: tournament.id, user_id: userId } },
+      });
+
+      // Fold them into the running tournament, reusing the existing late-join machinery
+      // (Swiss/Auto Swiss get a BYE for the current round; Balanced re-runs the tick).
+      if (tournament.status === 'ONGOING') {
+        try {
+          const bye = await createLateJoinerBye(fastify.prisma, tournament.id, userId);
+          if (bye) emitBracketUpdate(fastify.io, tournament.id);
+        } catch (err) {
+          request.log.warn({ err, slug }, 'Failed to create late-joiner BYE on approve');
+        }
+        if (tournament.format === 'BALANCED_LIECHTENSTEIN') {
+          void runBalancedPairingTick(fastify, tournament.id);
+        }
+      }
+      await reapplyDynamicSizing(fastify.prisma, tournament.id);
+      emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'registered' });
+      void notifyLateJoinDecision(tournament.id, userId, true);
+
+      return reply.send({ ok: true });
+    },
+  );
+
+  // POST /api/tournaments/:slug/participants/:userId/decline-join — host rejects a request.
+  fastify.post(
+    '/api/tournaments/:slug/participants/:userId/decline-join',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug, userId } = request.params as { slug: string; userId: string };
+      const tournament = await fastify.prisma.tournament.findFirst({ where: { slug, deleted_at: null }, select: { id: true } });
+      if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (!(await canManageTournament(fastify.prisma, tournament.id, request.user.sub, request.user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the host can decline join requests', statusCode: 403 });
+      }
+      const pending = await fastify.prisma.tournamentParticipant.findFirst({
+        where: { tournament_id: tournament.id, user_id: userId, status: 'JOIN_REQUESTED', deleted_at: null },
+        select: { id: true },
+      });
+      if (!pending) return reply.code(404).send({ error: 'NotFound', message: 'No pending join request for this user', statusCode: 404 });
+
+      // A declined request never played — remove the row so the user could ask again.
+      await fastify.prisma.tournamentParticipant.delete({ where: { id: pending.id } });
+      await fastify.prisma.auditLog.create({
+        data: { entity_type: 'TournamentParticipant', entity_id: pending.id, action: 'late_join_declined', actor_id: request.user.sub, new_value: { tournament_id: tournament.id, user_id: userId } },
+      });
+      emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'withdrew' });
+      void notifyLateJoinDecision(tournament.id, userId, false);
+
+      return reply.send({ ok: true });
     },
   );
 

@@ -678,6 +678,71 @@ export async function notifyHostsOfWithdrawal(
 }
 
 /**
+ * DM the tournament host + co-hosts when a user requests to join a running
+ * tournament (late-join). Points them to the in-app requests panel where they
+ * approve/decline. Fire-and-forget safe (never throws).
+ */
+export async function notifyHostsLateJoinRequest(
+  tournamentId: string,
+  applicantUserId: string,
+): Promise<void> {
+  if (!getToken()) return;
+  try {
+    const [tournament, applicant] = await Promise.all([
+      prisma.tournament.findFirst({
+        where: { id: tournamentId },
+        select: { name: true, slug: true, host_id: true, co_hosts: { select: { user_id: true } } },
+      }),
+      prisma.user.findUnique({ where: { id: applicantUserId }, select: { username: true } }),
+    ]);
+    if (!tournament || !applicant) return;
+
+    const hostIds = [...new Set([tournament.host_id, ...tournament.co_hosts.map((h) => h.user_id)])];
+    if (hostIds.length === 0) return;
+    const hosts = await prisma.user.findMany({
+      where: { id: { in: hostIds } },
+      select: { discord_id: true },
+    });
+    const msg =
+      `**[RizzOtto's Arena] Late-join request — ${tournament.name}**\n` +
+      `**${applicant.username}** asked to join the running tournament. ` +
+      `Approve or decline it on the tournament page: ` +
+      `<${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}>.`;
+    await Promise.allSettled(hosts.map((h) => sendDm(h.discord_id, msg)));
+  } catch (err) {
+    console.warn('[discord-notify] notifyHostsLateJoinRequest error (non-fatal):', err);
+  }
+}
+
+/**
+ * DM a user the outcome of their late-join request (approved / declined).
+ * Fire-and-forget safe (never throws).
+ */
+export async function notifyLateJoinDecision(
+  tournamentId: string,
+  applicantUserId: string,
+  approved: boolean,
+): Promise<void> {
+  if (!getToken()) return;
+  try {
+    const [tournament, applicant] = await Promise.all([
+      prisma.tournament.findFirst({ where: { id: tournamentId }, select: { name: true, slug: true } }),
+      prisma.user.findUnique({ where: { id: applicantUserId }, select: { discord_id: true } }),
+    ]);
+    if (!tournament || !applicant) return;
+    const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
+    const msg = approved
+      ? `**[RizzOtto's Arena] You're in — ${tournament.name}**\n` +
+        `Your request to join was approved. Head to the tournament: <${url}>.`
+      : `**[RizzOtto's Arena] Late-join declined — ${tournament.name}**\n` +
+        `The host declined your request to join <${url}>.`;
+    await sendDm(applicant.discord_id, msg);
+  } catch (err) {
+    console.warn('[discord-notify] notifyLateJoinDecision error (non-fatal):', err);
+  }
+}
+
+/**
  * P9: DM the tournament host + co-hosts when a match participant reports an issue
  * with their match (e.g. wrong result, wrong factions). Fire-and-forget safe.
  */
