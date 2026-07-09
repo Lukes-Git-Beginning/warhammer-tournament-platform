@@ -1385,6 +1385,68 @@ function mapPhase(d: MatchDecisionState): DecisionPhase {
   return 'coin_flip';
 }
 
+// ─── Free Pick: resolved-faction reminder shown on the map step ───
+// FREE_PICK is faction-first, so both factions are already locked by the time
+// players reach the map pick/ban. Surface them here so nobody has to leave the
+// map screen to recall which faction they ended up fielding.
+interface FreePickFactionBannerProps {
+  decision: MatchDecisionState;
+  factions: FactionWithStatsDto[];
+  rowPlayer: PlayerRef;
+  colPlayer: PlayerRef;
+  currentUserId: string;
+}
+
+function FreePickFactionBanner({ decision, factions, rowPlayer, colPlayer, currentUserId }: FreePickFactionBannerProps) {
+  // Mixed matchups resolve the pick-later side via the matrix; both-committed
+  // matchups carry the fixed ids on freePick. Prefer the matrix, fall back to registration.
+  const p1Id = decision.factionMatrix?.p1FactionId ?? decision.freePick?.p1FactionId ?? null;
+  const p2Id = decision.factionMatrix?.p2FactionId ?? decision.freePick?.p2FactionId ?? null;
+  const p1 = factions.find((f) => f.faction.id === p1Id)?.faction;
+  const p2 = factions.find((f) => f.faction.id === p2Id)?.faction;
+  if (!p1 && !p2) return null;
+
+  return (
+    <div className="mb-6 flex items-center justify-center gap-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-950/50 px-5 py-3">
+      {/* Player 1 (left) */}
+      <div className="flex items-center gap-2">
+        {p1 ? (
+          <FactionBadge colorHex={p1.color_hex} initials={p1.initials} name={p1.name} size="md" iconUrl={p1.icon_url} />
+        ) : (
+          <span className="text-xs text-rizzotto-stone-600">TBD</span>
+        )}
+        <div className="flex flex-col leading-tight">
+          <span className={`font-display text-sm uppercase tracking-wide ${rowPlayer?.id === currentUserId ? 'text-rizzotto-gold-300' : 'text-rizzotto-stone-200'}`}>
+            {p1?.name ?? '—'}
+          </span>
+          <span className="text-[10px] uppercase tracking-wide text-rizzotto-stone-500">
+            {rowPlayer?.id === currentUserId ? 'You' : (rowPlayer?.username ?? 'Player 1')}
+          </span>
+        </div>
+      </div>
+
+      <span className="font-display text-xs uppercase tracking-widest text-rizzotto-stone-600">vs</span>
+
+      {/* Player 2 (right) */}
+      <div className="flex flex-row-reverse items-center gap-2 text-right">
+        {p2 ? (
+          <FactionBadge colorHex={p2.color_hex} initials={p2.initials} name={p2.name} size="md" iconUrl={p2.icon_url} />
+        ) : (
+          <span className="text-xs text-rizzotto-stone-600">TBD</span>
+        )}
+        <div className="flex flex-col items-end leading-tight">
+          <span className={`font-display text-sm uppercase tracking-wide ${colPlayer?.id === currentUserId ? 'text-rizzotto-gold-300' : 'text-rizzotto-stone-200'}`}>
+            {p2?.name ?? '—'}
+          </span>
+          <span className="text-[10px] uppercase tracking-wide text-rizzotto-stone-500">
+            {colPlayer?.id === currentUserId ? 'You' : (colPlayer?.username ?? 'Player 2')}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Per-mode match-step order: which step (faction / map) runs first. A step whose
 // result is already fixed is simply skipped. Only FREE_PICK is faction-first for
 // now; MATRIX stays map-first (its current behaviour) until that is confirmed.
@@ -1706,6 +1768,9 @@ export function MatchDecisionPage() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4 }}
             >
+              {decision.tournamentMode === 'FREE_PICK' && (
+                <FreePickFactionBanner decision={decision} factions={factions} rowPlayer={matrixRowPlayer} colPlayer={matrixColPlayer} currentUserId={user.id} />
+              )}
               <RandomMapPhase pickedMapId={decision.pickedMapId} mapPool={mapPool} />
             </motion.div>
           )}
@@ -1718,6 +1783,9 @@ export function MatchDecisionPage() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4 }}
             >
+              {decision.tournamentMode === 'FREE_PICK' && (
+                <FreePickFactionBanner decision={decision} factions={factions} rowPlayer={matrixRowPlayer} colPlayer={matrixColPlayer} currentUserId={user.id} />
+              )}
               <PickBanPhase
                 decision={decision}
                 mapPool={mapPool}
@@ -1815,6 +1883,9 @@ export function MatchDecisionPage() {
                   </p>
                 )}
               </div>
+              {decision.tournamentMode === 'FREE_PICK' && (
+                <FreePickFactionBanner decision={decision} factions={factions} rowPlayer={matrixRowPlayer} colPlayer={matrixColPlayer} currentUserId={user.id} />
+              )}
               <Button
                 variant="forge"
                 size="lg"
