@@ -9,6 +9,7 @@ import { PresetLibraryAdmin } from '@/components/admin/PresetLibraryAdmin.js';
 import { FactionWinRatesChart } from '@/components/admin/FactionWinRatesChart.js';
 import { DropOffFunnelChart } from '@/components/admin/DropOffFunnelChart.js';
 import { PickBanStatsChart } from '@/components/admin/PickBanStatsChart.js';
+import { SkillDistributionChart } from '@/components/admin/SkillDistributionChart.js';
 import { UsageOverTimeChart } from '@/components/admin/UsageOverTimeChart.js';
 import { MapPoolEditor } from '@/components/admin/MapPoolEditor.js';
 import { FactionManager } from '@/components/admin/FactionManager.js';
@@ -57,6 +58,7 @@ function StatsTab() {
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
       <UsageOverTimeChart />
+      <SkillDistributionChart />
       <FactionWinRatesChart />
       <DropOffFunnelChart />
       <PickBanStatsChart />
