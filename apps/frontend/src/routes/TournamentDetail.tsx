@@ -914,6 +914,28 @@ export function TournamentDetail() {
         return <ParticipantsList slug={tournament.slug} canManage={!!canManage} tournamentStatus={tournament.status} tournamentMode={tournament.mode} />;
       })()}
 
+      {/* ─── Host roster management — faction edits / drops once standings replace the
+             participant list mid-tournament (#29 faction-edit reachable during ONGOING) ─── */}
+      {canManage &&
+        tournament.status === 'ONGOING' &&
+        ((bracket?.swiss && bracket.swiss.standings.length > 0) ||
+          tournament.format === 'SINGLE_ELIMINATION' ||
+          tournament.format === 'DOUBLE_ELIMINATION') && (
+          <details className="mb-6 rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900/40">
+            <summary className="cursor-pointer px-4 py-2.5 text-sm font-semibold text-rizzotto-gold-500/90 hover:text-rizzotto-gold-400">
+              Manage roster (host) — check-in status, faction edits, drops
+            </summary>
+            <div className="px-2 pb-2">
+              <ParticipantsList
+                slug={tournament.slug}
+                canManage={!!canManage}
+                tournamentStatus={tournament.status}
+                tournamentMode={tournament.mode}
+              />
+            </div>
+          </details>
+        )}
+
       {/* ─── Game History link — below standings/participants ─── */}
       {(tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && (
         <div className="mb-6 flex justify-end">
