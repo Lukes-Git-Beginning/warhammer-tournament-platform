@@ -123,7 +123,7 @@ export function SwissStandings({
     },
   });
   const setFactionMutation = useMutation({
-    mutationFn: ({ userId, factionId }: { userId: string; factionId: string }) =>
+    mutationFn: ({ userId, factionId }: { userId: string; factionId: string | null }) =>
       setParticipantFaction(tournamentSlug!, userId, factionId),
     onSuccess: () => {
       setFactionPickTarget(null);
@@ -321,30 +321,35 @@ export function SwissStandings({
             )}
             {showFactionColumn && !is2D3 && (
               <td className="px-4 py-2">
-                {faction && factionId ? (
-                  <Link to="/factions/$id" params={{ id: factionId }} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                    <FactionBadge
-                      size="sm"
-                      colorHex={faction.color_hex}
-                      initials={faction.initials}
-                      name={faction.name}
-                      iconUrl={faction.icon_url}
-                    />
-                    <span className="text-xs text-stone-300 hover:text-rizzotto-gold-400 transition-colors">{faction.name}</span>
-                  </Link>
-                ) : isFreePick ? (
-                  <span className="rounded border border-rizzotto-iron-600 px-2 py-0.5 text-[10px] uppercase tracking-wide text-rizzotto-stone-500">Free Pick</span>
-                ) : canManage && tournamentSlug ? (
-                  <button
-                    type="button"
-                    onClick={() => setFactionPickTarget(entry.userId)}
-                    className="rounded border border-dashed border-stone-600 px-2 py-0.5 text-[10px] text-stone-500 hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-400 transition-colors"
-                  >
-                    + Faction
-                  </button>
-                ) : (
-                  <span className="text-xs text-stone-600">—</span>
-                )}
+                <div className="flex items-center gap-2">
+                  {faction && factionId ? (
+                    <Link to="/factions/$id" params={{ id: factionId }} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                      <FactionBadge
+                        size="sm"
+                        colorHex={faction.color_hex}
+                        initials={faction.initials}
+                        name={faction.name}
+                        iconUrl={faction.icon_url}
+                      />
+                      <span className="text-xs text-stone-300 hover:text-rizzotto-gold-400 transition-colors">{faction.name}</span>
+                    </Link>
+                  ) : isFreePick ? (
+                    <span className="rounded border border-rizzotto-iron-600 px-2 py-0.5 text-[10px] uppercase tracking-wide text-rizzotto-stone-500">Free Pick</span>
+                  ) : (
+                    <span className="text-xs text-stone-600">—</span>
+                  )}
+                  {/* Host inline faction edit — same affordance as the Drop/Undrop buttons (#29) */}
+                  {canManage && tournamentSlug && !isDropped && (
+                    <button
+                      type="button"
+                      onClick={() => setFactionPickTarget(entry.userId)}
+                      title="Change this player's faction (host)"
+                      className="rounded border border-dashed border-stone-600 px-1.5 py-px text-[10px] text-stone-500 hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-400 transition-colors shrink-0"
+                    >
+                      {faction ? 'Edit' : 'Set'}
+                    </button>
+                  )}
+                </div>
               </td>
             )}
             <td className="px-4 py-2 text-right font-semibold text-stone-100">
@@ -449,6 +454,18 @@ export function SwissStandings({
               <DialogTitle>Set Faction</DialogTitle>
             </DialogHeader>
             <div className="grid grid-cols-3 gap-2 pt-2">
+              {isFreePick && (
+                <button
+                  type="button"
+                  disabled={setFactionMutation.isPending}
+                  onClick={() => {
+                    if (factionPickTarget) setFactionMutation.mutate({ userId: factionPickTarget, factionId: null });
+                  }}
+                  className="col-span-3 rounded border border-dashed border-stone-600 px-2 py-1.5 text-xs text-stone-400 hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-400 transition-colors disabled:opacity-40"
+                >
+                  — Free Pick (pick-later) —
+                </button>
+              )}
               {pickerFactions.map((f) => (
                 <button
                   key={f.id}
