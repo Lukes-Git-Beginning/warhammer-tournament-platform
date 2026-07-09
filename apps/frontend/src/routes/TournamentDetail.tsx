@@ -501,11 +501,14 @@ export function TournamentDetail() {
                   onChange={(e) => { setCreateP2Id(e.target.value); setCreateMatchError(null); }}
                   className="w-full rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
                 >
-                  <option value="">— select player —</option>
+                  <option value="">— Bye (no opponent) —</option>
                   {(participantsData?.data ?? [])
                     .filter((p) => p.user.id !== createP1Id)
                     .map((p) => <option key={p.user.id} value={p.user.id}>{p.user.username}</option>)}
                 </select>
+                {!createP2Id && (
+                  <p className="mt-1 text-xs text-stone-500">Leave empty to create a bye — a free win for Player 1.</p>
+                )}
               </div>
               <div>
                 <label className="text-xs text-stone-400 block mb-1">Round</label>
@@ -525,11 +528,11 @@ export function TournamentDetail() {
               </button>
               <button
                 type="button"
-                disabled={!createP1Id || !createP2Id || createMatchMutation.isPending}
+                disabled={!createP1Id || createMatchMutation.isPending}
                 onClick={() => createMatchMutation.mutate()}
                 className="px-4 py-1.5 text-sm rounded bg-rizzotto-blood-500 text-white font-medium hover:opacity-90 disabled:opacity-40"
               >
-                {createMatchMutation.isPending ? 'Creating…' : 'Create Match'}
+                {createMatchMutation.isPending ? 'Creating…' : createP2Id ? 'Create Match' : 'Create Bye'}
               </button>
             </div>
           </div>

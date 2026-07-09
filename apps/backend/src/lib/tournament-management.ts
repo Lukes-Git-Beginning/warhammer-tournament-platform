@@ -137,7 +137,11 @@ export async function setParticipantFactionOp(
   return { status: 200, body: { participant } };
 }
 
-/** Create a manual PENDING Swiss match (B18: omit player2 → BYE node). */
+/**
+ * Create a manual PENDING match for any format (B18: omit player2 → BYE node).
+ * The phase is stamped per format so a manually-added match/bye never damages a
+ * non-Swiss tournament (see the create call below).
+ */
 export async function createManualMatch(
   prisma: PrismaClient,
   io: Io,
@@ -149,7 +153,7 @@ export async function createManualMatch(
 
   const tournament = await prisma.tournament.findFirst({
     where: { slug, deleted_at: null },
-    select: { id: true, status: true },
+    select: { id: true, status: true, format: true },
   });
   if (!tournament) return { status: 404, body: { error: 'NotFound', message: 'Tournament not found', statusCode: 404 } };
 
@@ -167,9 +171,16 @@ export async function createManualMatch(
       match_number: nextMatchNumber,
       player1_id: player1Id,
       player2_id: player2Id ?? null,
-      // B18: no second player → BYE node (1.0 to player1, no opponent).
+      // B18: no second player → BYE node: award it to player1 (a bye is a free win,
+      // and both Swiss and Balanced Liechtenstein need a winner to count the round).
       status: player2Id ? 'PENDING' : 'BYE',
-      phase: 'SWISS',
+      winner_id: player2Id ? null : player1Id,
+      // Stamp the format-correct phase (mirror bracket.ts): only Swiss group matches
+      // are 'SWISS'; every other format (Balanced Liechtenstein, Elimination, RR,
+      // Liechtenstein) uses null. Writing 'SWISS' unconditionally damaged non-Swiss
+      // tournaments — a manual Balanced Liechtenstein match/bye landed outside the
+      // division group and fooled the auto-playoff guard into never generating playoffs.
+      phase: tournament.format === 'SWISS' ? 'SWISS' : null,
     },
     select: { id: true, round: true, match_number: true },
   });
