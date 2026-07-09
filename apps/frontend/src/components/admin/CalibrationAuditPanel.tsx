@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getAdminPlayerCalibrationAnswers,
   getPlayerClassification,
+  resetPlayerCalibration,
   type AdminCalibrationAudit,
   type PlayerClassificationDto,
 } from '@/lib/api.js';
@@ -158,17 +160,56 @@ export function CalibrationAuditPanel({ userId, username }: { userId: string; us
     retry: false,
   });
 
+  const queryClient = useQueryClient();
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const resetMutation = useMutation({
+    mutationFn: () => resetPlayerCalibration(userId),
+    onSuccess: () => {
+      setConfirmingReset(false);
+      void queryClient.invalidateQueries({ queryKey: ['admin-player-calibration', userId] });
+      void queryClient.invalidateQueries({ queryKey: ['player-classification', userId] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-skill-distribution'] });
+    },
+  });
+
   const isLoading = auditQuery.isLoading || classificationQuery.isLoading;
   const error = auditQuery.error ?? classificationQuery.error;
   const name = auditQuery.data?.username ?? username;
 
   return (
     <div className="space-y-4">
-      {name && (
-        <p className="text-sm text-stone-400">
-          Calibration audit for <span className="font-semibold text-stone-200">{name}</span>
-        </p>
-      )}
+      <div className="flex items-center justify-between gap-3">
+        {name && (
+          <p className="text-sm text-stone-400">
+            Calibration audit for <span className="font-semibold text-stone-200">{name}</span>
+          </p>
+        )}
+        {auditQuery.data?.hasQuestionnaire &&
+          (confirmingReset ? (
+            <span className="flex shrink-0 items-center gap-2 text-xs">
+              <span className="text-stone-400">Reset questionnaire?</span>
+              <button
+                type="button"
+                disabled={resetMutation.isPending}
+                onClick={() => resetMutation.mutate()}
+                className="rounded border border-red-700 px-2 py-0.5 font-semibold text-red-300 hover:bg-red-900/30 disabled:opacity-50"
+              >
+                {resetMutation.isPending ? 'Resetting…' : 'Yes, reset'}
+              </button>
+              <button type="button" onClick={() => setConfirmingReset(false)} className="text-stone-500 hover:text-stone-300">
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmingReset(true)}
+              className="shrink-0 rounded border border-stone-700 px-2.5 py-1 text-xs font-semibold text-stone-300 transition-colors hover:border-red-700 hover:text-red-300"
+            >
+              Reset questionnaire
+            </button>
+          ))}
+      </div>
 
       {isLoading && <div className="py-6 text-center text-sm text-stone-400">Loading…</div>}
 
