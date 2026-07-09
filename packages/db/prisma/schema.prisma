@@ -299,6 +299,7 @@ model Tournament {
   standard_rules_enabled Boolean              @default(false) // N17: show the fixed Community Standard ruleset block
   restrictions           String               @default("") // markdown — "Custom Restrictions"
   discord_link           String?
+  stream_url             String? // optional stream/broadcast URL — tournament page + spectator DMs
   entry_fee              String? // free-text
   draft_enabled          Boolean              @default(false)
   draft_preset_id        String?              @db.Uuid

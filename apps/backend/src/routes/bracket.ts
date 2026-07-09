@@ -88,6 +88,9 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
               player1_faction_id: true,
               player2_faction_id: true,
               map_decision: { select: { picked_map_id: true } },
+              // #6: derive the locked faction before the game is reported.
+              blind_pick: { select: { player1_faction_id: true, player2_faction_id: true, revealed_at: true } },
+              faction_matrix: { select: { p1_factions: true, p2_factions: true, picked_cell: true } },
             },
           },
         },
@@ -110,6 +113,28 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
       }
+
+      // #6: a game's faction is only written onto MatchGame.player1_faction_id at
+      // report. Derive it earlier from the locked pick data so the bracket node shows
+      // it as soon as it's decided — blind pick AFTER reveal (never spoil the blind),
+      // matrix once a cell is picked. SFT/committed factions come from registration.
+      const lockedFactions = (games: (typeof matches)[number]['games']): { p1: string | null; p2: string | null } => {
+        for (const g of games) {
+          if (g.blind_pick?.revealed_at && (g.blind_pick.player1_faction_id || g.blind_pick.player2_faction_id)) {
+            return { p1: g.blind_pick.player1_faction_id ?? null, p2: g.blind_pick.player2_faction_id ?? null };
+          }
+          const cell = g.faction_matrix?.picked_cell;
+          if (cell) {
+            const [r, c] = cell.split(',').map(Number);
+            if (r !== undefined && c !== undefined && !Number.isNaN(r) && !Number.isNaN(c)) {
+              const p1 = g.faction_matrix?.p1_factions[r] ?? null;
+              const p2 = g.faction_matrix?.p2_factions[c] ?? null;
+              if (p1 || p2) return { p1, p2 };
+            }
+          }
+        }
+        return { p1: null, p2: null };
+      };
 
       const response: BracketResponse = {
         tournamentId: tournament.id,
@@ -140,10 +165,10 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           // Other modes: per-match faction first, TournamentParticipant as fallback.
           player1FactionId: tournament.mode === TournamentMode.SFT
             ? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null)
-            : m.player1_faction_id ?? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null),
+            : m.player1_faction_id ?? lockedFactions(m.games).p1 ?? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null),
           player2FactionId: tournament.mode === TournamentMode.SFT
             ? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null)
-            : m.player2_faction_id ?? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null),
+            : m.player2_faction_id ?? lockedFactions(m.games).p2 ?? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null),
           player1GameWins: m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length,
           player2GameWins: m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length,
           pickedMapId: m.games.find((g) => g.map_decision?.picked_map_id)?.map_decision?.picked_map_id ?? null,

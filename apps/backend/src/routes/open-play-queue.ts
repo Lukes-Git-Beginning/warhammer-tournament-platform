@@ -159,11 +159,14 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
             data: { winner_id: game.reported_winner_id, status: 'COMPLETED', counts_for_leaderboard: true, played_at: new Date() },
           });
         }
-        // Remaining games without a reported result become completed draws —
-        // counts for leaderboard so cancel ≠ free pass.
+        // #19: remaining games without a reported result are CANCELLED and do NOT
+        // count — a cancelled match fabricates no game/result. status CANCELLED drops
+        // them from Meta (which filters COMPLETED) and counts_for_leaderboard=false
+        // keeps them out of the leaderboard/faction stats. Queue abuse is handled by
+        // the escalating queue penalty (#14), not by fake counting draws.
         await tx.matchGame.updateMany({
           where: { match_id: id, status: 'PENDING', winner_id: null, reported_winner_id: null },
-          data: { status: 'COMPLETED', counts_for_leaderboard: true },
+          data: { status: 'CANCELLED', counts_for_leaderboard: false },
         });
       });
 
