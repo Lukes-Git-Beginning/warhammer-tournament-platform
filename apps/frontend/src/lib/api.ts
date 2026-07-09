@@ -843,6 +843,21 @@ export function getAdminFactionWinRates(opts?: {
   return apiFetch(`/api/admin/stats/faction-winrates${qs ? `?${qs}` : ''}`);
 }
 
+export interface SkillDistributionEntry {
+  band: number;
+  name: string;
+  count: number;
+}
+export interface SkillDistributionResponse {
+  seasonId: string | null;
+  total: number;
+  unclassified: number;
+  distribution: SkillDistributionEntry[];
+}
+export function getAdminSkillDistribution(season?: string): Promise<SkillDistributionResponse> {
+  return apiFetch(`/api/admin/stats/skill-distribution${season ? `?season=${encodeURIComponent(season)}` : ''}`);
+}
+
 export interface GamesOverTimeEntry {
   day: string;
   tournament: number;

@@ -16,7 +16,8 @@ import {
   CalibrationQuestionsSchema,
   CALIBRATION_CONFIG_KEY,
 } from '../lib/skill-classification-service.js';
-import { CALIBRATION_QUESTIONS, questionnaireFloor } from '../lib/skill-classification.js';
+import { CALIBRATION_QUESTIONS, questionnaireFloor, classify, BAND_NAMES } from '../lib/skill-classification.js';
+import { getRatingModel } from '../lib/rating-model-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -519,6 +520,65 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // -------------------------------------------------------------------------
   // GET /api/admin/stats/faction-winrates
   // -------------------------------------------------------------------------
+
+  // GET /api/admin/stats/skill-distribution — how many players sit in each skill
+  // band (1 New … 5 Top). Derive-on-read: the hierarchical rating model is fitted +
+  // cached once per season, then each player's gating band is a pure in-memory blend
+  // of their questionnaire floor and (if any) their fitted general skill. Players with
+  // neither a questionnaire nor fitted data are counted as "unclassified".
+  fastify.get('/api/admin/stats/skill-distribution', async (request, reply) => {
+    const parsed = z.object({ season: z.string().uuid().optional() }).safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    let resolvedSeasonId: string | null = null;
+    if (parsed.data.season) {
+      const s = await fastify.prisma.season.findUnique({ where: { id: parsed.data.season }, select: { id: true } });
+      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
+      resolvedSeasonId = s.id;
+    } else {
+      const s = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
+      resolvedSeasonId = s?.id ?? null;
+    }
+
+    return cached(
+      fastify.redis,
+      cacheKey('admin:skill-distribution', { seasonId: resolvedSeasonId }),
+      async () => {
+        const [model, users, questions] = await Promise.all([
+          resolvedSeasonId
+            ? getRatingModel(fastify.prisma, fastify.redis, { seasonId: resolvedSeasonId, config: { hierarchical: true } })
+            : Promise.resolve(null),
+          fastify.prisma.user.findMany({ where: { deleted_at: null }, select: { id: true, calibration_answers: true } }),
+          loadCalibrationQuestions(fastify.prisma),
+        ]);
+
+        const counts = [0, 0, 0, 0, 0, 0]; // indices 1..5 = bands
+        let unclassified = 0;
+        for (const u of users) {
+          const answers = (u.calibration_answers as Record<string, string> | null) ?? {};
+          const hasQ = Object.keys(answers).length > 0;
+          const gs = model ? model.getGeneralSkill(u.id) : null;
+          if (!hasQ && !gs) {
+            unclassified++;
+            continue;
+          }
+          const qFloor = questionnaireFloor(answers, questions);
+          const { gatingBand } = classify(qFloor, { generalSkill: gs?.skill ?? null, stdError: gs?.se ?? null });
+          counts[gatingBand] = (counts[gatingBand] ?? 0) + 1;
+        }
+
+        return {
+          seasonId: resolvedSeasonId,
+          total: users.length,
+          unclassified,
+          distribution: [1, 2, 3, 4, 5].map((band) => ({ band, name: BAND_NAMES[band], count: counts[band] ?? 0 })),
+        };
+      },
+      { ttlSeconds: 300 },
+    );
+  });
 
   fastify.get('/api/admin/stats/faction-winrates', async (request, reply) => {
     const parsed = FactionWinRatesQuerySchema.safeParse(request.query);
