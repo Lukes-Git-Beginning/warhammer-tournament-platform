@@ -787,6 +787,27 @@ export function deleteUser(userId: string): Promise<{ id: string; deleted: boole
   return apiFetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
 }
 
+// Audit a player's calibration questionnaire answers (#27). Read-only: each answer
+// carries its prompt, chosen option label and the band floor it implies, plus the
+// resulting questionnaire floor — so an admin can see WHY someone was placed up.
+export interface AdminCalibrationAnswer {
+  questionId: string;
+  prompt: string;
+  value: string;
+  optionLabel: string;
+  floor: number | null;
+}
+export interface AdminCalibrationAudit {
+  userId: string;
+  username: string;
+  hasQuestionnaire: boolean;
+  questionnaireFloor: number | null;
+  answers: AdminCalibrationAnswer[];
+}
+export function getAdminPlayerCalibrationAnswers(userId: string): Promise<AdminCalibrationAudit> {
+  return apiFetch(`/api/admin/players/${userId}/calibration-answers`);
+}
+
 // ---------------------------------------------------------------------------
 // Admin — Stats
 // ---------------------------------------------------------------------------
