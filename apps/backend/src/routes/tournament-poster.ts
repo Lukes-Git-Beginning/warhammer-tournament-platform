@@ -3,10 +3,11 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { canManageTournament } from '../lib/tournament-utils.js';
+import { POSTER_DIR } from '../lib/posters.js';
 
-// Posters live under <cwd>/uploads/posters/<tournamentId>/<uuid>.<ext> and are served
+// Posters live under POSTER_DIR/<tournamentId>/<uuid>.<ext> and are served
 // statically at /uploads/posters/... (see @fastify/static registration in app.ts).
-const POSTER_DIR = process.env.POSTER_UPLOAD_DIR ?? join(process.cwd(), 'uploads', 'posters');
+// POSTER_DIR is the single source of truth shared with app.ts (see lib/posters.ts).
 
 const EXT_BY_MIME: Record<string, string> = {
   'image/png': 'png',

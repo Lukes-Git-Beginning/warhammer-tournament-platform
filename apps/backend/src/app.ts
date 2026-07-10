@@ -6,6 +6,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { REPLAY_DIR } from './lib/replays.js';
+import { POSTER_DIR } from './lib/posters.js';
 import dbPlugin from './plugins/db.js';
 import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
@@ -82,14 +83,20 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   await app.register(fastifyHelmet, { contentSecurityPolicy: false });
   await app.register(fastifyMultipart, { limits: { fileSize: 5 * 1024 * 1024 } }); // 5 MB
-  // Replays are written to REPLAY_DIR (REPLAY_UPLOAD_DIR in prod — a persistent
-  // path outside the repo checkout). They must be served from that exact path,
-  // not from cwd/uploads, or the static server can't find them and the SPA
-  // fallback serves index.html instead. Register the more specific
-  // /uploads/replays/ prefix before the general /uploads/ one.
+  // Replays and posters are written to persistent paths outside the repo checkout
+  // (REPLAY_DIR / POSTER_DIR — see lib/replays.ts and lib/posters.ts). They must be
+  // served from those exact paths, not from cwd/uploads, or the static server can't
+  // find them and the SPA fallback serves index.html instead. Register the more
+  // specific /uploads/replays/ and /uploads/posters/ prefixes before the general
+  // /uploads/ one.
   await app.register(fastifyStatic, {
     root: REPLAY_DIR,
     prefix: '/uploads/replays/',
+    decorateReply: false,
+  });
+  await app.register(fastifyStatic, {
+    root: POSTER_DIR,
+    prefix: '/uploads/posters/',
     decorateReply: false,
   });
   await app.register(fastifyStatic, {

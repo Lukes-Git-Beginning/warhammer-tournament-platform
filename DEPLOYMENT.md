@@ -41,7 +41,22 @@ STEAM_WEB_API_KEY=<key>
 FRONTEND_URL=https://rizzotto.gg
 ```
 
-> `ARMY_LIST_UPLOAD_DIR` ist optional — Standardpfad ist `<cwd>/storage/army-lists`.
+> **Upload-Verzeichnisse** (alle optional, Override per Env):
+>
+> | Variable | Default | Zweck |
+> |----------|---------|-------|
+> | `REPLAY_UPLOAD_DIR` | `<cwd>/uploads/replays` | Match-Replays |
+> | `POSTER_UPLOAD_DIR` | `~/.rizzotto/uploads/posters` | Turnier-Poster |
+> | `ARMY_LIST_UPLOAD_DIR` | `<cwd>/storage/army-lists` | Armeelisten |
+>
+> Uploads gehören **außerhalb des Checkouts**, sonst gehen sie beim Deploy verloren
+> bzw. kann der laufende Prozess das Verzeichnis nicht anlegen (ENOENT). Poster
+> defaulten deshalb auf `~/.rizzotto/uploads/posters` — für den `deploy`-User ohne
+> root selbst-anlegbar und persistent, kein manuelles Provisioning nötig. Replays
+> defaulten cwd-relativ; in Prod zeigt `REPLAY_UPLOAD_DIR` auf einen persistenten
+> externen Pfad. Beide werden über dedizierte `@fastify/static`-Mounts
+> (`/uploads/replays/`, `/uploads/posters/`) aus genau diesen Pfaden ausgeliefert
+> (siehe `app.ts`), nicht über den generischen `/uploads/`-Mount.
 
 ## Build + Deploy
 
