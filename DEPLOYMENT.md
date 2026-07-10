@@ -46,17 +46,21 @@ FRONTEND_URL=https://rizzotto.gg
 > | Variable | Default | Zweck |
 > |----------|---------|-------|
 > | `REPLAY_UPLOAD_DIR` | `<cwd>/uploads/replays` | Match-Replays |
-> | `POSTER_UPLOAD_DIR` | `~/.rizzotto/uploads/posters` | Turnier-Poster |
+> | `POSTER_UPLOAD_DIR` | auto → `/var/lib/rizzotto/uploads/posters` (prod), `<cwd>/uploads/posters` (dev) | Turnier-Poster |
 > | `ARMY_LIST_UPLOAD_DIR` | `<cwd>/storage/army-lists` | Armeelisten |
 >
-> Uploads gehören **außerhalb des Checkouts**, sonst gehen sie beim Deploy verloren
-> bzw. kann der laufende Prozess das Verzeichnis nicht anlegen (ENOENT). Poster
-> defaulten deshalb auf `~/.rizzotto/uploads/posters` — für den `deploy`-User ohne
-> root selbst-anlegbar und persistent, kein manuelles Provisioning nötig. Replays
-> defaulten cwd-relativ; in Prod zeigt `REPLAY_UPLOAD_DIR` auf einen persistenten
-> externen Pfad. Beide werden über dedizierte `@fastify/static`-Mounts
-> (`/uploads/replays/`, `/uploads/posters/`) aus genau diesen Pfaden ausgeliefert
-> (siehe `app.ts`), nicht über den generischen `/uploads/`-Mount.
+> Der Service läuft gehärtet (`ProtectSystem=strict`, `ProtectHome=read-only`, siehe
+> `deploy/systemd/rizzotto-backend.service`); **einzig schreibbar ist
+> `ReadWritePaths=/var/lib/rizzotto/uploads`**. Uploads irgendwo anders (Checkout
+> oder `deploy`-Home) schlagen mit ENOENT/EROFS fehl. Poster brauchen **keine**
+> gesetzte Env: `lib/posters.ts` probiert beim Start eine Kandidatenliste durch und
+> nimmt den ersten schreibbaren Pfad (in Prod → `/var/lib/rizzotto/uploads/posters`,
+> in Dev → `<cwd>/uploads/posters`); `POSTER_UPLOAD_DIR` erzwingt einen expliziten
+> Pfad. Replays defaulten cwd-relativ und brauchen in Prod `REPLAY_UPLOAD_DIR` unter
+> dem schreibbaren Root. Poster und Replays werden über dedizierte
+> `@fastify/static`-Mounts (`/uploads/posters/`, `/uploads/replays/`) aus genau
+> diesen Pfaden ausgeliefert (siehe `app.ts`), nicht über den generischen
+> `/uploads/`-Mount.
 
 ## Build + Deploy
 
