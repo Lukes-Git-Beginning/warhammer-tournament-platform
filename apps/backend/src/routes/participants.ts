@@ -2,10 +2,10 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { emitParticipantChange, emitBracketUpdate } from '../lib/emit.js';
 import { canManageTournament, createLateJoinerBye } from '../lib/tournament-utils.js';
-import { notifyHostsOfWithdrawal, notifyHostsLateJoinRequest, notifyLateJoinDecision } from '../lib/discord-notify.js';
+import { notifyHostsOfWithdrawal, notifyHostsLateJoinRequest, notifyLateJoinDecision, notifyOpponentOfWithdrawal } from '../lib/discord-notify.js';
 import { addLateParticipant, setParticipantFactionOp } from '../lib/tournament-management.js';
 import { reapplyDynamicSizing } from '../lib/auto-swiss-service.js';
-import { runBalancedPairingTick } from '../lib/balanced-liechtenstein-service.js';
+import { admitBalancedLateJoiner } from '../lib/balanced-liechtenstein-service.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -365,17 +365,23 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         data: { entity_type: 'TournamentParticipant', entity_id: pending.id, action: 'late_join_approved', actor_id: request.user.sub, new_value: { tournament_id: tournament.id, user_id: userId } },
       });
 
-      // Fold them into the running tournament, reusing the existing late-join machinery
-      // (Swiss/Auto Swiss get a BYE for the current round; Balanced re-runs the tick).
+      // Fold them into the running tournament using the format-correct late-join path.
       if (tournament.status === 'ONGOING') {
-        try {
-          const bye = await createLateJoinerBye(fastify.prisma, tournament.id, userId);
-          if (bye) emitBracketUpdate(fastify.io, tournament.id);
-        } catch (err) {
-          request.log.warn({ err, slug }, 'Failed to create late-joiner BYE on approve');
-        }
         if (tournament.format === 'BALANCED_LIECHTENSTEIN') {
-          void runBalancedPairingTick(fastify, tournament.id);
+          // BaLi: assign skill band + CATCHUP_BYE placeholders + pairing tick.
+          try {
+            await admitBalancedLateJoiner(fastify, tournament.id, userId);
+          } catch (err) {
+            request.log.warn({ err, slug }, 'Failed to admit balanced late joiner on approve');
+          }
+        } else {
+          // Swiss / Auto Swiss: CATCHUP_BYE (0 pts) for the current round.
+          try {
+            const bye = await createLateJoinerBye(fastify.prisma, tournament.id, userId);
+            if (bye) emitBracketUpdate(fastify.io, tournament.id);
+          } catch (err) {
+            request.log.warn({ err, slug }, 'Failed to create late-joiner CATCHUP_BYE on approve');
+          }
         }
       }
       await reapplyDynamicSizing(fastify.prisma, tournament.id);
@@ -835,7 +841,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await canManageTournament(fastify.prisma, t.id, request.user.sub, request.user.role))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
       }
-      const r = await addLateParticipant(fastify.prisma, fastify.io, slug, request.body, request.log);
+      const r = await addLateParticipant(fastify.prisma, fastify.io, slug, request.body, request.log, fastify);
       // #40: a host-added late participant grows the active pool — re-size live.
       if (r.status < 300 && (await reapplyDynamicSizing(fastify.prisma, t.id))) {
         emitBracketUpdate(fastify.io, t.id);
@@ -968,6 +974,64 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       // B20: let the host(s) know a player dropped — excluding the actor.
       void notifyHostsOfWithdrawal(tournament.id, userId, callerId);
+
+      // Mark any open unreported group matches of the dropped player so the
+      // survivor can decide: played → report normally, not played → void.
+      // Format-agnostic: applies to BaLi + Swiss + Auto Swiss group matches.
+      try {
+        const OPEN_FOR_VOID = ['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED'] as const;
+        const openMatches = await fastify.prisma.match.findMany({
+          where: {
+            tournament_id: tournament.id,
+            deleted_at: null,
+            status: { in: [...OPEN_FOR_VOID] },
+            // No game has a reported or confirmed winner yet.
+            games: { none: { reported_winner_id: { not: null } } },
+            AND: [
+              { OR: [{ phase: null }, { phase: 'SWISS' }] },
+              { OR: [{ player1_id: userId }, { player2_id: userId }] },
+            ],
+          },
+          select: {
+            id: true,
+            player1_id: true,
+            player2_id: true,
+          },
+        });
+
+        for (const m of openMatches) {
+          const survivorId = m.player1_id === userId ? m.player2_id : m.player1_id;
+
+          // Check if the other player is also WITHDREW.
+          const survivorStatus = survivorId
+            ? await fastify.prisma.tournamentParticipant.findFirst({
+                where: { tournament_id: tournament.id, user_id: survivorId, deleted_at: null },
+                select: { status: true },
+              })
+            : null;
+
+          if (!survivorId || survivorStatus?.status === 'WITHDREW') {
+            // Double-drop: cancel the match outright.
+            await fastify.prisma.match.update({
+              where: { id: m.id },
+              data: { status: 'CANCELLED', winner_id: null },
+            });
+          } else {
+            // Mark so the UI can show the "opponent withdrew" banner.
+            await fastify.prisma.match.update({
+              where: { id: m.id },
+              data: { withdrawn_player_id: userId },
+            });
+            void notifyOpponentOfWithdrawal(m.id, survivorId);
+          }
+        }
+
+        if (openMatches.length > 0) {
+          emitBracketUpdate(fastify.io, tournament.id);
+        }
+      } catch (err) {
+        request.log.warn({ err, userId, tournamentId: tournament.id }, 'Failed to void open matches after drop (non-fatal)');
+      }
 
       // #40: a drop shrinks the active pool — re-size the auto-sized bracket live.
       if (await reapplyDynamicSizing(fastify.prisma, tournament.id)) {

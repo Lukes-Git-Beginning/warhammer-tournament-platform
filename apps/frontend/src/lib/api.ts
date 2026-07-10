@@ -1398,8 +1398,12 @@ export interface GameDto {
   } | null;
 }
 
-export function getMatchGames(matchId: string): Promise<{ games: GameDto[] }> {
-  return apiFetch<{ games: GameDto[] }>(`/api/matches/${matchId}/games`);
+export function getMatchGames(matchId: string): Promise<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }> {
+  return apiFetch<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }>(`/api/matches/${matchId}/games`);
+}
+
+export function voidDroppedMatch(matchId: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/void-dropped`, { method: 'POST' });
 }
 
 export function setLobbyCode(

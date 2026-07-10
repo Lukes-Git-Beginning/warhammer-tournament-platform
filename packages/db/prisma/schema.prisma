@@ -104,6 +104,7 @@ enum MatchStatus {
   AWAITING_CONFIRMATION // Discord flow: one player declared, waiting for opponent response
   CANCELLED // Open Play no-contest: both players agreed to close without a result
   NO_CONTEST // tournament double-bye: technical abort, both players get a bye point (1.0, no BH)
+  CATCHUP_BYE // late-join placeholder: counts as a played round for depth/completeness, but scores 0 (no BH)
 }
 
 enum MatchResultType {
@@ -445,6 +446,9 @@ model Match {
   phase               MatchPhase? // Welle 2: discriminator between Swiss/Playoff phases (NULL = legacy/SE/RR)
   player1_faction_id  String?
   player2_faction_id  String?
+  // Withdraw→Void: the player who dropped, flagging the survivor's still-open match
+  // as "opponent withdrew — decide played vs void". Null in the normal case.
+  withdrawn_player_id String?          @db.Uuid
   // Dynamic weighted leaderboard (derive-on-read): authoritative season tag +
   // play time, stamped when the match is completed. season_id is nullable so it
   // is only set for finished matches (backfilled for historical rows).

@@ -159,16 +159,15 @@ export async function canManageTournament(
 
 /**
  * When a player is checked in after a Swiss / Auto-Swiss tournament has already
- * started (i.e. at least one Swiss round exists), give them a BYE in the current
- * (latest) Swiss round. This both:
- *   - awards a fair walkover for the round they were absent for, and
- *   - inserts a match row for them, so the round generator (which derives part of
- *     its player set from existing match rows) folds them into future rounds.
+ * started (i.e. at least one Swiss round exists), give them a CATCHUP_BYE in the
+ * current (latest) Swiss round. This:
+ *   - inserts a match row for them so the round generator folds them into future rounds, and
+ *   - awards 0 points (not a scoring BYE) — late joiners earn points only through real wins.
  *
  * No-op unless: tournament is ONGOING, format is SWISS / AUTO_SWISS, a Swiss round
  * already exists, and the player has no match in that round yet. Returns the
- * created BYE match ({ id, round }) or null when nothing was created. Callers
- * should treat failures as non-fatal — the check-in itself must still succeed.
+ * created CATCHUP_BYE match ({ id, round }) or null when nothing was created.
+ * Callers should treat failures as non-fatal — the check-in itself must still succeed.
  */
 export async function createLateJoinerBye(
   prisma: PrismaClient,
@@ -218,8 +217,8 @@ export async function createLateJoinerBye(
       match_number: matchNumber,
       player1_id: userId,
       player2_id: null,
-      winner_id: userId,
-      status: 'BYE',
+      winner_id: null,
+      status: 'CATCHUP_BYE',
       phase: 'SWISS',
     },
     select: { id: true, round: true },
@@ -229,7 +228,7 @@ export async function createLateJoinerBye(
     data: {
       entity_type: 'Match',
       entity_id: match.id,
-      action: 'late_joiner_bye',
+      action: 'late_joiner_catchup_bye',
       new_value: { tournamentId, userId, round },
     },
   });

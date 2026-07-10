@@ -143,6 +143,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           status: true,
           player1_id: true,
           player2_id: true,
+          withdrawn_player_id: true,
           tournament_id: true,
           tournament: { select: { host_id: true, mode: true, counts_for_leaderboard: true } },
           games: {
@@ -220,7 +221,13 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
               },
             ];
 
-      return reply.code(200).send({ games });
+      return reply.code(200).send({
+        games,
+        // Match-level fields the frontend GameTile needs for the "opponent withdrew" banner.
+        player1Id: match.player1_id,
+        player2Id: match.player2_id,
+        withdrawnPlayerId: match.withdrawn_player_id ?? null,
+      });
     },
   );
 

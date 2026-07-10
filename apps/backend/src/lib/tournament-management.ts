@@ -9,9 +9,11 @@
  */
 
 import type { PrismaClient } from '@rizzotto/db';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createLateJoinerBye } from './tournament-utils.js';
 import { emitBracketUpdate } from './emit.js';
+import { admitBalancedLateJoiner } from './balanced-liechtenstein-service.js';
 
 type Io = Parameters<typeof emitBracketUpdate>[0];
 
@@ -42,6 +44,7 @@ export async function addLateParticipant(
   slug: string,
   body: unknown,
   log: OpLogger,
+  fastify?: FastifyInstance,
 ): Promise<OpResult> {
   const parsed = AddLateSchema.safeParse(body);
   if (!parsed.success) {
@@ -50,7 +53,7 @@ export async function addLateParticipant(
 
   const tournament = await prisma.tournament.findUnique({
     where: { slug, deleted_at: null },
-    select: { id: true, status: true, mode: true, faction_allowlist: { select: { faction_id: true } } },
+    select: { id: true, status: true, format: true, mode: true, faction_allowlist: { select: { faction_id: true } } },
   });
   if (!tournament) return { status: 404, body: { error: 'NotFound', message: 'Tournament not found', statusCode: 404 } };
   // B21: also allow adding participants in the pre-start phase (registration
@@ -86,15 +89,24 @@ export async function addLateParticipant(
     select: { id: true, status: true, faction_id: true, user: { select: { id: true, username: true } } },
   });
 
-  // Late joiner mid-tournament: give them a BYE in the current Swiss round so
-  // they're folded into subsequent rounds (Swiss / Auto Swiss). Non-fatal.
+  // Late joiner mid-tournament: route through the format-specific admission path.
   // Pre-start (REGISTRATION_CLOSED) there is no round yet — just add them.
   if (tournament.status === 'ONGOING') {
-    try {
-      const bye = await createLateJoinerBye(prisma, tournament.id, parsed.data.userId);
-      if (bye) emitBracketUpdate(io, tournament.id);
-    } catch (err) {
-      log.warn({ err, slug }, 'Failed to create late-joiner BYE');
+    if (tournament.format === 'BALANCED_LIECHTENSTEIN' && fastify) {
+      // BaLi: assign skill band + create CATCHUP_BYE placeholders + trigger pairing tick.
+      try {
+        await admitBalancedLateJoiner(fastify, tournament.id, parsed.data.userId);
+      } catch (err) {
+        log.warn({ err, slug }, 'Failed to admit balanced late joiner');
+      }
+    } else {
+      // Swiss / Auto Swiss: give them a CATCHUP_BYE (0 pts) for the current round.
+      try {
+        const bye = await createLateJoinerBye(prisma, tournament.id, parsed.data.userId);
+        if (bye) emitBracketUpdate(io, tournament.id);
+      } catch (err) {
+        log.warn({ err, slug }, 'Failed to create late-joiner CATCHUP_BYE');
+      }
     }
   }
 

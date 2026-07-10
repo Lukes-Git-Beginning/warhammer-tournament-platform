@@ -1,10 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { emitStatusChange } from '../lib/emit.js';
+import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
 import { InvalidActionError } from '../lib/draft-service.js';
 import { completeMatch } from '../lib/complete-match.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
 import { notifyHostsOfMatchReport } from '../lib/discord-notify.js';
+import { runBalancedPairingTick } from '../lib/balanced-liechtenstein-service.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -711,6 +712,106 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } }),
       ]);
       return reply.code(200).send({ ok: true, winnerId });
+    },
+  );
+
+  // POST /api/matches/:id/void-dropped — survivor or canManage: resolve an open match
+  // where withdrawn_player_id is set. The survivor chooses "not played → void it".
+  //   BaLi → CANCELLED + re-pair (runBalancedPairingTick).
+  //   Swiss / Auto Swiss / Liechtenstein → FORFEIT to the survivor (walkover +1).
+  fastify.post(
+    '/api/matches/:id/void-dropped',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: {
+          id: true,
+          tournament_id: true,
+          player1_id: true,
+          player2_id: true,
+          winner_id: true,
+          status: true,
+          withdrawn_player_id: true,
+          games: { select: { reported_winner_id: true, winner_id: true } },
+          tournament: { select: { host_id: true, format: true } },
+        },
+      });
+      if (!match || !match.tournament_id) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      }
+
+      const { role, sub: callerId } = request.user;
+      const canManage = await canManageTournament(fastify.prisma, match.tournament_id, callerId, role);
+
+      // The survivor is the player in the match who is NOT the withdrawn one.
+      const withdrawnId = match.withdrawn_player_id;
+      const isSurvivor =
+        withdrawnId !== null &&
+        (callerId === match.player1_id || callerId === match.player2_id) &&
+        callerId !== withdrawnId;
+
+      if (!isSurvivor && !canManage) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the surviving player or a tournament manager can void this match', statusCode: 403 });
+      }
+
+      // Guard: must have a withdrawn player set (or one participant is WITHDREW),
+      // and no confirmed result yet.
+      const hasResult = match.games.some((g) => g.reported_winner_id !== null || g.winner_id !== null);
+      const hasWithdrawnFlag = withdrawnId !== null;
+
+      // Also accept if a participant is WITHDREW even without the flag (fallback for
+      // hosts who drop a player after the match exists without the flag being set).
+      let droppedParticipant: string | null = withdrawnId;
+      if (!hasWithdrawnFlag) {
+        const p1Status = match.player1_id
+          ? await fastify.prisma.tournamentParticipant.findFirst({
+              where: { tournament_id: match.tournament_id, user_id: match.player1_id, deleted_at: null },
+              select: { status: true },
+            })
+          : null;
+        const p2Status = match.player2_id
+          ? await fastify.prisma.tournamentParticipant.findFirst({
+              where: { tournament_id: match.tournament_id, user_id: match.player2_id, deleted_at: null },
+              select: { status: true },
+            })
+          : null;
+        if (p1Status?.status === 'WITHDREW') droppedParticipant = match.player1_id;
+        else if (p2Status?.status === 'WITHDREW') droppedParticipant = match.player2_id;
+      }
+
+      if (!droppedParticipant || hasResult) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match cannot be voided: no withdrawn player or result already reported', statusCode: 422 });
+      }
+
+      const survivorId = match.player1_id === droppedParticipant ? match.player2_id : match.player1_id;
+      const format = match.tournament?.format ?? '';
+
+      if (format === 'BALANCED_LIECHTENSTEIN') {
+        // BaLi: CANCELLED → re-pair the survivor.
+        await fastify.prisma.match.update({
+          where: { id: matchId },
+          data: { status: 'CANCELLED', winner_id: null, withdrawn_player_id: droppedParticipant },
+        });
+        void runBalancedPairingTick(fastify, match.tournament_id);
+      } else {
+        // Swiss / Auto Swiss / Liechtenstein: FORFEIT to the survivor (walkover).
+        if (!survivorId) {
+          return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Cannot determine survivor for forfeit', statusCode: 422 });
+        }
+        await fastify.prisma.$transaction([
+          fastify.prisma.match.update({
+            where: { id: matchId },
+            data: { status: 'FORFEIT', winner_id: survivorId, withdrawn_player_id: droppedParticipant },
+          }),
+          fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } }),
+        ]);
+      }
+
+      emitBracketUpdate(fastify.io, match.tournament_id);
+      return reply.code(200).send({ ok: true });
     },
   );
 

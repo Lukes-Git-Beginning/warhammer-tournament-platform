@@ -290,6 +290,117 @@ export async function runBalancedPairingTick(
   }
 }
 
+/**
+ * Admit a single late joiner into a running Balanced Liechtenstein tournament:
+ * 1. Assigns their skill band (mirrors assignSkillBandsForTournament for one player).
+ * 2. Creates A-1 CATCHUP_BYE placeholder rows for rounds 1..A-1 so that their
+ *    depth matches the earliest-active round, preventing a bye-flood from planPairings.
+ * 3. Triggers a pairing tick so they are immediately slotted into round A.
+ *
+ * Entry round A = clamp(max(earliestActiveRound, frontier - 1), 1, rounds_count).
+ * All catch-up rounds score 0 (CATCHUP_BYE — distinct from a scoring BYE).
+ * Non-fatal on skill-band assignment failure. No-op for wrong format/status.
+ */
+export async function admitBalancedLateJoiner(
+  fastify: FastifyInstance,
+  tournamentId: string,
+  userId: string,
+): Promise<void> {
+  const tournament = await fastify.prisma.tournament.findFirst({
+    where: { id: tournamentId, deleted_at: null },
+    select: { format: true, status: true, rounds_count: true },
+  });
+  if (!tournament || tournament.format !== 'BALANCED_LIECHTENSTEIN' || tournament.status !== 'ONGOING') {
+    return;
+  }
+  const roundsCount = tournament.rounds_count ?? 5;
+
+  // Step 1 — assign skill band for this single late joiner.
+  try {
+    const season = await fastify.prisma.season.findFirst({
+      where: { is_active: true },
+      select: { id: true },
+    });
+    const participant = await fastify.prisma.tournamentParticipant.findFirst({
+      where: { tournament_id: tournamentId, user_id: userId, deleted_at: null },
+      select: { id: true, requested_band: true },
+    });
+    if (participant) {
+      let computed = 0;
+      if (season) {
+        const cls = await getPlayerClassification(fastify.prisma, fastify.redis, season.id, userId);
+        computed = cls.matchmakingBand;
+      }
+      const effective = Math.max(computed, participant.requested_band ?? 0);
+      if (effective > 0) {
+        await fastify.prisma.tournamentParticipant.update({
+          where: { id: participant.id },
+          data: { skill_band: effective },
+        });
+      }
+    }
+  } catch (err) {
+    fastify.log.warn({ err, userId, tournamentId }, 'admitBalancedLateJoiner: skill-band assignment failed (non-fatal)');
+  }
+
+  // Step 2 — compute entry round A.
+  const allMatches = await fastify.prisma.match.findMany({
+    where: { tournament_id: tournamentId, deleted_at: null },
+    select: { round: true, status: true, match_number: true },
+  });
+
+  const frontier = allMatches.reduce((mx, m) => Math.max(mx, m.round), 0);
+
+  if (frontier === 0) {
+    // No matches yet — entry at round 1; no placeholders needed.
+    await runBalancedPairingTick(fastify, tournamentId);
+    emitBracketUpdate(fastify.io, tournamentId);
+    return;
+  }
+
+  const OPEN_STATUSES = new Set(['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED'] as const);
+  const openRounds = allMatches
+    .filter((m) => OPEN_STATUSES.has(m.status as 'PENDING' | 'ONGOING' | 'AWAITING_CONFIRMATION' | 'DISPUTED'))
+    .map((m) => m.round);
+
+  const earliestActiveRound = openRounds.length > 0 ? Math.min(...openRounds) : frontier;
+
+  // A = clamp(max(earliestActiveRound, frontier - 1), 1, roundsCount)
+  const A = Math.min(Math.max(Math.max(earliestActiveRound, frontier - 1), 1), roundsCount);
+
+  // Step 3 — create A-1 CATCHUP_BYE rows for rounds 1..A-1.
+  if (A > 1) {
+    let next = allMatches.reduce((mx, m) => Math.max(mx, m.match_number), 0) + 1;
+    const rows: Array<{
+      tournament_id: string;
+      round: number;
+      match_number: number;
+      player1_id: string;
+      player2_id: null;
+      winner_id: null;
+      status: 'CATCHUP_BYE';
+      phase: null;
+    }> = [];
+    for (let r = 1; r < A; r++) {
+      rows.push({
+        tournament_id: tournamentId,
+        round: r,
+        match_number: next++,
+        player1_id: userId,
+        player2_id: null,
+        winner_id: null,
+        status: 'CATCHUP_BYE',
+        phase: null,
+      });
+    }
+    await fastify.prisma.match.createMany({ data: rows });
+  }
+
+  // Step 4 — trigger pairing tick (pairs the late joiner from round A onward).
+  await runBalancedPairingTick(fastify, tournamentId);
+  emitBracketUpdate(fastify.io, tournamentId);
+}
+
 export interface BalancedPlayoffResult {
   pools: number;
   finals: number;
