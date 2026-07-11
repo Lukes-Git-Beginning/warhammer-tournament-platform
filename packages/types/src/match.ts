@@ -11,10 +11,12 @@ export const MatchStatusSchema = z.enum([
   'ONGOING',
   'COMPLETED',
   'BYE',
+  'CATCHUP_BYE',
   'FORFEIT',
   'DISPUTED',
   'AWAITING_CONFIRMATION',
   'CANCELLED',
+  'NO_CONTEST',
 ]);
 export type MatchStatus = z.infer<typeof MatchStatusSchema>;
 

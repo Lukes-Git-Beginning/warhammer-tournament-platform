@@ -43,7 +43,7 @@ export const DEFAULT_BAND = 3;
 const IMMEDIATE_REMATCH_PENALTY = 1_000_000;
 
 /** Terminal statuses that count as a played round toward a player's progress. */
-const ADVANCING = new Set(['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST']);
+const ADVANCING = new Set(['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST', 'CATCHUP_BYE']);
 /** Non-terminal statuses: the player is assigned/playing, not waiting for a new match. */
 const ACTIVE = new Set(['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED']);
 

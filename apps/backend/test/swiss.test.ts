@@ -182,6 +182,22 @@ describe('min-weight pairing (B8)', () => {
 // ---------- computeSwissStandings ----------
 
 describe('computeSwissStandings', () => {
+  it('CATCHUP_BYE scores 0 (late-join placeholder), unlike a scoring BYE', () => {
+    const ids = ['a', 'b'];
+    const matches: CompletedMatchRecord[] = [
+      { round: 1, player1_id: 'a', player2_id: null, winner_id: null, status: 'CATCHUP_BYE' },
+      { round: 1, player1_id: 'b', player2_id: null, winner_id: 'b', status: 'BYE' },
+    ];
+    const standings = computeSwissStandings(ids, matches);
+    const a = standings.find((s) => s.userId === 'a')!;
+    const b = standings.find((s) => s.userId === 'b')!;
+    expect(a.score).toBe(0);
+    expect(a.byes).toBe(0);
+    expect(a.buchholz).toBe(0);
+    expect(b.score).toBe(1);
+    expect(b.byes).toBe(1);
+  });
+
   it('8 players, correct score accumulation', () => {
     const ids = fakeIds(8);
 

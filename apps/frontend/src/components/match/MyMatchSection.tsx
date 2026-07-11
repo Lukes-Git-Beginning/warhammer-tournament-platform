@@ -140,6 +140,7 @@ function MyMatchInner({
               maps={maps}
               factions={factions}
               tournamentMode={tournamentMode}
+              withdrawnPlayerId={data.withdrawnPlayerId}
             />
           ))}
           {(() => {

@@ -44,6 +44,38 @@ describe('planPairings — round 1 (batch)', () => {
   });
 });
 
+describe('planPairings — late joiner (CATCHUP_BYE)', () => {
+  it('places a late joiner with CATCHUP_BYE placeholders at frontier depth, no bye-flood', () => {
+    // x advanced through rounds 1-2 (byes); the late joiner was folded in with two
+    // 0-point CATCHUP_BYE placeholders → both sit at depth 2 → paired in round 3.
+    const matches: BalancedMatchRow[] = [
+      { round: 1, player1_id: 'x', player2_id: null, status: 'BYE' },
+      { round: 2, player1_id: 'x', player2_id: null, status: 'BYE' },
+      { round: 1, player1_id: 'late', player2_id: null, status: 'CATCHUP_BYE' },
+      { round: 2, player1_id: 'late', player2_id: null, status: 'CATCHUP_BYE' },
+    ];
+    const plan = planPairings([P('x', 3), P('late', 3)], matches, 3);
+    expect(plan.byes).toHaveLength(0);
+    expect(plan.pairings).toHaveLength(1);
+    expect(plan.pairings[0]!.round).toBe(3);
+    expect([plan.pairings[0]!.player1_id, plan.pairings[0]!.player2_id].sort()).toEqual(['late', 'x']);
+  });
+
+  it('CATCHUP_BYE counts toward completeness (late joiner complete at rounds_count)', () => {
+    const matches: BalancedMatchRow[] = [
+      { round: 1, player1_id: 'late', player2_id: null, status: 'CATCHUP_BYE' },
+      { round: 2, player1_id: 'late', player2_id: null, status: 'CATCHUP_BYE' },
+      { round: 1, player1_id: 'x', player2_id: null, status: 'BYE' },
+      { round: 2, player1_id: 'x', player2_id: null, status: 'BYE' },
+      { round: 3, player1_id: 'late', player2_id: 'x', status: 'COMPLETED' },
+    ];
+    const plan = planPairings([P('late', 3), P('x', 3)], matches, 3);
+    expect(plan.complete).toBe(true);
+    expect(plan.pairings).toHaveLength(0);
+    expect(plan.byes).toHaveLength(0);
+  });
+});
+
 describe('planPairings — skill banding', () => {
   it('prefers same-band pairings over cross-band', () => {
     // 2× band 2, 2× band 4 → must pair 2-2 and 4-4, never crossing.

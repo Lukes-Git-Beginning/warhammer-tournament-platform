@@ -1459,7 +1459,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/admin/tournaments/:slug/add-late — add a participant after tournament start
   fastify.post('/api/admin/tournaments/:slug/add-late', async (request, reply) => {
     const { slug } = request.params as { slug: string };
-    const r = await addLateParticipant(fastify.prisma, fastify.io, slug, request.body, request.log);
+    const r = await addLateParticipant(fastify.prisma, fastify.io, slug, request.body, request.log, fastify);
     return reply.code(r.status).send(r.body);
   });
 

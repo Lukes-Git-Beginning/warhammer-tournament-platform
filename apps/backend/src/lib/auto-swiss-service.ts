@@ -210,7 +210,7 @@ export async function advanceAutoSwissRound(prisma: PrismaClient, tournamentId: 
 
   const maxSwissRound = Math.max(...swissMatches.map((m) => m.round));
   const currentRoundMatches = swissMatches.filter((m) => m.round === maxSwissRound);
-  const incompleteSwiss = currentRoundMatches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED' && m.status !== 'NO_CONTEST');
+  const incompleteSwiss = currentRoundMatches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED' && m.status !== 'NO_CONTEST' && m.status !== 'CATCHUP_BYE');
 
   if (incompleteSwiss.length > 0) return; // current round not done
 
@@ -578,7 +578,7 @@ export async function repairBrokenAutoSwiss(prisma: PrismaClient): Promise<void>
     if (hasPlayoffs) continue;
 
     // Only repair if all matches are done (Swiss rounds complete, including forfeit wins)
-    const pending = matches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'NO_CONTEST');
+    const pending = matches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'NO_CONTEST' && m.status !== 'CATCHUP_BYE');
     if (pending.length > 0) continue;
 
     // All matches done, no playoffs — this is a stuck tournament

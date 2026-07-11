@@ -233,7 +233,11 @@ export function computeSwissStandings(
   }
 
   for (const match of completedMatches) {
-    if (match.status !== 'COMPLETED' && match.status !== 'BYE' && match.status !== 'FORFEIT' && match.status !== 'NO_CONTEST') continue;
+    if (match.status !== 'COMPLETED' && match.status !== 'BYE' && match.status !== 'FORFEIT' && match.status !== 'NO_CONTEST' && match.status !== 'CATCHUP_BYE') continue;
+
+    // CATCHUP_BYE: late-join placeholder — counts as a played round for depth/completeness
+    // but scores 0 and pushes no opponent (0 Buchholz). No further action needed.
+    if (match.status === 'CATCHUP_BYE') continue;
 
     const p1 = match.player1_id;
     const p2 = match.player2_id;

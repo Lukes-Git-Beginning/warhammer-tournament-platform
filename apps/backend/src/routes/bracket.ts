@@ -78,6 +78,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           loser_next_match_id: true,
           bracket_side: true,
           phase: true,
+          withdrawn_player_id: true,
           player1_faction_id: true,
           player2_faction_id: true,
           draft: { select: { id: true, status: true } },
@@ -175,6 +176,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           draft_id: m.draft?.id ?? null,
           draft_status: (m.draft?.status ?? null) as BracketResponse['matches'][number]['draft_status'],
           phase: (m.phase ?? null) as BracketResponse['matches'][number]['phase'],
+          withdrawnPlayerId: m.withdrawn_player_id ?? null,
         })),
       };
 
@@ -653,7 +655,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       // Verify all matches in current round are completed or BYE
       const currentRoundMatches = existingMatches.filter((m) => m.round === currentRound);
       const incomplete = currentRoundMatches.filter(
-        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED' && m.status !== 'NO_CONTEST',
+        (m) => m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED' && m.status !== 'NO_CONTEST' && m.status !== 'CATCHUP_BYE',
       );
 
       if (incomplete.length > 0) {
@@ -876,7 +878,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
         const incomplete = existingMatches.filter(
-          (m) => m.round === currentRound && m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED' && m.status !== 'NO_CONTEST',
+          (m) => m.round === currentRound && m.status !== 'COMPLETED' && m.status !== 'BYE' && m.status !== 'FORFEIT' && m.status !== 'CANCELLED' && m.status !== 'NO_CONTEST' && m.status !== 'CATCHUP_BYE',
         );
         if (incomplete.length > 0) {
           return reply.code(400).send({

@@ -839,6 +839,46 @@ export async function notifyDispute(
 }
 
 /**
+ * DM the surviving player of a group match when their opponent has withdrawn.
+ * Instructs them to either report the result (if the match was played) or void it
+ * via the match page. Fire-and-forget safe (never throws).
+ */
+export async function notifyOpponentOfWithdrawal(matchId: string, survivorUserId: string): Promise<void> {
+  if (!getToken()) return;
+  try {
+    const [match, survivor] = await Promise.all([
+      prisma.match.findFirst({
+        where: { id: matchId },
+        select: {
+          id: true,
+          tournament: { select: { name: true, slug: true } },
+        },
+      }),
+      prisma.user.findUnique({
+        where: { id: survivorUserId },
+        select: { discord_id: true },
+      }),
+    ]);
+    if (!match || !survivor?.discord_id) return;
+
+    const base = process.env.FRONTEND_URL ?? 'https://rizzotto.gg';
+    const matchUrl = `${base}/matches/${matchId}`;
+    const tournamentName = match.tournament?.name ?? 'your tournament';
+
+    const msg =
+      `**[RizzOtto's Arena] Opponent withdrew — ${tournamentName}**\n\n` +
+      `Your opponent has withdrawn from the tournament. Please visit the match page to decide:\n` +
+      `• **Match was played** — report the result and upload your replay as normal.\n` +
+      `• **Match was not played** — void it so you can be re-paired for this round.\n\n` +
+      `Match page: <${matchUrl}>`;
+
+    await sendDm(survivor.discord_id, msg);
+  } catch (err) {
+    console.warn('[discord-notify] notifyOpponentOfWithdrawal error (non-fatal):', err);
+  }
+}
+
+/**
  * DM a user while players are waiting in the Open Play queue during their
  * availability window. [Match Now] pairs the clicker with the oldest player in
  * the queue (resolved when clicked, so the link stays valid indefinitely).

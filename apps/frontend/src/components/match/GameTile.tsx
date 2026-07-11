@@ -11,7 +11,7 @@ declare module '@tanstack/react-router' {
     freshDecision?: boolean;
   }
 }
-import { reportGameResult, startMatchDecision } from '@/lib/api';
+import { reportGameResult, startMatchDecision, voidDroppedMatch } from '@/lib/api';
 import type { GameDto, MapDto } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { LobbyCodeField } from './LobbyCodeField';
@@ -37,6 +37,8 @@ interface Props {
   factions?: Record<string, FactionDto>;
   /** Tournament mode — used to require blind pick for BPT */
   tournamentMode?: string;
+  /** Set when one player in this match has withdrawn; drives the "opponent withdrew" banner. */
+  withdrawnPlayerId?: string | null;
 }
 
 export function GameTile({
@@ -55,6 +57,7 @@ export function GameTile({
   maps = [],
   factions = {},
   tournamentMode,
+  withdrawnPlayerId,
 }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -99,8 +102,26 @@ export function GameTile({
     },
   });
 
+  const voidDroppedMutation = useMutation({
+    mutationFn: () => voidDroppedMatch(matchId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['match-games', matchId] });
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+    },
+  });
+
   const isPlayer1 = currentUserId === player1Id;
   const isPlayer2 = currentUserId === player2Id;
+
+  // Banner visibility: show when the current user is the survivor (a participant whose
+  // opponent withdrew) and the game has no result yet.
+  const isSurvivor =
+    withdrawnPlayerId != null &&
+    (isPlayer1 || isPlayer2) &&
+    currentUserId !== withdrawnPlayerId;
+  const gameUnresolved =
+    (game.status === 'PENDING' || game.status === 'ONGOING') && !game.reportedWinnerId;
+  const showWithdrawnBanner = isSurvivor && gameUnresolved;
 
   // Resolve faction IDs — prefer MatchGame fields, then BlindPick reveal (BPT),
   // then BracketNode (which has TournamentParticipant as final fallback).
@@ -163,6 +184,32 @@ export function GameTile({
         </span>
         <StatusBadge status={game.status} />
       </div>
+
+      {/* Opponent-withdrew banner — survivor only, unresolved game */}
+      {showWithdrawnBanner && (
+        <div className="rounded-lg border border-amber-700/60 bg-amber-950/40 p-4 flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-semibold text-amber-300">⚠ Your opponent withdrew.</p>
+            <p className="text-xs text-rizzotto-stone-400">
+              If you played this match, report the result below. If not, void it.
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="self-start border border-rizzotto-iron-600 text-rizzotto-stone-300 hover:border-rizzotto-stone-500 hover:text-rizzotto-stone-100"
+            onClick={() => voidDroppedMutation.mutate()}
+            disabled={voidDroppedMutation.isPending}
+          >
+            {voidDroppedMutation.isPending ? 'Voiding…' : 'Void match (not played)'}
+          </Button>
+          {voidDroppedMutation.isError && (
+            <p className="text-xs text-red-400">
+              {(voidDroppedMutation.error as Error).message}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* COMPLETED */}
       {game.status === 'COMPLETED' && (

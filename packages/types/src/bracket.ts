@@ -13,7 +13,7 @@ export interface BracketNode {
   result: MatchResultType | null;
   player1Points: number | null;
   player2Points: number | null;
-  status: 'PENDING' | 'ONGOING' | 'COMPLETED' | 'BYE' | 'FORFEIT' | 'DISPUTED' | 'CANCELLED';
+  status: 'PENDING' | 'ONGOING' | 'COMPLETED' | 'BYE' | 'FORFEIT' | 'DISPUTED' | 'CANCELLED' | 'CATCHUP_BYE';
   nextMatchId: string | null;
   loserNextMatchId: string | null;
   bracketSide: 'WINNERS' | 'LOSERS' | 'GRAND_FINAL' | null;
@@ -26,6 +26,8 @@ export interface BracketNode {
   draft_id?: string | null;
   draft_status?: 'PENDING' | 'ONGOING' | 'COMPLETED' | 'CANCELLED' | null;
   phase?: 'SWISS' | 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL' | 'PLAYOFF_THIRD_PLACE' | null;
+  /** Set when a player in this match has withdrawn; drives the "opponent withdrew" banner. */
+  withdrawnPlayerId?: string | null;
 }
 
 export interface SwissStandingEntry {
