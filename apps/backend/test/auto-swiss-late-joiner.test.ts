@@ -158,7 +158,7 @@ describe('Auto Swiss — late joiner pairing (Schritt A)', () => {
 });
 
 describe('createLateJoinerBye (Schritt B)', () => {
-  it('gives a late joiner a BYE in the current round, then they are paired next round', async () => {
+  it('gives a late joiner a 0-point CATCHUP_BYE in the current round, then they are paired next round', async () => {
     tournamentId = await makeTournament({ format: 'AUTO_SWISS', roundsCount: 5 });
     const late = players[8]!;
     for (const p of players) await addParticipant(tournamentId, p.id, 'CHECKED_IN');
@@ -168,12 +168,13 @@ describe('createLateJoinerBye (Schritt B)', () => {
     expect(bye).not.toBeNull();
     expect(bye!.round).toBe(1);
 
+    // Late joiners now receive a 0-point CATCHUP_BYE (no free bye point), not a scoring BYE.
     const r1bye = await prisma.match.findFirst({
-      where: { tournament_id: tournamentId, round: 1, status: 'BYE', player1_id: late.id },
+      where: { tournament_id: tournamentId, round: 1, status: 'CATCHUP_BYE', player1_id: late.id },
     });
     expect(r1bye).not.toBeNull();
     expect(r1bye!.player2_id).toBeNull();
-    expect(r1bye!.winner_id).toBe(late.id);
+    expect(r1bye!.winner_id).toBeNull();
     expect(r1bye!.phase).toBe('SWISS');
 
     // Advancing must not bye the same player twice — they get a real opponent.
