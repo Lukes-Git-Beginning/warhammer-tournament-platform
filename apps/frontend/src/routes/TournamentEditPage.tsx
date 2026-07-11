@@ -596,7 +596,17 @@ export function TournamentEditPage() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
     const { name, value, type } = e.target;
-    const v = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+    // Numeric inputs (rounds_count = range slider, max_participants = number) must be
+    // stored as numbers, not the raw string — otherwise the PATCH body sends "4" and the
+    // backend Zod (z.number()) rejects it. Number inputs keep '' for the "no limit" case.
+    const v =
+      type === 'checkbox'
+        ? (e.target as HTMLInputElement).checked
+        : type === 'range'
+          ? Number(value)
+          : type === 'number'
+            ? value === '' ? '' : Number(value)
+            : value;
     setForm((prev) => (prev ? { ...prev, [name]: v } : prev));
     if (name === 'name' || name === 'discord_link') {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
