@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { Select } from '@/components/ui/select';
 import { Label, FieldError, FieldHint } from '@/components/ui/label';
+import { MODE_DESCRIPTIONS } from '@/lib/tournamentDescriptions';
 
 const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
@@ -471,15 +472,7 @@ export function TournamentCreateForm() {
             <option value="FREE_PICK">Enticity&apos;s Free Pick — SFT/Matrix Hybrid</option>
             <option value="ONE_V_THREE">1v3 — Set Faction vs. One of Three Counterpicks</option>
           </Select>
-          <FieldHint>
-            {(form.mode === 'BPT' || !form.mode) && 'Every match includes a blind faction pick phase.'}
-            {form.mode === 'SFT' && 'Players pre-select a faction at registration; revealed at tournament start.'}
-            {form.mode === 'SLT' && 'Players upload their army list at registration. Reveal after each completed match.'}
-            {form.mode === 'MATRIX' && 'Each match: both players pick 3 factions blindly, then ban from the 3×3 matchup grid.'}
-            {form.mode === 'TWO_D_THREE' && 'Players pick 3 factions at registration; one is drawn at random for each player before every game.'}
-            {form.mode === 'FREE_PICK' && 'Each player chooses at registration: a fixed faction (like SFT) or to pick match-by-match. Two fixed players just play their factions; two pick-later players do a 3×3 matrix; a fixed vs pick-later match has the pick-later player offer 3 factions for the fixed player to choose from.'}
-            {form.mode === 'ONE_V_THREE' && 'A coin flip sets roles each match: one player runs the host\'s set faction, the other brings three, and the set-faction player picks which of the three their opponent plays.'}
-          </FieldHint>
+          <FieldHint>{MODE_DESCRIPTIONS[form.mode ?? 'BPT']}</FieldHint>
         </div>
 
         {/* ─── ONE_V_THREE: Set Faction ──────────────────────────────────── */}

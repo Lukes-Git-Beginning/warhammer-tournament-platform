@@ -21,6 +21,8 @@ import {
 import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth';
 import { formatInUserTimezone } from '@/lib/timezone';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { FORMAT_DESCRIPTIONS, MODE_DESCRIPTIONS } from '@/lib/tournamentDescriptions';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { sortStandingsByPlayoffResult, getFinalistIds, getSemifinalistIds } from '@/lib/bracketStandings';
 import { BracketView } from '@/components/bracket/BracketView';
@@ -320,9 +322,11 @@ export function TournamentDetail() {
           {tournament.name}
         </h1>
         <div className="flex gap-2">
-          <span className="rounded px-2 py-1 text-xs font-medium bg-stone-700 text-stone-200">
-            {formatLabel}
-          </span>
+          <InfoTooltip text={FORMAT_DESCRIPTIONS[tournament.format]}>
+            <span className="rounded px-2 py-1 text-xs font-medium bg-stone-700 text-stone-200">
+              {formatLabel}
+            </span>
+          </InfoTooltip>
           <span className={`rounded px-2 py-1 text-xs font-medium ${statusColor}`}>
             {tournament.status}
           </span>
@@ -671,9 +675,11 @@ export function TournamentDetail() {
           {(tournament.mode || tournament.format === 'AUTO_SWISS') && (
             <div>
               <span className="text-stone-500">Mode:</span>{' '}
-              <span className="text-stone-200">
-                {(({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', TWO_D_THREE: '2D3', FREE_PICK: "Enticity's Free Pick", ONE_V_THREE: '1v3', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode ?? ''] ?? tournament.mode ?? 'SFT')}
-              </span>
+              <InfoTooltip text={MODE_DESCRIPTIONS[tournament.mode ?? '']}>
+                <span className="text-stone-200 underline decoration-dotted decoration-stone-600 underline-offset-2">
+                  {(({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', TWO_D_THREE: '2D3', FREE_PICK: "Enticity's Free Pick", ONE_V_THREE: '1v3', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode ?? ''] ?? tournament.mode ?? 'SFT')}
+                </span>
+              </InfoTooltip>
             </div>
           )}
           {tournament.max_participants && (
