@@ -3,9 +3,9 @@ import { Link } from '@tanstack/react-router';
 import type { MatchFormat, HeatmapSlot, ScheduledMatchup } from '../../lib/api';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 
-const FORMAT_DURATION_H: Record<MatchFormat, number> = { BO1: 0.5, BO3: 1.5, BO5: 2.5 };
-const FORMAT_ROWS: Record<MatchFormat, number> = { BO1: 1, BO3: 2, BO5: 3 };
-const FORMAT_DURATION_LABEL: Record<MatchFormat, string> = { BO1: '~30 min', BO3: '~90 min', BO5: '~150 min' };
+const FORMAT_DURATION_H: Record<MatchFormat, number> = { BO1: 0.5, BO2: 1.0, BO3: 1.5, BO5: 2.5 };
+const FORMAT_ROWS: Record<MatchFormat, number> = { BO1: 1, BO2: 2, BO3: 2, BO5: 3 };
+const FORMAT_DURATION_LABEL: Record<MatchFormat, string> = { BO1: '~30 min', BO2: '~60 min', BO3: '~90 min', BO5: '~150 min' };
 
 const DISPLAY_HOURS = Array.from({ length: 24 }, (_, i) => i); // 0–23, full day
 const ROW_H = 28;

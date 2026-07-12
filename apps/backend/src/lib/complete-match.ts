@@ -261,16 +261,20 @@ export async function completeMatch(
     // LeaderboardEntry — mirrors resolveMatchResult so GameTile matches count on the leaderboard
     if (activeSeason && (match.tournament?.counts_for_leaderboard ?? true)) {
       const seasonId = activeSeason.id;
-      const WIN_PTS = 3, LOSS_PTS = 0;
+      const WIN_PTS = 3, DRAW_PTS = 1, LOSS_PTS = 0;
+      // winnerId === null means a Draw (e.g. a BO2 that finished 1–1): both players
+      // score DRAW_PTS and it counts as neither a win nor a loss (mirrors resolveMatchResult).
+      const isDraw = winnerId === null;
+      const pointsFor = (uid: string) => (isDraw ? DRAW_PTS : winnerId === uid ? WIN_PTS : LOSS_PTS);
       const entries = [
-        match.player1_id ? { userId: match.player1_id, isWinner: winnerId === match.player1_id, points: winnerId === match.player1_id ? WIN_PTS : LOSS_PTS } : null,
-        match.player2_id ? { userId: match.player2_id, isWinner: winnerId === match.player2_id, points: winnerId === match.player2_id ? WIN_PTS : LOSS_PTS } : null,
+        match.player1_id ? { userId: match.player1_id, isWinner: winnerId === match.player1_id, isDraw, points: pointsFor(match.player1_id) } : null,
+        match.player2_id ? { userId: match.player2_id, isWinner: winnerId === match.player2_id, isDraw, points: pointsFor(match.player2_id) } : null,
       ].filter((e): e is NonNullable<typeof e> => e !== null);
       for (const e of entries) {
         await tx.leaderboardEntry.upsert({
           where: { user_id_season_id: { user_id: e.userId, season_id: seasonId } },
-          create: { user_id: e.userId, season_id: seasonId, games_played: 1, wins: e.isWinner ? 1 : 0, losses: e.isWinner ? 0 : 1, total_points: e.points },
-          update: { games_played: { increment: 1 }, wins: e.isWinner ? { increment: 1 } : undefined, losses: !e.isWinner ? { increment: 1 } : undefined, total_points: { increment: e.points } },
+          create: { user_id: e.userId, season_id: seasonId, games_played: 1, wins: e.isWinner ? 1 : 0, losses: !e.isWinner && !e.isDraw ? 1 : 0, total_points: e.points },
+          update: { games_played: { increment: 1 }, wins: e.isWinner ? { increment: 1 } : undefined, losses: !e.isWinner && !e.isDraw ? { increment: 1 } : undefined, total_points: { increment: e.points } },
         });
       }
     }

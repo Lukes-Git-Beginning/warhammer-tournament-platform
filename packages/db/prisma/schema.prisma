@@ -61,6 +61,7 @@ enum PlayoffFormat {
 
 enum MatchFormat {
   BO1
+  BO2 // two-leg home/away (1v3): exactly 2 games, roles swap, 1–1 = Draw
   BO3
   BO5
 }

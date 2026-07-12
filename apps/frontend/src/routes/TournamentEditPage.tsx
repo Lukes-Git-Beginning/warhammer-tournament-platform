@@ -70,9 +70,9 @@ type EditFormData = {
   rounds_count: number;
   playoff_format: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   has_third_place_match: boolean;
-  swiss_match_format: 'BO1' | 'BO3' | 'BO5';
-  playoff_match_format: 'BO1' | 'BO3' | 'BO5';
-  finale_match_format: 'BO1' | 'BO3' | 'BO5';
+  swiss_match_format: 'BO1' | 'BO2' | 'BO3' | 'BO5';
+  playoff_match_format: 'BO1' | 'BO2' | 'BO3' | 'BO5';
+  finale_match_format: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   auto_sizing: boolean;
   allow_late_join_requests: boolean;
   map_decision_mode: MapDecisionMode;
@@ -92,6 +92,7 @@ const EditSchema = z.object({
 });
 
 function formatToMaxGames(fmt?: string): number {
+  if (fmt === 'BO2') return 2;
   if (fmt === 'BO3') return 3;
   if (fmt === 'BO5') return 5;
   return 1;
@@ -990,6 +991,7 @@ export function TournamentEditPage() {
                   </Label>
                   <Select id="tef-swiss-fmt" name="swiss_match_format" value={form.swiss_match_format} onChange={handleChange} disabled={ongoingLocked}>
                     <option value="BO1">Best of 1</option>
+                    <option value="BO2">Best of 2 — home &amp; away (1–1 = draw)</option>
                     <option value="BO3">Best of 3</option>
                     <option value="BO5">Best of 5</option>
                   </Select>
@@ -1057,6 +1059,7 @@ export function TournamentEditPage() {
                   <Label htmlFor="tef-bali-swiss-fmt">Group Format</Label>
                   <Select id="tef-bali-swiss-fmt" name="swiss_match_format" value={form.swiss_match_format} onChange={handleChange} disabled={ongoingLocked}>
                     <option value="BO1">Best of 1</option>
+                    <option value="BO2">Best of 2 — home &amp; away (1–1 = draw)</option>
                     <option value="BO3">Best of 3</option>
                     <option value="BO5">Best of 5</option>
                   </Select>

@@ -89,9 +89,9 @@ export interface Tournament {
   // Welle 2 fields
   rounds_count?: number | null;
   playoff_format?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' | null;
-  swiss_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
-  playoff_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
-  finale_match_format?: 'BO1' | 'BO3' | 'BO5' | null;
+  swiss_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5' | null;
+  playoff_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5' | null;
+  finale_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5' | null;
   auto_sizing?: boolean;
   auto_advance?: boolean;
   allow_late_join_requests?: boolean;
@@ -199,9 +199,9 @@ export interface TournamentCreate {
   auto_sizing?: boolean;
   auto_advance?: boolean;
   allow_late_join_requests?: boolean;
-  swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
-  playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
-  finale_match_format?: 'BO1' | 'BO3' | 'BO5';
+  swiss_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
+  playoff_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
+  finale_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   map_decision_mode?: MapDecisionMode;
   map_preset_config?: MapPresetConfig | null;
   map_pool?: string[];
@@ -238,9 +238,9 @@ export interface TournamentPatchInput {
   auto_advance?: boolean;
   allow_late_join_requests?: boolean;
   has_third_place_match?: boolean;
-  swiss_match_format?: 'BO1' | 'BO3' | 'BO5';
-  playoff_match_format?: 'BO1' | 'BO3' | 'BO5';
-  finale_match_format?: 'BO1' | 'BO3' | 'BO5';
+  swiss_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
+  playoff_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
+  finale_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   map_decision_mode?: MapDecisionMode;
   map_preset_config?: MapPresetConfig | null;
   map_pool?: string[];
@@ -1696,7 +1696,7 @@ export function getFactionTopPlayers(factionId: string): Promise<{ players: Fact
 // ---------------------------------------------------------------------------
 
 export type AvailabilityContext = 'TOURNAMENT' | 'MATCHMAKING';
-export type MatchFormat = 'BO1' | 'BO3' | 'BO5';
+export type MatchFormat = 'BO1' | 'BO2' | 'BO3' | 'BO5';
 
 export interface AvailabilitySlot {
   id?: string;

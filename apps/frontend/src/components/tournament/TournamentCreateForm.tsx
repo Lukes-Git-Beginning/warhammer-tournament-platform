@@ -38,9 +38,9 @@ const TournamentCreateSchema = z.object({
   auto_sizing: z.boolean().default(false),
   auto_advance: z.boolean().default(false),
   allow_late_join_requests: z.boolean().default(false),
-  swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
-  playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
-  finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
+  swiss_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).default('BO1'),
+  playoff_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).default('BO1'),
+  finale_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).default('BO1'),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).default('RANDOM_PICK_BAN'),
   map_pool: z.array(z.string()).max(36).default([]),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -64,6 +64,7 @@ const MAP_DECISION_MODES: MapDecisionModeOption[] = [
 ];
 
 function formatToMaxGames(fmt?: string): number {
+  if (fmt === 'BO2') return 2;
   if (fmt === 'BO3') return 3;
   if (fmt === 'BO5') return 5;
   return 1;
@@ -285,11 +286,28 @@ export function TournamentCreateForm() {
       [name]: newValue,
       ...(name === 'draft_enabled' && !checked ? { draft_preset_id: null } : {}),
       ...(name === 'format'
+        ? prev.mode === 'ONE_V_THREE'
+          ? {
+              // 1v3: 2-leg home/away (BO2) for Swiss rounds, BO3 for brackets.
+              swiss_match_format: value === 'SINGLE_ELIMINATION' || value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO2',
+              playoff_match_format: 'BO3',
+              finale_match_format: 'BO3',
+              auto_sizing: value === 'BALANCED_LIECHTENSTEIN',
+            }
+          : {
+              finale_match_format: value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO1',
+              // Balanced Liechtenstein auto-sizes by default; every other format
+              // starts with auto-sizing off (the host opts in via the checkbox).
+              auto_sizing: value === 'BALANCED_LIECHTENSTEIN',
+            }
+        : {}),
+      ...(name === 'mode' && value === 'ONE_V_THREE'
         ? {
-            finale_match_format: value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO1',
-            // Balanced Liechtenstein auto-sizes by default; every other format
-            // starts with auto-sizing off (the host opts in via the checkbox).
-            auto_sizing: value === 'BALANCED_LIECHTENSTEIN',
+            // 1v3 defaults: BO2 two-leg home/away for Swiss rounds (1–1 = Draw),
+            // BO3 for elimination brackets (need a decisive winner). Host can override.
+            swiss_match_format: prev.format === 'SINGLE_ELIMINATION' || prev.format === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO2',
+            playoff_match_format: 'BO3',
+            finale_match_format: 'BO3',
           }
         : {}),
       ...(name === 'start_date' ? { registration_deadline: value } : {}),
@@ -778,6 +796,7 @@ export function TournamentCreateForm() {
                   onChange={handleChange}
                 >
                   <option value="BO1">Best of 1</option>
+                  <option value="BO2">Best of 2 — home &amp; away (1–1 = draw)</option>
                   <option value="BO3">Best of 3</option>
                   <option value="BO5">Best of 5</option>
                 </Select>

@@ -90,10 +90,10 @@ async function drawTwoD3GameFactions(
 function resolveMatchFormat(
   tournament: { swiss_match_format: string; playoff_match_format: string; finale_match_format: string },
   phase: string | null,
-): 'BO1' | 'BO3' | 'BO5' {
-  if (phase === 'PLAYOFF_FINAL') return tournament.finale_match_format as 'BO1' | 'BO3' | 'BO5';
-  if (phase?.startsWith('PLAYOFF')) return tournament.playoff_match_format as 'BO1' | 'BO3' | 'BO5';
-  return tournament.swiss_match_format as 'BO1' | 'BO3' | 'BO5';
+): 'BO1' | 'BO2' | 'BO3' | 'BO5' {
+  if (phase === 'PLAYOFF_FINAL') return tournament.finale_match_format as 'BO1' | 'BO2' | 'BO3' | 'BO5';
+  if (phase?.startsWith('PLAYOFF')) return tournament.playoff_match_format as 'BO1' | 'BO2' | 'BO3' | 'BO5';
+  return tournament.swiss_match_format as 'BO1' | 'BO2' | 'BO3' | 'BO5';
 }
 
 /**
@@ -284,7 +284,7 @@ export async function finalizeGameResult(
   }
 
   // Series completion: count wins and decide whether to continue or complete
-  let format: 'BO1' | 'BO3' | 'BO5';
+  let format: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   if (game.match.tournament) {
     format = resolveMatchFormat(game.match.tournament, game.match.phase ?? null);
   } else {
@@ -293,9 +293,10 @@ export async function finalizeGameResult(
       where: { match_id: game.match_id },
       select: { format: true },
     });
-    format = (matchup?.format ?? 'BO1') as 'BO1' | 'BO3' | 'BO5';
+    format = (matchup?.format ?? 'BO1') as 'BO1' | 'BO2' | 'BO3' | 'BO5';
   }
-  const winsNeeded = format === 'BO5' ? 3 : format === 'BO3' ? 2 : 1;
+  const winsNeeded = format === 'BO5' ? 3 : format === 'BO3' || format === 'BO2' ? 2 : 1;
+  const maxGames = format === 'BO5' ? 5 : format === 'BO3' ? 3 : format === 'BO2' ? 2 : 1;
 
   const completedGames = await fastify.prisma.matchGame.findMany({
     where: { match_id: game.match_id, status: 'COMPLETED' },
@@ -305,14 +306,21 @@ export async function finalizeGameResult(
   const p1Wins = completedGames.filter((g) => g.winner_id === game.match.player1_id).length;
   const p2Wins = completedGames.filter((g) => g.winner_id === game.match.player2_id).length;
 
-  if (p1Wins >= winsNeeded || p2Wins >= winsNeeded) {
-    const matchWinner = p1Wins >= winsNeeded ? game.match.player1_id! : game.match.player2_id!;
+  // A series ends when someone clinches OR when it is played out to its game cap.
+  // The latter only leaves no winner for the even BO2 format (1–1 → Draw); odd
+  // formats always have a leader by the time the cap is reached.
+  const seriesWon = p1Wins >= winsNeeded || p2Wins >= winsNeeded;
+  const seriesExhausted = completedGames.length >= maxGames;
+
+  if (seriesWon || seriesExhausted) {
+    const matchWinner =
+      p1Wins > p2Wins ? game.match.player1_id! : p2Wins > p1Wins ? game.match.player2_id! : null; // null = Draw (BO2 1–1)
     await completeMatch(fastify, {
       matchId: game.match_id,
       winnerId: matchWinner,
       player1FactionId: p1FactionId,
       player2FactionId: p2FactionId,
-      actorId: matchWinner,
+      actorId: matchWinner ?? game.reported_winner_id ?? game.match.player1_id!,
       skipStats: true, // stats already written per-game above
     });
   } else {

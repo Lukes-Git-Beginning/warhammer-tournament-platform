@@ -37,6 +37,7 @@ const ListQuerySchema = z.object({
 const POOL_MAP_MODES = new Set(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'RANDOM_PICK_BAN']);
 
 function matchFormatGames(fmt?: string): number {
+  if (fmt === 'BO2') return 2;
   if (fmt === 'BO3') return 3;
   if (fmt === 'BO5') return 5;
   return 1;
@@ -180,9 +181,9 @@ const CreateTournamentSchema = z.object({
   auto_sizing: z.boolean().optional(),
   auto_advance: z.boolean().optional(),
   allow_late_join_requests: z.boolean().optional(),
-  swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
-  playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
-  finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
+  swiss_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).optional(),
+  playoff_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).optional(),
+  finale_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).optional(),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).optional(),
   map_pool: z.array(z.string().min(1)).max(36).optional(),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -212,9 +213,9 @@ const PatchTournamentSchema = z.object({
   auto_sizing: z.boolean().optional(),
   auto_advance: z.boolean().optional(),
   allow_late_join_requests: z.boolean().optional(),
-  swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
-  playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
-  finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).optional(),
+  swiss_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).optional(),
+  playoff_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).optional(),
+  finale_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).optional(),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).optional(),
   map_pool: z.array(z.string().min(1)).max(36).optional(),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -471,9 +472,10 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           auto_advance: data.auto_advance ?? false,
           allow_late_join_requests: data.allow_late_join_requests ?? false,
           set_faction_id: data.set_faction_id ?? null,
-          swiss_match_format: isAutoSwiss ? 'BO1' : data.swiss_match_format,
-          // 1v3: elimination playoffs/finals default to BO3 (role flip/swap/flip) so
-          // the coin-flip role alternates within a series. Swiss stays BO1 for now.
+          // 1v3: Swiss defaults to BO2 (two-leg home/away — roles swap between legs,
+          // 1–1 = Draw). Elimination playoffs/finals default to BO3 (flip/swap/flip;
+          // a bracket needs a decisive winner, so no draw there).
+          swiss_match_format: isAutoSwiss ? 'BO1' : (data.swiss_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO2' : undefined)),
           playoff_match_format: isAutoSwiss ? 'BO1' : (data.playoff_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO3' : undefined)),
           finale_match_format: isAutoSwiss ? 'BO1' : (data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' || data.mode === 'ONE_V_THREE' ? 'BO3' : undefined)),
           map_decision_mode: isAutoSwiss ? 'RANDOM_PICK_BAN' : data.map_decision_mode,
