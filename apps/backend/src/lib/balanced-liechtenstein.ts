@@ -186,11 +186,31 @@ function pairPool(
   const stuck = waiting.filter((_, i) => !used.has(i));
 
   // Whatever remains: hold if reinforcements are still coming (a cheaper partner may
-  // yet arrive), else the lowest-band straggler takes the bye (Swiss odd-out).
+  // yet arrive). Once nobody else is on the way, pair the leftovers AMONG THEMSELVES
+  // rather than sit several of them on byes — cheapest matchup first, and an
+  // immediate rematch (two who just met) is allowed only as a last resort (heavy
+  // penalty). Only the final odd one out takes the bye (lowest band). This fixes two
+  // same-band players who last played each other being BOTH byed instead of replaying.
   const byes: Waiter[] = [];
   if (stuck.length > 0 && incomingBands.length === 0) {
-    stuck.sort((a, b) => a.band - b.band);
-    byes.push(stuck[0]!);
+    const restCost = (x: Waiter, y: Waiter): number =>
+      Math.abs(x.band - y.band) +
+      (isImmediateRematch(x, y) ? 3 : metBefore(x, y) ? EVENTUAL_REMATCH_COST : 0);
+    const rest = [...stuck].sort((a, b) => a.band - b.band);
+    while (rest.length >= 2) {
+      const a = rest.shift()!;
+      let bestIdx = 0;
+      let bestCost = Infinity;
+      for (let k = 0; k < rest.length; k++) {
+        const c = restCost(a, rest[k]!);
+        if (c < bestCost) {
+          bestCost = c;
+          bestIdx = k;
+        }
+      }
+      pairs.push([a, rest.splice(bestIdx, 1)[0]!]);
+    }
+    if (rest.length === 1) byes.push(rest[0]!);
   }
   return { pairs, byes };
 }

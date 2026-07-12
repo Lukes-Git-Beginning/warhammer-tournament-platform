@@ -124,12 +124,16 @@ describe('planPairings — incremental next round', () => {
     }
   });
 
-  it('byes a straggler who is rematch-locked with no incoming players', () => {
-    // Only a,b; they played round 1. Pool 2 = {a,b} but they just met → one byes.
+  it('replays two rematch-locked leftovers instead of bye-ing them when no one else is due (#3)', () => {
+    // Only a,b remain and they already met in round 1. Rather than sit BOTH out across
+    // ticks (bye one now, the other next), they replay each other — an immediate
+    // rematch as a last resort beats a double bye.
     const matches: BalancedMatchRow[] = [done(1, 'a', 'b', 'a')];
     const plan = planPairings([P('a', 3), P('b', 3)], matches, 3);
-    expect(plan.pairings).toHaveLength(0);
-    expect(plan.byes).toHaveLength(1);
+    expect(plan.byes).toHaveLength(0);
+    expect(plan.pairings).toHaveLength(1);
+    expect(new Set([plan.pairings[0]!.player1_id, plan.pairings[0]!.player2_id])).toEqual(new Set(['a', 'b']));
+    expect(plan.pairings[0]!.round).toBe(2);
   });
 
   it('pairs everyone globally instead of stranding a rematch-locked pair (#18)', () => {
