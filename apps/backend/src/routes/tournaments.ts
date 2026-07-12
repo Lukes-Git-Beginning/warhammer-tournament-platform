@@ -124,10 +124,41 @@ function refineMapPool(
   }
 }
 
+// 1v3 mode: the host must set exactly one "set faction" (the Runner side), and the
+// pickable pool (allow-list minus the set faction) must have ≥3 options for the
+// Picker's three counter-picks. When no allow-list is given the full roster (>3)
+// applies, so only the presence of the set faction is enforced here.
+function refineOneVThree(
+  data: { mode?: string; set_faction_id?: string | null; faction_pool?: string[] },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.mode !== 'ONE_V_THREE') return;
+  if (!data.set_faction_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['set_faction_id'],
+      message: '1v3 mode requires a set faction for the Runner side.',
+    });
+    return;
+  }
+  const pool = data.faction_pool ?? [];
+  if (pool.length > 0) {
+    const others = pool.filter((f) => f !== data.set_faction_id);
+    if (others.length < 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['faction_pool'],
+        message: '1v3 needs at least 3 pickable factions besides the set faction (widen the faction pool).',
+      });
+    }
+  }
+}
+
 const CreateTournamentSchema = z.object({
   name: z.string().min(3).max(120),
   format: z.enum(['SWISS', 'AUTO_SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
-  mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK']).optional(),
+  mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE']).optional(),
+  set_faction_id: z.string().min(1).nullable().optional(),
   start_date: z.string().datetime(),
   timezone: z.string().min(1).max(64),
   max_participants: z.number().int().min(2).max(512).optional(),
@@ -157,7 +188,7 @@ const CreateTournamentSchema = z.object({
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   faction_pool: z.array(z.string().min(1)).max(24).optional(),
   restricted_factions: z.array(z.string().min(1)).max(24).optional(),
-}).superRefine(refineMapPool);
+}).superRefine(refineMapPool).superRefine(refineOneVThree);
 
 const PatchTournamentSchema = z.object({
   name: z.string().min(3).max(120).optional(),
@@ -190,13 +221,15 @@ const PatchTournamentSchema = z.object({
   is_major: z.boolean().optional(),
   // Fields added for full edit-form support
   format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']).optional(),
-  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK']).optional(),
+  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE']).optional(),
+  set_faction_id: z.string().min(1).nullable().optional(),
   has_third_place_match: z.boolean().optional(),
   counts_for_leaderboard: z.boolean().optional(),
   faction_pool: z.array(z.string().min(1)).optional(),
   restricted_factions: z.array(z.string().min(1)).optional(),
 })
   .superRefine(refineMapPool)
+  .superRefine(refineOneVThree)
   .refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
 
 // ---------------------------------------------------------------------------
@@ -437,9 +470,12 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           auto_sizing: isBalanced ? (data.auto_sizing ?? true) : (data.auto_sizing ?? false),
           auto_advance: data.auto_advance ?? false,
           allow_late_join_requests: data.allow_late_join_requests ?? false,
+          set_faction_id: data.set_faction_id ?? null,
           swiss_match_format: isAutoSwiss ? 'BO1' : data.swiss_match_format,
-          playoff_match_format: isAutoSwiss ? 'BO1' : data.playoff_match_format,
-          finale_match_format: isAutoSwiss ? 'BO1' : (data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' ? 'BO3' : undefined)),
+          // 1v3: elimination playoffs/finals default to BO3 (role flip/swap/flip) so
+          // the coin-flip role alternates within a series. Swiss stays BO1 for now.
+          playoff_match_format: isAutoSwiss ? 'BO1' : (data.playoff_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO3' : undefined)),
+          finale_match_format: isAutoSwiss ? 'BO1' : (data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' || data.mode === 'ONE_V_THREE' ? 'BO3' : undefined)),
           map_decision_mode: isAutoSwiss ? 'RANDOM_PICK_BAN' : data.map_decision_mode,
           map_preset_config: data.map_preset_config != null ? (data.map_preset_config as Prisma.InputJsonValue) : undefined,
         },

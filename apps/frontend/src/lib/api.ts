@@ -61,7 +61,9 @@ export interface Tournament {
   poster_url?: string | null;
   format: 'SINGLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN' | 'BALANCED_LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK';
+  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE';
+  /** ONE_V_THREE: the host-set faction the Runner side plays. */
+  set_faction_id?: string | null;
   status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
   start_date: string;
   timezone: string;
@@ -144,6 +146,9 @@ export interface MatchDecisionState {
   // for pick-later. Drives the per-match sub-flow (both fixed → play; both
   // pick-later → 3×3 matrix; mixed → mini-pick).
   freePick?: { p1FactionId: string | null; p2FactionId: string | null } | null;
+  // ONE_V_THREE: the host's set faction (the Runner side). The coin-flip roles live
+  // on `factionMatrix` (topPlayerId = Runner, bottomPlayerId = Picker).
+  oneVThree?: { setFactionId: string | null } | null;
   blindPick?: {
     player1Locked: boolean;
     player2Locked: boolean;
@@ -174,7 +179,8 @@ export interface TournamentCreate {
   name: string;
   format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN' | 'BALANCED_LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK';
+  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE';
+  set_faction_id?: string | null;
   start_date: string;
   timezone: string;
   max_participants?: number;
@@ -221,7 +227,8 @@ export interface TournamentPatchInput {
   draft_preset_id?: string | null;
   // draft-only (backend enforces, frontend disables after DRAFT)
   format?: Tournament['format'];
-  mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK';
+  mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE';
+  set_faction_id?: string | null;
   faction_pool?: string[];
   restricted_factions?: string[];
   // until-ongoing fields
@@ -1355,6 +1362,22 @@ export function offerFreePickFactions(matchId: string, factions: string[]): Prom
 // Free Pick mixed matchup: the fixed-faction player chooses one of the offered 3.
 export function selectFreePickFaction(matchId: string, factionId: string): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/matches/${matchId}/free-pick/select`, {
+    method: 'POST',
+    body: JSON.stringify({ factionId }),
+  });
+}
+
+// 1v3 mode: the Picker (coin-flip loser) offers 3 factions for the Runner to choose from.
+export function offerOneVThreeFactions(matchId: string, factions: string[]): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/one-v-three/offer`, {
+    method: 'POST',
+    body: JSON.stringify({ factions }),
+  });
+}
+
+// 1v3 mode: the Runner (coin-flip winner) chooses which of the 3 offered factions the Picker fields.
+export function selectOneVThreeFaction(matchId: string, factionId: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/one-v-three/select`, {
     method: 'POST',
     body: JSON.stringify({ factionId }),
   });

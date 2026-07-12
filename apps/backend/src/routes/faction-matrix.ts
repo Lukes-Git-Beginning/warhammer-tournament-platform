@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
+import { ensureOneVThreeDecision } from '../lib/one-v-three.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -366,6 +367,152 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
         data: {
           player1_faction_id: fixedIsP1 ? p1Fixed : factionId,
           player2_faction_id: fixedIsP1 ? factionId : p2Fixed,
+        },
+      });
+      emitMatrixUpdate(fastify, matchId, updated);
+      return reply.code(200).send({ ok: true });
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // POST /api/matches/:id/one-v-three/offer
+  // 1v3 mode: the Picker (coin-flip loser, bottom_player_id) offers 3 factions for
+  // the Runner to choose from. The Runner plays the tournament's set faction; the
+  // three must be distinct, allow-listed, and must NOT include the set faction
+  // (no mirror). Reuses the faction_matrix record established by the coin flip.
+  // -------------------------------------------------------------------------
+  fastify.post(
+    '/api/matches/:id/one-v-three/offer',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const actorId = request.user.sub;
+      const body = LockBodySchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: body.error.issues[0]?.message ?? 'Invalid body', statusCode: 400 });
+      }
+      const { factions } = body.data;
+
+      // Establish the coin-flip roles first (idempotent) so the record exists.
+      await ensureOneVThreeDecision(fastify.prisma, matchId);
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: {
+          id: true, player1_id: true, player2_id: true, tournament_id: true,
+          tournament: { select: { mode: true, set_faction_id: true, faction_allowlist: { select: { faction_id: true } } } },
+          games: {
+            where: { faction_matrix: { decided_at: null } },
+            orderBy: { game_number: 'desc' }, select: { id: true, faction_matrix: true }, take: 1,
+          },
+        },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      if (match.tournament?.mode !== 'ONE_V_THREE') return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in 1v3 mode', statusCode: 422 });
+      const isStaff = ['HOST', 'MODERATOR', 'ADMIN'].includes(request.user.role);
+      if (actorId !== match.player1_id && actorId !== match.player2_id && !isStaff) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'You are not a participant of this match', statusCode: 403 });
+      }
+      const game = match.games[0];
+      const matrix = game?.faction_matrix;
+      if (!game || !matrix) return reply.code(404).send({ error: 'NotFound', message: 'No active game awaiting factions', statusCode: 404 });
+      const setFaction = match.tournament.set_faction_id;
+      if (!setFaction) return reply.code(422).send({ error: 'UnprocessableEntity', message: 'This tournament has no set faction configured', statusCode: 422 });
+
+      const pickerId = matrix.bottom_player_id;
+      if (actorId !== pickerId && !isStaff) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Only the Picker offers factions', statusCode: 422 });
+      }
+
+      if (new Set(factions).size !== 3) {
+        return reply.code(400).send({ error: 'BadRequest', message: 'Offer 3 distinct factions', statusCode: 400 });
+      }
+      if (factions.includes(setFaction)) {
+        return reply.code(400).send({ error: 'BadRequest', message: 'You cannot offer the set faction — no mirror match', statusCode: 400 });
+      }
+      const allowlist = (match.tournament?.faction_allowlist ?? []).map((f) => f.faction_id);
+      for (const f of factions) {
+        if (allowlist.length > 0 && !allowlist.includes(f)) {
+          return reply.code(400).send({ error: 'BadRequest', message: `Faction "${f}" is not permitted in this tournament`, statusCode: 400 });
+        }
+      }
+
+      const now = new Date();
+      const runnerIsP1 = matrix.top_player_id === match.player1_id;
+      // Runner's side keeps [set faction]; the Picker's side receives the 3 offered.
+      const sides = runnerIsP1 ? { p2_factions: factions } : { p1_factions: factions };
+      const updated = await fastify.prisma.matchFactionMatrix.update({
+        where: { game_id: game.id },
+        data: { ...sides, p1_locked_at: now, p2_locked_at: now, revealed_at: now, last_action_at: now },
+      });
+
+      emitMatrixUpdate(fastify, matchId, updated);
+      return reply.code(200).send({ ok: true });
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // POST /api/matches/:id/one-v-three/select
+  // 1v3 mode: the Runner (coin-flip winner, top_player_id) chooses which of the 3
+  // offered factions the Picker will field.
+  // -------------------------------------------------------------------------
+  fastify.post(
+    '/api/matches/:id/one-v-three/select',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const actorId = request.user.sub;
+      const body = z.object({ factionId: z.string().min(1) }).safeParse(request.body);
+      if (!body.success) return reply.code(400).send({ error: 'BadRequest', message: 'Invalid body', statusCode: 400 });
+      const { factionId } = body.data;
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: {
+          id: true, player1_id: true, player2_id: true, tournament_id: true,
+          tournament: { select: { mode: true, set_faction_id: true } },
+          games: {
+            where: { faction_matrix: { decided_at: null } },
+            orderBy: { game_number: 'desc' }, select: { id: true, faction_matrix: true }, take: 1,
+          },
+        },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      if (match.tournament?.mode !== 'ONE_V_THREE') return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in 1v3 mode', statusCode: 422 });
+      const isStaff = ['HOST', 'MODERATOR', 'ADMIN'].includes(request.user.role);
+      if (actorId !== match.player1_id && actorId !== match.player2_id && !isStaff) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'You are not a participant of this match', statusCode: 403 });
+      }
+      const game = match.games[0];
+      const matrix = game?.faction_matrix;
+      if (!game || !matrix || !matrix.revealed_at) {
+        return reply.code(404).send({ error: 'NotFound', message: 'No offered factions to choose from yet', statusCode: 404 });
+      }
+      const setFaction = match.tournament.set_faction_id;
+      if (!setFaction) return reply.code(422).send({ error: 'UnprocessableEntity', message: 'This tournament has no set faction configured', statusCode: 422 });
+
+      const runnerId = matrix.top_player_id;
+      if (actorId !== runnerId && !isStaff) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Only the Runner chooses', statusCode: 422 });
+      }
+      const runnerIsP1 = runnerId === match.player1_id;
+      const offered = (runnerIsP1 ? matrix.p2_factions : matrix.p1_factions) as string[];
+      const idx = offered.indexOf(factionId);
+      if (idx < 0) return reply.code(400).send({ error: 'BadRequest', message: 'That faction is not among the three offered', statusCode: 400 });
+
+      const now = new Date();
+      // Runner's side holds [set faction] at index 0; the Picker's side holds the 3.
+      const pickedCell = runnerIsP1 ? cellKey(0, idx) : cellKey(idx, 0);
+      const updated = await fastify.prisma.matchFactionMatrix.update({
+        where: { game_id: game.id },
+        data: { picked_cell: pickedCell, decided_at: now, last_action_at: now },
+      });
+      // Write resolved factions onto the game: Runner = set faction, Picker = chosen.
+      await fastify.prisma.matchGame.update({
+        where: { id: game.id },
+        data: {
+          player1_faction_id: runnerIsP1 ? setFaction : factionId,
+          player2_faction_id: runnerIsP1 ? factionId : setFaction,
         },
       });
       emitMatrixUpdate(fastify, matchId, updated);

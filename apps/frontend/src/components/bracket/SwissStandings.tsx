@@ -59,7 +59,7 @@ function Avatar({ url, username }: { url: string | null; username: string }) {
   );
 }
 
-const FACTION_MODES = new Set(['SFT', '2FT', 'DFT', '3FT', 'TFT', 'TWO_D_THREE', 'FREE_PICK']);
+const FACTION_MODES = new Set(['SFT', '2FT', 'DFT', '3FT', 'TFT', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE']);
 
 function Divider({ label, colSpan }: { label: string; colSpan: number }) {
   return (

@@ -3,6 +3,7 @@ import type { PrismaClient } from '@rizzotto/db';
 import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
 import { ensureMatchGame } from '../lib/match-games.js';
+import { ensureOneVThreeDecision } from '../lib/one-v-three.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -335,6 +336,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           tournament: {
             select: {
               mode: true,
+              set_faction_id: true,
               restricted_factions: { select: { faction_id: true } },
               faction_allowlist: { select: { faction_id: true } },
             },
@@ -379,11 +381,29 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         };
       }
 
+      // 1v3: establish the coin-flip roles once the map is chosen (idempotent), then
+      // surface the host's set faction so the client can render Runner vs Picker.
+      let factionMatrix = game.faction_matrix ?? null;
+      let oneVThree: { setFactionId: string | null } | null = null;
+      if (match.tournament?.mode === 'ONE_V_THREE') {
+        if (!factionMatrix) {
+          await ensureOneVThreeDecision(fastify.prisma, matchId);
+          const g = await fastify.prisma.matchGame.findFirst({
+            where: { match_id: matchId, map_decision: { isNot: null } },
+            orderBy: { game_number: 'desc' },
+            select: { faction_matrix: true },
+          });
+          factionMatrix = g?.faction_matrix ?? null;
+        }
+        oneVThree = { setFactionId: match.tournament.set_faction_id ?? null };
+      }
+
       return reply.code(200).send({
-        ...serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? 'BPT', match.player1_id, game.faction_matrix ?? null),
+        ...serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? 'BPT', match.player1_id, factionMatrix),
         restrictedFactions: match.tournament?.restricted_factions.map((r) => r.faction_id) ?? [],
         factionAllowlist: match.tournament?.faction_allowlist.map((r) => r.faction_id) ?? [],
         freePick,
+        oneVThree,
       });
     },
   );

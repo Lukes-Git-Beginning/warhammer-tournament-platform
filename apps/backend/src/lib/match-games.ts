@@ -208,6 +208,20 @@ export async function finalizeGameResult(
       p1FactionId = p1Fixed ?? game.match.player1_faction_id ?? null;
       p2FactionId = p2Fixed ?? game.match.player2_faction_id ?? null;
     }
+  } else if (mode === 'ONE_V_THREE') {
+    // 1v3: the coin-flip Runner's side of the faction_matrix holds [set faction],
+    // the Picker's side holds the 3 offered; picked_cell resolves both (Runner =
+    // set faction, Picker = the chosen counter). Fall back to the already-written
+    // game factions if the pick step somehow left picked_cell unset.
+    const matrix = game.faction_matrix;
+    if (matrix?.decided_at && matrix.picked_cell) {
+      const [row, col] = matrix.picked_cell.split(',').map(Number);
+      p1FactionId = matrix.p1_factions[row ?? 0] ?? game.player1_faction_id ?? null;
+      p2FactionId = matrix.p2_factions[col ?? 0] ?? game.player2_faction_id ?? null;
+    } else {
+      p1FactionId = game.player1_faction_id ?? null;
+      p2FactionId = game.player2_faction_id ?? null;
+    }
   } else if (!game.match.tournament && game.blind_pick?.revealed_at) {
     // Open Play: factions come from the blind pick
     p1FactionId = game.blind_pick.player1_faction_id ?? null;

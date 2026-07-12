@@ -79,7 +79,8 @@ type EditFormData = {
   map_pool: string[];
   map_preset_config: MapPresetConfig | null;
   format: Tournament['format'];
-  mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK';
+  mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE';
+  set_faction_id: string | null;
   faction_pool: string[];
   restricted_factions: string[];
   visibility: 'PUBLIC' | 'PRIVATE';
@@ -235,7 +236,8 @@ function buildInitialForm(t: Tournament): EditFormData {
     map_pool: (t.map_pool ?? []).map((m) => m.id),
     map_preset_config: (t.map_preset_config as MapPresetConfig | null) ?? null,
     format: t.format,
-    mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX' || t.mode === 'TWO_D_THREE' || t.mode === 'FREE_PICK') ? t.mode : 'BPT',
+    mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX' || t.mode === 'TWO_D_THREE' || t.mode === 'FREE_PICK' || t.mode === 'ONE_V_THREE') ? t.mode : 'BPT',
+    set_faction_id: (t as unknown as { set_faction_id?: string | null }).set_faction_id ?? null,
     faction_pool: t.faction_allowlist ?? [],
     restricted_factions: t.restricted_factions ?? [],
     visibility: t.visibility ?? 'PUBLIC',
@@ -316,6 +318,8 @@ function buildPatchBody(
   if (form.format !== current.format) body.format = form.format;
   if (form.mode !== current.mode) body.mode = form.mode;
   if (form.visibility !== (current.visibility ?? 'PUBLIC')) body.visibility = form.visibility;
+  const currentSetFactionId = (current as unknown as { set_faction_id?: string | null }).set_faction_id ?? null;
+  if (form.set_faction_id !== currentSetFactionId) (body as Record<string, unknown>).set_faction_id = form.set_faction_id;
   if (!arraysEqual(form.faction_pool, initialFactionIds)) body.faction_pool = form.faction_pool;
   if (!arraysEqual(form.restricted_factions, initialRestrictedIds)) body.restricted_factions = form.restricted_factions;
 
@@ -768,6 +772,7 @@ export function TournamentEditPage() {
                   <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
                   <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
                   <option value="FREE_PICK">Enticity&apos;s Free Pick — SFT/Matrix Hybrid</option>
+                  <option value="ONE_V_THREE">1v3 — Set Faction vs. One of Three Counterpicks</option>
                 </Select>
               )}
             </div>
@@ -776,6 +781,56 @@ export function TournamentEditPage() {
             <div className="mt-3 rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-3 text-sm text-rizzotto-stone-300">
               <p className="font-semibold text-rizzotto-gold-400 mb-1">Auto Swiss</p>
               <p>Match format (BO1), map mode (Random Ban&amp;Pick) and rounds are set automatically at tournament start based on check-in count. Check-in opens 1h before start time.</p>
+            </div>
+          )}
+
+          {/* ── ONE_V_THREE: Set Faction ─────────────────────────────────── */}
+          {form.mode === 'ONE_V_THREE' && (
+            <div className="mt-3">
+              <Label required>Set faction (the Runner plays this)</Label>
+              {draftLocked ? (
+                <>
+                  <div className="mt-1 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/40 px-3 py-2 text-sm text-rizzotto-stone-300">
+                    {form.set_faction_id
+                      ? (allFactions.find((f) => f.id === form.set_faction_id)?.name ?? form.set_faction_id)
+                      : '—'}
+                  </div>
+                  <LockNote>Locked — registration is open</LockNote>
+                </>
+              ) : (
+                <div className="max-h-52 overflow-y-auto rounded-md border border-rizzotto-iron-700 p-2">
+                  {allFactions.length === 0 ? (
+                    <p className="text-xs text-rizzotto-stone-500 text-center py-4">Loading factions…</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+                      {allFactions.map((faction) => {
+                        const isSelected = form.set_faction_id === faction.id;
+                        return (
+                          <label
+                            key={faction.id}
+                            className={[
+                              'flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer transition-colors text-sm',
+                              isSelected
+                                ? 'bg-rizzotto-gold-500/15 text-rizzotto-gold-400'
+                                : 'text-rizzotto-stone-300 hover:bg-rizzotto-iron-700/50',
+                            ].join(' ')}
+                          >
+                            <input
+                              type="radio"
+                              name="tef-set-faction"
+                              value={faction.id}
+                              checked={isSelected}
+                              onChange={() => set('set_faction_id', faction.id)}
+                              className="accent-rizzotto-gold-400 shrink-0"
+                            />
+                            <span className="truncate">{faction.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </fieldset>

@@ -18,7 +18,8 @@ const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
   format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'AUTO_SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
-  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK']).default('BPT'),
+  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE']).default('BPT'),
+  set_faction_id: z.string().min(1).optional(),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
   max_participants: z.coerce.number().int().positive().optional().or(z.literal('')),
@@ -369,6 +370,9 @@ export function TournamentCreateForm() {
       ...(restrictedFactionsEnabled && (form.restricted_factions ?? []).length > 0
         ? { restricted_factions: form.restricted_factions }
         : {}),
+      ...(rest.mode === 'ONE_V_THREE' && rest.set_faction_id
+        ? { set_faction_id: rest.set_faction_id }
+        : {}),
     });
   }
 
@@ -447,6 +451,7 @@ export function TournamentCreateForm() {
             <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
             <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
             <option value="FREE_PICK">Enticity&apos;s Free Pick — SFT/Matrix Hybrid</option>
+            <option value="ONE_V_THREE">1v3 — Set Faction vs. One of Three Counterpicks</option>
           </Select>
           <FieldHint>
             {(form.mode === 'BPT' || !form.mode) && 'Every match includes a blind faction pick phase.'}
@@ -455,8 +460,51 @@ export function TournamentCreateForm() {
             {form.mode === 'MATRIX' && 'Each match: both players pick 3 factions blindly, then ban from the 3×3 matchup grid.'}
             {form.mode === 'TWO_D_THREE' && 'Players pick 3 factions at registration; one is drawn at random for each player before every game.'}
             {form.mode === 'FREE_PICK' && 'Each player chooses at registration: a fixed faction (like SFT) or to pick match-by-match. Two fixed players just play their factions; two pick-later players do a 3×3 matrix; a fixed vs pick-later match has the pick-later player offer 3 factions for the fixed player to choose from.'}
+            {form.mode === 'ONE_V_THREE' && 'A coin flip sets roles each match: one player runs the host\'s set faction, the other brings three, and the set-faction player picks which of the three their opponent plays.'}
           </FieldHint>
         </div>
+
+        {/* ─── ONE_V_THREE: Set Faction ──────────────────────────────────── */}
+        {form.mode === 'ONE_V_THREE' && (
+          <div>
+            <Label htmlFor="tcf-set-faction" required>
+              Set faction (the Runner plays this)
+            </Label>
+            <div className="max-h-52 overflow-y-auto rounded-md border border-rizzotto-iron-700 p-2">
+              {allFactions.length === 0 ? (
+                <p className="text-xs text-rizzotto-stone-500 text-center py-4">Loading factions…</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+                  {allFactions.map((faction) => {
+                    const isSelected = form.set_faction_id === faction.id;
+                    return (
+                      <label
+                        key={faction.id}
+                        className={[
+                          'flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer transition-colors text-sm',
+                          isSelected
+                            ? 'bg-rizzotto-gold-500/15 text-rizzotto-gold-400'
+                            : 'text-rizzotto-stone-300 hover:bg-rizzotto-iron-700/50',
+                        ].join(' ')}
+                      >
+                        <input
+                          type="radio"
+                          name="set_faction_id"
+                          value={faction.id}
+                          checked={isSelected}
+                          onChange={() => setForm((prev) => ({ ...prev, set_faction_id: faction.id }))}
+                          className="accent-rizzotto-gold-400 shrink-0"
+                        />
+                        <span className="truncate">{faction.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            {errors.set_faction_id && <FieldError message={errors.set_faction_id} />}
+          </div>
+        )}
       </div>
 
       {(form.format === 'SWISS' || form.format === 'BALANCED_LIECHTENSTEIN') && (

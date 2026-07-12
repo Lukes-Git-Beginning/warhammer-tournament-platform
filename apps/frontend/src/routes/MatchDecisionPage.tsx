@@ -12,6 +12,8 @@ import {
   banMatrixCell,
   offerFreePickFactions,
   selectFreePickFaction,
+  offerOneVThreeFactions,
+  selectOneVThreeFaction,
   getFactions,
 } from '@/lib/api';
 import type { MatchDecisionState, MapDto } from '@/lib/api';
@@ -1331,6 +1333,210 @@ function FreePickMiniPhase({ matchId, decision, currentUserId, factions, rowPlay
 }
 
 // ---------------------------------------------------------------------------
+// 1v3 Phase — coin-flip roles, Picker offers 3, Runner picks 1
+// ---------------------------------------------------------------------------
+
+interface OneVThreePhaseProps {
+  matchId: string;
+  decision: MatchDecisionState;
+  currentUserId: string;
+  factions: FactionWithStatsDto[];
+  rowPlayer?: PlayerRef;
+  colPlayer?: PlayerRef;
+  restrictedFactions?: string[];
+  factionAllowlist?: string[];
+}
+
+function OneVThreePhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer, restrictedFactions = [], factionAllowlist = [] }: OneVThreePhaseProps) {
+  const queryClient = useQueryClient();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const mx = decision.factionMatrix;
+  const setFactionId = decision.oneVThree?.setFactionId ?? null;
+  const runnerId = mx?.topPlayerId ?? null;
+  const pickerId = mx?.bottomPlayerId ?? null;
+
+  const viewerIsRunner = currentUserId === runnerId;
+  const viewerIsPicker = currentUserId === pickerId;
+
+  const revealed = Boolean(mx?.revealedAt);
+  const runnerIsP1 = runnerId != null && runnerId === rowPlayer?.id;
+  const offered = ((revealed ? (runnerIsP1 ? mx?.p2Factions : mx?.p1Factions) : []) ?? []) as string[];
+
+  const setFactionEntry = factions.find((f) => f.faction.id === setFactionId)?.faction;
+  const runnerRef = runnerIsP1 ? rowPlayer : colPlayer;
+  const pickerRef = runnerIsP1 ? colPlayer : rowPlayer;
+
+  const toggle = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : prev.length >= 3 ? prev : [...prev, id]));
+
+  const pickRandom3 = () => {
+    const pool = factions
+      .map((f) => f.faction.id)
+      .filter((id) => id !== setFactionId && (factionAllowlist.length === 0 || factionAllowlist.includes(id)));
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+    }
+    setSelected(pool.slice(0, 3));
+  };
+
+  async function submitOffer() {
+    if (selected.length !== 3) return;
+    setActing(true);
+    setErr(null);
+    try {
+      await offerOneVThreeFactions(matchId, selected);
+      await queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Offer failed — try again.');
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function choose(factionId: string) {
+    setActing(true);
+    setErr(null);
+    try {
+      await selectOneVThreeFaction(matchId, factionId);
+      await queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Pick failed — try again.');
+    } finally {
+      setActing(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-6">
+      <div className="text-center">
+        <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">1v3 — Set Faction vs. One of Three</h2>
+        <p className="mt-1 text-sm text-rizzotto-stone-400">
+          Coin flip:{' '}
+          <span className="text-rizzotto-stone-200">{runnerRef?.id === currentUserId ? 'You' : (runnerRef?.username ?? 'The Runner')}</span>
+          {' '}run{runnerRef?.id === currentUserId ? '' : 's'} {setFactionEntry?.name ?? 'the set faction'};{' '}
+          <span className="text-rizzotto-stone-200">{pickerRef?.id === currentUserId ? 'You' : (pickerRef?.username ?? 'The Picker')}</span>
+          {' '}bring{pickerRef?.id === currentUserId ? '' : 's'} three.
+        </p>
+      </div>
+
+      {/* Picker offers 3 (the set faction is not offerable — no mirror) */}
+      {!revealed && viewerIsPicker && (
+        <>
+          <p className="max-w-sm text-center text-sm text-rizzotto-stone-400">
+            Offer 3 factions — the Runner will choose which one you play. ({selected.length}/3)
+          </p>
+          <div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+            {factions.map(({ faction }) => {
+              const isSel = selected.includes(faction.id);
+              const isSetFaction = faction.id === setFactionId;
+              const banned = factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id);
+              const disabled = banned || isSetFaction || (!isSel && selected.length >= 3);
+              return (
+                <button
+                  key={faction.id}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => toggle(faction.id)}
+                  title={isSetFaction ? 'The set faction cannot be offered (no mirror)' : restrictedFactions.includes(faction.id) && !banned ? 'Restricted (nerfed) — does not count toward the leaderboard' : undefined}
+                  className={[
+                    'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center transition-[border-color,background-color,opacity]',
+                    isSel
+                      ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800'
+                      : disabled
+                        ? 'cursor-default border-rizzotto-iron-700 bg-rizzotto-iron-900/40 opacity-40'
+                        : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60',
+                  ].join(' ')}
+                >
+                  <FactionBadge colorHex={faction.color_hex} initials={faction.initials} name={faction.name} size="lg" iconUrl={faction.icon_url} />
+                  <span className={['line-clamp-2 font-display text-[10px] uppercase leading-tight tracking-wide', isSel ? 'text-rizzotto-gold-300' : 'text-rizzotto-stone-300'].join(' ')}>
+                    {faction.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={pickRandom3}
+              className="rounded-sm border border-rizzotto-iron-600 bg-rizzotto-iron-900 px-3 py-2 text-xs font-semibold text-rizzotto-stone-300 transition-colors hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-300"
+            >
+              🎲 Random 3
+            </button>
+            <Button variant="forge" size="md" disabled={selected.length !== 3 || acting} onClick={submitOffer}>
+              {acting ? 'Offering…' : 'Offer 3 Factions'}
+            </Button>
+          </div>
+          {err && <p className="text-sm text-red-400">{err}</p>}
+        </>
+      )}
+
+      {/* Runner waits for the offer */}
+      {!revealed && !viewerIsPicker && (
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-rizzotto-gold-400 border-t-transparent" />
+          <p className="text-sm text-rizzotto-stone-400">Waiting for the Picker to offer 3 factions…</p>
+        </div>
+      )}
+
+      {/* Runner chooses one of the offered 3 */}
+      {revealed && viewerIsRunner && (
+        <>
+          <p className="text-center text-sm text-rizzotto-stone-200">Choose the faction your opponent will field (you run {setFactionEntry?.name ?? 'the set faction'}):</p>
+          <div className="grid w-full max-w-lg grid-cols-3 gap-3">
+            {offered.map((fid) => {
+              const entry = factions.find((f) => f.faction.id === fid);
+              const isH = hovered === fid;
+              return (
+                <button
+                  key={fid}
+                  type="button"
+                  disabled={acting}
+                  onClick={() => choose(fid)}
+                  onMouseEnter={() => setHovered(fid)}
+                  onMouseLeave={() => setHovered(null)}
+                  className="relative flex flex-col items-center gap-2 rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900 p-3 transition-colors hover:border-emerald-400/50"
+                >
+                  <FactionBadge colorHex={entry?.faction.color_hex ?? '#666'} initials={entry?.faction.initials ?? '?'} name={entry?.faction.name ?? '?'} size="lg" iconUrl={entry?.faction.icon_url} />
+                  <span className="font-display text-xs uppercase tracking-wide text-rizzotto-stone-200">{entry?.faction.name ?? '?'}</span>
+                  {isH && (
+                    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-md" style={{ boxShadow: 'inset 0 0 24px 6px rgba(16,185,129,0.6)' }}>
+                      <span className="rounded bg-rizzotto-iron-950/70 px-2 py-0.5 font-display text-sm font-bold uppercase tracking-widest text-rizzotto-stone-100">Pick</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            disabled={acting || offered.length === 0}
+            onClick={() => offered.length > 0 && void choose(offered[Math.floor(Math.random() * offered.length)]!)}
+            className="rounded-sm border border-rizzotto-iron-600 bg-rizzotto-iron-900 px-3 py-2 text-xs font-semibold text-rizzotto-stone-300 transition-colors hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-300 disabled:opacity-50"
+          >
+            🎲 Random
+          </button>
+          {err && <p className="text-sm text-red-400">{err}</p>}
+        </>
+      )}
+
+      {/* Picker waits for the Runner's choice */}
+      {revealed && !viewerIsRunner && (
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-rizzotto-gold-400 border-t-transparent" />
+          <p className="text-sm text-rizzotto-stone-400">The Runner is choosing which of the three you'll play…</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -1342,6 +1548,7 @@ type DecisionPhase =
   | 'blind_pick'
   | 'faction_matrix'
   | 'free_pick_mini'
+  | 'one_v_three'
   | 'ready';
 
 function BlindPickCountdown({ firstLockedAt, timeoutMs }: { firstLockedAt: string | null; timeoutMs: number }) {
@@ -1469,6 +1676,11 @@ function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
     // MATRIX mode: faction pick/ban after map decision
     if (d.tournamentMode === 'MATRIX') {
       if (!d.factionMatrix?.decidedAt) return 'faction_matrix';
+      return 'ready';
+    }
+    // 1v3 mode: coin-flip roles + offer/select after map decision
+    if (d.tournamentMode === 'ONE_V_THREE') {
+      if (!d.factionMatrix?.decidedAt) return 'one_v_three';
       return 'ready';
     }
     // Map decided — check blind pick
@@ -1768,7 +1980,7 @@ export function MatchDecisionPage() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4 }}
             >
-              {decision.tournamentMode === 'FREE_PICK' && (
+              {(decision.tournamentMode === 'FREE_PICK' || decision.tournamentMode === 'ONE_V_THREE') && (
                 <FreePickFactionBanner decision={decision} factions={factions} rowPlayer={matrixRowPlayer} colPlayer={matrixColPlayer} currentUserId={user.id} />
               )}
               <RandomMapPhase pickedMapId={decision.pickedMapId} mapPool={mapPool} />
@@ -1783,7 +1995,7 @@ export function MatchDecisionPage() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4 }}
             >
-              {decision.tournamentMode === 'FREE_PICK' && (
+              {(decision.tournamentMode === 'FREE_PICK' || decision.tournamentMode === 'ONE_V_THREE') && (
                 <FreePickFactionBanner decision={decision} factions={factions} rowPlayer={matrixRowPlayer} colPlayer={matrixColPlayer} currentUserId={user.id} />
               )}
               <PickBanPhase
@@ -1859,6 +2071,27 @@ export function MatchDecisionPage() {
             </motion.div>
           )}
 
+          {phase === 'one_v_three' && (
+            <motion.div
+              key="one_v_three"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              <OneVThreePhase
+                matchId={matchId}
+                decision={decision}
+                currentUserId={user.id}
+                factions={factions}
+                rowPlayer={matrixRowPlayer}
+                colPlayer={matrixColPlayer}
+                restrictedFactions={decision.restrictedFactions ?? []}
+                factionAllowlist={decision.factionAllowlist ?? []}
+              />
+            </motion.div>
+          )}
+
           {phase === 'ready' && (
             <motion.div
               key="ready"
@@ -1883,7 +2116,7 @@ export function MatchDecisionPage() {
                   </p>
                 )}
               </div>
-              {decision.tournamentMode === 'FREE_PICK' && (
+              {(decision.tournamentMode === 'FREE_PICK' || decision.tournamentMode === 'ONE_V_THREE') && (
                 <FreePickFactionBanner decision={decision} factions={factions} rowPlayer={matrixRowPlayer} colPlayer={matrixColPlayer} currentUserId={user.id} />
               )}
               <Button
