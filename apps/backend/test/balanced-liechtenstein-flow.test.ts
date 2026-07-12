@@ -175,11 +175,49 @@ async function runGroupPhase(tournamentId: string, rounds: number): Promise<void
 }
 
 describe('Balanced Liechtenstein — division playoffs', () => {
-  it('refuses playoffs while the group phase is unfinished', async () => {
+  it('generates no division while the group phase is unfinished', async () => {
     const { tournamentId } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
     await runBalancedPairingTick(app, tournamentId); // only round 1 exists
     const result = await startBalancedPlayoffs(app, tournamentId);
-    expect('error' in result).toBe(true);
+    expect('error' in result).toBe(false);
+    expect((result as { finals: number }).finals).toBe(0); // no division is complete yet
+  });
+
+  it('generates a complete division while a slower division is still playing', async () => {
+    const { tournamentId, users } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
+    const u = users;
+    const seed = async (round: number, pairs: [TestUser, TestUser][]) => {
+      let mn = round * 100;
+      for (const [a, b] of pairs) {
+        await prisma.match.create({
+          data: {
+            tournament_id: tournamentId, round, match_number: mn++,
+            player1_id: a.id, player2_id: b.id, status: 'COMPLETED', winner_id: a.id,
+          },
+        });
+      }
+    };
+    // Band 5 (u0..u3) plays its full 2 rounds; band 3 (u4..u7) only round 1.
+    await seed(1, [[u[0]!, u[1]!], [u[2]!, u[3]!], [u[4]!, u[5]!], [u[6]!, u[7]!]]);
+    await seed(2, [[u[0]!, u[2]!], [u[1]!, u[3]!]]);
+
+    const result = await startBalancedPlayoffs(app, tournamentId);
+    expect('error' in result).toBe(false);
+    expect((result as { finals: number }).finals).toBe(1); // only band 5 is ready
+
+    const playoff = await prisma.match.findMany({
+      where: {
+        tournament_id: tournamentId,
+        phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] },
+        deleted_at: null,
+      },
+      select: { player1_id: true, player2_id: true },
+    });
+    const inPlayoffs = new Set(
+      playoff.flatMap((m) => [m.player1_id, m.player2_id]).filter((x): x is string => Boolean(x)),
+    );
+    expect(inPlayoffs.has(u[0]!.id)).toBe(true); // band 5 (complete) is seeded
+    expect(inPlayoffs.has(u[4]!.id)).toBe(false); // band 3 (still playing) is not
   });
 
   it('creates one final per division once the group phase is complete', async () => {
@@ -198,11 +236,62 @@ describe('Balanced Liechtenstein — division playoffs', () => {
     expect(players.size).toBe(4); // four distinct finalists
   });
 
-  it('refuses to generate playoffs twice', async () => {
+  it('never seeds a REGISTERED (never-checked-in) participant into a division bracket (Big Bees)', async () => {
+    // 8 real checked-in contenders (3 band 5 + 5 band 3, an even field that pairs
+    // cleanly) plus 1 phantom who registered but never checked in. Before the fix the
+    // phantom (band 5, 0 points) padded band 5 to a pool of 4, giving that division a
+    // third-place match with the phantom filling seed 4. After the fix band 5 has only
+    // 3 real players and borrows a band-3 player to fill — the phantom is never seeded.
+    const { tournamentId, users } = await setup([5, 5, 5, 3, 3, 3, 3, 3], 2);
+    const ghost = await createTestUser({ username: 'BigBees' });
+    createdUserIds.push(ghost.id);
+    await prisma.tournamentParticipant.create({
+      data: { tournament_id: tournamentId, user_id: ghost.id, status: 'REGISTERED', skill_band: 5 },
+    });
+
+    // Seed a completed 2-round group directly (each of the 8 contenders plays exactly
+    // twice) so playoff generation is deterministic — no dependence on tick/pairing order.
+    const u = users;
+    const rounds = [
+      [[u[0]!, u[1]!], [u[2]!, u[3]!], [u[4]!, u[5]!], [u[6]!, u[7]!]],
+      [[u[0]!, u[2]!], [u[1]!, u[3]!], [u[4]!, u[6]!], [u[5]!, u[7]!]],
+    ];
+    let mn = 1;
+    for (let r = 0; r < rounds.length; r++) {
+      for (const [a, b] of rounds[r]!) {
+        await prisma.match.create({
+          data: {
+            tournament_id: tournamentId, round: r + 1, match_number: mn++,
+            player1_id: a.id, player2_id: b.id, status: 'COMPLETED', winner_id: a.id,
+          },
+        });
+      }
+    }
+
+    const result = await startBalancedPlayoffs(app, tournamentId);
+    expect('error' in result).toBe(false); // the group is complete → playoffs generate
+
+    const playoff = await prisma.match.findMany({
+      where: {
+        tournament_id: tournamentId,
+        phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] },
+        deleted_at: null,
+      },
+      select: { player1_id: true, player2_id: true },
+    });
+    const inPlayoffs = new Set(
+      playoff.flatMap((m) => [m.player1_id, m.player2_id]).filter((x): x is string => Boolean(x)),
+    );
+    expect(playoff.length).toBeGreaterThan(0); // the real contenders did generate brackets
+    expect(inPlayoffs.has(ghost.id)).toBe(false); // the phantom is not in any of them
+  });
+
+  it('does not regenerate already-generated divisions (idempotent)', async () => {
     const { tournamentId } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
     await runGroupPhase(tournamentId, 2); // auto-launches the division playoffs
     const again = await startBalancedPlayoffs(app, tournamentId);
-    expect('error' in again).toBe(true);
+    expect('error' in again).toBe(false);
+    expect((again as { finals: number }).finals).toBe(0); // nothing new to generate
   });
 
   it('auto-launches playoffs even when a group match carries phase SWISS', async () => {

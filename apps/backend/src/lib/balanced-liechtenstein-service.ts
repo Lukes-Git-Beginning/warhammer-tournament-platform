@@ -26,6 +26,11 @@ const MAX_ITERATIONS = 12; // safety cap for bye cascades in a single tick
 const RELEASE_LOCK =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
+/** Match statuses that count as a played (advancing) round toward a player's depth. */
+const BL_ADVANCING = new Set(['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST', 'CATCHUP_BYE']);
+/** Non-terminal statuses: the player is assigned/playing, not finished. */
+const BL_ACTIVE = new Set(['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED']);
+
 /**
  * Fix every participant's skill division (matchmakingBand 1..5) on the tournament
  * for skill-based pairing + division playoffs. Called at start (authoritative,
@@ -221,6 +226,16 @@ export async function runBalancedPairingTick(
         });
       }
       for (const b of plan.byes) {
+        // "0 points until first real game": a bye handed to a late joiner (someone
+        // with a CATCHUP_BYE placeholder) who has not yet played a real game is
+        // itself a 0-point CATCHUP_BYE — not a scoring bye. This stops a late joiner
+        // who keeps getting byed from banking free points (Dniper). Earned byes are
+        // protected: an on-time player (no catch-up placeholder), and anyone who has
+        // already completed a real game, gets a normal scoring bye.
+        const own = matches.filter((m) => m.player1_id === b.player_id || m.player2_id === b.player_id);
+        const hasPlayedReal = own.some((m) => m.status === 'COMPLETED');
+        const isLateJoiner = own.some((m) => m.status === 'CATCHUP_BYE');
+        const isCatchup = isLateJoiner && !hasPlayedReal;
         rows.push({
           id: randomUUID(),
           tournament_id: tournamentId,
@@ -228,8 +243,8 @@ export async function runBalancedPairingTick(
           match_number: nextNumber++,
           player1_id: b.player_id,
           player2_id: null,
-          status: 'BYE' as MatchStatus,
-          winner_id: b.player_id,
+          status: (isCatchup ? 'CATCHUP_BYE' : 'BYE') as MatchStatus,
+          winner_id: isCatchup ? null : b.player_id,
           phase: null as MatchPhase | null,
         });
       }
@@ -251,31 +266,18 @@ export async function runBalancedPairingTick(
           ms.map((m) => ({ id: m.id, player1_id: m.player1_id, player2_id: m.player2_id })),
         );
       }
-    } else {
-      // No new pairings this tick → the group phase may be complete. Auto-launch
-      // the division playoffs (previously host-only). startBalancedPlayoffs is the
-      // authority: it only proceeds when every contender has played all rounds.
-      // Cheap guard first so we don't re-query on every post-playoff match tick.
-      //
-      // Only REAL playoff matches (phase 'PLAYOFF_*') count as "already generated".
-      // A group match can carry phase 'SWISS' (e.g. a manually-created or forfeit
-      // match, which stamps 'SWISS' unconditionally) — that must NOT be mistaken for
-      // a playoff, or the auto-launch is suppressed forever. Mirror startBalancedPlayoffs'
-      // own guard (`phase && phase !== 'SWISS'`).
-      const playoffExists = await fastify.prisma.match.count({
-        where: {
-          tournament_id: tournamentId,
-          deleted_at: null,
-          phase: { not: null, notIn: ['SWISS'] },
-        },
-      });
-      if (playoffExists === 0) {
-        const result = await startBalancedPlayoffs(fastify, tournamentId);
-        if (!('error' in result)) {
-          emitBracketUpdate(fastify.io, tournamentId);
-          fastify.log.info({ tournamentId, ...result }, 'balanced playoffs auto-started');
-        }
-      }
+    }
+
+    // After every tick, attempt per-division playoff generation. startBalancedPlayoffs
+    // is idempotent: it generates each division once its own (and any borrowed) bands
+    // are complete and skips already-generated ones — so the top division can start
+    // while lower divisions are still playing, and a fully-generated tournament is a
+    // cheap no-op. (Runs on every tick, not just dry ones, so a division that finishes
+    // in a tick that also pairs another division still launches immediately.)
+    const playoffResult = await startBalancedPlayoffs(fastify, tournamentId);
+    if (!('error' in playoffResult) && playoffResult.finals > 0) {
+      emitBracketUpdate(fastify.io, tournamentId);
+      fastify.log.info({ tournamentId, ...playoffResult }, 'balanced division playoffs generated');
     }
   } catch (err) {
     fastify.log.error({ err, tournamentId }, 'balanced pairing tick failed');
@@ -529,9 +531,8 @@ export async function startBalancedPlayoffs(
       games: { select: { status: true, winner_id: true } },
     },
   });
-  if (matches.some((m) => m.phase && m.phase !== 'SWISS')) {
-    return { error: 'Playoffs have already been generated' };
-  }
+  // Playoffs generate per division (see the loop below), so existing playoff matches
+  // no longer block a call — divisions that are still ungenerated can be added.
 
   const roster = await fastify.prisma.tournamentParticipant.findMany({
     where: {
@@ -546,18 +547,8 @@ export async function startBalancedPlayoffs(
   const anyCheckedIn = active.some((p) => p.status === 'CHECKED_IN');
   const contenders = anyCheckedIn ? active.filter((p) => p.status === 'CHECKED_IN') : active;
 
-  // The group phase must be complete: every contender has played all rounds.
-  const plan = planPairings(
-    contenders.map((p) => ({ userId: p.user_id, band: p.skill_band })),
-    matches.map((m) => ({
-      round: m.round,
-      player1_id: m.player1_id,
-      player2_id: m.player2_id,
-      status: m.status,
-    })),
-    roundsCount,
-  );
-  if (!plan.complete) return { error: 'Group phase is not complete yet' };
+  // No global completeness gate: each division is generated as soon as it (and any
+  // band it borrows down into) is complete — see the per-division gate below.
 
   // Final Swiss standings → global rank (best = 1).
   const participantIds = roster.map((p) => p.user_id);
@@ -587,21 +578,65 @@ export async function startBalancedPlayoffs(
   );
 
   const bandByUser = new Map(roster.map((p) => [p.user_id, p.skill_band ?? DEFAULT_BAND]));
+  // Only real contenders seed the playoff pools. A participant who is REGISTERED but
+  // never CHECKED_IN (or who withdrew) is not a contender and must not appear in a
+  // division bracket — this is the "Big Bees" phantom-finalist fix.
+  const contenderIds = new Set(contenders.map((p) => p.user_id));
   const ranked = sorted
-    .filter((s) => !withdrawnIds.has(s.userId))
+    .filter((s) => contenderIds.has(s.userId) && !withdrawnIds.has(s.userId))
     .map((s, i) => ({ userId: s.userId, band: bandByUser.get(s.userId) ?? DEFAULT_BAND, rank: i + 1 }));
 
   const pools = formDivisionPools(ranked);
 
-  const playoffRound = matches.reduce((mx, m) => Math.max(mx, m.round), 0) + 1;
+  // Per-division readiness. A contender is complete once they have played all rounds
+  // with no active match; a band is complete once all its contenders are. A division
+  // is generated only when every band its pool draws from (its own + any borrowed
+  // below) is complete — so its membership + seeding can no longer shift.
+  const completedByUser = new Map<string, number>();
+  const activeUsers = new Set<string>();
+  for (const m of matches) {
+    if (m.phase && m.phase !== 'SWISS') continue; // group phase only
+    for (const uid of [m.player1_id, m.player2_id]) {
+      if (!uid) continue;
+      if (BL_ADVANCING.has(m.status)) completedByUser.set(uid, (completedByUser.get(uid) ?? 0) + 1);
+      else if (BL_ACTIVE.has(m.status)) activeUsers.add(uid);
+    }
+  }
+  const contenderIsComplete = (uid: string) =>
+    (completedByUser.get(uid) ?? 0) >= roundsCount && !activeUsers.has(uid);
+  const contendersByBand = new Map<number, string[]>();
+  for (const c of contenders) {
+    const b = bandByUser.get(c.user_id) ?? DEFAULT_BAND;
+    const list = contendersByBand.get(b) ?? [];
+    list.push(c.user_id);
+    contendersByBand.set(b, list);
+  }
+  const bandComplete = (b: number) => (contendersByBand.get(b) ?? []).every(contenderIsComplete);
+
+  // A player already seeded into a real playoff match ⇒ their division was generated.
+  const alreadyInPlayoff = new Set<string>();
+  for (const m of matches) {
+    if (m.phase && m.phase !== 'SWISS') {
+      if (m.player1_id) alreadyInPlayoff.add(m.player1_id);
+      if (m.player2_id) alreadyInPlayoff.add(m.player2_id);
+    }
+  }
+
+  // Playoff round follows the last GROUP round (stable as more divisions are added);
+  // match numbers follow the global max so they never collide with existing rows.
+  const groupRounds = matches.filter((m) => m.phase === null || m.phase === 'SWISS');
+  const playoffRound = groupRounds.reduce((mx, m) => Math.max(mx, m.round), 0) + 1;
   let nextNumber = matches.reduce((mx, m) => Math.max(mx, m.match_number), 0) + 1;
   const rows: Prisma.MatchCreateManyInput[] = [];
   const allPlayable: Array<{ id: string; round: number; player1_id: string; player2_id: string }> = [];
   let brackets = 0;
 
-  // One playoff bracket per division; its size follows the division's own size.
+  // One playoff bracket per division, generated once it is ready and not already done.
   for (const pool of pools) {
     if (pool.seeds.length < 2) continue; // a lone champion needs no bracket
+    if (pool.seeds.some((s) => alreadyInPlayoff.has(s))) continue; // already generated
+    const spanBands = new Set(pool.players.map((p) => p.band));
+    if (![...spanBands].every(bandComplete)) continue; // wait for borrowed bands to finish
     const built = buildDivisionBracket(pool.seeds, tournamentId, playoffRound, nextNumber);
     rows.push(...built.rows);
     allPlayable.push(...built.playable);

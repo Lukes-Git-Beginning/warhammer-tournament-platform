@@ -523,7 +523,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, host_id: true },
+        select: { id: true, host_id: true, format: true, status: true },
       });
 
       if (!tournament) {
@@ -599,13 +599,21 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         action: 'checked_in',
       });
 
-      // If checked in after the bracket already started, give the late joiner a
-      // BYE in the current Swiss round so they're folded into later rounds. Non-fatal.
+      // If checked in after the bracket already started, fold the late joiner in.
+      // Balanced Liechtenstein is admitted exactly like a late JOIN — assign the
+      // skill band, backfill 0-point CATCHUP_BYE placeholders, run the pairing tick
+      // (createLateJoinerBye is a no-op for BaLi, which would otherwise leave the
+      // player at round-1 depth with no catch-up handling). Non-fatal.
       try {
-        const bye = await createLateJoinerBye(fastify.prisma, tournament.id, parsed.data.user_id);
-        if (bye) emitBracketUpdate(fastify.io, tournament.id);
+        if (tournament.format === 'BALANCED_LIECHTENSTEIN' && tournament.status === 'ONGOING') {
+          await admitBalancedLateJoiner(fastify, tournament.id, parsed.data.user_id);
+          emitBracketUpdate(fastify.io, tournament.id);
+        } else {
+          const bye = await createLateJoinerBye(fastify.prisma, tournament.id, parsed.data.user_id);
+          if (bye) emitBracketUpdate(fastify.io, tournament.id);
+        }
       } catch (err) {
-        request.log.warn({ err, slug }, 'Failed to create late-joiner BYE');
+        request.log.warn({ err, slug }, 'Failed to fold in late check-in');
       }
 
       // #40: a late join grows the active pool — re-size the auto-sized bracket live.

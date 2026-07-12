@@ -297,7 +297,10 @@ async function generateNextSwissRound(
         noContestMap.get(m.player2_id)?.push(m.player1_id);
       }
     }
-    if (m.status === 'BYE') {
+    // A CATCHUP_BYE counts as "already byed" for pairing purposes: a late joiner who
+    // sat out a round on a 0-point placeholder must not then also be handed a scoring
+    // bye (that would be a double bye / free point). It still scores 0 in standings.
+    if (m.status === 'BYE' || m.status === 'CATCHUP_BYE') {
       const byePlayer = m.player1_id ?? m.player2_id;
       if (byePlayer) byeMap.set(byePlayer, true);
     }
