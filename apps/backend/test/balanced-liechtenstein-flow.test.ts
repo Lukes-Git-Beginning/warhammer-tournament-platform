@@ -198,6 +198,31 @@ describe('Balanced Liechtenstein — division playoffs', () => {
     expect(players.size).toBe(4); // four distinct finalists
   });
 
+  it('never seeds a REGISTERED (never-checked-in) participant into a division bracket (Big Bees)', async () => {
+    // 3 real checked-in contenders + 1 phantom who registered but never checked in.
+    // Before the fix the phantom (band 5, 0 points) padded the pool to 4, which turns
+    // the division into a final + third-place match — and the phantom filled seed 4 of
+    // that third-place match. The pool must be built from checked-in contenders only.
+    const { tournamentId } = await setup([5, 5, 5], 2);
+    const ghost = await createTestUser({ username: 'BigBees' });
+    createdUserIds.push(ghost.id);
+    await prisma.tournamentParticipant.create({
+      data: { tournament_id: tournamentId, user_id: ghost.id, status: 'REGISTERED', skill_band: 5 },
+    });
+
+    await runGroupPhase(tournamentId, 2); // group completes → auto-launch playoffs
+
+    const playoff = await prisma.match.findMany({
+      where: { tournament_id: tournamentId, phase: { startsWith: 'PLAYOFF' }, deleted_at: null },
+      select: { player1_id: true, player2_id: true },
+    });
+    const inPlayoffs = new Set(
+      playoff.flatMap((m) => [m.player1_id, m.player2_id]).filter((x): x is string => Boolean(x)),
+    );
+    expect(playoff.length).toBeGreaterThan(0); // the 3 real contenders did generate a bracket
+    expect(inPlayoffs.has(ghost.id)).toBe(false); // the phantom is not in it
+  });
+
   it('refuses to generate playoffs twice', async () => {
     const { tournamentId } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
     await runGroupPhase(tournamentId, 2); // auto-launches the division playoffs

@@ -221,6 +221,16 @@ export async function runBalancedPairingTick(
         });
       }
       for (const b of plan.byes) {
+        // "0 points until first real game": a bye handed to a late joiner (someone
+        // with a CATCHUP_BYE placeholder) who has not yet played a real game is
+        // itself a 0-point CATCHUP_BYE — not a scoring bye. This stops a late joiner
+        // who keeps getting byed from banking free points (Dniper). Earned byes are
+        // protected: an on-time player (no catch-up placeholder), and anyone who has
+        // already completed a real game, gets a normal scoring bye.
+        const own = matches.filter((m) => m.player1_id === b.player_id || m.player2_id === b.player_id);
+        const hasPlayedReal = own.some((m) => m.status === 'COMPLETED');
+        const isLateJoiner = own.some((m) => m.status === 'CATCHUP_BYE');
+        const isCatchup = isLateJoiner && !hasPlayedReal;
         rows.push({
           id: randomUUID(),
           tournament_id: tournamentId,
@@ -228,8 +238,8 @@ export async function runBalancedPairingTick(
           match_number: nextNumber++,
           player1_id: b.player_id,
           player2_id: null,
-          status: 'BYE' as MatchStatus,
-          winner_id: b.player_id,
+          status: (isCatchup ? 'CATCHUP_BYE' : 'BYE') as MatchStatus,
+          winner_id: isCatchup ? null : b.player_id,
           phase: null as MatchPhase | null,
         });
       }
@@ -587,8 +597,12 @@ export async function startBalancedPlayoffs(
   );
 
   const bandByUser = new Map(roster.map((p) => [p.user_id, p.skill_band ?? DEFAULT_BAND]));
+  // Only real contenders seed the playoff pools. A participant who is REGISTERED but
+  // never CHECKED_IN (or who withdrew) is not a contender and must not appear in a
+  // division bracket — this is the "Big Bees" phantom-finalist fix.
+  const contenderIds = new Set(contenders.map((p) => p.user_id));
   const ranked = sorted
-    .filter((s) => !withdrawnIds.has(s.userId))
+    .filter((s) => contenderIds.has(s.userId) && !withdrawnIds.has(s.userId))
     .map((s, i) => ({ userId: s.userId, band: bandByUser.get(s.userId) ?? DEFAULT_BAND, rank: i + 1 }));
 
   const pools = formDivisionPools(ranked);
