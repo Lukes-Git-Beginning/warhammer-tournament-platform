@@ -28,6 +28,9 @@ interface SwissStandingsProps {
   playoffFormat?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' | null;
   /** Players who have advanced to the Grand Final (from PLAYOFF_FINAL match) */
   finalistIds?: ReadonlySet<string>;
+  /** Balanced Liechtenstein: tournament podium (top division's playoff) — userId →
+   *  1|2|3. When set, drives the placement badge instead of the group rank. */
+  podium?: ReadonlyMap<string, 1 | 2 | 3>;
   /** Players who have qualified for the Semifinals (QF winners — TOP8 only) */
   semifinalistIds?: Set<string>;
   /** Tournament slug — enables drop/undrop buttons when set */
@@ -86,6 +89,7 @@ export function SwissStandings({
   tournamentMode,
   playoffFormat,
   finalistIds,
+  podium,
   semifinalistIds,
   tournamentSlug,
   canManage = false,
@@ -197,7 +201,19 @@ export function SwissStandings({
       const hasNoMatchHistory = entry.wins === 0 && entry.losses === 0 && entry.draws === 0 && entry.byes === 0;
       const isNeverCheckedIn = participantStatus === 'REGISTERED' && hasNoMatchHistory;
 
-      const placementKey = (isCompleted && rank <= 3 && !isDropped ? rank : undefined) as 1 | 2 | 3 | undefined;
+      // Placement badge. Balanced Liechtenstein: the whole tournament's 1st/2nd/3rd
+      // come from the TOP division's playoff result (`podium`, keyed by userId) — so a
+      // borrowed player who won the small final gets 3RD even though they are listed
+      // under a lower division, and the group-rank-3 player who LOST it gets nothing.
+      // Every other format keeps the group-rank badge (top 3 of the final standings).
+      const placementKey: 1 | 2 | 3 | undefined =
+        !isCompleted || isDropped
+          ? undefined
+          : podium
+            ? podium.get(entry.userId)
+            : rank <= 3
+              ? (rank as 1 | 2 | 3)
+              : undefined;
       const badge = placementKey ? PLACEMENT_BADGE[placementKey] : null;
 
       const skillBandMeta = entry.skillBand != null ? SKILL_BAND_META[entry.skillBand] : null;

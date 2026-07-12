@@ -73,6 +73,43 @@ export function getEliminationPlacements(matches: BracketNode[]): EliminationPla
   return { placements, lastCompletedRound, gfParticipants };
 }
 
+/**
+ * Balanced Liechtenstein podium: the WHOLE tournament's 1st/2nd/3rd come from the
+ * TOP division's playoff only (the highest skill band). Borrowing only ever pulls
+ * players DOWN, so no lower division ever holds a top-band player — the top final /
+ * small final are the ones whose participants reach the max band. Exactly three
+ * badges are awarded (no 4th), and they follow the match RESULT, not the group rank:
+ *   Grand Final winner → 1, Grand Final loser → 2, Small Final winner → 3.
+ * They apply to those userIds wherever they are shown — including a borrowed player
+ * listed under a lower division. Lower divisions award no tournament placement badge.
+ */
+export function getBalancedTopDivisionPodium(
+  matches: BracketNode[],
+  bandByUser: ReadonlyMap<string, number>,
+): Map<string, 1 | 2 | 3> {
+  const podium = new Map<string, 1 | 2 | 3>();
+  const bandOf = (id: string | null): number => (id ? (bandByUser.get(id) ?? -Infinity) : -Infinity);
+  const matchBand = (m: BracketNode): number => Math.max(bandOf(m.player1Id), bandOf(m.player2Id));
+
+  const finals = matches.filter((m) => m.phase === 'PLAYOFF_FINAL');
+  if (finals.length === 0) return podium;
+  const topBand = Math.max(...finals.map(matchBand));
+  const topFinal = finals.find((m) => matchBand(m) === topBand);
+  const topSmallFinal = matches.find(
+    (m) => m.phase === 'PLAYOFF_THIRD_PLACE' && matchBand(m) === topBand,
+  );
+
+  if (topFinal?.status === 'COMPLETED' && topFinal.winnerId) {
+    const loser = topFinal.player1Id === topFinal.winnerId ? topFinal.player2Id : topFinal.player1Id;
+    podium.set(topFinal.winnerId, 1);
+    if (loser) podium.set(loser, 2);
+  }
+  if (topSmallFinal?.status === 'COMPLETED' && topSmallFinal.winnerId) {
+    podium.set(topSmallFinal.winnerId, 3);
+  }
+  return podium;
+}
+
 type Standing = SwissMeta['standings'][number];
 
 /**

@@ -5,7 +5,7 @@ import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import type { FactionDto } from '@rizzotto/types';
 import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, addThirdPlaceMatch, getFactions, patchTournament, fillByeMatch, deleteMatch } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
-import { sortStandingsByPlayoffResult, getFinalistIds } from '@/lib/bracketStandings';
+import { sortStandingsByPlayoffResult, getFinalistIds, getBalancedTopDivisionPodium } from '@/lib/bracketStandings';
 import { computeBracketLayout } from './computeBracketLayout';
 import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
@@ -91,6 +91,18 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     }
     return ids;
   }, [data?.matches]);
+
+  // Balanced Liechtenstein: the tournament podium (1st/2nd/3rd) is the TOP division's
+  // playoff result, applied by userId (so a borrowed player gets it even when listed
+  // under a lower division). Undefined for other formats → SwissStandings keeps its
+  // rank-based badges.
+  const balancedPodium = useMemo(
+    () =>
+      format === 'BALANCED_LIECHTENSTEIN' && data?.matches
+        ? getBalancedTopDivisionPodium(data.matches, bandByUser)
+        : undefined,
+    [format, data?.matches, bandByUser],
+  );
 
   const sortedStandings = useMemo(
     () => (data?.swiss?.standings && data?.matches
@@ -308,6 +320,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           tournamentMode={data.mode}
           playoffFormat={playoffFormat}
           finalistIds={format === 'BALANCED_LIECHTENSTEIN' ? divisionFinalistIds : finalistIds}
+          podium={balancedPodium}
           tournamentSlug={slug}
           canManage={canManage}
           isCompleted={data.status === 'COMPLETED'}
