@@ -234,7 +234,11 @@ describe('Balanced Liechtenstein — division playoffs', () => {
     expect('error' in result).toBe(false); // the group is complete → playoffs generate
 
     const playoff = await prisma.match.findMany({
-      where: { tournament_id: tournamentId, phase: { startsWith: 'PLAYOFF' }, deleted_at: null },
+      where: {
+        tournament_id: tournamentId,
+        phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] },
+        deleted_at: null,
+      },
       select: { player1_id: true, player2_id: true },
     });
     const inPlayoffs = new Set(
