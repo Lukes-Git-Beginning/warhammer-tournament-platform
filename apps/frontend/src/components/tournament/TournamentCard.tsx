@@ -38,6 +38,7 @@ const MODE_LABELS: Record<string, string> = {
   MATRIX: 'Matrix',
   TWO_D_THREE: '2D3',
   FREE_PICK: 'Free Pick',
+  ONE_V_THREE: '1v3',
   BLIND_PICK: 'Blind Pick',
   ONE_V_ONE: '1v1',
   THREE_V_THREE: '3v3',

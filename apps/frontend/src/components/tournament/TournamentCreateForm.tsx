@@ -18,7 +18,8 @@ const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
   format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'AUTO_SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
-  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK']).default('BPT'),
+  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE']).default('BPT'),
+  set_faction_id: z.string().min(1).optional(),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
   max_participants: z.coerce.number().int().positive().optional().or(z.literal('')),
@@ -37,9 +38,9 @@ const TournamentCreateSchema = z.object({
   auto_sizing: z.boolean().default(false),
   auto_advance: z.boolean().default(false),
   allow_late_join_requests: z.boolean().default(false),
-  swiss_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
-  playoff_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
-  finale_match_format: z.enum(['BO1', 'BO3', 'BO5']).default('BO1'),
+  swiss_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).default('BO1'),
+  playoff_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).default('BO1'),
+  finale_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).default('BO1'),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).default('RANDOM_PICK_BAN'),
   map_pool: z.array(z.string()).max(36).default([]),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -63,6 +64,7 @@ const MAP_DECISION_MODES: MapDecisionModeOption[] = [
 ];
 
 function formatToMaxGames(fmt?: string): number {
+  if (fmt === 'BO2') return 2;
   if (fmt === 'BO3') return 3;
   if (fmt === 'BO5') return 5;
   return 1;
@@ -284,11 +286,28 @@ export function TournamentCreateForm() {
       [name]: newValue,
       ...(name === 'draft_enabled' && !checked ? { draft_preset_id: null } : {}),
       ...(name === 'format'
+        ? prev.mode === 'ONE_V_THREE'
+          ? {
+              // 1v3: 2-leg home/away (BO2) for Swiss rounds, BO3 for brackets.
+              swiss_match_format: value === 'SINGLE_ELIMINATION' || value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO2',
+              playoff_match_format: 'BO3',
+              finale_match_format: 'BO3',
+              auto_sizing: value === 'BALANCED_LIECHTENSTEIN',
+            }
+          : {
+              finale_match_format: value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO1',
+              // Balanced Liechtenstein auto-sizes by default; every other format
+              // starts with auto-sizing off (the host opts in via the checkbox).
+              auto_sizing: value === 'BALANCED_LIECHTENSTEIN',
+            }
+        : {}),
+      ...(name === 'mode' && value === 'ONE_V_THREE'
         ? {
-            finale_match_format: value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO1',
-            // Balanced Liechtenstein auto-sizes by default; every other format
-            // starts with auto-sizing off (the host opts in via the checkbox).
-            auto_sizing: value === 'BALANCED_LIECHTENSTEIN',
+            // 1v3 defaults: BO2 two-leg home/away for Swiss rounds (1–1 = Draw),
+            // BO3 for elimination brackets (need a decisive winner). Host can override.
+            swiss_match_format: prev.format === 'SINGLE_ELIMINATION' || prev.format === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO2',
+            playoff_match_format: 'BO3',
+            finale_match_format: 'BO3',
           }
         : {}),
       ...(name === 'start_date' ? { registration_deadline: value } : {}),
@@ -369,6 +388,9 @@ export function TournamentCreateForm() {
       ...(restrictedFactionsEnabled && (form.restricted_factions ?? []).length > 0
         ? { restricted_factions: form.restricted_factions }
         : {}),
+      ...(rest.mode === 'ONE_V_THREE' && rest.set_faction_id
+        ? { set_faction_id: rest.set_faction_id }
+        : {}),
     });
   }
 
@@ -447,6 +469,7 @@ export function TournamentCreateForm() {
             <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
             <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
             <option value="FREE_PICK">Enticity&apos;s Free Pick — SFT/Matrix Hybrid</option>
+            <option value="ONE_V_THREE">1v3 — Set Faction vs. One of Three Counterpicks</option>
           </Select>
           <FieldHint>
             {(form.mode === 'BPT' || !form.mode) && 'Every match includes a blind faction pick phase.'}
@@ -455,8 +478,51 @@ export function TournamentCreateForm() {
             {form.mode === 'MATRIX' && 'Each match: both players pick 3 factions blindly, then ban from the 3×3 matchup grid.'}
             {form.mode === 'TWO_D_THREE' && 'Players pick 3 factions at registration; one is drawn at random for each player before every game.'}
             {form.mode === 'FREE_PICK' && 'Each player chooses at registration: a fixed faction (like SFT) or to pick match-by-match. Two fixed players just play their factions; two pick-later players do a 3×3 matrix; a fixed vs pick-later match has the pick-later player offer 3 factions for the fixed player to choose from.'}
+            {form.mode === 'ONE_V_THREE' && 'A coin flip sets roles each match: one player runs the host\'s set faction, the other brings three, and the set-faction player picks which of the three their opponent plays.'}
           </FieldHint>
         </div>
+
+        {/* ─── ONE_V_THREE: Set Faction ──────────────────────────────────── */}
+        {form.mode === 'ONE_V_THREE' && (
+          <div>
+            <Label htmlFor="tcf-set-faction" required>
+              Set faction (the Runner plays this)
+            </Label>
+            <div className="max-h-52 overflow-y-auto rounded-md border border-rizzotto-iron-700 p-2">
+              {allFactions.length === 0 ? (
+                <p className="text-xs text-rizzotto-stone-500 text-center py-4">Loading factions…</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+                  {allFactions.map((faction) => {
+                    const isSelected = form.set_faction_id === faction.id;
+                    return (
+                      <label
+                        key={faction.id}
+                        className={[
+                          'flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer transition-colors text-sm',
+                          isSelected
+                            ? 'bg-rizzotto-gold-500/15 text-rizzotto-gold-400'
+                            : 'text-rizzotto-stone-300 hover:bg-rizzotto-iron-700/50',
+                        ].join(' ')}
+                      >
+                        <input
+                          type="radio"
+                          name="set_faction_id"
+                          value={faction.id}
+                          checked={isSelected}
+                          onChange={() => setForm((prev) => ({ ...prev, set_faction_id: faction.id }))}
+                          className="accent-rizzotto-gold-400 shrink-0"
+                        />
+                        <span className="truncate">{faction.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            {errors.set_faction_id && <FieldError message={errors.set_faction_id} />}
+          </div>
+        )}
       </div>
 
       {(form.format === 'SWISS' || form.format === 'BALANCED_LIECHTENSTEIN') && (
@@ -730,6 +796,7 @@ export function TournamentCreateForm() {
                   onChange={handleChange}
                 >
                   <option value="BO1">Best of 1</option>
+                  <option value="BO2">Best of 2 — home &amp; away (1–1 = draw)</option>
                   <option value="BO3">Best of 3</option>
                   <option value="BO5">Best of 5</option>
                 </Select>

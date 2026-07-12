@@ -49,6 +49,7 @@ enum TournamentMode {
   MATRIX // 3×3 Faction Matrix — blind 3-pick per player, 7 bans + 1 pick
   TWO_D_THREE // 2D3 — each player picks 3 factions at registration, one drawn at random per game
   FREE_PICK // Enticity's Free Pick — per player: fixed faction (faction_id set, SFT-like) OR pick-later (faction_id null); matchup resolves by both players' choices
+  ONE_V_THREE // 1v3 — coin flip sets roles: the Runner plays the host-set faction, the Picker offers 3, the Runner picks which of the 3 the Picker plays
 }
 
 enum PlayoffFormat {
@@ -60,6 +61,7 @@ enum PlayoffFormat {
 
 enum MatchFormat {
   BO1
+  BO2 // two-leg home/away (1v3): exactly 2 games, roles swap, 1–1 = Draw
   BO3
   BO5
 }
@@ -306,6 +308,9 @@ model Tournament {
   draft_preset_id        String?              @db.Uuid
   counts_for_leaderboard Boolean              @default(true)
   is_major               Boolean              @default(false)
+  // ONE_V_THREE: the host-set faction the "Runner" side plays each game (coin-flip role).
+  set_faction_id         String?
+
   // Welle 2 — Tournament-Mechanik
   rounds_count           Int                  @default(5) // 3–6 via constraint
   has_third_place_match  Boolean              @default(false)
