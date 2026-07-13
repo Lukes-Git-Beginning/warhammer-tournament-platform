@@ -31,7 +31,7 @@ export function ConclaveSection() {
       icon: <TrendingUp className="size-7" strokeWidth={1.25} />,
       title: t('conclave.pillars.ladder.title'),
       description: t('conclave.pillars.ladder.body'),
-      comingSoon: true,
+      comingSoon: false, // Open Play is live
     },
   ];
 
