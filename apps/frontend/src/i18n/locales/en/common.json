@@ -80,7 +80,7 @@
     "pillars": {
       "tournaments": {
         "title": "Tournaments",
-        "body": "Swiss rounds, elimination brackets, and Liechtenstein — a pre-drawn schedule with unique pairings every round. Register with a locked faction, blind-pick, or draft live in Captain's Mode."
+        "body": "Swiss rounds, elimination brackets, Liechtenstein, and skill-balanced divisions — a pre-drawn schedule with unique pairings every round. Register with a locked faction, blind-pick, a 1v3 counter-pick, or draft live in Captain's Mode."
       },
       "honour": {
         "title": "Roll of Honour",
@@ -88,7 +88,7 @@
       },
       "ladder": {
         "title": "The Ladder",
-        "body": "Step outside the tournament. Challenge any ranked opponent, log the result, and let every game count. Open play is coming to the Arena — and the Roll of Honour will remember."
+        "body": "Step outside the tournament. Challenge any ranked opponent, schedule a match, log the result, and let every game count. Open Play is live in the Arena — and the Roll of Honour remembers."
       }
     }
   },

@@ -51,6 +51,14 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
       className={`flex h-full flex-col${isDraft ? ' border-2 border-dashed border-rizzotto-gold-500/40' : ''}`}
     >
       <CardHeader>
+        {tournament.poster_url && (
+          <img
+            src={tournament.poster_url}
+            alt=""
+            className="mb-3 h-28 w-full rounded object-cover"
+            loading="lazy"
+          />
+        )}
         {isDraft && (
           <Badge
             variant="default"
@@ -217,7 +225,7 @@ export function TournamentsListing() {
           aria-pressed={majorOnly}
         >
           <Crown className="size-3.5" strokeWidth={1.5} />
-          Nur Majors
+          Majors only
         </button>
       </div>
 
