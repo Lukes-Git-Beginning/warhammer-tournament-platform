@@ -18,6 +18,7 @@ import {
 } from '../lib/skill-classification-service.js';
 import { CALIBRATION_QUESTIONS, questionnaireFloor, classify, BAND_NAMES } from '../lib/skill-classification.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
+import { getQueuePenaltyState, clearQueuePenalty } from '../lib/queue-penalty.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -332,6 +333,19 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     await invalidate(fastify.redis, cacheKey('admin:stats', {}));
 
     return { id: unbanned.id, username: unbanned.username };
+  });
+
+  // GET /api/admin/users/:id/queue-penalty — #14 current Open Play queue penalty.
+  fastify.get<{ Params: { id: string } }>('/api/admin/users/:id/queue-penalty', async (request, reply) => {
+    if (!fastify.redis) return reply.code(200).send({ cooldownSec: 0, level: 0 });
+    const state = await getQueuePenaltyState(fastify.redis, request.params.id, Date.now());
+    return reply.code(200).send(state);
+  });
+
+  // DELETE /api/admin/users/:id/queue-penalty — #14 lift the cooldown + wipe the record.
+  fastify.delete<{ Params: { id: string } }>('/api/admin/users/:id/queue-penalty', async (request, reply) => {
+    if (fastify.redis) await clearQueuePenalty(fastify.redis, request.params.id);
+    return reply.code(200).send({ ok: true });
   });
 
   // PATCH /api/admin/users/:id/role — change a user's role

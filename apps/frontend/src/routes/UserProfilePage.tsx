@@ -2,7 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { getUserProfile, getUserGames, getPlayerAntiFarming, type AntiFarmingOpponent } from '@/lib/api.js';
+import {
+  getUserProfile,
+  getUserGames,
+  getPlayerAntiFarming,
+  getAdminUserQueuePenalty,
+  clearAdminUserQueuePenalty,
+  type AntiFarmingOpponent,
+} from '@/lib/api.js';
 import { patchMePreferences } from '@/lib/onboarding.js';
 import type { UserMe } from '@rizzotto/types';
 import { GameHistoryTable } from '../components/match/GameHistoryTable.js';
@@ -278,6 +285,65 @@ function AntiFarmingSection({ playerId }: { playerId: string }) {
 // Page
 // ---------------------------------------------------------------------------
 
+function formatCooldown(seconds: number): string {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${Math.max(1, m)}m`;
+}
+
+/** Admin-only: show + lift this player's Open Play queue-abuse penalty (#14). */
+function QueueCooldownAdminPanel({ userId }: { userId: string }) {
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ['admin-queue-penalty', userId],
+    queryFn: () => getAdminUserQueuePenalty(userId),
+  });
+  const clear = useMutation({
+    mutationFn: () => clearAdminUserQueuePenalty(userId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-queue-penalty', userId] }),
+  });
+
+  const cooldownSec = data?.cooldownSec ?? 0;
+  const level = data?.level ?? 0;
+  const hasPenalty = cooldownSec > 0 || level > 0;
+
+  return (
+    <div>
+      <p className="mb-2 text-[10px] font-mono uppercase tracking-wider text-stone-500">
+        Admin · Open Play queue
+      </p>
+      <div className="flex items-center justify-between gap-3 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/40 px-4 py-3">
+        {hasPenalty ? (
+          <span className="text-sm text-stone-300">
+            Queue-abuse level <span className="font-semibold text-stone-100">{level}</span>
+            {cooldownSec > 0 ? (
+              <>
+                {' '}· cooldown{' '}
+                <span className="font-semibold text-stone-100">{formatCooldown(cooldownSec)}</span> left
+              </>
+            ) : (
+              ' · no active cooldown'
+            )}
+          </span>
+        ) : (
+          <span className="text-sm text-stone-500">No active queue penalty.</span>
+        )}
+        <Button
+          size="sm"
+          variant="etched"
+          onClick={() => clear.mutate()}
+          disabled={!hasPenalty || clear.isPending}
+        >
+          {clear.isPending ? 'Clearing…' : 'Clear'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function UserProfilePage() {
   const { t } = useTranslation();
   const { id } = useParams({ from: '/users/$id' });
@@ -347,15 +413,20 @@ export function UserProfilePage() {
         <CalibrationWizard userId={id} open={wizardOpen} onOpenChange={setWizardOpen} />
       )}
 
-      {/* Admin: inspect + reset this player's questionnaire (right where the take-questionnaire CTA sits) */}
+      {/* Admin: collapsible controls tucked under the skill-standing tile. */}
       {me?.role === 'ADMIN' && (
-        <div className="mt-4">
-          <p className="mb-2 text-[10px] font-mono uppercase tracking-wider text-stone-500">
-            Admin · skill calibration
-          </p>
-          <div className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/40 p-4">
-            <CalibrationAuditPanel userId={id} />
-          </div>
+        <div className="-mt-4 space-y-3">
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-stone-500 hover:text-stone-300">
+              <span className="transition-transform group-open:rotate-90">▸</span>
+              Admin · skill calibration
+            </summary>
+            <div className="mt-2 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/40 p-4">
+              <CalibrationAuditPanel userId={id} />
+            </div>
+          </details>
+
+          <QueueCooldownAdminPanel userId={id} />
         </div>
       )}
 

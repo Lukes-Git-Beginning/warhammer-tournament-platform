@@ -723,6 +723,20 @@ export function getAdminQueueActivity(opts?: {
   return apiFetch(`/api/admin/queue-activity${qs ? `?${qs}` : ''}`);
 }
 
+// #14 — admin view + lift of a user's Open Play queue penalty.
+export interface QueuePenaltyState {
+  cooldownSec: number;
+  level: number;
+}
+
+export function getAdminUserQueuePenalty(userId: string): Promise<QueuePenaltyState> {
+  return apiFetch<QueuePenaltyState>(`/api/admin/users/${userId}/queue-penalty`);
+}
+
+export function clearAdminUserQueuePenalty(userId: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(`/api/admin/users/${userId}/queue-penalty`, { method: 'DELETE' });
+}
+
 export function getAdminStats(): Promise<AdminStats> {
   return apiFetch('/api/admin/stats');
 }

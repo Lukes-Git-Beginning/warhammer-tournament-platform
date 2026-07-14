@@ -58,6 +58,30 @@ export async function getQueueTimeoutRemaining(redis: Redis, userId: string): Pr
   return ttl > 0 ? ttl : 0;
 }
 
+/** Admin view: the player's current cooldown (seconds) + effective (decayed) offense level. */
+export async function getQueuePenaltyState(
+  redis: Redis,
+  userId: string,
+  nowMs: number,
+): Promise<{ cooldownSec: number; level: number }> {
+  const [cooldownSec, offense] = await Promise.all([
+    getQueueTimeoutRemaining(redis, userId),
+    redis.hgetall(`${OFFENSE_PREFIX}${userId}`),
+  ]);
+  const storedLevel = offense.level ? Number(offense.level) : 0;
+  const ts = offense.ts ? Number(offense.ts) : nowMs;
+  return { cooldownSec, level: decayedLevel(storedLevel, ts, nowMs) };
+}
+
+/** Admin action: lift the cooldown AND wipe the offense record (a clean slate). */
+export async function clearQueuePenalty(redis: Redis, userId: string): Promise<void> {
+  await Promise.all([
+    redis.del(`${TIMEOUT_PREFIX}${userId}`),
+    redis.del(`${OFFENSE_PREFIX}${userId}`),
+    redis.del(`${SHORTLEAVE_PREFIX}${userId}`),
+  ]);
+}
+
 export interface QueueLeaveOutcome {
   /** The 3-short-leaves pattern fired this leave. */
   tripped: boolean;
