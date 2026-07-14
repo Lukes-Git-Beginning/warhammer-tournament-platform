@@ -185,13 +185,9 @@ async function maybeSendDmWave(fastify: FastifyInstance, queueLen: number): Prom
   if (prelim.length === 0) return;
   const prelimIds = prelim.map((c) => c.id);
 
-  const [snoozeFlags, activeMatches] = await Promise.all([
+  const [snoozeFlags, activeMatches, liveTournaments] = await Promise.all([
     Promise.all(prelimIds.map((id) => redis.exists(`${SNOOZE_PREFIX}${id}`))),
-    // #1: suppress availability pings while a player has ANY open/unreported match —
-    // tournament round OR Open Play — but only for that match's duration. A tournament
-    // player is muted while playing, yet still pingable between rounds (their previous
-    // match is COMPLETED and the next isn't ONGOING yet), so we never mute the whole
-    // tournament.
+    // #1: a player directly in ANY open/unreported match (tournament or Open Play).
     prisma.match.findMany({
       where: {
         status: { in: ['ONGOING', 'AWAITING_CONFIRMATION'] },
@@ -200,6 +196,17 @@ async function maybeSendDmWave(fastify: FastifyInstance, queueLen: number): Prom
       },
       select: { player1_id: true, player2_id: true },
     }),
+    // #1: tournaments that have a live match right now (any players) — used to mute
+    // their participants who are merely BETWEEN rounds in a running real-time session.
+    prisma.match.findMany({
+      where: {
+        status: { in: ['ONGOING', 'AWAITING_CONFIRMATION'] },
+        deleted_at: null,
+        tournament_id: { not: null },
+      },
+      select: { tournament_id: true },
+      distinct: ['tournament_id'],
+    }),
   ]);
 
   const snoozed = new Set(prelimIds.filter((_, i) => snoozeFlags[i] === 1));
@@ -207,6 +214,21 @@ async function maybeSendDmWave(fastify: FastifyInstance, queueLen: number): Prom
   for (const m of activeMatches) {
     if (m.player1_id) inActiveMatch.add(m.player1_id);
     if (m.player2_id) inActiveMatch.add(m.player2_id);
+  }
+
+  // #1 (real-time tournaments): also mute checked-in participants of any tournament with
+  // a live match right now — they're just between rounds in an active session. During a
+  // multi-day tournament's downtime there are no live matches, so they stay pingable
+  // (and mid-session breaks like lunch free up naturally too).
+  const liveTournamentIds = liveTournaments
+    .map((t) => t.tournament_id)
+    .filter((id): id is string => id !== null);
+  if (liveTournamentIds.length > 0) {
+    const participants = await prisma.tournamentParticipant.findMany({
+      where: { tournament_id: { in: liveTournamentIds }, user_id: { in: prelimIds }, status: 'CHECKED_IN' },
+      select: { user_id: true },
+    });
+    for (const p of participants) inActiveMatch.add(p.user_id);
   }
 
   const eligible = selectEligibleRecipients(candidates, { queued, contacted, snoozed, inActiveMatch });
