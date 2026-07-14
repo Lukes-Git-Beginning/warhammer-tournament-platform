@@ -35,7 +35,7 @@ const AuditLogQuerySchema = PaginationSchema.extend({
 
 const QueueActivityQuerySchema = PaginationSchema.extend({
   user_id: z.string().uuid().optional(),
-  event: z.enum(['JOIN', 'LEAVE', 'MATCH', 'CANCEL', 'WIN', 'LOSE', 'DRAW']).optional(),
+  event: z.enum(['JOIN', 'LEAVE', 'MATCH', 'CANCEL', 'WIN', 'LOSE', 'DRAW', 'WARNING', 'TIMEOUT']).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -192,6 +192,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         opponent_id: e.opponent?.id ?? null,
         opponent_username: e.opponent?.username ?? null,
         match_id: e.match_id,
+        level: e.level,
         created_at: e.created_at.toISOString(),
       })),
       total,

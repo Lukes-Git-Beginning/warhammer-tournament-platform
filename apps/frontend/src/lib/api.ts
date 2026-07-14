@@ -684,7 +684,16 @@ export function getAdminAuditLog(opts?: {
   return apiFetch(`/api/admin/audit-log${qs ? `?${qs}` : ''}`);
 }
 
-export type QueueActivityEvent = 'JOIN' | 'LEAVE' | 'MATCH' | 'CANCEL' | 'WIN' | 'LOSE' | 'DRAW';
+export type QueueActivityEvent =
+  | 'JOIN'
+  | 'LEAVE'
+  | 'MATCH'
+  | 'CANCEL'
+  | 'WIN'
+  | 'LOSE'
+  | 'DRAW'
+  | 'WARNING'
+  | 'TIMEOUT';
 
 export interface QueueActivityEntry {
   id: string;
@@ -695,6 +704,7 @@ export interface QueueActivityEntry {
   opponent_id: string | null;
   opponent_username: string | null;
   match_id: string | null;
+  level: number | null;
   created_at: string;
 }
 

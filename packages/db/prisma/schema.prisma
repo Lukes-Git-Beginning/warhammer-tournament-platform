@@ -173,6 +173,8 @@ enum QueueEventType {
   WIN // won an Open Play match
   LOSE // lost an Open Play match
   DRAW // Open Play match ended in a draw
+  WARNING // #14 queue-abuse escalation level 1 — friendly heads-up, no sanction
+  TIMEOUT // #14 queue-abuse escalation level >= 2 — cooldown applied
 }
 
 enum AvailabilityContext {
@@ -936,6 +938,7 @@ model QueueActivityLog {
   event       QueueEventType
   match_id    String?        @db.Uuid // set for MATCH/CANCEL/WIN/LOSE/DRAW
   opponent_id String?        @db.Uuid // the other player, when known
+  level       Int?           // #14 escalation level for WARNING/TIMEOUT events
   created_at  DateTime       @default(now())
 
   user     User  @relation("QueueActivityUser", fields: [user_id], references: [id])

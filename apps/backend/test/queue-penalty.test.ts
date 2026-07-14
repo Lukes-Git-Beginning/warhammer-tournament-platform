@@ -8,9 +8,11 @@ import {
   isShortStint,
   reachedAbuseThreshold,
   timeoutMsForLevel,
+  decayedLevel,
   SHORT_STINT_MS,
   ABUSE_THRESHOLD,
   MAX_TIMEOUT_MS,
+  DECAY_PERIOD_MS,
 } from '../src/lib/queue-penalty.js';
 
 describe('isShortStint', () => {
@@ -53,5 +55,29 @@ describe('timeoutMsForLevel — education-first escalation', () => {
   it('level 4+ is the long stand-in until an admin lifts it', () => {
     expect(timeoutMsForLevel(4)).toBe(MAX_TIMEOUT_MS);
     expect(timeoutMsForLevel(9)).toBe(MAX_TIMEOUT_MS);
+  });
+});
+
+describe('decayedLevel — one step forgiven per clean decay period', () => {
+  const t = 1_000_000_000;
+
+  it('does not decay before a full period passes', () => {
+    expect(decayedLevel(3, t, t)).toBe(3);
+    expect(decayedLevel(3, t, t + DECAY_PERIOD_MS - 1)).toBe(3);
+  });
+
+  it('drops one level per full period', () => {
+    expect(decayedLevel(3, t, t + DECAY_PERIOD_MS)).toBe(2);
+    expect(decayedLevel(3, t, t + 2 * DECAY_PERIOD_MS)).toBe(1);
+  });
+
+  it('floors at 0 and reflects the "25 clean days → back to warning" case', () => {
+    // level 1, then ~25 clean days (> 3 periods) → fully decayed
+    expect(decayedLevel(1, t, t + 25 * 24 * 60 * 60 * 1000)).toBe(0);
+    expect(decayedLevel(3, t, t + 100 * DECAY_PERIOD_MS)).toBe(0);
+  });
+
+  it('is a no-op for a clean slate', () => {
+    expect(decayedLevel(0, t, t + 5 * DECAY_PERIOD_MS)).toBe(0);
   });
 });

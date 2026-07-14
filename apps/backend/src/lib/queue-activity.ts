@@ -12,7 +12,7 @@ export async function logQueueActivity(
   db: Db,
   event: QueueEventType,
   userId: string,
-  opts: { matchId?: string | null; opponentId?: string | null } = {},
+  opts: { matchId?: string | null; opponentId?: string | null; level?: number | null } = {},
 ): Promise<void> {
   try {
     await db.queueActivityLog.create({
@@ -21,6 +21,7 @@ export async function logQueueActivity(
         event,
         match_id: opts.matchId ?? null,
         opponent_id: opts.opponentId ?? null,
+        level: opts.level ?? null,
       },
     });
   } catch {

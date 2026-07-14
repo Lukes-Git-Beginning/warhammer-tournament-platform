@@ -934,8 +934,9 @@ export async function notifyQueueWarning(discordUserId: string): Promise<void> {
       discordUserId,
       `**[RizzOtto's Arena] 👋 Quick heads-up**\n\n` +
         `We noticed you've joined and left the Open Play queue a few times right after queueing. ` +
-        `No worries and nothing happens this time — just a friendly note that leaving repeatedly ` +
-        `right away can leave other players hanging. Thanks for keeping matchmaking smooth! ⚔️`,
+        `We understand that real life happens, and it's certainly better to leave than to go AFK ` +
+        `while queued. Nothing happens this time — just please try to avoid it when you can, since ` +
+        `leaving right after queueing can leave other players hanging. Thanks for keeping matchmaking smooth! ⚔️`,
     );
   } catch {
     // non-fatal — user may have DMs disabled

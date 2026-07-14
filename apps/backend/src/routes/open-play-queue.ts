@@ -101,6 +101,13 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
         if (fastify.redis && joinedAtRaw) {
           const outcome = await recordQueueLeave(fastify.redis, userId, Number(joinedAtRaw), Date.now());
           if (outcome.tripped) {
+            // Surface the escalation in the admin Queue Activity tab (with the level).
+            await logQueueActivity(
+              fastify.prisma,
+              outcome.timeoutSec > 0 ? 'TIMEOUT' : 'WARNING',
+              userId,
+              { level: outcome.level },
+            );
             const u = await fastify.prisma.user.findUnique({
               where: { id: userId },
               select: { username: true, discord_id: true },
