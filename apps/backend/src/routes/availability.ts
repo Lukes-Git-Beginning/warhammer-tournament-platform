@@ -46,6 +46,36 @@ const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(200).send({ slots: data });
   });
 
+  // GET /api/availability/heatmap/named?context=… — #12: STAFF ONLY.
+  // Same buckets as the public heatmap, but with the names of who is available per
+  // slot. The public endpoint above stays anonymous (counts only); names are gated.
+  fastify.get(
+    '/api/availability/heatmap/named',
+    { preHandler: [fastify.authenticate, fastify.requireRole('ADMIN', 'MODERATOR')] },
+    async (request, reply) => {
+      const q = z.object({ context: z.enum(['TOURNAMENT', 'MATCHMAKING']).optional() }).safeParse(request.query);
+      if (!q.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: q.error.message, statusCode: 400 });
+      }
+      const rows = await fastify.prisma.availabilitySlot.findMany({
+        where: q.data.context ? { context: q.data.context } : {},
+        select: { day_of_week: true, hour_utc: true, user: { select: { username: true } } },
+      });
+      const byCell = new Map<string, string[]>();
+      for (const r of rows) {
+        const key = `${r.day_of_week}:${r.hour_utc}`;
+        const arr = byCell.get(key);
+        if (arr) arr.push(r.user.username);
+        else byCell.set(key, [r.user.username]);
+      }
+      const slots = [...byCell.entries()].map(([key, names]) => {
+        const [day, hour] = key.split(':').map(Number);
+        return { day_of_week: day, hour_utc: hour, names: names.sort((a, b) => a.localeCompare(b)) };
+      });
+      return reply.code(200).send({ slots });
+    },
+  );
+
   // GET /api/availability/now — public, returns MATCHMAKING slot count for current UTC hour
   fastify.get('/api/availability/now', async (_request, reply) => {
     const now = new Date();

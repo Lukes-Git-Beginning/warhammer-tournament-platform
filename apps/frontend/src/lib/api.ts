@@ -684,7 +684,16 @@ export function getAdminAuditLog(opts?: {
   return apiFetch(`/api/admin/audit-log${qs ? `?${qs}` : ''}`);
 }
 
-export type QueueActivityEvent = 'JOIN' | 'LEAVE' | 'MATCH' | 'CANCEL' | 'WIN' | 'LOSE' | 'DRAW';
+export type QueueActivityEvent =
+  | 'JOIN'
+  | 'LEAVE'
+  | 'MATCH'
+  | 'CANCEL'
+  | 'WIN'
+  | 'LOSE'
+  | 'DRAW'
+  | 'WARNING'
+  | 'TIMEOUT';
 
 export interface QueueActivityEntry {
   id: string;
@@ -695,6 +704,7 @@ export interface QueueActivityEntry {
   opponent_id: string | null;
   opponent_username: string | null;
   match_id: string | null;
+  level: number | null;
   created_at: string;
 }
 
@@ -711,6 +721,21 @@ export function getAdminQueueActivity(opts?: {
   if (opts?.event) params.set('event', opts.event);
   const qs = params.toString();
   return apiFetch(`/api/admin/queue-activity${qs ? `?${qs}` : ''}`);
+}
+
+// #14 — admin view + lift of a user's Open Play queue penalty.
+export interface QueuePenaltyState {
+  cooldownSec: number;
+  level: number;
+}
+
+export function getAdminUserQueuePenalty(userId: string): Promise<QueuePenaltyState> {
+  return apiFetch<QueuePenaltyState>(`/api/admin/users/${userId}/queue-penalty`);
+}
+
+// Lifts any active cooldown and drops the player back to level 1 ("warned").
+export function liftAdminUserQueueCooldown(userId: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(`/api/admin/users/${userId}/queue-penalty`, { method: 'DELETE' });
 }
 
 export function getAdminStats(): Promise<AdminStats> {
@@ -1727,6 +1752,20 @@ export function getAvailabilityHeatmap(
 ): Promise<{ slots: HeatmapSlot[] }> {
   const qs = context ? `?context=${context}` : '';
   return apiFetch<{ slots: HeatmapSlot[] }>(`/api/availability/heatmap${qs}`);
+}
+
+// #12: staff-only — the names of who is available per slot (public heatmap stays anonymous).
+export interface NamedHeatmapSlot {
+  day_of_week: number;
+  hour_utc: number;
+  names: string[];
+}
+
+export function getAvailabilityHeatmapNamed(
+  context?: 'TOURNAMENT' | 'MATCHMAKING',
+): Promise<{ slots: NamedHeatmapSlot[] }> {
+  const qs = context ? `?context=${context}` : '';
+  return apiFetch<{ slots: NamedHeatmapSlot[] }>(`/api/availability/heatmap/named${qs}`);
 }
 
 export function getMyAvailability(): Promise<{ slots: AvailabilitySlot[] }> {

@@ -6,6 +6,7 @@ import {
   getMyAvailability,
   setMyAvailability,
   getAvailabilityHeatmap,
+  getAvailabilityHeatmapNamed,
   getAvailabilityNow,
   getQueueStatus,
   getScheduledMatchups,
@@ -143,6 +144,8 @@ export function OpenPlayPage() {
 
 function QueueTab({ userTimezone }: { userTimezone?: string }) {
   const qc = useQueryClient();
+  const { data: me } = useAuthQuery();
+  const isStaff = me?.role === 'ADMIN' || me?.role === 'MODERATOR';
 
   const join = useMutation({
     mutationFn: joinQueue,
@@ -152,6 +155,14 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
   const { data: heatmapData } = useQuery({
     queryKey: ['availability-heatmap'],
     queryFn: () => getAvailabilityHeatmap(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // #12: staff also get per-slot names in the hover.
+  const { data: namedHeatmap } = useQuery({
+    queryKey: ['availability-heatmap-named', 'all'],
+    queryFn: () => getAvailabilityHeatmapNamed(),
+    enabled: isStaff,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -188,7 +199,7 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
         <p className="text-xs text-stone-500">
           Community matchmaking availability — brighter means more players have marked this time as free.
         </p>
-        <AvailabilityHeatmap slots={allSlots} userTimezone={userTimezone} />
+        <AvailabilityHeatmap slots={allSlots} userTimezone={userTimezone} namedSlots={namedHeatmap?.slots} />
       </div>
     </div>
   );
@@ -203,6 +214,8 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
   const [view, setView] = useState<'mine' | 'matchmaking' | 'tournament'>('mine');
   const [localSlots, setLocalSlots] = useState<AvailabilitySlot[] | null>(null);
   const qc = useQueryClient();
+  const { data: me } = useAuthQuery();
+  const isStaff = me?.role === 'ADMIN' || me?.role === 'MODERATOR';
 
   const { data: myData, isLoading } = useQuery({
     queryKey: ['availability-me', currentUserId],
@@ -220,6 +233,20 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
     queryKey: ['availability-heatmap', 'TOURNAMENT'],
     queryFn: () => getAvailabilityHeatmap('TOURNAMENT'),
     enabled: view === 'tournament',
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // #12: staff-only per-slot names, fetched alongside the active heatmap view.
+  const { data: mmNamed } = useQuery({
+    queryKey: ['availability-heatmap-named', 'MATCHMAKING'],
+    queryFn: () => getAvailabilityHeatmapNamed('MATCHMAKING'),
+    enabled: isStaff && view === 'matchmaking',
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: tournNamed } = useQuery({
+    queryKey: ['availability-heatmap-named', 'TOURNAMENT'],
+    queryFn: () => getAvailabilityHeatmapNamed('TOURNAMENT'),
+    enabled: isStaff && view === 'tournament',
     staleTime: 5 * 60 * 1000,
   });
 
@@ -308,9 +335,9 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
           userTimezone={userTimezone}
         />
       ) : view === 'matchmaking' ? (
-        <AvailabilityHeatmap slots={mmHeatmap?.slots ?? []} userTimezone={userTimezone} hue={38} />
+        <AvailabilityHeatmap slots={mmHeatmap?.slots ?? []} userTimezone={userTimezone} hue={38} namedSlots={mmNamed?.slots} />
       ) : (
-        <AvailabilityHeatmap slots={tournHeatmap?.slots ?? []} userTimezone={userTimezone} hue={199} />
+        <AvailabilityHeatmap slots={tournHeatmap?.slots ?? []} userTimezone={userTimezone} hue={199} namedSlots={tournNamed?.slots} />
       )}
     </div>
   );

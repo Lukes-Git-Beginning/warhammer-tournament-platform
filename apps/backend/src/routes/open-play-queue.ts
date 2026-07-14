@@ -7,6 +7,8 @@ import {
   runMatchmakingTick,
   resetContactedSet,
 } from '../lib/matchmaking-tick.js';
+import { getQueueTimeoutRemaining, recordQueueLeave } from '../lib/queue-penalty.js';
+import { notifyQueueTimeout, notifyQueueWarning, notifyQueueAbuseToStaff } from '../lib/discord-notify.js';
 
 const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/open-play/queue — join queue
@@ -18,6 +20,16 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!fastify.redis) {
         return reply.code(503).send({ error: 'ServiceUnavailable', message: 'Queue service unavailable', statusCode: 503 });
+      }
+
+      // #14: reject a re-join while the queue-abuse cooldown is still running.
+      const cooldownSec = await getQueueTimeoutRemaining(fastify.redis, userId);
+      if (cooldownSec > 0) {
+        return reply.code(429).send({
+          error: 'TooManyRequests',
+          message: `You're on a short queue cooldown for leaving too many times in quick succession. Try again in about ${Math.ceil(cooldownSec / 60)} min.`,
+          statusCode: 429,
+        });
       }
 
       const pos = await fastify.redis.lpos(QUEUE_KEY, userId);
@@ -78,9 +90,37 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user.sub;
+      // Read the join timestamp before clearing it, to measure the stint (#14).
+      const joinedAtRaw = fastify.redis ? await fastify.redis.hget(JOINED_AT_KEY, userId) : null;
       const removed = fastify.redis ? await fastify.redis.lrem(QUEUE_KEY, 0, userId) : 0;
       if (fastify.redis) await fastify.redis.hdel(JOINED_AT_KEY, userId);
-      if (removed > 0) await logQueueActivity(fastify.prisma, 'LEAVE', userId);
+      if (removed > 0) {
+        await logQueueActivity(fastify.prisma, 'LEAVE', userId);
+        // #14: a short stint counts toward the abuse threshold; every 3 within 24h trips
+        // one escalation step — education-first: L1 warns only, sanctions start at L2.
+        if (fastify.redis && joinedAtRaw) {
+          const outcome = await recordQueueLeave(fastify.redis, userId, Number(joinedAtRaw), Date.now());
+          if (outcome.tripped) {
+            // Surface the escalation in the admin Queue Activity tab (with the level).
+            await logQueueActivity(
+              fastify.prisma,
+              outcome.timeoutSec > 0 ? 'TIMEOUT' : 'WARNING',
+              userId,
+              { level: outcome.level },
+            );
+            const u = await fastify.prisma.user.findUnique({
+              where: { id: userId },
+              select: { username: true, discord_id: true },
+            });
+            if (u?.discord_id) {
+              if (outcome.timeoutSec > 0) void notifyQueueTimeout(u.discord_id, outcome.timeoutSec);
+              else void notifyQueueWarning(u.discord_id);
+            }
+            // Sanctions (level ≥ 2) also notify staff.
+            if (outcome.level >= 2) void notifyQueueAbuseToStaff(u?.username ?? userId, outcome.level, outcome.timeoutSec);
+          }
+        }
+      }
       return reply.code(204).send();
     },
   );

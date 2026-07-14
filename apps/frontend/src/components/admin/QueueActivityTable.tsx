@@ -5,7 +5,17 @@ import { formatInUserTimezone } from '@/lib/timezone';
 
 const PAGE_SIZE = 20;
 
-const EVENTS: QueueActivityEvent[] = ['JOIN', 'LEAVE', 'MATCH', 'CANCEL', 'WIN', 'LOSE', 'DRAW'];
+const EVENTS: QueueActivityEvent[] = [
+  'JOIN',
+  'LEAVE',
+  'MATCH',
+  'CANCEL',
+  'WIN',
+  'LOSE',
+  'DRAW',
+  'WARNING',
+  'TIMEOUT',
+];
 
 const EVENT_STYLES: Record<QueueActivityEvent, string> = {
   JOIN: 'bg-sky-950/60 text-sky-300',
@@ -15,6 +25,8 @@ const EVENT_STYLES: Record<QueueActivityEvent, string> = {
   WIN: 'bg-emerald-950/60 text-emerald-300',
   LOSE: 'bg-red-950/60 text-red-300',
   DRAW: 'bg-stone-700/60 text-stone-300',
+  WARNING: 'bg-yellow-950/60 text-yellow-300', // #14 education-first heads-up
+  TIMEOUT: 'bg-orange-950/60 text-orange-300', // #14 cooldown sanction
 };
 
 function formatDate(iso: string): string {
@@ -124,12 +136,15 @@ export function QueueActivityTable() {
                     <td className="px-4 py-3 text-stone-400 whitespace-nowrap">
                       {formatDate(entry.created_at)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`rounded px-2 py-0.5 text-xs font-medium ${EVENT_STYLES[entry.event]}`}
                       >
                         {entry.event}
                       </span>
+                      {entry.level != null && (
+                        <span className="ml-1.5 text-xs text-stone-500">L{entry.level}</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <PlayerCell

@@ -18,6 +18,7 @@ import {
 } from '../lib/skill-classification-service.js';
 import { CALIBRATION_QUESTIONS, questionnaireFloor, classify, BAND_NAMES } from '../lib/skill-classification.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
+import { getQueuePenaltyState, resetQueuePenaltyToWarned } from '../lib/queue-penalty.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -35,7 +36,7 @@ const AuditLogQuerySchema = PaginationSchema.extend({
 
 const QueueActivityQuerySchema = PaginationSchema.extend({
   user_id: z.string().uuid().optional(),
-  event: z.enum(['JOIN', 'LEAVE', 'MATCH', 'CANCEL', 'WIN', 'LOSE', 'DRAW']).optional(),
+  event: z.enum(['JOIN', 'LEAVE', 'MATCH', 'CANCEL', 'WIN', 'LOSE', 'DRAW', 'WARNING', 'TIMEOUT']).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -192,6 +193,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         opponent_id: e.opponent?.id ?? null,
         opponent_username: e.opponent?.username ?? null,
         match_id: e.match_id,
+        level: e.level,
         created_at: e.created_at.toISOString(),
       })),
       total,
@@ -331,6 +333,20 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     await invalidate(fastify.redis, cacheKey('admin:stats', {}));
 
     return { id: unbanned.id, username: unbanned.username };
+  });
+
+  // GET /api/admin/users/:id/queue-penalty — #14 current Open Play queue penalty.
+  fastify.get<{ Params: { id: string } }>('/api/admin/users/:id/queue-penalty', async (request, reply) => {
+    if (!fastify.redis) return reply.code(200).send({ cooldownSec: 0, level: 0 });
+    const state = await getQueuePenaltyState(fastify.redis, request.params.id, Date.now());
+    return reply.code(200).send(state);
+  });
+
+  // DELETE /api/admin/users/:id/queue-penalty — #14 lift the cooldown + drop to level 1
+  // ("warned"): not a full pardon, so the next offense goes straight to the short timeout.
+  fastify.delete<{ Params: { id: string } }>('/api/admin/users/:id/queue-penalty', async (request, reply) => {
+    if (fastify.redis) await resetQueuePenaltyToWarned(fastify.redis, request.params.id, Date.now());
+    return reply.code(200).send({ ok: true });
   });
 
   // PATCH /api/admin/users/:id/role — change a user's role
