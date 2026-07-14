@@ -910,22 +910,80 @@ export async function notifyAvailabilityPing(
   }
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds >= 86400) {
+    const d = Math.round(seconds / 86400);
+    return `${d} day${d === 1 ? '' : 's'}`;
+  }
+  if (seconds >= 3600) {
+    const h = Math.round(seconds / 3600);
+    return `${h} hour${h === 1 ? '' : 's'}`;
+  }
+  const m = Math.max(1, Math.round(seconds / 60));
+  return `${m} minute${m === 1 ? '' : 's'}`;
+}
+
 /**
- * #14 — DM a player put on a short Open Play queue cooldown for repeatedly
- * joining and bailing within a couple of minutes. Friendly but firm.
+ * #14 — first offense: a friendly heads-up only, NO sanction. Education-first.
  */
-export async function notifyQueueTimeout(discordUserId: string, minutes: number): Promise<void> {
+export async function notifyQueueWarning(discordUserId: string): Promise<void> {
+  const token = getToken();
+  if (!token) return;
+  try {
+    await sendDm(
+      discordUserId,
+      `**[RizzOtto's Arena] 👋 Quick heads-up**\n\n` +
+        `We noticed you've joined and left the Open Play queue a few times right after queueing. ` +
+        `No worries and nothing happens this time — just a friendly note that leaving repeatedly ` +
+        `right away can leave other players hanging. Thanks for keeping matchmaking smooth! ⚔️`,
+    );
+  } catch {
+    // non-fatal — user may have DMs disabled
+  }
+}
+
+/**
+ * #14 — repeat offense: DM the player about the cooldown that's now in effect.
+ */
+export async function notifyQueueTimeout(discordUserId: string, timeoutSeconds: number): Promise<void> {
   const token = getToken();
   if (!token) return;
   try {
     await sendDm(
       discordUserId,
       `**[RizzOtto's Arena] ⏳ Queue cooldown**\n\n` +
-        `You've joined and left the Open Play queue a few times in quick succession, so you're on a short ` +
-        `**${minutes}-minute** cooldown. It keeps matchmaking fair for everyone waiting — hop back in once ` +
-        `it's up. See you on the field! ⚔️`,
+        `You've kept joining and leaving the Open Play queue in quick succession, so you're on a ` +
+        `**${formatDuration(timeoutSeconds)}** cooldown. It keeps matchmaking fair for everyone waiting — ` +
+        `hop back in once it's up. See you on the field! ⚔️`,
     );
   } catch {
     // non-fatal — user may have DMs disabled
+  }
+}
+
+/**
+ * #14 — from the second offense (first actual sanction) onward, notify staff.
+ */
+export async function notifyQueueAbuseToStaff(
+  username: string,
+  level: number,
+  timeoutSeconds: number,
+): Promise<void> {
+  const token = getToken();
+  if (!token) return;
+  try {
+    const staff = await prisma.user.findMany({
+      where: { role: { in: ['ADMIN', 'MODERATOR'] }, deleted_at: null },
+      select: { discord_id: true },
+    });
+    const consequence = timeoutSeconds > 0 ? `a ${formatDuration(timeoutSeconds)} cooldown` : 'a warning only';
+    const message =
+      `**[RizzOtto's Arena] ⚠️ Queue abuse**\n\n` +
+      `**${username}** hit queue-abuse level **${level}** (repeatedly joining and leaving the Open Play ` +
+      `queue). Applied: ${consequence}.`;
+    const recipients = [...new Set(staff.map((u) => u.discord_id))];
+    await Promise.allSettled(recipients.map((id) => sendDm(id, message)));
+  } catch {
+    // non-fatal
   }
 }

@@ -7,8 +7,8 @@ import {
   runMatchmakingTick,
   resetContactedSet,
 } from '../lib/matchmaking-tick.js';
-import { getQueueTimeoutRemaining, recordQueueLeave, TIMEOUT_MS } from '../lib/queue-penalty.js';
-import { notifyQueueTimeout } from '../lib/discord-notify.js';
+import { getQueueTimeoutRemaining, recordQueueLeave } from '../lib/queue-penalty.js';
+import { notifyQueueTimeout, notifyQueueWarning, notifyQueueAbuseToStaff } from '../lib/discord-notify.js';
 
 const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/open-play/queue — join queue
@@ -96,13 +96,21 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       if (fastify.redis) await fastify.redis.hdel(JOINED_AT_KEY, userId);
       if (removed > 0) {
         await logQueueActivity(fastify.prisma, 'LEAVE', userId);
-        // #14: a short stint counts toward the abuse threshold; the third within
-        // 24h trips a cooldown + a friendly DM.
+        // #14: a short stint counts toward the abuse threshold; every 3 within 24h trips
+        // one escalation step — education-first: L1 warns only, sanctions start at L2.
         if (fastify.redis && joinedAtRaw) {
-          const { timedOut } = await recordQueueLeave(fastify.redis, userId, Number(joinedAtRaw), Date.now());
-          if (timedOut) {
-            const u = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { discord_id: true } });
-            if (u?.discord_id) void notifyQueueTimeout(u.discord_id, Math.round(TIMEOUT_MS / 60000));
+          const outcome = await recordQueueLeave(fastify.redis, userId, Number(joinedAtRaw), Date.now());
+          if (outcome.tripped) {
+            const u = await fastify.prisma.user.findUnique({
+              where: { id: userId },
+              select: { username: true, discord_id: true },
+            });
+            if (u?.discord_id) {
+              if (outcome.timeoutSec > 0) void notifyQueueTimeout(u.discord_id, outcome.timeoutSec);
+              else void notifyQueueWarning(u.discord_id);
+            }
+            // Sanctions (level ≥ 2) also notify staff.
+            if (outcome.level >= 2) void notifyQueueAbuseToStaff(u?.username ?? userId, outcome.level, outcome.timeoutSec);
           }
         }
       }
