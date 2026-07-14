@@ -909,3 +909,23 @@ export async function notifyAvailabilityPing(
     console.warn('[discord-notify] Availability ping error (non-fatal):', err);
   }
 }
+
+/**
+ * #14 — DM a player put on a short Open Play queue cooldown for repeatedly
+ * joining and bailing within a couple of minutes. Friendly but firm.
+ */
+export async function notifyQueueTimeout(discordUserId: string, minutes: number): Promise<void> {
+  const token = getToken();
+  if (!token) return;
+  try {
+    await sendDm(
+      discordUserId,
+      `**[RizzOtto's Arena] ⏳ Queue cooldown**\n\n` +
+        `You've joined and left the Open Play queue a few times in quick succession, so you're on a short ` +
+        `**${minutes}-minute** cooldown. It keeps matchmaking fair for everyone waiting — hop back in once ` +
+        `it's up. See you on the field! ⚔️`,
+    );
+  } catch {
+    // non-fatal — user may have DMs disabled
+  }
+}

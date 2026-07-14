@@ -1729,6 +1729,20 @@ export function getAvailabilityHeatmap(
   return apiFetch<{ slots: HeatmapSlot[] }>(`/api/availability/heatmap${qs}`);
 }
 
+// #12: staff-only — the names of who is available per slot (public heatmap stays anonymous).
+export interface NamedHeatmapSlot {
+  day_of_week: number;
+  hour_utc: number;
+  names: string[];
+}
+
+export function getAvailabilityHeatmapNamed(
+  context?: 'TOURNAMENT' | 'MATCHMAKING',
+): Promise<{ slots: NamedHeatmapSlot[] }> {
+  const qs = context ? `?context=${context}` : '';
+  return apiFetch<{ slots: NamedHeatmapSlot[] }>(`/api/availability/heatmap/named${qs}`);
+}
+
 export function getMyAvailability(): Promise<{ slots: AvailabilitySlot[] }> {
   return apiFetch<{ slots: AvailabilitySlot[] }>('/api/availability/me');
 }

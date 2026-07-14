@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import type { HeatmapSlot } from '../../lib/api';
+import type { HeatmapSlot, NamedHeatmapSlot } from '../../lib/api';
 import { getUtcOffsetHours } from '../../lib/timezone';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -28,9 +28,11 @@ interface AvailabilityHeatmapProps {
   userTimezone?: string;
   /** HSL hue for the density colour. 38 = amber (matchmaking), 199 = sky (tournament). */
   hue?: number;
+  /** #12: staff-only per-slot names. When present, the hover shows who is available. */
+  namedSlots?: NamedHeatmapSlot[];
 }
 
-export function AvailabilityHeatmap({ slots, userTimezone, hue = 38 }: AvailabilityHeatmapProps) {
+export function AvailabilityHeatmap({ slots, userTimezone, hue = 38, namedSlots }: AvailabilityHeatmapProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const offset = userTimezone ? getUtcOffsetHours(userTimezone) : 0;
 
@@ -46,6 +48,18 @@ export function AvailabilityHeatmap({ slots, userTimezone, hue = 38 }: Availabil
     lookup.set(key, (lookup.get(key) ?? 0) + s.count);
   }
   const max = Math.max(0, ...lookup.values());
+
+  // #12: staff hover names, aggregated into the same local buckets as the counts.
+  const namesLookup = new Map<string, string[]>();
+  if (namedSlots) {
+    for (const s of namedSlots) {
+      const { day, hour } = utcToLocal(s.day_of_week, s.hour_utc, offset);
+      const key = `${day}:${hour}`;
+      const arr = namesLookup.get(key);
+      if (arr) arr.push(...s.names);
+      else namesLookup.set(key, [...s.names]);
+    }
+  }
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -84,12 +98,19 @@ export function AvailabilityHeatmap({ slots, userTimezone, hue = 38 }: Availabil
               {Array.from({ length: 7 }, (_, day) => {
                 const count = lookup.get(`${day}:${hour}`) ?? 0;
                 const isNow = day === nowCell.day && hour === nowCell.hour;
+                const names = namesLookup.get(`${day}:${hour}`);
+                const title =
+                  names && names.length
+                    ? `${names.length} available: ${names.join(', ')}`
+                    : count > 0
+                      ? `${count} player${count === 1 ? '' : 's'} available`
+                      : undefined;
                 return (
                   <div
                     key={`${day}-${hour}`}
                     style={{ height: ROW_H, background: intensityColor(count, max, hue) }}
                     className={`border-b border-r border-stone-700/30 ${isNow ? 'ring-2 ring-inset ring-rizzotto-gold-400' : ''}`}
-                    title={count > 0 ? `${count} player${count === 1 ? '' : 's'} available` : undefined}
+                    title={title}
                   />
                 );
               })}

@@ -187,9 +187,13 @@ async function maybeSendDmWave(fastify: FastifyInstance, queueLen: number): Prom
 
   const [snoozeFlags, activeMatches] = await Promise.all([
     Promise.all(prelimIds.map((id) => redis.exists(`${SNOOZE_PREFIX}${id}`))),
+    // #1: suppress availability pings while a player has ANY open/unreported match —
+    // tournament round OR Open Play — but only for that match's duration. A tournament
+    // player is muted while playing, yet still pingable between rounds (their previous
+    // match is COMPLETED and the next isn't ONGOING yet), so we never mute the whole
+    // tournament.
     prisma.match.findMany({
       where: {
-        type: 'OPEN_PLAY',
         status: { in: ['ONGOING', 'AWAITING_CONFIRMATION'] },
         deleted_at: null,
         OR: [{ player1_id: { in: prelimIds } }, { player2_id: { in: prelimIds } }],
