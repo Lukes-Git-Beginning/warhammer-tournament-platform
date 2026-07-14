@@ -73,13 +73,24 @@ export async function getQueuePenaltyState(
   return { cooldownSec, level: decayedLevel(storedLevel, ts, nowMs) };
 }
 
-/** Admin action: lift the cooldown AND wipe the offense record (a clean slate). */
-export async function clearQueuePenalty(redis: Redis, userId: string): Promise<void> {
+/**
+ * Admin action: lift any active cooldown and drop the offense record back to level 1
+ * (the "warned" baseline) — NOT a full pardon. The warning stays on record, so the
+ * next offense goes straight to the short timeout (level 2). The level then decays
+ * normally from here.
+ */
+export async function resetQueuePenaltyToWarned(
+  redis: Redis,
+  userId: string,
+  nowMs: number,
+): Promise<void> {
+  const offenseKey = `${OFFENSE_PREFIX}${userId}`;
   await Promise.all([
-    redis.del(`${TIMEOUT_PREFIX}${userId}`),
-    redis.del(`${OFFENSE_PREFIX}${userId}`),
-    redis.del(`${SHORTLEAVE_PREFIX}${userId}`),
+    redis.del(`${TIMEOUT_PREFIX}${userId}`), // lift the active cooldown
+    redis.del(`${SHORTLEAVE_PREFIX}${userId}`), // fresh accumulation window
   ]);
+  await redis.hset(offenseKey, 'level', '1', 'ts', String(nowMs));
+  await redis.pexpire(offenseKey, 2 * DECAY_PERIOD_MS); // level 1 decays to 0 in ~7 clean days
 }
 
 export interface QueueLeaveOutcome {

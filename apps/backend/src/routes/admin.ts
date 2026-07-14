@@ -18,7 +18,7 @@ import {
 } from '../lib/skill-classification-service.js';
 import { CALIBRATION_QUESTIONS, questionnaireFloor, classify, BAND_NAMES } from '../lib/skill-classification.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
-import { getQueuePenaltyState, clearQueuePenalty } from '../lib/queue-penalty.js';
+import { getQueuePenaltyState, resetQueuePenaltyToWarned } from '../lib/queue-penalty.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -342,9 +342,10 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(200).send(state);
   });
 
-  // DELETE /api/admin/users/:id/queue-penalty — #14 lift the cooldown + wipe the record.
+  // DELETE /api/admin/users/:id/queue-penalty — #14 lift the cooldown + drop to level 1
+  // ("warned"): not a full pardon, so the next offense goes straight to the short timeout.
   fastify.delete<{ Params: { id: string } }>('/api/admin/users/:id/queue-penalty', async (request, reply) => {
-    if (fastify.redis) await clearQueuePenalty(fastify.redis, request.params.id);
+    if (fastify.redis) await resetQueuePenaltyToWarned(fastify.redis, request.params.id, Date.now());
     return reply.code(200).send({ ok: true });
   });
 

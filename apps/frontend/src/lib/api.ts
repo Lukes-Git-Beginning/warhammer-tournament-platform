@@ -733,7 +733,8 @@ export function getAdminUserQueuePenalty(userId: string): Promise<QueuePenaltySt
   return apiFetch<QueuePenaltyState>(`/api/admin/users/${userId}/queue-penalty`);
 }
 
-export function clearAdminUserQueuePenalty(userId: string): Promise<{ ok: boolean }> {
+// Lifts any active cooldown and drops the player back to level 1 ("warned").
+export function liftAdminUserQueueCooldown(userId: string): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>(`/api/admin/users/${userId}/queue-penalty`, { method: 'DELETE' });
 }
 

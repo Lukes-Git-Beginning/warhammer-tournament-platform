@@ -7,7 +7,7 @@ import {
   getUserGames,
   getPlayerAntiFarming,
   getAdminUserQueuePenalty,
-  clearAdminUserQueuePenalty,
+  liftAdminUserQueueCooldown,
   type AntiFarmingOpponent,
 } from '@/lib/api.js';
 import { patchMePreferences } from '@/lib/onboarding.js';
@@ -301,14 +301,16 @@ function QueueCooldownAdminPanel({ userId }: { userId: string }) {
     queryKey: ['admin-queue-penalty', userId],
     queryFn: () => getAdminUserQueuePenalty(userId),
   });
-  const clear = useMutation({
-    mutationFn: () => clearAdminUserQueuePenalty(userId),
+  const lift = useMutation({
+    mutationFn: () => liftAdminUserQueueCooldown(userId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-queue-penalty', userId] }),
   });
 
   const cooldownSec = data?.cooldownSec ?? 0;
   const level = data?.level ?? 0;
   const hasPenalty = cooldownSec > 0 || level > 0;
+  // Lifting drops to level 1 ("warned"), so there's only something to do above that.
+  const canLift = cooldownSec > 0 || level > 1;
 
   return (
     <div>
@@ -334,10 +336,11 @@ function QueueCooldownAdminPanel({ userId }: { userId: string }) {
         <Button
           size="sm"
           variant="etched"
-          onClick={() => clear.mutate()}
-          disabled={!hasPenalty || clear.isPending}
+          onClick={() => lift.mutate()}
+          disabled={!canLift || lift.isPending}
+          title="Lift the cooldown and drop the player back to level 1 (warned)"
         >
-          {clear.isPending ? 'Clearing…' : 'Clear'}
+          {lift.isPending ? 'Lifting…' : 'Lift cooldown'}
         </Button>
       </div>
     </div>
