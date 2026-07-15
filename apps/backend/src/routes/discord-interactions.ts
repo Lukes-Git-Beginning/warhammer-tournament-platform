@@ -272,7 +272,9 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
             let matchId: string;
             let mapName: string | null;
             try {
-              ({ matchId, mapName } = await createOpenPlayMatch(prisma, opponentId, user.id, 'QUEUE'));
+              // #12: this player grabbed a waiting opponent via the availability DM —
+              // distinct from the tick pairing two players who were both queueing.
+              ({ matchId, mapName } = await createOpenPlayMatch(prisma, opponentId, user.id, 'AVAILABILITY'));
             } catch (err) {
               // Match creation failed — put the opponent back at the front of the queue.
               await redis.lpush(QUEUE_KEY, opponentId);
@@ -282,6 +284,13 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
             }
 
             await redis.hdel(JOINED_AT_KEY, opponentId);
+
+            // #12: log the pairing so it shows in the admin Queue Activity tab
+            // (mirrors the matchmaking-tick MATCH events; source lives on the match).
+            await Promise.all([
+              logQueueActivity(prisma, 'MATCH', user.id, { matchId, opponentId }),
+              logQueueActivity(prisma, 'MATCH', opponentId, { matchId, opponentId: user.id }),
+            ]);
 
             const opponent = await prisma.user.findUnique({
               where: { id: opponentId },

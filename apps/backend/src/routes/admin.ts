@@ -177,7 +177,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (user_id) where.user_id = user_id;
     if (event) where.event = event;
 
-    const [total, entries] = await Promise.all([
+    const [total, entries, sourceGroups] = await Promise.all([
       fastify.prisma.queueActivityLog.count({ where }),
       fastify.prisma.queueActivityLog.findMany({
         where,
@@ -189,7 +189,32 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           opponent: { select: { id: true, username: true, avatar_url: true } },
         },
       }),
+      // #12: lifetime Open-Play match totals by source (Queue vs Availability-DM vs Challenge).
+      fastify.prisma.match.groupBy({
+        by: ['source'],
+        where: { type: 'OPEN_PLAY', deleted_at: null },
+        _count: { _all: true },
+      }),
     ]);
+
+    // #12: source lives on the match, not the log — look up the sources for the
+    // match_ids on this page so each row can show where the pairing came from.
+    const matchIds = [...new Set(entries.map((e) => e.match_id).filter((id): id is string => id != null))];
+    const matchSources =
+      matchIds.length > 0
+        ? await fastify.prisma.match.findMany({
+            where: { id: { in: matchIds } },
+            select: { id: true, source: true },
+          })
+        : [];
+    const sourceByMatchId = new Map(matchSources.map((m) => [m.id, m.source]));
+
+    const matchSourceCounts = { QUEUE: 0, AVAILABILITY: 0, CHALLENGE: 0 };
+    for (const g of sourceGroups) {
+      if (g.source && g.source in matchSourceCounts) {
+        matchSourceCounts[g.source as keyof typeof matchSourceCounts] = g._count._all;
+      }
+    }
 
     return {
       entries: entries.map((e) => ({
@@ -201,9 +226,11 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         opponent_id: e.opponent?.id ?? null,
         opponent_username: e.opponent?.username ?? null,
         match_id: e.match_id,
+        source: e.match_id ? (sourceByMatchId.get(e.match_id) ?? null) : null,
         level: e.level,
         created_at: e.created_at.toISOString(),
       })),
+      matchSourceCounts,
       total,
       page,
       pageSize,

@@ -10,7 +10,7 @@ export async function createOpenPlayMatch(
   prisma: PrismaClient,
   player1Id: string,
   player2Id: string,
-  source: 'QUEUE' | 'CHALLENGE' = 'QUEUE',
+  source: 'QUEUE' | 'CHALLENGE' | 'AVAILABILITY' = 'QUEUE',
 ): Promise<{ matchId: string; mapId: string | null; mapName: string | null }> {
   const maps = await prisma.map.findMany({
     where: { deleted_at: null },

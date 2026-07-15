@@ -706,8 +706,17 @@ export interface QueueActivityEntry {
   opponent_id: string | null;
   opponent_username: string | null;
   match_id: string | null;
+  /** #12 — Open-Play match origin: QUEUE (tick paired two waiters) vs AVAILABILITY
+   * (grabbed via availability DM) vs CHALLENGE (scheduled). Null for non-match events. */
+  source: 'QUEUE' | 'AVAILABILITY' | 'CHALLENGE' | null;
   level: number | null;
   created_at: string;
+}
+
+export interface MatchSourceCounts {
+  QUEUE: number;
+  AVAILABILITY: number;
+  CHALLENGE: number;
 }
 
 export function getAdminQueueActivity(opts?: {
@@ -715,7 +724,13 @@ export function getAdminQueueActivity(opts?: {
   pageSize?: number;
   user_id?: string;
   event?: QueueActivityEvent;
-}): Promise<{ entries: QueueActivityEntry[]; total: number; page: number; pageSize: number }> {
+}): Promise<{
+  entries: QueueActivityEntry[];
+  matchSourceCounts: MatchSourceCounts;
+  total: number;
+  page: number;
+  pageSize: number;
+}> {
   const params = new URLSearchParams();
   if (opts?.page) params.set('page', String(opts.page));
   if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
