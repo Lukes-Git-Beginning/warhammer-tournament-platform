@@ -899,6 +899,26 @@ export function getAdminSkillDistribution(season?: string): Promise<SkillDistrib
   return apiFetch(`/api/admin/stats/skill-distribution${season ? `?season=${encodeURIComponent(season)}` : ''}`);
 }
 
+// #17 — engagement-gap report.
+export interface AdminEngagementUser {
+  id: string;
+  username: string;
+  email: string | null;
+  createdAt: string;
+  lastLogin: string | null;
+}
+export interface AdminVerifiedNeverPlayed extends AdminEngagementUser {
+  steamPersona: string | null;
+  steamProfileUrl: string | null;
+}
+export interface AdminEngagementReport {
+  notSteamVerified: AdminEngagementUser[];
+  verifiedNeverPlayed: AdminVerifiedNeverPlayed[];
+}
+export function getAdminEngagementReport(): Promise<AdminEngagementReport> {
+  return apiFetch(`/api/admin/reports/engagement`);
+}
+
 export interface GamesOverTimeEntry {
   day: string;
   tournament: number;

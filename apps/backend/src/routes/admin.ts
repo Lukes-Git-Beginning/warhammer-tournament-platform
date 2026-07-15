@@ -606,6 +606,63 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     );
   });
 
+  // GET /api/admin/reports/engagement — #17: two engagement-gap lists.
+  //  (1) users who have NOT linked/verified Steam yet (can't be matched into
+  //      Steam-gated play).
+  //  (2) fully-verified users who have never completed a game (dormant — worth a
+  //      nudge). "Never played" = no COMPLETED match as either player.
+  fastify.get('/api/admin/reports/engagement', async () => {
+    const [notSteamVerified, verifiedNeverPlayed] = await Promise.all([
+      fastify.prisma.user.findMany({
+        where: { deleted_at: null, steam_link: null },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          created_at: true,
+          last_login: true,
+        },
+        orderBy: { created_at: 'desc' },
+      }),
+      fastify.prisma.user.findMany({
+        where: {
+          deleted_at: null,
+          steam_link: { isNot: null },
+          matches_as_player1: { none: { status: 'COMPLETED', deleted_at: null } },
+          matches_as_player2: { none: { status: 'COMPLETED', deleted_at: null } },
+        },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          created_at: true,
+          last_login: true,
+          steam_link: { select: { persona: true, profile_url: true } },
+        },
+        orderBy: { created_at: 'desc' },
+      }),
+    ]);
+
+    return {
+      notSteamVerified: notSteamVerified.map((u) => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        createdAt: u.created_at.toISOString(),
+        lastLogin: u.last_login?.toISOString() ?? null,
+      })),
+      verifiedNeverPlayed: verifiedNeverPlayed.map((u) => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        createdAt: u.created_at.toISOString(),
+        lastLogin: u.last_login?.toISOString() ?? null,
+        steamPersona: u.steam_link?.persona ?? null,
+        steamProfileUrl: u.steam_link?.profile_url ?? null,
+      })),
+    };
+  });
+
   fastify.get('/api/admin/stats/faction-winrates', async (request, reply) => {
     const parsed = FactionWinRatesQuerySchema.safeParse(request.query);
     if (!parsed.success) {
