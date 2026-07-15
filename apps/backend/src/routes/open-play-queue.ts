@@ -150,13 +150,17 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
     const now = new Date();
     const day = (now.getUTCDay() + 6) % 7; // 0=Mon..6=Sun
     const hour = now.getUTCHours();
-    const [queue, availableNow] = await Promise.all([
+    const [queue, availableNow, playingMatches] = await Promise.all([
       fastify.redis ? fastify.redis.llen(QUEUE_KEY) : Promise.resolve(0),
       fastify.prisma.availabilitySlot.count({
         where: { day_of_week: day, hour_utc: hour, context: 'MATCHMAKING' },
       }),
+      // #7: how many are currently playing an Open Play match (2 players per ongoing match).
+      fastify.prisma.match.count({
+        where: { type: 'OPEN_PLAY', status: 'ONGOING', deleted_at: null },
+      }),
     ]);
-    return reply.code(200).send({ queue, availableNow });
+    return reply.code(200).send({ queue, availableNow, playing: playingMatches * 2 });
   });
 
   // POST /api/open-play/matches/:id/cancel — either player can cancel.

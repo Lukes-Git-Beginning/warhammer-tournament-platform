@@ -381,7 +381,7 @@ function pairingDmText(name: string, label: string, opponentDiscordId: string, m
     return `**[RizzOtto's Arena] ${label} — ${name}** 🏆\n` +
       `Congratulations on reaching the ${label}! You face ${vs}. This is where legends are forged — good luck, and may your dice run hot. <${url}>`;
   }
-  return `**[RizzOtto's Arena] ${label} Pairing — ${name}**\nYou are playing against ${vs}.`;
+  return `**[RizzOtto's Arena] ${label} Pairing — ${name}**\nYou are playing against ${vs}.\nOpen your match: <${url}>`;
 }
 
 /**

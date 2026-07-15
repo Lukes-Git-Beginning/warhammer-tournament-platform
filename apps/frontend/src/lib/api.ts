@@ -1873,8 +1873,8 @@ export function getAvailabilityNow(): Promise<{ count: number; day_of_week: numb
   return apiFetch<{ count: number; day_of_week: number; hour_utc: number }>('/api/availability/now');
 }
 
-export function getQueueCount(): Promise<{ queue: number; availableNow: number }> {
-  return apiFetch<{ queue: number; availableNow: number }>('/api/open-play/queue/count');
+export function getQueueCount(): Promise<{ queue: number; availableNow: number; playing: number }> {
+  return apiFetch<{ queue: number; availableNow: number; playing: number }>('/api/open-play/queue/count');
 }
 
 export function cancelOpenPlayMatch(matchId: string): Promise<{ ok: true }> {
