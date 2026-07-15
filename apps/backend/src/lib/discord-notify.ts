@@ -862,15 +862,19 @@ export async function notifyOpponentOfWithdrawal(matchId: string, survivorUserId
     if (!match || !survivor?.discord_id) return;
 
     const base = process.env.FRONTEND_URL ?? 'https://rizzotto.gg';
-    const matchUrl = `${base}/matches/${matchId}`;
+    // Link to the tournament page (My Match → GameTile), NOT /matches/:id — the /matches page
+    // renders the replay-less dual-submit for tournament matches, which bypasses both the replay
+    // requirement and the played/void decision. The tournament GameTile has both.
+    const slug = match.tournament?.slug;
+    const url = slug ? `${base}/tournaments/${slug}` : `${base}/matches/${matchId}`;
     const tournamentName = match.tournament?.name ?? 'your tournament';
 
     const msg =
       `**[RizzOtto's Arena] Opponent withdrew — ${tournamentName}**\n\n` +
-      `Your opponent has withdrawn from the tournament. Please visit the match page to decide:\n` +
+      `Your opponent has withdrawn from the tournament. Open your match on the tournament page to decide:\n` +
       `• **Match was played** — report the result and upload your replay as normal.\n` +
       `• **Match was not played** — void it so you can be re-paired for this round.\n\n` +
-      `Match page: <${matchUrl}>`;
+      `Your match: <${url}>`;
 
     await sendDm(survivor.discord_id, msg);
   } catch (err) {
