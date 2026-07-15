@@ -396,8 +396,6 @@ export function TournamentCreateForm() {
   }
 
   const isBalanced = form.format === 'BALANCED_LIECHTENSTEIN';
-  // Balanced defaults to auto-sizing; the host can turn it off for fixed rounds.
-  const balancedAutoSized = isBalanced && (form.auto_sizing ?? true);
 
   return (
     <form onSubmit={handleSubmit} className="w-full space-y-6">
@@ -711,7 +709,7 @@ export function TournamentCreateForm() {
             {/* Rounds count — Swiss/Liechtenstein always; Balanced only when the
                 host turned auto-sizing off (fixed rounds). Round Robin rounds are
                 determined by participant count. */}
-            {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN' || (isBalanced && !balancedAutoSized)) && <div>
+            {(!form.auto_sizing && (form.format === 'SWISS' || form.format === 'LIECHTENSTEIN' || isBalanced)) && <div>
               <Label htmlFor="tcf-rounds">{form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : isBalanced ? 'Balanced Liechtenstein Rounds' : 'Swiss Rounds'}</Label>
               <div className="flex items-center gap-3 mt-1">
                 <input
@@ -732,9 +730,9 @@ export function TournamentCreateForm() {
               <FieldHint>Number of rounds (3–8). All rounds pre-generated randomly at start. Default: 5.</FieldHint>
             </div>}
 
-            {/* Playoff format + third-place — hidden for Balanced Liechtenstein,
-                whose playoff bracket is sized per skill division automatically. */}
-            {!isBalanced && (
+            {/* Playoff format + third-place — hidden for Balanced Liechtenstein (sized per skill
+                division automatically) AND whenever auto-sizing is on (#16). */}
+            {!isBalanced && !form.auto_sizing && (
               <>
             {/* Playoff format */}
             <div>
