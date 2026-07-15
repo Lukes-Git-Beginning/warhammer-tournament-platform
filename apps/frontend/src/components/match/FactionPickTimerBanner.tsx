@@ -48,7 +48,7 @@ export function FactionPickTimerBanner() {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [next?.deadline]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [next?.deadline]);
 
   if (!next || !label) return null;
 

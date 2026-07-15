@@ -708,7 +708,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
 
-    let seasonId: string | null = null;
+    let seasonId: string | null;
     if (parsed.data.season) {
       const s = await fastify.prisma.season.findUnique({ where: { id: parsed.data.season }, select: { id: true } });
       if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
