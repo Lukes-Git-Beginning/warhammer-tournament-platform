@@ -919,6 +919,27 @@ export function getAdminEngagementReport(): Promise<AdminEngagementReport> {
   return apiFetch(`/api/admin/reports/engagement`);
 }
 
+// #19 — underrated players: data rating vs questionnaire rating.
+export interface AdminUnderratedPlayer {
+  id: string;
+  username: string;
+  questionnaireBand: number;
+  questionnaireBandName: string;
+  dataBand: number;
+  dataBandName: string;
+  dataWinChance: number;
+  generalSkillSe: number;
+  delta: number; // >0 = data rates them above their self-claim
+  smurfSuspected: boolean;
+}
+export interface AdminUnderratedReport {
+  seasonId: string | null;
+  players: AdminUnderratedPlayer[];
+}
+export function getAdminUnderratedReport(season?: string): Promise<AdminUnderratedReport> {
+  return apiFetch(`/api/admin/reports/underrated${season ? `?season=${encodeURIComponent(season)}` : ''}`);
+}
+
 export interface GamesOverTimeEntry {
   day: string;
   tournament: number;

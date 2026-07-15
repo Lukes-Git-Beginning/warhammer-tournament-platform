@@ -16,7 +16,15 @@ import {
   CalibrationQuestionsSchema,
   CALIBRATION_CONFIG_KEY,
 } from '../lib/skill-classification-service.js';
-import { CALIBRATION_QUESTIONS, questionnaireFloor, classify, BAND_NAMES } from '../lib/skill-classification.js';
+import {
+  CALIBRATION_QUESTIONS,
+  questionnaireFloor,
+  classify,
+  BAND_NAMES,
+  bandToLogOdds,
+  skillToWinChance,
+} from '../lib/skill-classification.js';
+import { skillToBand } from '../lib/rating-model.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
 import { getQueuePenaltyState, resetQueuePenaltyToWarned } from '../lib/queue-penalty.js';
 
@@ -661,6 +669,64 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         steamProfileUrl: u.steam_link?.profile_url ?? null,
       })),
     };
+  });
+
+  // GET /api/admin/reports/underrated — #19: players whose DATA-based rating exceeds
+  // their QUESTIONNAIRE-based rating (potentially stronger than they claimed). Sorted
+  // by the gap, descending; NO threshold — the admin judges. Needs BOTH signals to
+  // compare, so players lacking a questionnaire or lacking fitted data are omitted.
+  fastify.get('/api/admin/reports/underrated', async (request, reply) => {
+    const parsed = z.object({ season: z.string().uuid().optional() }).safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    let seasonId: string | null = null;
+    if (parsed.data.season) {
+      const s = await fastify.prisma.season.findUnique({ where: { id: parsed.data.season }, select: { id: true } });
+      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
+      seasonId = s.id;
+    } else {
+      const s = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
+      seasonId = s?.id ?? null;
+    }
+
+    const [model, users, questions] = await Promise.all([
+      seasonId
+        ? getRatingModel(fastify.prisma, fastify.redis, { seasonId, config: { hierarchical: true } })
+        : Promise.resolve(null),
+      fastify.prisma.user.findMany({
+        where: { deleted_at: null },
+        select: { id: true, username: true, calibration_answers: true },
+      }),
+      loadCalibrationQuestions(fastify.prisma),
+    ]);
+
+    const players = [];
+    for (const u of users) {
+      const answers = (u.calibration_answers as Record<string, string> | null) ?? {};
+      if (Object.keys(answers).length === 0) continue; // need a self-claim to compare against
+      const gs = model ? model.getGeneralSkill(u.id) : null;
+      if (!gs) continue; // need fitted data to compare
+      const qFloor = questionnaireFloor(answers, questions);
+      const qSkill = bandToLogOdds(qFloor);
+      const dataBand = skillToBand(gs.skill);
+      players.push({
+        id: u.id,
+        username: u.username,
+        questionnaireBand: qFloor,
+        questionnaireBandName: BAND_NAMES[qFloor],
+        dataBand,
+        dataBandName: BAND_NAMES[dataBand],
+        dataWinChance: skillToWinChance(gs.skill),
+        generalSkillSe: gs.se,
+        delta: gs.skill - qSkill, // >0 = data rates them above their claim
+        // Confident overclaim: conservative data (GS − 2·SE) still lands above the claim.
+        smurfSuspected: skillToBand(gs.skill - 2 * gs.se) > qFloor,
+      });
+    }
+    players.sort((a, b) => b.delta - a.delta);
+    return { seasonId, players };
   });
 
   fastify.get('/api/admin/stats/faction-winrates', async (request, reply) => {
