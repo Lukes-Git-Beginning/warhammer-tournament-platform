@@ -345,6 +345,8 @@ export interface PlayerClassificationDto {
   matchmakingWinChance: number;
   bandName: string;
   hasQuestionnaire: boolean;
+  /** #18 — false when the player has no real signal; bandName is then "Unrated". */
+  rated: boolean;
 }
 
 export interface CalibrationOption {

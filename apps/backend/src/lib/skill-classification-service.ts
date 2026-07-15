@@ -78,6 +78,8 @@ export interface PlayerClassification extends Classification {
   bandName: string;
   /** Whether the player has answered any scoring questions yet. */
   hasQuestionnaire: boolean;
+  /** True when there is real signal (questionnaire or fitted data); false = "Unrated". */
+  rated: boolean;
 }
 
 /** Read a user's stored calibration answers (question id → option value). */
@@ -120,6 +122,10 @@ export async function getPlayerClassification(
   });
 
   const hasQuestionnaire = Object.keys(answers).length > 0;
+  // #18 — "rated" means we have real signal: a questionnaire OR fitted game data.
+  // A player with neither is NOT band-1 "New"; the default floor is just a
+  // placeholder. Such players are surfaced as "Unrated" and kept out of band stats.
+  const rated = hasQuestionnaire || gs != null;
 
   return {
     ...result,
@@ -130,8 +136,10 @@ export async function getPlayerClassification(
     generalSkill: gs?.skill ?? null,
     generalSkillSe: gs?.se ?? null,
     matchmakingWinChance: skillToWinChance(result.matchmakingSkill),
-    bandName: BAND_NAMES[result.gatingBand]!,
+    // Headline tier name — "Unrated" when we have no real signal (not "New").
+    bandName: rated ? BAND_NAMES[result.gatingBand]! : 'Unrated',
     hasQuestionnaire,
+    rated,
   };
 }
 
