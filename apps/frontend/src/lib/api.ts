@@ -480,6 +480,23 @@ export function getAllTimeLeaderboard(opts?: {
   return apiFetch<AllTimeLeaderboardResponse>(`/api/leaderboard/all-time${qs ? `?${qs}` : ''}`);
 }
 
+// #6 — major-tournament-wins leaderboard.
+export interface MajorWinTournament {
+  id: string;
+  name: string;
+  slug: string;
+  startDate: string | null;
+}
+export interface MajorWinsEntry {
+  rank: number;
+  user: { id: string; username: string; avatar_url: string | null };
+  wins: number;
+  tournaments: MajorWinTournament[];
+}
+export function getMajorWinsLeaderboard(): Promise<{ entries: MajorWinsEntry[] }> {
+  return apiFetch(`/api/leaderboard/major-wins`);
+}
+
 export function getUserProfile(id: string): Promise<UserProfileResponse> {
   return apiFetch<UserProfileResponse>(`/api/users/${id}`);
 }
