@@ -80,6 +80,15 @@ function serializeGame(game: {
           player1Locked: Boolean(game.blind_pick.player1_locked_at),
           player2Locked: Boolean(game.blind_pick.player2_locked_at),
           revealedAt: game.blind_pick.revealed_at?.toISOString() ?? null,
+          // #2: earliest lock — starts the 2-minute auto-resolve countdown so the
+          // game tile can show the faction-pick timer.
+          firstLockedAt: (
+            game.blind_pick.player1_locked_at && game.blind_pick.player2_locked_at
+              ? (game.blind_pick.player1_locked_at < game.blind_pick.player2_locked_at
+                  ? game.blind_pick.player1_locked_at
+                  : game.blind_pick.player2_locked_at)
+              : (game.blind_pick.player1_locked_at ?? game.blind_pick.player2_locked_at)
+          )?.toISOString() ?? null,
           player1FactionId: game.blind_pick.revealed_at
             ? (game.blind_pick.player1_faction_id ?? null)
             : null,

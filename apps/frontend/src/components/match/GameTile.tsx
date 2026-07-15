@@ -157,6 +157,15 @@ export function GameTile({
       ((tournamentMode !== 'MATRIX' && !isFreePick) || (p1FactionId != null && p2FactionId != null)),
   );
 
+  // #2 — Faction-pick timer. Once one player locks their blind pick, the other has
+  // BLIND_PICK_TIMEOUT_MS before a random faction is auto-assigned. Surface the
+  // countdown on the tile so nobody is caught out.
+  const blindPickDeadline =
+    game.blindPick?.firstLockedAt && !game.blindPick?.revealedAt
+      ? new Date(new Date(game.blindPick.firstLockedAt).getTime() + BLIND_PICK_TIMEOUT_MS)
+      : null;
+  const blindPickTimeLeft = useCountdown(blindPickDeadline);
+
   const _isReporter = game.reportedWinnerId !== null && game.reporterId === currentUserId;
   const _isOpponentReporter =
     game.reportedWinnerId !== null && game.reporterId !== null && game.reporterId !== currentUserId;
@@ -353,6 +362,11 @@ export function GameTile({
                   ) : (
                     <p className="text-sm text-rizzotto-stone-400 text-center">
                       {game.decision.mode === 'RANDOM' ? 'Drawing battlefield…' : 'Picking battlefield…'}
+                    </p>
+                  )}
+                  {blindPickTimeLeft && (
+                    <p className="text-xs font-semibold text-rizzotto-gold-400 text-center">
+                      ⏱ {blindPickTimeLeft} until a faction is auto-picked
                     </p>
                   )}
                   <Button variant="forge" size="sm" asChild>
@@ -700,6 +714,10 @@ function ProvisionalPanel({
     </div>
   );
 }
+
+// Mirror of BLIND_PICK_TIMEOUT_MS in apps/backend/src/lib/blind-pick-auto-resolve.ts —
+// once one player locks, the other has this long before a random faction is assigned.
+const BLIND_PICK_TIMEOUT_MS = 2 * 60 * 1000;
 
 function useCountdown(target: Date | null): string | null {
   const [remaining, setRemaining] = useState<string | null>(null);

@@ -1441,6 +1441,8 @@ export interface GameDto {
     player1Locked: boolean;
     player2Locked: boolean;
     revealedAt: string | null;
+    /** Earliest lock — start of the 2-minute auto-resolve countdown (#2). */
+    firstLockedAt?: string | null;
     player1FactionId: string | null;
     player2FactionId: string | null;
   } | null;
@@ -1448,6 +1450,19 @@ export interface GameDto {
 
 export function getMatchGames(matchId: string): Promise<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }> {
   return apiFetch<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }>(`/api/matches/${matchId}/games`);
+}
+
+// #2 — Site-wide faction-pick timer. A running blind pick where the opponent has
+// locked and this user has not; drives the always-visible countdown banner.
+export interface PendingFactionPick {
+  matchId: string;
+  tournamentSlug: string | null;
+  tournamentName: string | null;
+  deadline: string; // ISO — when the pick auto-resolves to a random faction
+}
+
+export function getPendingFactionPicks(): Promise<{ picks: PendingFactionPick[] }> {
+  return apiFetch<{ picks: PendingFactionPick[] }>(`/api/me/pending-faction-picks`);
 }
 
 export function voidDroppedMatch(matchId: string): Promise<{ ok: true }> {

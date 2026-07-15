@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
 import { ensureMatchGame } from '../lib/match-games.js';
 import { ensureOneVThreeDecision } from '../lib/one-v-three.js';
+import { BLIND_PICK_TIMEOUT_MS } from '../lib/blind-pick-auto-resolve.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -316,6 +317,78 @@ function getPresetForRound(
 // ---------------------------------------------------------------------------
 
 const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
+  // -------------------------------------------------------------------------
+  // GET /api/me/pending-faction-picks
+  // #2: the authenticated user's running faction-pick timers — blind picks where
+  // the opponent has locked, the user has NOT, and the 2-minute auto-resolve
+  // window is still open. Powers the site-wide countdown banner so players notice
+  // the timer wherever they are on the site.
+  // -------------------------------------------------------------------------
+  fastify.get(
+    '/api/me/pending-faction-picks',
+    { preHandler: fastify.authenticate },
+    async (request) => {
+      const userId = request.user.sub;
+
+      const running = await fastify.prisma.matchBlindPick.findMany({
+        where: {
+          revealed_at: null,
+          // exactly one player locked → the countdown is running
+          OR: [
+            { player1_locked_at: { not: null }, player2_locked_at: null },
+            { player2_locked_at: { not: null }, player1_locked_at: null },
+          ],
+          game: {
+            match: {
+              deleted_at: null,
+              status: { in: ['PENDING', 'ONGOING'] },
+              OR: [{ player1_id: userId }, { player2_id: userId }],
+            },
+          },
+        },
+        select: {
+          player1_locked_at: true,
+          player2_locked_at: true,
+          game: {
+            select: {
+              match: {
+                select: {
+                  id: true,
+                  player1_id: true,
+                  tournament: { select: { slug: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const now = Date.now();
+      const picks = running
+        .map((bp) => {
+          const match = bp.game.match;
+          const userIsP1 = match.player1_id === userId;
+          // Only surface to the player who has NOT locked yet — they are the one at
+          // risk of a random auto-assignment.
+          const userLockedAt = userIsP1 ? bp.player1_locked_at : bp.player2_locked_at;
+          if (userLockedAt) return null;
+          const opponentLockedAt = bp.player1_locked_at ?? bp.player2_locked_at;
+          if (!opponentLockedAt) return null;
+          const deadlineMs = opponentLockedAt.getTime() + BLIND_PICK_TIMEOUT_MS;
+          if (deadlineMs <= now) return null; // already past — cron will auto-resolve
+          return {
+            matchId: match.id,
+            tournamentSlug: match.tournament?.slug ?? null,
+            tournamentName: match.tournament?.name ?? null,
+            deadline: new Date(deadlineMs).toISOString(),
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null);
+
+      return { picks };
+    },
+  );
+
   // -------------------------------------------------------------------------
   // GET /api/matches/:id/decision
   // Returns the current decision state for a match (no auth required).

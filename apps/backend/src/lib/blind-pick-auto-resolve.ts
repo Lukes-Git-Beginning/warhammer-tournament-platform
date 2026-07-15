@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 
-const TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+/** How long the second player has to lock once the first has, before auto-resolve. */
+export const BLIND_PICK_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+const TIMEOUT_MS = BLIND_PICK_TIMEOUT_MS;
 
 /**
  * Scans for blind picks where one player locked but the opponent hasn't responded
