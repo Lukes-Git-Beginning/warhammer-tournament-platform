@@ -8,6 +8,7 @@ import {
   getAvailabilityHeatmap,
   getAvailabilityHeatmapNamed,
   getAvailabilityNow,
+  getQueueCount,
   getQueueStatus,
   getScheduledMatchups,
   createScheduledMatchup,
@@ -62,6 +63,15 @@ export function OpenPlayPage() {
     staleTime: 60_000,
   });
 
+  // #7: how many are currently playing an Open Play match.
+  const { data: liveCounts } = useQuery({
+    queryKey: ['queue-count'],
+    queryFn: getQueueCount,
+    refetchInterval: 30_000,
+    staleTime: 30_000,
+  });
+  const playingNow = liveCounts?.playing ?? 0;
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -88,8 +98,29 @@ export function OpenPlayPage() {
                 available now
               </span>
             )}
+            {playingNow > 0 && (
+              <>
+                <span className="text-stone-700">·</span>
+                <span>
+                  <span className="font-semibold text-stone-200">{playingNow}</span> playing
+                </span>
+              </>
+            )}
           </div>
         )}
+      </div>
+
+      {/* #11: Open Play uses the same required map pack as the tournaments. */}
+      <div className="rounded-md border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 px-4 py-3 text-sm">
+        <span className="text-stone-300">Required mod for Open Play: </span>
+        <a
+          href="https://steamcommunity.com/sharedfiles/filedetails/?id=2875865414"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-rizzotto-gold-400 hover:underline"
+        >
+          Total Tavern Tournament Map Pack ↗
+        </a>
       </div>
 
       <QueueStatusCard />

@@ -6,6 +6,7 @@ import {
   getLeaderboard,
   getAllTimeLeaderboard,
   getLeaderboardByMode,
+  getMajorWinsLeaderboard,
   listSeasons,
   type AllTimeEntry,
   type LeaderboardMode,
@@ -15,7 +16,7 @@ import type { LeaderboardEntryDto, DynamicLeaderboardEntryDto } from '@rizzotto/
 import { PageShell } from '@/components/layout/PageShell.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 
-type Tab = 'season' | 'all-time' | 'winrate';
+type Tab = 'season' | 'all-time' | 'winrate' | 'majors';
 
 const PAGE_SIZE = 1000; // load every rank on one page; pagination is a fallback past 1000
 
@@ -643,12 +644,115 @@ function LeaderboardTable({
 }
 
 // ---------------------------------------------------------------------------
+// Majors Tab (#6 — major-tournament wins)
+// ---------------------------------------------------------------------------
+
+function MajorsTab() {
+  const [search, setSearch] = useState('');
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['leaderboard-major-wins'],
+    queryFn: getMajorWinsLeaderboard,
+  });
+
+  const entries = (data?.entries ?? []).filter((e) =>
+    normalize(e.user.username).includes(normalize(search)),
+  );
+
+  return (
+    <div>
+      <p className="mb-4 text-sm text-stone-400">
+        Champions of tournaments flagged as majors — ranked by how many they&rsquo;ve won.
+      </p>
+      <LeaderboardSearch value={search} onChange={setSearch} count={entries.length} />
+
+      {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>}
+      {error && (
+        <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
+          Failed to load leaderboard.
+        </div>
+      )}
+      {!isLoading && !error && entries.length === 0 && (
+        <EmptyState
+          variant="sigil"
+          title="No major champions yet"
+          body="No one has won a major tournament yet."
+          motto="In lapide sigillata."
+        />
+      )}
+      {!isLoading && !error && entries.length > 0 && (
+        <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-stone-wall-texture bg-[length:512px_512px] bg-blend-soft-light backdrop-blur-sm">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
+                <th className="px-4 py-3 text-right font-medium text-stone-400">Major Wins</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Titles</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-800/60">
+              {entries.map((entry) => {
+                const isFirst = entry.rank === 1;
+                const rowClass = isFirst
+                  ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10'
+                  : 'hover:bg-stone-800/30';
+                return (
+                  <tr key={entry.user.id} className={`transition-colors ${rowClass}`}>
+                    <td className="px-4 py-3">
+                      <RankCell rank={entry.rank} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        to="/users/$id"
+                        params={{ id: entry.user.id }}
+                        className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
+                      >
+                        <Avatar url={entry.user.avatar_url} username={entry.user.username} />
+                        <span
+                          className={
+                            isFirst ? 'font-semibold text-rizzotto-gold-500' : 'text-stone-200'
+                          }
+                        >
+                          {entry.user.username}
+                        </span>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400 whitespace-nowrap">
+                      {entry.wins} 🏆
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {entry.tournaments.map((trn) => (
+                          <Link
+                            key={trn.id}
+                            to="/tournaments/$slug"
+                            params={{ slug: trn.slug }}
+                            className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 px-2 py-0.5 text-xs text-stone-300 hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-400 transition-colors"
+                          >
+                            {trn.name}
+                          </Link>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page Shell
 // ---------------------------------------------------------------------------
 
 const TABS_CONFIG: { id: Tab; label: string }[] = [
   { id: 'season', label: 'Season' },
   { id: 'winrate', label: 'Win Rate' },
+  { id: 'majors', label: 'Majors' },
   { id: 'all-time', label: 'All Time' },
 ];
 
@@ -698,6 +802,7 @@ export function LeaderboardPage() {
       {activeTab === 'season' && <SeasonTab />}
       {activeTab === 'all-time' && <AllTimeTab />}
       {activeTab === 'winrate' && <ModeTab mode={activeTab} />}
+      {activeTab === 'majors' && <MajorsTab />}
     </PageShell>
   );
 }

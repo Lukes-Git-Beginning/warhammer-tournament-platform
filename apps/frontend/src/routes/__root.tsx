@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header';
 import { useRequireSteamLink } from '@/lib/auth';
 import { DevLoginPanel } from '@/components/dev/DevLoginPanel';
 import { ActiveMatchVisibilityProvider } from '@/contexts/ActiveMatchVisibility';
+import { FactionPickTimerBanner } from '@/components/match/FactionPickTimerBanner';
 
 function RootLayout() {
   const { t } = useTranslation();
@@ -39,6 +40,8 @@ function RootLayout() {
         <Header />
         <Outlet />
       </div>
+      {/* #2 — always-visible faction-pick countdown (renders only when a timer runs) */}
+      <FactionPickTimerBanner />
 {import.meta.env.DEV && <DevLoginPanel />}
     </div>
     </ActiveMatchVisibilityProvider>

@@ -189,7 +189,11 @@ export function SwissStandings({
     return entries.map((entry, idx) => {
       const rank = idx + 1 + rankOffset;
       const displayName = entry.username ?? entry.userId;
-      const factionId = entry.factionId ?? playerFactionMap?.get(entry.userId);
+      // In FREE_PICK mode a null faction means "pick-later" (intentional), so don't
+      // fill it from the per-game bracket fallback — that would overwrite "Free Pick"
+      // with whatever faction the player happened to pick first. Match nodes still
+      // show each game's actual picked faction.
+      const factionId = isFreePick ? entry.factionId : (entry.factionId ?? playerFactionMap?.get(entry.userId));
       const faction = factionId ? factionMap?.get(factionId) : undefined;
       const factionPool = is2D3 ? (playerFactionPoolMap?.get(entry.userId) ?? []) : [];
       const isFinalist = finalistIds?.has(entry.userId);

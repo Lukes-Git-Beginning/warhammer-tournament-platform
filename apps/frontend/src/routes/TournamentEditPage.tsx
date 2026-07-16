@@ -919,7 +919,7 @@ export function TournamentEditPage() {
 
           {isSwissFamily ? (
             <>
-              {(form.format === 'SWISS' || form.format === 'LIECHTENSTEIN') && (
+              {(!form.auto_sizing && (form.format === 'SWISS' || form.format === 'LIECHTENSTEIN')) && (
                 <div>
                   <Label htmlFor="tef-rounds">
                     {form.format === 'LIECHTENSTEIN' ? 'Liechtenstein Rounds' : 'Swiss Rounds'}
@@ -944,6 +944,7 @@ export function TournamentEditPage() {
                 </div>
               )}
 
+              {!form.auto_sizing && (
               <div>
                 <Label>Playoff Format</Label>
                 <div className="flex gap-3 mt-1 flex-wrap">
@@ -969,8 +970,9 @@ export function TournamentEditPage() {
                   <FieldHint>TOP4 requires ≥8 participants at playoff start. Auto-falls back to TOP2 if below threshold.</FieldHint>
                 )}
               </div>
+              )}
 
-              {form.playoff_format !== 'NONE' && (
+              {!form.auto_sizing && form.playoff_format !== 'NONE' && (
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
                     type="checkbox"

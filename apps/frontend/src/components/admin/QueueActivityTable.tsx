@@ -29,6 +29,18 @@ const EVENT_STYLES: Record<QueueActivityEvent, string> = {
   TIMEOUT: 'bg-orange-950/60 text-orange-300', // #14 cooldown sanction
 };
 
+// #12 — where an Open-Play match came from.
+const SOURCE_LABELS: Record<'QUEUE' | 'AVAILABILITY' | 'CHALLENGE', string> = {
+  QUEUE: 'Queue',
+  AVAILABILITY: 'Availability DM',
+  CHALLENGE: 'Challenge',
+};
+const SOURCE_STYLES: Record<'QUEUE' | 'AVAILABILITY' | 'CHALLENGE', string> = {
+  QUEUE: 'bg-indigo-950/50 text-indigo-300',
+  AVAILABILITY: 'bg-teal-950/50 text-teal-300',
+  CHALLENGE: 'bg-purple-950/50 text-purple-300',
+};
+
 function formatDate(iso: string): string {
   return formatInUserTimezone(iso);
 }
@@ -113,6 +125,19 @@ export function QueueActivityTable() {
 
       {!isLoading && !error && (
         <>
+          {data?.matchSourceCounts && (
+            <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-stone-500">Open-Play matches by origin (all time):</span>
+              {(['QUEUE', 'AVAILABILITY', 'CHALLENGE'] as const).map((s) => (
+                <span
+                  key={s}
+                  className={`rounded px-2 py-0.5 font-medium ${SOURCE_STYLES[s]}`}
+                >
+                  {SOURCE_LABELS[s]}: {data.matchSourceCounts[s]}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="overflow-x-auto rounded-md border border-stone-800">
             <table className="min-w-full text-sm">
               <thead>
@@ -142,6 +167,13 @@ export function QueueActivityTable() {
                       >
                         {entry.event}
                       </span>
+                      {entry.source && (
+                        <span
+                          className={`ml-1.5 rounded px-2 py-0.5 text-xs font-medium ${SOURCE_STYLES[entry.source]}`}
+                        >
+                          {SOURCE_LABELS[entry.source]}
+                        </span>
+                      )}
                       {entry.level != null && (
                         <span className="ml-1.5 text-xs text-stone-500">L{entry.level}</span>
                       )}

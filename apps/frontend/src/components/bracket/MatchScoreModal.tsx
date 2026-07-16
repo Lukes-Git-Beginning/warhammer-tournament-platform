@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createPortal } from 'react-dom';
 import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, restoreMatch, cancelMatch, swapPlayer, deleteMatch, getParticipants, forfeitMatch, setMatchNoContest } from '@/lib/api';
 import { useState } from 'react';
 
@@ -243,7 +244,10 @@ export function MatchScoreModal({
     if (e.target === e.currentTarget) onClose();
   };
 
-  return (
+  // #1: render via a portal to document.body so `fixed` escapes the bracket's
+  // TransformWrapper (a transformed ancestor makes `position: fixed` relative to it,
+  // not the viewport — which is why the modal popped up inside a huge bracket).
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
       onClick={handleBackdropClick}
@@ -575,6 +579,7 @@ export function MatchScoreModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

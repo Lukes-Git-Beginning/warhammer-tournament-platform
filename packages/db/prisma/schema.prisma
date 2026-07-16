@@ -163,6 +163,7 @@ enum MatchType {
 enum MatchSource {
   QUEUE
   CHALLENGE
+  AVAILABILITY
 }
 
 enum QueueEventType {

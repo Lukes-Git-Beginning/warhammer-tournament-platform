@@ -54,10 +54,16 @@ function ClassificationSummary({ c }: { c: PlayerClassificationDto }) {
       </div>
       <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
         <Stat label="Effective band">
-          <span className="inline-flex items-center gap-2">
-            <BandChip band={c.gatingBand} />
-            <span className="text-stone-400">{c.bandName}</span>
-          </span>
+          {c.rated ? (
+            <span className="inline-flex items-center gap-2">
+              <BandChip band={c.gatingBand} />
+              <span className="text-stone-400">{c.bandName}</span>
+            </span>
+          ) : (
+            <span className="rounded border border-stone-700 px-2 py-0.5 text-xs text-stone-500">
+              Unrated
+            </span>
+          )}
         </Stat>
         <Stat label="Matchmaking band">
           <BandChip band={c.matchmakingBand} />

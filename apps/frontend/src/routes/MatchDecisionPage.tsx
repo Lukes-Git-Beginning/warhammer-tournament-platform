@@ -1856,7 +1856,35 @@ export function MatchDecisionPage() {
     queryKey: ['match-detail', matchId],
     queryFn: () => import('@/lib/api').then((m) => m.getMatchDetail(matchId)),
     retry: false,
+    // Poll so we notice if the match is voided/decided out from under us (#10).
+    refetchInterval: 5000,
   });
+
+  // #10 — If the opponent withdraws while the player is sitting in the picker, the
+  // match is terminated out from under them (BaLi → CANCELLED/void, Swiss → a
+  // forfeit-win → COMPLETED/FORFEIT). A pre-game decision screen is then meaningless,
+  // so close the picker and send the player to their game tile, which shows the
+  // withdrawal banner and next steps. No notification — the tile speaks for itself.
+  useEffect(() => {
+    const status = matchDetail?.status;
+    const terminal =
+      status === 'COMPLETED' ||
+      status === 'CANCELLED' ||
+      status === 'FORFEIT' ||
+      status === 'NO_CONTEST' ||
+      status === 'BYE' ||
+      status === 'CATCHUP_BYE';
+    if (!terminal) return;
+    if (matchDetail?.tournament_slug) {
+      void router.navigate({
+        to: '/tournaments/$slug',
+        params: { slug: matchDetail.tournament_slug },
+        hash: 'my-match',
+      });
+    } else {
+      void router.navigate({ to: '/matches/$matchId', params: { matchId } });
+    }
+  }, [matchDetail?.status, matchDetail?.tournament_slug, matchId, router]);
 
   // Map pool — tournament-specific snapshot (falls back to global pool if slug not yet loaded)
   const { data: allMapsData } = useQuery({

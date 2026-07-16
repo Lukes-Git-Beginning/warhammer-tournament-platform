@@ -182,6 +182,66 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
       { ttlSeconds: 120 },
     );
   });
+
+  // GET /api/leaderboard/major-wins — #6: players ranked by MAJOR tournament wins
+  // (1st place in a completed tournament flagged is_major). Standard competition
+  // ranking (equal win counts share a rank). Public, cached.
+  fastify.get('/api/leaderboard/major-wins', async () => {
+    return cached(
+      fastify.redis,
+      cacheKey('leaderboard:major-wins', {}),
+      async () => {
+        const wins = await fastify.prisma.tournamentResult.findMany({
+          where: {
+            placement: 1,
+            tournament: { is_major: true, deleted_at: null, status: 'COMPLETED' },
+          },
+          select: {
+            user: { select: { id: true, username: true, avatar_url: true } },
+            tournament: { select: { id: true, name: true, slug: true, start_date: true } },
+          },
+          orderBy: { tournament: { start_date: 'desc' } },
+        });
+
+        const byUser = new Map<
+          string,
+          {
+            user: { id: string; username: string; avatar_url: string | null };
+            wins: number;
+            tournaments: { id: string; name: string; slug: string; startDate: string | null }[];
+          }
+        >();
+        for (const w of wins) {
+          if (!w.user) continue;
+          const cur = byUser.get(w.user.id) ?? { user: w.user, wins: 0, tournaments: [] };
+          cur.wins += 1;
+          cur.tournaments.push({
+            id: w.tournament.id,
+            name: w.tournament.name,
+            slug: w.tournament.slug,
+            startDate: w.tournament.start_date?.toISOString() ?? null,
+          });
+          byUser.set(w.user.id, cur);
+        }
+
+        const sorted = [...byUser.values()].sort(
+          (a, b) => b.wins - a.wins || a.user.username.localeCompare(b.user.username),
+        );
+        // Standard competition ranking: equal win counts share a rank.
+        let lastWins = -1;
+        let lastRank = 0;
+        const entries = sorted.map((e, i) => {
+          const rank = e.wins === lastWins ? lastRank : i + 1;
+          lastWins = e.wins;
+          lastRank = rank;
+          return { rank, user: e.user, wins: e.wins, tournaments: e.tournaments };
+        });
+
+        return { entries };
+      },
+      { ttlSeconds: 300 },
+    );
+  });
 };
 
 export default leaderboardRoutes;

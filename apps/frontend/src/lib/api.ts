@@ -345,6 +345,8 @@ export interface PlayerClassificationDto {
   matchmakingWinChance: number;
   bandName: string;
   hasQuestionnaire: boolean;
+  /** #18 — false when the player has no real signal; bandName is then "Unrated". */
+  rated: boolean;
 }
 
 export interface CalibrationOption {
@@ -476,6 +478,23 @@ export function getAllTimeLeaderboard(opts?: {
   if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
   const qs = params.toString();
   return apiFetch<AllTimeLeaderboardResponse>(`/api/leaderboard/all-time${qs ? `?${qs}` : ''}`);
+}
+
+// #6 — major-tournament-wins leaderboard.
+export interface MajorWinTournament {
+  id: string;
+  name: string;
+  slug: string;
+  startDate: string | null;
+}
+export interface MajorWinsEntry {
+  rank: number;
+  user: { id: string; username: string; avatar_url: string | null };
+  wins: number;
+  tournaments: MajorWinTournament[];
+}
+export function getMajorWinsLeaderboard(): Promise<{ entries: MajorWinsEntry[] }> {
+  return apiFetch(`/api/leaderboard/major-wins`);
 }
 
 export function getUserProfile(id: string): Promise<UserProfileResponse> {
@@ -704,8 +723,17 @@ export interface QueueActivityEntry {
   opponent_id: string | null;
   opponent_username: string | null;
   match_id: string | null;
+  /** #12 — Open-Play match origin: QUEUE (tick paired two waiters) vs AVAILABILITY
+   * (grabbed via availability DM) vs CHALLENGE (scheduled). Null for non-match events. */
+  source: 'QUEUE' | 'AVAILABILITY' | 'CHALLENGE' | null;
   level: number | null;
   created_at: string;
+}
+
+export interface MatchSourceCounts {
+  QUEUE: number;
+  AVAILABILITY: number;
+  CHALLENGE: number;
 }
 
 export function getAdminQueueActivity(opts?: {
@@ -713,7 +741,13 @@ export function getAdminQueueActivity(opts?: {
   pageSize?: number;
   user_id?: string;
   event?: QueueActivityEvent;
-}): Promise<{ entries: QueueActivityEntry[]; total: number; page: number; pageSize: number }> {
+}): Promise<{
+  entries: QueueActivityEntry[];
+  matchSourceCounts: MatchSourceCounts;
+  total: number;
+  page: number;
+  pageSize: number;
+}> {
   const params = new URLSearchParams();
   if (opts?.page) params.set('page', String(opts.page));
   if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
@@ -895,6 +929,47 @@ export interface SkillDistributionResponse {
 }
 export function getAdminSkillDistribution(season?: string): Promise<SkillDistributionResponse> {
   return apiFetch(`/api/admin/stats/skill-distribution${season ? `?season=${encodeURIComponent(season)}` : ''}`);
+}
+
+// #17 — engagement-gap report.
+export interface AdminEngagementUser {
+  id: string;
+  username: string;
+  email: string | null;
+  createdAt: string;
+  lastLogin: string | null;
+}
+export interface AdminVerifiedNeverPlayed extends AdminEngagementUser {
+  steamPersona: string | null;
+  steamProfileUrl: string | null;
+}
+export interface AdminEngagementReport {
+  notSteamVerified: AdminEngagementUser[];
+  verifiedNeverPlayed: AdminVerifiedNeverPlayed[];
+}
+export function getAdminEngagementReport(): Promise<AdminEngagementReport> {
+  return apiFetch(`/api/admin/reports/engagement`);
+}
+
+// #19 — underrated players: data rating vs questionnaire rating.
+export interface AdminUnderratedPlayer {
+  id: string;
+  username: string;
+  questionnaireBand: number;
+  questionnaireBandName: string;
+  dataBand: number;
+  dataBandName: string;
+  dataWinChance: number;
+  generalSkillSe: number;
+  delta: number; // >0 = data rates them above their self-claim
+  smurfSuspected: boolean;
+}
+export interface AdminUnderratedReport {
+  seasonId: string | null;
+  players: AdminUnderratedPlayer[];
+}
+export function getAdminUnderratedReport(season?: string): Promise<AdminUnderratedReport> {
+  return apiFetch(`/api/admin/reports/underrated${season ? `?season=${encodeURIComponent(season)}` : ''}`);
 }
 
 export interface GamesOverTimeEntry {
@@ -1441,6 +1516,8 @@ export interface GameDto {
     player1Locked: boolean;
     player2Locked: boolean;
     revealedAt: string | null;
+    /** Earliest lock — start of the 2-minute auto-resolve countdown (#2). */
+    firstLockedAt?: string | null;
     player1FactionId: string | null;
     player2FactionId: string | null;
   } | null;
@@ -1448,6 +1525,19 @@ export interface GameDto {
 
 export function getMatchGames(matchId: string): Promise<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }> {
   return apiFetch<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }>(`/api/matches/${matchId}/games`);
+}
+
+// #2 — Site-wide faction-pick timer. A running blind pick where the opponent has
+// locked and this user has not; drives the always-visible countdown banner.
+export interface PendingFactionPick {
+  matchId: string;
+  tournamentSlug: string | null;
+  tournamentName: string | null;
+  deadline: string; // ISO — when the pick auto-resolves to a random faction
+}
+
+export function getPendingFactionPicks(): Promise<{ picks: PendingFactionPick[] }> {
+  return apiFetch<{ picks: PendingFactionPick[] }>(`/api/me/pending-faction-picks`);
 }
 
 export function voidDroppedMatch(matchId: string): Promise<{ ok: true }> {
@@ -1873,8 +1963,8 @@ export function getAvailabilityNow(): Promise<{ count: number; day_of_week: numb
   return apiFetch<{ count: number; day_of_week: number; hour_utc: number }>('/api/availability/now');
 }
 
-export function getQueueCount(): Promise<{ queue: number; availableNow: number }> {
-  return apiFetch<{ queue: number; availableNow: number }>('/api/open-play/queue/count');
+export function getQueueCount(): Promise<{ queue: number; availableNow: number; playing: number }> {
+  return apiFetch<{ queue: number; availableNow: number; playing: number }>('/api/open-play/queue/count');
 }
 
 export function cancelOpenPlayMatch(matchId: string): Promise<{ ok: true }> {
