@@ -195,9 +195,9 @@ export async function completeMatch(
       },
     });
 
-    // In SFT tournaments: latch faction onto the participant record if not yet set.
-    // This covers players who registered before the faction picker existed.
-    if (match.tournament?.mode === 'SFT') {
+    // In SFT / Faction War tournaments: latch faction onto the participant record if not
+    // yet set. This covers players who registered before the faction picker existed.
+    if (match.tournament?.mode === 'SFT' || match.tournament?.mode === 'FACTION_WAR') {
       if (player1FactionId && match.player1_id) {
         await tx.tournamentParticipant.updateMany({
           where: { tournament_id: match.tournament_id ?? undefined, user_id: match.player1_id, faction_id: null, deleted_at: null },

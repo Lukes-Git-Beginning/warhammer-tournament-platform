@@ -677,7 +677,7 @@ export function TournamentDetail() {
               <span className="text-stone-500">Mode:</span>{' '}
               <InfoTooltip text={MODE_DESCRIPTIONS[tournament.mode ?? '']}>
                 <span className="text-stone-200 underline decoration-dotted decoration-stone-600 underline-offset-2">
-                  {(({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', TWO_D_THREE: '2D3', FREE_PICK: "Enticity's Free Pick", ONE_V_THREE: '1v3', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode ?? ''] ?? tournament.mode ?? 'SFT')}
+                  {(({ SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', TWO_D_THREE: '2D3', FREE_PICK: "Enticity's Free Pick", ONE_V_THREE: '1v3', FACTION_WAR: 'Faction War', BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3' } as Record<string, string>)[tournament.mode ?? ''] ?? tournament.mode ?? 'SFT')}
                 </span>
               </InfoTooltip>
             </div>

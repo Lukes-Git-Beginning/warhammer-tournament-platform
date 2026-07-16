@@ -127,7 +127,7 @@ export async function setParticipantFactionOp(
 
   const tournament = await prisma.tournament.findUnique({
     where: { slug, deleted_at: null },
-    select: { id: true, faction_allowlist: { select: { faction_id: true } } },
+    select: { id: true, mode: true, faction_allowlist: { select: { faction_id: true } } },
   });
   if (!tournament) return { status: 404, body: { error: 'NotFound', message: 'Tournament not found', statusCode: 404 } };
 
@@ -140,6 +140,23 @@ export async function setParticipantFactionOp(
     const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
     if (allowlist.length > 0 && !allowlist.includes(parsed.data.faction_id)) {
       return { status: 400, body: { error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" is not in the tournament allowlist`, statusCode: 400 } };
+    }
+    // FACTION_WAR: a faction is globally exclusive — reject if another active player
+    // already holds it (the target player is excluded so a re-assign to the same is a no-op).
+    if (tournament.mode === 'FACTION_WAR') {
+      const claimed = await prisma.tournamentParticipant.findFirst({
+        where: {
+          tournament_id: tournament.id,
+          faction_id: parsed.data.faction_id,
+          status: { in: ['REGISTERED', 'CHECKED_IN'] },
+          deleted_at: null,
+          NOT: { user_id: userId },
+        },
+        select: { id: true },
+      });
+      if (claimed) {
+        return { status: 409, body: { error: 'Conflict', message: 'This faction is already claimed by another player in this tournament', statusCode: 409 } };
+      }
     }
   }
 

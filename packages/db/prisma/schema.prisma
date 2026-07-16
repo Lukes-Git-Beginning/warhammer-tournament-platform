@@ -50,6 +50,7 @@ enum TournamentMode {
   TWO_D_THREE // 2D3 — each player picks 3 factions at registration, one drawn at random per game
   FREE_PICK // Enticity's Free Pick — per player: fixed faction (faction_id set, SFT-like) OR pick-later (faction_id null); matchup resolves by both players' choices
   ONE_V_THREE // 1v3 — coin flip sets roles: the Runner plays the host-set faction, the Picker offers 3, the Runner picks which of the 3 the Picker plays
+  FACTION_WAR // like SFT (faction pre-pick at registration) but each faction is globally exclusive — once claimed, no other player in the tournament can pick it
 }
 
 enum PlayoffFormat {

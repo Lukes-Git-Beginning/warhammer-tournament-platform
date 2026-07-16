@@ -170,7 +170,9 @@ export async function finalizeGameResult(
   if (mode === 'BPT' && game.blind_pick?.revealed_at) {
     p1FactionId = game.blind_pick.player1_faction_id ?? null;
     p2FactionId = game.blind_pick.player2_faction_id ?? null;
-  } else if (mode === 'SFT') {
+  } else if (mode === 'SFT' || mode === 'FACTION_WAR') {
+    // FACTION_WAR resolves identically to SFT — each player's single pre-picked faction
+    // from their participant record (it is just globally exclusive at pick time).
     const participants = game.match.tournament?.participants ?? [];
     const p1Part = participants.find((p) => p.user_id === game.match.player1_id);
     const p2Part = participants.find((p) => p.user_id === game.match.player2_id);

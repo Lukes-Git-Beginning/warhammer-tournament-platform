@@ -19,7 +19,7 @@ const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
   format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'AUTO_SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
-  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE']).default('BPT'),
+  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR']).default('BPT'),
   set_faction_id: z.string().min(1).optional(),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
@@ -469,6 +469,7 @@ export function TournamentCreateForm() {
             <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
             <option value="FREE_PICK">Enticity&apos;s Free Pick — SFT/Matrix Hybrid</option>
             <option value="ONE_V_THREE">1v3 — Set Faction vs. One of Three Counterpicks</option>
+            <option value="FACTION_WAR">Faction War — SFT with globally exclusive factions</option>
           </Select>
           <FieldHint>{MODE_DESCRIPTIONS[form.mode ?? 'BPT']}</FieldHint>
         </div>
