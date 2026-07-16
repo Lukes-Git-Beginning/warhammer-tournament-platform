@@ -13,7 +13,16 @@ export interface BracketNode {
   result: MatchResultType | null;
   player1Points: number | null;
   player2Points: number | null;
-  status: 'PENDING' | 'ONGOING' | 'COMPLETED' | 'BYE' | 'FORFEIT' | 'DISPUTED' | 'CANCELLED' | 'CATCHUP_BYE';
+  status:
+    | 'PENDING'
+    | 'ONGOING'
+    | 'COMPLETED'
+    | 'BYE'
+    | 'FORFEIT'
+    | 'DISPUTED'
+    | 'CANCELLED'
+    | 'CATCHUP_BYE'
+    | 'PENDING_BYE';
   nextMatchId: string | null;
   loserNextMatchId: string | null;
   bracketSide: 'WINNERS' | 'LOSERS' | 'GRAND_FINAL' | null;

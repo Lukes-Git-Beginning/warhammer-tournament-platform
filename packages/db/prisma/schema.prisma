@@ -107,6 +107,7 @@ enum MatchStatus {
   CANCELLED // Open Play no-contest: both players agreed to close without a result
   NO_CONTEST // tournament double-bye: technical abort, both players get a bye point (1.0, no BH)
   CATCHUP_BYE // late-join placeholder: counts as a played round for depth/completeness, but scores 0 (no BH)
+  PENDING_BYE // BaLi 2.0: provisional bye, reclaimable into a real match until the round can no longer gain a same-depth opponent; crystallises into BYE/CATCHUP_BYE otherwise
 }
 
 enum MatchResultType {
@@ -415,6 +416,10 @@ model TournamentParticipant {
   // below their computed band — play-up only). Both null for non-balanced formats.
   skill_band      Int? // effective division, set at Start
   requested_band  Int? // player's chosen division at registration (play-up)
+  // BALANCED_LIECHTENSTEIN: set once at late admission (late-join OR post-bracket
+  // force-checkin) and never reset. Drives the 0-point catch-up-bye rule (marker AND
+  // no real game yet), independent of registered_at.
+  late_joined     Boolean           @default(false)
   deleted_at      DateTime?
 
   tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)

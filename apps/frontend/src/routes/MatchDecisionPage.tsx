@@ -1873,7 +1873,8 @@ export function MatchDecisionPage() {
       status === 'FORFEIT' ||
       status === 'NO_CONTEST' ||
       status === 'BYE' ||
-      status === 'CATCHUP_BYE';
+      status === 'CATCHUP_BYE' ||
+      status === 'PENDING_BYE';
     if (!terminal) return;
     if (matchDetail?.tournament_slug) {
       void router.navigate({

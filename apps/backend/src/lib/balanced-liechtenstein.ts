@@ -33,17 +33,45 @@
 // ---------------------------------------------------------------------------
 
 import blossom from 'edmonds-blossom';
+import { pairCost, bandGapCost } from './bali-pairing-cost.js';
+import { adjustedSeedScore } from './bali-playoff-seeding.js';
 
 /** Default division when a participant has no skill_band yet (Intermediate). */
 export const DEFAULT_BAND = 3;
 
-/** #18: an immediate rematch must never be chosen — a penalty that dwarfs any
- *  reachable band + eventual-rematch cost, so Blossom only picks it when a player
- *  has literally no other partner (then it's filtered out below → wait / bye). */
-const IMMEDIATE_REMATCH_PENALTY = 1_000_000;
+// BaLi 2.0 pairing-engine tuning (the progressive cost itself lives in bali-pairing-cost.ts).
+/** Integer scale for the float progressive costs so Blossom stays exact (1.3 → 13000).
+ *  Large enough that the tie-break bonuses below never override a real cost gap (the
+ *  smallest, 0.2, scales to 2000 — far above any achievable bonus sum). */
+const COST_SCALE = 10_000;
+/** Max band value, for the protect-the-weak tie-break below. */
+const MAX_BAND = 5;
+/** Per-band weight of the "protect the weak" tie-break (must dominate the +1 commit
+ *  nudge, and its per-matching sum must stay far below the 2000 cost granularity — true
+ *  for realistic same-depth pools). */
+const PROTECT_WEIGHT = 2;
+/** Max-weight tie-break bonus for a real edge that involves at least one FREE player,
+ *  added on top of the min-cost weight so that among EQUAL-COST optima Blossom:
+ *   (a) prefers pairing/RESERVING the LOWER band first — including holding a free player
+ *       for an incoming low one — which fixes the uniform-Δ1 trap where the optimiser is
+ *       indifferent between b1–b2 and b2–b3 and keeps passing a lone weak player over
+ *       until only a far band is left (a Δ3/Δ4 stomp), and
+ *   (b) all else equal, COMMITS two free players rather than holding (the +1).
+ *  A real cost difference always dominates (the bonus never crosses the cost granularity).
+ *  Incoming↔incoming edges get nothing (not actionable now). */
+const edgeBonus = (lowFree: boolean, highFree: boolean, bandA: number, bandB: number): number =>
+  lowFree || highFree ? PROTECT_WEIGHT * (MAX_BAND + 1 - Math.min(bandA, bandB)) + (lowFree && highFree ? 1 : 0) : 0;
+/** Closed-pool last-resort penalty ADDED to the band gap so that an immediate rematch is
+ *  only ever chosen when there is literally no fresh partner left (nobody incoming) — a
+ *  fresh play-up of ANY size (max band gap cost 9) is preferred over replaying a just-met
+ *  opponent, but replaying still beats double-byeing two locked leftovers (#3). Never used
+ *  while the pool is still open (there an immediate rematch has no edge at all → hold). */
+const IMMEDIATE_LAST_RESORT = 1_000;
 
-/** Terminal statuses that count as a played round toward a player's progress. */
-const ADVANCING = new Set(['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST', 'CATCHUP_BYE']);
+/** Terminal statuses that count as a played round toward a player's progress. A
+ *  PENDING_BYE advances the holder too (so the tournament flows), but stays reclaimable
+ *  into a real match until the holder is paired forward — see the tick's reclaim pass. */
+const ADVANCING = new Set(['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST', 'CATCHUP_BYE', 'PENDING_BYE']);
 /** Non-terminal statuses: the player is assigned/playing, not waiting for a new match. */
 const ACTIVE = new Set(['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED']);
 
@@ -100,12 +128,28 @@ interface Waiter {
   pastOpponents: Set<string>;
 }
 
-/** How many bands of play-up an EVENTUAL rematch — a repeat of an opponent from an
- *  earlier, non-consecutive round — is considered "worth". At 1.5 a player prefers a
- *  fresh opponent one band up over replaying someone, but prefers replaying over a
- *  jump of two or more bands. The immediately-previous opponent is never a candidate
- *  at all (strict no-immediate-rematch). Alex-Spec 2026-07-03. */
-export const EVENTUAL_REMATCH_COST = 1.5;
+/** Deterministic PRNG shuffle (mulberry32) seeded from a string — reproducible
+ *  tie-breaks when several equal-cost pairings exist (mirrors swiss.ts). */
+function seededShuffle<T>(arr: T[], seed: string): T[] {
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  let a = h >>> 0;
+  const rand = (): number => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
 
 /** True when a and b faced each other in the round each just finished (hard block). */
 function isImmediateRematch(a: Waiter, b: Waiter): boolean {
@@ -118,100 +162,100 @@ function metBefore(a: Waiter, b: Waiter): boolean {
 }
 
 /**
- * Pair one round pool by minimum cost, where a pairing's cost is the band distance
- * plus a penalty (EVENTUAL_REMATCH_COST) when the two have met before. That weighs
- * the two soft constraints — repeating an opponent vs. playing up a band:
- *   same band, fresh   0        1 band up, fresh   1
- *   eventual rematch   1.5      2 bands up, fresh  2 …
- * so a fresh one-band play-up beats a repeat, but a repeat beats a >=2-band jump.
- * The immediately-previous opponent is excluded outright (strict no-rematch).
+ * Pair one round pool under BaLi 2.0's "provisional optimum, commit-when-free" model.
  *
- * A candidate pairing is DEFERRED while either player could still get a strictly
- * cheaper one from a player finishing the previous round and joining this pool
- * (`incomingBands`) — the pool pairs the earliest COMPATIBLE player, not the earliest.
- * A lone straggler holds while anyone is still incoming; otherwise the lowest band byes.
+ * The pool's FULL field is modelled at once: the FREE players waiting now (`waiting`)
+ * plus the INCOMING players still finishing the previous round (`incoming`). A single
+ * global minimum-cost matching (Edmonds' Blossom over the progressive `pairCost`) is
+ * computed across the whole field, and only edges between two FREE players are COMMITTED
+ * now. A free player whose optimal partner is still incoming is HELD (no match), to be
+ * re-evaluated on the next tick once that partner frees up — because committing any edge
+ * that lies in some min-cost matching provably preserves the global optimum. This is what
+ * kills the greedy-in-time stomps: a close-band partner who is still playing is "reserved"
+ * by the matching, never pre-empted by an eager pairing that later forces a big band jump.
+ *
+ * Costs (bali-pairing-cost.ts) are progressive + asymmetric: every Δ1 is cheap and uniform
+ * (< a rematch), gaps ≥ 2 are asymmetric so a low player is not stomped. A tie-break bonus
+ * protects the weakest — among EQUAL-cost optima it pairs/reserves the lowest band first,
+ * so the uniform Δ1 costs cannot strand a lone low player.
+ *
+ * Byes are AVOIDED (Alex): a forced big band gap is PLAYED, never turned into a bye. While
+ * anyone is still incoming, an unmatched free player HOLDS (no bye). Only once the pool is
+ * CLOSED (nobody incoming) does the last free player with no partner take a bye — the one
+ * genuinely unavoidable, odd-count case. An immediate rematch is forbidden while the pool
+ * is open (the player holds); in a closed pool it is allowed only as an absolute last
+ * resort (a heavy penalty, so any fresh play-up wins) to avoid double-byeing two locked
+ * leftovers (#3).
  */
 function pairPool(
   waiting: Waiter[],
-  incomingBands: number[],
+  incoming: Waiter[],
+  seedKey: string,
 ): { pairs: [Waiter, Waiter][]; byes: Waiter[] } {
-  const cost = (a: Waiter, b: Waiter): number =>
-    Math.abs(a.band - b.band) + (metBefore(a, b) ? EVENTUAL_REMATCH_COST : 0);
+  const pairs: [Waiter, Waiter][] = [];
+  const byes: Waiter[] = [];
 
-  // Cheapest pairing either player could still get from an incoming opponent. An
-  // incoming player already finished this pool's round, so it is never an immediate
-  // rematch and (bar a rarer eventual rematch) fresh → approximate by band gap only.
-  const incBest = (band: number): number =>
-    incomingBands.length === 0
-      ? Infinity
-      : Math.min(...incomingBands.map((ib) => Math.abs(ib - band)));
+  // Order by id then seeded-shuffle → the pool's output depends only on the SET of
+  // players (+ seed), not on the DB row order, and equal-cost optima are reproducible.
+  const byId = (a: Waiter, b: Waiter): number =>
+    a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0;
+  const free = seededShuffle([...waiting].sort(byId), `${seedKey}:free`);
+  const inc = seededShuffle([...incoming].sort(byId), `${seedKey}:inc`);
+  const closed = inc.length === 0; // no reinforcements → this pool is final
+  const W = free.length;
+  const nodes = [...free, ...inc]; // [free | incoming]
+  const n = nodes.length;
+  const isFree = (i: number): boolean => i < W;
 
-  // #18: global minimum-cost matching over the whole pool (Edmonds' Blossom, like
-  // regular Swiss B8), so we never strand a player who has a valid same-band partner
-  // just because a greedy pass took it first. Immediate rematches carry a dominating
-  // penalty so they're only chosen when a player has no other partner at all.
-  const n = waiting.length;
+  // Scaled cost of an edge, or null when it must not exist. An immediate rematch has no
+  // edge while the pool is still open (the players hold for a fresh partner); in a closed
+  // pool it becomes a heavy last-resort cost so a fresh play-up of any size still wins.
+  const edgeScaled = (a: Waiter, b: Waiter): number | null => {
+    if (isImmediateRematch(a, b)) {
+      return closed
+        ? Math.round((bandGapCost(a.band, b.band) + IMMEDIATE_LAST_RESORT) * COST_SCALE)
+        : null;
+    }
+    const c = pairCost(a.band, b.band, { immediate: false, metBefore: metBefore(a, b) });
+    return Number.isFinite(c) ? Math.round(c * COST_SCALE) : null;
+  };
+
   const mate = new Array<number>(n).fill(-1);
   if (n >= 2) {
-    // Scale by 2 so EVENTUAL_REMATCH_COST (1.5) stays integral for the matcher.
-    const w = (a: Waiter, b: Waiter): number =>
-      Math.round((cost(a, b) + (isImmediateRematch(a, b) ? IMMEDIATE_REMATCH_PENALTY : 0)) * 2);
-    let maxW = 0;
+    let maxScaled = 0;
     for (let i = 0; i < n; i++)
-      for (let j = i + 1; j < n; j++) maxW = Math.max(maxW, w(waiting[i]!, waiting[j]!));
-    const K = maxW + 1; // offset so max-weight matching == min-cost matching
+      for (let j = i + 1; j < n; j++) {
+        const s = edgeScaled(nodes[i]!, nodes[j]!);
+        if (s !== null && s > maxScaled) maxScaled = s;
+      }
+    const K = maxScaled + 1; // offset so max-weight matching == min-cost matching
     const edges: Array<[number, number, number]> = [];
     for (let i = 0; i < n; i++)
-      for (let j = i + 1; j < n; j++) edges.push([i, j, K - w(waiting[i]!, waiting[j]!)]);
-    const result = blossom(edges);
-    for (let i = 0; i < n; i++) mate[i] = result[i] ?? -1;
-  }
-
-  const pairs: [Waiter, Waiter][] = [];
-  const used = new Set<number>();
-  for (let i = 0; i < n; i++) {
-    const j = mate[i]!;
-    if (j < 0 || j <= i || used.has(i) || used.has(j)) continue;
-    const a = waiting[i]!, b = waiting[j]!;
-    // Never create a forced immediate rematch — those players wait / bye instead.
-    if (isImmediateRematch(a, b)) continue;
-    const c = cost(a, b);
-    // Defer if a strictly cheaper opponent is still on the way for either player.
-    if (incBest(a.band) < c || incBest(b.band) < c) continue;
-    used.add(i);
-    used.add(j);
-    pairs.push([a, b]);
-  }
-
-  const stuck = waiting.filter((_, i) => !used.has(i));
-
-  // Whatever remains: hold if reinforcements are still coming (a cheaper partner may
-  // yet arrive). Once nobody else is on the way, pair the leftovers AMONG THEMSELVES
-  // rather than sit several of them on byes — cheapest matchup first, and an
-  // immediate rematch (two who just met) is allowed only as a last resort (heavy
-  // penalty). Only the final odd one out takes the bye (lowest band). This fixes two
-  // same-band players who last played each other being BOTH byed instead of replaying.
-  const byes: Waiter[] = [];
-  if (stuck.length > 0 && incomingBands.length === 0) {
-    const restCost = (x: Waiter, y: Waiter): number =>
-      Math.abs(x.band - y.band) +
-      (isImmediateRematch(x, y) ? 3 : metBefore(x, y) ? EVENTUAL_REMATCH_COST : 0);
-    const rest = [...stuck].sort((a, b) => a.band - b.band);
-    while (rest.length >= 2) {
-      const a = rest.shift()!;
-      let bestIdx = 0;
-      let bestCost = Infinity;
-      for (let k = 0; k < rest.length; k++) {
-        const c = restCost(a, rest[k]!);
-        if (c < bestCost) {
-          bestCost = c;
-          bestIdx = k;
-        }
+      for (let j = i + 1; j < n; j++) {
+        const s = edgeScaled(nodes[i]!, nodes[j]!);
+        if (s === null) continue;
+        const bonus = edgeBonus(isFree(i), isFree(j), nodes[i]!.band, nodes[j]!.band);
+        edges.push([i, j, K - s + bonus]);
       }
-      pairs.push([a, rest.splice(bestIdx, 1)[0]!]);
+    if (edges.length > 0) {
+      const result = blossom(edges);
+      for (let i = 0; i < n; i++) mate[i] = result[i] ?? -1;
     }
-    if (rest.length === 1) byes.push(rest[0]!);
   }
+
+  // Commit FREE↔FREE edges; a free player matched to an incoming node is HELD (their
+  // optimal partner is still playing). An unmatched free player HOLDS while anyone is
+  // incoming, and only byes once the pool is closed (the unavoidable odd-count leftover).
+  for (let i = 0; i < W; i++) {
+    const j = mate[i]!;
+    if (j < 0) {
+      if (closed) byes.push(nodes[i]!);
+      continue;
+    }
+    if (isFree(j) && j > i) pairs.push([nodes[i]!, nodes[j]!]);
+    // matched to an incoming node → hold (no row)
+  }
+
   return { pairs, byes };
 }
 
@@ -221,11 +265,15 @@ function pairPool(
  *
  * Called both at start (no matches yet → pairs the whole of round 1) and after
  * every match completion (pairs the freed players into their next round).
+ *
+ * `tournamentId` only seeds the deterministic tie-break shuffle so equal-cost optima
+ * are reproducible across ticks; it does not otherwise affect the plan.
  */
 export function planPairings(
   participants: BalancedParticipant[],
   matches: BalancedMatchRow[],
   roundsCount: number,
+  tournamentId = '',
 ): PairingPlan {
   const roster = new Set(participants.map((p) => p.userId));
   const bandOf = new Map(participants.map((p) => [p.userId, p.band ?? DEFAULT_BAND]));
@@ -272,16 +320,25 @@ export function planPairings(
     }
   }
 
-  // Bucket players by the round pool they are waiting for / incoming to.
+  // Bucket players by the round pool they are waiting for / incoming to. Incoming
+  // players carry their full rematch history so the global matching can weigh a
+  // still-playing partner exactly like a free one (bar the immediate-rematch case,
+  // which cannot arise between a finished waiter and a mid-game incoming).
+  const asWaiter = (pr: Progress): Waiter => ({
+    userId: pr.userId,
+    band: pr.band,
+    lastOpponentId: pr.lastOpponentId,
+    pastOpponents: pr.pastOpponents,
+  });
   const waitingByRound = new Map<number, Waiter[]>();
-  const incomingByRound = new Map<number, number[]>(); // pool round → bands still arriving
+  const incomingByRound = new Map<number, Waiter[]>(); // pool round → players still arriving
   for (const pr of progress.values()) {
     if (pr.activeRound !== null) {
       // Currently playing round `activeRound` → will join pool activeRound+1 next.
       const next = pr.activeRound + 1;
       if (next <= roundsCount) {
         const arr = incomingByRound.get(next) ?? [];
-        arr.push(pr.band);
+        arr.push(asWaiter(pr));
         incomingByRound.set(next, arr);
       }
       continue;
@@ -289,19 +346,18 @@ export function planPairings(
     if (pr.completed >= roundsCount) continue; // done — no more pairing
     const round = pr.completed + 1;
     const list = waitingByRound.get(round) ?? [];
-    list.push({
-      userId: pr.userId,
-      band: pr.band,
-      lastOpponentId: pr.lastOpponentId,
-      pastOpponents: pr.pastOpponents,
-    });
+    list.push(asWaiter(pr));
     waitingByRound.set(round, list);
   }
 
   const pairings: PlannedPairing[] = [];
   const byes: PlannedBye[] = [];
   for (const [round, waiting] of waitingByRound) {
-    const { pairs, byes: poolByes } = pairPool(waiting, incomingByRound.get(round) ?? []);
+    const { pairs, byes: poolByes } = pairPool(
+      waiting,
+      incomingByRound.get(round) ?? [],
+      `${tournamentId}:${round}`,
+    );
     for (const [a, b] of pairs) {
       pairings.push({ round, player1_id: a.userId, player2_id: b.userId });
     }
@@ -323,24 +379,33 @@ export function planPairings(
 // playoff. Instead each skill level gets its own division; the top 2 of each
 // division play a final for that level's champion.
 //
-// Pools are formed from the TOP, player by player: a level keeps all its own
-// players, and a level with fewer than 4 borrows the best players of the level(s)
-// below until it reaches 4 (the borrowed player is promoted out of their level).
-// A trailing bottom pool that still can't reach 4 is merged into the pool above.
+// Pools are formed from the TOP, player by player: a level keeps all its own players,
+// and a level below the target pool size borrows the best players of the level(s) below
+// until it reaches the target (the borrowed player is promoted out of their level). A
+// trailing bottom pool that still can't reach MIN_POOL_SIZE is merged into the pool above.
 //
-// Final seats: seat 1 is reserved for the best player of the pool's OWN band (so a
-// real top-band player always makes the final, never displaced by a borrowed
-// lower-band player who happened to outscore them); seat 2 is the best of the rest.
+// Seeding (BaLi 2.0 — 2026-07-15): there is NO seat-1 own-band reservation. Cross-band
+// records are made comparable with a handicap (adjustedSeedScore: −0.2 × rounds per band
+// a borrowed player sits below the division's own band), and seeds follow the handicapped
+// score. A genuine top-band player who earned it still tops the bracket; a lone 0-5
+// top-band player does not (handicap is 0 for own-band, so their raw record decides).
+//
+// The TARGET pool size is driven by the host's chosen playoff size (targetPoolSizeFrom
+// Format): TOP8 → 16 (borrow aggressively → few big mixed divisions), TOP4 → 8, TOP2 → 4
+// (minimal borrow → many pure divisional playoffs). The size knob IS the big-top vs
+// many-pure-divisions trade-off.
 // ---------------------------------------------------------------------------
 
-/** Minimum players a division pool needs before it stands on its own. */
+/** Absolute minimum players a division pool needs before it stands on its own (merge floor). */
 export const MIN_POOL_SIZE = 4;
 
 export interface RankedPlayer {
   userId: string;
   band: number;
-  /** Final Swiss placement, 1 = best. Drives pool fill order + finalist choice. */
+  /** Final Swiss placement, 1 = best. Drives pool fill order + tie-breaks. */
   rank: number;
+  /** Raw Swiss score (wins). Handicapped per band below the division for seeding. */
+  rawScore: number;
 }
 
 export interface DivisionPool {
@@ -349,9 +414,9 @@ export interface DivisionPool {
   /** Members, best rank first. Includes any players promoted from below. */
   players: RankedPlayer[];
   /**
-   * Full playoff seed order (userIds). Seed 1 is the best of the pool's OWN
-   * (highest) band; the rest follow by Swiss rank. Drives both the bracket size
-   * (via its length) and the seeding (1v4, 1v8, …).
+   * Full playoff seed order (userIds), by handicap-adjusted score (cross-band fair),
+   * then Swiss rank. Drives both the bracket size (via its length) and the seeding
+   * (1v4, 1v8, …).
    */
   seeds: string[];
   /** The two top seeds — convenience for the TOP2 (final-only) case (null if < 2). */
@@ -370,10 +435,31 @@ export function divisionPlayoffFormat(poolSize: number): 'TOP2' | 'TOP4' | 'TOP8
 }
 
 /**
- * Group ranked players into division pools of at least MIN_POOL_SIZE, top down,
- * borrowing the best of the levels below to fill short levels. Pure.
+ * Target division size implied by the host's chosen playoff size — this drives how
+ * aggressively short divisions borrow from below (2026-07-15). TOP8 fills to 16 (few
+ * big mixed divisions), TOP4 to 8, TOP2/NONE to the MIN_POOL_SIZE floor (many pure
+ * divisions). It is only a target: a field with too few players simply forms a
+ * smaller pool and the bracket auto-downgrades via divisionPlayoffFormat.
  */
-export function formDivisionPools(players: RankedPlayer[]): DivisionPool[] {
+export function targetPoolSizeFromFormat(playoffFormat: string | null | undefined): number {
+  if (playoffFormat === 'TOP8') return 16;
+  if (playoffFormat === 'TOP4') return 8;
+  return MIN_POOL_SIZE;
+}
+
+/**
+ * Group ranked players into division pools top down, borrowing the best of the levels
+ * below to fill short levels up to `targetPoolSize`, then seed each pool by the
+ * cross-band handicap-adjusted score. Pure.
+ *
+ * `roundsCount` scales the seeding handicap; `targetPoolSize` (from the host's chosen
+ * playoff size) drives the borrowing — see targetPoolSizeFromFormat.
+ */
+export function formDivisionPools(
+  players: RankedPlayer[],
+  roundsCount: number,
+  targetPoolSize: number = MIN_POOL_SIZE,
+): DivisionPool[] {
   // Best of the highest level first; within a level, best rank first.
   const ordered = [...players].sort((a, b) => b.band - a.band || a.rank - b.rank);
   const assigned = new Set<string>();
@@ -386,10 +472,10 @@ export function formDivisionPools(players: RankedPlayer[]): DivisionPool[] {
     const members = [...own];
     own.forEach((p) => assigned.add(p.userId));
 
-    // Borrow the best available players from the levels below to reach the minimum.
-    if (members.length < MIN_POOL_SIZE) {
+    // Borrow the best available players from the levels below to reach the target size.
+    if (members.length < targetPoolSize) {
       for (const c of ordered) {
-        if (members.length >= MIN_POOL_SIZE) break;
+        if (members.length >= targetPoolSize) break;
         if (c.band < band && !assigned.has(c.userId)) {
           members.push(c);
           assigned.add(c.userId);
@@ -399,25 +485,25 @@ export function formDivisionPools(players: RankedPlayer[]): DivisionPool[] {
     pools.push({ band, players: members, seeds: [], finalists: null });
   }
 
-  // A trailing pool that never reached the minimum joins the pool above it.
+  // A trailing pool that never reached the absolute minimum joins the pool above it.
   if (pools.length >= 2 && pools[pools.length - 1]!.players.length < MIN_POOL_SIZE) {
     const last = pools.pop()!;
     pools[pools.length - 1]!.players.push(...last.players);
   }
 
-  // Playoff seed order (Alex-Spec 2026-07-03):
-  //  - Seed 1 is RESERVED for the best-ranked player of the pool's OWN (highest)
-  //    band — so a genuine top-band player always tops the bracket even when a
-  //    borrowed lower-band player outscored them in the group phase. This keeps a
-  //    "top division" from being headed by a promoted lower-band player.
-  //  - Seeds 2..N are the rest of the pool, best Swiss rank first, any band.
-  // The bracket size then follows from the pool's size (divisionPlayoffFormat).
+  // Seed by handicap-adjusted score (cross-band fair), tie-broken by Swiss rank. There
+  // is NO seat-1 own-band reservation (BaLi 2.0): the handicap already discounts a
+  // borrowed lower-band record, so a genuine top-band player who earned it tops the
+  // bracket and a lone 0-5 top-band player does not.
   for (const pool of pools) {
-    pool.players.sort((a, b) => a.rank - b.rank);
-    const seat1 = pool.players.find((p) => p.band === pool.band) ?? pool.players[0]!;
-    pool.seeds = seat1
-      ? [seat1.userId, ...pool.players.filter((p) => p.userId !== seat1.userId).map((p) => p.userId)]
-      : [];
+    const seeded = [...pool.players].sort(
+      (a, b) =>
+        adjustedSeedScore(b.rawScore, roundsCount, pool.band, b.band) -
+          adjustedSeedScore(a.rawScore, roundsCount, pool.band, a.band) ||
+        a.rank - b.rank,
+    );
+    pool.players = seeded;
+    pool.seeds = seeded.map((p) => p.userId);
     pool.finalists = pool.seeds.length >= 2 ? [pool.seeds[0]!, pool.seeds[1]!] : null;
   }
 

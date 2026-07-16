@@ -14,7 +14,13 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import type { Prisma, MatchStatus, MatchPhase } from '@rizzotto/db';
-import { planPairings, formDivisionPools, divisionPlayoffFormat, DEFAULT_BAND } from './balanced-liechtenstein.js';
+import {
+  planPairings,
+  formDivisionPools,
+  divisionPlayoffFormat,
+  targetPoolSizeFromFormat,
+  DEFAULT_BAND,
+} from './balanced-liechtenstein.js';
 import { computeSwissStandings, sortSwissStandings, type CompletedMatchRecord } from './swiss.js';
 import { getPlayerClassification } from './skill-classification-service.js';
 import { autoSwissConfig } from './auto-swiss-service.js';
@@ -22,12 +28,15 @@ import { emitBracketUpdate } from './emit.js';
 import { notifyMatchesCreated } from './discord-notify.js';
 
 const LOCK_TTL_SECONDS = 15;
-const MAX_ITERATIONS = 12; // safety cap for bye cascades in a single tick
+const MAX_ITERATIONS = 30; // safety cap for bye cascades (create → crystallise → reclaim) in a single tick
 const RELEASE_LOCK =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
-/** Match statuses that count as a played (advancing) round toward a player's depth. */
-const BL_ADVANCING = new Set(['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST', 'CATCHUP_BYE']);
+/** Match statuses that count as a played (advancing) round toward a player's depth.
+ *  PENDING_BYE advances provisionally (it crystallises into BYE/CATCHUP_BYE once the
+ *  holder is paired forward, and a final-round bye is scored outright), so a complete
+ *  player never carries an unresolved one. */
+const BL_ADVANCING = new Set(['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST', 'CATCHUP_BYE', 'PENDING_BYE']);
 /** Non-terminal statuses: the player is assigned/playing, not finished. */
 const BL_ACTIVE = new Set(['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED']);
 
@@ -162,6 +171,9 @@ export async function runBalancedPairingTick(
       player1_id: string;
       player2_id: string;
     }> = [];
+    // True once any row was created OR a PENDING_BYE was reclaimed/crystallised, so a
+    // tick that only resolves byes still pushes a live bracket update to the clients.
+    let mutated = false;
 
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
       const [roster, matches] = await Promise.all([
@@ -171,11 +183,12 @@ export async function runBalancedPairingTick(
             deleted_at: null,
             status: { in: ['REGISTERED', 'CHECKED_IN'] },
           },
-          select: { user_id: true, skill_band: true, status: true },
+          select: { user_id: true, skill_band: true, status: true, late_joined: true },
         }),
         fastify.prisma.match.findMany({
           where: { tournament_id: tournamentId, deleted_at: null },
           select: {
+            id: true,
             round: true,
             player1_id: true,
             player2_id: true,
@@ -184,6 +197,7 @@ export async function runBalancedPairingTick(
           },
         }),
       ]);
+      const lateJoinedSet = new Set(roster.filter((p) => p.late_joined).map((p) => p.user_id));
 
       // Mirror the start handler's roster rule: once anyone has checked in, only
       // checked-in players compete; otherwise the whole registered field does.
@@ -191,6 +205,43 @@ export async function runBalancedPairingTick(
       const participants = anyCheckedIn
         ? roster.filter((p) => p.status === 'CHECKED_IN')
         : roster;
+
+      // A PENDING_BYE can no longer be reclaimed once its holder has been paired forward
+      // (has any live match at a later round) — from then on it simply scores.
+      const movedOn = (userId: string, round: number): boolean =>
+        matches.some(
+          (m) =>
+            (m.player1_id === userId || m.player2_id === userId) &&
+            m.round > round &&
+            m.status !== 'CANCELLED',
+        );
+      // 0-point rule (marker-based): a late joiner (persistent late_joined marker) who
+      // has not yet played a real game only ever gets 0-point CATCHUP_BYEs, never a
+      // scoring bye — closes the "reward for being late" hole independent of registered_at.
+      const byeStatusFor = (userId: string): { status: MatchStatus; winner: string | null } => {
+        const hasPlayedReal = matches.some(
+          (m) => (m.player1_id === userId || m.player2_id === userId) && m.status === 'COMPLETED',
+        );
+        const isCatchup = lateJoinedSet.has(userId) && !hasPlayedReal;
+        return isCatchup
+          ? { status: 'CATCHUP_BYE' as MatchStatus, winner: null }
+          : { status: 'BYE' as MatchStatus, winner: userId };
+      };
+
+      // Step A — crystallise any PENDING_BYE whose holder has moved on: it can no longer be
+      // reclaimed into a real match, so it becomes a scored bye (or a 0-point catch-up bye
+      // for a late joiner with no real game yet). Re-loop so the plan sees the fresh data.
+      const toCrystallise = matches.filter(
+        (m) => m.status === 'PENDING_BYE' && m.player1_id !== null && movedOn(m.player1_id, m.round),
+      );
+      if (toCrystallise.length > 0) {
+        for (const m of toCrystallise) {
+          const { status, winner } = byeStatusFor(m.player1_id!);
+          await fastify.prisma.match.update({ where: { id: m.id }, data: { status, winner_id: winner } });
+        }
+        mutated = true;
+        continue;
+      }
 
       const plan = planPairings(
         participants.map((p) => ({ userId: p.user_id, band: p.skill_band })),
@@ -201,8 +252,46 @@ export async function runBalancedPairingTick(
           status: m.status,
         })),
         roundsCount,
+        tournamentId,
       );
       if (plan.pairings.length === 0 && plan.byes.length === 0) break;
+
+      // Step B — RECLAIM: rather than sit a fresh same-depth player on a bye, fill an
+      // existing still-reclaimable PENDING_BYE at that round with them (turn it into a real
+      // match, pulling the holder back to that round). Cause-agnostic: covers every way a
+      // same-depth player appears — late-join, drop->void survivor, host reset.
+      const reclaimUsed = new Set<string>();
+      const reclaimUpdates: Array<{ id: string; player1_id: string; player2_id: string; round: number }> = [];
+      const freshByes: typeof plan.byes = [];
+      for (const b of plan.byes) {
+        const pb = matches.find(
+          (m) =>
+            m.status === 'PENDING_BYE' &&
+            m.round === b.round &&
+            m.player1_id !== null &&
+            m.player1_id !== b.player_id &&
+            !reclaimUsed.has(m.id) &&
+            !movedOn(m.player1_id, m.round),
+        );
+        if (pb) {
+          reclaimUsed.add(pb.id);
+          reclaimUpdates.push({ id: pb.id, player1_id: pb.player1_id!, player2_id: b.player_id, round: pb.round });
+        } else {
+          freshByes.push(b);
+        }
+      }
+      if (reclaimUpdates.length > 0) {
+        for (const u of reclaimUpdates) {
+          await fastify.prisma.match.update({
+            where: { id: u.id },
+            data: { player2_id: u.player2_id, status: 'PENDING' as MatchStatus },
+          });
+          // Notify + live-update the reclaimed pair like any freshly created match.
+          createdMatches.push({ id: u.id, round: u.round, player1_id: u.player1_id, player2_id: u.player2_id });
+        }
+        mutated = true;
+        continue; // re-plan: the pulled-back holders now pair at their bye round
+      }
 
       let nextNumber = matches.reduce((mx, m) => Math.max(mx, m.match_number), 0) + 1;
       const rows: Prisma.MatchCreateManyInput[] = [];
@@ -225,34 +314,44 @@ export async function runBalancedPairingTick(
           player2_id: p.player2_id,
         });
       }
-      for (const b of plan.byes) {
-        // "0 points until first real game": a bye handed to a late joiner (someone
-        // with a CATCHUP_BYE placeholder) who has not yet played a real game is
-        // itself a 0-point CATCHUP_BYE — not a scoring bye. This stops a late joiner
-        // who keeps getting byed from banking free points (Dniper). Earned byes are
-        // protected: an on-time player (no catch-up placeholder), and anyone who has
-        // already completed a real game, gets a normal scoring bye.
-        const own = matches.filter((m) => m.player1_id === b.player_id || m.player2_id === b.player_id);
-        const hasPlayedReal = own.some((m) => m.status === 'COMPLETED');
-        const isLateJoiner = own.some((m) => m.status === 'CATCHUP_BYE');
-        const isCatchup = isLateJoiner && !hasPlayedReal;
-        rows.push({
-          id: randomUUID(),
-          tournament_id: tournamentId,
-          round: b.round,
-          match_number: nextNumber++,
-          player1_id: b.player_id,
-          player2_id: null,
-          status: (isCatchup ? 'CATCHUP_BYE' : 'BYE') as MatchStatus,
-          winner_id: isCatchup ? null : b.player_id,
-          phase: null as MatchPhase | null,
-        });
+      for (const b of freshByes) {
+        // A non-final bye is PROVISIONAL (PENDING_BYE): it can still be pulled into a real
+        // match if a same-depth opponent turns up (Step B). A final-round bye has no next
+        // round to reclaim into, so it scores immediately.
+        if (b.round >= roundsCount) {
+          const { status, winner } = byeStatusFor(b.player_id);
+          rows.push({
+            id: randomUUID(),
+            tournament_id: tournamentId,
+            round: b.round,
+            match_number: nextNumber++,
+            player1_id: b.player_id,
+            player2_id: null,
+            status,
+            winner_id: winner,
+            phase: null as MatchPhase | null,
+          });
+        } else {
+          rows.push({
+            id: randomUUID(),
+            tournament_id: tournamentId,
+            round: b.round,
+            match_number: nextNumber++,
+            player1_id: b.player_id,
+            player2_id: null,
+            status: 'PENDING_BYE' as MatchStatus,
+            winner_id: null,
+            phase: null as MatchPhase | null,
+          });
+        }
       }
+      if (rows.length === 0) break;
       await fastify.prisma.match.createMany({ data: rows });
+      mutated = true;
     }
 
+    if (mutated) emitBracketUpdate(fastify.io, tournamentId);
     if (createdMatches.length > 0) {
-      emitBracketUpdate(fastify.io, tournamentId);
       const byRound = new Map<number, typeof createdMatches>();
       for (const m of createdMatches) {
         const list = byRound.get(m.round) ?? [];
@@ -317,32 +416,32 @@ export async function admitBalancedLateJoiner(
   }
   const roundsCount = tournament.rounds_count ?? 5;
 
-  // Step 1 — assign skill band for this single late joiner.
-  try {
-    const season = await fastify.prisma.season.findFirst({
-      where: { is_active: true },
-      select: { id: true },
-    });
-    const participant = await fastify.prisma.tournamentParticipant.findFirst({
-      where: { tournament_id: tournamentId, user_id: userId, deleted_at: null },
-      select: { id: true, requested_band: true },
-    });
-    if (participant) {
-      let computed = 0;
+  // Step 1 — mark as a late joiner and assign their skill band. The late_joined marker
+  // is the persistent signal (not registered_at) for the 0-point catch-up-bye rule, and
+  // is set even if band classification fails — a classification hiccup must never turn a
+  // late joiner into a scoring-bye farmer.
+  const participant = await fastify.prisma.tournamentParticipant.findFirst({
+    where: { tournament_id: tournamentId, user_id: userId, deleted_at: null },
+    select: { id: true, requested_band: true },
+  });
+  if (participant) {
+    let effective = participant.requested_band ?? 0;
+    try {
+      const season = await fastify.prisma.season.findFirst({
+        where: { is_active: true },
+        select: { id: true },
+      });
       if (season) {
         const cls = await getPlayerClassification(fastify.prisma, fastify.redis, season.id, userId);
-        computed = cls.matchmakingBand;
+        effective = Math.max(effective, cls.matchmakingBand);
       }
-      const effective = Math.max(computed, participant.requested_band ?? 0);
-      if (effective > 0) {
-        await fastify.prisma.tournamentParticipant.update({
-          where: { id: participant.id },
-          data: { skill_band: effective },
-        });
-      }
+    } catch (err) {
+      fastify.log.warn({ err, userId, tournamentId }, 'admitBalancedLateJoiner: skill-band classification failed (non-fatal)');
     }
-  } catch (err) {
-    fastify.log.warn({ err, userId, tournamentId }, 'admitBalancedLateJoiner: skill-band assignment failed (non-fatal)');
+    await fastify.prisma.tournamentParticipant.update({
+      where: { id: participant.id },
+      data: { late_joined: true, ...(effective > 0 ? { skill_band: effective } : {}) },
+    });
   }
 
   // Step 2 — compute entry round A.
@@ -360,15 +459,11 @@ export async function admitBalancedLateJoiner(
     return;
   }
 
-  const OPEN_STATUSES = new Set(['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED'] as const);
-  const openRounds = allMatches
-    .filter((m) => OPEN_STATUSES.has(m.status as 'PENDING' | 'ONGOING' | 'AWAITING_CONFIRMATION' | 'DISPUTED'))
-    .map((m) => m.round);
-
-  const earliestActiveRound = openRounds.length > 0 ? Math.min(...openRounds) : frontier;
-
-  // A = clamp(max(earliestActiveRound, frontier - 1), 1, roundsCount)
-  const A = Math.min(Math.max(Math.max(earliestActiveRound, frontier - 1), 1), roundsCount);
+  // Enter at the FRONTIER — the current deepest round — so the late joiner sits at the
+  // same depth as the leaders and is paired against a genuine peer, never dropped into a
+  // still-open EARLY round where the others have already advanced (which handed out a
+  // free scored bye, #5). Rounds 1..A-1 become 0-point CATCHUP_BYE placeholders.
+  const A = Math.min(Math.max(frontier, 1), roundsCount);
 
   // Step 3 — create A-1 CATCHUP_BYE rows for rounds 1..A-1.
   if (A > 1) {
@@ -510,7 +605,7 @@ export async function startBalancedPlayoffs(
 ): Promise<BalancedPlayoffResult | { error: string }> {
   const tournament = await fastify.prisma.tournament.findFirst({
     where: { id: tournamentId, deleted_at: null },
-    select: { format: true, status: true, rounds_count: true },
+    select: { format: true, status: true, rounds_count: true, playoff_format: true },
   });
   if (!tournament || tournament.format !== 'BALANCED_LIECHTENSTEIN') {
     return { error: 'Not a Balanced Liechtenstein tournament' };
@@ -584,9 +679,18 @@ export async function startBalancedPlayoffs(
   const contenderIds = new Set(contenders.map((p) => p.user_id));
   const ranked = sorted
     .filter((s) => contenderIds.has(s.userId) && !withdrawnIds.has(s.userId))
-    .map((s, i) => ({ userId: s.userId, band: bandByUser.get(s.userId) ?? DEFAULT_BAND, rank: i + 1 }));
+    .map((s, i) => ({
+      userId: s.userId,
+      band: bandByUser.get(s.userId) ?? DEFAULT_BAND,
+      rank: i + 1,
+      rawScore: s.score,
+    }));
 
-  const pools = formDivisionPools(ranked);
+  const pools = formDivisionPools(
+    ranked,
+    roundsCount,
+    targetPoolSizeFromFormat(tournament.playoff_format),
+  );
 
   // Per-division readiness. A contender is complete once they have played all rounds
   // with no active match; a band is complete once all its contenders are. A division

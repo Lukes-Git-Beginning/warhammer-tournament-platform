@@ -104,6 +104,7 @@ export const statusColors: Record<string, string> = {
   FORFEIT:     'border-amber-700 bg-amber-950/40',
   CANCELLED:   'border-stone-700 bg-stone-900/20 opacity-50',
   CATCHUP_BYE: 'border-stone-800 bg-stone-900/20 opacity-50',
+  PENDING_BYE: 'border-stone-800 bg-stone-900/20 opacity-50',
 };
 
 export function MatchNode({
@@ -123,7 +124,9 @@ export function MatchNode({
   player2Band,
 }: MatchNodeProps) {
   const isBye = match.status === 'BYE';
-  const isCatchupBye = match.status === 'CATCHUP_BYE';
+  // PENDING_BYE is a provisional bye (BaLi 2.0) that may still be filled by a same-depth
+  // opponent — render it like a catch-up bye slot until it resolves.
+  const isCatchupBye = match.status === 'CATCHUP_BYE' || match.status === 'PENDING_BYE';
   const isForfeit = match.status === 'FORFEIT';
   const isCancelled = match.status === 'CANCELLED';
   const isOngoing = match.status === 'ONGOING';
