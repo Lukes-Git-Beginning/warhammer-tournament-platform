@@ -21,6 +21,10 @@ const HOLD_TTL = 60;
 const RATELIMIT_TTL = 300;
 const CONTACTED_TTL = 1800; // matches the 30-min queue-eviction window
 const TICK_LOCK_TTL = 5;
+// #1: a tournament counts as "in session" for ping-muting if a match completed within
+// this window (or one is live now). Long enough to bridge between-rounds lulls in a
+// real-time event, short enough that a multi-day tournament's downtime frees participants.
+const TOURNAMENT_SESSION_LOOKBACK_MS = 30 * 60 * 1000; // 30 minutes
 
 // -- Lua scripts (Redis runs each atomically) --------------------------------
 
@@ -196,13 +200,20 @@ async function maybeSendDmWave(fastify: FastifyInstance, queueLen: number): Prom
       },
       select: { player1_id: true, player2_id: true },
     }),
-    // #1: tournaments that have a live match right now (any players) — used to mute
-    // their participants who are merely BETWEEN rounds in a running real-time session.
+    // #1: tournaments that are currently IN SESSION — a match live right now OR one
+    // completed within the last TOURNAMENT_SESSION_LOOKBACK_MS. The recency window is
+    // what closes the between-rounds gap: when a whole round finishes and the next
+    // round hasn't started, nothing is ONGOING for a minute, yet the session is clearly
+    // still running. A multi-day tournament's overnight/lunch downtime has no match for
+    // far longer, so its participants fall out of the window and stay pingable.
     prisma.match.findMany({
       where: {
-        status: { in: ['ONGOING', 'AWAITING_CONFIRMATION'] },
         deleted_at: null,
         tournament_id: { not: null },
+        OR: [
+          { status: { in: ['ONGOING', 'AWAITING_CONFIRMATION'] } },
+          { status: 'COMPLETED', played_at: { gte: new Date(now.getTime() - TOURNAMENT_SESSION_LOOKBACK_MS) } },
+        ],
       },
       select: { tournament_id: true },
       distinct: ['tournament_id'],
@@ -216,16 +227,21 @@ async function maybeSendDmWave(fastify: FastifyInstance, queueLen: number): Prom
     if (m.player2_id) inActiveMatch.add(m.player2_id);
   }
 
-  // #1 (real-time tournaments): also mute checked-in participants of any tournament with
-  // a live match right now — they're just between rounds in an active session. During a
-  // multi-day tournament's downtime there are no live matches, so they stay pingable
-  // (and mid-session breaks like lunch free up naturally too).
-  const liveTournamentIds = liveTournaments
+  // #1 (real-time tournaments): also mute active participants of any in-session
+  // tournament — they're playing or between rounds, not free for Open Play. Include
+  // REGISTERED as well as CHECKED_IN: not every tournament enforces check-in, so a
+  // playing participant is often still REGISTERED. Only genuine drops (WITHDREW /
+  // DISQUALIFIED) and not-yet-approved late-join requests (JOIN_REQUESTED) stay pingable.
+  const activeTournamentIds = liveTournaments
     .map((t) => t.tournament_id)
     .filter((id): id is string => id !== null);
-  if (liveTournamentIds.length > 0) {
+  if (activeTournamentIds.length > 0) {
     const participants = await prisma.tournamentParticipant.findMany({
-      where: { tournament_id: { in: liveTournamentIds }, user_id: { in: prelimIds }, status: 'CHECKED_IN' },
+      where: {
+        tournament_id: { in: activeTournamentIds },
+        user_id: { in: prelimIds },
+        status: { in: ['REGISTERED', 'CHECKED_IN'] },
+      },
       select: { user_id: true },
     });
     for (const p of participants) inActiveMatch.add(p.user_id);
