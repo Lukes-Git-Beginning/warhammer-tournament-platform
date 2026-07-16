@@ -7,6 +7,7 @@ import {
   requestJoinTournament,
   withdrawFromTournament,
   getFactions,
+  getTakenFactions,
   getPlayerClassification,
 } from '@/lib/api';
 import type { Tournament, ParticipantStatus } from '@/lib/api';
@@ -42,6 +43,7 @@ function FactionSelectGrid({
   pickCount,
   allowedFactionIds,
   restrictedFactionIds,
+  takenFactionIds,
   onSetSelected,
 }: {
   selected: string[];
@@ -49,6 +51,8 @@ function FactionSelectGrid({
   pickCount: number;
   allowedFactionIds?: string[];
   restrictedFactionIds?: string[];
+  /** FACTION_WAR: faction ids already claimed by other players — greyed out + unpickable. */
+  takenFactionIds?: string[];
   /** When provided, enables a "Random" button that fills the selection with
    *  `pickCount` random pickable factions (respecting the allowlist). */
   onSetSelected?: (ids: string[]) => void;
@@ -64,10 +68,13 @@ function FactionSelectGrid({
 
   // Empty allowlist means all factions are permitted
   const hasRestriction = allowedFactionIds != null && allowedFactionIds.length > 0;
+  const isTaken = (id: string): boolean => takenFactionIds != null && takenFactionIds.includes(id);
 
   // Pickable pool for "Random" — allowlist is respected, but restricted factions
-  // stay eligible (they are nerfed, not banned).
-  const pickable = factions.filter((f) => !(hasRestriction && !allowedFactionIds!.includes(f.id)));
+  // stay eligible (they are nerfed, not banned). Taken factions (Faction War) are out.
+  const pickable = factions.filter(
+    (f) => !(hasRestriction && !allowedFactionIds!.includes(f.id)) && !isTaken(f.id),
+  );
 
   function pickRandom() {
     if (pickable.length === 0) return;
@@ -99,7 +106,8 @@ function FactionSelectGrid({
         // an allowlist actually forbids a faction.
         const isRestricted = restrictedFactionIds != null && restrictedFactionIds.includes(f.id);
         const isFull = pickCount > 1 && !isSelected && selected.length >= pickCount;
-        const isDisabled = (hasRestriction && !allowedFactionIds!.includes(f.id)) || isFull;
+        const taken = isTaken(f.id) && !isSelected;
+        const isDisabled = (hasRestriction && !allowedFactionIds!.includes(f.id)) || isFull || taken;
         return (
           <button
             key={f.id}
@@ -107,13 +115,15 @@ function FactionSelectGrid({
             onClick={() => !isDisabled && onToggle(f.id)}
             disabled={isDisabled}
             title={
-              isFull
-                ? `Pick limit reached (${pickCount})`
-                : hasRestriction && !allowedFactionIds!.includes(f.id)
-                  ? 'Not permitted in this tournament'
-                  : isRestricted
-                    ? 'Restricted (nerfed) — games with this faction do not count toward the leaderboard'
-                    : undefined
+              taken
+                ? 'Already claimed by another player in this tournament'
+                : isFull
+                  ? `Pick limit reached (${pickCount})`
+                  : hasRestriction && !allowedFactionIds!.includes(f.id)
+                    ? 'Not permitted in this tournament'
+                    : isRestricted
+                      ? 'Restricted (nerfed) — games with this faction do not count toward the leaderboard'
+                      : undefined
             }
             className={cn(
               'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center transition-[border-color,background-color] duration-base ease-burn',
@@ -330,11 +340,23 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
   const [requestedBand, setRequestedBand] = useState<number | null>(null);
 
   const isFreePick = tournament.mode === 'FREE_PICK';
+  const isFactionWar = tournament.mode === 'FACTION_WAR';
   const needsFactionPick =
     tournament.mode === 'SFT' ||
     tournament.mode === 'TWO_D_THREE' ||
+    isFactionWar ||
     (isFreePick && freePickChoice === 'fixed');
   const pickCount = tournament.mode === 'TWO_D_THREE' ? 3 : 1;
+
+  // FACTION_WAR: the factions already claimed by other players, so the picker can grey
+  // them out. Refetched whenever the picker opens so a just-taken faction disappears.
+  const { data: takenData } = useQuery({
+    queryKey: ['tournament-taken-factions', tournament.slug],
+    queryFn: () => getTakenFactions(tournament.slug),
+    enabled: isFactionWar && pickingFaction,
+    staleTime: 10_000,
+  });
+  const takenFactionIds = isFactionWar ? (takenData?.takenFactionIds ?? []) : undefined;
   const isBalancedLiechtenstein = tournament.format === 'BALANCED_LIECHTENSTEIN';
 
   const toggleFaction = (id: string) =>
@@ -479,6 +501,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
           pickCount={pickCount}
           allowedFactionIds={tournament.faction_allowlist}
           restrictedFactionIds={tournament.restricted_factions}
+          takenFactionIds={takenFactionIds}
           onSetSelected={setSelectedFactions}
         />
         {register.isError && (

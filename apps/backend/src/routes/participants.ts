@@ -112,6 +112,29 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         // Restricted factions are intentionally pickable — they are nerfed, not
         // banned. Games involving them are excluded from the leaderboard at match
         // completion (see lib/match-games.ts), never blocked at pick time.
+
+        // FACTION_WAR: a faction is globally exclusive — reject if another active
+        // participant already claimed it. The current user is excluded so a WITHDREW →
+        // re-register (to change faction) still works.
+        if (tournament.mode === 'FACTION_WAR') {
+          const claimed = await fastify.prisma.tournamentParticipant.findFirst({
+            where: {
+              tournament_id: tournament.id,
+              faction_id: parsed.data.faction_id,
+              status: { in: ['REGISTERED', 'CHECKED_IN'] },
+              deleted_at: null,
+              NOT: { user_id: request.user.sub },
+            },
+            select: { id: true },
+          });
+          if (claimed) {
+            return reply.code(409).send({
+              error: 'Conflict',
+              message: 'This faction has already been claimed by another player in this tournament',
+              statusCode: 409,
+            });
+          }
+        }
       }
 
       // 2D3 mode: player picks exactly 3 distinct factions; one is drawn at random
@@ -260,6 +283,21 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
         if (allowlist.length > 0 && !allowlist.includes(parsed.data.faction_id)) {
           return reply.code(400).send({ error: 'BadRequest', message: 'Faction is not permitted in this tournament', statusCode: 400 });
+        }
+        if (tournament.mode === 'FACTION_WAR') {
+          const claimed = await fastify.prisma.tournamentParticipant.findFirst({
+            where: {
+              tournament_id: tournament.id,
+              faction_id: parsed.data.faction_id,
+              status: { in: ['REGISTERED', 'CHECKED_IN'] },
+              deleted_at: null,
+              NOT: { user_id: request.user.sub },
+            },
+            select: { id: true },
+          });
+          if (claimed) {
+            return reply.code(409).send({ error: 'Conflict', message: 'This faction has already been claimed by another player in this tournament', statusCode: 409 });
+          }
         }
       }
       let factionIds: string[] = [];
@@ -822,7 +860,8 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       (tournament.mode === 'SFT' ||
         tournament.mode === 'BPT' ||
         tournament.mode === 'TWO_D_THREE' ||
-        tournament.mode === 'FREE_PICK') &&
+        tournament.mode === 'FREE_PICK' ||
+        tournament.mode === 'FACTION_WAR') &&
       !started;
 
     const data = maskFactions
@@ -830,6 +869,34 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       : participants;
 
     return { data, total: data.length };
+  });
+
+  // GET /api/tournaments/:slug/taken-factions
+  // Public: the faction IDs already claimed by an active participant in a FACTION_WAR
+  // tournament, so the registration picker can grey them out. Returns IDs only (never
+  // player names), so it leaks nothing about WHO picked what — only WHICH are gone.
+  fastify.get('/api/tournaments/:slug/taken-factions', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const tournament = await fastify.prisma.tournament.findUnique({
+      where: { slug, deleted_at: null },
+      select: { id: true, mode: true },
+    });
+    if (!tournament) {
+      return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+    }
+    if (tournament.mode !== 'FACTION_WAR') return { takenFactionIds: [] };
+    const rows = await fastify.prisma.tournamentParticipant.findMany({
+      where: {
+        tournament_id: tournament.id,
+        status: { in: ['REGISTERED', 'CHECKED_IN'] },
+        deleted_at: null,
+        faction_id: { not: null },
+      },
+      select: { faction_id: true },
+    });
+    return {
+      takenFactionIds: rows.map((r) => r.faction_id).filter((id): id is string => id !== null),
+    };
   });
 
   // ---------------------------------------------------------------------------

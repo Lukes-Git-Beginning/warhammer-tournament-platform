@@ -12,6 +12,8 @@ export const MODE_DESCRIPTIONS: Record<string, string> = {
     'Each player chooses at registration: a fixed faction (like SFT) or to pick match-by-match. Two fixed players just play their factions; two pick-later players do a 3×3 matrix; a fixed vs pick-later match has the pick-later player offer 3 factions for the fixed player to choose from.',
   ONE_V_THREE:
     "A coin flip sets roles each match: one player runs the host's set faction, the other brings three, and the set-faction player picks which of the three their opponent plays.",
+  FACTION_WAR:
+    'Like SFT, but every faction is exclusive: once a player claims a faction at registration, no one else can pick it — first come, first served, and no mirror matches.',
 };
 
 export const FORMAT_DESCRIPTIONS: Record<string, string> = {
