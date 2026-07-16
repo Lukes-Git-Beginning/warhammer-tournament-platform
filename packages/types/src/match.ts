@@ -12,6 +12,7 @@ export const MatchStatusSchema = z.enum([
   'COMPLETED',
   'BYE',
   'CATCHUP_BYE',
+  'PENDING_BYE',
   'FORFEIT',
   'DISPUTED',
   'AWAITING_CONFIRMATION',

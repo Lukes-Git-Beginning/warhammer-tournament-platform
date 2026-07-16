@@ -8,7 +8,12 @@ import {
   type RankedPlayer,
 } from '../src/lib/balanced-liechtenstein.js';
 
-const R = (userId: string, band: number, rank: number): RankedPlayer => ({ userId, band, rank });
+const R = (userId: string, band: number, rank: number, rawScore = 100 - rank): RankedPlayer => ({
+  userId,
+  band,
+  rank,
+  rawScore,
+});
 
 const P = (userId: string, band: number | null): BalancedParticipant => ({ userId, band });
 const done = (round: number, a: string, b: string | null, winner: string): BalancedMatchRow => ({
@@ -285,7 +290,7 @@ describe('planPairings — completion', () => {
 describe('formDivisionPools', () => {
   it('keeps one level as a single pool and picks the top 2 as finalists', () => {
     const players = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => R(`p${r}`, 3, r));
-    const pools = formDivisionPools(players);
+    const pools = formDivisionPools(players, 5);
     expect(pools).toHaveLength(1);
     expect(pools[0]!.band).toBe(3);
     expect(pools[0]!.players).toHaveLength(8);
@@ -295,7 +300,7 @@ describe('formDivisionPools', () => {
   it('borrows the best of the level below to fill a short top level', () => {
     // 3 level-5 (best ranks) + 5 level-3 → level5 pool = 3 own + best level-3.
     const players = [R('a', 5, 1), R('b', 5, 2), R('c', 5, 3), R('d', 3, 4), R('e', 3, 5), R('f', 3, 6), R('g', 3, 7), R('h', 3, 8)];
-    const pools = formDivisionPools(players);
+    const pools = formDivisionPools(players, 5);
     expect(pools).toHaveLength(2);
     const top = pools.find((p) => p.band === 5)!;
     expect(top.players.map((p) => p.userId).sort()).toEqual(['a', 'b', 'c', 'd']); // d promoted
@@ -308,41 +313,59 @@ describe('formDivisionPools', () => {
   it('merges a trailing sub-minimum pool into the pool above', () => {
     // 4 level-5 + 2 level-3, nothing below to fill → the 2 join the level-5 pool.
     const players = [R('a', 5, 1), R('b', 5, 2), R('c', 5, 3), R('d', 5, 4), R('e', 3, 5), R('f', 3, 6)];
-    const pools = formDivisionPools(players);
+    const pools = formDivisionPools(players, 5);
     expect(pools).toHaveLength(1);
     expect(pools[0]!.players).toHaveLength(6);
     expect(pools[0]!.finalists).toEqual(['a', 'b']);
   });
 
+  it('fills to the target pool size when the host chose a larger playoff', () => {
+    // TOP4 → target 8: a short top band borrows down to 8 instead of the floor of 4.
+    // 9 band-3 players so the 4 left after borrowing still form their own viable pool.
+    const players = [
+      R('a', 5, 1), R('b', 5, 2), R('c', 5, 3),
+      ...[4, 5, 6, 7, 8, 9, 10, 11, 12].map((r) => R(`i${r}`, 3, r)),
+    ];
+    const pools = formDivisionPools(players, 5, 8);
+    const top = pools.find((p) => p.band === 5)!;
+    expect(top.players).toHaveLength(8); // 3 own + 5 borrowed
+    expect(pools.find((p) => p.band === 3)!.players).toHaveLength(4); // remainder stands alone
+  });
+
   it('handles a tiny field (single pool, whatever its size)', () => {
-    const pools = formDivisionPools([R('a', 3, 1), R('b', 3, 2), R('c', 3, 3)]);
+    const pools = formDivisionPools([R('a', 3, 1), R('b', 3, 2), R('c', 3, 3)], 5);
     expect(pools).toHaveLength(1);
     expect(pools[0]!.finalists).toEqual(['a', 'b']);
   });
 
-  it('reserves final seat 1 for the best of the pool own-band, even if a borrowed player outranks them', () => {
-    // Top band (4) has 2 weak-scoring players; the pool borrows 2 higher-ranked
-    // band-3 players to reach the minimum. Seat 1 must still be the best band-4
-    // player (adv1), NOT the higher-ranked promoted intermediate.
-    const players = [R('int1', 3, 1), R('int2', 3, 2), R('adv1', 4, 3), R('adv2', 4, 4)];
-    const pools = formDivisionPools(players);
+  // BaLi 2.0: no seat-1 own-band reservation — the handicap-adjusted score decides.
+  it('seeds a merged pool by handicap-adjusted score, not raw cross-band record', () => {
+    // Pool band 4 borrows two band-3 players. Handicap at 5 rounds = 1.0 per band.
+    //  adv1 5-0 → 5.0 ; int1 5-0 → 4.0 ; int2 4-1 → 3.0 ; adv2 2-3 → 2.0.
+    // A dominant borrowed 5-0 (int1) outseeds a weak own-band 2-3 (adv2), but stays
+    // behind the own-band 5-0 (adv1). No artificial own-band seat 1.
+    const players = [R('adv1', 4, 1, 5), R('int1', 3, 2, 5), R('int2', 3, 3, 4), R('adv2', 4, 6, 2)];
+    const pools = formDivisionPools(players, 5);
     expect(pools).toHaveLength(1);
-    const pool = pools[0]!;
-    expect(pool.band).toBe(4);
-    // Seat 1 = best band-4 player; seat 2 = best of the rest (the top-ranked intermediate).
-    expect(pool.finalists).toEqual(['adv1', 'int1']);
-  });
-
-  it('exposes the full seed order: top-band best first, then the rest by rank', () => {
-    const players = [R('int1', 3, 1), R('int2', 3, 2), R('adv1', 4, 3), R('adv2', 4, 4)];
-    const pools = formDivisionPools(players);
-    // adv1 (best of the own band 4) leads; the rest follow by Swiss rank.
+    expect(pools[0]!.band).toBe(4);
     expect(pools[0]!.seeds).toEqual(['adv1', 'int1', 'int2', 'adv2']);
+    expect(pools[0]!.finalists).toEqual(['adv1', 'int1']);
   });
 
-  it('a pure single-band pool seeds strictly by rank', () => {
+  it('does NOT head the bracket with a lone 0-5 top-band player (the edge that killed seat-1)', () => {
+    // adv1 is the only band-4 player and went 0-5; the pool borrows three strong band-3
+    // players. adv1 must sink to the bottom seed, not be reserved seat 1.
+    const players = [R('int1', 3, 1, 5), R('int2', 3, 2, 4), R('int3', 3, 3, 4), R('adv1', 4, 8, 0)];
+    const pools = formDivisionPools(players, 5);
+    expect(pools[0]!.band).toBe(4);
+    expect(pools[0]!.seeds[0]).toBe('int1');
+    expect(pools[0]!.seeds.at(-1)).toBe('adv1');
+    expect(pools[0]!.finalists).toEqual(['int1', 'int2']);
+  });
+
+  it('a pure single-band pool seeds strictly by score then rank', () => {
     const players = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => R(`p${r}`, 3, r));
-    const pools = formDivisionPools(players);
+    const pools = formDivisionPools(players, 5);
     expect(pools[0]!.seeds).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']);
   });
 });
