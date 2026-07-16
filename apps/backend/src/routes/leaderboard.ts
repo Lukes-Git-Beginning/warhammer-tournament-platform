@@ -2,6 +2,79 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { cached, cacheKey } from '../lib/cache.js';
 import { computeSeasonLeaderboard } from '../lib/leaderboard-service.js';
+import {
+  computeSwissStandings,
+  sortSwissStandings,
+  type CompletedMatchRecord,
+} from '../lib/swiss.js';
+
+/**
+ * The SINGLE champion of a completed tournament, for the "major wins" leaderboard.
+ * Determined from match data (not TournamentResult.placement, which is by Swiss standing
+ * for BaLi and can carry stale rows), so exactly one winner is credited per tournament:
+ *  - Playoff final(s): Swiss+Playoff has one; a Balanced Liechtenstein has one per DIVISION
+ *    → the champion is the winner of the TOP division's final (highest skill band among its
+ *    finalists), never a lower-division winner.
+ *  - Single/Double elimination: the grand final (GRAND_FINAL side, else the top-round match).
+ *  - Pure Swiss / Round Robin / Liechtenstein (no playoff): the top of the final standings.
+ */
+export interface ChampionMatch {
+  phase: string | null;
+  status: string;
+  round: number;
+  winner_id: string | null;
+  player1_id: string | null;
+  player2_id: string | null;
+  bracket_side: string | null;
+}
+
+export function tournamentChampion(
+  tournamentId: string,
+  format: string,
+  matches: ChampionMatch[],
+  bandByUser: Map<string, number>,
+  participantIds: string[],
+  withdrawnIds: Set<string>,
+): string | null {
+  const done = matches.filter((m) => m.status === 'COMPLETED' && m.winner_id);
+
+  const finals = done.filter((m) => m.phase === 'PLAYOFF_FINAL');
+  if (finals.length > 0) {
+    let best = finals[0]!;
+    let bestBand = -1;
+    for (const f of finals) {
+      const band = Math.max(bandByUser.get(f.player1_id ?? '') ?? 0, bandByUser.get(f.player2_id ?? '') ?? 0);
+      if (band > bestBand) {
+        bestBand = band;
+        best = f;
+      }
+    }
+    return best.winner_id;
+  }
+
+  if (format === 'DOUBLE_ELIMINATION' || format === 'SINGLE_ELIMINATION') {
+    const grandFinals = done.filter((m) => m.bracket_side === 'GRAND_FINAL');
+    const pool = grandFinals.length > 0 ? grandFinals : done.filter((m) => m.phase !== 'PLAYOFF_THIRD_PLACE');
+    if (pool.length === 0) return null;
+    const maxRound = Math.max(...pool.map((m) => m.round));
+    return pool.filter((m) => m.round === maxRound).at(-1)?.winner_id ?? null;
+  }
+
+  // Pure ranked (Swiss / RR / DRR / Liechtenstein) — champion = top of final standings.
+  const completed: CompletedMatchRecord[] = done.map((m) => ({
+    round: m.round,
+    player1_id: m.player1_id,
+    player2_id: m.player2_id,
+    winner_id: m.winner_id,
+    status: m.status,
+  }));
+  const standings = sortSwissStandings(
+    computeSwissStandings(participantIds, completed, withdrawnIds),
+    completed,
+    tournamentId,
+  );
+  return standings[0]?.userId ?? null;
+}
 
 const PaginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -183,54 +256,102 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
     );
   });
 
-  // GET /api/leaderboard/major-wins — #6: players ranked by MAJOR tournament wins
-  // (1st place in a completed tournament flagged is_major). Standard competition
-  // ranking (equal win counts share a rank). Public, cached.
+  // GET /api/leaderboard/major-wins — #6: players ranked by MAJOR tournament wins. A win
+  // is being the SINGLE champion of a completed is_major tournament — the decisive final
+  // winner (for Balanced Liechtenstein, the TOP division's final), computed from match
+  // data via tournamentChampion (not TournamentResult.placement, which is multi-valued for
+  // BaLi and can carry stale rows). Standard competition ranking. Public, cached.
   fastify.get('/api/leaderboard/major-wins', async () => {
     return cached(
       fastify.redis,
       cacheKey('leaderboard:major-wins', {}),
       async () => {
-        const wins = await fastify.prisma.tournamentResult.findMany({
-          where: {
-            placement: 1,
-            tournament: { is_major: true, deleted_at: null, status: 'COMPLETED' },
-          },
-          select: {
-            user: { select: { id: true, username: true, avatar_url: true } },
-            tournament: { select: { id: true, name: true, slug: true, start_date: true } },
-          },
-          orderBy: { tournament: { start_date: 'desc' } },
+        const tournaments = await fastify.prisma.tournament.findMany({
+          where: { is_major: true, deleted_at: null, status: 'COMPLETED' },
+          select: { id: true, format: true, name: true, slug: true, start_date: true },
+          orderBy: { start_date: 'desc' },
         });
+        if (tournaments.length === 0) return { entries: [] };
+        const tournamentIds = tournaments.map((t) => t.id);
 
-        const byUser = new Map<
-          string,
-          {
-            user: { id: string; username: string; avatar_url: string | null };
-            wins: number;
-            tournaments: { id: string; name: string; slug: string; startDate: string | null }[];
-          }
-        >();
-        for (const w of wins) {
-          if (!w.user) continue;
-          const cur = byUser.get(w.user.id) ?? { user: w.user, wins: 0, tournaments: [] };
-          cur.wins += 1;
-          cur.tournaments.push({
-            id: w.tournament.id,
-            name: w.tournament.name,
-            slug: w.tournament.slug,
-            startDate: w.tournament.start_date?.toISOString() ?? null,
-          });
-          byUser.set(w.user.id, cur);
+        const [matches, participants] = await Promise.all([
+          fastify.prisma.match.findMany({
+            where: { tournament_id: { in: tournamentIds }, deleted_at: null },
+            select: {
+              tournament_id: true,
+              phase: true,
+              status: true,
+              round: true,
+              winner_id: true,
+              player1_id: true,
+              player2_id: true,
+              bracket_side: true,
+            },
+          }),
+          fastify.prisma.tournamentParticipant.findMany({
+            where: { tournament_id: { in: tournamentIds }, deleted_at: null },
+            select: { tournament_id: true, user_id: true, skill_band: true, status: true },
+          }),
+        ]);
+
+        const matchesByT = new Map<string, ChampionMatch[]>();
+        for (const m of matches) {
+          if (!m.tournament_id) continue;
+          (matchesByT.get(m.tournament_id) ?? matchesByT.set(m.tournament_id, []).get(m.tournament_id)!).push(m);
+        }
+        const partsByT = new Map<string, typeof participants>();
+        for (const p of participants) {
+          (partsByT.get(p.tournament_id) ?? partsByT.set(p.tournament_id, []).get(p.tournament_id)!).push(p);
         }
 
-        const sorted = [...byUser.values()].sort(
-          (a, b) => b.wins - a.wins || a.user.username.localeCompare(b.user.username),
-        );
+        // Champion user id → the majors they won.
+        const byUser = new Map<
+          string,
+          { tournaments: { id: string; name: string; slug: string; startDate: string | null }[] }
+        >();
+        for (const t of tournaments) {
+          const ps = partsByT.get(t.id) ?? [];
+          const champion = tournamentChampion(
+            t.id,
+            t.format,
+            matchesByT.get(t.id) ?? [],
+            new Map(ps.map((p) => [p.user_id, p.skill_band ?? 0])),
+            ps.map((p) => p.user_id),
+            new Set(ps.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id)),
+          );
+          if (!champion) continue;
+          const cur = byUser.get(champion) ?? { tournaments: [] };
+          cur.tournaments.push({
+            id: t.id,
+            name: t.name,
+            slug: t.slug,
+            startDate: t.start_date?.toISOString() ?? null,
+          });
+          byUser.set(champion, cur);
+        }
+
+        const championIds = [...byUser.keys()];
+        const users = championIds.length
+          ? await fastify.prisma.user.findMany({
+              where: { id: { in: championIds } },
+              select: { id: true, username: true, avatar_url: true },
+            })
+          : [];
+        const userById = new Map(users.map((u) => [u.id, u]));
+
+        const rows = championIds
+          .map((id) => {
+            const user = userById.get(id);
+            const v = byUser.get(id)!;
+            return user ? { user, wins: v.tournaments.length, tournaments: v.tournaments } : null;
+          })
+          .filter((r): r is NonNullable<typeof r> => r !== null)
+          .sort((a, b) => b.wins - a.wins || a.user.username.localeCompare(b.user.username));
+
         // Standard competition ranking: equal win counts share a rank.
         let lastWins = -1;
         let lastRank = 0;
-        const entries = sorted.map((e, i) => {
+        const entries = rows.map((e, i) => {
           const rank = e.wins === lastWins ? lastRank : i + 1;
           lastWins = e.wins;
           lastRank = rank;
