@@ -19,13 +19,13 @@ import { WelcomeBannerEditor } from '@/components/admin/WelcomeBannerEditor.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { ImportLogTable } from '@/components/admin/ImportLogTable.js';
 import { AdminMatchesTab } from '@/components/admin/AdminMatchesTab.js';
-import { AdminScheduledMatchupsTab } from '@/components/admin/AdminScheduledMatchupsTab.js';
+import { AdminAllGamesTab } from '@/components/admin/AdminAllGamesTab.js';
 import { SkillCalibrationTab } from '@/components/admin/SkillCalibrationTab.js';
 import { AdminReportsTab } from '@/components/admin/AdminReportsTab.js';
 
-type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings' | 'import' | 'matches' | 'challenges' | 'queue' | 'skill_calibration' | 'reports';
+type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings' | 'import' | 'matches' | 'all_games' | 'queue' | 'skill_calibration' | 'reports';
 
-const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'skill_calibration', 'users', 'matches', 'challenges', 'queue', 'presets', 'audit', 'import'];
+const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'skill_calibration', 'users', 'matches', 'all_games', 'queue', 'presets', 'audit', 'import'];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard: 'admin.tabs.dashboard',
@@ -36,7 +36,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
   settings: 'admin.tabs.settings',
   import: 'admin.tabs.import',
   matches: 'admin.tabs.matches',
-  challenges: 'admin.tabs.challenges',
+  all_games: 'admin.tabs.all_games',
   queue: 'admin.tabs.queue',
   skill_calibration: 'admin.tabs.skill_calibration',
   reports: 'admin.tabs.reports',
@@ -51,7 +51,7 @@ const STATIC_LABELS: Record<Tab, string> = {
   settings: 'Settings',
   import: 'Import-Log',
   matches: 'Matches',
-  challenges: 'Challenges',
+  all_games: 'All Games',
   queue: 'Queue Activity',
   skill_calibration: 'Skill Calibration',
   reports: 'Reports',
@@ -169,7 +169,7 @@ export function AdminPage() {
         {tab === 'audit' && <AuditLogTable />}
         {tab === 'users' && <UserBanTab />}
         {tab === 'matches' && <AdminMatchesTab />}
-        {tab === 'challenges' && <AdminScheduledMatchupsTab />}
+        {tab === 'all_games' && <AdminAllGamesTab />}
         {tab === 'queue' && <QueueActivityTable />}
         {tab === 'presets' && <PresetLibraryAdmin />}
         {tab === 'stats' && <StatsTab />}

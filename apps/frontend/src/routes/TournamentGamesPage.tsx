@@ -40,13 +40,7 @@ export function TournamentGamesPage() {
         </div>
       )}
 
-      {data && (
-        <GameHistoryTable
-          games={data.games}
-          canManage={!!tournament?.can_manage}
-          tournamentSlug={slug}
-        />
-      )}
+      {data && <GameHistoryTable games={data.games} />}
     </PageShell>
   );
 }
