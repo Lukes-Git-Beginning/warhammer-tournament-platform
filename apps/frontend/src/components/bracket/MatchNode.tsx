@@ -158,16 +158,19 @@ export function MatchNode({
 
   const isDraw = match.result === 'DRAW';
 
-  // Use game wins if available, fall back to legacy score string; Draw always shows ½
-  const score1 = isDraw
-    ? '½'
-    : match.player1GameWins > 0 || match.player2GameWins > 0
-      ? String(match.player1GameWins)
+  // Show per-game wins whenever any exist — a played 1–1 (e.g. a Bo2 draw) reads as "1–1",
+  // not "½–½". "½" is reserved for a true couldn't-play draw with no games. Falls back to
+  // the legacy score string when neither is present.
+  const hasGameWins = match.player1GameWins > 0 || match.player2GameWins > 0;
+  const score1 = hasGameWins
+    ? String(match.player1GameWins)
+    : isDraw
+      ? '½'
       : (match.score ? (match.score.split('-')[0] ?? '') : '');
-  const score2 = isDraw
-    ? '½'
-    : match.player1GameWins > 0 || match.player2GameWins > 0
-      ? String(match.player2GameWins)
+  const score2 = hasGameWins
+    ? String(match.player2GameWins)
+    : isDraw
+      ? '½'
       : (match.score ? (match.score.split('-')[1] ?? '') : '');
 
   const isThirdPlace = match.phase === 'PLAYOFF_THIRD_PLACE';

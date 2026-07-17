@@ -198,8 +198,10 @@ export function MatchScoreModal({
   const p1FactionChanged = p1FactionId !== (initialP1FactionId ?? '');
   const p2FactionChanged = p2FactionId !== (initialP2FactionId ?? '');
 
-  // ── Per-game override (non-Bo1): edit each played game's map / factions / winner ──
-  const perGame = isOverride && !isBo1;
+  // ── Per-game (non-Bo1): edit each played game's map / factions / winner. Covers both
+  // an override on a completed/disputed match AND entering the result on a PENDING one
+  // (e.g. after a Cancel → Restore), so a restored multi-game match keeps its per-game rows.
+  const perGame = !isBo1 && (isOverride || isPending);
   const maxGames = maxGamesForFormat(matchFormat);
   type GameRow = { gameNumber: number; mapId: string; p1FactionId: string; p2FactionId: string; winnerId: string };
   const [gameRows, setGameRows] = useState<GameRow[]>([]);
@@ -253,6 +255,23 @@ export function MatchScoreModal({
 
   const mutation = useMutation({
     mutationFn: () => {
+      // Non-Bo1: the per-game winners are the single source of truth — the match result
+      // and score are DERIVED from them (more game wins → that player; equal → a played
+      // draw). No separate winner radio or manual counter. Host authority; handles PENDING
+      // entry and completed/disputed override uniformly via the override endpoint.
+      if (perGame) {
+        const result: 'PLAYER1_WIN' | 'PLAYER2_WIN' | 'DRAW' | 'DOUBLE_LOSS' =
+          perGameTally.p1 > perGameTally.p2 ? 'PLAYER1_WIN'
+          : perGameTally.p2 > perGameTally.p1 ? 'PLAYER2_WIN'
+          : 'DRAW';
+        return overrideMatchResult(matchId, {
+          result,
+          player1_score: perGameTally.p1,
+          player2_score: perGameTally.p2,
+          reason: reason || undefined,
+          games: overrideGames(),
+        });
+      }
       if (isDraw) {
         return overrideMatchResult(matchId, {
           result: 'DRAW',
@@ -298,10 +317,9 @@ export function MatchScoreModal({
     },
   });
 
-  const canSubmit =
-    (!!winnerId || isDraw) &&
-    (!isOverride || isDraw || reason.trim().length > 0) &&
-    (!perGame || allGamesHaveResult);
+  const canSubmit = perGame
+    ? allGamesHaveResult && (!isOverride || reason.trim().length > 0)
+    : (!!winnerId || isDraw) && (!isOverride || isDraw || reason.trim().length > 0);
 
   const scoreWinnerId =
     p1Score > p2Score ? player1Id
@@ -470,19 +488,21 @@ export function MatchScoreModal({
         )}
 
         <fieldset className="mb-4">
-          <legend className="text-xs text-stone-400 mb-2">Winner</legend>
+          <legend className="text-xs text-stone-400 mb-2">{perGame ? 'Players' : 'Winner'}</legend>
           <div className="space-y-2">
             {player1Id && (
               <div className="flex items-center gap-2">
                 <label className="flex flex-1 items-center gap-2 text-sm text-stone-200 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="winner"
-                    value={player1Id}
-                    checked={winnerId === player1Id && !isDraw}
-                    onChange={() => { setWinnerId(player1Id); setIsDraw(false); }}
-                    className="accent-rizzotto-gold-500"
-                  />
+                  {!perGame && (
+                    <input
+                      type="radio"
+                      name="winner"
+                      value={player1Id}
+                      checked={winnerId === player1Id && !isDraw}
+                      onChange={() => { setWinnerId(player1Id); setIsDraw(false); }}
+                      className="accent-rizzotto-gold-500"
+                    />
+                  )}
                   {player1Name ?? player1Id}
                 </label>
                 {tournamentSlug && (
@@ -501,14 +521,16 @@ export function MatchScoreModal({
             {player2Id && (
               <div className="flex items-center gap-2">
                 <label className="flex flex-1 items-center gap-2 text-sm text-stone-200 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="winner"
-                    value={player2Id}
-                    checked={winnerId === player2Id && !isDraw}
-                    onChange={() => { setWinnerId(player2Id); setIsDraw(false); }}
-                    className="accent-rizzotto-gold-500"
-                  />
+                  {!perGame && (
+                    <input
+                      type="radio"
+                      name="winner"
+                      value={player2Id}
+                      checked={winnerId === player2Id && !isDraw}
+                      onChange={() => { setWinnerId(player2Id); setIsDraw(false); }}
+                      className="accent-rizzotto-gold-500"
+                    />
+                  )}
                   {player2Name ?? player2Id}
                 </label>
                 {tournamentSlug && (
@@ -524,18 +546,20 @@ export function MatchScoreModal({
                 )}
               </div>
             )}
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="radio"
-                name="winner"
-                value="draw"
-                checked={isDraw}
-                onChange={() => { setIsDraw(true); setWinnerId(''); }}
-                className="accent-amber-500"
-              />
-              <span className="text-amber-400 font-medium">Draw</span>
-              <span className="text-xs text-stone-500">(0.5 pts each — couldn't play)</span>
-            </label>
+            {!perGame && (
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  name="winner"
+                  value="draw"
+                  checked={isDraw}
+                  onChange={() => { setIsDraw(true); setWinnerId(''); }}
+                  className="accent-amber-500"
+                />
+                <span className="text-amber-400 font-medium">Draw</span>
+                <span className="text-xs text-stone-500">(0.5 pts each — couldn't play)</span>
+              </label>
+            )}
             {dropError && (
               <p className="mt-2 text-xs text-amber-400 rounded border border-amber-800 bg-amber-950/30 px-2 py-1.5">
                 {dropError}
@@ -544,7 +568,7 @@ export function MatchScoreModal({
           </div>
         </fieldset>
 
-        {!isBo1 && (
+        {!isBo1 && !perGame && (
           <fieldset className="mb-4">
             <legend className="text-xs text-stone-400 mb-2">Score</legend>
             <div className="flex items-center justify-center gap-6">
@@ -624,9 +648,14 @@ export function MatchScoreModal({
               </button>
             )}
             <p className="mt-2 text-[10px] text-stone-500">
-              Per-game winners: {perGameTally.p1}–{perGameTally.p2}
-              {perGameTally.draw > 0 ? ` (+${perGameTally.draw} draw)` : ''}. The match winner
-              above still drives the bracket.
+              Match result: {perGameTally.p1}–{perGameTally.p2}
+              {perGameTally.draw > 0 ? ` (+${perGameTally.draw} drawn game)` : ''} —{' '}
+              {perGameTally.p1 > perGameTally.p2
+                ? `${player1Name ?? 'Player 1'} wins`
+                : perGameTally.p2 > perGameTally.p1
+                  ? `${player2Name ?? 'Player 2'} wins`
+                  : 'draw'}
+              . Derived from the per-game winners; drives the bracket.
             </p>
           </fieldset>
         )}
