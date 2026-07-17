@@ -221,6 +221,39 @@ export async function factionMatchupMatrix(
   }));
 }
 
+// A single "general strength" per faction: the mean win-chance (vs a neutral opponent) of the
+// players who use it, from the model's per-(player, faction) skill — i.e. "how well does a
+// representative player do with this faction, controlling for who they played". Distinct from
+// the raw win-rate (which is contaminated by opponent skill) and from the matchup matrix (which
+// is faction-vs-faction). Reuses the cached model, so it is cheap alongside the matrix.
+export interface FactionStrengthEntry {
+  factionId: string;
+  meanNeutralWinChance: number; // mean logistic(PFS) over players with a fitted skill for this faction
+  playerCount: number;
+  lowSampleWarning: boolean;
+}
+
+export async function factionStrengths(
+  prisma: PrismaClient,
+  redis: Redis | undefined,
+  seasonId: string,
+): Promise<FactionStrengthEntry[]> {
+  const model = await getRatingModel(prisma, redis, { seasonId });
+  const byFaction = new Map<string, { sum: number; count: number }>();
+  for (const e of model.playerFactionSkills) {
+    const cur = byFaction.get(e.factionId) ?? { sum: 0, count: 0 };
+    cur.sum += logistic(e.skill);
+    cur.count += 1;
+    byFaction.set(e.factionId, cur);
+  }
+  return [...byFaction.entries()].map(([factionId, { sum, count }]) => ({
+    factionId,
+    meanNeutralWinChance: count > 0 ? sum / count : 0.5,
+    playerCount: count,
+    lowSampleWarning: count < 3,
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // #5 — Player faction proficiency table
 // ---------------------------------------------------------------------------

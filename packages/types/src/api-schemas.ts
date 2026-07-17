@@ -188,9 +188,19 @@ export const FactionMatchupMatrixEntryDtoSchema = z.object({
 });
 export type FactionMatchupMatrixEntryDto = z.infer<typeof FactionMatchupMatrixEntryDtoSchema>;
 
+// Per-faction "general strength" (mean skill-adjusted win-chance of its players) — #13.
+export const FactionStrengthDtoSchema = z.object({
+  factionId: z.string(),
+  meanNeutralWinChance: z.number(),
+  playerCount: z.number().int(),
+  lowSampleWarning: z.boolean(),
+});
+export type FactionStrengthDto = z.infer<typeof FactionStrengthDtoSchema>;
+
 export const FactionMatchupMatrixResponseSchema = z.object({
   seasonId: z.string().uuid(),
   entries: z.array(FactionMatchupMatrixEntryDtoSchema),
+  factionStrengths: z.array(FactionStrengthDtoSchema),
 });
 export type FactionMatchupMatrixResponse = z.infer<typeof FactionMatchupMatrixResponseSchema>;
 

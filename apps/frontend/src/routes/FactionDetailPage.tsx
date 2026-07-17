@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { getFaction, getMatchupHeatmap, getFactionTopPlayers, getFactionGames, getFactions, type FactionTopPlayer } from '@/lib/api';
+import { getFaction, getMatchupHeatmap, getMatchupMatrix, getFactionTopPlayers, getFactionGames, getFactions, type FactionTopPlayer } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { GameHistoryTable } from '@/components/match/GameHistoryTable';
 import type { FactionDto } from '@rizzotto/types';
@@ -55,6 +55,8 @@ interface MatchupRow {
   draws: number;
   total: number;
   winRate: number | null;
+  /** Model-adjusted favourability: this faction's win-chance vs the opponent at equal player skill. */
+  favWinChance: number | null;
   isMirror: boolean;
 }
 
@@ -115,6 +117,12 @@ function MatchupGrid({ rows, factionMap, onSelectOpponent }: { rows: MatchupRow[
         <SortTh label="W" col="wins" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-8 justify-end" />
         <SortTh label="L" col="losses" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-8 justify-end" />
         <SortTh label="Total" col="total" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-10 justify-end" />
+        <span
+          className="w-[64px] text-right text-[10px] uppercase tracking-wider text-stone-500"
+          title="Model favourability — this faction's win-chance vs the opponent at EQUAL player skill (opponent strength removed). Raw Win Rate is not skill-adjusted."
+        >
+          Favour.
+        </span>
         <SortTh label="Win Rate" col="winRate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-[140px] justify-end" />
       </div>
       {sorted.map((row) => {
@@ -142,6 +150,15 @@ function MatchupGrid({ rows, factionMap, onSelectOpponent }: { rows: MatchupRow[
             <span className="w-8 text-right text-xs text-emerald-400">{row.isMirror ? '—' : row.wins}</span>
             <span className="w-8 text-right text-xs text-red-400">{row.isMirror ? '—' : row.losses}</span>
             <span className="w-10 text-right text-xs text-stone-500">{row.isMirror ? '—' : row.total}</span>
+            <span className="w-[64px] text-right text-xs">
+              {row.isMirror || row.favWinChance === null ? (
+                <span className="text-stone-600">—</span>
+              ) : (
+                <span className={row.favWinChance >= 0.5 ? 'text-emerald-400' : 'text-red-400'}>
+                  {Math.round(row.favWinChance * 100)}%
+                </span>
+              )}
+            </span>
             <div className="w-[140px] flex justify-end items-center gap-1">
               {row.isMirror ? (
                 <span className="text-xs text-stone-600">—</span>
@@ -219,6 +236,13 @@ export function FactionDetailPage() {
     staleTime: 2 * 60 * 1000,
   });
 
+  // #13 — model-adjusted matchup favourability + per-faction "general strength" (skill-removed).
+  const { data: modelMatrix } = useQuery({
+    queryKey: ['matchup-matrix'],
+    queryFn: () => getMatchupMatrix(),
+    staleTime: 2 * 60 * 1000,
+  });
+
   const { data: topPlayersData } = useQuery({
     queryKey: ['faction-top-players', id],
     queryFn: () => getFactionTopPlayers(id),
@@ -245,6 +269,14 @@ export function FactionDetailPage() {
     const cells = matchupData?.cells ?? [];
     const allFactions = factionsData?.data ?? [];
 
+    // Model favourability of THIS faction vs each opponent (direct / reversed lookup, mirroring
+    // the ModelMatchupHeatmap): entry stores A's win-chance for the canonical (A<B) pair.
+    const modelFav = new Map<string, number>();
+    for (const e of modelMatrix?.entries ?? []) {
+      if (e.factionA === id) modelFav.set(e.factionB, e.neutralEqualProficiencyWinChance);
+      else if (e.factionB === id) modelFav.set(e.factionA, 1 - e.neutralEqualProficiencyWinChance);
+    }
+
     const rowMap = new Map<string, MatchupRow>();
 
     for (const cell of cells) {
@@ -257,6 +289,7 @@ export function FactionDetailPage() {
           draws: cell.draws,
           total: cell.total,
           winRate: cell.winrate_a,
+          favWinChance: modelFav.get(opponentId) ?? null,
           isMirror: opponentId === id,
         });
       } else if (cell.faction_b_id === id) {
@@ -269,6 +302,7 @@ export function FactionDetailPage() {
             draws: cell.draws,
             total: cell.total,
             winRate: cell.winrate_a !== null ? 1 - cell.winrate_a : null,
+            favWinChance: modelFav.get(opponentId) ?? null,
             isMirror: false,
           });
         }
@@ -279,7 +313,7 @@ export function FactionDetailPage() {
     for (const fw of allFactions) {
       const fId = fw.faction.id;
       if (!rowMap.has(fId)) {
-        rowMap.set(fId, { factionId: fId, wins: 0, losses: 0, draws: 0, total: 0, winRate: null, isMirror: fId === id });
+        rowMap.set(fId, { factionId: fId, wins: 0, losses: 0, draws: 0, total: 0, winRate: null, favWinChance: modelFav.get(fId) ?? null, isMirror: fId === id });
       }
     }
 
@@ -288,7 +322,7 @@ export function FactionDetailPage() {
       if (!a.isMirror && b.isMirror) return -1;
       return b.total - a.total;
     });
-  }, [matchupData, factionsData, id]);
+  }, [matchupData, factionsData, modelMatrix, id]);
 
   if (isLoading) {
     return (
@@ -309,6 +343,7 @@ export function FactionDetailPage() {
   }
 
   const { faction, stats } = data;
+  const strengthEntry = modelMatrix?.factionStrengths?.find((s) => s.factionId === id);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 space-y-8">
@@ -326,7 +361,7 @@ export function FactionDetailPage() {
 
       {/* Stat Cards */}
       {stats ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
           <StatCard label="Games" value={stats.matches_played} />
           <StatCard label="Wins" value={<span className="text-emerald-400">{stats.wins}</span>} />
           <StatCard label="Losses" value={<span className="text-red-400">{stats.losses}</span>} />
@@ -337,6 +372,19 @@ export function FactionDetailPage() {
               stats.win_rate !== null ? (
                 <span className={stats.win_rate >= 0.5 ? 'text-emerald-400' : 'text-red-400'}>
                   {Math.round(stats.win_rate * 100)}%
+                </span>
+              ) : '—'
+            }
+          />
+          <StatCard
+            label="Model Strength"
+            value={
+              strengthEntry ? (
+                <span
+                  className={strengthEntry.meanNeutralWinChance >= 0.5 ? 'text-emerald-400' : 'text-red-400'}
+                  title={`Skill-adjusted: mean win-chance of the ${strengthEntry.playerCount} player(s) using this faction vs a neutral opponent${strengthEntry.lowSampleWarning ? ' — low sample' : ''}`}
+                >
+                  {Math.round(strengthEntry.meanNeutralWinChance * 100)}%
                 </span>
               ) : '—'
             }

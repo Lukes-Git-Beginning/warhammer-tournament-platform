@@ -18,6 +18,7 @@ import {
   matchBreakdown,
   playerOpponentBreakdown,
   factionMatchupMatrix,
+  factionStrengths,
   playerFactionProficiency,
 } from '../lib/breakdown-service.js';
 
@@ -108,6 +109,7 @@ const ratingRoutes: FastifyPluginAsync = async (fastify) => {
       async () => ({
         seasonId: resolved.id,
         entries: await factionMatchupMatrix(fastify.prisma, fastify.redis, resolved.id),
+        factionStrengths: await factionStrengths(fastify.prisma, fastify.redis, resolved.id),
       }),
       { ttlSeconds: 60 },
     );
