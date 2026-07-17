@@ -141,6 +141,7 @@ function MyMatchInner({
               factions={factions}
               tournamentMode={tournamentMode}
               withdrawnPlayerId={data.withdrawnPlayerId}
+              isPlayoffMatch={match.phase?.startsWith('PLAYOFF') ?? false}
             />
           ))}
           {(() => {

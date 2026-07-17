@@ -39,6 +39,8 @@ interface Props {
   tournamentMode?: string;
   /** Set when one player in this match has withdrawn; drives the "opponent withdrew" banner. */
   withdrawnPlayerId?: string | null;
+  /** True for a playoff-bracket match — a withdrawal there is a walkover (survivor advances). */
+  isPlayoffMatch?: boolean;
 }
 
 export function GameTile({
@@ -58,6 +60,7 @@ export function GameTile({
   factions = {},
   tournamentMode,
   withdrawnPlayerId,
+  isPlayoffMatch,
 }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -200,7 +203,9 @@ export function GameTile({
           <div className="flex flex-col gap-1">
             <p className="text-sm font-semibold text-amber-300">⚠ Your opponent withdrew.</p>
             <p className="text-xs text-rizzotto-stone-400">
-              If you played this match, report the result below. If not, void it.
+              {isPlayoffMatch
+                ? 'If you played this match, report the result below. If not, take the walkover — you advance.'
+                : 'If you played this match, report the result below. If not, void it.'}
             </p>
           </div>
           <Button
@@ -210,7 +215,9 @@ export function GameTile({
             onClick={() => voidDroppedMutation.mutate()}
             disabled={voidDroppedMutation.isPending}
           >
-            {voidDroppedMutation.isPending ? 'Voiding…' : 'Void match (not played)'}
+            {voidDroppedMutation.isPending
+              ? (isPlayoffMatch ? 'Advancing…' : 'Voiding…')
+              : (isPlayoffMatch ? 'Take walkover (opponent withdrew)' : 'Void match (not played)')}
           </Button>
           {voidDroppedMutation.isError && (
             <p className="text-xs text-red-400">

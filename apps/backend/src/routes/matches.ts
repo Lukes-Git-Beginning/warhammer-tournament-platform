@@ -734,6 +734,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           player2_id: true,
           winner_id: true,
           status: true,
+          phase: true,
           withdrawn_player_id: true,
           games: { select: { reported_winner_id: true, winner_id: true } },
           tournament: { select: { host_id: true, format: true } },
@@ -789,8 +790,25 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const survivorId = match.player1_id === droppedParticipant ? match.player2_id : match.player1_id;
       const format = match.tournament?.format ?? '';
 
-      if (format === 'BALANCED_LIECHTENSTEIN') {
-        // BaLi: CANCELLED → re-pair the survivor.
+      const isPlayoffPhase =
+        match.phase === 'PLAYOFF_QF' ||
+        match.phase === 'PLAYOFF_SF' ||
+        match.phase === 'PLAYOFF_FINAL' ||
+        match.phase === 'PLAYOFF_THIRD_PLACE';
+
+      if (isPlayoffPhase) {
+        // Playoff bracket match: the bracket is fixed, so a drop is a walkover — the
+        // survivor takes the win and ADVANCES. completeMatch runs the bracket progression
+        // (a plain FORFEIT update would leave the next match unfilled). No re-pairing here
+        // regardless of format (a BaLi playoff match must not fall into the re-pair branch).
+        if (!survivorId) {
+          return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Cannot determine survivor for walkover', statusCode: 422 });
+        }
+        await fastify.prisma.match.update({ where: { id: matchId }, data: { withdrawn_player_id: droppedParticipant } });
+        await fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } });
+        await completeMatch(fastify, { matchId, winnerId: survivorId, actorId: callerId, walkover: true });
+      } else if (format === 'BALANCED_LIECHTENSTEIN') {
+        // BaLi group phase: CANCELLED → re-pair the survivor.
         await fastify.prisma.match.update({
           where: { id: matchId },
           data: { status: 'CANCELLED', winner_id: null, withdrawn_player_id: droppedParticipant },

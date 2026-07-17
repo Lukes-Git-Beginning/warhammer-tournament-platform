@@ -139,6 +139,12 @@ export interface CompleteMatchOpts {
   score?: string | null;
   /** Skip FactionStats/MatchupStats writes — set true when stats are written per-game upstream */
   skipStats?: boolean;
+  /**
+   * Walkover: the opponent withdrew and no game was played. Advances the bracket and marks
+   * the match FORFEIT, but writes NO game row, leaderboard entry or faction stats (there was
+   * no real game — games are the statistical unit). Used for playoff-phase drops.
+   */
+  walkover?: boolean;
 }
 
 /**
@@ -186,8 +192,8 @@ export async function completeMatch(
       where: { id: matchId },
       data: {
         winner_id: winnerId,
-        score: score ?? null,
-        status: 'COMPLETED',
+        score: opts.walkover ? 'W/O' : (score ?? null),
+        status: opts.walkover ? 'FORFEIT' : 'COMPLETED',
         season_id: activeSeason?.id ?? null,
         played_at: new Date(),
         ...(player1FactionId ? { player1_faction_id: player1FactionId } : {}),
@@ -241,7 +247,7 @@ export async function completeMatch(
     // completions create/refresh game 1 here. FactionStats/MatchupStats are rebuilt from
     // these rows by recomputeFactionStats() after the transaction — never incrementally —
     // so re-editing a completed match can never double-count.
-    if (!opts.skipStats) {
+    if (!opts.skipStats && !opts.walkover) {
       const existingGames = await tx.matchGame.count({ where: { match_id: matchId } });
       const gameData = {
         status: 'COMPLETED' as const,
@@ -258,8 +264,9 @@ export async function completeMatch(
       }
     }
 
-    // LeaderboardEntry — mirrors resolveMatchResult so GameTile matches count on the leaderboard
-    if (activeSeason && (match.tournament?.counts_for_leaderboard ?? true)) {
+    // LeaderboardEntry — mirrors resolveMatchResult so GameTile matches count on the leaderboard.
+    // A walkover played no game, so it never touches the leaderboard.
+    if (activeSeason && !opts.walkover && (match.tournament?.counts_for_leaderboard ?? true)) {
       const seasonId = activeSeason.id;
       const WIN_PTS = 3, LOSS_PTS = 0;
       const entries = [
@@ -294,7 +301,7 @@ export async function completeMatch(
 
   // Rebuild faction/matchup stats from the COMPLETED game rows (idempotent). Skipped
   // for BoN (skipStats) — finalizeGameResult runs its own recompute after the series.
-  if (activeSeason && !opts.skipStats) {
+  if (activeSeason && !opts.skipStats && !opts.walkover) {
     await recomputeFactionStats(fastify.prisma, activeSeason.id);
   }
 

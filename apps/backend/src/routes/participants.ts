@@ -1062,10 +1062,11 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
             status: { in: [...OPEN_FOR_VOID] },
             // No game has a reported or confirmed winner yet.
             games: { none: { reported_winner_id: { not: null } } },
-            AND: [
-              { OR: [{ phase: null }, { phase: 'SWISS' }] },
-              { OR: [{ player1_id: userId }, { player2_id: userId }] },
-            ],
+            // Every open match of the dropped player — group (phase null / SWISS) AND
+            // playoff (PLAYOFF_*). Previously this filtered to group phase only, so a
+            // playoff-phase drop silently skipped the opponent (no DM, no game-tile banner).
+            // Playoff matches resolve as a walkover when the survivor acts (see void-dropped).
+            OR: [{ player1_id: userId }, { player2_id: userId }],
           },
           select: {
             id: true,
