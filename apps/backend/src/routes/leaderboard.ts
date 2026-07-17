@@ -2,6 +2,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { cached, cacheKey } from '../lib/cache.js';
 import { computeSeasonLeaderboard } from '../lib/leaderboard-service.js';
+import { getRatingModel } from '../lib/rating-model-service.js';
+import { logistic, skillToBand } from '../lib/rating-model.js';
 import {
   computeSwissStandings,
   sortSwissStandings,
@@ -385,6 +387,88 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         return { entries };
       },
       { ttlSeconds: 300 },
+    );
+  });
+
+  // GET /api/leaderboard/skill — #14: players ranked purely by their DATA-derived general
+  // skill (GS) from the hierarchical rating model. NOT the questionnaire band, NOT the
+  // achievement/points leaderboard — just "how strong is this player" from game results.
+  // Only players with ≥ minGames decisive games are ranked (thin data is unreliable).
+  fastify.get('/api/leaderboard/skill', async (request, reply) => {
+    const parsed = z
+      .object({
+        seasonId: z.string().uuid().optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        pageSize: z.coerce.number().int().min(1).max(500).default(100),
+        minGames: z.coerce.number().int().min(1).max(1000).default(5),
+      })
+      .safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { seasonId, page, pageSize, minGames } = parsed.data;
+
+    let season;
+    if (seasonId) {
+      season = await fastify.prisma.season.findUnique({ where: { id: seasonId } });
+      if (!season) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
+    } else {
+      season = await fastify.prisma.season.findFirst({ where: { is_active: true } });
+      if (!season) return reply.code(404).send({ error: 'NotFound', message: 'No active season', statusCode: 404 });
+    }
+    const resolvedSeasonId = season.id;
+
+    return cached(
+      fastify.redis,
+      cacheKey('leaderboard:skill', { seasonId: resolvedSeasonId, page, pageSize, minGames }),
+      async () => {
+        // Force the hierarchical fit so the general-skill decomposition exists (mirrors the
+        // skill-classification service — the flat default model has no GS).
+        const model = await getRatingModel(fastify.prisma, fastify.redis, {
+          seasonId: resolvedSeasonId,
+          config: { hierarchical: true },
+        });
+
+        const eligible = model.generalSkills
+          .filter((e) => e.gamesCount >= minGames)
+          .sort((a, b) => b.generalSkill - a.generalSkill || b.gamesCount - a.gamesCount);
+        const total = eligible.length;
+        const slice = eligible.slice((page - 1) * pageSize, page * pageSize);
+
+        const users = slice.length
+          ? await fastify.prisma.user.findMany({
+              where: { id: { in: slice.map((e) => e.playerId) } },
+              select: { id: true, username: true, avatar_url: true },
+            })
+          : [];
+        const userById = new Map(users.map((u) => [u.id, u]));
+
+        const entries = slice.flatMap((e, i) => {
+          const user = userById.get(e.playerId);
+          if (!user) return [];
+          return [
+            {
+              rank: (page - 1) * pageSize + i + 1,
+              user,
+              generalSkill: e.generalSkill,
+              stdError: e.stdError,
+              winChance: logistic(e.generalSkill),
+              band: skillToBand(e.generalSkill),
+              gamesCount: e.gamesCount,
+              factionsPlayed: e.factionsPlayed,
+            },
+          ];
+        });
+
+        return {
+          entries,
+          total,
+          page,
+          pageSize,
+          season: { id: season.id, name: season.name, is_active: season.is_active },
+        };
+      },
+      { ttlSeconds: 3600 },
     );
   });
 };

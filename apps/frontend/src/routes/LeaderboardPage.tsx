@@ -7,6 +7,7 @@ import {
   getAllTimeLeaderboard,
   getLeaderboardByMode,
   getMajorWinsLeaderboard,
+  getSkillLeaderboard,
   listSeasons,
   type AllTimeEntry,
   type LeaderboardMode,
@@ -16,7 +17,7 @@ import type { LeaderboardEntryDto, DynamicLeaderboardEntryDto } from '@rizzotto/
 import { PageShell } from '@/components/layout/PageShell.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 
-type Tab = 'season' | 'all-time' | 'winrate' | 'majors';
+type Tab = 'season' | 'all-time' | 'winrate' | 'majors' | 'skill';
 
 const PAGE_SIZE = 1000; // load every rank on one page; pagination is a fallback past 1000
 
@@ -756,11 +757,101 @@ function MajorsTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Skill Tab (#14 — data-derived general skill, questionnaire excluded)
+// ---------------------------------------------------------------------------
+
+function SkillTab() {
+  const [search, setSearch] = useState('');
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['leaderboard-skill'],
+    queryFn: () => getSkillLeaderboard({ pageSize: PAGE_SIZE }),
+  });
+
+  const entries = (data?.entries ?? []).filter((e) =>
+    normalize(e.user.username).includes(normalize(search)),
+  );
+
+  return (
+    <div>
+      <p className="mb-4 text-sm text-stone-400">
+        Players ranked purely by their game-data skill estimate — the model&rsquo;s general skill,
+        with the questionnaire excluded. Win% is vs the average active player. Minimum 5 games.
+      </p>
+      <LeaderboardSearch value={search} onChange={setSearch} count={entries.length} />
+
+      {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>}
+      {error && (
+        <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
+          Failed to load leaderboard.
+        </div>
+      )}
+      {!isLoading && !error && entries.length === 0 && (
+        <EmptyState
+          variant="sigil"
+          title="No rated players yet"
+          body="No one has enough games for a skill estimate yet."
+          motto="In lapide sigillata."
+        />
+      )}
+      {!isLoading && !error && entries.length > 0 && (
+        <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-stone-wall-texture bg-[length:512px_512px] bg-blend-soft-light backdrop-blur-sm">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
+                <th className="px-4 py-3 text-right font-medium text-stone-400">Win% vs avg</th>
+                <th className="px-4 py-3 text-right font-medium text-stone-400">Games</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-800/60">
+              {entries.map((entry) => {
+                const isFirst = entry.rank === 1;
+                const rowClass = isFirst
+                  ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10'
+                  : 'hover:bg-stone-800/30';
+                return (
+                  <tr key={entry.user.id} className={`transition-colors ${rowClass}`}>
+                    <td className="px-4 py-3">
+                      <RankCell rank={entry.rank} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        to="/users/$id"
+                        params={{ id: entry.user.id }}
+                        className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
+                      >
+                        <Avatar url={entry.user.avatar_url} username={entry.user.username} />
+                        <span className={isFirst ? 'font-semibold text-rizzotto-gold-500' : 'text-stone-200'}>
+                          {entry.user.username}
+                        </span>
+                      </Link>
+                    </td>
+                    <td
+                      className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400 whitespace-nowrap"
+                      title={`General skill ${entry.generalSkill.toFixed(2)} ± ${entry.stdError.toFixed(2)} (log-odds) · band ${entry.band} · ${entry.factionsPlayed} factions`}
+                    >
+                      {Math.round(entry.winChance * 100)}%
+                    </td>
+                    <td className="px-4 py-3 text-right text-stone-400 whitespace-nowrap">{entry.gamesCount}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page Shell
 // ---------------------------------------------------------------------------
 
 const TABS_CONFIG: { id: Tab; label: string }[] = [
   { id: 'season', label: 'Season' },
+  { id: 'skill', label: 'Skill' },
   { id: 'winrate', label: 'Win Rate' },
   { id: 'majors', label: 'Majors' },
   { id: 'all-time', label: 'All Time' },
@@ -813,6 +904,7 @@ export function LeaderboardPage() {
       {activeTab === 'all-time' && <AllTimeTab />}
       {activeTab === 'winrate' && <ModeTab mode={activeTab} />}
       {activeTab === 'majors' && <MajorsTab />}
+      {activeTab === 'skill' && <SkillTab />}
     </PageShell>
   );
 }

@@ -499,6 +499,35 @@ export function getMajorWinsLeaderboard(): Promise<{ entries: MajorWinsEntry[] }
   return apiFetch(`/api/leaderboard/major-wins`);
 }
 
+// #14 — General Skill leaderboard: players ranked by their data-derived general skill (GS)
+// from the hierarchical rating model (not the questionnaire, not the achievement points).
+export interface SkillLeaderboardEntry {
+  rank: number;
+  user: { id: string; username: string; avatar_url: string | null };
+  generalSkill: number; // log-odds
+  stdError: number;
+  winChance: number; // logistic(generalSkill), vs the average active player
+  band: number; // 1..5
+  gamesCount: number;
+  factionsPlayed: number;
+}
+export interface SkillLeaderboardResponse {
+  entries: SkillLeaderboardEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  season: { id: string; name: string; is_active: boolean };
+}
+export function getSkillLeaderboard(opts?: { seasonId?: string; page?: number; pageSize?: number; minGames?: number }): Promise<SkillLeaderboardResponse> {
+  const params = new URLSearchParams();
+  if (opts?.seasonId) params.set('seasonId', opts.seasonId);
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
+  if (opts?.minGames != null) params.set('minGames', String(opts.minGames));
+  const qs = params.toString();
+  return apiFetch<SkillLeaderboardResponse>(`/api/leaderboard/skill${qs ? `?${qs}` : ''}`);
+}
+
 export function getUserProfile(id: string): Promise<UserProfileResponse> {
   return apiFetch<UserProfileResponse>(`/api/users/${id}`);
 }

@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { getMetaGames, getGameAudit, getFactions, getMaps, editGame, deleteGame } from '@/lib/api';
-import type { AuditGameEntry, GameAuditIssue } from '@/lib/api';
+import type { GameAuditIssue } from '@/lib/api';
 import type { GameHistoryEntry } from '@rizzotto/types';
 
 const ISSUE_LABELS: Record<GameAuditIssue, string> = {
