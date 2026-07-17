@@ -258,6 +258,9 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
     player2FactionId: z.string().nullable().optional(),
     pickedMapId: z.string().nullable().optional(),
     winnerId: z.string().nullable().optional(),
+    // "Official" flag (internally counts_for_leaderboard): drives every statistic, not just
+    // the leaderboard. An explicit value here overrides the restricted-faction derivation.
+    countsForLeaderboard: z.boolean().optional(),
   });
 
   fastify.patch(
@@ -365,7 +368,10 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       const restricted = new Set(match.tournament?.restricted_factions.map((r) => r.faction_id) ?? []);
       const isRestricted =
         restricted.size > 0 && ((newP1F !== null && restricted.has(newP1F)) || (newP2F !== null && restricted.has(newP2F)));
-      const gameCounts = (match.tournament?.counts_for_leaderboard ?? true) && !isRestricted;
+      const gameCounts =
+        body.countsForLeaderboard !== undefined
+          ? body.countsForLeaderboard
+          : (match.tournament?.counts_for_leaderboard ?? true) && !isRestricted;
 
       await fastify.prisma.matchGame.update({
         where: { id: game.id },

@@ -89,8 +89,9 @@ export function AdminAllGamesTab() {
       </div>
 
       <p className="mb-3 text-xs text-stone-500">
-        Inline-edit factions, map and winner. Changing a winner that would flip the match
-        result is rejected — use the match-result editor for that.
+        Inline-edit factions, map, winner and the Official flag (Official games count for every
+        statistic — leaderboard, heatmaps, faction stats). Changing a winner that would flip the
+        match result is rejected — use the match-result editor for that.
       </p>
 
       {isLoading && (
@@ -100,7 +101,9 @@ export function AdminAllGamesTab() {
       )}
 
       {!isLoading && (
-        <div className="overflow-x-auto rounded-md border border-stone-800">
+        // Full-bleed: break out of the admin container's max width — this table is wide and
+        // side-scrolling is painful. Near-full viewport width; still scrolls if truly needed.
+        <div className="relative left-1/2 w-[98vw] -translate-x-1/2 overflow-x-auto rounded-md border border-stone-800">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-stone-800 bg-stone-900/60 text-left">
@@ -114,7 +117,8 @@ export function AdminAllGamesTab() {
                 <th className="px-3 py-2 font-medium text-stone-400">Faction</th>
                 <th className="px-3 py-2 font-medium text-stone-400">Map</th>
                 <th className="px-3 py-2 font-medium text-stone-400">Winner</th>
-                <th className="px-3 py-2 font-medium text-stone-400">Lb</th>
+                <th className="px-3 py-2 font-medium text-stone-400">Replay</th>
+                <th className="px-3 py-2 font-medium text-stone-400">Official</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-800/60">
@@ -186,21 +190,36 @@ export function AdminAllGamesTab() {
                         </select>
                       </td>
                       <td className="px-3 py-2 text-xs">
-                        {g.countsForLeaderboard === false
-                          ? <span className="text-stone-600">no</span>
-                          : <span className="text-emerald-500/70">yes</span>}
+                        {g.replayUrl
+                          ? <a href={g.replayUrl} download className="text-rizzotto-gold-400 hover:text-rizzotto-gold-300 underline">Download</a>
+                          : <span className="text-stone-600">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => save(g, { countsForLeaderboard: g.countsForLeaderboard === false })}
+                          title="Official games count for every statistic (leaderboard, heatmaps, faction stats). Click to toggle."
+                          className={`rounded border px-2 py-0.5 text-[10px] transition-colors disabled:opacity-40 ${
+                            g.countsForLeaderboard === false
+                              ? 'border-stone-700 text-stone-500 hover:border-stone-500'
+                              : 'border-emerald-800 text-emerald-400 hover:border-emerald-500'
+                          }`}
+                        >
+                          {g.countsForLeaderboard === false ? 'Unofficial' : 'Official'}
+                        </button>
                       </td>
                     </tr>
                     {rowError[g.id] && (
                       <tr>
-                        <td colSpan={11} className="px-3 pb-2 text-xs text-red-400">{rowError[g.id]}</td>
+                        <td colSpan={12} className="px-3 pb-2 text-xs text-red-400">{rowError[g.id]}</td>
                       </tr>
                     )}
                   </Fragment>
                 );
               })}
               {games.length === 0 && (
-                <tr><td colSpan={11} className="px-3 py-6 text-center text-stone-500 text-sm">No games.</td></tr>
+                <tr><td colSpan={12} className="px-3 py-6 text-center text-stone-500 text-sm">No games.</td></tr>
               )}
             </tbody>
           </table>

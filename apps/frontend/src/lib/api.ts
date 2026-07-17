@@ -1554,6 +1554,8 @@ export function editGame(
     player2FactionId?: string | null;
     pickedMapId?: string | null;
     winnerId?: string | null;
+    /** "Official" flag — drives every statistic, not just the leaderboard. */
+    countsForLeaderboard?: boolean;
   },
 ): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/matches/${matchId}/games/${gameNumber}`, {
