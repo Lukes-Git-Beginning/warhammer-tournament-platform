@@ -121,6 +121,112 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', fastify.authenticate);
   fastify.addHook('preHandler', fastify.requireRole('ADMIN'));
 
+  // GET /api/admin/game-audit — read-only scan of every COMPLETED game for data anomalies:
+  // a draw, a missing faction, a mirror, a faction outside the tournament allowlist, an
+  // SFT / Faction War game whose faction disagrees with the registered one, or an "official"
+  // game sitting on a voided / cancelled match. Returns only flagged games (GameHistoryEntry
+  // shape + an `issues` array) so the admin All Games table can render and fix them inline.
+  fastify.get('/api/admin/game-audit', async (_request, reply) => {
+    const games = await fastify.prisma.matchGame.findMany({
+      where: { status: 'COMPLETED', match: { deleted_at: null, player1_id: { not: null }, player2_id: { not: null } } },
+      select: {
+        id: true,
+        game_number: true,
+        winner_id: true,
+        player1_faction_id: true,
+        player2_faction_id: true,
+        played_at: true,
+        replay_url: true,
+        counts_for_leaderboard: true,
+        map_decision: { select: { picked_map_id: true } },
+        match: {
+          select: {
+            id: true,
+            round: true,
+            match_number: true,
+            played_at: true,
+            status: true,
+            counts_for_leaderboard: true,
+            player1_id: true,
+            player2_id: true,
+            source: true,
+            player1: { select: { id: true, username: true, avatar_url: true } },
+            player2: { select: { id: true, username: true, avatar_url: true } },
+            tournament: { select: { id: true, name: true, slug: true, mode: true, faction_allowlist: { select: { faction_id: true } } } },
+          },
+        },
+      },
+      orderBy: { played_at: 'desc' },
+    });
+
+    // Registered factions per (tournament, user) for the SFT / Faction War mismatch check.
+    const tournamentIds = [...new Set(games.map((g) => g.match.tournament?.id).filter((x): x is string => !!x))];
+    const participants = tournamentIds.length
+      ? await fastify.prisma.tournamentParticipant.findMany({
+          where: { tournament_id: { in: tournamentIds }, deleted_at: null },
+          select: { tournament_id: true, user_id: true, faction_id: true },
+        })
+      : [];
+    const regFaction = new Map<string, string | null>();
+    for (const p of participants) regFaction.set(`${p.tournament_id}:${p.user_id}`, p.faction_id);
+
+    const flagged = games.flatMap((g) => {
+      const t = g.match.tournament;
+      const p1f = g.player1_faction_id;
+      const p2f = g.player2_faction_id;
+      const issues: string[] = [];
+
+      if (g.winner_id === null) issues.push('draw');
+      if (!p1f || !p2f) issues.push('missing_faction');
+      if (p1f && p2f && p1f === p2f) issues.push('mirror');
+
+      const allow = new Set((t?.faction_allowlist ?? []).map((a) => a.faction_id));
+      if (allow.size > 0 && ((p1f && !allow.has(p1f)) || (p2f && !allow.has(p2f)))) issues.push('faction_not_allowed');
+
+      if (t && (t.mode === 'SFT' || t.mode === 'FACTION_WAR')) {
+        const r1 = g.match.player1_id ? regFaction.get(`${t.id}:${g.match.player1_id}`) : null;
+        const r2 = g.match.player2_id ? regFaction.get(`${t.id}:${g.match.player2_id}`) : null;
+        if ((r1 && p1f && r1 !== p1f) || (r2 && p2f && r2 !== p2f)) issues.push('sft_mismatch');
+      }
+
+      if (g.counts_for_leaderboard && (g.match.counts_for_leaderboard === false || g.match.status === 'CANCELLED')) {
+        issues.push('official_but_void');
+      }
+
+      if (issues.length === 0) return [];
+      return [{
+        id: g.id,
+        gameNumber: g.game_number,
+        matchId: g.match.id,
+        round: g.match.round,
+        matchNumber: g.match.match_number,
+        playedAt: (g.played_at ?? g.match.played_at)?.toISOString() ?? null,
+        player1: g.match.player1 ?? null,
+        player2: g.match.player2 ?? null,
+        winnerId: g.winner_id,
+        player1FactionId: p1f,
+        player2FactionId: p2f,
+        mapPickedId: g.map_decision?.picked_map_id ?? null,
+        replayUrl: g.replay_url,
+        countsForLeaderboard: g.counts_for_leaderboard,
+        tournament: t ? { id: t.id, name: t.name, slug: t.slug } : undefined,
+        matchSource: g.match.source ?? null,
+        issues,
+      }];
+    });
+
+    const mapIds = [...new Set(flagged.map((r) => r.mapPickedId).filter((x): x is string => !!x))];
+    const maps = mapIds.length
+      ? await fastify.prisma.map.findMany({ where: { id: { in: mapIds } }, select: { id: true, name: true } })
+      : [];
+    const mapById = new Map(maps.map((m) => [m.id, m.name]));
+
+    return reply.code(200).send({
+      total: flagged.length,
+      games: flagged.map(({ mapPickedId, ...r }) => ({ ...r, mapName: mapPickedId ? (mapById.get(mapPickedId) ?? null) : null })),
+    });
+  });
+
   // GET /api/admin/audit-log
   fastify.get('/api/admin/audit-log', async (request, reply) => {
     const parsed = AuditLogQuerySchema.safeParse(request.query);

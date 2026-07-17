@@ -1,8 +1,18 @@
 import { Fragment, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { getMetaGames, getFactions, getMaps, editGame, deleteGame } from '@/lib/api';
+import { getMetaGames, getGameAudit, getFactions, getMaps, editGame, deleteGame } from '@/lib/api';
+import type { AuditGameEntry, GameAuditIssue } from '@/lib/api';
 import type { GameHistoryEntry } from '@rizzotto/types';
+
+const ISSUE_LABELS: Record<GameAuditIssue, string> = {
+  draw: 'Draw',
+  missing_faction: 'Missing faction',
+  mirror: 'Mirror',
+  faction_not_allowed: 'Not allowed',
+  sft_mismatch: 'SFT mismatch',
+  official_but_void: 'Void but official',
+};
 import { formatInUserTimezone } from '@/lib/timezone';
 
 const PAGE_SIZE = 50;
@@ -23,9 +33,16 @@ export function AdminAllGamesTab() {
   const [rowError, setRowError] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const { data, isLoading: allLoading } = useQuery({
     queryKey: ['admin-all-games', page],
     queryFn: () => getMetaGames(page, PAGE_SIZE),
+    enabled: !flaggedOnly,
+  });
+  const { data: auditData, isLoading: auditLoading } = useQuery({
+    queryKey: ['admin-game-audit'],
+    queryFn: () => getGameAudit(),
+    enabled: flaggedOnly,
   });
   const { data: factionsData } = useQuery({ queryKey: ['factions'], queryFn: () => getFactions(), staleTime: 60 * 60_000 });
   const { data: mapsData } = useQuery({ queryKey: ['all-maps'], queryFn: () => getMaps(), staleTime: 60 * 60_000 });
@@ -45,6 +62,7 @@ export function AdminAllGamesTab() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-all-games'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-game-audit'] });
       void queryClient.invalidateQueries({ queryKey: ['meta-games'] });
       void queryClient.invalidateQueries({ queryKey: ['factions'] });
     },
@@ -67,24 +85,43 @@ export function AdminAllGamesTab() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-all-games'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-game-audit'] });
       void queryClient.invalidateQueries({ queryKey: ['meta-games'] });
     },
     onError: (err: Error, game) => setRowError((e) => ({ ...e, [game.id]: err.message })),
     onSettled: () => setSavingId(null),
   });
 
-  const games = data?.games ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const games = (flaggedOnly ? (auditData?.games ?? []) : (data?.games ?? [])) as Array<
+    GameHistoryEntry & { issues?: GameAuditIssue[] }
+  >;
+  const total = flaggedOnly ? (auditData?.total ?? 0) : (data?.total ?? 0);
+  const isLoading = flaggedOnly ? auditLoading : allLoading;
+  const totalPages = flaggedOnly ? 1 : Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const colSpan = flaggedOnly ? 14 : 13;
 
   const save = (game: GameHistoryEntry, body: EditBody) => mutation.mutate({ game, body });
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500">
-          All Games <span className="ml-2 text-sm font-normal text-stone-500">({total} total)</span>
-        </h2>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500">
+            {flaggedOnly ? 'Flagged Games' : 'All Games'}{' '}
+            <span className="text-sm font-normal text-stone-500">({total}{flaggedOnly ? ' flagged' : ' total'})</span>
+          </h2>
+          <button
+            type="button"
+            onClick={() => setFlaggedOnly((v) => !v)}
+            className={`rounded border px-2.5 py-1 text-xs transition-colors ${
+              flaggedOnly
+                ? 'border-amber-600 text-amber-300 hover:border-amber-400'
+                : 'border-stone-700 text-stone-400 hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-400'
+            }`}
+          >
+            {flaggedOnly ? '← All games' : '⚑ Flagged only'}
+          </button>
+        </div>
         {totalPages > 1 && (
           <div className="flex items-center gap-3 text-sm">
             <button
@@ -108,8 +145,11 @@ export function AdminAllGamesTab() {
 
       <p className="mb-3 text-xs text-stone-500">
         Inline-edit factions, map, winner and the Official flag (Official games count for every
-        statistic — leaderboard, heatmaps, faction stats). Changing a winner that would flip the
-        match result is rejected — use the match-result editor for that.
+        statistic — leaderboard, heatmaps, faction stats), or ✕ to hard-delete. Changing a winner
+        that would flip the match result is rejected — use the match-result editor for that.
+        {' '}<span className="text-amber-400/80">Flagged only</span> lists games with a data
+        anomaly (draw, missing/mirror faction, faction outside the allowlist, SFT mismatch, or an
+        Official game on a voided match) so you can clean them up.
       </p>
 
       {isLoading && (
@@ -126,6 +166,7 @@ export function AdminAllGamesTab() {
             <thead>
               <tr className="border-b border-stone-800 bg-stone-900/60 text-left">
                 <th className="px-3 py-2 font-medium text-stone-400">Game ID</th>
+                {flaggedOnly && <th className="px-3 py-2 font-medium text-stone-400">Issues</th>}
                 <th className="px-3 py-2 font-medium text-stone-400">Date</th>
                 <th className="px-3 py-2 font-medium text-stone-400">Tournament</th>
                 <th className="px-3 py-2 font-medium text-stone-400">R·G</th>
@@ -148,6 +189,20 @@ export function AdminAllGamesTab() {
                   <Fragment key={g.id}>
                     <tr className={`hover:bg-stone-800/30 transition-colors${busy ? ' opacity-60' : ''}`}>
                       <td className="px-3 py-2 font-mono text-[10px] text-stone-500" title={g.id}>{g.id.slice(0, 8)}</td>
+                      {flaggedOnly && (
+                        <td className="px-3 py-2">
+                          <div className="flex flex-wrap gap-1">
+                            {(g.issues ?? []).map((iss) => (
+                              <span
+                                key={iss}
+                                className="rounded border border-amber-800/70 bg-amber-950/30 px-1.5 py-0.5 text-[10px] text-amber-300 whitespace-nowrap"
+                              >
+                                {ISSUE_LABELS[iss]}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      )}
                       <td className="px-3 py-2 text-stone-500 text-xs whitespace-nowrap">
                         {g.playedAt ? formatInUserTimezone(g.playedAt) : '—'}
                       </td>
@@ -246,14 +301,14 @@ export function AdminAllGamesTab() {
                     </tr>
                     {rowError[g.id] && (
                       <tr>
-                        <td colSpan={13} className="px-3 pb-2 text-xs text-red-400">{rowError[g.id]}</td>
+                        <td colSpan={colSpan} className="px-3 pb-2 text-xs text-red-400">{rowError[g.id]}</td>
                       </tr>
                     )}
                   </Fragment>
                 );
               })}
               {games.length === 0 && (
-                <tr><td colSpan={13} className="px-3 py-6 text-center text-stone-500 text-sm">No games.</td></tr>
+                <tr><td colSpan={colSpan} className="px-3 py-6 text-center text-stone-500 text-sm">No games.</td></tr>
               )}
             </tbody>
           </table>

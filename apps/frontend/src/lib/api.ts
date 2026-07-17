@@ -1823,6 +1823,21 @@ export function getMetaGames(page = 1, limit = 50): Promise<{ games: GameHistory
   return apiFetch<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }>(`/api/meta/games?page=${page}&limit=${limit}`);
 }
 
+// Admin data-cleanup audit: every COMPLETED game flagged with ≥1 anomaly.
+export type GameAuditIssue =
+  | 'draw'
+  | 'missing_faction'
+  | 'mirror'
+  | 'faction_not_allowed'
+  | 'sft_mismatch'
+  | 'official_but_void';
+export interface AuditGameEntry extends GameHistoryEntry {
+  issues: GameAuditIssue[];
+}
+export function getGameAudit(): Promise<{ total: number; games: AuditGameEntry[] }> {
+  return apiFetch<{ total: number; games: AuditGameEntry[] }>(`/api/admin/game-audit`);
+}
+
 export function getFactionGames(factionId: string, page = 1, limit = 30, opponentFactionId?: string): Promise<{ games: GameHistoryEntry[]; total: number }> {
   const params = new URLSearchParams({ factionId, page: String(page), limit: String(limit) });
   if (opponentFactionId) params.set('opponentFactionId', opponentFactionId);
