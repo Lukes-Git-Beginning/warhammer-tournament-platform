@@ -1,12 +1,17 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { getFactions } from '@/lib/api';
 import type { GameHistoryEntry } from '@rizzotto/types';
 import { formatInUserTimezone } from '@/lib/timezone';
+import { EditGameModal } from './EditGameModal';
 
 interface Props {
   games: GameHistoryEntry[];
   showTournament?: boolean;
+  /** When true (+ tournamentSlug), staff get a per-row edit button (factions/map/winner). */
+  canManage?: boolean;
+  tournamentSlug?: string;
 }
 
 function FactionChip({ factionId, factionMap }: {
@@ -27,7 +32,9 @@ function FactionChip({ factionId, factionMap }: {
   );
 }
 
-export function GameHistoryTable({ games, showTournament = false }: Props) {
+export function GameHistoryTable({ games, showTournament = false, canManage = false, tournamentSlug }: Props) {
+  const [editingGame, setEditingGame] = useState<GameHistoryEntry | null>(null);
+  const canEdit = canManage && !!tournamentSlug;
   const { data: factionData } = useQuery({
     queryKey: ['factions'],
     queryFn: () => getFactions(),
@@ -59,6 +66,7 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
             <th className="px-3 py-2 text-left font-medium text-stone-400">Map</th>
             <th className="px-3 py-2 text-left font-medium text-stone-400">Winner</th>
             <th className="px-3 py-2 text-left font-medium text-stone-400">Replay</th>
+            {canEdit && <th className="px-3 py-2 text-right font-medium text-stone-400">Edit</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-stone-800/60">
@@ -136,11 +144,29 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
                     : <span className="text-stone-600 text-xs">—</span>
                   }
                 </td>
+                {canEdit && (
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => setEditingGame(g)}
+                      className="rounded border border-rizzotto-iron-700 px-2 py-0.5 text-xs text-stone-300 hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-400 transition-colors"
+                    >
+                      Edit
+                    </button>
+                  </td>
+                )}
               </tr>
             );
           })}
         </tbody>
       </table>
+      {editingGame && tournamentSlug && (
+        <EditGameModal
+          game={editingGame}
+          tournamentSlug={tournamentSlug}
+          onClose={() => setEditingGame(null)}
+        />
+      )}
     </div>
   );
 }

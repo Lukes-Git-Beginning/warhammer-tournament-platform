@@ -7,6 +7,9 @@ import { ensureMatchGame, finalizeGameResult } from '../lib/match-games.js';
 import { REPLAY_DIR } from '../lib/replays.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
 import { notifyOpenPlayDispute } from '../lib/discord-notify.js';
+import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
+import { invalidate } from '../lib/cache.js';
+import { emitBracketUpdate } from '../lib/emit.js';
 
 const LobbyCodeBodySchema = z.object({
   lobby_code: z.string().max(64).nullable(),
@@ -237,6 +240,200 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         player2Id: match.player2_id,
         withdrawnPlayerId: match.withdrawn_player_id ?? null,
       });
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // PATCH /api/matches/:id/games/:gameNumber
+  // Staff correction of a recorded game's factions, map and/or winner (there is
+  // no other way to fix a mis-recorded game in a multi-game match). Games are the
+  // statistical unit, so any change rebuilds FactionStats/MatchupStats + busts
+  // caches. Editing the WINNER is allowed only while it does NOT change the MATCH
+  // winner (which would ripple into the bracket + standings) — an outcome-changing
+  // correction is rejected with 409 and directed to the match-result editor, which
+  // handles bracket advancement and leaderboard points correctly.
+  // -------------------------------------------------------------------------
+  const EditGameSchema = z.object({
+    player1FactionId: z.string().nullable().optional(),
+    player2FactionId: z.string().nullable().optional(),
+    pickedMapId: z.string().nullable().optional(),
+    winnerId: z.string().nullable().optional(),
+  });
+
+  fastify.patch(
+    '/api/matches/:id/games/:gameNumber',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId, gameNumber: gameNumberRaw } = request.params as { id: string; gameNumber: string };
+      const gameNumber = Number(gameNumberRaw);
+      const parsed = EditGameSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+      }
+      const body = parsed.data;
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: {
+          id: true,
+          tournament_id: true,
+          player1_id: true,
+          player2_id: true,
+          winner_id: true,
+          tournament: {
+            select: {
+              counts_for_leaderboard: true,
+              restricted_factions: { select: { faction_id: true } },
+              faction_allowlist: { select: { faction_id: true } },
+              map_pool: { select: { map_id: true } },
+            },
+          },
+          games: {
+            select: { id: true, game_number: true, winner_id: true, player1_faction_id: true, player2_faction_id: true, status: true },
+          },
+        },
+      });
+      if (!match) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      }
+
+      const role = request.user?.role ?? '';
+      const userId = request.user?.sub ?? '';
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only a tournament manager can edit games', statusCode: 403 });
+      }
+
+      const game = match.games.find((g) => g.game_number === gameNumber);
+      if (!game) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Game not found', statusCode: 404 });
+      }
+
+      // Proposed values (undefined = leave unchanged).
+      const newP1F = body.player1FactionId !== undefined ? body.player1FactionId : game.player1_faction_id;
+      const newP2F = body.player2FactionId !== undefined ? body.player2FactionId : game.player2_faction_id;
+      const newWinner = body.winnerId !== undefined ? body.winnerId : game.winner_id;
+
+      if (newWinner !== null && newWinner !== match.player1_id && newWinner !== match.player2_id) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Winner must be one of the two players', statusCode: 422 });
+      }
+
+      // Factions must be in the allowlist (empty = all allowed) and must exist.
+      const allowlist = new Set(match.tournament?.faction_allowlist.map((f) => f.faction_id) ?? []);
+      for (const fid of [newP1F, newP2F]) {
+        if (fid !== null && allowlist.size > 0 && !allowlist.has(fid)) {
+          return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Faction is not allowed in this tournament', statusCode: 422 });
+        }
+      }
+      for (const fid of [body.player1FactionId, body.player2FactionId]) {
+        if (fid) {
+          const exists = await fastify.prisma.faction.findUnique({ where: { id: fid }, select: { id: true } });
+          if (!exists) return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Unknown faction', statusCode: 422 });
+        }
+      }
+
+      // Map must be in the tournament pool (empty pool = any map).
+      if (body.pickedMapId) {
+        const pool = new Set(match.tournament?.map_pool.map((m) => m.map_id) ?? []);
+        if (pool.size > 0 && !pool.has(body.pickedMapId)) {
+          return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Map is not in the tournament map pool', statusCode: 422 });
+        }
+      }
+
+      // Guard: reject an edit that would flip the MATCH winner (bracket + standings).
+      const wins = new Map<string, number>();
+      for (const g of match.games) {
+        const w = g.id === game.id ? newWinner : g.winner_id;
+        if (w) wins.set(w, (wins.get(w) ?? 0) + 1);
+      }
+      let proposedMatchWinner: string | null = null;
+      let top = 0;
+      let tie = false;
+      for (const [uid, c] of wins) {
+        if (c > top) { top = c; proposedMatchWinner = uid; tie = false; }
+        else if (c === top) tie = true;
+      }
+      if (tie) proposedMatchWinner = match.winner_id;
+      if (match.winner_id !== null && proposedMatchWinner !== match.winner_id) {
+        return reply.code(409).send({
+          error: 'Conflict',
+          message: 'This would change the match result. Use the match result editor, which updates the bracket and standings.',
+          statusCode: 409,
+        });
+      }
+
+      // Restricted faction → the game does not count for the leaderboard.
+      const restricted = new Set(match.tournament?.restricted_factions.map((r) => r.faction_id) ?? []);
+      const isRestricted =
+        restricted.size > 0 && ((newP1F !== null && restricted.has(newP1F)) || (newP2F !== null && restricted.has(newP2F)));
+      const gameCounts = (match.tournament?.counts_for_leaderboard ?? true) && !isRestricted;
+
+      await fastify.prisma.matchGame.update({
+        where: { id: game.id },
+        data: {
+          player1_faction_id: newP1F,
+          player2_faction_id: newP2F,
+          winner_id: newWinner,
+          counts_for_leaderboard: gameCounts,
+        },
+      });
+      if (body.pickedMapId !== undefined && match.player1_id && match.player2_id) {
+        await fastify.prisma.matchMapDecision.upsert({
+          where: { game_id: game.id },
+          update: { picked_map_id: body.pickedMapId, decided_at: new Date() },
+          create: {
+            game_id: game.id,
+            mode: 'HOST_PRESET',
+            coin_flip_seed: 'staff-edit',
+            top_player_id: match.player1_id,
+            bottom_player_id: match.player2_id,
+            picked_map_id: body.pickedMapId,
+            decided_at: new Date(),
+          },
+        });
+      }
+
+      // Rebuild stats from the game rows (idempotent) + bust caches.
+      const activeSeason = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
+      if (activeSeason) await recomputeFactionStats(fastify.prisma, activeSeason.id);
+      if (fastify.redis) {
+        await Promise.all([
+          invalidate(fastify.redis, 'factions:*'),
+          invalidate(fastify.redis, 'meta:*'),
+          invalidate(fastify.redis, 'leaderboard:*'),
+          invalidate(fastify.redis, 'rating-model:*'),
+          invalidate(fastify.redis, 'h2h:*'),
+        ]);
+      }
+
+      await fastify.prisma.auditLog.create({
+        data: {
+          entity_type: 'MatchGame',
+          entity_id: game.id,
+          action: 'game_edited',
+          actor_id: userId,
+          new_value: {
+            player1_faction_id: newP1F,
+            player2_faction_id: newP2F,
+            winner_id: newWinner,
+            picked_map_id: body.pickedMapId ?? null,
+          },
+        },
+      });
+      if (fastify.io) {
+        if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
+        fastify.io.to(`match_decision_${matchId}`).emit('match.game.updated', {
+          matchId,
+          gameNumber,
+          status: game.status,
+          winnerId: newWinner,
+          lobbyCode: null,
+          reportedWinnerId: null,
+          reportedAt: null,
+          confirmedAt: null,
+        });
+      }
+
+      return reply.code(200).send({ ok: true });
     },
   );
 

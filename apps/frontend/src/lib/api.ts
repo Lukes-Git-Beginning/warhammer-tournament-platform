@@ -1534,6 +1534,23 @@ export function getMatchGames(matchId: string): Promise<{ games: GameDto[]; play
   return apiFetch<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }>(`/api/matches/${matchId}/games`);
 }
 
+/** Staff-only correction of a recorded game's factions, map and/or winner. */
+export function editGame(
+  matchId: string,
+  gameNumber: number,
+  body: {
+    player1FactionId?: string | null;
+    player2FactionId?: string | null;
+    pickedMapId?: string | null;
+    winnerId?: string | null;
+  },
+): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/games/${gameNumber}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
 // #2 — Site-wide faction-pick timer. A running blind pick where the opponent has
 // locked and this user has not; drives the always-visible countdown banner.
 export interface PendingFactionPick {
