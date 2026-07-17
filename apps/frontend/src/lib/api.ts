@@ -585,6 +585,15 @@ export function reportMatchIssue(matchId: string, comment: string): Promise<{ ok
   });
 }
 
+export interface OverrideGameInput {
+  gameNumber: number;
+  mapId?: string | null;
+  player1FactionId?: string | null;
+  player2FactionId?: string | null;
+  /** null = a draw for that game */
+  winnerId?: string | null;
+}
+
 export function overrideMatchResult(
   matchId: string,
   body: {
@@ -595,6 +604,8 @@ export function overrideMatchResult(
     map_id?: string;
     player1FactionId?: string;
     player2FactionId?: string;
+    /** Per-game detail for non-Bo1 matches (map / factions / winner per game). */
+    games?: OverrideGameInput[];
   },
 ): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/matches/${matchId}/result`, {

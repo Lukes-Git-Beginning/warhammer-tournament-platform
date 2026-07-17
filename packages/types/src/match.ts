@@ -43,6 +43,22 @@ export const OverrideMatchResultSchema = z.object({
   map_id: z.string().min(1).optional(),
   player1FactionId: z.string().min(1).optional(),
   player2FactionId: z.string().min(1).optional(),
+  // Per-game detail for non-Bo1 matches: each played game's map, factions and winner
+  // (winnerId null = a draw for that game). When present, these game rows are written
+  // instead of collapsing the whole match onto a single game. The match-level result
+  // above still drives the winner + bracket advancement.
+  games: z
+    .array(
+      z.object({
+        gameNumber: z.number().int().min(1),
+        mapId: z.string().nullable().optional(),
+        player1FactionId: z.string().nullable().optional(),
+        player2FactionId: z.string().nullable().optional(),
+        winnerId: z.string().nullable().optional(),
+      }),
+    )
+    .max(9)
+    .optional(),
 });
 export type OverrideMatchResultPayload = z.infer<typeof OverrideMatchResultSchema>;
 

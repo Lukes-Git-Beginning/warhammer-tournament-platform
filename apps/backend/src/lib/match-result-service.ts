@@ -51,6 +51,20 @@ export interface ResolveMatchResultOpts {
   /** Faction overrides — written to the match and latched onto TournamentParticipant if not set */
   player1FactionId?: string;
   player2FactionId?: string;
+  /**
+   * Per-game detail for a multi-game (non-Bo1) match. When provided, these game rows are
+   * written verbatim (map / factions / winner, winnerId null = a per-game draw) instead of
+   * collapsing the match onto a single game 1. The match-level `result` still drives the
+   * winner + bracket progression; these rows are the statistical record. Existing games not
+   * listed here are removed. Games are the statistical unit.
+   */
+  games?: Array<{
+    gameNumber: number;
+    mapId?: string | null;
+    player1FactionId?: string | null;
+    player2FactionId?: string | null;
+    winnerId?: string | null;
+  }>;
 }
 
 /**
@@ -99,6 +113,7 @@ export async function resolveMatchResult(
           counts_for_leaderboard: true,
           is_major: true,
           mode: true,
+          restricted_factions: { select: { faction_id: true } },
         },
       },
     },
@@ -304,12 +319,53 @@ export async function resolveMatchResult(
       }
     }
 
-    // 4. Game-level record — all faction/matchup stats derive from MatchGame rows
-    //    (games are the statistical unit; the match is just a container). Single-game
-    //    completion: create or refresh game 1 with the result + factions. FactionStats
-    //    and MatchupStats are rebuilt from these rows by recomputeFactionStats() after
-    //    the transaction — never incrementally — so overrides never double-count.
-    {
+    // 4. Game-level records — the statistical unit (the match is just a container).
+    //    FactionStats/MatchupStats are rebuilt from these rows by recomputeFactionStats()
+    //    after the transaction — never incrementally — so overrides never double-count.
+    if (opts.games && opts.games.length > 0) {
+      // Multi-game override: write each provided game's map / factions / winner verbatim
+      // (winnerId null = a per-game draw) and drop games the host removed from the series.
+      const restricted = new Set(match.tournament?.restricted_factions.map((r) => r.faction_id) ?? []);
+      const tournamentCounts = match.tournament?.counts_for_leaderboard ?? true;
+      const keepNumbers = opts.games.map((g) => g.gameNumber);
+      await tx.matchGame.deleteMany({ where: { match_id: matchId, game_number: { notIn: keepNumbers } } });
+      for (const g of opts.games) {
+        const gp1 = g.player1FactionId ?? null;
+        const gp2 = g.player2FactionId ?? null;
+        const isRestricted = restricted.size > 0 && ((gp1 !== null && restricted.has(gp1)) || (gp2 !== null && restricted.has(gp2)));
+        const gameData = {
+          status: 'COMPLETED' as const,
+          winner_id: g.winnerId ?? null,
+          player1_faction_id: gp1,
+          player2_faction_id: gp2,
+          played_at: new Date(),
+          counts_for_leaderboard: tournamentCounts && !isRestricted,
+        };
+        const existing = await tx.matchGame.findFirst({
+          where: { match_id: matchId, game_number: g.gameNumber },
+          select: { id: true },
+        });
+        const gameId = existing
+          ? (await tx.matchGame.update({ where: { id: existing.id }, data: gameData })).id
+          : (await tx.matchGame.create({ data: { match_id: matchId, game_number: g.gameNumber, ...gameData } })).id;
+        if (g.mapId !== undefined && match.player1_id && match.player2_id) {
+          await tx.matchMapDecision.upsert({
+            where: { game_id: gameId },
+            update: { picked_map_id: g.mapId, decided_at: new Date() },
+            create: {
+              game_id: gameId,
+              mode: 'HOST_PRESET',
+              coin_flip_seed: 'host-override',
+              top_player_id: match.player1_id,
+              bottom_player_id: match.player2_id,
+              picked_map_id: g.mapId,
+              decided_at: new Date(),
+            },
+          });
+        }
+      }
+    } else {
+      // Single-game (Bo1) completion: create or refresh game 1 with the result + factions.
       const existingGames = await tx.matchGame.count({ where: { match_id: matchId } });
       const gameData = {
         status: 'COMPLETED' as const,

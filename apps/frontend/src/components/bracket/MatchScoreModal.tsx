@@ -1,7 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
-import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, restoreMatch, cancelMatch, swapPlayer, deleteMatch, getParticipants, forfeitMatch, setMatchNoContest } from '@/lib/api';
-import { useState } from 'react';
+import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, getMatchGames, restoreMatch, cancelMatch, swapPlayer, deleteMatch, getParticipants, forfeitMatch, setMatchNoContest } from '@/lib/api';
+import type { OverrideGameInput } from '@/lib/api';
+import { useEffect, useState } from 'react';
+
+const DRAW = '__draw__';
+
+function maxGamesForFormat(format?: string | null): number {
+  switch (format) {
+    case 'BO5': return 5;
+    case 'BO3': return 3;
+    case 'BO2': return 2;
+    default: return 3;
+  }
+}
 
 interface MatchScoreModalProps {
   matchId: string;
@@ -186,6 +198,59 @@ export function MatchScoreModal({
   const p1FactionChanged = p1FactionId !== (initialP1FactionId ?? '');
   const p2FactionChanged = p2FactionId !== (initialP2FactionId ?? '');
 
+  // ── Per-game override (non-Bo1): edit each played game's map / factions / winner ──
+  const perGame = isOverride && !isBo1;
+  const maxGames = maxGamesForFormat(matchFormat);
+  type GameRow = { gameNumber: number; mapId: string; p1FactionId: string; p2FactionId: string; winnerId: string };
+  const [gameRows, setGameRows] = useState<GameRow[]>([]);
+  const [gamesSeeded, setGamesSeeded] = useState(false);
+  const { data: matchGamesData } = useQuery({
+    queryKey: ['match-games', matchId],
+    queryFn: () => getMatchGames(matchId),
+    enabled: perGame,
+  });
+  useEffect(() => {
+    if (!perGame || gamesSeeded || !matchGamesData) return;
+    const rows: GameRow[] = (matchGamesData.games ?? [])
+      .filter((g) => g.id !== null) // skip the virtual placeholder game
+      .map((g) => ({
+        gameNumber: g.gameNumber,
+        mapId: g.decision?.pickedMapId ?? '',
+        p1FactionId: g.player1FactionId ?? '',
+        p2FactionId: g.player2FactionId ?? '',
+        winnerId: g.winnerId ?? '',
+      }));
+    setGameRows(rows.length > 0 ? rows : [{ gameNumber: 1, mapId: '', p1FactionId: '', p2FactionId: '', winnerId: '' }]);
+    setGamesSeeded(true);
+  }, [perGame, gamesSeeded, matchGamesData]);
+
+  const updateRow = (idx: number, patch: Partial<GameRow>) =>
+    setGameRows((rows) => rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  const addRow = () =>
+    setGameRows((rows) => (rows.length >= maxGames ? rows : [...rows, { gameNumber: rows.length + 1, mapId: '', p1FactionId: '', p2FactionId: '', winnerId: '' }]));
+  const removeRow = (idx: number) =>
+    setGameRows((rows) => rows.filter((_, i) => i !== idx).map((r, i) => ({ ...r, gameNumber: i + 1 })));
+
+  const perGameTally = gameRows.reduce(
+    (acc, r) => {
+      if (r.winnerId === player1Id) acc.p1++;
+      else if (r.winnerId === player2Id) acc.p2++;
+      else if (r.winnerId === DRAW) acc.draw++;
+      return acc;
+    },
+    { p1: 0, p2: 0, draw: 0 },
+  );
+  const allGamesHaveResult = gameRows.length > 0 && gameRows.every((r) => r.winnerId !== '');
+
+  const overrideGames = (): OverrideGameInput[] =>
+    gameRows.map((r) => ({
+      gameNumber: r.gameNumber,
+      mapId: r.mapId || null,
+      player1FactionId: r.p1FactionId || null,
+      player2FactionId: r.p2FactionId || null,
+      winnerId: r.winnerId === DRAW ? null : r.winnerId || null,
+    }));
+
   const mutation = useMutation({
     mutationFn: () => {
       if (isDraw) {
@@ -197,6 +262,7 @@ export function MatchScoreModal({
           map_id: mapId || undefined,
           player1FactionId: p1FactionId || undefined,
           player2FactionId: p2FactionId || undefined,
+          games: perGame ? overrideGames() : undefined,
         });
       }
       if (isOverride) {
@@ -212,6 +278,7 @@ export function MatchScoreModal({
           map_id: mapId || undefined,
           player1FactionId: p1FactionId || undefined,
           player2FactionId: p2FactionId || undefined,
+          games: perGame ? overrideGames() : undefined,
         });
       }
       const score = isBo1
@@ -231,7 +298,10 @@ export function MatchScoreModal({
     },
   });
 
-  const canSubmit = (!!winnerId || isDraw) && (!isOverride || isDraw || reason.trim().length > 0);
+  const canSubmit =
+    (!!winnerId || isDraw) &&
+    (!isOverride || isDraw || reason.trim().length > 0) &&
+    (!perGame || allGamesHaveResult);
 
   const scoreWinnerId =
     p1Score > p2Score ? player1Id
@@ -485,7 +555,83 @@ export function MatchScoreModal({
           </fieldset>
         )}
 
-        {maps.length > 0 && (
+        {perGame && (
+          <fieldset className="mb-4">
+            <legend className="text-xs text-stone-400 mb-2">Per-game detail</legend>
+            <div className="space-y-2">
+              {gameRows.map((row, idx) => (
+                <div key={idx} className="rounded border border-stone-700 bg-stone-800/40 p-2 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-stone-300">Game {row.gameNumber}</span>
+                    {gameRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeRow(idx)}
+                        className="text-[10px] text-red-400 hover:text-red-300"
+                      >
+                        − remove
+                      </button>
+                    )}
+                  </div>
+                  {maps.length > 0 && (
+                    <select
+                      value={row.mapId}
+                      onChange={(e) => updateRow(idx, { mapId: e.target.value })}
+                      className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+                    >
+                      <option value="">— map —</option>
+                      {maps.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  )}
+                  <div className="flex gap-2">
+                    <select
+                      value={row.p1FactionId}
+                      onChange={(e) => updateRow(idx, { p1FactionId: e.target.value })}
+                      className="flex-1 min-w-0 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+                    >
+                      <option value="">{player1Name ?? 'P1'} faction</option>
+                      {factions.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+                    <select
+                      value={row.p2FactionId}
+                      onChange={(e) => updateRow(idx, { p2FactionId: e.target.value })}
+                      className="flex-1 min-w-0 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+                    >
+                      <option value="">{player2Name ?? 'P2'} faction</option>
+                      {factions.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+                  </div>
+                  <select
+                    value={row.winnerId}
+                    onChange={(e) => updateRow(idx, { winnerId: e.target.value })}
+                    className={`w-full rounded border px-2 py-1 text-xs text-stone-200 bg-stone-900 focus:outline-none focus:border-rizzotto-gold-500 ${row.winnerId === '' ? 'border-amber-600' : 'border-stone-700'}`}
+                  >
+                    <option value="">— winner —</option>
+                    {player1Id && <option value={player1Id}>{player1Name ?? 'P1'} won</option>}
+                    {player2Id && <option value={player2Id}>{player2Name ?? 'P2'} won</option>}
+                    <option value={DRAW}>Draw</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+            {gameRows.length < maxGames && (
+              <button
+                type="button"
+                onClick={addRow}
+                className="mt-2 text-xs text-rizzotto-gold-400 hover:text-rizzotto-gold-300"
+              >
+                + Add game
+              </button>
+            )}
+            <p className="mt-2 text-[10px] text-stone-500">
+              Per-game winners: {perGameTally.p1}–{perGameTally.p2}
+              {perGameTally.draw > 0 ? ` (+${perGameTally.draw} draw)` : ''}. The match winner
+              above still drives the bracket.
+            </p>
+          </fieldset>
+        )}
+
+        {maps.length > 0 && !perGame && (
           <div className="mb-4">
             <label className="text-xs text-stone-400 block mb-1" htmlFor="map-select">
               Map <span className="text-stone-600">(optional)</span>
@@ -504,7 +650,7 @@ export function MatchScoreModal({
           </div>
         )}
 
-        {factions.length > 0 && (
+        {factions.length > 0 && !perGame && (
           <fieldset className="mb-4">
             <legend className="text-xs text-stone-400 mb-2">
               Factions <span className="text-stone-600">(optional)</span>
