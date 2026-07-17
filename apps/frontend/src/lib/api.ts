@@ -491,6 +491,8 @@ export interface MajorWinsEntry {
   rank: number;
   user: { id: string; username: string; avatar_url: string | null };
   wins: number;
+  /** Tiebreaker: total game wins across all majors (games are the statistical unit). */
+  majorGameWins: number;
   tournaments: MajorWinTournament[];
 }
 export function getMajorWinsLeaderboard(): Promise<{ entries: MajorWinsEntry[] }> {

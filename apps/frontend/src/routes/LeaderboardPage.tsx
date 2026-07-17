@@ -661,7 +661,8 @@ function MajorsTab() {
   return (
     <div>
       <p className="mb-4 text-sm text-stone-400">
-        Champions of tournaments flagged as majors — ranked by how many they&rsquo;ve won.
+        Champions of tournaments flagged as majors — ranked by how many they&rsquo;ve won, ties
+        broken by total game wins across majors.
       </p>
       <LeaderboardSearch value={search} onChange={setSearch} count={entries.length} />
 
@@ -687,6 +688,12 @@ function MajorsTab() {
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
                 <th className="px-4 py-3 text-right font-medium text-stone-400">Major Wins</th>
+                <th
+                  className="px-4 py-3 text-right font-medium text-stone-400"
+                  title="Tiebreaker — total game wins across all majors"
+                >
+                  Game Wins
+                </th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Titles</th>
               </tr>
             </thead>
@@ -719,6 +726,9 @@ function MajorsTab() {
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400 whitespace-nowrap">
                       {entry.wins} 🏆
+                    </td>
+                    <td className="px-4 py-3 text-right text-stone-300 whitespace-nowrap">
+                      {entry.majorGameWins}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">

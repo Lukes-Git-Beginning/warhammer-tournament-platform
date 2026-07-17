@@ -274,7 +274,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         if (tournaments.length === 0) return { entries: [] };
         const tournamentIds = tournaments.map((t) => t.id);
 
-        const [matches, participants] = await Promise.all([
+        const [matches, participants, gameWins] = await Promise.all([
           fastify.prisma.match.findMany({
             where: { tournament_id: { in: tournamentIds }, deleted_at: null },
             select: {
@@ -292,7 +292,21 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
             where: { tournament_id: { in: tournamentIds }, deleted_at: null },
             select: { tournament_id: true, user_id: true, skill_band: true, status: true },
           }),
+          // Tiebreaker: total GAME wins across all majors (games are the statistical unit —
+          // not tournament wins, not match wins). Leaderboard-excluded games (voided / modded
+          // faction) count for nothing, so counts_for_leaderboard is enforced.
+          fastify.prisma.matchGame.groupBy({
+            by: ['winner_id'],
+            where: {
+              status: 'COMPLETED',
+              counts_for_leaderboard: true,
+              winner_id: { not: null },
+              match: { tournament_id: { in: tournamentIds }, deleted_at: null },
+            },
+            _count: { _all: true },
+          }),
         ]);
+        const gameWinsByUser = new Map(gameWins.map((g) => [g.winner_id!, g._count._all]));
 
         const matchesByT = new Map<string, ChampionMatch[]>();
         for (const m of matches) {
@@ -343,19 +357,29 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
           .map((id) => {
             const user = userById.get(id);
             const v = byUser.get(id)!;
-            return user ? { user, wins: v.tournaments.length, tournaments: v.tournaments } : null;
+            return user
+              ? { user, wins: v.tournaments.length, majorGameWins: gameWinsByUser.get(id) ?? 0, tournaments: v.tournaments }
+              : null;
           })
           .filter((r): r is NonNullable<typeof r> => r !== null)
-          .sort((a, b) => b.wins - a.wins || a.user.username.localeCompare(b.user.username));
+          // Primary: major titles. Tiebreaker: total game wins across majors. Then name.
+          .sort(
+            (a, b) =>
+              b.wins - a.wins ||
+              b.majorGameWins - a.majorGameWins ||
+              a.user.username.localeCompare(b.user.username),
+          );
 
-        // Standard competition ranking: equal win counts share a rank.
-        let lastWins = -1;
+        // Standard competition ranking: rows tied on BOTH titles and the game-win
+        // tiebreaker share a rank.
+        let lastKey = '';
         let lastRank = 0;
         const entries = rows.map((e, i) => {
-          const rank = e.wins === lastWins ? lastRank : i + 1;
-          lastWins = e.wins;
+          const key = `${e.wins}:${e.majorGameWins}`;
+          const rank = key === lastKey ? lastRank : i + 1;
+          lastKey = key;
           lastRank = rank;
-          return { rank, user: e.user, wins: e.wins, tournaments: e.tournaments };
+          return { rank, user: e.user, wins: e.wins, majorGameWins: e.majorGameWins, tournaments: e.tournaments };
         });
 
         return { entries };
