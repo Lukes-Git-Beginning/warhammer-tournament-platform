@@ -1564,6 +1564,11 @@ export function editGame(
   });
 }
 
+/** Staff-only hard delete of a single recorded game. */
+export function deleteGame(matchId: string, gameNumber: number): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/matches/${matchId}/games/${gameNumber}`, { method: 'DELETE' });
+}
+
 // #2 — Site-wide faction-pick timer. A running blind pick where the opponent has
 // locked and this user has not; drives the always-visible countdown banner.
 export interface PendingFactionPick {

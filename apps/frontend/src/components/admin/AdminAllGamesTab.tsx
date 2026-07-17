@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { getMetaGames, getFactions, getMaps, editGame } from '@/lib/api';
+import { getMetaGames, getFactions, getMaps, editGame, deleteGame } from '@/lib/api';
 import type { GameHistoryEntry } from '@rizzotto/types';
 import { formatInUserTimezone } from '@/lib/timezone';
 
@@ -52,6 +52,24 @@ export function AdminAllGamesTab() {
       setRowError((e) => ({ ...e, [game.id]: err.message }));
       void queryClient.invalidateQueries({ queryKey: ['admin-all-games', page] });
     },
+    onSettled: () => setSavingId(null),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (game: GameHistoryEntry) => deleteGame(game.matchId, game.gameNumber),
+    onMutate: (game) => {
+      setSavingId(game.id);
+      setRowError((e) => {
+        const c = { ...e };
+        delete c[game.id];
+        return c;
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-all-games'] });
+      void queryClient.invalidateQueries({ queryKey: ['meta-games'] });
+    },
+    onError: (err: Error, game) => setRowError((e) => ({ ...e, [game.id]: err.message })),
     onSettled: () => setSavingId(null),
   });
 
@@ -119,6 +137,7 @@ export function AdminAllGamesTab() {
                 <th className="px-3 py-2 font-medium text-stone-400">Winner</th>
                 <th className="px-3 py-2 font-medium text-stone-400">Replay</th>
                 <th className="px-3 py-2 font-medium text-stone-400">Official</th>
+                <th className="px-3 py-2 font-medium text-stone-400" />
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-800/60">
@@ -209,17 +228,32 @@ export function AdminAllGamesTab() {
                           {g.countsForLeaderboard === false ? 'Unofficial' : 'Official'}
                         </button>
                       </td>
+                      <td className="px-3 py-2 text-xs">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            if (window.confirm(`Permanently delete game R${g.round}·G${g.gameNumber}? This cannot be undone.`)) {
+                              deleteMutation.mutate(g);
+                            }
+                          }}
+                          className="rounded border border-red-900 px-2 py-0.5 text-[10px] text-red-400 hover:border-red-600 hover:bg-red-900/20 transition-colors disabled:opacity-40"
+                          title="Hard-delete this game"
+                        >
+                          ✕
+                        </button>
+                      </td>
                     </tr>
                     {rowError[g.id] && (
                       <tr>
-                        <td colSpan={12} className="px-3 pb-2 text-xs text-red-400">{rowError[g.id]}</td>
+                        <td colSpan={13} className="px-3 pb-2 text-xs text-red-400">{rowError[g.id]}</td>
                       </tr>
                     )}
                   </Fragment>
                 );
               })}
               {games.length === 0 && (
-                <tr><td colSpan={12} className="px-3 py-6 text-center text-stone-500 text-sm">No games.</td></tr>
+                <tr><td colSpan={13} className="px-3 py-6 text-center text-stone-500 text-sm">No games.</td></tr>
               )}
             </tbody>
           </table>

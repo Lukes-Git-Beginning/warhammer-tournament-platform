@@ -444,6 +444,58 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // -------------------------------------------------------------------------
+  // DELETE /api/matches/:id/games/:gameNumber
+  // Staff hard-delete of a single recorded game (admin cleanup). Cascades its map
+  // decision / blind pick / matrix, rebuilds stats and busts caches. The match's own
+  // winner/bracket is left untouched — deleting a game only drops its game-level record.
+  // -------------------------------------------------------------------------
+  fastify.delete(
+    '/api/matches/:id/games/:gameNumber',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId, gameNumber: gameNumberRaw } = request.params as { id: string; gameNumber: string };
+      const gameNumber = Number(gameNumberRaw);
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: { id: true, tournament_id: true, games: { select: { id: true, game_number: true } } },
+      });
+      if (!match) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      }
+      const role = request.user?.role ?? '';
+      const userId = request.user?.sub ?? '';
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only a tournament manager can delete games', statusCode: 403 });
+      }
+      const game = match.games.find((g) => g.game_number === gameNumber);
+      if (!game) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Game not found', statusCode: 404 });
+      }
+
+      await fastify.prisma.matchGame.delete({ where: { id: game.id } });
+
+      const activeSeason = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
+      if (activeSeason) await recomputeFactionStats(fastify.prisma, activeSeason.id);
+      if (fastify.redis) {
+        await Promise.all([
+          invalidate(fastify.redis, 'factions:*'),
+          invalidate(fastify.redis, 'meta:*'),
+          invalidate(fastify.redis, 'leaderboard:*'),
+          invalidate(fastify.redis, 'rating-model:*'),
+          invalidate(fastify.redis, 'h2h:*'),
+        ]);
+      }
+      await fastify.prisma.auditLog.create({
+        data: { entity_type: 'MatchGame', entity_id: game.id, action: 'game_deleted', actor_id: userId, new_value: { matchId, gameNumber } },
+      });
+      if (fastify.io && match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
+
+      return reply.code(200).send({ ok: true });
+    },
+  );
+
+  // -------------------------------------------------------------------------
   // PATCH /api/matches/:id/games/:gameNumber/lobby-code
   // Either player or host/admin can set the optional lobby code.
   // -------------------------------------------------------------------------
