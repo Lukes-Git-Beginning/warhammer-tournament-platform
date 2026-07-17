@@ -95,7 +95,11 @@ function computeLinearLayout(
     roundMatches.sort((a, b) => a.matchNumber - b.matchNumber);
 
     const x = xBase + col * (MATCH_WIDTH + ROUND_GAP);
-    let fallbackY = yBase;
+    // Running floor: the next match in this round must sit at least here. This keeps a
+    // bye-seeded match (no feeder, e.g. a bye-vs-bye in an odd single-elim round) from
+    // colliding with a later, feeder-positioned match whose ideal midpoint lands on the
+    // same row — the later match is pushed down instead of drawn on top.
+    let minY = yBase;
 
     for (const m of roundMatches) {
       // Only consider feeders that belong to this group (scoped lookup)
@@ -108,11 +112,12 @@ function computeLinearLayout(
         const feederYs = feeders.map((f) => positions.get(f.matchId)?.y ?? yBase);
         y = feederYs.reduce((sum, v) => sum + v, 0) / feederYs.length;
       } else {
-        y = fallbackY;
+        y = minY;
       }
+      if (y < minY) y = minY; // never overlap the previous match in this round
 
       positions.set(m.matchId, { x, y });
-      fallbackY = y + MATCH_HEIGHT + ROW_GAP;
+      minY = y + MATCH_HEIGHT + ROW_GAP;
     }
   }
 

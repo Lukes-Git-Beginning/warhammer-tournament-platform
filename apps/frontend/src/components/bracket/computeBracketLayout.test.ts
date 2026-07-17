@@ -61,6 +61,32 @@ describe('computeBracketLayout', () => {
     expect(r2m1.y).toBe(expectedY);
   });
 
+  it('bye-vs-bye round match (no feeder) does not overlap a later feeder-positioned match', () => {
+    // 11-player 16-bracket: 3 R1 matches + 4 R2 (r2m2 is bye-vs-bye, no R1 feeder).
+    // Regression: r2m2 used to take the running fallbackY (104) and r2m3, positioned by
+    // its feeder r1m2 (also at 104), landed on the exact same row → overlapping nodes.
+    const matches: BracketNode[] = [
+      makeMatch('r1m1', 1, 1, 'r2m1'),
+      makeMatch('r1m2', 1, 2, 'r2m3'),
+      makeMatch('r1m3', 1, 3, 'r2m4'),
+      makeMatch('r2m1', 2, 1, 'r3m1'),
+      makeMatch('r2m2', 2, 2, 'r3m1'), // no feeder
+      makeMatch('r2m3', 2, 3, 'r3m2'),
+      makeMatch('r2m4', 2, 4, 'r3m2'),
+      makeMatch('r3m1', 3, 1, 'r4m1'),
+      makeMatch('r3m2', 3, 2, 'r4m1'),
+      makeMatch('r4m1', 4, 1, null),
+    ];
+
+    const layout = computeBracketLayout(matches);
+    const r2ys = ['r2m1', 'r2m2', 'r2m3', 'r2m4']
+      .map((id) => layout.positions.get(id)!.y)
+      .sort((a, b) => a - b);
+    for (let i = 1; i < r2ys.length; i++) {
+      expect(r2ys[i]! - r2ys[i - 1]!).toBeGreaterThanOrEqual(MATCH_HEIGHT + ROW_GAP);
+    }
+  });
+
   it('8-player bracket: 7 matches, R3.y == midpoint of R2 feeders', () => {
     // R1: m1..m4, R2: m5(feeds m7), m6(feeds m7), R3: m7
     const matches: BracketNode[] = [
