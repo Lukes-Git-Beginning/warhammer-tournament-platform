@@ -666,7 +666,7 @@ export function TournamentDetail() {
               <span className="text-stone-500">Format:</span>{' '}
               <span className="text-stone-200">
                 {({ AUTO_SWISS: 'Auto Swiss', SWISS: 'Swiss', SINGLE_ELIMINATION: 'Single Elimination', DOUBLE_ELIMINATION: 'Double Elimination', ROUND_ROBIN: 'Round Robin', LIECHTENSTEIN: 'Liechtenstein', BALANCED_LIECHTENSTEIN: 'Balanced Liechtenstein' } as Record<string, string>)[tournament.format] ?? tournament.format}
-                {tournament.format !== 'AUTO_SWISS' && tournament.rounds_count ? ` · ${tournament.rounds_count} Rounds` : ''}
+                {['SWISS', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN'].includes(tournament.format) && tournament.rounds_count ? ` · ${tournament.rounds_count} Rounds` : ''}
                 {tournament.format === 'AUTO_SWISS' && tournament.status === 'ONGOING' && tournament.rounds_count ? ` · ${tournament.rounds_count} Rounds` : ''}
                 {tournament.format === 'AUTO_SWISS' && tournament.status !== 'ONGOING' && tournament.status !== 'COMPLETED' ? ' · Rounds TBD' : ''}
               </span>

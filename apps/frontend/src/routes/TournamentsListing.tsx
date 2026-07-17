@@ -104,7 +104,7 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
               ? (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED') && tournament.rounds_count
                 ? ` · ${tournament.rounds_count}R`
                 : ' · TBD'
-              : tournament.rounds_count ? ` · ${tournament.rounds_count}R` : ''}
+              : ['SWISS', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN'].includes(tournament.format) && tournament.rounds_count ? ` · ${tournament.rounds_count}R` : ''}
           </span>
           {tournament.mode && (
             <span className="font-mono text-xs uppercase tracking-wide">
