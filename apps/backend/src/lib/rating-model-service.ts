@@ -13,6 +13,7 @@
 import type { PrismaClient, Prisma } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { cached, cacheKey, invalidate } from './cache.js';
+import { eligibleStatGameWhere } from './stat-eligibility.js';
 import {
   fitRatingModel,
   createRatingModel,
@@ -76,12 +77,14 @@ export async function loadSeasonObservations(
   prisma: PrismaClient,
   seasonId: string,
 ): Promise<MatchObservation[]> {
+  // Same canonical game set as the raw matchup heatmap (getMatchupMatrix), plus a
+  // decisive winner (draws carry no signal). Game-level only — the parent Match's
+  // status is irrelevant to global statistics (a completed game of an in-progress
+  // series still counts); leaderboard eligibility is authoritative at the game level.
   const games = await prisma.matchGame.findMany({
     where: {
-      status: 'COMPLETED',
+      ...eligibleStatGameWhere(seasonId),
       winner_id: { not: null },
-      counts_for_leaderboard: true,
-      match: confirmedMatchWhere(seasonId),
     },
     select: {
       winner_id: true,

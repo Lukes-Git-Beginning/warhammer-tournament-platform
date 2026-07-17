@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
 import { InvalidActionError } from '../lib/draft-service.js';
@@ -6,6 +6,39 @@ import { completeMatch } from '../lib/complete-match.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
 import { notifyHostsOfMatchReport } from '../lib/discord-notify.js';
 import { runBalancedPairingTick } from '../lib/balanced-liechtenstein-service.js';
+import { invalidate } from '../lib/cache.js';
+import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
+
+/**
+ * Cascade a match's leaderboard eligibility onto its games and refresh global stats.
+ * The game-level `counts_for_leaderboard` flag is authoritative for all statistics
+ * (heatmaps, rating model, faction winrates), so voiding/cancelling a match must set
+ * it on the games — not just the match row.
+ */
+async function cascadeGameEligibility(
+  fastify: FastifyInstance,
+  matchId: string,
+  countsForLeaderboard: boolean,
+): Promise<void> {
+  await fastify.prisma.matchGame.updateMany({
+    where: { match_id: matchId },
+    data: { counts_for_leaderboard: countsForLeaderboard },
+  });
+  const activeSeason = await fastify.prisma.season.findFirst({
+    where: { is_active: true },
+    select: { id: true },
+  });
+  if (activeSeason) await recomputeFactionStats(fastify.prisma, activeSeason.id);
+  if (fastify.redis) {
+    await Promise.all([
+      invalidate(fastify.redis, 'factions:*'),
+      invalidate(fastify.redis, 'meta:*'),
+      invalidate(fastify.redis, 'leaderboard:*'),
+      invalidate(fastify.redis, 'rating-model:*'),
+      invalidate(fastify.redis, 'h2h:*'),
+    ]);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -480,8 +513,9 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: matchId },
         data: { counts_for_leaderboard: !parsed.data.void },
       });
+      // Cascade onto the games (the authoritative flag for all statistics) + refresh stats.
+      await cascadeGameEligibility(fastify, matchId, !parsed.data.void);
 
-      // Leaderboard cache (60s TTL) will naturally expire; no manual invalidation needed.
       return reply.code(200).send({ matchId, void: parsed.data.void });
     },
   );
@@ -533,6 +567,8 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: matchId },
         data: { status: 'CANCELLED', winner_id: null, result: null, score: null, player1_points: null, player2_points: null, played_at: null },
       });
+      // A cancelled match's games count for nothing statistically.
+      await cascadeGameEligibility(fastify, matchId, false);
       return reply.code(200).send({ matchId, status: 'CANCELLED' });
     },
   );

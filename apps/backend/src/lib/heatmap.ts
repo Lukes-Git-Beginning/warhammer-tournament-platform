@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@rizzotto/db';
 import type { MatchupCell } from '@rizzotto/types';
+import { eligibleStatGameWhere } from './stat-eligibility.js';
 
 // ---------------------------------------------------------------------------
 // getMatchupMatrix
@@ -26,11 +27,10 @@ export async function getMatchupMatrix(
   prisma: PrismaClient,
   seasonId: string,
 ): Promise<MatchupCell[]> {
+  // Same canonical game set as the rating model (loadSeasonObservations) so the two
+  // heatmaps' sample sizes agree — see stat-eligibility.ts.
   const games = await prisma.matchGame.findMany({
-    where: {
-      status: 'COMPLETED',
-      match: { season_id: seasonId, deleted_at: null },
-    },
+    where: eligibleStatGameWhere(seasonId),
     select: {
       winner_id: true,
       player1_faction_id: true,
@@ -47,6 +47,7 @@ export async function getMatchupMatrix(
     const p1f = g.player1_faction_id;
     const p2f = g.player2_faction_id;
     if (!p1f || !p2f) continue; // a matchup needs both factions known
+    if (p1f === p2f) continue; // mirror — no faction-vs-faction winrate is defined
 
     const isDraw = g.winner_id === null;
     let winnerFaction: string | null = null;
