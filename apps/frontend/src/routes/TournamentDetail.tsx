@@ -906,7 +906,10 @@ export function TournamentDetail() {
             </section>
           );
         }
-        if (isElim && participantsData) {
+        // Only switch to the bracket-derived standings once the bracket exists. Before the
+        // tournament starts (no matches yet), fall through to ParticipantsList so the check-in
+        // status + host check-in actions are visible — same as every other format.
+        if (isElim && participantsData && (bracket?.matches?.length ?? 0) > 0) {
           return (
             <EliminationStandings
               matches={bracket?.matches ?? []}
