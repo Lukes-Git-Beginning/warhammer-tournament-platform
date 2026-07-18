@@ -444,7 +444,7 @@ export function GameTile({
                       className={`flex-1 py-2 px-3 rounded-lg border text-sm font-semibold transition-colors ${
                         selectedWinnerId === myId
                           ? 'border-rizzotto-gold-400 bg-rizzotto-gold-400/10 text-rizzotto-gold-300'
-                          : 'border-rizzotto-iron-600 text-rizzotto-stone-300 hover:border-rizzotto-stone-500'
+                          : 'border-rizzotto-iron-600 text-rizzotto-stone-300 hover:border-rizzotto-stone-500 hover:bg-rizzotto-iron-800 hover:text-rizzotto-stone-100'
                       }`}
                     >
                       I Won
@@ -454,7 +454,7 @@ export function GameTile({
                       className={`flex-1 py-2 px-3 rounded-lg border text-sm font-semibold transition-colors ${
                         selectedWinnerId === opponentId
                           ? 'border-rizzotto-gold-400 bg-rizzotto-gold-400/10 text-rizzotto-gold-300'
-                          : 'border-rizzotto-iron-600 text-rizzotto-stone-300 hover:border-rizzotto-stone-500'
+                          : 'border-rizzotto-iron-600 text-rizzotto-stone-300 hover:border-rizzotto-stone-500 hover:bg-rizzotto-iron-800 hover:text-rizzotto-stone-100'
                       }`}
                     >
                       Opponent Won

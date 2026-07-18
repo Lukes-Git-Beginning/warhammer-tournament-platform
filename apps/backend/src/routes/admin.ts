@@ -844,6 +844,10 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       const qFloor = questionnaireFloor(answers, questions);
       const qSkill = bandToLogOdds(qFloor);
       const dataBand = skillToBand(gs.skill);
+      // N9: only surface a genuine upward band jump (data band strictly above the
+      // claimed/questionnaire band). Band-5 players are auto-excluded — no band is
+      // higher, so they can never show a positive gap; and intra-band noise is dropped.
+      if (dataBand <= qFloor) continue;
       players.push({
         id: u.id,
         username: u.username,

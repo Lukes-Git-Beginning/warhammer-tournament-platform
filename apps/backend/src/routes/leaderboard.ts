@@ -399,7 +399,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
       .object({
         seasonId: z.string().uuid().optional(),
         page: z.coerce.number().int().min(1).default(1),
-        pageSize: z.coerce.number().int().min(1).max(500).default(100),
+        pageSize: z.coerce.number().int().min(1).max(1000).default(100),
         minGames: z.coerce.number().int().min(1).max(1000).default(5),
       })
       .safeParse(request.query);

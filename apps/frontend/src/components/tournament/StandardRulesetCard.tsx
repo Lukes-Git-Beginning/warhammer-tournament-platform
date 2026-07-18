@@ -11,7 +11,11 @@
 export const STANDARD_RULESET = {
   settings: ['Default Funds', 'Ultra Unit Scale', '1500 Tickets', 'Unit Caps On'],
   banned: ['Masque of Slaanesh', 'Dreadmaw'],
-  conduct: ['10 minutes to ready up', '40 minute round limit'],
+  conduct: [
+    '10 minutes to ready up',
+    '40 minute round limit',
+    'Exploiting bugs or glitches is considered cheating and results in disqualification.',
+  ],
 } as const;
 
 function Row({ label, items }: { label: string; items: readonly string[] }) {

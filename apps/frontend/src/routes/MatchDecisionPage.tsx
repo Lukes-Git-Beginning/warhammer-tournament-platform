@@ -238,14 +238,14 @@ function RandomMapPhase({ pickedMapId, mapPool }: RandomMapPhaseProps) {
           <img
             src={displayedMap.image_url}
             alt=""
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-100 ${spinning ? 'opacity-30' : 'opacity-50'}`}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-100 ${spinning ? 'opacity-80' : 'opacity-100'}`}
           />
         )}
-        <div className="relative z-10 text-center px-4">
+        <div className="relative z-10 text-center px-4 py-2 rounded-md bg-rizzotto-iron-950/65 backdrop-blur-sm">
           <p
-            className={`font-display font-bold leading-tight transition-all ${
+            className={`font-display font-bold leading-tight drop-shadow-lg transition-all ${
               spinning
-                ? 'text-lg text-rizzotto-stone-300'
+                ? 'text-lg text-rizzotto-stone-100'
                 : 'text-2xl text-rizzotto-gold-400'
             }`}
           >

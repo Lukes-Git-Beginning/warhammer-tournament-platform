@@ -1115,22 +1115,25 @@ export function TournamentEditPage() {
           ) : null}
         </fieldset>
 
-        <label className="flex items-start gap-2 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4 text-sm text-rizzotto-stone-300">
-          <input
-            type="checkbox"
-            name="allow_late_join_requests"
-            checked={form.allow_late_join_requests}
-            onChange={handleChange}
-            className="mt-0.5"
-          />
-          <span>
-            <span className="font-medium text-rizzotto-stone-200">Allow late-join requests</span>
-            <span className="block text-xs text-rizzotto-stone-500">
-              Players can request to join after the tournament has started; you approve or decline each request
-              (a Discord DM plus a panel on the tournament page). Can be toggled during an ongoing tournament.
+        {/* N3: late-join only applies where pairing grows dynamically — hidden for fixed brackets (SE/DE). */}
+        {form.format !== 'SINGLE_ELIMINATION' && form.format !== 'DOUBLE_ELIMINATION' && (
+          <label className="flex items-start gap-2 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4 text-sm text-rizzotto-stone-300">
+            <input
+              type="checkbox"
+              name="allow_late_join_requests"
+              checked={form.allow_late_join_requests}
+              onChange={handleChange}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium text-rizzotto-stone-200">Allow late-join requests</span>
+              <span className="block text-xs text-rizzotto-stone-500">
+                Players can request to join after the tournament has started; you approve or decline each request
+                (a Discord DM plus a panel on the tournament page). Can be toggled during an ongoing tournament.
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+        )}
 
         {/* ── Map Pool ──────────────────────────────────────────────────── */}
         <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
