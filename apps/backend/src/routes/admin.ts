@@ -11,6 +11,7 @@ import { emitBracketUpdate } from '../lib/emit.js';
 import { addLateParticipant, setParticipantFactionOp, createManualMatch } from '../lib/tournament-management.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM, OPPONENT_SHARE_WARN } from '../lib/scoring-service.js';
+import { getNonGuildMemberIds, isGuildLookupConfigured } from '../lib/discord-notify.js';
 import {
   loadCalibrationQuestions,
   CalibrationQuestionsSchema,
@@ -801,6 +802,43 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         steamPersona: u.steam_link?.persona ?? null,
         steamProfileUrl: u.steam_link?.profile_url ?? null,
       })),
+    };
+  });
+
+  // GET /api/admin/reports/not-in-discord — #47: fully-registered (Steam-verified)
+  // users who are NOT members of the configured Discord guild — an invite list.
+  // Requires DISCORD_GUILD_ID + bot token; returns { configured: false } otherwise.
+  fastify.get('/api/admin/reports/not-in-discord', async () => {
+    if (!isGuildLookupConfigured()) {
+      return { configured: false, users: [] as unknown[] };
+    }
+    const users = await fastify.prisma.user.findMany({
+      where: { deleted_at: null, steam_link: { isNot: null } },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        created_at: true,
+        last_login: true,
+        discord_id: true,
+      },
+      orderBy: { username: 'asc' },
+    });
+    const notMembers = await getNonGuildMemberIds(
+      users.map((u) => u.discord_id).filter((d): d is string => !!d),
+    );
+    if (!notMembers) return { configured: false, users: [] as unknown[] };
+    return {
+      configured: true,
+      users: users
+        .filter((u) => u.discord_id && notMembers.has(u.discord_id))
+        .map((u) => ({
+          id: u.id,
+          username: u.username,
+          email: u.email,
+          createdAt: u.created_at.toISOString(),
+          lastLogin: u.last_login?.toISOString() ?? null,
+        })),
     };
   });
 

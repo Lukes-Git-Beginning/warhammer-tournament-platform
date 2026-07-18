@@ -1001,6 +1001,15 @@ export function getAdminEngagementReport(): Promise<AdminEngagementReport> {
   return apiFetch(`/api/admin/reports/engagement`);
 }
 
+// #47 — fully-registered players who are not members of the Discord server.
+export interface AdminNotInDiscordReport {
+  configured: boolean;
+  users: AdminEngagementUser[];
+}
+export function getAdminNotInDiscordReport(): Promise<AdminNotInDiscordReport> {
+  return apiFetch(`/api/admin/reports/not-in-discord`);
+}
+
 // #19 — underrated players: data rating vs questionnaire rating.
 export interface AdminUnderratedPlayer {
   id: string;

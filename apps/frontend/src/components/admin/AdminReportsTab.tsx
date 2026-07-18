@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
   getAdminEngagementReport,
+  getAdminNotInDiscordReport,
   getAdminUnderratedReport,
   type AdminEngagementUser,
 } from '@/lib/api.js';
@@ -238,11 +239,59 @@ function VerifiedNeverPlayedSection() {
   );
 }
 
+// #47 — fully-registered players who aren't members of the Discord server (invite list).
+function NotInDiscordSection() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['admin-not-in-discord-report'],
+    queryFn: getAdminNotInDiscordReport,
+  });
+
+  if (isLoading) return <div className="py-8 text-center text-stone-400 text-sm">Checking Discord membership…</div>;
+  if (error) return <EngagementError />;
+  if (!data) return null;
+
+  return (
+    <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+      <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">Registered, not in Discord</h3>
+      <p className="mb-3 text-xs text-stone-500">
+        Fully registered (Steam-verified) players who are not members of the Discord server — an invite
+        list. {data.configured ? `${data.users.length} total.` : ''}
+      </p>
+      {!data.configured ? (
+        <p className="py-4 text-center text-sm text-stone-500">
+          Discord guild lookup is not configured (needs DISCORD_GUILD_ID + bot token).
+        </p>
+      ) : data.users.length === 0 ? (
+        <p className="py-4 text-center text-sm text-stone-500">Everyone is in the server. 🎉</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="text-xs uppercase tracking-wide text-stone-500">
+              <tr>
+                <th className="px-3 py-2">Player</th>
+                <th className="px-3 py-2">Email</th>
+                <th className="px-3 py-2">Registered</th>
+                <th className="px-3 py-2">Last login</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.users.map((u) => (
+                <UserRow key={u.id} user={u} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // N10 — split the previously-stacked reports into sub-tabs to cut down on scrolling.
 const SUB_TABS = [
   { key: 'underrated', label: 'Underrated' },
   { key: 'notVerified', label: 'Not verified' },
   { key: 'neverPlayed', label: 'Never played' },
+  { key: 'notInDiscord', label: 'Not in Discord' },
 ] as const;
 type SubTab = (typeof SUB_TABS)[number]['key'];
 
@@ -269,6 +318,7 @@ export function AdminReportsTab() {
       {sub === 'underrated' && <UnderratedSection />}
       {sub === 'notVerified' && <NotSteamVerifiedSection />}
       {sub === 'neverPlayed' && <VerifiedNeverPlayedSection />}
+      {sub === 'notInDiscord' && <NotInDiscordSection />}
     </div>
   );
 }

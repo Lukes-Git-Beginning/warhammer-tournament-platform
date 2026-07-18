@@ -70,6 +70,41 @@ async function discordRequest(
   });
 }
 
+/** True when the guild membership lookup is configured (bot token + guild id). */
+export function isGuildLookupConfigured(): boolean {
+  return !!process.env.DISCORD_GUILD_ID && !!getToken();
+}
+
+/**
+ * #47: given Discord user IDs, return the subset that are NOT members of the
+ * configured guild. Checks each via `GET /guilds/{guild}/members/{id}` (404 = not a
+ * member — the same call auth.ts uses on login). Only a hard 404 flags a non-member;
+ * rate-limits / errors are treated as "unknown" and skipped to avoid false positives.
+ * Returns null when the lookup isn't configured.
+ */
+export async function getNonGuildMemberIds(discordIds: string[]): Promise<Set<string> | null> {
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (!guildId || !getToken()) return null;
+
+  const notMembers = new Set<string>();
+  const CONCURRENCY = 8;
+  for (let i = 0; i < discordIds.length; i += CONCURRENCY) {
+    const batch = discordIds.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      batch.map(async (id) => {
+        try {
+          const resp = await discordRequest('GET', `/guilds/${guildId}/members/${id}`);
+          if (resp.status === 404) notMembers.add(id);
+          // 200 = member; 429/5xx → leave as unknown (don't flag).
+        } catch {
+          /* network error — skip */
+        }
+      }),
+    );
+  }
+  return notMembers;
+}
+
 /**
  * Open (or fetch existing) DM channel for a Discord user.
  * Returns the channel ID or null on failure.
