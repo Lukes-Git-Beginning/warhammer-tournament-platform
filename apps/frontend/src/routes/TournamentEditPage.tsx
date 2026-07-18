@@ -552,7 +552,11 @@ export function TournamentEditPage() {
   const canManage =
     !!user &&
     !!tournament &&
-    (user.role === 'MODERATOR' ||
+    // Co-hosts are covered by the server-computed can_manage flag. The tournament page
+    // shows them the Edit button, so the edit page must let them in too — otherwise the
+    // click just bounces straight back here ("nothing happens").
+    (!!tournament.can_manage ||
+      user.role === 'MODERATOR' ||
       user.role === 'ADMIN' ||
       (user.role === 'HOST' && tournament.host?.id === user.id));
 
