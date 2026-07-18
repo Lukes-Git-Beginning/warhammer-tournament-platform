@@ -2094,7 +2094,8 @@ export function transferTournamentOwner(slug: string, host_id: string): Promise<
   return apiFetch(`/api/tournaments/${slug}/transfer-owner`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ host_id }),
+    // Backend expects `new_host_id` (required); sending `host_id` failed body validation → 400.
+    body: JSON.stringify({ new_host_id: host_id }),
   });
 }
 
