@@ -169,6 +169,7 @@ export function TournamentCreateForm() {
     format: 'SINGLE_ELIMINATION',
     mode: 'BPT',
     timezone: defaultTimezone,
+    discord_link: 'https://discord.gg/MX3cs6gA54',
     start_date: nextRoundHour(),
     registration_deadline: nextRoundHour(),
     draft_enabled: false,
@@ -408,6 +409,9 @@ export function TournamentCreateForm() {
         </div>
       )}
 
+      {/* Poster at the very top (mirrors the Edit view). */}
+      <PosterPickField file={posterFile} onPick={setPosterFile} />
+
       <div>
         <Label htmlFor="tcf-name" required>
           {t('tournament.form.name')}
@@ -432,6 +436,29 @@ export function TournamentCreateForm() {
           rows={4}
           maxLength={5000}
           placeholder={t('tournament.form.description_placeholder')}
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="tcf-discord">{t('tournament.form.discord_link')}</Label>
+        <Input
+          id="tcf-discord"
+          name="discord_link"
+          value={form.discord_link ?? ''}
+          onChange={handleChange}
+          placeholder="https://discord.gg/…"
+        />
+        <FieldError message={errors.discord_link} />
+      </div>
+
+      <div>
+        <Label htmlFor="tcf-stream">Stream link (optional)</Label>
+        <Input
+          id="tcf-stream"
+          name="stream_url"
+          value={form.stream_url ?? ''}
+          onChange={handleChange}
+          placeholder="https://twitch.tv/…"
         />
       </div>
 
@@ -648,74 +675,6 @@ export function TournamentCreateForm() {
         </p>
         <AvailabilityHeatmap slots={heatmapData?.slots ?? []} userTimezone={me?.timezone ?? undefined} hue={199} />
       </div>
-
-      {/* ─── Rules (N17) ───────────────────────────────────────────────── */}
-      <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
-        <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">Rules</legend>
-
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            name="standard_rules_enabled"
-            checked={form.standard_rules_enabled ?? false}
-            onChange={handleChange}
-            className="accent-rizzotto-gold-400 h-4 w-4"
-          />
-          <span className="text-sm text-rizzotto-stone-300">Enable standard rules</span>
-        </label>
-        {form.standard_rules_enabled && <StandardRulesetCard compact />}
-
-        <div>
-          <Label htmlFor="tcf-rules">Custom Rules</Label>
-          <MarkdownEditor
-            id="tcf-rules"
-            name="rules"
-            value={form.rules ?? ''}
-            onChange={handleChange}
-            rows={6}
-            maxLength={10000}
-            placeholder={t('tournament.form.rules_placeholder')}
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="tcf-restrictions">Custom Restrictions</Label>
-          <MarkdownEditor
-            id="tcf-restrictions"
-            name="restrictions"
-            value={form.restrictions ?? ''}
-            onChange={handleChange}
-            rows={4}
-            maxLength={10000}
-            placeholder="Faction-specific house rules, list-submission notes, …"
-          />
-        </div>
-      </fieldset>
-
-      <div>
-        <Label htmlFor="tcf-discord">{t('tournament.form.discord_link')}</Label>
-        <Input
-          id="tcf-discord"
-          name="discord_link"
-          value={form.discord_link ?? ''}
-          onChange={handleChange}
-          placeholder="https://discord.gg/…"
-        />
-        <FieldError message={errors.discord_link} />
-      </div>
-
-      <div>
-        <Label htmlFor="tcf-stream">Stream link (optional)</Label>
-        <Input
-          id="tcf-stream"
-          name="stream_url"
-          value={form.stream_url ?? ''}
-          onChange={handleChange}
-          placeholder="https://twitch.tv/…"
-        />
-      </div>
-
-      <PosterPickField file={posterFile} onPick={setPosterFile} />
 
       {/* ─── Match Mechanics ───────────────────────────────────────────── */}
       <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
@@ -1121,6 +1080,49 @@ export function TournamentCreateForm() {
         {usesMapPool && (form.map_pool ?? []).length < minPool && (
           <FieldError message={`Select at least ${minPool} maps (${(form.map_pool ?? []).length} selected).`} />
         )}
+      </fieldset>
+
+      {/* ─── Rules (N17) — between the map pool and the faction pool ───── */}
+      <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+        <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">Rules</legend>
+
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            name="standard_rules_enabled"
+            checked={form.standard_rules_enabled ?? false}
+            onChange={handleChange}
+            className="accent-rizzotto-gold-400 h-4 w-4"
+          />
+          <span className="text-sm text-rizzotto-stone-300">Enable standard rules</span>
+        </label>
+        {form.standard_rules_enabled && <StandardRulesetCard compact />}
+
+        <div>
+          <Label htmlFor="tcf-rules">Custom Rules</Label>
+          <MarkdownEditor
+            id="tcf-rules"
+            name="rules"
+            value={form.rules ?? ''}
+            onChange={handleChange}
+            rows={6}
+            maxLength={10000}
+            placeholder={t('tournament.form.rules_placeholder')}
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="tcf-restrictions">Custom Restrictions</Label>
+          <MarkdownEditor
+            id="tcf-restrictions"
+            name="restrictions"
+            value={form.restrictions ?? ''}
+            onChange={handleChange}
+            rows={4}
+            maxLength={10000}
+            placeholder="Faction-specific house rules, list-submission notes, …"
+          />
+        </div>
       </fieldset>
 
       {/* ─── Faction Pool ──────────────────────────────────────────────── */}
