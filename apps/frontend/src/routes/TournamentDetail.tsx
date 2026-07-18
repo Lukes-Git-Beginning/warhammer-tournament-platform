@@ -384,6 +384,17 @@ export function TournamentDetail() {
               disabled={startMutation.isPending}
               className="rounded bg-rizzotto-gold-500 px-4 py-1.5 text-sm font-semibold text-rizzotto-iron-950 hover:bg-rizzotto-gold-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => {
+                // Soft minimum-participants check: warn the host, but let them start anyway.
+                const active = tournament.participantCount ?? 0;
+                if (
+                  tournament.min_participants &&
+                  active < tournament.min_participants &&
+                  !confirm(
+                    `Only ${active} of the minimum ${tournament.min_participants} participants are in. Start anyway?`,
+                  )
+                ) {
+                  return;
+                }
                 if (
                   confirm(
                     t('tournament.detail.start_tournament_confirm', { name: tournament.name }),
@@ -688,6 +699,12 @@ export function TournamentDetail() {
               <span className="text-stone-200">
                 {tournament.participantCount !== undefined ? `${tournament.participantCount} / ` : ''}{tournament.max_participants}
               </span>
+            </div>
+          )}
+          {tournament.min_participants && (
+            <div>
+              <span className="text-stone-500">Min. participants</span>{' '}
+              <span className="text-stone-200">{tournament.min_participants}</span>
             </div>
           )}
           {tournament.host && (

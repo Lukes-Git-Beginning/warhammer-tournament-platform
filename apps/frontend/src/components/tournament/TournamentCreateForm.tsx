@@ -24,6 +24,7 @@ const TournamentCreateSchema = z.object({
   start_date: z.string().min(1),
   timezone: z.string().min(1),
   max_participants: z.coerce.number().int().positive().optional().or(z.literal('')),
+  min_participants: z.coerce.number().int().positive().optional().or(z.literal('')),
   registration_deadline: z.string().optional(),
   rules: z.string().max(10000).optional(),
   standard_rules_enabled: z.boolean().default(true),
@@ -347,6 +348,7 @@ export function TournamentCreateForm() {
 
     const {
       max_participants,
+      min_participants,
       discord_link,
       stream_url,
       registration_deadline,
@@ -372,6 +374,7 @@ export function TournamentCreateForm() {
       ...rest,
       start_date: toIsoOrInvalid(start_date),
       ...(max_participants ? { max_participants: Number(max_participants) } : {}),
+      ...(min_participants ? { min_participants: Number(min_participants) } : {}),
       ...(discord_link ? { discord_link } : {}),
       ...(stream_url ? { stream_url } : {}),
       ...(registration_deadline
@@ -583,6 +586,7 @@ export function TournamentCreateForm() {
         </div>
       )}
 
+      {/* Start / deadline on the top row, min / max participants directly beneath each. */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="min-w-0">
           <Label htmlFor="tcf-start" required>
@@ -598,18 +602,30 @@ export function TournamentCreateForm() {
           <FieldError message={errors.start_date} />
         </div>
 
-      </div>
+        <div className="min-w-0">
+          <Label htmlFor="tcf-deadline">{t('tournament.form.registration_deadline')}</Label>
+          <Input
+            id="tcf-deadline"
+            type="datetime-local"
+            name="registration_deadline"
+            value={form.registration_deadline ?? ''}
+            onChange={handleChange}
+          />
+        </div>
 
-      {/* N8: general availability heatmap to help the host pick a start time */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-stone-300">When are players usually around?</p>
-        <p className="text-xs text-stone-500">
-          Community availability — brighter means more players have marked this time as free. Pick a start time when most can attend.
-        </p>
-        <AvailabilityHeatmap slots={heatmapData?.slots ?? []} userTimezone={me?.timezone ?? undefined} hue={199} />
-      </div>
+        <div className="min-w-0">
+          <Label htmlFor="tcf-min">Min. participants</Label>
+          <Input
+            id="tcf-min"
+            type="number"
+            name="min_participants"
+            value={form.min_participants ?? ''}
+            onChange={handleChange}
+            min={2}
+            placeholder="e.g. 8"
+          />
+        </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="min-w-0">
           <Label htmlFor="tcf-max">{t('tournament.form.max_participants')}</Label>
           <Input
@@ -622,17 +638,15 @@ export function TournamentCreateForm() {
             placeholder={t('tournament.form.max_participants_placeholder')}
           />
         </div>
+      </div>
 
-        <div className="min-w-0">
-          <Label htmlFor="tcf-deadline">{t('tournament.form.registration_deadline')}</Label>
-          <Input
-            id="tcf-deadline"
-            type="datetime-local"
-            name="registration_deadline"
-            value={form.registration_deadline ?? ''}
-            onChange={handleChange}
-          />
-        </div>
+      {/* General availability heatmap to help the host pick a start time */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-stone-300">When are players usually around?</p>
+        <p className="text-xs text-stone-500">
+          Community availability — brighter means more players have marked this time as free. Pick a start time when most can attend.
+        </p>
+        <AvailabilityHeatmap slots={heatmapData?.slots ?? []} userTimezone={me?.timezone ?? undefined} hue={199} />
       </div>
 
       {/* ─── Rules (N17) ───────────────────────────────────────────────── */}

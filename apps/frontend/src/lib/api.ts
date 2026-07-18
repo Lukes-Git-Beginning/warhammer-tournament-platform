@@ -68,6 +68,7 @@ export interface Tournament {
   start_date: string;
   timezone: string;
   max_participants: number | null;
+  min_participants: number | null;
   registration_deadline: string | null;
   rules: string | null;
   standard_rules_enabled?: boolean;
@@ -184,6 +185,7 @@ export interface TournamentCreate {
   start_date: string;
   timezone: string;
   max_participants?: number;
+  min_participants?: number;
   registration_deadline?: string;
   rules?: string;
   discord_link?: string;
@@ -221,6 +223,7 @@ export interface TournamentPatchInput {
   timezone?: string;
   registration_deadline?: string | null;
   max_participants?: number | null;
+  min_participants?: number | null;
   visibility?: 'PUBLIC' | 'PRIVATE';
   status?: Tournament['status'];
   draft_enabled?: boolean;

@@ -300,6 +300,7 @@ model Tournament {
   status                 TournamentStatus     @default(DRAFT)
   visibility             TournamentVisibility @default(PUBLIC)
   max_participants       Int?
+  min_participants       Int? // soft target: warn (not block) the host on start if fewer are in
   start_date             DateTime
   timezone               String // IANA
   registration_deadline  DateTime?

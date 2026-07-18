@@ -67,6 +67,7 @@ type EditFormData = {
   start_date: string;
   registration_deadline: string;
   max_participants: number | '';
+  min_participants: number | '';
   rounds_count: number;
   playoff_format: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   has_third_place_match: boolean;
@@ -225,6 +226,7 @@ function buildInitialForm(t: Tournament): EditFormData {
     start_date: isoToLocalInput(t.start_date),
     registration_deadline: isoToLocalInput(t.registration_deadline),
     max_participants: t.max_participants ?? '',
+    min_participants: t.min_participants ?? '',
     rounds_count: t.rounds_count ?? 5,
     playoff_format: t.playoff_format ?? 'NONE',
     has_third_place_match: t.has_third_place_match ?? false,
@@ -296,6 +298,9 @@ function buildPatchBody(
 
   const maxNorm = form.max_participants === '' ? null : Number(form.max_participants);
   if (maxNorm !== (current.max_participants ?? null)) body.max_participants = maxNorm;
+
+  const minNorm = form.min_participants === '' ? null : Number(form.min_participants);
+  if (minNorm !== (current.min_participants ?? null)) body.min_participants = minNorm;
 
   if (form.rounds_count !== (current.rounds_count ?? 5)) body.rounds_count = form.rounds_count;
   if (form.playoff_format !== (current.playoff_format ?? 'NONE')) body.playoff_format = form.playoff_format;
@@ -892,8 +897,22 @@ export function TournamentEditPage() {
           </div>
         </div>
 
-        {/* ── Capacity ──────────────────────────────────────────────────── */}
+        {/* ── Capacity — min beneath start, max beneath deadline ─────────── */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="min-w-0">
+            <Label htmlFor="tef-min">Min. participants</Label>
+            <Input
+              id="tef-min"
+              type="number"
+              name="min_participants"
+              value={form.min_participants ?? ''}
+              onChange={handleChange}
+              min={2}
+              placeholder="e.g. 8"
+              disabled={ongoingLocked}
+            />
+            {ongoingLocked && <LockNote>Locked — tournament is underway</LockNote>}
+          </div>
           <div className="min-w-0">
             <Label htmlFor="tef-max">{t('tournament.form.max_participants')}</Label>
             <Input
