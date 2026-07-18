@@ -198,6 +198,21 @@ export function getFinalistIds(matches: BracketNode[]): Set<string> {
 }
 
 /**
+ * Returns the IDs of division champions — the winner of each completed PLAYOFF_FINAL.
+ * For Balanced Liechtenstein this yields one champion per division; for a single
+ * bracket it yields the tournament winner. Used to mark the actual winner (not just
+ * "Finalist") in the standings.
+ */
+export function getChampionIds(matches: BracketNode[]): Set<string> {
+  return new Set(
+    matches
+      .filter((m) => m.phase === 'PLAYOFF_FINAL' && m.status === 'COMPLETED' && m.winnerId)
+      .map((m) => m.winnerId)
+      .filter((id): id is string => id !== null),
+  );
+}
+
+/**
  * Returns the IDs of confirmed Semifinal qualifiers (QF winners).
  * Only meaningful for TOP8 format — for TOP4 the SF field is seeded directly.
  * Falls back to SF match participants when SF matches already exist.

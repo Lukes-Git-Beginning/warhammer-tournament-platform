@@ -5,7 +5,7 @@ import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import type { FactionDto } from '@rizzotto/types';
 import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, addThirdPlaceMatch, getFactions, patchTournament, fillByeMatch, deleteMatch } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
-import { sortStandingsByPlayoffResult, getFinalistIds, getBalancedTopDivisionPodium } from '@/lib/bracketStandings';
+import { sortStandingsByPlayoffResult, getFinalistIds, getChampionIds, getBalancedTopDivisionPodium } from '@/lib/bracketStandings';
 import { computeBracketLayout } from './computeBracketLayout';
 import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
@@ -68,6 +68,11 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
 
   const finalistIds = useMemo(
     () => getFinalistIds(data?.matches ?? []),
+    [data?.matches],
+  );
+
+  const championIds = useMemo(
+    () => getChampionIds(data?.matches ?? []),
     [data?.matches],
   );
 
@@ -320,6 +325,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           tournamentMode={data.mode}
           playoffFormat={playoffFormat}
           finalistIds={format === 'BALANCED_LIECHTENSTEIN' ? divisionFinalistIds : finalistIds}
+          championIds={championIds}
           podium={balancedPodium}
           tournamentSlug={slug}
           canManage={canManage}

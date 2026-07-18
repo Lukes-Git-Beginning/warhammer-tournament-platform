@@ -28,6 +28,8 @@ interface SwissStandingsProps {
   playoffFormat?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' | null;
   /** Players who have advanced to the Grand Final (from PLAYOFF_FINAL match) */
   finalistIds?: ReadonlySet<string>;
+  /** Division champions — the winner of each PLAYOFF_FINAL (shown as "Champion", not "Finalist"). */
+  championIds?: ReadonlySet<string>;
   /** Balanced Liechtenstein: tournament podium (top division's playoff) — userId →
    *  1|2|3. When set, drives the placement badge instead of the group rank. */
   podium?: ReadonlyMap<string, 1 | 2 | 3>;
@@ -89,6 +91,7 @@ export function SwissStandings({
   tournamentMode,
   playoffFormat,
   finalistIds,
+  championIds,
   podium,
   semifinalistIds,
   tournamentSlug,
@@ -197,6 +200,7 @@ export function SwissStandings({
       const faction = factionId ? factionMap?.get(factionId) : undefined;
       const factionPool = is2D3 ? (playerFactionPoolMap?.get(entry.userId) ?? []) : [];
       const isFinalist = finalistIds?.has(entry.userId);
+      const isChampion = championIds?.has(entry.userId);
       const participantStatus = participantStatusMap?.get(entry.userId);
       const isDropped = entry.dropped === true || participantStatus === 'WITHDREW';
       // Only flag as "never checked in" if REGISTERED AND has no match history.
@@ -253,13 +257,13 @@ export function SwissStandings({
                     {badge.label}
                   </span>
                 )}
-                {/* Finalist star badge (BALANCED_LIECHTENSTEIN Division Finals) */}
+                {/* Division champion / finalist badge (BALANCED_LIECHTENSTEIN Division Finals) */}
                 {isFinalist && (
                   <span
-                    className="ml-0.5 rounded border px-1.5 py-px text-[10px] font-bold uppercase tracking-wider text-rizzotto-gold-400 border-rizzotto-gold-500/50 bg-rizzotto-gold-500/10"
-                    title="Division Finalist"
+                    className={`ml-0.5 rounded border px-1.5 py-px text-[10px] font-bold uppercase tracking-wider text-rizzotto-gold-400 border-rizzotto-gold-500/50 ${isChampion ? 'bg-rizzotto-gold-500/20' : 'bg-rizzotto-gold-500/10'}`}
+                    title={isChampion ? 'Division Champion' : 'Division Finalist'}
                   >
-                    ★ Finalist
+                    {isChampion ? '🏆 Champion' : '★ Finalist'}
                   </span>
                 )}
                 {/* Band badge — shown in non-balanced mode only (in balanced, the section header carries the band) */}

@@ -131,7 +131,7 @@ export function CalendarPage() {
             onChange={(e) => setMajorOnly(e.target.checked)}
             className="accent-rizzotto-gold-500 size-4 cursor-pointer rounded"
           />
-          Nur Majors
+          Majors only
         </label>
 
         {/* Spacer */}

@@ -395,6 +395,21 @@ export function TournamentDetail() {
                 ) {
                   return;
                 }
+                // Z50: surface the check-in count so non-checked-in players aren't left out silently.
+                const parts = participantsData?.data ?? [];
+                const checkedIn = parts.filter((p) => p.status === 'CHECKED_IN').length;
+                const registered = parts.filter(
+                  (p) => p.status === 'REGISTERED' || p.status === 'CHECKED_IN',
+                ).length;
+                if (
+                  checkedIn > 0 &&
+                  checkedIn < registered &&
+                  !confirm(
+                    `${checkedIn} of ${registered} registered players have checked in. Players who haven't checked in may be left out. Start anyway?`,
+                  )
+                ) {
+                  return;
+                }
                 if (
                   confirm(
                     t('tournament.detail.start_tournament_confirm', { name: tournament.name }),
