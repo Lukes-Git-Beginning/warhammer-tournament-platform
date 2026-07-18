@@ -113,17 +113,17 @@ function MatchupGrid({ rows, factionMap, onSelectOpponent }: { rows: MatchupRow[
   return (
     <div className="space-y-0">
       <div className="flex items-center gap-2 pb-2 border-b border-stone-800">
-        <SortTh label="Opponent" col="name" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="flex-1" />
-        <SortTh label="W" col="wins" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-8 justify-end" />
-        <SortTh label="L" col="losses" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-8 justify-end" />
-        <SortTh label="Total" col="total" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-10 justify-end" />
+        <SortTh label="Opponent" col="name" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="flex-1 min-w-0" />
+        <SortTh label="W" col="wins" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-7 shrink-0 justify-end" />
+        <SortTh label="L" col="losses" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-7 shrink-0 justify-end" />
+        <SortTh label="Total" col="total" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-10 shrink-0 justify-end" />
         <span
-          className="w-[64px] text-right text-[10px] uppercase tracking-wider text-stone-500"
+          className="w-14 shrink-0 text-right text-[10px] uppercase tracking-wider text-stone-500"
           title="Model favourability — this faction's win-chance vs the opponent at EQUAL player skill (opponent strength removed). Raw Win Rate is not skill-adjusted."
         >
-          Favour.
+          Fav.
         </span>
-        <SortTh label="Win Rate" col="winRate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-[140px] justify-end" />
+        <SortTh label="Win Rate" col="winRate" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="w-[128px] shrink-0 justify-end" />
       </div>
       {sorted.map((row) => {
         const faction = factionMap.get(row.factionId);
@@ -144,13 +144,23 @@ function MatchupGrid({ rows, factionMap, onSelectOpponent }: { rows: MatchupRow[
                 <span className="text-xs text-stone-500">{row.factionId}</span>
               )}
               {row.isMirror && (
-                <span className="text-[9px] uppercase tracking-wider text-stone-600 border border-stone-700 rounded px-1">Mirror</span>
+                <span className="text-[9px] uppercase tracking-wider text-stone-600 border border-stone-700 rounded px-1 shrink-0">Mirror</span>
+              )}
+              {onSelectOpponent && !row.isMirror && (
+                <button
+                  type="button"
+                  title={`Filter replays: vs ${faction?.name ?? row.factionId}`}
+                  onClick={() => onSelectOpponent(row.factionId)}
+                  className="shrink-0 text-[9px] text-stone-600 hover:text-rizzotto-gold-400 transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  replays
+                </button>
               )}
             </div>
-            <span className="w-8 text-right text-xs text-emerald-400">{row.isMirror ? '—' : row.wins}</span>
-            <span className="w-8 text-right text-xs text-red-400">{row.isMirror ? '—' : row.losses}</span>
-            <span className="w-10 text-right text-xs text-stone-500">{row.isMirror ? '—' : row.total}</span>
-            <span className="w-[64px] text-right text-xs">
+            <span className="w-7 shrink-0 text-right text-xs text-emerald-400">{row.isMirror ? '—' : row.wins}</span>
+            <span className="w-7 shrink-0 text-right text-xs text-red-400">{row.isMirror ? '—' : row.losses}</span>
+            <span className="w-10 shrink-0 text-right text-xs text-stone-500">{row.isMirror ? '—' : row.total}</span>
+            <span className="w-14 shrink-0 text-right text-xs">
               {row.isMirror || row.favWinChance === null ? (
                 <span className="text-stone-600">—</span>
               ) : (
@@ -159,23 +169,11 @@ function MatchupGrid({ rows, factionMap, onSelectOpponent }: { rows: MatchupRow[
                 </span>
               )}
             </span>
-            <div className="w-[140px] flex justify-end items-center gap-1">
+            <div className="w-[128px] shrink-0 flex justify-end items-center">
               {row.isMirror ? (
                 <span className="text-xs text-stone-600">—</span>
               ) : (
-                <>
-                  <WinRateBar rate={row.winRate} />
-                  {onSelectOpponent && (
-                    <button
-                      type="button"
-                      title={`Filter replays: vs ${faction?.name ?? row.factionId}`}
-                      onClick={() => onSelectOpponent(row.factionId)}
-                      className="ml-1 text-[9px] text-stone-600 hover:text-rizzotto-gold-400 transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      replays
-                    </button>
-                  )}
-                </>
+                <WinRateBar rate={row.winRate} />
               )}
             </div>
           </div>
