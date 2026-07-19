@@ -122,11 +122,14 @@ export async function applyBalancedStartConfig(
 
   const config = autoSwissConfig(count);
   const rounds = config?.rounds ?? Math.max(1, Math.min(3, count - 1));
-  const playoffFormat = config?.playoffFormat ?? 'TOP2';
 
+  // Auto-sizing owns ONLY the round count for Balanced Liechtenstein. The playoff
+  // size drives division formation (homogeneous band-pure divisions vs. few large
+  // mixed brackets), which is a deliberate host choice — not a function of the head
+  // count. Leave playoff_format at the host's stored value.
   await fastify.prisma.tournament.update({
     where: { id: tournamentId },
-    data: { rounds_count: rounds, playoff_format: playoffFormat },
+    data: { rounds_count: rounds },
   });
 }
 
@@ -447,7 +450,7 @@ export async function admitBalancedLateJoiner(
   // Step 2 — compute entry round A.
   const allMatches = await fastify.prisma.match.findMany({
     where: { tournament_id: tournamentId, deleted_at: null },
-    select: { round: true, status: true, match_number: true },
+    select: { round: true, status: true, match_number: true, player1_id: true, player2_id: true },
   });
 
   const frontier = allMatches.reduce((mx, m) => Math.max(mx, m.round), 0);
@@ -465,8 +468,17 @@ export async function admitBalancedLateJoiner(
   // free scored bye, #5). Rounds 1..A-1 become 0-point CATCHUP_BYE placeholders.
   const A = Math.min(Math.max(frontier, 1), roundsCount);
 
-  // Step 3 — create A-1 CATCHUP_BYE rows for rounds 1..A-1.
+  // Step 3 — create CATCHUP_BYE rows for rounds 1..A-1, but ONLY where this player has
+  // no node yet. A returning drop (undrop mid-event) already holds real matches for the
+  // rounds they played, so we backfill just the gaps — never duplicating an already-played
+  // round. This keeps the backfill idempotent and safe to reuse from both late-join and
+  // undrop (e.g. play R1, drop, return at R6 → only R2..R5 get catch-up byes).
   if (A > 1) {
+    const playedRounds = new Set(
+      allMatches
+        .filter((m) => m.player1_id === userId || m.player2_id === userId)
+        .map((m) => m.round),
+    );
     let next = allMatches.reduce((mx, m) => Math.max(mx, m.match_number), 0) + 1;
     const rows: Array<{
       tournament_id: string;
@@ -479,6 +491,7 @@ export async function admitBalancedLateJoiner(
       phase: null;
     }> = [];
     for (let r = 1; r < A; r++) {
+      if (playedRounds.has(r)) continue; // already has a node this round — don't duplicate
       rows.push({
         tournament_id: tournamentId,
         round: r,
@@ -490,7 +503,7 @@ export async function admitBalancedLateJoiner(
         phase: null,
       });
     }
-    await fastify.prisma.match.createMany({ data: rows });
+    if (rows.length > 0) await fastify.prisma.match.createMany({ data: rows });
   }
 
   // Step 4 — trigger pairing tick (pairs the late joiner from round A onward).

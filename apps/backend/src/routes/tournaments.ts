@@ -431,13 +431,12 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const isAutoSwiss = data.format === 'AUTO_SWISS';
       const isBalanced = data.format === 'BALANCED_LIECHTENSTEIN';
-      // Balanced Liechtenstein auto-sizes its round count + playoff size from the
-      // check-in count at start (applyBalancedStartConfig), unless the host opts
-      // out via auto_sizing=false for a fixed-round tournament. Auto-sizing
-      // defaults ON for Balanced. Match format is host-configurable (unlike Auto
-      // Swiss, which forces BO1). Its playoff bracket is always per-division, so
-      // the stored playoff_format is only a cosmetic "playoffs exist" flag.
-      // Map decision stays host-configurable for Balanced (unlike Auto Swiss).
+      // Balanced Liechtenstein auto-sizes only its ROUND COUNT from the check-in count
+      // at start (applyBalancedStartConfig), unless the host opts out via auto_sizing=false.
+      // Auto-sizing defaults ON for Balanced. The PLAYOFF SIZE is always the host's choice
+      // (it drives division formation — homogeneous band-pure vs. few large mixed brackets)
+      // and is stored verbatim. Match format + map decision stay host-configurable (unlike
+      // Auto Swiss, which forces BO1 / RANDOM_PICK_BAN).
       const balancedAutoSized = isBalanced && (data.auto_sizing ?? true);
       const autoSized = isAutoSwiss || balancedAutoSized;
 
@@ -469,7 +468,11 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           host_id: request.user.sub,
           // Welle 2
           rounds_count: autoSized ? undefined : data.rounds_count,
-          playoff_format: autoSized ? undefined : isBalanced ? 'TOP4' : data.playoff_format,
+          // BaLi: the playoff size is a host choice (it drives division formation —
+          // homogeneous vs. merged) and is no longer auto-derived, so store the host's
+          // value verbatim. Auto Swiss still drops it (derived at start). Other formats
+          // keep the host value unless auto-sized.
+          playoff_format: isBalanced ? data.playoff_format : autoSized ? undefined : data.playoff_format,
           // #37: opt-in auto-sizing / auto-advancement (any format). Balanced
           // defaults auto-sizing ON; every other format defaults OFF.
           auto_sizing: isBalanced ? (data.auto_sizing ?? true) : (data.auto_sizing ?? false),

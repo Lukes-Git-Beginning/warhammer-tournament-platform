@@ -296,12 +296,18 @@ export function TournamentCreateForm() {
               playoff_match_format: 'BO3',
               finale_match_format: 'BO3',
               auto_sizing: value === 'BALANCED_LIECHTENSTEIN',
+              // BaLi playoff size is a host choice (division formation), no longer
+              // auto-derived — default it to homogeneous Top 2 on format select.
+              ...(value === 'BALANCED_LIECHTENSTEIN' ? { playoff_format: 'TOP2' as const } : {}),
             }
           : {
               finale_match_format: value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO1',
               // Balanced Liechtenstein auto-sizes by default; every other format
               // starts with auto-sizing off (the host opts in via the checkbox).
               auto_sizing: value === 'BALANCED_LIECHTENSTEIN',
+              // BaLi playoff size is a host choice (division formation), no longer
+              // auto-derived — default it to homogeneous Top 2 on format select.
+              ...(value === 'BALANCED_LIECHTENSTEIN' ? { playoff_format: 'TOP2' as const } : {}),
             }
         : {}),
       ...(name === 'mode' && value === 'ONE_V_THREE'
@@ -708,13 +714,15 @@ export function TournamentCreateForm() {
               <FieldHint>Number of rounds (3–8). All rounds pre-generated randomly at start. Default: 5.</FieldHint>
             </div>}
 
-            {/* Playoff format + third-place — hidden for Balanced Liechtenstein (sized per skill
-                division automatically) AND whenever auto-sizing is on (#16). */}
-            {!isBalanced && !form.auto_sizing && (
+            {/* Playoff format + third-place. For Balanced Liechtenstein the host picks the
+                playoff SIZE (which drives division formation: homogeneous vs. merged) — shown
+                even with auto-sizing on, since auto-sizing only controls the round count there.
+                For other formats the block is hidden while auto-sizing is on (#16). */}
+            {(isBalanced || !form.auto_sizing) && (
               <>
             {/* Playoff format */}
             <div>
-              <Label htmlFor="tcf-playoff">Playoff Format</Label>
+              <Label htmlFor="tcf-playoff">{isBalanced ? 'Playoff Size' : 'Playoff Format'}</Label>
               <div className="flex gap-3 mt-1 flex-wrap">
                 {(['NONE', 'TOP2', 'TOP4', 'TOP8'] as const).map((opt) => (
                   <label key={opt} className="flex items-center gap-2 cursor-pointer">
@@ -730,16 +738,27 @@ export function TournamentCreateForm() {
                   </label>
                 ))}
               </div>
-              {form.playoff_format === 'TOP8' && (
-                <FieldHint>TOP8 requires ≥16 participants at playoff start. Auto-falls back to TOP4 if below threshold.</FieldHint>
-              )}
-              {form.playoff_format === 'TOP4' && (
-                <FieldHint>TOP4 requires ≥8 participants at playoff start. Auto-falls back to TOP2 if below threshold.</FieldHint>
+              {isBalanced ? (
+                <FieldHint>
+                  Controls how playoff divisions are formed. Smaller (Top 2) keeps them band-pure —
+                  homogeneous playoffs; a band with 8+ players still gets its own Top 4. Larger (Top 8)
+                  merges bands into a few big, mixed brackets.
+                </FieldHint>
+              ) : (
+                <>
+                  {form.playoff_format === 'TOP8' && (
+                    <FieldHint>TOP8 requires ≥16 participants at playoff start. Auto-falls back to TOP4 if below threshold.</FieldHint>
+                  )}
+                  {form.playoff_format === 'TOP4' && (
+                    <FieldHint>TOP4 requires ≥8 participants at playoff start. Auto-falls back to TOP2 if below threshold.</FieldHint>
+                  )}
+                </>
               )}
             </div>
 
-            {/* Third-place match — only when playoffs are enabled (SE uses its own below) */}
-            {form.playoff_format && form.playoff_format !== 'NONE' && (
+            {/* Third-place match — only when playoffs are enabled (SE uses its own below).
+                Balanced Liechtenstein runs a third-place match per division automatically. */}
+            {!isBalanced && form.playoff_format && form.playoff_format !== 'NONE' && (
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"

@@ -97,12 +97,17 @@ export async function reapplyDynamicSizing(
     .reduce((max, m) => Math.max(max, m.round), 0);
 
   const { rounds, playoffFormat } = computeDynamicSize(active, currentRound);
-  if (rounds === (t.rounds_count ?? 0) && playoffFormat === t.playoff_format) return false;
+  // Balanced Liechtenstein: auto-sizing owns only the round count. Its playoff size
+  // drives division formation (homogeneous band-pure vs. few large mixed brackets) and
+  // stays the host's choice. Auto Swiss + auto-sized Swiss keep deriving both.
+  const nextPlayoffFormat =
+    t.format === 'BALANCED_LIECHTENSTEIN' ? t.playoff_format : playoffFormat;
+  if (rounds === (t.rounds_count ?? 0) && nextPlayoffFormat === t.playoff_format) return false;
 
   await prisma.tournament.update({
     where: { id: tournamentId },
     // Flag the change so the round-advance flow DMs players once, at round-end.
-    data: { rounds_count: rounds, playoff_format: playoffFormat, pending_resize_notice: true },
+    data: { rounds_count: rounds, playoff_format: nextPlayoffFormat, pending_resize_notice: true },
   });
   return true;
 }

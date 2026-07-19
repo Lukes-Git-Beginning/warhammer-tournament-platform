@@ -1134,7 +1134,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findUnique({
         where: { slug, deleted_at: null },
-        select: { id: true, status: true, host_id: true },
+        select: { id: true, status: true, host_id: true, format: true },
       });
       if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       // N13: undrop must also work before the tournament starts (a player can
@@ -1208,6 +1208,35 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'registered' });
       if (droppedPlayoffMatches.length > 0) {
         emitBracketUpdate(fastify.io, tournament.id);
+      }
+
+      // If the group / Swiss phase is still running (no playoffs generated yet), fold the
+      // returning player back in exactly like a late join: backfill 0-point CATCHUP_BYE
+      // placeholders for the rounds they missed while dropped (the backfill skips rounds they
+      // already played) and re-pair them. Once the playoffs exist, the playoff-match restore
+      // above is the correct path and this admission must NOT run — admitBalancedLateJoiner
+      // would misread the frontier from playoff rounds. Non-fatal.
+      if (tournament.status === 'ONGOING') {
+        const playoffMatchCount = await fastify.prisma.match.count({
+          where: {
+            tournament_id: tournament.id,
+            deleted_at: null,
+            phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] },
+          },
+        });
+        if (playoffMatchCount === 0) {
+          try {
+            if (tournament.format === 'BALANCED_LIECHTENSTEIN') {
+              await admitBalancedLateJoiner(fastify, tournament.id, userId);
+              emitBracketUpdate(fastify.io, tournament.id);
+            } else {
+              const bye = await createLateJoinerBye(fastify.prisma, tournament.id, userId);
+              if (bye) emitBracketUpdate(fastify.io, tournament.id);
+            }
+          } catch (err) {
+            request.log.warn({ err, slug }, 'Failed to re-admit undropped player into the group phase');
+          }
+        }
       }
 
       return reply.code(200).send({ undroped: true, matchesRestored: droppedPlayoffMatches.length });

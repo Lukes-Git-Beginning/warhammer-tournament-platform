@@ -1079,6 +1079,34 @@ export function TournamentEditPage() {
                 </div>
               )}
 
+              {/* Playoff size drives division formation (homogeneous vs. merged) — the
+                  host's choice, shown even while auto-sizing is on (which now only controls
+                  the round count for BaLi). */}
+              <div>
+                <Label>Playoff Size</Label>
+                <div className="flex gap-3 mt-1 flex-wrap">
+                  {(['NONE', 'TOP2', 'TOP4', 'TOP8'] as const).map((opt) => (
+                    <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="playoff_format"
+                        value={opt}
+                        checked={(form.playoff_format ?? 'NONE') === opt}
+                        onChange={handleChange}
+                        disabled={ongoingLocked}
+                        className="accent-rizzotto-gold-400 disabled:opacity-50"
+                      />
+                      <span className="text-sm text-rizzotto-stone-300">{opt}</span>
+                    </label>
+                  ))}
+                </div>
+                <FieldHint>
+                  Controls how playoff divisions are formed. Smaller (Top 2) keeps them band-pure —
+                  homogeneous playoffs; a band with 8+ players still gets its own Top 4. Larger (Top 8)
+                  merges bands into a few big, mixed brackets.
+                </FieldHint>
+              </div>
+
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <Label htmlFor="tef-bali-swiss-fmt">Group Format</Label>
@@ -1108,7 +1136,7 @@ export function TournamentEditPage() {
               </div>
 
               <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-3 text-sm text-rizzotto-stone-300">
-                <p>Players are paired within their own skill division each round. When the group stage ends, every division runs its own playoff bracket sized to that division (TOP 2 / 4 / 8, each with a third-place match).</p>
+                <p>Players are paired within their own skill division each round. When the group stage ends, each division runs its own playoff bracket (with a third-place match). The playoff size above controls how divisions are formed — smaller keeps them band-pure, larger merges them into fewer, bigger mixed brackets.</p>
               </div>
             </>
           ) : !isAutoSwiss ? (
