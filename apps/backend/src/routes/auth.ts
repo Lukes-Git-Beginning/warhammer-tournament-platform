@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import fastifyOauth2 from '@fastify/oauth2';
 import type { Role, JwtPayload } from '@rizzotto/types';
+import { resolveGuildId } from '../lib/discord-notify.js';
 
 const DISCORD_USERINFO_URL = 'https://discord.com/api/users/@me';
 
@@ -118,14 +119,16 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         }),
       ]);
 
-      // Silently add the user to the RizzOttoverse Discord server if they aren't
-      // already a member. Requires guilds.join scope + DISCORD_GUILD_ID env var.
-      // Fire-and-forget: failure must never block the login flow.
-      const guildId = process.env.DISCORD_GUILD_ID;
+      // Silently add the user to the RizzOttoverse Discord server if they aren't already
+      // a member. Requires guilds.join scope + a resolvable guild id (env override or
+      // auto-detected from the bot token). Fire-and-forget: the guild resolution + calls
+      // run inside the async IIFE so they never add latency to the login flow.
       const botToken = process.env.DISCORD_BOT_TOKEN;
-      if (guildId && botToken) {
+      if (botToken) {
         void (async () => {
           try {
+            const guildId = await resolveGuildId();
+            if (!guildId) return;
             // Check membership first — skip the add call if already a member (204).
             const memberCheck = await fetch(
               `https://discord.com/api/guilds/${guildId}/members/${profile.id}`,

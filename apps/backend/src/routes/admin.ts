@@ -809,7 +809,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // users who are NOT members of the configured Discord guild — an invite list.
   // Requires DISCORD_GUILD_ID + bot token; returns { configured: false } otherwise.
   fastify.get('/api/admin/reports/not-in-discord', async () => {
-    if (!isGuildLookupConfigured()) {
+    if (!(await isGuildLookupConfigured())) {
       return { configured: false, users: [] as unknown[] };
     }
     const users = await fastify.prisma.user.findMany({

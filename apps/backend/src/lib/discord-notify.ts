@@ -70,9 +70,40 @@ async function discordRequest(
   });
 }
 
-/** True when the guild membership lookup is configured (bot token + guild id). */
-export function isGuildLookupConfigured(): boolean {
-  return !!process.env.DISCORD_GUILD_ID && !!getToken();
+// RizzOttoverse Discord server — the fallback guild used when DISCORD_GUILD_ID is unset
+// and the bot's guild list is ambiguous. Overridable at any time via the env var.
+const DEFAULT_GUILD_ID = '1445915589418946572';
+
+let cachedGuildId: string | null | undefined;
+
+/**
+ * The Discord guild to operate on. Resolution order: explicit DISCORD_GUILD_ID env
+ * override → the sole guild the bot is a member of (auto-detected via the bot token) →
+ * the known RizzOttoverse id. Returns null only when there is no bot token at all. A
+ * successful auto-detection is cached; the last-resort constant is not, so a later call
+ * can still refine it once the API responds.
+ */
+export async function resolveGuildId(): Promise<string | null> {
+  const explicit = process.env.DISCORD_GUILD_ID?.trim();
+  if (explicit) return explicit;
+  if (cachedGuildId) return cachedGuildId;
+  if (!getToken()) return null;
+  try {
+    const resp = await discordRequest('GET', '/users/@me/guilds');
+    if (resp.ok) {
+      const guilds = (await resp.json()) as Array<{ id: string }>;
+      if (guilds.length === 1) return (cachedGuildId = guilds[0]!.id);
+      if (guilds.some((g) => g.id === DEFAULT_GUILD_ID)) return (cachedGuildId = DEFAULT_GUILD_ID);
+    }
+  } catch {
+    /* network hiccup — fall through to the constant */
+  }
+  return DEFAULT_GUILD_ID;
+}
+
+/** True when the guild membership lookup is usable (a guild id resolves + bot token set). */
+export async function isGuildLookupConfigured(): Promise<boolean> {
+  return (await resolveGuildId()) !== null;
 }
 
 /**
@@ -83,8 +114,8 @@ export function isGuildLookupConfigured(): boolean {
  * Returns null when the lookup isn't configured.
  */
 export async function getNonGuildMemberIds(discordIds: string[]): Promise<Set<string> | null> {
-  const guildId = process.env.DISCORD_GUILD_ID;
-  if (!guildId || !getToken()) return null;
+  const guildId = await resolveGuildId();
+  if (!guildId) return null;
 
   const notMembers = new Set<string>();
   const CONCURRENCY = 8;
