@@ -28,6 +28,7 @@ import { WeekAvailabilityGrid } from '../components/open-play/WeekAvailabilityGr
 import { AvailabilityHeatmap } from '../components/open-play/AvailabilityHeatmap';
 import { ChallengeCalendar } from '../components/open-play/ChallengeCalendar';
 import { StandardRulesetCard } from '../components/tournament/StandardRulesetCard';
+import { PageBackdrop } from '../components/layout/PageBackdrop';
 
 type Tab = 'queue' | 'availability' | 'challenges';
 
@@ -74,6 +75,7 @@ export function OpenPlayPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
+      <PageBackdrop />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-stone-100">Open Play</h1>
