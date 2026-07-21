@@ -7,7 +7,7 @@ export interface PageBackdropProps {
 }
 
 export function PageBackdrop({
-  src = '/img/inner-page-atmosphere',
+  src = '/img/inner-page-atmosphere-v2',
   opacity = 0.32,
 }: PageBackdropProps) {
   const [hasError, setHasError] = useState(false);
