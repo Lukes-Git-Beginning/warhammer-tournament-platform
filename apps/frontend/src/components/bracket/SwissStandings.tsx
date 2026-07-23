@@ -33,6 +33,9 @@ interface SwissStandingsProps {
   /** Balanced Liechtenstein: tournament podium (top division's playoff) — userId →
    *  1|2|3. When set, drives the placement badge instead of the group rank. */
   podium?: ReadonlyMap<string, 1 | 2 | 3>;
+  /** Balanced Liechtenstein: userId → the band of the division whose FINAL they reached.
+   *  Tints the finalist banner to that division's colour (shows a borrowed play-up). */
+  finalDivisionBandByUser?: ReadonlyMap<string, number>;
   /** Players who have qualified for the Semifinals (QF winners — TOP8 only) */
   semifinalistIds?: Set<string>;
   /** Tournament slug — enables drop/undrop buttons when set */
@@ -93,6 +96,7 @@ export function SwissStandings({
   finalistIds,
   championIds,
   podium,
+  finalDivisionBandByUser,
   semifinalistIds,
   tournamentSlug,
   canManage = false,
@@ -257,15 +261,25 @@ export function SwissStandings({
                     {badge.label}
                   </span>
                 )}
-                {/* Division champion / finalist badge (BALANCED_LIECHTENSTEIN Division Finals) */}
-                {isFinalist && (
-                  <span
-                    className={`ml-0.5 rounded border px-1.5 py-px text-[10px] font-bold uppercase tracking-wider text-rizzotto-gold-400 border-rizzotto-gold-500/50 ${isChampion ? 'bg-rizzotto-gold-500/20' : 'bg-rizzotto-gold-500/10'}`}
-                    title={isChampion ? 'Division Champion' : 'Division Finalist'}
-                  >
-                    {isChampion ? '🏆 Champion' : '★ Finalist'}
-                  </span>
-                )}
+                {/* Division champion / finalist badge (BALANCED_LIECHTENSTEIN Division Finals).
+                    Tinted to the division whose FINAL this player reached — so a borrowed
+                    player who played UP shows the colour of the division they reached, not
+                    their home band. Falls back to gold when the final's band is unknown. */}
+                {isFinalist && (() => {
+                  const finalBand = finalDivisionBandByUser?.get(entry.userId);
+                  const finalMeta = finalBand != null ? SKILL_BAND_META[finalBand] : null;
+                  const cls = finalMeta
+                    ? `${finalMeta.textCls} ${finalMeta.borderCls} ${finalMeta.bgCls}`
+                    : `text-rizzotto-gold-400 border-rizzotto-gold-500/50 ${isChampion ? 'bg-rizzotto-gold-500/20' : 'bg-rizzotto-gold-500/10'}`;
+                  return (
+                    <span
+                      className={`ml-0.5 rounded border px-1.5 py-px text-[10px] font-bold uppercase tracking-wider ${cls} ${isChampion ? 'ring-1 ring-inset ring-current/30' : ''}`}
+                      title={`${finalMeta ? `${finalMeta.name} Division ` : ''}${isChampion ? 'Champion' : 'Finalist'}`}
+                    >
+                      {isChampion ? '🏆 Champion' : '★ Finalist'}
+                    </span>
+                  );
+                })()}
                 {/* Band badge — shown in non-balanced mode only (in balanced, the section header carries the band) */}
                 {skillBandMeta && !isBalanced && (
                   <span

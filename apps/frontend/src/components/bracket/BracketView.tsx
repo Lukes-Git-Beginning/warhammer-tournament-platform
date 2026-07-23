@@ -97,6 +97,23 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     return ids;
   }, [data?.matches]);
 
+  // Balanced Liechtenstein: userId → the BAND of the division whose final they reached
+  // (the max band among that final's two players). A borrowed player who played UP shows
+  // the finalist banner in the colour of the division they reached, not their home band.
+  const finalDivisionBandByUser = useMemo<ReadonlyMap<string, number>>(() => {
+    const map = new Map<string, number>();
+    for (const m of data?.matches ?? []) {
+      if (m.phase !== 'PLAYOFF_FINAL') continue;
+      const b1 = m.player1Id ? (bandByUser.get(m.player1Id) ?? -Infinity) : -Infinity;
+      const b2 = m.player2Id ? (bandByUser.get(m.player2Id) ?? -Infinity) : -Infinity;
+      const divBand = Math.max(b1, b2);
+      if (divBand === -Infinity) continue;
+      if (m.player1Id) map.set(m.player1Id, divBand);
+      if (m.player2Id) map.set(m.player2Id, divBand);
+    }
+    return map;
+  }, [data?.matches, bandByUser]);
+
   // Balanced Liechtenstein: the tournament podium (1st/2nd/3rd) is the TOP division's
   // playoff result, applied by userId (so a borrowed player gets it even when listed
   // under a lower division). Undefined for other formats → SwissStandings keeps its
@@ -110,10 +127,19 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   );
 
   const sortedStandings = useMemo(
-    () => (data?.swiss?.standings && data?.matches
-      ? sortStandingsByPlayoffResult(data.swiss.standings, data.matches)
-      : data?.swiss?.standings),
-    [data?.swiss?.standings, data?.matches],
+    () => {
+      if (!data?.swiss?.standings) return data?.swiss?.standings;
+      // Balanced Liechtenstein keeps the Swiss ordering (division → points → tiebreakers);
+      // the playoff result only DECORATES the table (podium badges + finalist banners), it
+      // never reshuffles rows. Re-sorting here was the "Byrd shown 1st, not RizzOtto" bug —
+      // it hoisted a lower-division final's participants above the actual top-division winner.
+      // Every other format still hoists its Grand Finalists to ranks 1–2.
+      if (format === 'BALANCED_LIECHTENSTEIN') return data.swiss.standings;
+      return data.matches
+        ? sortStandingsByPlayoffResult(data.swiss.standings, data.matches)
+        : data.swiss.standings;
+    },
+    [format, data?.swiss?.standings, data?.matches],
   );
 
   // #25: fit the bracket to the container WIDTH (never upscale past 1:1) and grow
@@ -327,6 +353,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           finalistIds={format === 'BALANCED_LIECHTENSTEIN' ? divisionFinalistIds : finalistIds}
           championIds={championIds}
           podium={balancedPodium}
+          finalDivisionBandByUser={format === 'BALANCED_LIECHTENSTEIN' ? finalDivisionBandByUser : undefined}
           tournamentSlug={slug}
           canManage={canManage}
           isCompleted={data.status === 'COMPLETED'}
