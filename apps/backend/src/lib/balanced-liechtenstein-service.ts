@@ -20,6 +20,8 @@ import {
   divisionPlayoffFormat,
   targetPoolSizeFromFormat,
   DEFAULT_BAND,
+  seededShuffle,
+  MAX_BAND,
 } from './balanced-liechtenstein.js';
 import { computeSwissStandings, sortSwissStandings, type CompletedMatchRecord } from './swiss.js';
 import { getPlayerClassification } from './skill-classification-service.js';
@@ -195,7 +197,9 @@ export async function runBalancedPairingTick(
             round: true,
             player1_id: true,
             player2_id: true,
+            winner_id: true,
             status: true,
+            phase: true,
             match_number: true,
           },
         }),
@@ -246,6 +250,54 @@ export async function runBalancedPairingTick(
         continue;
       }
 
+      // Bye pre-selection (Alex 2026-07-23): the odd-count bye goes to the weakest active
+      // player by handicap-adjusted Swiss score (0.2 per PLAYED round per band below the top),
+      // never byed twice — decided BEFORE the holistic optimum runs, so a lone weak player takes
+      // a bye instead of a hopeless 3-band play-up. Outside BaLi every band is equal → handicap
+      // 0 → plain lowest score, exactly the Swiss bye rule.
+      const completedForScore: CompletedMatchRecord[] = matches
+        .filter(
+          (m) =>
+            (m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST') &&
+            (m.phase === null || m.phase === 'SWISS'),
+        )
+        .map((m) => ({
+          round: m.round,
+          player1_id: m.player1_id,
+          player2_id: m.player2_id,
+          winner_id: m.winner_id,
+          status: m.status,
+        }));
+      const scoreByUser = new Map(
+        computeSwissStandings(
+          participants.map((p) => p.user_id),
+          completedForScore,
+          new Set<string>(),
+        ).map((s) => [s.userId, s.score]),
+      );
+      const bandByUser = new Map(participants.map((p) => [p.user_id, p.skill_band ?? DEFAULT_BAND]));
+      const hadBye = new Set(
+        matches
+          .filter(
+            (m) =>
+              (m.status === 'BYE' || m.status === 'CATCHUP_BYE' || m.status === 'PENDING_BYE') &&
+              m.player1_id &&
+              !m.player2_id,
+          )
+          .map((m) => m.player1_id!),
+      );
+      const pickBye = (candidateIds: string[], round: number): string | null => {
+        const eligible = candidateIds.filter((id) => !hadBye.has(id));
+        const pool = eligible.length > 0 ? eligible : candidateIds; // all already byed → any
+        const played = Math.max(0, round - 1); // handicap only over rounds already played
+        const adj = (id: string) =>
+          (scoreByUser.get(id) ?? 0) - 0.2 * played * (MAX_BAND - (bandByUser.get(id) ?? MAX_BAND));
+        let min = Infinity;
+        for (const id of pool) min = Math.min(min, adj(id));
+        const tied = pool.filter((id) => Math.abs(adj(id) - min) < 1e-9);
+        return seededShuffle(tied, `${tournamentId}:${round}:bye`)[0] ?? null;
+      };
+
       const plan = planPairings(
         participants.map((p) => ({ userId: p.user_id, band: p.skill_band })),
         matches.map((m) => ({
@@ -256,6 +308,7 @@ export async function runBalancedPairingTick(
         })),
         roundsCount,
         tournamentId,
+        pickBye,
       );
       if (plan.pairings.length === 0 && plan.byes.length === 0) break;
 

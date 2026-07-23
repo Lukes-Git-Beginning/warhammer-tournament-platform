@@ -30,13 +30,16 @@ describe('bandGapCost — progressive + asymmetric', () => {
 
   it('puts the asymmetry only in Δ2+: a low gap hurts more than a high one', () => {
     expect(bandGapCost(1, 3)).toBe(2.5); // b1-b3
-    expect(bandGapCost(3, 5)).toBe(1.3); // b3-b5
+    expect(bandGapCost(3, 5)).toBe(2.1); // b3-b5 (raised from 1.3 so a Δ2 costs > two Δ1 singles)
     expect(bandGapCost(1, 3)).toBeGreaterThan(bandGapCost(3, 5));
   });
 
-  it('has the nice ordering b3-b5 < rematch < b1-b3', () => {
-    expect(bandGapCost(3, 5)).toBeLessThan(EVENTUAL_REMATCH_COST); // top plays up 2 over a rematch
-    expect(bandGapCost(1, 3)).toBeGreaterThan(EVENTUAL_REMATCH_COST); // bottom rematches over a 2-band stomp
+  it('has the ordering rematch < b3-b5 (Δ2) < b1-b3 (Δ2)', () => {
+    // Alex 2026-07-23: every Δ2 now costs > two Δ1 singles (2×1.0), which also lands it ABOVE an
+    // eventual rematch (1.5) — so the optimiser prefers replaying an old opponent to a 2-band stomp,
+    // and prefers two singles to one Δ2. The low-band Δ2 still hurts most (asymmetry survives).
+    expect(EVENTUAL_REMATCH_COST).toBeLessThan(bandGapCost(3, 5)); // a Δ2 is now dearer than a rematch
+    expect(bandGapCost(3, 5)).toBeLessThan(bandGapCost(1, 3)); // and the low-band Δ2 is the dearest
   });
 
   it('makes extreme play-ups very expensive', () => {

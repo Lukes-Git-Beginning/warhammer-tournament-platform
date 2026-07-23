@@ -45,7 +45,7 @@ export const DEFAULT_BAND = 3;
  *  smallest, 0.2, scales to 2000 — far above any achievable bonus sum). */
 const COST_SCALE = 10_000;
 /** Max band value, for the protect-the-weak tie-break below. */
-const MAX_BAND = 5;
+export const MAX_BAND = 5;
 /** Per-band weight of the "protect the weak" tie-break (must dominate the +1 commit
  *  nudge, and its per-matching sum must stay far below the 2000 cost granularity — true
  *  for realistic same-depth pools). */
@@ -130,7 +130,7 @@ interface Waiter {
 
 /** Deterministic PRNG shuffle (mulberry32) seeded from a string — reproducible
  *  tie-breaks when several equal-cost pairings exist (mirrors swiss.ts). */
-function seededShuffle<T>(arr: T[], seed: string): T[] {
+export function seededShuffle<T>(arr: T[], seed: string): T[] {
   let h = 1779033703 ^ seed.length;
   for (let i = 0; i < seed.length; i++) {
     h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
@@ -191,6 +191,7 @@ function pairPool(
   waiting: Waiter[],
   incoming: Waiter[],
   seedKey: string,
+  pickBye?: (candidateUserIds: string[]) => string | null,
 ): { pairs: [Waiter, Waiter][]; byes: Waiter[] } {
   const pairs: [Waiter, Waiter][] = [];
   const byes: Waiter[] = [];
@@ -202,6 +203,18 @@ function pairPool(
   const free = seededShuffle([...waiting].sort(byId), `${seedKey}:free`);
   const inc = seededShuffle([...incoming].sort(byId), `${seedKey}:inc`);
   const closed = inc.length === 0; // no reinforcements → this pool is final
+
+  // Pre-assigned bye: in a CLOSED pool with an odd head-count, the caller picks the odd-one-out
+  // up front (weakest handicap-adjusted score, never byed twice) rather than leaving it to the
+  // Blossom leftover. This keeps a lone weak player on a bye instead of a hopeless 3-band play-up,
+  // and makes the bye deterministic rather than a side effect of the async commit order.
+  let preBye: Waiter | null = null;
+  if (closed && free.length % 2 === 1 && pickBye) {
+    const byeId = pickBye(free.map((w) => w.userId));
+    const idx = byeId ? free.findIndex((w) => w.userId === byeId) : -1;
+    if (idx >= 0) preBye = free.splice(idx, 1)[0]!;
+  }
+
   const W = free.length;
   const nodes = [...free, ...inc]; // [free | incoming]
   const n = nodes.length;
@@ -256,6 +269,7 @@ function pairPool(
     // matched to an incoming node → hold (no row)
   }
 
+  if (preBye) byes.push(preBye);
   return { pairs, byes };
 }
 
@@ -274,6 +288,10 @@ export function planPairings(
   matches: BalancedMatchRow[],
   roundsCount: number,
   tournamentId = '',
+  // Optional: choose the odd-one-out bye for a closed round pool, given that round's
+  // candidate ids. The engine stays score-agnostic — the caller (which has the standings)
+  // supplies the pick. Returns null to fall back to the Blossom-leftover bye.
+  pickBye?: (candidateUserIds: string[], round: number) => string | null,
 ): PairingPlan {
   const roster = new Set(participants.map((p) => p.userId));
   const bandOf = new Map(participants.map((p) => [p.userId, p.band ?? DEFAULT_BAND]));
@@ -357,6 +375,7 @@ export function planPairings(
       waiting,
       incomingByRound.get(round) ?? [],
       `${tournamentId}:${round}`,
+      pickBye ? (ids) => pickBye(ids, round) : undefined,
     );
     for (const [a, b] of pairs) {
       pairings.push({ round, player1_id: a.userId, player2_id: b.userId });

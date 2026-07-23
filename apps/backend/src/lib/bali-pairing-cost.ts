@@ -6,6 +6,10 @@
 //    one-band play-up always beats a rematch, and low bands are never repelled (a b2 must not prefer
 //    b3 over b1). The asymmetry ("a gap hurts more the lower the weaker player") lives ONLY in gaps
 //    ≥ 2. Same band (gap 0) = 0.
+//  - Every Δ2 now costs > 2.0 (Alex 2026-07-23): concentrating a 2-band jump on ONE weaker player
+//    must cost more than spreading it across TWO Δ1 singles (2×1.0), so the optimiser prefers the
+//    two singles. Since 2.1 > 1.5 this also puts a lone Δ2 ABOVE an eventual rematch — replaying an
+//    old opponent now beats a 2-band stomp. b1 keeps a steeper Δ2 (2.5): the asymmetry survives.
 //  - Immediate rematch (last round) = forbidden. Eventual (earlier) rematch = soft ~1.5-band penalty.
 // Numbers are ILLUSTRATIVE — validate/tune via the pairing simulation before shipping.
 
@@ -17,8 +21,8 @@ export const IMMEDIATE_REMATCH_COST = Infinity;
 /** Progressive band-gap cost as cost[lowerBand] = [Δ1, Δ2, Δ3, Δ4]. */
 const BAND_GAP_COST: Record<number, number[]> = {
   1: [1.0, 2.5, 5.0, 9.0],
-  2: [1.0, 2.0, 4.0],
-  3: [1.0, 1.3],
+  2: [1.0, 2.1, 4.0],
+  3: [1.0, 2.1],
   4: [1.0],
 };
 
