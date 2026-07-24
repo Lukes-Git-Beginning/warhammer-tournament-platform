@@ -447,8 +447,24 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       });
       if (!pending) return reply.code(404).send({ error: 'NotFound', message: 'No pending join request for this user', statusCode: 404 });
 
-      // A declined request never played — remove the row so the user could ask again.
-      await fastify.prisma.tournamentParticipant.delete({ where: { id: pending.id } });
+      // Only a truly never-played request is safe to hard-delete (so the user can ask again).
+      // A returning player who withdrew, re-requested and is now declined HAS played — the same
+      // row carries their match history (request-join reuses the existing row), so deleting it
+      // would orphan their matches: they vanish from the standings and the bracket shows their
+      // raw user id. In that case revert the row to WITHDREW instead of deleting it.
+      const playedCount = await fastify.prisma.match.count({
+        where: {
+          tournament_id: tournament.id,
+          deleted_at: null,
+          status: { in: ['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST', 'CATCHUP_BYE'] },
+          OR: [{ player1_id: userId }, { player2_id: userId }],
+        },
+      });
+      if (playedCount > 0) {
+        await fastify.prisma.tournamentParticipant.update({ where: { id: pending.id }, data: { status: 'WITHDREW' } });
+      } else {
+        await fastify.prisma.tournamentParticipant.delete({ where: { id: pending.id } });
+      }
       await fastify.prisma.auditLog.create({
         data: { entity_type: 'TournamentParticipant', entity_id: pending.id, action: 'late_join_declined', actor_id: request.user.sub, new_value: { tournament_id: tournament.id, user_id: userId } },
       });
