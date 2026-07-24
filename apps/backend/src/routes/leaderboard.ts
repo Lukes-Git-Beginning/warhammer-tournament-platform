@@ -400,7 +400,9 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         seasonId: z.string().uuid().optional(),
         page: z.coerce.number().int().min(1).default(1),
         pageSize: z.coerce.number().int().min(1).max(1000).default(100),
-        minGames: z.coerce.number().int().min(1).max(1000).default(5),
+        // #8: the Skill leaderboard excludes players with fewer than 20 games (a handful of
+        // games is too noisy to rank on), and shows their real win-rate as a column.
+        minGames: z.coerce.number().int().min(1).max(1000).default(20),
       })
       .safeParse(request.query);
     if (!parsed.success) {
@@ -443,9 +445,22 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
           : [];
         const userById = new Map(users.map((u) => [u.id, u]));
 
+        // #8: real win/loss record (same dynamic MatchGame source as the old winrate tab) so the
+        // Skill leaderboard can show an actual win-rate column next to the model-derived skill.
+        const record = new Map(
+          (await computeSeasonLeaderboard(fastify.prisma, fastify.redis, resolvedSeasonId)).map((r) => [
+            r.playerId,
+            r,
+          ]),
+        );
+
         const entries = slice.flatMap((e, i) => {
           const user = userById.get(e.playerId);
           if (!user) return [];
+          const rec = record.get(e.playerId);
+          const wins = rec?.wins ?? 0;
+          const losses = rec?.losses ?? 0;
+          const gamesForRate = rec?.totalGames ?? e.gamesCount;
           return [
             {
               rank: (page - 1) * pageSize + i + 1,
@@ -456,6 +471,9 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
               band: skillToBand(e.generalSkill),
               gamesCount: e.gamesCount,
               factionsPlayed: e.factionsPlayed,
+              wins,
+              losses,
+              winRate: gamesForRate > 0 ? wins / gamesForRate : 0,
             },
           ];
         });

@@ -513,6 +513,9 @@ export interface SkillLeaderboardEntry {
   band: number; // 1..5
   gamesCount: number;
   factionsPlayed: number;
+  wins: number;
+  losses: number;
+  winRate: number; // #8: actual wins / games this season (0..1)
 }
 export interface SkillLeaderboardResponse {
   entries: SkillLeaderboardEntry[];

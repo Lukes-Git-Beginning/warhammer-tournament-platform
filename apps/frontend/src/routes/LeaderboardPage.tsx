@@ -5,19 +5,16 @@ import { Link } from '@tanstack/react-router';
 import {
   getLeaderboard,
   getAllTimeLeaderboard,
-  getLeaderboardByMode,
   getMajorWinsLeaderboard,
   getSkillLeaderboard,
   listSeasons,
   type AllTimeEntry,
-  type LeaderboardMode,
-  type ExtendedLeaderboardEntry,
 } from '@/lib/api.js';
 import type { LeaderboardEntryDto, DynamicLeaderboardEntryDto } from '@rizzotto/types';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 
-type Tab = 'season' | 'all-time' | 'winrate' | 'majors' | 'skill';
+type Tab = 'season' | 'all-time' | 'majors' | 'skill';
 
 const PAGE_SIZE = 1000; // load every rank on one page; pagination is a fallback past 1000
 
@@ -321,177 +318,6 @@ function AllTimeTab() {
         totalPages={totalPages}
         onPageChange={setPage}
       />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Mode-based Tab (winrate)
-// ---------------------------------------------------------------------------
-
-interface ModeTabProps {
-  mode: Extract<LeaderboardMode, 'winrate'>;
-}
-
-function ModeTab({ mode }: ModeTabProps) {
-  const [page, setPage] = useState(1);
-  const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined);
-
-  const { data: seasonsData } = useQuery({
-    queryKey: ['seasons'],
-    queryFn: listSeasons,
-  });
-
-  const seasons = seasonsData?.data ?? [];
-  const activeSeason = seasons.find((s) => s.is_active);
-  const effectiveSeasonId = selectedSeasonId ?? activeSeason?.id;
-
-  const [search, setSearch] = useState('');
-
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['leaderboard-mode', mode, effectiveSeasonId, page],
-    queryFn: () =>
-      getLeaderboardByMode({ mode, season: effectiveSeasonId, page, pageSize: PAGE_SIZE }),
-  });
-
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
-  const entries = data?.entries ?? [];
-  const filtered = entries.filter((e) => normalize(e.user.username).includes(normalize(search)));
-
-  const rateKey: keyof ExtendedLeaderboardEntry = 'win_rate';
-
-  return (
-    <div>
-      {/* Season selector */}
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-stone-400">Season</label>
-          <select
-            className="rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
-            value={effectiveSeasonId ?? ''}
-            onChange={(e) => {
-              setPage(1);
-              setSelectedSeasonId(e.target.value || undefined);
-            }}
-          >
-            {!activeSeason && !selectedSeasonId && <option value="">All</option>}
-            {seasons.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {s.is_active ? ' (active)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <span className="rounded border border-stone-700 bg-stone-900/60 px-2 py-1 text-xs text-stone-500">
-          Min 5 games required
-        </span>
-      </div>
-
-      <LeaderboardSearch value={search} onChange={setSearch} count={filtered.length} />
-
-      {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>}
-
-      {error && (
-        <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">
-          Failed to load leaderboard.
-        </div>
-      )}
-
-      {!isLoading && !error && filtered.length === 0 && (
-        <EmptyState
-          variant="sigil"
-          title="No entries"
-          body="No players qualify for this ranking yet."
-          motto="In lapide sigillata."
-        />
-      )}
-
-      {!isLoading && !error && filtered.length > 0 && (
-        <div>
-          <div className="overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 backdrop-blur-sm">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400">Win Rate</th>
-                  <th className="px-4 py-3 text-center font-medium text-stone-400">W / L</th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400">Games</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-800/60">
-                {filtered.map((entry) => {
-                  const isFirst = entry.rank === 1;
-                  const rowClass = isFirst
-                    ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10'
-                    : 'hover:bg-stone-800/30';
-                  const rateVal = entry[rateKey] as number | undefined;
-                  return (
-                    <tr key={entry.user.id} className={`transition-colors ${rowClass}`}>
-                      <td className="px-4 py-3">
-                        <RankCell rank={entry.rank} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <Link
-                          to="/users/$id"
-                          params={{ id: entry.user.id }}
-                          className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
-                        >
-                          <Avatar url={entry.user.avatar_url} username={entry.user.username} />
-                          <span
-                            className={
-                              isFirst ? 'font-semibold text-rizzotto-gold-500' : 'text-stone-200'
-                            }
-                          >
-                            {entry.user.username}
-                          </span>
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400">
-                        {rateVal != null ? `${(rateVal * 100).toFixed(1)}%` : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-center text-stone-300">
-                        <span className="text-emerald-400">{entry.wins}</span>
-                        <span className="text-stone-600"> / </span>
-                        <span className="text-red-400">{entry.losses}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-stone-400">
-                        {entry.games_played}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-between text-sm">
-              <button
-                type="button"
-                onClick={() => setPage((p) => p - 1)}
-                disabled={page <= 1}
-                className="rounded border border-stone-700 px-3 py-1.5 text-stone-300 hover:border-stone-500 hover:text-stone-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                ← Back
-              </button>
-              <span className="text-stone-500">
-                {page} / {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPage((p) => p + 1)}
-                disabled={page >= totalPages}
-                className="rounded border border-stone-700 px-3 py-1.5 text-stone-300 hover:border-stone-500 hover:text-stone-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                Next →
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -801,6 +627,7 @@ function SkillTab() {
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
                 <th className="px-4 py-3 text-right font-medium text-stone-400">Win% vs avg</th>
+                <th className="px-4 py-3 text-right font-medium text-stone-400">Win Rate</th>
                 <th className="px-4 py-3 text-right font-medium text-stone-400">Games</th>
               </tr>
             </thead>
@@ -833,6 +660,12 @@ function SkillTab() {
                     >
                       {Math.round(entry.winChance * 100)}%
                     </td>
+                    <td
+                      className="px-4 py-3 text-right text-stone-300 whitespace-nowrap"
+                      title={`${entry.wins}W – ${entry.losses}L`}
+                    >
+                      {Math.round(entry.winRate * 100)}%
+                    </td>
                     <td className="px-4 py-3 text-right text-stone-400 whitespace-nowrap">{entry.gamesCount}</td>
                   </tr>
                 );
@@ -852,7 +685,6 @@ function SkillTab() {
 const TABS_CONFIG: { id: Tab; label: string }[] = [
   { id: 'season', label: 'Season' },
   { id: 'skill', label: 'Skill' },
-  { id: 'winrate', label: 'Win Rate' },
   { id: 'majors', label: 'Majors' },
   { id: 'all-time', label: 'All Time' },
 ];
@@ -902,7 +734,6 @@ export function LeaderboardPage() {
 
       {activeTab === 'season' && <SeasonTab />}
       {activeTab === 'all-time' && <AllTimeTab />}
-      {activeTab === 'winrate' && <ModeTab mode={activeTab} />}
       {activeTab === 'majors' && <MajorsTab />}
       {activeTab === 'skill' && <SkillTab />}
     </PageShell>
