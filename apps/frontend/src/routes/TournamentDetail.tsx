@@ -24,7 +24,7 @@ import { formatInUserTimezone } from '@/lib/timezone';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { FORMAT_DESCRIPTIONS, MODE_DESCRIPTIONS } from '@/lib/tournamentDescriptions';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
-import { sortStandingsByPlayoffResult, getFinalistIds, getSemifinalistIds } from '@/lib/bracketStandings';
+import { sortStandingsByPlayoffResult, getFinalistIds, getSemifinalistIds, getChampionIds, getBalancedTopDivisionPodium } from '@/lib/bracketStandings';
 import { BracketView } from '@/components/bracket/BracketView';
 import { SwissStandings } from '@/components/bracket/SwissStandings';
 import { EliminationStandings } from '@/components/bracket/EliminationStandings';
@@ -224,11 +224,56 @@ export function TournamentDetail() {
     () => getSemifinalistIds(bracket?.matches ?? []),
     [bracket?.matches],
   );
+  const standingsChampionIds = useMemo(() => getChampionIds(bracket?.matches ?? []), [bracket?.matches]);
+
+  // Balanced Liechtenstein standings decoration — mirrors BracketView, because the visible
+  // standings on this page come from HERE (BracketView is rendered with hideStandings), not
+  // from BracketView. Keep Swiss order, podium from the TOP division only, finalist banner
+  // tinted to the division whose final the player reached.
+  const isBalanced = tournament?.format === 'BALANCED_LIECHTENSTEIN';
+  const bandByUser = useMemo<Map<string, number>>(() => {
+    const map = new Map<string, number>();
+    for (const e of bracket?.swiss?.standings ?? []) {
+      if (e.skillBand != null) map.set(e.userId, e.skillBand);
+    }
+    return map;
+  }, [bracket?.swiss?.standings]);
+  const divisionFinalistIds = useMemo<ReadonlySet<string>>(() => {
+    const ids = new Set<string>();
+    for (const m of bracket?.matches ?? []) {
+      if (m.phase === 'PLAYOFF_FINAL') {
+        if (m.player1Id) ids.add(m.player1Id);
+        if (m.player2Id) ids.add(m.player2Id);
+      }
+    }
+    return ids;
+  }, [bracket?.matches]);
+  const finalDivisionBandByUser = useMemo<ReadonlyMap<string, number>>(() => {
+    const map = new Map<string, number>();
+    for (const m of bracket?.matches ?? []) {
+      if (m.phase !== 'PLAYOFF_FINAL') continue;
+      const b1 = m.player1Id ? (bandByUser.get(m.player1Id) ?? -Infinity) : -Infinity;
+      const b2 = m.player2Id ? (bandByUser.get(m.player2Id) ?? -Infinity) : -Infinity;
+      const divBand = Math.max(b1, b2);
+      if (divBand === -Infinity) continue;
+      if (m.player1Id) map.set(m.player1Id, divBand);
+      if (m.player2Id) map.set(m.player2Id, divBand);
+    }
+    return map;
+  }, [bracket?.matches, bandByUser]);
+  const balancedPodium = useMemo(
+    () => (isBalanced && bracket?.matches ? getBalancedTopDivisionPodium(bracket.matches, bandByUser) : undefined),
+    [isBalanced, bracket?.matches, bandByUser],
+  );
   const sortedStandings = useMemo(() => {
     const swiss = bracket?.swiss;
-    if (!swiss?.standings || !bracket?.matches) return swiss?.standings;
+    if (!swiss?.standings) return swiss?.standings;
+    // BaLi keeps Swiss order (division → points → tiebreakers); the playoff result only
+    // decorates the table (podium badges + finalist banners), it never reshuffles rows.
+    if (isBalanced) return swiss.standings;
+    if (!bracket?.matches) return swiss.standings;
     return sortStandingsByPlayoffResult(swiss.standings, bracket.matches);
-  }, [bracket?.swiss?.standings, bracket?.matches]);
+  }, [isBalanced, bracket?.swiss?.standings, bracket?.matches]);
 
   // Drive standings updates from socket events directly, not via BracketView
   useLiveBracket(tournament?.id ?? '');
@@ -692,7 +737,11 @@ export function TournamentDetail() {
               <span className="text-stone-500">Format:</span>{' '}
               <span className="text-stone-200">
                 {({ AUTO_SWISS: 'Auto Swiss', SWISS: 'Swiss', SINGLE_ELIMINATION: 'Single Elimination', DOUBLE_ELIMINATION: 'Double Elimination', ROUND_ROBIN: 'Round Robin', LIECHTENSTEIN: 'Liechtenstein', BALANCED_LIECHTENSTEIN: 'Balanced Liechtenstein' } as Record<string, string>)[tournament.format] ?? tournament.format}
-                {['SWISS', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN'].includes(tournament.format) && tournament.rounds_count ? ` · ${tournament.rounds_count} Rounds` : ''}
+                {['SWISS', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN'].includes(tournament.format)
+                  ? (tournament.auto_sizing && tournament.status !== 'ONGOING' && tournament.status !== 'COMPLETED'
+                      ? ' · Rounds TBD' // #3: auto-sized rounds are only fixed at start — don't show the default
+                      : tournament.rounds_count ? ` · ${tournament.rounds_count} Rounds` : '')
+                  : ''}
                 {tournament.format === 'AUTO_SWISS' && tournament.status === 'ONGOING' && tournament.rounds_count ? ` · ${tournament.rounds_count} Rounds` : ''}
                 {tournament.format === 'AUTO_SWISS' && tournament.status !== 'ONGOING' && tournament.status !== 'COMPLETED' ? ' · Rounds TBD' : ''}
               </span>
@@ -927,7 +976,10 @@ export function TournamentDetail() {
                 playerFactionMap={standingsPlayerFactionMap}
                 playerFactionPoolMap={standingsPlayerFactionPoolMap}
                 playoffFormat={tournament.playoff_format ?? undefined}
-                finalistIds={standingsFinalistIds}
+                finalistIds={isBalanced ? divisionFinalistIds : standingsFinalistIds}
+                championIds={standingsChampionIds}
+                podium={balancedPodium}
+                finalDivisionBandByUser={isBalanced ? finalDivisionBandByUser : undefined}
                 semifinalistIds={standingsSemifinalistIds}
                 tournamentSlug={tournament.slug}
                 canManage={!!canManage}
