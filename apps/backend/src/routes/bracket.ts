@@ -231,7 +231,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             userId: s.userId,
             username: user?.username ?? null,
             avatarUrl: user?.avatar_url ?? null,
-            factionId: factionByUser.get(s.userId) ?? factionFromGames.get(s.userId) ?? null,
+            // #9: FREE_PICK shows "Free Pick" (null) until a host explicitly sets a faction — never
+            // the first game's picked faction. Other modes keep the game-derived fallback.
+            factionId:
+              tournament.mode === TournamentMode.FREE_PICK
+                ? factionByUser.get(s.userId) ?? null
+                : factionByUser.get(s.userId) ?? factionFromGames.get(s.userId) ?? null,
             score: s.score,
             wins: s.wins,
             losses: s.losses,
