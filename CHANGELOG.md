@@ -1,11 +1,77 @@
 # Changelog
 
-All notable changes to Rizzotto (rizzotto.gg) are documented here.
-The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
-Entries are grouped by deploy wave (the platform ships continuously to `main`).
+All notable changes to **Rizzotto** (rizzotto.gg) are documented here.
+The format is loosely based on [Keep a Changelog](https://keepachangelog.com/); entries are grouped by deploy wave (the platform ships continuously to `main`).
+
+**Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.1.x)` · `Update / new capability → minor (1.x.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). The many small deploys between launch and the first tagged patch make up the **1.1** line; from **[1.1.1]** on, notable releases carry a version tag.
 
 ## [Unreleased]
-_Nothing staged._
+Planned for **v1.2** (see `plans/v1.2-planning.md`): format mouseover tooltips, winrate merged into the Skill leaderboard as a column with a 20-game cutoff, an optional lobby-password field, and imgur → local map hosting plus three new maps (Otsuchi Castle, Blasphemous Snowfield, Excavation Site). Later: custom challenges + asynchronous challenge events, and website invite/referral tracking.
+
+## [1.1.1] — 2026-07-24 — BaLi fairness + display fixes
+First tagged release since launch.
+
+### Fixed
+- **BaLi pairing:** the odd-count bye is pre-assigned to the weakest player by handicap-adjusted score *before* the pairing optimum runs — a lone weak player takes a bye instead of a hopeless 3-band play-up. The Δ2 band-gap cost rose to 2.1 (two adjacent play-ups beat one 2-band jump; a rematch beats a 2-band stomp).
+- **BaLi standings:** no longer re-sorted by playoff result — they keep Swiss order (division → points → tiebreakers); the 1st/2nd/3rd badges come only from the top division's playoff, and each finalist banner is tinted to the division whose final that player reached. Fixes a completed tournament showing the wrong player in 1st.
+- **BaLi byes:** a provisional bye now reads "BYE · pending" instead of the misleading "Catch-up · 0 pts"; only a genuine late-join catch-up bye shows the 0-point label.
+- **BaLi late-join:** a late joiner can no longer inherit a several-band-away opponent — the bye reclaim is gated so a late-join pairing is never the round's biggest band-gap (and never an immediate rematch).
+- **Open Play:** the front-page availability heatmap shows matchmaking availability only (was mixing in tournament availability).
+- **Standings:** Free Pick mode keeps "Free Pick" until a host sets a faction (was showing the first faction picked).
+- **Tournaments:** auto-sized tournaments show "Rounds TBD" before they start, instead of the default count.
+
+## 2026-07-21 — Discord self-config & atmospheric backdrop
+### Added
+- **Atmospheric page backdrop** — a darkened nocturnal-ruins painting behind every page (Open Play included).
+### Fixed
+- **Discord bot self-configures its guild** from its token (env override → auto-detect → fallback), fixing the "not configured" report and a silent login auto-join failure.
+
+## 2026-07-20 — Balanced Liechtenstein playoff size & undrop
+### Changed
+- **Playoff size is a host choice** — removed from the auto-sizer, with a homogeneous-vs-large explanation and a default of Top 2. Fixes 16+ check-ins forcing a single mixed Top-8 and discarding the divisional concept.
+### Fixed
+- **Undrop / catch-up-bye backfill is idempotent** — it skips already-played rounds, and undrop folds a returning player back into the group phase.
+
+## 2026-07-18 — Quick-wins, capacity & ops fixes
+### Added
+- **Minimum-participants field** with a 2×2 capacity layout (start / deadline, min / max) and a soft start-warning the host can override; shown on the tournament page.
+- **"Not in Discord" account report** and split **Reports** admin sub-tabs (less scrolling).
+### Changed
+- Create form reordered — poster first, Discord/stream under the description, rules between the map and faction pools; the Discord invite is pre-filled.
+### Fixed
+- Division-champion marker; "Majors only" wording; **host transfer** (was sending the wrong body field → every transfer 400'd); **co-host edit access** (the edit page now uses the server `can_manage` flag).
+
+## 2026-07-17 — BaLi 2.0, Faction War, Majors & tournament ops
+### Added
+- **BaLi 2.0 pairing engine** — provisional-optimum "commit-when-free" pairing, a progressive/asymmetric band-gap cost, pending-bye reclaim, and a playoff-seeding handicap that discounts wins from lower divisions.
+- **Faction War** mode; a **major-tournament-wins leaderboard** derived from match data.
+- **Per-game override** in the score modal — a non-Bo1 override shows map, factions and winner/draw per game.
+### Changed
+- Heatmap stat-eligibility unified (a shared void-cascade); the major tiebreaker uses game-wins.
+### Fixed
+- Playoff-drop notify + walkover; game editing in the admin "All Games" tab.
+
+## 2026-07-16 — Quick-wins batch + majors
+### Added
+- Faction-pick timer; majors leaderboard; admin reports & "underrated players"; Open Play match origin (queue vs availability DM); an "unrated" flag.
+### Fixed
+- Free-pick / picker fixes; closed the availability-ping gap that pinged a player mid-tournament (in-session = live or <30 min; REGISTERED muted).
+
+## 2026-07-14 — Open Play suppression & queue-abuse ladder
+### Added
+- **Education-first queue-abuse escalation** — hint → 1h → 24h with a 7-day decay and a queue-activity log, plus an admin cooldown reset on the player profile.
+### Changed
+- Open Play availability DMs are suppressed during a live match or a real-time tournament session; the staff availability heatmap is de-anonymized (names on hover).
+
+## 2026-07-13 — UI polish
+### Added
+- Posters on the tournament listing cards; format/mode hover tooltips from a shared source.
+### Changed
+- "Majors only" wording (i18n); the landing page shows "The Ladder" as live (Open Play) instead of "coming".
+
+## 2026-07-11 — Balanced Liechtenstein & Swiss robustness
+### Fixed
+- A late joiner now gets a 0-point catch-up bye (no gifted points); withdraw → void is handled cleanly (BaLi cancel + re-pair, Swiss forfeit-win), and dropped players sort to the end of the standings.
 
 ## 2026-07-09 — Manual-match safety, late join, calibration audit & skill stats
 
@@ -35,6 +101,20 @@ _Nothing staged._
   Balanced Liechtenstein match/bye no longer lands outside the division group.
 - **Balanced Liechtenstein playoffs auto-launch** even when a group match carries
   a stray `SWISS` phase — a manual/forfeit match no longer blocks playoff generation.
+
+## 2026-07-03 — Balanced Liechtenstein & the Skill engine (major feature deploy)
+### Added
+- **Balanced Liechtenstein** — a skill-banded asynchronous Swiss format: players are paired within their skill division, each division plays its own auto-sized playoff (with a third-place match), and results are finalised from the Swiss record.
+- **Skill classification engine** + a **public adaptive calibration wizard** (only asks questions that can still raise your band) + an **admin-editable question catalogue**; opt-in **band-up at registration**. Band colours (White/Rust/Bronze/Silver/Gold), play-up arrows, division standings and finalist stars.
+- **Host/co-host draft visibility** — unpublished tournament drafts are visible to their staff.
+### Changed
+- Restricted factions stay pickable (nerfed, not banned); Steam re-link is hardened (admin-only reset, with an audit trail).
+
+## 2026-07-02 — Matchmaking DM rewrite & chart polish
+### Changed
+- **Open Play matchmaking** moved to a central tick with rate-limited DM waves and a "Match Now" action; result reporting moved **fully on-site** (the Discord declare-win/loss buttons were removed and a replay is mandatory); on-site disputes DM the moderators.
+### Fixed
+- Standard-ruleset card values align to a shared column; faction-popularity chart labels fit on one line.
 
 ## 2026-06-30 — Phase-2 feature batch
 
@@ -96,5 +176,5 @@ _Nothing staged._
 - Tournament view live-refreshes on status change (B7); game-history page no
   longer overflows horizontally (B2); `Europe/Kiev` normalized to `Europe/Kyiv`. (B17)
 
-## 2026-06-27 — v1.0 launch
-Rizzotto left beta and launched v1 on rizzotto.gg (21:00 CEST).
+## [1.0.0] — 2026-06-27 — v1 launch
+Rizzotto left beta and launched v1 on rizzotto.gg (21:00 CEST). Discord + Steam authentication; tournament creation (Swiss, Single & Double Elimination, Round Robin) with a live bracket and standings; a real-time faction draft (blind pick, ban patterns, faction matrix); placement-based leaderboards (ELO removed for fairness during beta); faction meta and popularity pages; a Souls-like / grimdark design system; and a Discord bot (check-in and match reminders, Open Play queue and lobby finder).
