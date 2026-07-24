@@ -185,16 +185,18 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['queue-status'] }),
   });
 
+  // #10: the Open Play front page shows MATCHMAKING availability only (as its label says) —
+  // not the combined TOURNAMENT+MATCHMAKING calendar.
   const { data: heatmapData } = useQuery({
-    queryKey: ['availability-heatmap'],
-    queryFn: () => getAvailabilityHeatmap(),
+    queryKey: ['availability-heatmap', 'MATCHMAKING'],
+    queryFn: () => getAvailabilityHeatmap('MATCHMAKING'),
     staleTime: 5 * 60 * 1000,
   });
 
   // #12: staff also get per-slot names in the hover.
   const { data: namedHeatmap } = useQuery({
-    queryKey: ['availability-heatmap-named', 'all'],
-    queryFn: () => getAvailabilityHeatmapNamed(),
+    queryKey: ['availability-heatmap-named', 'MATCHMAKING'],
+    queryFn: () => getAvailabilityHeatmapNamed('MATCHMAKING'),
     enabled: isStaff,
     staleTime: 5 * 60 * 1000,
   });
@@ -387,9 +389,10 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState('');
 
+  // #10: matchmaking availability only (the slots feed challenge scheduling), not combined.
   const { data: heatmapData } = useQuery({
-    queryKey: ['availability-heatmap'],
-    queryFn: () => getAvailabilityHeatmap(),
+    queryKey: ['availability-heatmap', 'MATCHMAKING'],
+    queryFn: () => getAvailabilityHeatmap('MATCHMAKING'),
     staleTime: 5 * 60 * 1000,
   });
 
