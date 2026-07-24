@@ -269,12 +269,15 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
 
   // Show "Advance to Playoffs" after last Swiss round is fully complete and playoffs not yet generated.
   const hasPlayoffMatches = swiss !== undefined && data.matches.some((m) => m.round > swiss.recommendedRounds);
+  // A round is "done" when every non-cancelled match reached a terminal status. Excluding
+  // CANCELLED matters when a player withdrew in the last round (their match is cancelled) —
+  // otherwise the cancelled row keeps the button hidden and the host can't start the playoffs.
   const lastSwissRoundDone =
     swiss !== undefined &&
     swiss.currentRound >= swiss.recommendedRounds &&
     data.matches
-      .filter((m) => m.round === swiss.recommendedRounds)
-      .every((m) => m.status === 'COMPLETED' || m.status === 'BYE');
+      .filter((m) => m.round === swiss.recommendedRounds && m.status !== 'CANCELLED')
+      .every((m) => ['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST', 'CATCHUP_BYE'].includes(m.status));
   const showAdvanceToPlayoffs =
     canManage &&
     playoffFormat &&
