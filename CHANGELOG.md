@@ -6,7 +6,25 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/); 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.1.x)` · `Update / new capability → minor (1.x.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). The many small deploys between launch and the first tagged patch make up the **1.1** line; from **[1.1.1]** on, notable releases carry a version tag.
 
 ## [Unreleased]
-Planned for **v1.2** (see `plans/v1.2-planning.md`): format mouseover tooltips, winrate merged into the Skill leaderboard as a column with a 20-game cutoff, an optional lobby-password field, and imgur → local map hosting plus three new maps (Otsuchi Castle, Blasphemous Snowfield, Excavation Site). Later: custom challenges + asynchronous challenge events, and website invite/referral tracking.
+Still planned for the **v1.2** line (see `plans/v1.2-planning.md`): format mouseover tooltips, an optional lobby-password field, and imgur → local map hosting plus three new maps (Otsuchi Castle, Blasphemous Snowfield, Excavation Site). Later: custom challenges + asynchronous challenge events, and website invite/referral tracking.
+
+## [1.2.0] — unreleased — Skill-leaderboard win-rate + fairness & robustness fixes
+First minor since 1.1: the Skill leaderboard now surfaces real win-rate, alongside a batch of pairing, playoff-trigger and data-integrity fixes.
+
+### Added
+- **Skill-leaderboard win-rate** — the Skill board now carries a real win-rate column (wins / games from the match-game source) beside the model skill, still ranked by skill. The old standalone Win Rate tab is retired. (#8)
+
+### Changed
+- **Skill-leaderboard cutoff** raised to 20 games (was 5) — the board no longer lists players with only a handful of games.
+
+### Fixed
+- **BaLi bye choice** now minimises play-ups — among the eligible weakest candidates it byes the one that strands the fewest peers into cross-band rematches (the weakest still wins ties), fixing avoidable double play-ups seen in live rounds.
+- **BaLi playoff auto-generation** no longer stalls after a burst of withdrawals — the pairing tick coalesces a dropped trigger and re-runs on the settled field, so playoffs generate without a manual nudge.
+- **Start-Playoffs button** is no longer hidden by a cancelled final-round match — a last-round withdrawal cancels its match, and the completeness check now ignores CANCELLED.
+- **Declining a re-join** no longer erases a player's history — a withdrawn player who re-requested and was declined is reverted to WITHDREW instead of hard-deleted, so they stay in the standings and bracket (fixes a played player collapsing to a raw user id).
+
+### Ops
+- **Changelog automation** — a `post-changelog` script publishes the newest release section to the Discord changelog channel (dry-run by default).
 
 ## [1.1.1] — 2026-07-24 — BaLi fairness + display fixes
 First tagged release since launch.
