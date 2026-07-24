@@ -124,9 +124,12 @@ export function MatchNode({
   player2Band,
 }: MatchNodeProps) {
   const isBye = match.status === 'BYE';
-  // PENDING_BYE is a provisional bye (BaLi 2.0) that may still be filled by a same-depth
-  // opponent — render it like a catch-up bye slot until it resolves.
-  const isCatchupBye = match.status === 'CATCHUP_BYE' || match.status === 'PENDING_BYE';
+  // PENDING_BYE is a normal PROVISIONAL bye (BaLi 2.0): a player held for a possible same-depth
+  // opponent. It scores like a real bye once it resolves (or becomes a match), so it must NOT
+  // read as a 0-point catch-up bye. CATCHUP_BYE is the only true 0-point late-join placeholder.
+  const isPendingBye = match.status === 'PENDING_BYE';
+  const isCatchupBye = match.status === 'CATCHUP_BYE';
+  const isAnyBye = isBye || isPendingBye || isCatchupBye;
   const isForfeit = match.status === 'FORFEIT';
   const isCancelled = match.status === 'CANCELLED';
   const isOngoing = match.status === 'ONGOING';
@@ -150,8 +153,8 @@ export function MatchNode({
 
   const statusCls = statusColors[match.status] ?? 'border-stone-700 bg-stone-900/40';
 
-  // BYE and CATCHUP_BYE use dashed border style in addition to status colors
-  const borderStyle = (isBye || isCatchupBye) ? 'border border-dashed' : 'border';
+  // Every bye variant uses a dashed border in addition to status colors
+  const borderStyle = isAnyBye ? 'border border-dashed' : 'border';
 
   const p1Winner = match.winnerId && match.winnerId === match.player1Id;
   const p2Winner = match.winnerId && match.winnerId === match.player2Id;
@@ -224,6 +227,11 @@ export function MatchNode({
           Catch-up · 0 pts
         </div>
       )}
+      {isPendingBye && (
+        <div className="absolute top-0 right-0 bg-stone-900/80 text-stone-500 text-[8px] font-medium tracking-wider px-1 rounded-bl border-l border-b border-stone-700/40">
+          BYE · pending
+        </div>
+      )}
       {isWithdrawnVoid && (
         <div className="absolute top-0 right-0 bg-amber-950/70 text-amber-600 text-[8px] font-medium tracking-wider px-1 rounded-bl border-l border-b border-amber-700/30">
           Withdrew → re-paired
@@ -250,7 +258,7 @@ export function MatchNode({
         >
           {match.player1Id
             ? (player1Name ?? match.player1Id)
-            : (p1SlotLabel ?? (isBye || isCatchupBye ? 'BYE' : 'TBD'))}
+            : (p1SlotLabel ?? (isAnyBye ? 'BYE' : 'TBD'))}
         </span>
         {p1Dropped && (
           <span className="text-[9px] text-red-400 uppercase tracking-wider ml-1 font-semibold">out</span>
@@ -284,7 +292,7 @@ export function MatchNode({
         >
           {match.player2Id
             ? (player2Name ?? match.player2Id)
-            : (p2SlotLabel ?? (isBye || isCatchupBye ? 'BYE' : 'TBD'))}
+            : (p2SlotLabel ?? (isAnyBye ? 'BYE' : 'TBD'))}
         </span>
         {p2Dropped && (
           <span className="text-[9px] text-red-400 uppercase tracking-wider ml-1 font-semibold">out</span>
