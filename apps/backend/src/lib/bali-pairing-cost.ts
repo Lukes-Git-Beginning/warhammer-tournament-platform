@@ -46,3 +46,23 @@ export function pairCost(bandA: number, bandB: number, rematch: RematchState): n
   if (rematch.immediate) return IMMEDIATE_REMATCH_COST;
   return bandGapCost(bandA, bandB) + (rematch.metBefore ? EVENTUAL_REMATCH_COST : 0);
 }
+
+/**
+ * #11 late-join reclaim gate (Alex 2026-07-24). When a late joiner reaches an already-formed
+ * round, the engine may pull an existing bye-holder into a real match with them — but that
+ * pairing must be LEGAL: its band gap may not EXCEED the round's current worst committed gap (so a
+ * late join is never the round's biggest gap), and it may not be an immediate rematch. When the
+ * reclaim does NOT involve a still-catching-up late joiner (normal round formation), it is always
+ * allowed — the gate only constrains late-join accommodation.
+ */
+export function isLegalLateJoinReclaim(opts: {
+  involvesCatchup: boolean;
+  holderBand: number;
+  joinerBand: number;
+  roundMaxGap: number;
+  immediateRematch: boolean;
+}): boolean {
+  if (!opts.involvesCatchup) return true;
+  if (Math.abs(opts.holderBand - opts.joinerBand) > opts.roundMaxGap) return false;
+  return !opts.immediateRematch;
+}

@@ -23,6 +23,7 @@ import {
   seededShuffle,
   MAX_BAND,
 } from './balanced-liechtenstein.js';
+import { isLegalLateJoinReclaim } from './bali-pairing-cost.js';
 import { computeSwissStandings, sortSwissStandings, type CompletedMatchRecord } from './swiss.js';
 import { getPlayerClassification } from './skill-classification-service.js';
 import { autoSwissConfig } from './auto-swiss-service.js';
@@ -222,18 +223,17 @@ export async function runBalancedPairingTick(
             m.round > round &&
             m.status !== 'CANCELLED',
         );
-      // 0-point rule (marker-based): a late joiner (persistent late_joined marker) who
-      // has not yet played a real game only ever gets 0-point CATCHUP_BYEs, never a
-      // scoring bye — closes the "reward for being late" hole independent of registered_at.
-      const byeStatusFor = (userId: string): { status: MatchStatus; winner: string | null } => {
-        const hasPlayedReal = matches.some(
-          (m) => (m.player1_id === userId || m.player2_id === userId) && m.status === 'COMPLETED',
-        );
-        const isCatchup = lateJoinedSet.has(userId) && !hasPlayedReal;
-        return isCatchup
+      // A late joiner still "catching up" = the persistent marker is set AND they have no real
+      // (COMPLETED) game yet. Drives both the 0-point catch-up-bye rule and the reclaim gate below.
+      const hasPlayedReal = (userId: string): boolean =>
+        matches.some((m) => (m.player1_id === userId || m.player2_id === userId) && m.status === 'COMPLETED');
+      const isCatchingUp = (userId: string): boolean => lateJoinedSet.has(userId) && !hasPlayedReal(userId);
+      // 0-point rule (marker-based): a still-catching-up late joiner only ever gets 0-point
+      // CATCHUP_BYEs, never a scoring bye — closes the "reward for being late" hole.
+      const byeStatusFor = (userId: string): { status: MatchStatus; winner: string | null } =>
+        isCatchingUp(userId)
           ? { status: 'CATCHUP_BYE' as MatchStatus, winner: null }
           : { status: 'BYE' as MatchStatus, winner: userId };
-      };
 
       // Step A — crystallise any PENDING_BYE whose holder has moved on: it can no longer be
       // reclaimed into a real match, so it becomes a scored bye (or a 0-point catch-up bye
@@ -319,7 +319,31 @@ export async function runBalancedPairingTick(
       const reclaimUsed = new Set<string>();
       const reclaimUpdates: Array<{ id: string; player1_id: string; player2_id: string; round: number }> = [];
       const freshByes: typeof plan.byes = [];
+      const bandOf = (id: string): number => bandByUser.get(id) ?? DEFAULT_BAND;
       for (const b of plan.byes) {
+        // #11 (Alex 2026-07-24): a reclaim that accommodates a still-catching-up late joiner must be
+        // a LEGAL pairing — its band gap may not EXCEED the round's current worst committed gap (so a
+        // late join is never the round's biggest gap), and it may not be an immediate rematch. If no
+        // legal bye-partner is available they both stay on provisional byes and fold into a later
+        // round's optimum. Normal (non-late) holds during round formation reclaim freely, as before.
+        const bCatchup = isCatchingUp(b.player_id);
+        const committedGaps = matches
+          .filter((m) => m.round === b.round && m.player1_id && m.player2_id && m.status !== 'CANCELLED')
+          .map((m) => Math.abs(bandOf(m.player1_id!) - bandOf(m.player2_id!)));
+        const roundMaxGap = committedGaps.length > 0 ? Math.max(...committedGaps) : 0;
+        const isLegalReclaim = (holderId: string): boolean =>
+          isLegalLateJoinReclaim({
+            involvesCatchup: bCatchup || isCatchingUp(holderId),
+            holderBand: bandOf(holderId),
+            joinerBand: bandOf(b.player_id),
+            roundMaxGap,
+            immediateRematch: matches.some(
+              (x) =>
+                x.round === b.round - 1 &&
+                ((x.player1_id === holderId && x.player2_id === b.player_id) ||
+                  (x.player1_id === b.player_id && x.player2_id === holderId)),
+            ),
+          });
         const pb = matches.find(
           (m) =>
             m.status === 'PENDING_BYE' &&
@@ -327,7 +351,8 @@ export async function runBalancedPairingTick(
             m.player1_id !== null &&
             m.player1_id !== b.player_id &&
             !reclaimUsed.has(m.id) &&
-            !movedOn(m.player1_id, m.round),
+            !movedOn(m.player1_id, m.round) &&
+            isLegalReclaim(m.player1_id),
         );
         if (pb) {
           reclaimUsed.add(pb.id);

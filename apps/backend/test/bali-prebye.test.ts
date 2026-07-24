@@ -4,6 +4,7 @@
 // only fresh band-near partner used up and otherwise landed a Δ3.
 import { describe, it, expect } from 'vitest';
 import { planPairings, type BalancedMatchRow, type BalancedParticipant } from '../src/lib/balanced-liechtenstein.js';
+import { isLegalLateJoinReclaim } from '../src/lib/bali-pairing-cost.js';
 
 const p = (userId: string, band: number): BalancedParticipant => ({ userId, band });
 
@@ -53,5 +54,30 @@ describe('BaLi pre-assigned bye', () => {
     const byes = plan.byes.filter((x) => x.round === 2).map((b) => b.player_id);
     expect(byes).not.toContain('A');
     expect(byes).toEqual(['C']);
+  });
+});
+
+describe('isLegalLateJoinReclaim (#11 late-join reclaim gate)', () => {
+  it('always allows a reclaim that involves no catching-up late joiner (normal formation)', () => {
+    // Even a wide gap with no committed matches is fine when no late joiner is being accommodated.
+    expect(isLegalLateJoinReclaim({ involvesCatchup: false, holderBand: 1, joinerBand: 5, roundMaxGap: 0, immediateRematch: false })).toBe(true);
+  });
+
+  it('rejects a late-join reclaim whose gap exceeds the round worst committed gap', () => {
+    // holder b1 vs joiner b3 = Δ2, but the round worst existing gap is Δ1 → would be the biggest.
+    expect(isLegalLateJoinReclaim({ involvesCatchup: true, holderBand: 1, joinerBand: 3, roundMaxGap: 1, immediateRematch: false })).toBe(false);
+  });
+
+  it('allows a late-join reclaim whose gap ties the round worst committed gap', () => {
+    expect(isLegalLateJoinReclaim({ involvesCatchup: true, holderBand: 2, joinerBand: 3, roundMaxGap: 1, immediateRematch: false })).toBe(true);
+  });
+
+  it('rejects a late-join reclaim that would be an immediate rematch, even within the gap', () => {
+    expect(isLegalLateJoinReclaim({ involvesCatchup: true, holderBand: 3, joinerBand: 3, roundMaxGap: 2, immediateRematch: true })).toBe(false);
+  });
+
+  it('with no committed matches yet (roundMaxGap 0) allows only a same-band late-join reclaim', () => {
+    expect(isLegalLateJoinReclaim({ involvesCatchup: true, holderBand: 3, joinerBand: 3, roundMaxGap: 0, immediateRematch: false })).toBe(true);
+    expect(isLegalLateJoinReclaim({ involvesCatchup: true, holderBand: 3, joinerBand: 4, roundMaxGap: 0, immediateRematch: false })).toBe(false);
   });
 });
