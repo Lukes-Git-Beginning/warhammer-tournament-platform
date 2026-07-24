@@ -19,7 +19,7 @@ describe('BaLi pre-assigned bye', () => {
       { round: 1, player1_id: 'C', player2_id: 'D', status: 'COMPLETED' },
       { round: 1, player1_id: 'E', player2_id: null, status: 'BYE' },
     ];
-    const pickBye = (ids: string[]) => (ids.includes('A') ? 'A' : null);
+    const pickBye = (ids: string[]) => (ids.includes('A') ? ['A'] : []);
 
     const plan = planPairings(participants, matches, 3, 't', pickBye);
     const r2 = plan.pairings.filter((x) => x.round === 2);
@@ -49,11 +49,33 @@ describe('BaLi pre-assigned bye', () => {
       { round: 1, player1_id: 'D', player2_id: 'E', status: 'COMPLETED' },
     ];
     const hadBye = new Set(['A']);
-    const pickBye = (ids: string[]) => ids.find((id) => !hadBye.has(id) && id === 'C') ?? null;
+    const pickBye = (ids: string[]) => ids.filter((id) => !hadBye.has(id) && id === 'C');
     const plan = planPairings(participants, matches, 3, 't', pickBye);
     const byes = plan.byes.filter((x) => x.round === 2).map((b) => b.player_id);
     expect(byes).not.toContain('A');
     expect(byes).toEqual(['C']);
+  });
+
+  it('byes the play-up-minimising eligible player, not just the weakest (glue case)', () => {
+    // R2: 5 players. Z is the weakest (picked first), but byeing Z strands X and Y — who met in
+    // R1 (an immediate rematch) — into play-ups. Byeing X (or Y) instead lets the other two b3s
+    // pair a fresh partner for zero play-ups. The engine must prefer that over the raw-weakest bye.
+    const participants = [p('X', 3), p('Y', 3), p('Z', 3), p('P', 5), p('Q', 5)];
+    const matches: BalancedMatchRow[] = [
+      { round: 1, player1_id: 'X', player2_id: 'Y', status: 'COMPLETED' },
+      { round: 1, player1_id: 'Z', player2_id: 'P', status: 'COMPLETED' },
+      { round: 1, player1_id: 'Q', player2_id: null, status: 'BYE' },
+    ];
+    const order = ['Z', 'X', 'Y']; // weakest first — a raw pre-bye would bye Z
+    const pickBye = (ids: string[]) => order.filter((id) => ids.includes(id));
+    const plan = planPairings(participants, matches, 4, 't', pickBye);
+    const r2 = plan.pairings.filter((x) => x.round === 2);
+    const byes = plan.byes.filter((x) => x.round === 2).map((b) => b.player_id);
+    const bandOf: Record<string, number> = { X: 3, Y: 3, Z: 3, P: 5, Q: 5 };
+    const maxGap = Math.max(0, ...r2.map((x) => Math.abs(bandOf[x.player1_id]! - bandOf[x.player2_id]!)));
+
+    expect(byes).not.toContain('Z'); // byeing the weakest here would have forced play-ups
+    expect(maxGap).toBe(0); // the chosen bye keeps every pairing same-band
   });
 });
 

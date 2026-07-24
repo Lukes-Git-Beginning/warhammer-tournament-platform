@@ -191,11 +191,8 @@ function pairPool(
   waiting: Waiter[],
   incoming: Waiter[],
   seedKey: string,
-  pickBye?: (candidateUserIds: string[]) => string | null,
+  pickBye?: (candidateUserIds: string[]) => string[],
 ): { pairs: [Waiter, Waiter][]; byes: Waiter[] } {
-  const pairs: [Waiter, Waiter][] = [];
-  const byes: Waiter[] = [];
-
   // Order by id then seeded-shuffle → the pool's output depends only on the SET of
   // players (+ seed), not on the DB row order, and equal-cost optima are reproducible.
   const byId = (a: Waiter, b: Waiter): number =>
@@ -203,22 +200,6 @@ function pairPool(
   const free = seededShuffle([...waiting].sort(byId), `${seedKey}:free`);
   const inc = seededShuffle([...incoming].sort(byId), `${seedKey}:inc`);
   const closed = inc.length === 0; // no reinforcements → this pool is final
-
-  // Pre-assigned bye: in a CLOSED pool with an odd head-count, the caller picks the odd-one-out
-  // up front (weakest handicap-adjusted score, never byed twice) rather than leaving it to the
-  // Blossom leftover. This keeps a lone weak player on a bye instead of a hopeless 3-band play-up,
-  // and makes the bye deterministic rather than a side effect of the async commit order.
-  let preBye: Waiter | null = null;
-  if (closed && free.length % 2 === 1 && pickBye) {
-    const byeId = pickBye(free.map((w) => w.userId));
-    const idx = byeId ? free.findIndex((w) => w.userId === byeId) : -1;
-    if (idx >= 0) preBye = free.splice(idx, 1)[0]!;
-  }
-
-  const W = free.length;
-  const nodes = [...free, ...inc]; // [free | incoming]
-  const n = nodes.length;
-  const isFree = (i: number): boolean => i < W;
 
   // Scaled cost of an edge, or null when it must not exist. An immediate rematch has no
   // edge while the pool is still open (the players hold for a fresh partner); in a closed
@@ -233,44 +214,91 @@ function pairPool(
     return Number.isFinite(c) ? Math.round(c * COST_SCALE) : null;
   };
 
-  const mate = new Array<number>(n).fill(-1);
-  if (n >= 2) {
-    let maxScaled = 0;
-    for (let i = 0; i < n; i++)
-      for (let j = i + 1; j < n; j++) {
-        const s = edgeScaled(nodes[i]!, nodes[j]!);
-        if (s !== null && s > maxScaled) maxScaled = s;
+  // Min-cost matching over `freeList` (+ the shared incoming pool). Returns the committed
+  // FREE↔FREE pairs and, once the pool is closed, the unmatched leftover as byes. A free player
+  // matched to an incoming node is HELD (their optimal partner is still playing).
+  const solve = (freeList: Waiter[]): { pairs: [Waiter, Waiter][]; byes: Waiter[] } => {
+    const pairs: [Waiter, Waiter][] = [];
+    const byes: Waiter[] = [];
+    const W = freeList.length;
+    const nodes = [...freeList, ...inc]; // [free | incoming]
+    const n = nodes.length;
+    const isFree = (i: number): boolean => i < W;
+    const mate = new Array<number>(n).fill(-1);
+    if (n >= 2) {
+      let maxScaled = 0;
+      for (let i = 0; i < n; i++)
+        for (let j = i + 1; j < n; j++) {
+          const s = edgeScaled(nodes[i]!, nodes[j]!);
+          if (s !== null && s > maxScaled) maxScaled = s;
+        }
+      const K = maxScaled + 1; // offset so max-weight matching == min-cost matching
+      const edges: Array<[number, number, number]> = [];
+      for (let i = 0; i < n; i++)
+        for (let j = i + 1; j < n; j++) {
+          const s = edgeScaled(nodes[i]!, nodes[j]!);
+          if (s === null) continue;
+          const bonus = edgeBonus(isFree(i), isFree(j), nodes[i]!.band, nodes[j]!.band);
+          edges.push([i, j, K - s + bonus]);
+        }
+      if (edges.length > 0) {
+        const result = blossom(edges);
+        for (let i = 0; i < n; i++) mate[i] = result[i] ?? -1;
       }
-    const K = maxScaled + 1; // offset so max-weight matching == min-cost matching
-    const edges: Array<[number, number, number]> = [];
-    for (let i = 0; i < n; i++)
-      for (let j = i + 1; j < n; j++) {
-        const s = edgeScaled(nodes[i]!, nodes[j]!);
-        if (s === null) continue;
-        const bonus = edgeBonus(isFree(i), isFree(j), nodes[i]!.band, nodes[j]!.band);
-        edges.push([i, j, K - s + bonus]);
+    }
+    for (let i = 0; i < W; i++) {
+      const j = mate[i]!;
+      if (j < 0) {
+        if (closed) byes.push(nodes[i]!);
+        continue;
       }
-    if (edges.length > 0) {
-      const result = blossom(edges);
-      for (let i = 0; i < n; i++) mate[i] = result[i] ?? -1;
+      if (isFree(j) && j > i) pairs.push([nodes[i]!, nodes[j]!]);
+      // matched to an incoming node → hold (no row)
+    }
+    return { pairs, byes };
+  };
+
+  // Play-up profile of a matching: (worst band-gap, #gaps≥2, total gap). Lower is better.
+  const profile = (m: { pairs: [Waiter, Waiter][] }): [number, number, number] => {
+    let worst = 0, heavy = 0, total = 0;
+    for (const [a, b] of m.pairs) {
+      const g = Math.abs(a.band - b.band);
+      if (g > worst) worst = g;
+      if (g >= 2) heavy += 1;
+      total += g;
+    }
+    return [worst, heavy, total];
+  };
+  const strictlyLess = (x: [number, number, number], y: [number, number, number]): boolean =>
+    x[0] !== y[0] ? x[0] < y[0] : x[1] !== y[1] ? x[1] < y[1] : x[2] < y[2];
+
+  // Pre-assigned bye: in a CLOSED odd pool the caller supplies the ELIGIBLE bye candidates ordered
+  // weakest-first (already respecting the never-byed-twice rule). Among them, pick the bye that
+  // yields the fewest play-ups — a weak player is often the "glue" that lets their same-band peers
+  // avoid a rematch-forced play-up, so blindly byeing the weakest can ADD play-ups. Ties keep the
+  // weakest. This preserves the "weakest rests" intent without ever creating extra play-ups.
+  // Provisional/open pools are unaffected (no pre-bye there).
+  if (closed && free.length % 2 === 1 && pickBye) {
+    const ranked = pickBye(free.map((w) => w.userId)); // eligible byes, weakest first
+    let chosen: { m: { pairs: [Waiter, Waiter][]; byes: Waiter[] }; byed: Waiter } | null = null;
+    let chosenProfile: [number, number, number] | null = null;
+    for (const id of ranked) {
+      const idx = free.findIndex((w) => w.userId === id);
+      if (idx < 0) continue;
+      const m = solve(free.filter((_, i) => i !== idx));
+      const prof = profile(m);
+      if (chosenProfile === null || strictlyLess(prof, chosenProfile)) {
+        chosen = { m, byed: free[idx]! };
+        chosenProfile = prof;
+      }
+    }
+    if (chosen) {
+      chosen.m.byes.push(chosen.byed);
+      return chosen.m;
     }
   }
 
-  // Commit FREE↔FREE edges; a free player matched to an incoming node is HELD (their
-  // optimal partner is still playing). An unmatched free player HOLDS while anyone is
-  // incoming, and only byes once the pool is closed (the unavoidable odd-count leftover).
-  for (let i = 0; i < W; i++) {
-    const j = mate[i]!;
-    if (j < 0) {
-      if (closed) byes.push(nodes[i]!);
-      continue;
-    }
-    if (isFree(j) && j > i) pairs.push([nodes[i]!, nodes[j]!]);
-    // matched to an incoming node → hold (no row)
-  }
-
-  if (preBye) byes.push(preBye);
-  return { pairs, byes };
+  return solve(free);
 }
 
 /**
@@ -288,10 +316,11 @@ export function planPairings(
   matches: BalancedMatchRow[],
   roundsCount: number,
   tournamentId = '',
-  // Optional: choose the odd-one-out bye for a closed round pool, given that round's
-  // candidate ids. The engine stays score-agnostic — the caller (which has the standings)
-  // supplies the pick. Returns null to fall back to the Blossom-leftover bye.
-  pickBye?: (candidateUserIds: string[], round: number) => string | null,
+  // Optional: rank the ELIGIBLE odd-one-out bye candidates for a closed round pool (weakest
+  // first), given that round's candidate ids. The engine stays score-agnostic — the caller (which
+  // has the standings) supplies the ranking; the engine then byes whichever of them creates the
+  // fewest play-ups, tie-broken by weakest. An empty array falls back to the Blossom-leftover bye.
+  pickBye?: (candidateUserIds: string[], round: number) => string[],
 ): PairingPlan {
   const roster = new Set(participants.map((p) => p.userId));
   const bandOf = new Map(participants.map((p) => [p.userId, p.band ?? DEFAULT_BAND]));

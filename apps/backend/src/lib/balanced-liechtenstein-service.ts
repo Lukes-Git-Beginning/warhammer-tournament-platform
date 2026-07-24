@@ -162,11 +162,21 @@ export async function runBalancedPairingTick(
 
   const redis = fastify.redis;
   const lockKey = `rizzotto:bl:tick:${tournamentId}:lock`;
+  const pendingKey = `rizzotto:bl:tick:${tournamentId}:pending`;
   const token = randomUUID();
 
   if (redis) {
     const acquired = await redis.set(lockKey, token, 'EX', LOCK_TTL_SECONDS, 'NX');
-    if (acquired !== 'OK') return; // another tick is already running for this tournament
+    if (acquired !== 'OK') {
+      // Another tick is running. Don't drop this trigger — flag a re-run so the holder
+      // re-processes the latest state after it finishes. Without this, a burst of triggers
+      // (e.g. several near-simultaneous withdrawals) can leave the final, now-complete field
+      // un-processed → the per-division playoffs never auto-generate (the case that needed a
+      // manual start-playoffs on an already-finished field).
+      await redis.set(pendingKey, '1', 'EX', LOCK_TTL_SECONDS);
+      return;
+    }
+    await redis.del(pendingKey); // we hold the lock → we'll read the freshest state; clear the flag
   }
 
   try {
@@ -286,16 +296,15 @@ export async function runBalancedPairingTick(
           )
           .map((m) => m.player1_id!),
       );
-      const pickBye = (candidateIds: string[], round: number): string | null => {
+      const pickBye = (candidateIds: string[], round: number): string[] => {
         const eligible = candidateIds.filter((id) => !hadBye.has(id));
         const pool = eligible.length > 0 ? eligible : candidateIds; // all already byed → any
         const played = Math.max(0, round - 1); // handicap only over rounds already played
         const adj = (id: string) =>
           (scoreByUser.get(id) ?? 0) - 0.2 * played * (MAX_BAND - (bandByUser.get(id) ?? MAX_BAND));
-        let min = Infinity;
-        for (const id of pool) min = Math.min(min, adj(id));
-        const tied = pool.filter((id) => Math.abs(adj(id) - min) < 1e-9);
-        return seededShuffle(tied, `${tournamentId}:${round}:bye`)[0] ?? null;
+        // Eligible candidates, weakest (lowest handicap-adjusted score) first; ties are broken
+        // deterministically per round. The engine byes whichever creates the fewest play-ups.
+        return [...seededShuffle(pool, `${tournamentId}:${round}:bye`)].sort((a, b) => adj(a) - adj(b));
       };
 
       const plan = planPairings(
@@ -469,6 +478,14 @@ export async function runBalancedPairingTick(
         /* lock will expire on its own */
       }
     }
+  }
+
+  // A trigger that arrived while we held the lock flagged a re-run — process the now-latest state
+  // so nothing is lost (e.g. the final withdrawal in a burst that just completed the field, which
+  // otherwise leaves the auto playoff-generation un-triggered).
+  if (redis && (await redis.get(pendingKey)) === '1') {
+    await redis.del(pendingKey);
+    return runBalancedPairingTick(fastify, tournamentId);
   }
 }
 
