@@ -351,12 +351,12 @@ export function MatchDetailPage() {
   const isPrivileged = !!match.can_manage;
   const canReport = !!(user && (isPlayer1 || isPlayer2 || isPrivileged));
 
-  // Hosts/admins can also resolve a DISPUTED match (the dual-submit flow is stuck);
-  // regular players only report ONGOING/PENDING.
+  // Hosts/admins can also resolve a DISPUTED match (the dual-submit flow is stuck) and EDIT a
+  // COMPLETED one to correct a wrong result; regular players only report ONGOING/PENDING.
   const reportable =
     match.status === 'ONGOING' ||
     match.status === 'PENDING' ||
-    (isPrivileged && match.status === 'DISPUTED');
+    (isPrivileged && (match.status === 'DISPUTED' || match.status === 'COMPLETED'));
 
   // ---------------------------------------------------------------------------
   // Decision gate state
@@ -682,10 +682,13 @@ export function MatchDetailPage() {
       {/* ------------------------------------------------------------------ */}
       {/* Result Reporting                                                     */}
       {/* ------------------------------------------------------------------ */}
-      {!isOpenPlay && canReport && reportable && (
+      {/* Report / edit result. Open Play stays player-driven (on-site flow), but a privileged
+          user (host/mod/admin) can open the editor here to correct ANY match — including a
+          completed Ladder game, which otherwise has no result editor at all. */}
+      {canReport && reportable && (!isOpenPlay || isPrivileged) && (
         <div className="mb-4 flex justify-end">
           <Button variant="forge" size="md" onClick={() => setShowScoreModal(true)}>
-            Report Result
+            {match.status === 'COMPLETED' ? 'Edit Result' : 'Report Result'}
           </Button>
         </div>
       )}

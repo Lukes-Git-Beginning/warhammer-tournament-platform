@@ -301,7 +301,12 @@ export function AdminAllGamesTab() {
                     </tr>
                     {rowError[g.id] && (
                       <tr>
-                        <td colSpan={colSpan} className="px-3 pb-2 text-xs text-red-400">{rowError[g.id]}</td>
+                        <td colSpan={colSpan} className="px-3 pb-2 text-xs text-red-400">
+                          {rowError[g.id]}{' '}
+                          <Link to="/matches/$matchId" params={{ matchId: g.matchId }} className="text-rizzotto-gold-400 hover:underline">
+                            Open the match to edit →
+                          </Link>
+                        </td>
                       </tr>
                     )}
                   </Fragment>
