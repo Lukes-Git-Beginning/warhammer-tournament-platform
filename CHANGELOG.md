@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.18.1] — 2026-07-25 — Auto-sizer round-count fix
+### Fixed
+- **Auto-sized round counts are monotonic again** — a mid-size field no longer gets *more* rounds than a large one. The 8+ and 16+ tiers had their round counts swapped (8+ forced 5 rounds while 16+ got only 4); now 8+ → 4 rounds, 16+ → 5.
+- **No-shows no longer inflate the schedule** — once check-in has begun, a player who registered but never checked in is treated as a no-show when the tournament re-sizes mid-run (it already was at start). Drops now correctly shrink the round count instead of a phantom head-count keeping it high.
+
 ## [1.18.0] — 2026-07-25 — Changelog channel 📜
 ### Added
 - **This channel.** Release notes now land here automatically — after every deploy, RizzBOTto posts what changed, each entry versioned and stamped with the exact time it went live. The full history above was backfilled the moment the channel went online.
