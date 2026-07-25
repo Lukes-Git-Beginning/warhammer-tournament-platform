@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.19.2] — 2026-07-26 — Auto-sizer correction (BaLi-specific rounds)
+### Fixed
+- **Reverted the v1.18.1 round-count change for Swiss / Auto Swiss.** Those formats deliberately target **7 total rounds** for predictable scheduling — 5 Swiss + a 2-round Top 4, or 4 Swiss + a 3-round Top 8 — so the 8+ tier having *more* Swiss rounds than 16+ is intentional, not a bug. The v1.18.1 "monotonic fix" is undone.
+- **Balanced Liechtenstein now sizes on its own:** 3 rounds under 8 players, 4 from 8 up (Top 8 almost never applies to BaLi, and its playoff size is the host's choice — independent of the round count). No-shows also no longer inflate a BaLi round count when it re-sizes mid-run.
+
 ## [1.19.1] — 2026-07-25 — Fix wrong Ladder / completed-match results
 ### Fixed
 - **A wrong result on a Ladder (Open Play) match can finally be corrected.** The result editor was hidden for Open Play *and* for completed matches, so the All Games tab's "use the match result editor" led nowhere for a ladder game. Hosts / mods / admins now get an **Edit Result** button on any match page (Ladder included, completed included), and the All Games rejection links straight to that match.
