@@ -1,7 +1,12 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import type { PrismaClient } from '@rizzotto/db';
+import type { FastifyBaseLogger } from 'fastify';
 import { postChannelMessage, isBotConfigured } from './discord-notify.js';
+
+/** AdminConfig key that stores the newest CHANGELOG version already posted to Discord. */
+export const CHANGELOG_LAST_PUBLISHED_KEY = 'changelog_last_published';
 
 /**
  * Publish the versioned CHANGELOG.md to the Discord changelog channel from the server
@@ -78,6 +83,19 @@ function chunk(text: string, max: number): string[] {
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Given all sections (newest-first, as parsed) and the last-published version, return the
+ * sections still to post, OLDEST-first. Everything above the last-published section is newer;
+ * an unknown/absent cursor (first run) means every section is new. Pure — unit-tested.
+ */
+export function selectSectionsToPost(
+  sections: ChangelogSection[],
+  lastPublished: string | null,
+): ChangelogSection[] {
+  const idx = lastPublished ? sections.findIndex((s) => s.version === lastPublished) : -1;
+  return (idx >= 0 ? sections.slice(0, idx) : sections).slice().reverse();
+}
+
 export interface PublishResult {
   channelId: string;
   dryRun: boolean;
@@ -138,4 +156,65 @@ export async function publishChangelog(opts: {
   }
 
   return { channelId, dryRun: !opts.confirm, posted, skipped };
+}
+
+/**
+ * Auto-publish any CHANGELOG versions that have appeared since the last one posted — called
+ * once on backend boot (every deploy restarts the backend). Fully hands-off: RizzBOTto posts
+ * new release notes itself. Idempotent via the `changelog_last_published` AdminConfig key, so a
+ * plain restart with no new version posts nothing; the very first run backfills the whole file.
+ * Posts oldest-first, advances the stored cursor after each success, and stops (without losing
+ * progress) on the first failure so the next boot resumes. Never throws — logs and returns.
+ */
+export async function publishNewChangelogOnBoot(
+  prisma: PrismaClient,
+  log: FastifyBaseLogger,
+): Promise<void> {
+  if (!isBotConfigured()) {
+    log.info('[changelog] no bot token — skipping auto-publish');
+    return;
+  }
+
+  let sections: ChangelogSection[];
+  try {
+    sections = parseChangelog(readFileSync(resolveChangelogPath(), 'utf8'));
+  } catch (err) {
+    log.warn({ err: String(err) }, '[changelog] CHANGELOG.md unreadable — skipping auto-publish');
+    return;
+  }
+  if (sections.length === 0) return;
+
+  const row = await prisma.adminConfig.findUnique({
+    where: { key: CHANGELOG_LAST_PUBLISHED_KEY },
+    select: { value: true },
+  });
+  const lastPublished = typeof row?.value === 'string' ? row.value : null;
+
+  // Sections newer than the last-published one, oldest-first. First run → the whole backfill.
+  const toPost = selectSectionsToPost(sections, lastPublished);
+  if (toPost.length === 0) {
+    log.info({ lastPublished }, '[changelog] nothing new to auto-publish');
+    return;
+  }
+
+  const channelId = changelogChannelId();
+  log.info({ count: toPost.length, lastPublished, channelId }, '[changelog] auto-publishing new versions');
+
+  for (const section of toPost) {
+    try {
+      for (const part of chunk(section.body, DISCORD_MAX)) {
+        await postChannelMessage(channelId, part);
+        await sleep(POST_DELAY_MS);
+      }
+    } catch (err) {
+      log.error({ err: String(err), version: section.version }, '[changelog] auto-publish failed — retrying next boot');
+      return; // cursor left at the last success; the next boot resumes from here
+    }
+    await prisma.adminConfig.upsert({
+      where: { key: CHANGELOG_LAST_PUBLISHED_KEY },
+      create: { key: CHANGELOG_LAST_PUBLISHED_KEY, value: section.version, updated_by: 'system' },
+      update: { value: section.version, updated_by: 'system' },
+    });
+  }
+  log.info({ published: toPost.map((s) => s.version) }, '[changelog] auto-publish complete');
 }

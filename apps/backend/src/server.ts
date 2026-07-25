@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { buildApp } from './app.js';
+import { publishNewChangelogOnBoot } from './lib/changelog-publish.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -22,6 +23,9 @@ async function main(): Promise<void> {
 
   try {
     await app.listen({ port: PORT, host: HOST });
+    // Fire-and-forget: RizzBOTto auto-publishes any CHANGELOG versions added since the last
+    // deploy to the Discord changelog channel. Never blocks or fails startup.
+    void publishNewChangelogOnBoot(app.prisma, app.log);
   } catch (err) {
     app.log.error(err);
     process.exit(1);
