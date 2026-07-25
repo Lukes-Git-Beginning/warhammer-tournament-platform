@@ -18,6 +18,38 @@ const DEFAULT_CHANGELOG_CHANNEL_ID = '1530338921903427665';
 const DISCORD_MAX = 1900; // hard limit is 2000 — keep headroom
 const POST_DELAY_MS = 1200; // stay comfortably under Discord's per-channel rate limit
 
+/**
+ * When each version went live on prod (Unix seconds), from the deploy workflow completion
+ * times. Used to stamp every changelog post with a Discord `<t:…>` timestamp so it renders in
+ * each reader's own timezone. A version NOT listed here (any future release) falls back to the
+ * current time — which, since new versions are auto-posted on the boot right after their deploy,
+ * IS the moment they went live.
+ */
+export const DEPLOY_TIMESTAMPS: Record<string, number> = {
+  '1.0.0': 1782586800, // launch tournament (2026-06-27 21:00 CEST)
+  '1.1.0': 1782775900,
+  '1.2.0': 1782949206,
+  '1.3.0': 1783009142,
+  '1.4.0': 1783119060,
+  '1.5.0': 1783378428,
+  '1.6.0': 1783463380,
+  '1.7.0': 1783530362,
+  '1.8.0': 1783616753,
+  '1.8.1': 1783726940,
+  '1.9.0': 1783795178,
+  '1.10.0': 1783898826,
+  '1.11.0': 1783925540,
+  '1.12.0': 1784064661,
+  '1.13.0': 1784198502,
+  '1.14.0': 1784305379,
+  '1.15.0': 1784392887,
+  '1.15.1': 1784505170,
+  '1.15.2': 1784590987,
+  '1.16.0': 1784646227,
+  '1.16.1': 1784909420,
+  '1.17.0': 1784962802,
+};
+
 export function changelogChannelId(): string {
   return process.env.DISCORD_CHANGELOG_CHANNEL_ID?.trim() || DEFAULT_CHANGELOG_CHANNEL_ID;
 }
@@ -84,6 +116,20 @@ function chunk(text: string, max: number): string[] {
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Render a section for Discord: the changelog body plus a "went live on prod" line using a
+ * Discord timestamp (`<t:unix:F>` absolute + `<t:unix:R>` relative), which each reader sees in
+ * their own timezone. Historical versions use their real deploy time; a future version falls
+ * back to now (= its deploy moment, since it is auto-posted on the boot right after deploy).
+ */
+export function renderSectionForDiscord(
+  section: ChangelogSection,
+  nowUnix: number = Math.floor(Date.now() / 1000),
+): string {
+  const ts = DEPLOY_TIMESTAMPS[section.version] ?? nowUnix;
+  return `${section.body}\n\n🚀 **Live on prod:** <t:${ts}:F> · <t:${ts}:R>`;
+}
+
+/**
  * Given all sections (newest-first, as parsed) and the last-published version, return the
  * sections still to post, OLDEST-first. Everything above the last-published section is newer;
  * an unknown/absent cursor (first run) means every section is new. Pure — unit-tested.
@@ -132,7 +178,8 @@ export async function publishChangelog(opts: {
   }
 
   for (const section of selected) {
-    const parts = chunk(section.body, DISCORD_MAX);
+    const rendered = renderSectionForDiscord(section);
+    const parts = chunk(rendered, DISCORD_MAX);
     if (opts.confirm) {
       try {
         for (const part of parts) {
@@ -152,7 +199,7 @@ export async function publishChangelog(opts: {
         };
       }
     }
-    posted.push({ version: section.version, parts: parts.length, chars: section.body.length });
+    posted.push({ version: section.version, parts: parts.length, chars: rendered.length });
   }
 
   return { channelId, dryRun: !opts.confirm, posted, skipped };
@@ -202,7 +249,7 @@ export async function publishNewChangelogOnBoot(
 
   for (const section of toPost) {
     try {
-      for (const part of chunk(section.body, DISCORD_MAX)) {
+      for (const part of chunk(renderSectionForDiscord(section), DISCORD_MAX)) {
         await postChannelMessage(channelId, part);
         await sleep(POST_DELAY_MS);
       }

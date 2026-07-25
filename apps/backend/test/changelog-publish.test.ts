@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { parseChangelog, selectSectionsToPost } from '../src/lib/changelog-publish.js';
+import {
+  parseChangelog,
+  selectSectionsToPost,
+  renderSectionForDiscord,
+  DEPLOY_TIMESTAMPS,
+} from '../src/lib/changelog-publish.js';
 
 const SAMPLE = `# Changelog
 
@@ -51,5 +56,26 @@ describe('selectSectionsToPost', () => {
 
   it('an unknown cursor is treated as first-run (posts all) — never silently skips', () => {
     expect(selectSectionsToPost(secs, '9.9.9').map((s) => s.version)).toEqual(['1.0.0', '1.1.0', '1.2.0']);
+  });
+});
+
+describe('renderSectionForDiscord', () => {
+  const secs = parseChangelog(SAMPLE);
+
+  it('stamps a known version with its real deploy time', () => {
+    const rendered = renderSectionForDiscord(secs.find((s) => s.version === '1.0.0')!, 1_700_000_000);
+    expect(rendered.startsWith('## [1.0.0]')).toBe(true);
+    expect(rendered).toContain('Live on prod');
+    expect(rendered).toContain(`<t:${DEPLOY_TIMESTAMPS['1.0.0']}:F>`);
+    expect(rendered).not.toContain('<t:1700000000'); // known version ignores the now fallback
+  });
+
+  it('falls back to the given now for an unknown (future) version', () => {
+    const rendered = renderSectionForDiscord(
+      { version: '9.9.9', heading: '## [9.9.9]', body: '## [9.9.9] future' },
+      1_800_000_000,
+    );
+    expect(rendered).toContain('<t:1800000000:F>');
+    expect(rendered).toContain('<t:1800000000:R>');
   });
 });
