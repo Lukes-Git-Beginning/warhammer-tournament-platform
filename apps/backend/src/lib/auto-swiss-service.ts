@@ -31,14 +31,28 @@ export function autoSwissConfig(checkInCount: number): {
   rounds: number;
   playoffFormat: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
 } | null {
-  // Rounds grow with the field (~ceil(log2 n), enough to seed the tier's playoff): 3 for a
-  // small field, 4 mid, 5 for a large one. NOTE: the 8+ and 16+ round counts used to be
-  // swapped (8→5, 16→4), which non-monotonically gave a mid field MORE rounds than a large
-  // one — e.g. a checked-in 8 forced 5 rounds. Fixed to 8→4, 16→5.
-  if (checkInCount >= 16) return { rounds: 5, playoffFormat: 'TOP8' };
-  if (checkInCount >= 8)  return { rounds: 4, playoffFormat: 'TOP4' };
+  // Rounds are chosen so Swiss + playoff = 7 total, for predictable scheduling:
+  //   16+ → 4 Swiss + 3-round Top 8 = 7   ·   8+ → 5 Swiss + 2-round Top 4 = 7   ·   4+ → 3 Swiss + Top 2.
+  // The 8+ tier INTENTIONALLY has more Swiss rounds than 16+ (its playoff is shorter, so the
+  // total lands on 7 either way) — this is deliberate, do NOT "monotonic-fix" it. Balanced
+  // Liechtenstein does NOT use this table for its round count (see balancedRounds): Top 8 almost
+  // never applies to it and its playoff size is the host's choice, not tied to the rounds.
+  if (checkInCount >= 16) return { rounds: 4, playoffFormat: 'TOP8' };
+  if (checkInCount >= 8)  return { rounds: 5, playoffFormat: 'TOP4' };
   if (checkInCount >= 4)  return { rounds: 3, playoffFormat: 'TOP2' };
   return null;
+}
+
+/**
+ * Balanced Liechtenstein round count. Unlike autoSwissConfig's 7-total scheduling, BaLi sizes
+ * purely on field size — Top 8 almost never applies and the playoff size is the host's choice,
+ * independent of the round count. 3 rounds under 8 players, 4 from 8 up; a tiny field (<4) gets
+ * at most count-1 so nobody is forced into a rematch.
+ */
+export function balancedRounds(count: number): number {
+  if (count >= 8) return 4;
+  if (count >= 4) return 3;
+  return Math.max(1, count - 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -91,26 +105,32 @@ export async function reapplyDynamicSizing(
   // Once the playoffs exist we never re-size (a PLAYOFF_* phase, i.e. not null/SWISS).
   if (matches.some((m) => m.phase != null && m.phase !== 'SWISS')) return false;
 
-  // Active pairing pool — dropped / disqualified excluded; BYE and forfeit don't change
-  // membership. Mirror applyBalancedStartConfig: once ANY player has checked in, a still-
-  // REGISTERED (never-checked-in) participant is a no-show, not part of the playing pool, and
-  // must not inflate the size. Only a tournament run entirely without check-in counts REGISTERED.
   const roster = await prisma.tournamentParticipant.findMany({
     where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN'] } },
     select: { status: true },
   });
-  const checkedIn = roster.filter((p) => p.status === 'CHECKED_IN').length;
-  const active = checkedIn > 0 ? checkedIn : roster.length;
   const currentRound = matches
     .filter((m) => m.phase == null || m.phase === 'SWISS')
     .reduce((max, m) => Math.max(max, m.round), 0);
 
-  const { rounds, playoffFormat } = computeDynamicSize(active, currentRound);
-  // Balanced Liechtenstein: auto-sizing owns only the round count. Its playoff size
-  // drives division formation (homogeneous band-pure vs. few large mixed brackets) and
-  // stays the host's choice. Auto Swiss + auto-sized Swiss keep deriving both.
-  const nextPlayoffFormat =
-    t.format === 'BALANCED_LIECHTENSTEIN' ? t.playoff_format : playoffFormat;
+  const isBalanced = t.format === 'BALANCED_LIECHTENSTEIN';
+  let rounds: number;
+  let nextPlayoffFormat = t.playoff_format;
+  if (isBalanced) {
+    // Balanced Liechtenstein sizes on its own (balancedRounds), NOT the 7-total autoSwissConfig
+    // table. No-shows don't count — mirror applyBalancedStartConfig: once anyone has checked in,
+    // a still-REGISTERED (never-checked-in) participant is a no-show that must not inflate the
+    // size. The playoff size stays the host's choice (it drives division formation).
+    const checkedIn = roster.filter((p) => p.status === 'CHECKED_IN').length;
+    const active = checkedIn > 0 ? checkedIn : roster.length;
+    rounds = Math.max(balancedRounds(active), currentRound); // never shrink below a played round
+  } else {
+    // Auto Swiss / auto-sized Swiss keep the 7-total autoSwissConfig sizing and derive both the
+    // round count and the playoff size from the active pool (REGISTERED + CHECKED_IN, unchanged).
+    const dyn = computeDynamicSize(roster.length, currentRound);
+    rounds = dyn.rounds;
+    nextPlayoffFormat = dyn.playoffFormat;
+  }
   if (rounds === (t.rounds_count ?? 0) && nextPlayoffFormat === t.playoff_format) return false;
 
   await prisma.tournament.update({

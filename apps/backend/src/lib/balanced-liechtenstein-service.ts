@@ -26,7 +26,7 @@ import {
 import { isLegalLateJoinReclaim } from './bali-pairing-cost.js';
 import { computeSwissStandings, sortSwissStandings, type CompletedMatchRecord } from './swiss.js';
 import { getPlayerClassification } from './skill-classification-service.js';
-import { autoSwissConfig } from './auto-swiss-service.js';
+import { balancedRounds } from './auto-swiss-service.js';
 import { emitBracketUpdate } from './emit.js';
 import { notifyMatchesCreated } from './discord-notify.js';
 
@@ -123,8 +123,7 @@ export async function applyBalancedStartConfig(
   const anyCheckedIn = roster.some((p) => p.status === 'CHECKED_IN');
   const count = anyCheckedIn ? roster.filter((p) => p.status === 'CHECKED_IN').length : roster.length;
 
-  const config = autoSwissConfig(count);
-  const rounds = config?.rounds ?? Math.max(1, Math.min(3, count - 1));
+  const rounds = balancedRounds(count);
 
   // Auto-sizing owns ONLY the round count for Balanced Liechtenstein. The playoff
   // size drives division formation (homogeneous band-pure divisions vs. few large
