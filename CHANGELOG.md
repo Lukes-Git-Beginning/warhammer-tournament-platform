@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.18.0] — 2026-07-25 — Changelog channel 📜
+### Added
+- **This channel.** Release notes now land here automatically — after every deploy, RizzBOTto posts what changed, each entry versioned and stamped with the exact time it went live. The full history above was backfilled the moment the channel went online.
+
 ## [1.17.0] — 2026-07-25 — Skill-leaderboard win-rate + fairness & robustness fixes
 ### Added
 - **Skill-leaderboard win-rate** — the Skill board now carries a real win-rate column (wins / games from the match-game source) beside the model skill, still ranked by skill. The old standalone Win Rate tab is retired.
