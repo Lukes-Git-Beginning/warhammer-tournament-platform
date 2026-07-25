@@ -31,8 +31,12 @@ export function autoSwissConfig(checkInCount: number): {
   rounds: number;
   playoffFormat: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
 } | null {
-  if (checkInCount >= 16) return { rounds: 4, playoffFormat: 'TOP8' };
-  if (checkInCount >= 8)  return { rounds: 5, playoffFormat: 'TOP4' };
+  // Rounds grow with the field (~ceil(log2 n), enough to seed the tier's playoff): 3 for a
+  // small field, 4 mid, 5 for a large one. NOTE: the 8+ and 16+ round counts used to be
+  // swapped (8→5, 16→4), which non-monotonically gave a mid field MORE rounds than a large
+  // one — e.g. a checked-in 8 forced 5 rounds. Fixed to 8→4, 16→5.
+  if (checkInCount >= 16) return { rounds: 5, playoffFormat: 'TOP8' };
+  if (checkInCount >= 8)  return { rounds: 4, playoffFormat: 'TOP4' };
   if (checkInCount >= 4)  return { rounds: 3, playoffFormat: 'TOP2' };
   return null;
 }
@@ -87,11 +91,16 @@ export async function reapplyDynamicSizing(
   // Once the playoffs exist we never re-size (a PLAYOFF_* phase, i.e. not null/SWISS).
   if (matches.some((m) => m.phase != null && m.phase !== 'SWISS')) return false;
 
-  // Active pairing pool — dropped / disqualified excluded; BYE and forfeit don't
-  // change membership.
-  const active = await prisma.tournamentParticipant.count({
+  // Active pairing pool — dropped / disqualified excluded; BYE and forfeit don't change
+  // membership. Mirror applyBalancedStartConfig: once ANY player has checked in, a still-
+  // REGISTERED (never-checked-in) participant is a no-show, not part of the playing pool, and
+  // must not inflate the size. Only a tournament run entirely without check-in counts REGISTERED.
+  const roster = await prisma.tournamentParticipant.findMany({
     where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN'] } },
+    select: { status: true },
   });
+  const checkedIn = roster.filter((p) => p.status === 'CHECKED_IN').length;
+  const active = checkedIn > 0 ? checkedIn : roster.length;
   const currentRound = matches
     .filter((m) => m.phase == null || m.phase === 'SWISS')
     .reduce((max, m) => Math.max(max, m.round), 0);
