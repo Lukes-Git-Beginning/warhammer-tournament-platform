@@ -28,6 +28,7 @@ import {
 import { skillToBand } from '../lib/rating-model.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
 import { getQueuePenaltyState, resetQueuePenaltyToWarned } from '../lib/queue-penalty.js';
+import { publishChangelog } from '../lib/changelog-publish.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -2123,6 +2124,31 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
     await fastify.prisma.scheduledMatchup.update({ where: { id }, data: { status: 'CANCELLED' } });
     return reply.code(204).send();
+  });
+
+  // POST /api/admin/publish-changelog — publish the versioned CHANGELOG.md to the Discord
+  // changelog channel from the server (the bot token lives here, so no external tooling or
+  // local token is needed). Dry-run by default; { confirm: true } actually posts, oldest
+  // version first. { versions: ["1.4.0", ...] } restricts to specific versions.
+  const PublishChangelogSchema = z.object({
+    confirm: z.boolean().default(false),
+    versions: z.array(z.string()).optional(),
+  });
+  fastify.post('/api/admin/publish-changelog', async (request, reply) => {
+    const parsed = PublishChangelogSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    try {
+      const result = await publishChangelog(parsed.data);
+      return reply.code(200).send(result);
+    } catch (err) {
+      return reply.code(502).send({
+        error: 'BadGateway',
+        message: err instanceof Error ? err.message : 'Failed to publish changelog',
+        statusCode: 502,
+      });
+    }
   });
 
 };

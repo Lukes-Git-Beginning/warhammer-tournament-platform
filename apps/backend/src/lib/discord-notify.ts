@@ -70,6 +70,29 @@ async function discordRequest(
   });
 }
 
+/** True when a bot token is configured, so the caller can fail fast with a clear error. */
+export function isBotConfigured(): boolean {
+  return getToken() !== null;
+}
+
+/**
+ * Publish a plain-text message to a Discord channel via the bot and return the created
+ * message id. Mentions are disabled. Used by the admin changelog-publish endpoint so the
+ * prod server (where the bot token lives) can post release notes without any external
+ * tooling. Throws on a non-2xx so the caller can surface Discord's error (incl. 429).
+ */
+export async function postChannelMessage(channelId: string, content: string): Promise<string> {
+  const res = await discordRequest('POST', `/channels/${channelId}/messages`, {
+    content,
+    allowed_mentions: { parse: [] },
+  });
+  if (!res.ok) {
+    throw new Error(`Discord ${res.status}: ${await res.text()}`);
+  }
+  const json = (await res.json()) as { id: string };
+  return json.id;
+}
+
 // RizzOttoverse Discord server — the fallback guild used when DISCORD_GUILD_ID is unset
 // and the bot's guild list is ambiguous. Overridable at any time via the env var.
 const DEFAULT_GUILD_ID = '1445915589418946572';
