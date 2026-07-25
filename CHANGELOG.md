@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.19.1] — 2026-07-25 — Fix wrong Ladder / completed-match results
+### Fixed
+- **A wrong result on a Ladder (Open Play) match can finally be corrected.** The result editor was hidden for Open Play *and* for completed matches, so the All Games tab's "use the match result editor" led nowhere for a ladder game. Hosts / mods / admins now get an **Edit Result** button on any match page (Ladder included, completed included), and the All Games rejection links straight to that match.
+
 ## [1.19.0] — 2026-07-25 — No auto-finalise + un-finalise
 ### Fixed
 - **Tournaments are never finalised automatically anymore.** An auto-advance path closed a tournament the moment the last *existing* playoff match finished — and a Top-4 bracket generates the final only after the semis, so the tournament finalised itself **right after the semis**, before a final was ever created. Both automatic-finalise paths are removed; closing a tournament is always a manual host action now.
