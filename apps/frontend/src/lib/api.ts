@@ -593,6 +593,10 @@ export function advancePlayoffs(tournamentId: string): Promise<{ phase: string; 
   return apiFetch(`/api/tournaments/${tournamentId}/advance-playoffs`, { method: 'POST' });
 }
 
+export function unfinalizeTournament(slug: string): Promise<{ tournamentId: string; status: string; reopened: boolean }> {
+  return apiFetch(`/api/tournaments/${slug}/unfinalize`, { method: 'POST' });
+}
+
 export function addThirdPlaceMatch(tournamentId: string): Promise<{ repaired: boolean }> {
   return apiFetch(`/api/tournaments/${tournamentId}/add-third-place-match`, { method: 'POST' });
 }

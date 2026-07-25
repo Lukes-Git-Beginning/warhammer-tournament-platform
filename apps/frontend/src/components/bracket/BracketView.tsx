@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import type { FactionDto } from '@rizzotto/types';
-import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, addThirdPlaceMatch, getFactions, patchTournament, fillByeMatch, deleteMatch } from '@/lib/api';
+import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, addThirdPlaceMatch, getFactions, patchTournament, fillByeMatch, deleteMatch, unfinalizeTournament } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { sortStandingsByPlayoffResult, getFinalistIds, getChampionIds, getBalancedTopDivisionPodium } from '@/lib/bracketStandings';
 import { computeBracketLayout } from './computeBracketLayout';
@@ -236,6 +236,20 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     },
   });
 
+  const {
+    mutate: doUnfinalize,
+    isPending: isUnfinalizing,
+    error: unfinalizeError,
+  } = useMutation({
+    mutationFn: () => unfinalizeTournament(slug),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      void queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+    },
+  });
+
   if (isLoading) {
     return <div className="text-stone-400 text-sm py-6">Loading bracket…</div>;
   }
@@ -440,7 +454,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           <button
             type="button"
             onClick={() => {
-              if (confirm('Finalise tournament? Placements will be calculated. This cannot be undone.')) {
+              if (confirm('Finalise tournament? Placements will be calculated. You can un-finalise it again afterwards if needed.')) {
                 doComplete();
               }
             }}
@@ -448,6 +462,27 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
             className="rounded border border-rizzotto-gold-500/60 px-4 py-2 text-sm font-medium text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isCompleting ? 'Finalising…' : 'Finalise Tournament'}
+          </button>
+        </div>
+      )}
+
+      {/* Un-finalise — reopen a finalised tournament (host/admin) to fix the bracket + re-finalise */}
+      {canManage && data.status === 'COMPLETED' && (
+        <div className="mb-4">
+          {unfinalizeError && (
+            <p className="mb-2 text-sm text-red-400">Error: {(unfinalizeError as Error).message}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm('Re-open this finalised tournament? Its placements and the season points it awarded are undone until you finalise again.')) {
+                doUnfinalize();
+              }
+            }}
+            disabled={isUnfinalizing}
+            className="rounded border border-stone-600 px-4 py-2 text-sm font-medium text-stone-300 hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isUnfinalizing ? 'Re-opening…' : 'Un-finalise Tournament'}
           </button>
         </div>
       )}
