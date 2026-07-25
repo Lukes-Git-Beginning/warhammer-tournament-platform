@@ -4,7 +4,7 @@ import { z } from 'zod';
 import ical from 'ical-generator';
 import { generateSlug, validateStatusTransition, TournamentStatus, canManageTournament } from '../lib/tournament-utils.js';
 import { emitStatusChange } from '../lib/emit.js';
-import { finalizeTournament } from '../lib/finalize-tournament.js';
+import { finalizeTournament, unfinalizeTournament } from '../lib/finalize-tournament.js';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
 import type { TournamentStatusLiteral } from '@rizzotto/types';
 import {
@@ -1165,6 +1165,49 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       await invalidate(fastify.redis, 'tournaments:list:*');
       request.log.info({ slug }, 'Tournament soft-deleted');
       return reply.code(204).send();
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // POST /api/tournaments/:slug/unfinalize
+  // Reopen a finalised (COMPLETED) tournament to ONGOING and undo the finalisation stats, so the
+  // host can fix the bracket (e.g. generate a final that was skipped) and re-finalise. Because
+  // finalisation is now ALWAYS a manual host action, this is the paired "undo". Host/MOD/ADMIN.
+  // ---------------------------------------------------------------------------
+  fastify.post<{ Params: { slug: string } }>(
+    '/api/tournaments/:slug/unfinalize',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { slug } = request.params;
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { slug, deleted_at: null },
+        select: { id: true, status: true },
+      });
+      if (!tournament) {
+        return reply.code(404).send({ error: 'NotFound', message: `Tournament "${slug}" not found`, statusCode: 404 });
+      }
+      const user = request.user;
+      if (!(await canManageTournament(fastify.prisma, tournament.id, user.sub, user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'You do not have permission to un-finalize this tournament', statusCode: 403 });
+      }
+      if (tournament.status !== 'COMPLETED') {
+        return reply.code(409).send({ error: 'Conflict', message: 'Only a finalised (COMPLETED) tournament can be un-finalized', statusCode: 409 });
+      }
+
+      const result = await unfinalizeTournament(fastify.prisma, tournament.id);
+
+      await fastify.prisma.auditLog.create({
+        data: { entity_type: 'Tournament', entity_id: tournament.id, action: 'unfinalize', actor_id: user.sub },
+      });
+      await Promise.all([
+        invalidate(fastify.redis, 'leaderboard:*'),
+        invalidate(fastify.redis, 'tournaments:list:*'),
+        invalidate(fastify.redis, 'factions:*'),
+        invalidate(fastify.redis, 'meta:*'),
+        invalidate(fastify.redis, `tournament:${slug}`),
+      ]);
+      request.log.info({ slug, ...result }, 'Tournament un-finalized');
+      return reply.code(200).send({ tournamentId: tournament.id, status: 'ONGOING', ...result });
     },
   );
 

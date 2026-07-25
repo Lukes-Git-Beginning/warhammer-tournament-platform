@@ -471,3 +471,60 @@ export async function finalizeTournament(
 
   return { resultCount: placements.size, seasonId };
 }
+
+/**
+ * Reverse a finalisation: reopen a COMPLETED tournament to ONGOING and undo the stats
+ * finalizeTournament wrote. finalize is idempotent (it recomputes each player's season
+ * aggregate from ALL their season results), so the exact reversal is: drop THIS tournament's
+ * placement results, then recompute every affected player's season-leaderboard points from
+ * their REMAINING results. Games / W-L are left untouched — the matches still happened and the
+ * tournament still exists — so re-finalising after fixing the bracket is clean. No-op unless the
+ * tournament is currently COMPLETED. Returns whether it was reopened.
+ */
+export async function unfinalizeTournament(
+  prisma: PrismaClient,
+  tournamentId: string,
+): Promise<{ reopened: boolean }> {
+  const tournament = await prisma.tournament.findFirst({
+    where: { id: tournamentId, deleted_at: null },
+    select: { status: true },
+  });
+  if (!tournament || tournament.status !== 'COMPLETED') return { reopened: false };
+
+  const results = await prisma.tournamentResult.findMany({
+    where: { tournament_id: tournamentId },
+    select: { user_id: true, season_id: true },
+  });
+  const seasonId = results.find((r) => r.season_id)?.season_id ?? null;
+  const affectedUserIds = [...new Set(results.map((r) => r.user_id))];
+
+  await prisma.$transaction(async (tx) => {
+    // Drop this tournament's placement results.
+    await tx.tournamentResult.deleteMany({ where: { tournament_id: tournamentId } });
+
+    // Recompute each affected player's season leaderboard points from their REMAINING results.
+    if (seasonId) {
+      for (const userId of affectedUserIds) {
+        const remaining = await tx.tournamentResult.findMany({
+          where: { season_id: seasonId, user_id: userId },
+          select: { points_earned: true },
+        });
+        if (remaining.length === 0) {
+          // No season results left → the player drops off the season points board entirely.
+          await tx.leaderboardEntry.deleteMany({ where: { user_id: userId, season_id: seasonId } });
+        } else {
+          const totalPoints = remaining.reduce((sum, r) => sum + r.points_earned, 0);
+          await tx.leaderboardEntry.updateMany({
+            where: { user_id: userId, season_id: seasonId },
+            data: { total_points: totalPoints },
+          });
+        }
+      }
+    }
+
+    // Reopen the tournament.
+    await tx.tournament.update({ where: { id: tournamentId }, data: { status: 'ONGOING' } });
+  });
+
+  return { reopened: true };
+}

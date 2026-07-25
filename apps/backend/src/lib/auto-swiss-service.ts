@@ -230,12 +230,12 @@ export async function advanceAutoSwissRound(prisma: PrismaClient, tournamentId: 
 
   const playoffMatches = allMatches.filter((m) => m.phase?.startsWith('PLAYOFF'));
 
-  // If playoffs already started → check completion
+  // Playoffs already started → nothing left to auto-generate here. Finalising a tournament is a
+  // HOST decision and MUST NEVER be automatic: the old auto-finalise closed tournaments the moment
+  // the last EXISTING playoff match finished — e.g. right after the semis, before the final round
+  // was even created (route-generated brackets create only one playoff round at a time). The host
+  // advances the bracket (POST /advance-playoffs) and closes the tournament manually.
   if (playoffMatches.length > 0) {
-    const pendingPlayoffs = playoffMatches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE');
-    if (pendingPlayoffs.length === 0) {
-      await prisma.tournament.update({ where: { id: tournamentId }, data: { status: 'COMPLETED' } });
-    }
     return;
   }
 
@@ -541,7 +541,8 @@ async function startPlayoffs(
   }
 
   if (matches.length === 0) {
-    await prisma.tournament.update({ where: { id: tournament.id }, data: { status: 'COMPLETED' } });
+    // No playoff bracket to build (too few players / no playoff format). Do NOT auto-finalise —
+    // the host closes the tournament manually. Leave it ONGOING.
     return;
   }
 
