@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.19.0] — 2026-07-25 — No auto-finalise + un-finalise
+### Fixed
+- **Tournaments are never finalised automatically anymore.** An auto-advance path closed a tournament the moment the last *existing* playoff match finished — and a Top-4 bracket generates the final only after the semis, so the tournament finalised itself **right after the semis**, before a final was ever created. Both automatic-finalise paths are removed; closing a tournament is always a manual host action now.
+### Added
+- **Un-finalise.** A host/admin can reopen a finalised tournament (COMPLETED → ONGOING). It also undoes the finalisation's placement results and recomputes the season-leaderboard points, so a host can fix the bracket (e.g. play the final that was skipped) and re-finalise cleanly.
+
 ## [1.18.1] — 2026-07-25 — Auto-sizer round-count fix
 ### Fixed
 - **Auto-sized round counts are monotonic again** — a mid-size field no longer gets *more* rounds than a large one. The 8+ and 16+ tiers had their round counts swapped (8+ forced 5 rounds while 16+ got only 4); now 8+ → 4 rounds, 16+ → 5.
