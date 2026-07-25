@@ -8,7 +8,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/); 
 ## [Unreleased]
 Still planned for the **v1.2** line (see `plans/v1.2-planning.md`): format mouseover tooltips, an optional lobby-password field, and imgur → local map hosting plus three new maps (Otsuchi Castle, Blasphemous Snowfield, Excavation Site). Later: custom challenges + asynchronous challenge events, and website invite/referral tracking.
 
-## [1.2.0] — unreleased — Skill-leaderboard win-rate + fairness & robustness fixes
+## [1.2.0] — 2026-07-25 — Skill-leaderboard win-rate + fairness & robustness fixes
 First minor since 1.1: the Skill leaderboard now surfaces real win-rate, alongside a batch of pairing, playoff-trigger and data-integrity fixes.
 
 ### Added
