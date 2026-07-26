@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.20.0] — 2026-07-26 — Lobby password
+### Added
+- **Optional lobby password** on a match's game, right next to the lobby code — set and shared the same way (by a participant or staff, one-click copy, masked from non-participants). For custom-battle lobbies that need both a name/code *and* a password to join.
+
 ## [1.19.3] — 2026-07-26 — Admin Matches list: recent-first + timestamps
 ### Fixed
 - **The admin Matches list now sorts most-recent-first and shows a real date + time.** Cancelled/BYE rows (which have no play time) were floating to the top and every Date cell read "—"; now played matches sort by play time (newest first), cancelled/BYE fall to the bottom, and every row shows a **date + time** (the play time, or the created time — dimmed — for cancelled/BYE). Makes it easy to find the match someone just reported wrong.
