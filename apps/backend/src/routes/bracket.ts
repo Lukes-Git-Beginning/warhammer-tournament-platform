@@ -24,6 +24,8 @@ import {
 } from '../lib/playoff-generator.js';
 import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
 import { autoSwissConfig } from '../lib/auto-swiss-service.js';
+import { projectBracketPlan } from '../lib/bracket-plan.js';
+import { DEFAULT_BAND } from '../lib/balanced-liechtenstein.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
 import { createManualMatch } from '../lib/tournament-management.js';
 import { notifyMatchesCreated } from '../lib/discord-notify.js';
@@ -41,7 +43,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, format: true, mode: true, status: true, swiss_match_format: true, playoff_match_format: true, finale_match_format: true, rounds_count: true },
+        select: { id: true, format: true, mode: true, status: true, swiss_match_format: true, playoff_match_format: true, finale_match_format: true, rounds_count: true, playoff_format: true },
       });
 
       if (!tournament) {
@@ -255,10 +257,27 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         const activeCount = participantIds.length - rawStandings.filter((s) => s.dropped).length;
         const recommendedRounds = tournament.rounds_count ?? recommendNumberOfRounds(activeCount);
 
+        // Projected structure for the CURRENT field — uses the same active definition as the
+        // sizing (checked-in contenders when any are checked in; no-shows excluded) so the
+        // placeholder plan can't diverge from what will actually be generated.
+        const droppedSet = new Set(rawStandings.filter((s) => s.dropped).map((s) => s.userId));
+        const contenders = participants.filter((p) => p.status !== 'WITHDREW' && !droppedSet.has(p.user_id));
+        const anyCheckedIn = contenders.some((p) => p.status === 'CHECKED_IN');
+        const activeBands = (anyCheckedIn ? contenders.filter((p) => p.status === 'CHECKED_IN') : contenders).map(
+          (p) => p.skill_band ?? DEFAULT_BAND,
+        );
+        const plan = projectBracketPlan({
+          format: tournament.format,
+          playoffFormat: tournament.playoff_format,
+          roundsCount: tournament.rounds_count,
+          activeBands,
+        });
+
         response.swiss = {
           recommendedRounds,
           currentRound: rounds,
           standings,
+          plan,
         };
       }
 

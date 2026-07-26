@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
-import type { FactionDto } from '@rizzotto/types';
+import type { FactionDto, ProjectedDivision } from '@rizzotto/types';
 import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, addThirdPlaceMatch, getFactions, patchTournament, fillByeMatch, deleteMatch, unfinalizeTournament } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { sortStandingsByPlayoffResult, getFinalistIds, getChampionIds, getBalancedTopDivisionPodium } from '@/lib/bracketStandings';
@@ -11,6 +11,17 @@ import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
 import { MatchReadOnlyModal } from './MatchReadOnlyModal';
 import { SwissStandings } from './SwissStandings';
+
+/** Human summary of the projected playoff shape for the "current plan" header. */
+function describePlayoff(divisions: ProjectedDivision[]): string {
+  const named = divisions.filter((d) => d.format !== 'NONE').map((d) => d.format.replace('TOP', 'Top '));
+  if (named.length === 0) return 'no playoffs';
+  if (named.length === 1) return `${named[0]} playoff`;
+  const uniform = named.every((f) => f === named[0]);
+  return uniform
+    ? `${named.length} divisions · ${named[0]} each`
+    : `${named.length} divisions · ${named.join(' / ')}`;
+}
 
 interface BracketViewProps {
   slug: string;
@@ -354,6 +365,23 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
       {isDE && allDone && (
         <div className="mb-4 rounded border border-rizzotto-gold-500/60 bg-rizzotto-gold-500/10 px-4 py-3 text-sm font-medium text-rizzotto-gold-400">
           Grand Final concluded — tournament decided
+        </div>
+      )}
+
+      {/* Current plan — the projected round count + playoff shape for the active field, shown
+          up-front (and live-updating) so everyone sees the structure before it is generated. */}
+      {swiss?.plan && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-stone-700 bg-stone-900/60 px-4 py-2 text-sm">
+          <span className="text-[11px] uppercase tracking-wider text-stone-500">Current plan</span>
+          <span className="font-medium text-stone-100">
+            {swiss.plan.groupRounds} {swiss.plan.groupRounds === 1 ? 'round' : 'rounds'}
+          </span>
+          <span className="text-stone-600">·</span>
+          <span className="font-medium text-rizzotto-gold-400">{describePlayoff(swiss.plan.divisions)}</span>
+          {swiss.currentRound < swiss.plan.groupRounds && (
+            <span className="text-xs text-stone-500">(round {swiss.currentRound}/{swiss.plan.groupRounds})</span>
+          )}
+          <span className="ml-auto text-[10px] italic text-stone-600">provisional — updates as the field changes</span>
         </div>
       )}
 

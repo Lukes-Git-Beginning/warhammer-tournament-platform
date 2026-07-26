@@ -58,10 +58,28 @@ export interface SwissStandingEntry {
   skillBand?: number | null;
 }
 
+/** One projected playoff bracket (a division for BaLi; a single bracket for other formats). */
+export interface ProjectedDivision {
+  size: number;
+  format: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
+}
+
+/**
+ * The projected bracket structure for the CURRENT active field — how many group rounds and what
+ * playoff shape are planned. Deterministic (same sizing rules as real generation) and recomputed
+ * on every fetch, so the UI can show the full plan as placeholders that reshape on drops/joins.
+ */
+export interface BracketPlan {
+  groupRounds: number;
+  divisions: ProjectedDivision[];
+}
+
 export interface SwissMeta {
   recommendedRounds: number;
   currentRound: number;
   standings: SwissStandingEntry[];
+  /** Present for round-based formats — projected round count + playoff shape (placeholders). */
+  plan?: BracketPlan;
 }
 
 export interface BracketResponse {
