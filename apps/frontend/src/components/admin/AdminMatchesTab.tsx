@@ -208,9 +208,15 @@ export function AdminMatchesTab() {
                         </span>
                       </td>
                       <td className="px-3 py-2 text-xs text-stone-500 whitespace-nowrap">
-                        {m.playedAt
-                          ? new Date(m.playedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                          : '—'}
+                        {(() => {
+                          const when = new Date(m.playedAt ?? m.createdAt).toLocaleString('en-GB', {
+                            day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+                          });
+                          // No play time on CANCELLED/BYE rows — fall back to the created time, dimmed.
+                          return m.playedAt ? when : (
+                            <span className="italic text-stone-600" title="created (never played)">{when}</span>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-2">
                         {isVoided ? (

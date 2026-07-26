@@ -1863,7 +1863,10 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           winner:     { select: { id: true, username: true } },
           games:      { select: { id: true, replay_url: true }, take: 1 },
         },
-        orderBy: { played_at: 'desc' },
+        // Most-recent first. A played match sorts by when it was played; CANCELLED/BYE rows
+        // (no played_at) must NOT float to the top (Postgres puts NULLS first on DESC) — push
+        // them last and order everything by creation as the tiebreak/fallback.
+        orderBy: [{ played_at: { sort: 'desc', nulls: 'last' } }, { created_at: 'desc' }],
         skip,
         take: limit,
       }),
@@ -1879,6 +1882,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         result: m.result ?? null,
         countsForLeaderboard: m.counts_for_leaderboard,
         playedAt: m.played_at?.toISOString() ?? null,
+        createdAt: m.created_at.toISOString(),
         tournament: m.tournament ? { name: m.tournament.name, slug: m.tournament.slug, format: m.tournament.format } : null,
         player1: m.player1 ? { id: m.player1.id, username: m.player1.username } : null,
         player2: m.player2 ? { id: m.player2.id, username: m.player2.username } : null,

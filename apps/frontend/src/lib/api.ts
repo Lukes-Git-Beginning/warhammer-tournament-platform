@@ -842,6 +842,7 @@ export interface AdminMatchRow {
   result: string | null;
   countsForLeaderboard: boolean;
   playedAt: string | null;
+  createdAt: string;
   tournament: { name: string; slug: string; format: string } | null;
   player1: { id: string; username: string } | null;
   player2: { id: string; username: string } | null;
