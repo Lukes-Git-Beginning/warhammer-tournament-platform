@@ -15,6 +15,10 @@ const LobbyCodeBodySchema = z.object({
   lobby_code: z.string().max(64).nullable(),
 });
 
+const LobbyPasswordBodySchema = z.object({
+  lobby_password: z.string().max(64).nullable(),
+});
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -27,6 +31,7 @@ function serializeGame(game: {
   player1_faction_id: string | null;
   player2_faction_id: string | null;
   lobby_code: string | null;
+  lobby_password: string | null;
   reported_winner_id: string | null;
   reporter_id: string | null;
   reported_at: Date | null;
@@ -59,6 +64,7 @@ function serializeGame(game: {
     player1FactionId: game.player1_faction_id,
     player2FactionId: game.player2_faction_id,
     lobbyCode: includeSensitive ? game.lobby_code : null,
+    lobbyPassword: includeSensitive ? game.lobby_password : null,
     reportedWinnerId: game.reported_winner_id,
     // reporter_id is an internal user UUID — only exposed to participants/staff
     reporterId: includeSensitive ? game.reporter_id : null,
@@ -111,6 +117,7 @@ const GAME_SELECT = {
   player1_faction_id: true,
   player2_faction_id: true,
   lobby_code: true,
+  lobby_password: true,
   reported_winner_id: true,
   reporter_id: true,
   reported_at: true,
@@ -565,6 +572,61 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(200).send({ ok: true, lobby_code: parsed.data.lobby_code });
+    },
+  );
+
+  // PATCH /api/matches/:id/games/:gameNumber/lobby-password
+  // Either player or host/admin can set the optional lobby password (paired with the code).
+  // -------------------------------------------------------------------------
+  fastify.patch(
+    '/api/matches/:id/games/:gameNumber/lobby-password',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId, gameNumber: gameNumberStr } = request.params as { id: string; gameNumber: string };
+      const gameNumber = parseInt(gameNumberStr, 10);
+
+      const parsed = LobbyPasswordBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+      }
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: { player1_id: true, player2_id: true, tournament_id: true, tournament: { select: { host_id: true } } },
+      });
+      if (!match) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      }
+
+      const userId = request.user.sub;
+      const isParticipant = userId === match.player1_id || userId === match.player2_id;
+      const isStaff = await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, request.user.role);
+      if (!isParticipant && !isStaff) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Not a participant or staff', statusCode: 403 });
+      }
+
+      const gameId = await ensureMatchGame(fastify.prisma, matchId, gameNumber);
+      const updated = await fastify.prisma.matchGame.update({
+        where: { id: gameId },
+        data: { lobby_password: parsed.data.lobby_password },
+        select: { lobby_code: true, lobby_password: true },
+      });
+
+      if (fastify.io) {
+        fastify.io.to(`match_decision_${matchId}`).emit('match.game.updated', {
+          matchId,
+          gameNumber,
+          status: 'PENDING',
+          winnerId: null,
+          lobbyCode: updated.lobby_code,
+          lobbyPassword: updated.lobby_password,
+          reportedWinnerId: null,
+          reportedAt: null,
+          confirmedAt: null,
+        });
+      }
+
+      return reply.code(200).send({ ok: true, lobby_password: updated.lobby_password });
     },
   );
 

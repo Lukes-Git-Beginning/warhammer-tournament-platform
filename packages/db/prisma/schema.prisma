@@ -509,6 +509,7 @@ model MatchGame {
   player1_faction_id String?     // auto-resolved from BlindPick/SFT on finalization
   player2_faction_id String?
   lobby_code         String?     // optional ingame lobby code
+  lobby_password     String?     // optional ingame lobby password (paired with the code)
   // Provisional-result flow (30-min auto-confirm)
   reported_winner_id String?     @db.Uuid
   reporter_id        String?     @db.Uuid

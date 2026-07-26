@@ -1572,6 +1572,7 @@ export interface GameDto {
   player1FactionId: string | null;
   player2FactionId: string | null;
   lobbyCode: string | null;
+  lobbyPassword: string | null;
   reportedWinnerId: string | null;
   reporterId: string | null;
   reportedAt: string | null;
@@ -1643,6 +1644,17 @@ export function setLobbyCode(
   return apiFetch(`/api/matches/${matchId}/games/${gameNumber}/lobby-code`, {
     method: 'PATCH',
     body: JSON.stringify({ lobby_code: lobbyCode }),
+  });
+}
+
+export function setLobbyPassword(
+  matchId: string,
+  gameNumber: number,
+  lobbyPassword: string | null,
+): Promise<{ ok: true; lobby_password: string | null }> {
+  return apiFetch(`/api/matches/${matchId}/games/${gameNumber}/lobby-password`, {
+    method: 'PATCH',
+    body: JSON.stringify({ lobby_password: lobbyPassword }),
   });
 }
 

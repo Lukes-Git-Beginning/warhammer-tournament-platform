@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { setLobbyCode } from '@/lib/api';
+import { setLobbyCode, setLobbyPassword } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -8,30 +8,68 @@ interface Props {
   matchId: string;
   gameNumber: number;
   currentCode: string | null;
+  currentPassword: string | null;
   canEdit: boolean;
 }
 
-export function LobbyCodeField({ matchId, gameNumber, currentCode, canEdit }: Props) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(currentCode ?? '');
+/** In-game lobby join details (code + optional password), editable by a participant or staff. */
+export function LobbyCodeField({ matchId, gameNumber, currentCode, currentPassword, canEdit }: Props) {
   const queryClient = useQueryClient();
+  const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['match-games', matchId] });
+
+  return (
+    <div className="flex flex-col gap-2">
+      <LobbyValueRow
+        label="Lobby Code"
+        current={currentCode}
+        placeholder="Enter lobby code…"
+        addLabel="+ Add lobby code"
+        canEdit={canEdit}
+        onSave={(v) => setLobbyCode(matchId, gameNumber, v)}
+        onSaved={invalidate}
+      />
+      <LobbyValueRow
+        label="Lobby Password"
+        current={currentPassword}
+        placeholder="Enter lobby password…"
+        addLabel="+ Add lobby password"
+        canEdit={canEdit}
+        onSave={(v) => setLobbyPassword(matchId, gameNumber, v)}
+        onSaved={invalidate}
+      />
+    </div>
+  );
+}
+
+interface RowProps {
+  label: string;
+  current: string | null;
+  placeholder: string;
+  addLabel: string;
+  canEdit: boolean;
+  onSave: (value: string | null) => Promise<unknown>;
+  onSaved: () => void;
+}
+
+function LobbyValueRow({ label, current, placeholder, addLabel, canEdit, onSave, onSaved }: RowProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(current ?? '');
+  const copy = useCopyToClipboard();
 
   const mutation = useMutation({
-    mutationFn: (code: string | null) => setLobbyCode(matchId, gameNumber, code || null),
+    mutationFn: (value: string | null) => onSave(value),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['match-games', matchId] });
+      onSaved();
       setEditing(false);
     },
   });
 
-  const copied = useCopyToClipboard();
-
-  if (!canEdit && !currentCode) return null;
+  if (!canEdit && !current) return null;
 
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider">
-        Lobby Code <span className="text-rizzotto-stone-600">(optional)</span>
+        {label} <span className="text-rizzotto-stone-600">(optional)</span>
       </span>
 
       {editing ? (
@@ -39,17 +77,12 @@ export function LobbyCodeField({ matchId, gameNumber, currentCode, canEdit }: Pr
           <Input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Enter lobby code…"
+            placeholder={placeholder}
             className="h-8 text-sm font-mono max-w-[180px]"
             maxLength={64}
             autoFocus
           />
-          <Button
-            size="sm"
-            variant="forge"
-            onClick={() => mutation.mutate(draft)}
-            disabled={mutation.isPending}
-          >
+          <Button size="sm" variant="forge" onClick={() => mutation.mutate(draft || null)} disabled={mutation.isPending}>
             Save
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
@@ -58,20 +91,20 @@ export function LobbyCodeField({ matchId, gameNumber, currentCode, canEdit }: Pr
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          {currentCode ? (
+          {current ? (
             <>
               <span className="font-mono text-sm text-rizzotto-stone-100 bg-rizzotto-iron-800 px-2 py-0.5 rounded border border-rizzotto-iron-600">
-                {currentCode}
+                {current}
               </span>
               <button
-                onClick={() => copied(currentCode)}
+                onClick={() => copy(current)}
                 className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-gold-400 transition-colors"
               >
                 Copy
               </button>
               {canEdit && (
                 <button
-                  onClick={() => { setDraft(currentCode); setEditing(true); }}
+                  onClick={() => { setDraft(current); setEditing(true); }}
                   className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-gold-400 transition-colors"
                 >
                   Edit
@@ -84,7 +117,7 @@ export function LobbyCodeField({ matchId, gameNumber, currentCode, canEdit }: Pr
                 onClick={() => { setDraft(''); setEditing(true); }}
                 className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-gold-400 transition-colors"
               >
-                + Add lobby code
+                {addLabel}
               </button>
             )
           )}

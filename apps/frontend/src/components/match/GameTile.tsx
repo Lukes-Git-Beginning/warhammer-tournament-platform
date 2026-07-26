@@ -426,11 +426,12 @@ export function GameTile({
                 <PlayerInfo name={rightName} avatarUrl={rightAvatarUrl} faction={rightFaction} />
               </div>
 
-              {/* Lobby code */}
+              {/* Lobby code + password */}
               <LobbyCodeField
                 matchId={matchId}
                 gameNumber={game.gameNumber}
                 currentCode={game.lobbyCode}
+                currentPassword={game.lobbyPassword}
                 canEdit={isParticipant}
               />
 

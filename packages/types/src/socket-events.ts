@@ -132,6 +132,7 @@ export interface ServerToClientEvents {
     status: string;
     winnerId: string | null;
     lobbyCode: string | null;
+    lobbyPassword?: string | null;
     reportedWinnerId: string | null;
     reportedAt: string | null;
     confirmedAt: string | null;
