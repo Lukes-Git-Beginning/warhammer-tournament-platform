@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.21.0] — 2026-07-26 — Provisional bracket / current plan
+### Added
+- **The full bracket structure is visible up-front now.** Every round-based tournament (Swiss, Auto Swiss, classic + Balanced Liechtenstein) shows a live **"Current plan"** — how many rounds there are and what the playoffs currently look like (Top-X, and for BaLi how many divisions) — plus a **placeholder playoff bracket** of TBD slots *before* the playoffs are even generated. It's computed with the exact same sizing rules as real generation (so it can't mislead) and reshapes live as the field changes (drops / late-joins). Also sets up the auto-advance into playoffs (#37b).
+
 ## [1.20.0] — 2026-07-26 — Lobby password
 ### Added
 - **Optional lobby password** on a match's game, right next to the lobby code — set and shared the same way (by a participant or staff, one-click copy, masked from non-participants). For custom-battle lobbies that need both a name/code *and* a password to join.
