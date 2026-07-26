@@ -11,6 +11,7 @@ import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
 import { MatchReadOnlyModal } from './MatchReadOnlyModal';
 import { SwissStandings } from './SwissStandings';
+import { PlayoffPlanPreview } from './PlayoffPlanPreview';
 
 /** Human summary of the projected playoff shape for the "current plan" header. */
 function describePlayoff(divisions: ProjectedDivision[]): string {
@@ -403,6 +404,12 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           canManage={canManage}
           isCompleted={data.status === 'COMPLETED'}
         />
+      )}
+
+      {/* Provisional playoff bracket — the projected shape as TBD placeholders, shown until the
+          real playoffs are generated (then the real bracket below takes over). */}
+      {swiss?.plan && !hasPlayoffMatches && data.status !== 'COMPLETED' && (
+        <PlayoffPlanPreview divisions={swiss.plan.divisions} />
       )}
 
       {/* Next Swiss Round button — host only */}
