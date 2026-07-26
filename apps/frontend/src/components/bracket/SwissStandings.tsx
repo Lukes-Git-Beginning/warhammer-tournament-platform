@@ -155,7 +155,7 @@ export function SwissStandings({
   const showFactionColumn = tournamentMode ? FACTION_MODES.has(tournamentMode) : false;
   const is2D3 = tournamentMode === 'TWO_D_THREE';
   const isFreePick = tournamentMode === 'FREE_PICK';
-  const colCount = 5 + (showFactionColumn ? 1 : 0) + 1; // # + Player + [Faction] + Score + W/D/L/B + GL + BH
+  const colCount = 5 + (showFactionColumn ? 1 : 0) + 2; // # + Player + [Faction] + Score + W/D/L/B + GL + BH + SK
 
   // Cap displayed round at the Swiss phase — don't count playoff rounds.
   const displayRound = Math.min(currentRound, recommendedRounds);
@@ -404,6 +404,7 @@ export function SwissStandings({
             </td>
             <td className="px-4 py-2 text-right text-stone-400 tabular-nums">{entry.gamesLost}</td>
             <td className="px-4 py-2 text-right text-stone-500 tabular-nums text-xs">{entry.buchholz.toFixed(1)}</td>
+            <td className="px-4 py-2 text-right text-stone-500 tabular-nums text-xs">{entry.solkoff.toFixed(1)}</td>
           </tr>
         </Fragment>
       );
@@ -424,6 +425,7 @@ export function SwissStandings({
           <th className="px-4 py-2 text-center font-medium text-stone-400" title="Wins / Draws / Losses / Byes">W / D / L / B</th>
           <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Games Lost">GL</th>
           <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Buchholz">BH</th>
+          <th className="px-4 py-2 text-right font-medium text-stone-400 tabular-nums" title="Solkoff — Buchholz minus the strongest & weakest opponent (Median Buchholz)">SK</th>
         </tr>
       </thead>
     );
