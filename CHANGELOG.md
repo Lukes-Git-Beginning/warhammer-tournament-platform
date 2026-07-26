@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.19.3] — 2026-07-26 — Admin Matches list: recent-first + timestamps
+### Fixed
+- **The admin Matches list now sorts most-recent-first and shows a real date + time.** Cancelled/BYE rows (which have no play time) were floating to the top and every Date cell read "—"; now played matches sort by play time (newest first), cancelled/BYE fall to the bottom, and every row shows a **date + time** (the play time, or the created time — dimmed — for cancelled/BYE). Makes it easy to find the match someone just reported wrong.
+
 ## [1.19.2] — 2026-07-26 — Auto-sizer correction (BaLi-specific rounds)
 ### Fixed
 - **Reverted the v1.18.1 round-count change for Swiss / Auto Swiss.** Those formats deliberately target **7 total rounds** for predictable scheduling — 5 Swiss + a 2-round Top 4, or 4 Swiss + a 3-round Top 8 — so the 8+ tier having *more* Swiss rounds than 16+ is intentional, not a bug. The v1.18.1 "monotonic fix" is undone.
