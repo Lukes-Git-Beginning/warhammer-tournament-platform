@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.22.0] — 2026-07-27 — Solkoff in the standings
+### Added
+- **Solkoff (SK) is now shown in the standings**, right after Buchholz. It's the tiebreaker applied immediately after Buchholz (score → Buchholz → games lost → **Solkoff** → head-to-head), so a two-player tie on score *and* Buchholz is now readable at a glance instead of looking arbitrary. Appears in both the flat Swiss table and the per-division Balanced Liechtenstein tables.
+
 ## [1.21.0] — 2026-07-26 — Provisional bracket / current plan
 ### Added
 - **The full bracket structure is visible up-front now.** Every round-based tournament (Swiss, Auto Swiss, classic + Balanced Liechtenstein) shows a live **"Current plan"** — how many rounds there are and what the playoffs currently look like (Top-X, and for BaLi how many divisions) — plus a **placeholder playoff bracket** of TBD slots *before* the playoffs are even generated. It's computed with the exact same sizing rules as real generation (so it can't mislead) and reshapes live as the field changes (drops / late-joins). Also sets up the auto-advance into playoffs (#37b).
