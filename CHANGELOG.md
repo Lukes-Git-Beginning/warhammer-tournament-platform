@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.23.0] — 2026-07-28 — Host match ops: Full Reset + playoff backfill
+### Added
+- **Full Reset on any match node.** A host/mod/admin can wipe a match back to a clean, unplayed placeholder — it deletes the games, draft, picked map, factions and lobby code (so a swapped-in player never inherits the old data) and pulls any winner it had already advanced back out of the next bracket node (→ TBD). Unlike "Restore to Pending" (which only cleared the top-level result), nothing stale survives; the tournament-level (SFT) faction is kept.
+- **Backfill the next seed into a playoff drop.** When a player drops out of an entry-round playoff match, instead of walking the survivor over, a host can fill the open slot with the next non-qualified group seed (for Balanced Liechtenstein, from the survivor's own division) — so nobody is in the final "by default" and the survivor plays for the spot. Typical flow: Full Reset the walkover node, then Backfill.
+
 ## [1.22.0] — 2026-07-27 — Solkoff in the standings
 ### Added
 - **Solkoff (SK) is now shown in the standings**, right after Buchholz. It's the tiebreaker applied immediately after Buchholz (score → Buchholz → games lost → **Solkoff** → head-to-head), so a two-player tie on score *and* Buchholz is now readable at a glance instead of looking arbitrary. Appears in both the flat Swiss table and the per-division Balanced Liechtenstein tables.
