@@ -6,6 +6,8 @@ import { completeMatch } from '../lib/complete-match.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
 import { notifyHostsOfMatchReport } from '../lib/discord-notify.js';
 import { runBalancedPairingTick } from '../lib/balanced-liechtenstein-service.js';
+import { computeSwissStandings, sortSwissStandings } from '../lib/swiss.js';
+import { DEFAULT_BAND } from '../lib/balanced-liechtenstein.js';
 import { invalidate } from '../lib/cache.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 
@@ -642,6 +644,105 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       await cascadeGameEligibility(fastify, matchId, false);
       emitBracketUpdate(fastify.io, match.tournament_id ?? '');
       return reply.code(200).send({ matchId, status: match.player2_id ? 'PENDING' : 'BYE' });
+    },
+  );
+
+  // POST /api/matches/:id/backfill-next-seed — admin/mod/host: fill the OPEN slot of an
+  // ENTRY-ROUND playoff node with the next group-standings seed that didn't qualify, instead
+  // of walking the survivor over. "Open" = a null slot or one held by a WITHDREW player.
+  // Guards: the match must be a PENDING playoff node whose slot is NOT fed by a previous
+  // playoff match (a later round is filled by that round's winner, not a group seed). For
+  // Balanced Liechtenstein the seed is drawn from the surviving player's own band (division).
+  // Typical flow after a semis drop: Full Reset the walkover node first (→ PENDING, survivor
+  // pulled back out of the final), then Backfill this slot.
+  fastify.post(
+    '/api/matches/:id/backfill-next-seed',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const match = await fastify.prisma.match.findUnique({
+        where: { id: matchId },
+        select: { id: true, phase: true, status: true, player1_id: true, player2_id: true, tournament_id: true },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      const role = request.user?.role ?? '';
+      const userId = request.user?.sub ?? '';
+      const tournamentId = match.tournament_id ?? '';
+      if (!(await canManageTournament(fastify.prisma, tournamentId, userId, role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+      }
+      if (!match.phase?.startsWith('PLAYOFF')) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Not a playoff match', statusCode: 422 });
+      }
+      if (match.status !== 'PENDING') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match must be PENDING — Full Reset it first if the survivor already advanced', statusCode: 422 });
+      }
+
+      // All non-deleted tournament matches — for entry-round detection, playoff membership, and standings.
+      const allMatches = await fastify.prisma.match.findMany({
+        where: { tournament_id: tournamentId, deleted_at: null },
+        select: { id: true, phase: true, status: true, round: true, player1_id: true, player2_id: true, winner_id: true, next_match_id: true },
+      });
+      // Entry-round guard: a slot fed by a previous playoff match is filled by that winner, not a seed.
+      if (allMatches.some((m) => m.next_match_id === matchId)) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'This slot is filled by a previous playoff winner, not a group seed', statusCode: 422 });
+      }
+
+      const participants = await fastify.prisma.tournamentParticipant.findMany({
+        where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] } },
+        select: { user_id: true, status: true, skill_band: true },
+      });
+      const bandByUser = new Map(participants.map((p) => [p.user_id, p.skill_band ?? DEFAULT_BAND]));
+      const withdrawnIds = new Set(participants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
+
+      // Identify the OPEN slot (null or held by a withdrawn player) and the SURVIVING player.
+      const p1Open = match.player1_id === null || withdrawnIds.has(match.player1_id);
+      const p2Open = match.player2_id === null || withdrawnIds.has(match.player2_id);
+      let openSlot: 'player1_id' | 'player2_id';
+      let survivorId: string | null;
+      if (p1Open && !p2Open) { openSlot = 'player1_id'; survivorId = match.player2_id; }
+      else if (p2Open && !p1Open) { openSlot = 'player2_id'; survivorId = match.player1_id; }
+      else return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Need exactly one open (empty or withdrawn) slot and one valid surviving player', statusCode: 422 });
+      if (!survivorId) return reply.code(422).send({ error: 'UnprocessableEntity', message: 'No valid surviving player in the other slot', statusCode: 422 });
+
+      // Players already anywhere in the playoffs are not eligible to be backfilled.
+      const inPlayoffs = new Set<string>();
+      for (const m of allMatches) {
+        if (!m.phase?.startsWith('PLAYOFF')) continue;
+        if (m.player1_id) inPlayoffs.add(m.player1_id);
+        if (m.player2_id) inPlayoffs.add(m.player2_id);
+      }
+
+      // Group standings (non-playoff completed matches) = the seeding order.
+      const groupCompleted = allMatches
+        .filter((m) => !m.phase?.startsWith('PLAYOFF'))
+        .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST')
+        .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
+      const participantIds = participants.map((p) => p.user_id);
+      const ranked = sortSwissStandings(
+        computeSwissStandings(participantIds, groupCompleted, withdrawnIds),
+        groupCompleted,
+        tournamentId,
+      );
+
+      const tournament = await fastify.prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true } });
+      const isBaLi = tournament?.format === 'BALANCED_LIECHTENSTEIN';
+      const survivorBand = bandByUser.get(survivorId) ?? DEFAULT_BAND;
+
+      const seed = ranked.find(
+        (s) =>
+          !s.dropped &&
+          !withdrawnIds.has(s.userId) &&
+          !inPlayoffs.has(s.userId) &&
+          (!isBaLi || (bandByUser.get(s.userId) ?? DEFAULT_BAND) === survivorBand),
+      );
+      if (!seed) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'No eligible next seed available to backfill', statusCode: 422 });
+      }
+
+      await fastify.prisma.match.update({ where: { id: matchId }, data: { [openSlot]: seed.userId } });
+      emitBracketUpdate(fastify.io, tournamentId);
+      return reply.code(200).send({ matchId, filledSlot: openSlot, seedUserId: seed.userId });
     },
   );
 

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
-import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, getMatchGames, restoreMatch, cancelMatch, fullResetMatch, swapPlayer, deleteMatch, getParticipants, forfeitMatch, setMatchNoContest } from '@/lib/api';
+import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, getMatchGames, restoreMatch, cancelMatch, fullResetMatch, backfillNextSeed, swapPlayer, deleteMatch, getParticipants, forfeitMatch, setMatchNoContest } from '@/lib/api';
 import type { OverrideGameInput } from '@/lib/api';
 import { useEffect, useState } from 'react';
 
@@ -133,6 +133,17 @@ export function MatchScoreModal({
       void queryClient.invalidateQueries({ queryKey: ['tournament-participants'] });
       onClose();
     },
+  });
+
+  // Backfill the next non-qualified seed into a playoff node's open slot (semis-drop → re-seed
+  // instead of walkover). The backend enforces all guards; surface its message on failure.
+  const backfillMutation = useMutation({
+    mutationFn: () => backfillNextSeed(matchId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      onClose();
+    },
+    onError: (err: Error) => alert(`Backfill failed: ${err.message}`),
   });
 
   // B10: technical-abort double-bye (both players get a bye point, no winner).
@@ -429,8 +440,22 @@ export function MatchScoreModal({
                 ⟲ Full Reset (wipe node clean)
               </button>
             )}
+            {canManage && isPending && (
+              <button
+                type="button"
+                disabled={backfillMutation.isPending}
+                onClick={() => {
+                  if (confirm('Backfill the next non-qualified seed into this playoff node’s open slot (instead of a walkover)? Use this after a player dropped out of an entry-round playoff match — Full-Reset the node first if the survivor already advanced.')) {
+                    backfillMutation.mutate();
+                  }
+                }}
+                className="w-full rounded border border-sky-800 px-2 py-1 text-xs text-sky-300/90 hover:bg-sky-950/30 transition-colors disabled:opacity-40"
+              >
+                ↧ Backfill next seed (playoff drop)
+              </button>
+            )}
             <p className="text-[10px] text-stone-600">
-              Restore → enter correct result · Cancel → remove from standings · No Contest → double bye · Full Reset → wipe everything &amp; re-seed
+              Restore → enter correct result · Cancel → remove from standings · No Contest → double bye · Full Reset → wipe everything &amp; re-seed · Backfill → next seed fills a playoff drop
             </p>
           </div>
         )}

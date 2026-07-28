@@ -1352,6 +1352,14 @@ export function fullResetMatch(matchId: string): Promise<{ matchId: string; stat
   return apiFetch(`/api/matches/${matchId}/full-reset`, { method: 'POST' });
 }
 
+/** Host/mod/admin: fill the open (empty or withdrawn) slot of an entry-round playoff match
+ *  with the next non-qualified group seed, instead of walking the survivor over. */
+export function backfillNextSeed(
+  matchId: string,
+): Promise<{ matchId: string; filledSlot: string; seedUserId: string }> {
+  return apiFetch(`/api/matches/${matchId}/backfill-next-seed`, { method: 'POST' });
+}
+
 export function swapPlayer(
   matchId: string,
   oldPlayerId: string,
