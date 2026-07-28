@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
-import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, getMatchGames, restoreMatch, cancelMatch, swapPlayer, deleteMatch, getParticipants, forfeitMatch, setMatchNoContest } from '@/lib/api';
+import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, getMatchGames, restoreMatch, cancelMatch, fullResetMatch, swapPlayer, deleteMatch, getParticipants, forfeitMatch, setMatchNoContest } from '@/lib/api';
 import type { OverrideGameInput } from '@/lib/api';
 import { useEffect, useState } from 'react';
 
@@ -120,6 +120,17 @@ export function MatchScoreModal({
     mutationFn: () => cancelMatch(matchId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      onClose();
+    },
+  });
+
+  // Full reset — wipe the node clean (games + draft + factions + advancement) so it can be
+  // re-seeded from scratch. Also invalidate participants (stats/standings shift on wipe).
+  const fullResetMutation = useMutation({
+    mutationFn: () => fullResetMatch(matchId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants'] });
       onClose();
     },
   });
@@ -356,8 +367,8 @@ export function MatchScoreModal({
         )}
         {!isOverride && <div className="mb-4" />}
 
-        {/* Match admin actions — Cancel available for COMPLETED+FORFEIT, Restore for FORFEIT+CANCELLED */}
-        {(canCancel || canRestore) && (
+        {/* Match admin actions — Cancel for COMPLETED+FORFEIT, Restore for FORFEIT+CANCELLED, Full Reset for any manageable node */}
+        {(canCancel || canRestore || canManage) && (
           <div className="mb-4 rounded border border-stone-700 bg-stone-800/50 p-3 space-y-2">
             <p className="text-xs text-stone-400">
               {matchStatus === 'CANCELLED' ? 'This match is cancelled.'
@@ -404,8 +415,22 @@ export function MatchScoreModal({
                 </button>
               )}
             </div>
+            {canManage && (
+              <button
+                type="button"
+                disabled={fullResetMutation.isPending}
+                onClick={() => {
+                  if (confirm('Full-reset this node? This DELETES its games, draft, picked map, factions and lobby code, and pulls any winner it advanced back out of the next match (→ TBD). Use this to re-seed a node from scratch. The players stay; their tournament faction is kept.')) {
+                    fullResetMutation.mutate();
+                  }
+                }}
+                className="w-full rounded border border-red-800 px-2 py-1 text-xs text-red-300/90 hover:bg-red-950/30 transition-colors disabled:opacity-40"
+              >
+                ⟲ Full Reset (wipe node clean)
+              </button>
+            )}
             <p className="text-[10px] text-stone-600">
-              Restore → enter correct result · Cancel → remove from standings · No Contest → double bye
+              Restore → enter correct result · Cancel → remove from standings · No Contest → double bye · Full Reset → wipe everything &amp; re-seed
             </p>
           </div>
         )}

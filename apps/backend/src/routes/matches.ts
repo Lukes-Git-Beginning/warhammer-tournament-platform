@@ -573,6 +573,78 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // POST /api/matches/:id/full-reset — admin/mod/host: wipe a match node back to a clean,
+  // unplayed placeholder. Unlike restore (which only clears the top-level result), this
+  // DELETES the match's games + draft — with ALL their map / faction / lobby / pick data —
+  // so nothing stale survives a reset (a swapped-in player never inherits the old map or
+  // faction), clears the match's own result + factions + played time, and — crucially —
+  // pulls any winner this match had already advanced back out of the NEXT bracket node
+  // (→ TBD). The tournament-level (SFT-latched) faction on the participant is untouched.
+  fastify.post(
+    '/api/matches/:id/full-reset',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const match = await fastify.prisma.match.findUnique({
+        where: { id: matchId },
+        select: {
+          id: true,
+          winner_id: true,
+          player2_id: true,
+          tournament_id: true,
+          next_match_id: true,
+        },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      const role = request.user?.role ?? '';
+      const userId = request.user?.sub ?? '';
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+      }
+
+      await fastify.prisma.$transaction(async (tx) => {
+        // 1. Drop every per-game row (cascades map decisions + faction matrices) and the
+        //    draft (cascades its picks) — no map/faction/lobby/pick choice survives.
+        await tx.matchGame.deleteMany({ where: { match_id: matchId } });
+        await tx.draft.deleteMany({ where: { match_id: matchId } });
+        // 2. Cascade to the next bracket node: if this match had advanced a winner, pull
+        //    them back out of that node's slot (→ TBD) so no stale finalist lingers.
+        if (match.next_match_id && match.winner_id) {
+          const nx = await tx.match.findUnique({
+            where: { id: match.next_match_id },
+            select: { id: true, player1_id: true, player2_id: true },
+          });
+          if (nx?.player1_id === match.winner_id) {
+            await tx.match.update({ where: { id: nx.id }, data: { player1_id: null } });
+          } else if (nx?.player2_id === match.winner_id) {
+            await tx.match.update({ where: { id: nx.id }, data: { player2_id: null } });
+          }
+        }
+        // 3. Reset the node itself. A structural bye (no opponent) stays a bye; a real
+        //    pairing goes back to a clean PENDING.
+        await tx.match.update({
+          where: { id: matchId },
+          data: {
+            status: match.player2_id ? 'PENDING' : 'BYE',
+            winner_id: match.player2_id ? null : match.winner_id,
+            result: null,
+            score: null,
+            player1_points: null,
+            player2_points: null,
+            player1_faction_id: null,
+            player2_faction_id: null,
+            played_at: null,
+          },
+        });
+      });
+
+      // The deleted games no longer count anywhere → recompute derived stats + bust caches.
+      await cascadeGameEligibility(fastify, matchId, false);
+      emitBracketUpdate(fastify.io, match.tournament_id ?? '');
+      return reply.code(200).send({ matchId, status: match.player2_id ? 'PENDING' : 'BYE' });
+    },
+  );
+
   // POST /api/matches/:id/report — a match participant flags an issue with their
   // match (wrong result, wrong factions, …). DMs the host + co-hosts and writes an
   // audit log entry. Player-only: staff use the edit modal instead.

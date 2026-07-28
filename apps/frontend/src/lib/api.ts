@@ -1345,6 +1345,13 @@ export function cancelMatch(matchId: string): Promise<{ matchId: string; status:
   return apiFetch(`/api/matches/${matchId}/cancel-match`, { method: 'POST' });
 }
 
+/** Host/mod/admin: wipe a match node back to a clean, unplayed placeholder — deletes its
+ *  games + draft (map / faction / lobby / pick data) and pulls any advanced winner back
+ *  out of the next bracket node (→ TBD). Heavier than restore; use to fully re-seed a node. */
+export function fullResetMatch(matchId: string): Promise<{ matchId: string; status: string }> {
+  return apiFetch(`/api/matches/${matchId}/full-reset`, { method: 'POST' });
+}
+
 export function swapPlayer(
   matchId: string,
   oldPlayerId: string,
