@@ -543,7 +543,10 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       }
       await fastify.prisma.match.update({
         where: { id: matchId },
-        data: { status: 'PENDING', winner_id: null, result: null, score: null, player1_points: null, player2_points: null, played_at: null },
+        // Clear withdrawn_player_id too: a restored match is being replayed, so a lingering
+        // "opponent withdrew" walkover marker must not survive (it otherwise blocks the picker
+        // — e.g. after a withdrawn player was swapped out for a replacement).
+        data: { status: 'PENDING', winner_id: null, result: null, score: null, player1_points: null, player2_points: null, played_at: null, withdrawn_player_id: null },
       });
       return reply.code(200).send({ matchId, status: 'PENDING' });
     },
@@ -636,6 +639,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
             player1_faction_id: null,
             player2_faction_id: null,
             played_at: null,
+            withdrawn_player_id: null,
           },
         });
       });
