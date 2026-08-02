@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 ## [1.24.0] — 2026-08-02 — Bye DMs, division ordering & re-seed marker fixes
 ### Fixed
-- **Balanced Liechtenstein byes now DM the player.** A bye never notified the player before (BaLi created bye rows outside the notification path); now a *final* bye sends the encouraging DM — both when a provisional bye crystallises and when a final-round bye is drawn. Provisional (still-reclaimable) byes and 0-point catch-up byes stay silent.
+- **Balanced Liechtenstein byes now DM the player.** A bye never notified the player before (BaLi created bye rows outside the notification path). Now a mid-tournament bye that becomes final sends the encouraging "you advance" DM, and a **final-round bye** gets a tailored message: it's the final round, a *provisional* playoff outlook (in / just outside the spots, from the current division standings — can still shift), and "if you make the playoffs, I'll ping you when the bracket is set". Provisional (still-reclaimable) byes and 0-point catch-up byes stay silent.
 - **Division playoffs are ordered top-division-first.** The stacked division brackets were ordered by creation order (so e.g. Advanced could sit above Top); they now sort by skill band, highest first.
 - **Re-seeding a playoff drop no longer leaves a stale "opponent withdrew" marker.** Backfill and swap (like restore/full-reset in v1.23.0) now clear the withdrawal marker when the withdrawn player is replaced, so the picker is no longer blocked on the re-seeded match.
 
