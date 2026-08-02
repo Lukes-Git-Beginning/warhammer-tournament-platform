@@ -133,7 +133,7 @@ export function computeSlotLabels(
 
 export function SVGBracket({ data, players, factionMap, tournamentMode, format, bandByUser, onMatchClick }: SVGBracketProps) {
   const isSft = tournamentMode === 'SFT';
-  const layout = computeBracketLayout(data.matches);
+  const layout = computeBracketLayout(data.matches, bandByUser);
 
   const slotLabels = computeSlotLabels(data.matches, players);
 

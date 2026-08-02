@@ -185,7 +185,7 @@ function groupPlayoffDivisions(playoff: BracketNode[]): BracketNode[][] {
  * getting a label strip. Divisions are ordered by their earliest match number
  * (top division — highest band — first).
  */
-function computeBalancedPlayoffLayout(swiss: BracketNode[], playoff: BracketNode[]): BracketLayout {
+function computeBalancedPlayoffLayout(swiss: BracketNode[], playoff: BracketNode[], bandByUser?: Map<string, number>): BracketLayout {
   const positions = new Map<string, MatchPosition>();
 
   const swissLayout = computeLinearLayout(swiss, { xBase: 0, yBase: 0 });
@@ -193,10 +193,26 @@ function computeBalancedPlayoffLayout(swiss: BracketNode[], playoff: BracketNode
 
   const xBase = swissLayout.width > 0 ? swissLayout.width + SECTION_GAP : 0;
 
-  const divisions = groupPlayoffDivisions(playoff).sort(
-    (a, b) =>
-      Math.min(...a.map((m) => m.matchNumber)) - Math.min(...b.map((m) => m.matchNumber)),
-  );
+  // Order divisions by skill band, HIGHEST first (Top → Advanced → …) so the top division's
+  // bracket is always on top. The old "earliest match number" heuristic assumed the top
+  // division was generated first, which isn't guaranteed. A division's band = the highest band
+  // among its players (same rule as the SVGBracket label). Falls back to match-number order
+  // when band info is absent (keeps a deterministic tie-break).
+  const divisionBand = (div: BracketNode[]): number => {
+    let band = 0;
+    for (const m of div) {
+      for (const pid of [m.player1Id, m.player2Id]) {
+        const b = pid ? bandByUser?.get(pid) : undefined;
+        if (b && b > band) band = b;
+      }
+    }
+    return band;
+  };
+  const divisions = groupPlayoffDivisions(playoff).sort((a, b) => {
+    const byBand = divisionBand(b) - divisionBand(a); // highest band first
+    if (byBand !== 0) return byBand;
+    return Math.min(...a.map((m) => m.matchNumber)) - Math.min(...b.map((m) => m.matchNumber));
+  });
 
   const groups: BracketGroup[] = [];
   let yOffset = 0;
@@ -217,7 +233,7 @@ function computeBalancedPlayoffLayout(swiss: BracketNode[], playoff: BracketNode
   return { positions, width: maxX, height: maxY, groups };
 }
 
-export function computeBracketLayout(matches: BracketNode[]): BracketLayout {
+export function computeBracketLayout(matches: BracketNode[], bandByUser?: Map<string, number>): BracketLayout {
   if (matches.length === 0) {
     return { positions: new Map(), width: 0, height: 0 };
   }
@@ -231,7 +247,7 @@ export function computeBracketLayout(matches: BracketNode[]): BracketLayout {
     const finalCount = playoff.filter((m) => m.phase === 'PLAYOFF_FINAL').length;
     if (finalCount > 1) {
       const swiss = matches.filter((m) => !m.phase || m.phase === 'SWISS');
-      return computeBalancedPlayoffLayout(swiss, playoff);
+      return computeBalancedPlayoffLayout(swiss, playoff, bandByUser);
     }
 
     // SE / Swiss / RR — identical behaviour to the original implementation.
