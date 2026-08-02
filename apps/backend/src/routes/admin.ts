@@ -1905,16 +1905,19 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     const match = await fastify.prisma.match.findUnique({
       where: { id: matchId },
-      select: { id: true, status: true, player1_id: true, player2_id: true },
+      select: { id: true, status: true, player1_id: true, player2_id: true, withdrawn_player_id: true },
     });
     if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
     if (match.status !== 'PENDING') return reply.code(409).send({ error: 'Conflict', message: 'Can only swap players in PENDING matches', statusCode: 409 });
 
     const { oldPlayerId, newPlayerId } = parsed.data;
-    let updateData: { player1_id?: string; player2_id?: string };
+    let updateData: { player1_id?: string; player2_id?: string; withdrawn_player_id?: null };
     if (match.player1_id === oldPlayerId) updateData = { player1_id: newPlayerId };
     else if (match.player2_id === oldPlayerId) updateData = { player2_id: newPlayerId };
     else return reply.code(400).send({ error: 'BadRequest', message: 'oldPlayerId is not in this match', statusCode: 400 });
+    // If the player being swapped out is the one who withdrew, the withdrawal is resolved by
+    // the replacement — clear the stale "opponent withdrew" marker so it can't block the picker.
+    if (match.withdrawn_player_id === oldPlayerId) updateData.withdrawn_player_id = null;
 
     await fastify.prisma.$transaction(async (tx) => {
       await tx.match.update({ where: { id: matchId }, data: updateData });

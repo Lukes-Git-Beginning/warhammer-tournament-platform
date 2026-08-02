@@ -744,7 +744,10 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'No eligible next seed available to backfill', statusCode: 422 });
       }
 
-      await fastify.prisma.match.update({ where: { id: matchId }, data: { [openSlot]: seed.userId } });
+      // Clear withdrawn_player_id: filling the open slot with a live replacement resolves the
+      // withdrawal, so the "opponent withdrew" marker must not linger (it would keep blocking
+      // the picker on the re-seeded match).
+      await fastify.prisma.match.update({ where: { id: matchId }, data: { [openSlot]: seed.userId, withdrawn_player_id: null } });
       emitBracketUpdate(fastify.io, tournamentId);
       return reply.code(200).send({ matchId, filledSlot: openSlot, seedUserId: seed.userId });
     },
