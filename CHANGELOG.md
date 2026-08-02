@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.26.0] — 2026-08-02 — Change tournament visibility any time
+### Changed
+- **A host can now switch a tournament between Public and Private at any time**, not only while it's a draft. Visibility is a pure access flag (it doesn't touch matches or standings), so locking it to the draft stage was needless — run a tournament private during setup and flip it public on announcement, or hide a finished event. Format and mode stay draft-only (those are structural).
+
 ## [1.25.0] — 2026-08-02 — BaLi: no more idle waiting for a pairing (#36)
 ### Fixed
 - **Balanced Liechtenstein no longer parks free players needlessly.** When several same-skill players were still finishing their round, the pairing engine could reserve *every* free player against a still-playing one and commit no matches — so players who'd already finished sat idle for minutes with clean opponents right there. It now commits a free-vs-free pairing the moment it's provably downside-free (a same-band, non-rematch pair that a cost check confirms won't strand a weaker player into a play-up), while still reserving a partner for a genuinely scarce/weaker player. Prompt pairings in the common case, no loss to the stomp-avoidance that reservation protects.
