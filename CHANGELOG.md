@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.24.0] — 2026-08-02 — Bye DMs, division ordering & re-seed marker fixes
+### Fixed
+- **Balanced Liechtenstein byes now DM the player.** A bye never notified the player before (BaLi created bye rows outside the notification path); now a *final* bye sends the encouraging DM — both when a provisional bye crystallises and when a final-round bye is drawn. Provisional (still-reclaimable) byes and 0-point catch-up byes stay silent.
+- **Division playoffs are ordered top-division-first.** The stacked division brackets were ordered by creation order (so e.g. Advanced could sit above Top); they now sort by skill band, highest first.
+- **Re-seeding a playoff drop no longer leaves a stale "opponent withdrew" marker.** Backfill and swap (like restore/full-reset in v1.23.0) now clear the withdrawal marker when the withdrawn player is replaced, so the picker is no longer blocked on the re-seeded match.
+
 ## [1.23.0] — 2026-07-28 — Host match ops: Full Reset + playoff backfill
 ### Added
 - **Full Reset on any match node.** A host/mod/admin can wipe a match back to a clean, unplayed placeholder — it deletes the games, draft, picked map, factions and lobby code (so a swapped-in player never inherits the old data) and pulls any winner it had already advanced back out of the next bracket node (→ TBD). Unlike "Restore to Pending" (which only cleared the top-level result), nothing stale survives; the tournament-level (SFT) faction is kept.
