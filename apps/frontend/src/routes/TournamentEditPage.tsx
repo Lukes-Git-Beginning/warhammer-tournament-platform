@@ -1631,17 +1631,17 @@ export function TournamentEditPage() {
 
           <div className="min-w-0 max-w-xs">
             <Label htmlFor="tef-visibility">Visibility</Label>
+            {/* Visibility is a pure access flag (no structural dependency), so unlike format/
+                mode it stays editable after the draft — a host can flip Public/Private any time. */}
             <Select
               id="tef-visibility"
               name="visibility"
               value={form.visibility}
               onChange={handleChange}
-              disabled={draftLocked}
             >
               <option value="PUBLIC">Public</option>
               <option value="PRIVATE">Private</option>
             </Select>
-            {draftLocked && <LockNote>Locked — registration is open</LockNote>}
           </div>
 
           <div className="flex flex-col gap-3">

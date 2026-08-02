@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.26.1] — 2026-08-02 — Visibility editable in the Edit dialog
+### Fixed
+- **The Edit Tournament dialog now lets you change Public/Private after the draft too** — the dropdown was still disabled ("Locked — registration is open") for non-draft tournaments, mirroring the old rule. It matches v1.26.0 now: a host can flip visibility any time from the dialog, no console needed.
+
 ## [1.26.0] — 2026-08-02 — Change tournament visibility any time
 ### Changed
 - **A host can now switch a tournament between Public and Private at any time**, not only while it's a draft. Visibility is a pure access flag (it doesn't touch matches or standings), so locking it to the draft stage was needless — run a tournament private during setup and flip it public on announcement, or hide a finished event. Format and mode stay draft-only (those are structural).
