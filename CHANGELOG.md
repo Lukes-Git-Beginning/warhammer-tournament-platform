@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.25.0] — 2026-08-02 — BaLi: no more idle waiting for a pairing (#36)
+### Fixed
+- **Balanced Liechtenstein no longer parks free players needlessly.** When several same-skill players were still finishing their round, the pairing engine could reserve *every* free player against a still-playing one and commit no matches — so players who'd already finished sat idle for minutes with clean opponents right there. It now commits a free-vs-free pairing the moment it's provably downside-free (a same-band, non-rematch pair that a cost check confirms won't strand a weaker player into a play-up), while still reserving a partner for a genuinely scarce/weaker player. Prompt pairings in the common case, no loss to the stomp-avoidance that reservation protects.
+
 ## [1.24.0] — 2026-08-02 — Bye DMs, division ordering & re-seed marker fixes
 ### Fixed
 - **Balanced Liechtenstein byes now DM the player.** A bye never notified the player before (BaLi created bye rows outside the notification path). Now a mid-tournament bye that becomes final sends the encouraging "you advance" DM, and a **final-round bye** gets a tailored message: it's the final round, a *provisional* playoff outlook (in / just outside the spots, from the current division standings — can still shift), and "if you make the playoffs, I'll ping you when the bracket is set". Provisional (still-reclaimable) byes and 0-point catch-up byes stay silent.
