@@ -184,7 +184,8 @@ export async function runBalancedPairingTick(
       id: string;
       round: number;
       player1_id: string;
-      player2_id: string;
+      // null for a final-round BYE routed here so its player gets the bye DM via notifyMatchesCreated.
+      player2_id: string | null;
     }> = [];
     // True once any row was created OR a PENDING_BYE was reclaimed/crystallised, so a
     // tick that only resolves byes still pushes a live bracket update to the clients.
@@ -251,9 +252,24 @@ export async function runBalancedPairingTick(
         (m) => m.status === 'PENDING_BYE' && m.player1_id !== null && movedOn(m.player1_id, m.round),
       );
       if (toCrystallise.length > 0) {
+        const crystallisedByes: Array<{ id: string; round: number; player1_id: string }> = [];
         for (const m of toCrystallise) {
           const { status, winner } = byeStatusFor(m.player1_id!);
           await fastify.prisma.match.update({ where: { id: m.id }, data: { status, winner_id: winner } });
+          // Only a real (scored) BYE earns the encouraging DM — a 0-point CATCHUP_BYE is a
+          // late-join placeholder, not a "free win", so it stays silent.
+          if (status === 'BYE') crystallisedByes.push({ id: m.id, round: m.round, player1_id: m.player1_id! });
+        }
+        // The provisional PENDING_BYE was intentionally silent (it could still be reclaimed);
+        // now that it is final, DM the bye player — closes the "BaLi byes never notify" gap.
+        const byRound = new Map<number, typeof crystallisedByes>();
+        for (const b of crystallisedByes) {
+          const l = byRound.get(b.round) ?? [];
+          l.push(b);
+          byRound.set(b.round, l);
+        }
+        for (const [round, bs] of byRound) {
+          await notifyMatchesCreated(tournamentId, round, bs.map((b) => ({ id: b.id, player1_id: b.player1_id, player2_id: null })));
         }
         mutated = true;
         continue;
@@ -409,8 +425,9 @@ export async function runBalancedPairingTick(
         // round to reclaim into, so it scores immediately.
         if (b.round >= roundsCount) {
           const { status, winner } = byeStatusFor(b.player_id);
+          const byeId = randomUUID();
           rows.push({
-            id: randomUUID(),
+            id: byeId,
             tournament_id: tournamentId,
             round: b.round,
             match_number: nextNumber++,
@@ -420,6 +437,9 @@ export async function runBalancedPairingTick(
             winner_id: winner,
             phase: null as MatchPhase | null,
           });
+          // A final-round scored BYE is final immediately → DM the player. Route it through
+          // createdMatches (notifyMatchesCreated handles the bye path); a catch-up bye stays silent.
+          if (status === 'BYE') createdMatches.push({ id: byeId, round: b.round, player1_id: b.player_id, player2_id: null });
         } else {
           rows.push({
             id: randomUUID(),
