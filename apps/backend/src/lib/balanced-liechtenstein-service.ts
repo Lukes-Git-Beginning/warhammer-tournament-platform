@@ -28,7 +28,7 @@ import { computeSwissStandings, sortSwissStandings, type CompletedMatchRecord } 
 import { getPlayerClassification } from './skill-classification-service.js';
 import { balancedRounds } from './auto-swiss-service.js';
 import { emitBracketUpdate } from './emit.js';
-import { notifyMatchesCreated } from './discord-notify.js';
+import { notifyMatchesCreated, notifyFinalRoundBye } from './discord-notify.js';
 
 const LOCK_TTL_SECONDS = 15;
 const MAX_ITERATIONS = 30; // safety cap for bye cascades (create → crystallise → reclaim) in a single tick
@@ -184,9 +184,10 @@ export async function runBalancedPairingTick(
       id: string;
       round: number;
       player1_id: string;
-      // null for a final-round BYE routed here so its player gets the bye DM via notifyMatchesCreated.
-      player2_id: string | null;
+      player2_id: string;
     }> = [];
+    // Final-round BYE holders (scored BYE only) — DM'd separately with a playoff outlook.
+    const finalRoundByePlayers: string[] = [];
     // True once any row was created OR a PENDING_BYE was reclaimed/crystallised, so a
     // tick that only resolves byes still pushes a live bracket update to the clients.
     let mutated = false;
@@ -437,9 +438,9 @@ export async function runBalancedPairingTick(
             winner_id: winner,
             phase: null as MatchPhase | null,
           });
-          // A final-round scored BYE is final immediately → DM the player. Route it through
-          // createdMatches (notifyMatchesCreated handles the bye path); a catch-up bye stays silent.
-          if (status === 'BYE') createdMatches.push({ id: byeId, round: b.round, player1_id: b.player_id, player2_id: null });
+          // A final-round scored BYE is final immediately → DM the player with a playoff
+          // outlook (below). A 0-point catch-up bye stays silent.
+          if (status === 'BYE') finalRoundByePlayers.push(b.player_id);
         } else {
           rows.push({
             id: randomUUID(),
@@ -473,6 +474,31 @@ export async function runBalancedPairingTick(
           round,
           ms.map((m) => ({ id: m.id, player1_id: m.player1_id, player2_id: m.player2_id })),
         );
+      }
+    }
+
+    // Final-round byes get a tailored DM with a PROVISIONAL playoff outlook (they've finished
+    // their group phase; playoffs — not another round — follow). The definitive news is the
+    // playoff-pairing DM when a division bracket is generated.
+    if (finalRoundByePlayers.length > 0) {
+      const qualifiers = await provisionalPlayoffQualifiers(fastify, tournamentId);
+      const tRow = await fastify.prisma.tournament.findUnique({
+        where: { id: tournamentId },
+        select: { name: true, slug: true, stream_url: true },
+      });
+      if (tRow) {
+        const users = await fastify.prisma.user.findMany({
+          where: { id: { in: finalRoundByePlayers } },
+          select: { id: true, discord_id: true, username: true },
+        });
+        for (const u of users) {
+          if (!u.discord_id) continue;
+          await notifyFinalRoundBye(
+            { name: tRow.name, slug: tRow.slug, stream_url: tRow.stream_url },
+            { discord_id: u.discord_id, username: u.username },
+            { inPlayoffZone: qualifiers.has(u.id) },
+          );
+        }
       }
     }
 
@@ -726,6 +752,75 @@ export function buildDivisionBracket(
  * division size (TOP2/TOP4/TOP8, each with a third-place match). Returns an
  * `{ error }` on precondition failure; guarded against double-generation.
  */
+/**
+ * Read-only: the set of userIds who, by the CURRENT standings, would seed a division
+ * playoff bracket (pools with ≥2 seeds). PROVISIONAL — final-round matches may still be
+ * pending, so this can shift. Mirrors the pool computation in startBalancedPlayoffs exactly
+ * so the outlook matches the real generation. Used only for the final-round bye DM.
+ */
+export async function provisionalPlayoffQualifiers(
+  fastify: FastifyInstance,
+  tournamentId: string,
+): Promise<Set<string>> {
+  const tournament = await fastify.prisma.tournament.findFirst({
+    where: { id: tournamentId, deleted_at: null },
+    select: { format: true, rounds_count: true, playoff_format: true },
+  });
+  if (!tournament || tournament.format !== 'BALANCED_LIECHTENSTEIN') return new Set();
+  const roundsCount = tournament.rounds_count ?? 5;
+
+  const matches = await fastify.prisma.match.findMany({
+    where: { tournament_id: tournamentId, deleted_at: null },
+    select: {
+      round: true, player1_id: true, player2_id: true, winner_id: true, status: true, phase: true,
+      games: { select: { status: true, winner_id: true } },
+    },
+  });
+  const roster = await fastify.prisma.tournamentParticipant.findMany({
+    where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] } },
+    select: { user_id: true, skill_band: true, status: true },
+  });
+  const withdrawnIds = new Set(roster.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
+  const active = roster.filter((p) => p.status !== 'WITHDREW');
+  const anyCheckedIn = active.some((p) => p.status === 'CHECKED_IN');
+  const contenders = anyCheckedIn ? active.filter((p) => p.status === 'CHECKED_IN') : active;
+  const contenderIds = new Set(contenders.map((p) => p.user_id));
+
+  const participantIds = roster.map((p) => p.user_id);
+  const completed: CompletedMatchRecord[] = matches
+    .filter(
+      (m) =>
+        (m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST') &&
+        (m.phase === null || m.phase === 'SWISS'),
+    )
+    .map((m) => ({
+      round: m.round,
+      player1_id: m.player1_id,
+      player2_id: m.player2_id,
+      winner_id: m.winner_id,
+      status: m.status,
+      player1_game_wins: m.games.some((g) => g.status === 'COMPLETED')
+        ? m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length
+        : undefined,
+      player2_game_wins: m.games.some((g) => g.status === 'COMPLETED')
+        ? m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length
+        : undefined,
+    }));
+  const sorted = sortSwissStandings(
+    computeSwissStandings(participantIds, completed, withdrawnIds),
+    completed,
+    tournamentId,
+  );
+  const bandByUser = new Map(roster.map((p) => [p.user_id, p.skill_band ?? DEFAULT_BAND]));
+  const ranked = sorted
+    .filter((s) => contenderIds.has(s.userId) && !withdrawnIds.has(s.userId))
+    .map((s, i) => ({ userId: s.userId, band: bandByUser.get(s.userId) ?? DEFAULT_BAND, rank: i + 1, rawScore: s.score }));
+  const pools = formDivisionPools(ranked, roundsCount, targetPoolSizeFromFormat(tournament.playoff_format));
+  const qualifiers = new Set<string>();
+  for (const pool of pools) if (pool.seeds.length >= 2) for (const s of pool.seeds) qualifiers.add(s);
+  return qualifiers;
+}
+
 export async function startBalancedPlayoffs(
   fastify: FastifyInstance,
   tournamentId: string,

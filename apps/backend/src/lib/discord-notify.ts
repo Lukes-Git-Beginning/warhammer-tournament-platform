@@ -648,6 +648,40 @@ export async function notifyBye(
 }
 
 /**
+ * DM a player who drew a bye in the FINAL group round. There is no next round — playoffs
+ * follow — so the message says so and gives a PROVISIONAL playoff outlook from the current
+ * standings ("as it stands"), which can still shift as the last results land. The definitive
+ * news is the playoff-pairing DM that fires when a division bracket is generated.
+ */
+export async function notifyFinalRoundBye(
+  tournament: { name: string; slug: string; stream_url?: string | null },
+  byePlayer: { discord_id: string; username: string },
+  opts: { inPlayoffZone: boolean },
+): Promise<void> {
+  const token = getToken();
+  if (!token) return;
+  const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
+  const streamUrl =
+    tournament.stream_url ??
+    (await prisma.tournament.findFirst({ where: { slug: tournament.slug }, select: { stream_url: true } }))?.stream_url ??
+    null;
+  const outlook = opts.inPlayoffZone
+    ? `As it stands you're **in the playoff spots** — though the last results can still shift things.`
+    : `As it stands you're **just outside the playoff spots** — it'd take a few results (or a drop) to fall your way.`;
+  const msg =
+    `**[RizzOtto's Arena] Bye — ${tournament.name}**\n` +
+    `You drew a bye in the final round — a free win, and that's your group phase in the books. ☕\n` +
+    `${outlook}\n` +
+    `**If you make the playoffs, I'll ping you the moment the bracket is set.** 🏆 Standings: <${url}>` +
+    streamLine(streamUrl);
+  try {
+    await sendDm(byePlayer.discord_id, msg);
+  } catch (err) {
+    console.warn('[discord-notify] notifyFinalRoundBye error (non-fatal):', err);
+  }
+}
+
+/**
  * P1/P2 (#23): at playoff start, congratulate the qualifiers and give everyone else
  * a warm "your run ends here". Fire-and-forget safe.
  */
