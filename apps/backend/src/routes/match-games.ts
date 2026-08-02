@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ensureMatchGame, finalizeGameResult } from '../lib/match-games.js';
-import { REPLAY_DIR } from '../lib/replays.js';
+import { REPLAY_DIR, validateReplayUpload } from '../lib/replays.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
 import { notifyOpenPlayDispute } from '../lib/discord-notify.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
@@ -747,8 +747,11 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(400).send({ error: 'BadRequest', message: 'Replay file is empty', statusCode: 400 });
         }
 
-        const ext = data?.filename?.split('.').pop() ?? 'rec';
-        const filename = `${randomUUID()}.${ext}`;
+        const replayError = validateReplayUpload(data?.filename, buffer);
+        if (replayError) {
+          return reply.code(400).send({ error: 'BadRequest', message: replayError, statusCode: 400 });
+        }
+        const filename = `${randomUUID()}.replay`;
         const matchDir = join(REPLAY_DIR, matchId);
         await mkdir(matchDir, { recursive: true });
         await writeFile(join(matchDir, filename), buffer);
@@ -869,8 +872,11 @@ const openPlayReplayRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'BadRequest', message: 'Replay file is empty', statusCode: 400 });
       }
 
-      const ext = data.filename?.split('.').pop() ?? 'rec';
-      const filename = `${randomUUID()}.${ext}`;
+      const replayError = validateReplayUpload(data.filename, buffer);
+      if (replayError) {
+        return reply.code(400).send({ error: 'BadRequest', message: replayError, statusCode: 400 });
+      }
+      const filename = `${randomUUID()}.replay`;
       const matchDir = join(REPLAY_DIR, matchId);
       await mkdir(matchDir, { recursive: true });
       await writeFile(join(matchDir, filename), buffer);
