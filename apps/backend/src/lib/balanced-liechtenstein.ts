@@ -272,6 +272,66 @@ function pairPool(
   const strictlyLess = (x: [number, number, number], y: [number, number, number]): boolean =>
     x[0] !== y[0] ? x[0] < y[0] : x[1] !== y[1] ? x[1] < y[1] : x[2] < y[2];
 
+  // #36 cost-neutral DE-HOLD. The base matching (with the protect bonus) can HOLD every free
+  // player when enough same-band players are still incoming — total tie-break bonus 30−5p is
+  // minimised by committing nothing, so free players idle needlessly (RizzOtto's tournament).
+  // Fix: after the base matching, commit any HELD free-free pair that a PURE-cost (bonus-free)
+  // max-weight matching proves is a "safe edge" — i.e. committing it does NOT raise the global
+  // optimum, so it can never strand a weaker player into a play-up. Only floor edges (Δ0, no
+  // rematch → cost 0) are candidates: pairing two equals now is the abundance case; a player
+  // reserved for a scarce/weak incoming has a >0 hold and is left alone (scarcity preserved).
+  const K_FIXED = 100_000_000; // ≥ any open-pool edge cost, fixed so MWM values compare across sets
+  const pureMWM = (nodeList: Waiter[]): number => {
+    const n = nodeList.length;
+    if (n < 2) return 0;
+    const edges: Array<[number, number, number]> = [];
+    for (let i = 0; i < n; i++)
+      for (let j = i + 1; j < n; j++) {
+        const s = edgeScaled(nodeList[i]!, nodeList[j]!);
+        if (s === null) continue;
+        edges.push([i, j, K_FIXED - s]); // pure weight, no protect/commit bonus
+      }
+    if (edges.length === 0) return 0;
+    const mate = blossom(edges);
+    let w = 0;
+    for (let i = 0; i < n; i++) {
+      const j = mate[i] ?? -1;
+      if (j > i) w += K_FIXED - edgeScaled(nodeList[i]!, nodeList[j]!)!;
+    }
+    return w;
+  };
+  const deHold = (base: { pairs: [Waiter, Waiter][]; byes: Waiter[] }): { pairs: [Waiter, Waiter][]; byes: Waiter[] } => {
+    if (inc.length === 0) return base; // closed pool: nobody is held
+    const used = new Set<string>();
+    for (const [a, b] of base.pairs) { used.add(a.userId); used.add(b.userId); }
+    for (const b of base.byes) used.add(b.userId);
+    let held = free.filter((f) => !used.has(f.userId));
+    if (held.length < 2) return base;
+    const extra: [Waiter, Waiter][] = [];
+    let field = [...held, ...inc]; // the still-uncommitted sub-field
+    let opt = pureMWM(field);
+    let progress = true;
+    while (progress && held.length >= 2) {
+      progress = false;
+      for (let i = 0; i < held.length && !progress; i++)
+        for (let j = i + 1; j < held.length; j++) {
+          if (edgeScaled(held[i]!, held[j]!) !== 0) continue; // floor edges only (Δ0, no rematch)
+          const u = held[i]!, v = held[j]!;
+          const reduced = field.filter((w) => w.userId !== u.userId && w.userId !== v.userId);
+          if (pureMWM(reduced) + K_FIXED === opt) {
+            // u–v lies in a max-weight matching → committing it preserves the optimum.
+            extra.push([u, v]);
+            held = held.filter((w) => w.userId !== u.userId && w.userId !== v.userId);
+            field = reduced;
+            opt = pureMWM(field);
+            progress = true;
+            break;
+          }
+        }
+    }
+    return { pairs: [...base.pairs, ...extra], byes: base.byes };
+  };
+
   // Pre-assigned bye: in a CLOSED odd pool the caller supplies the ELIGIBLE bye candidates ordered
   // weakest-first (already respecting the never-byed-twice rule). Among them, pick the bye that
   // yields the fewest play-ups — a weak player is often the "glue" that lets their same-band peers
@@ -298,7 +358,7 @@ function pairPool(
     }
   }
 
-  return solve(free);
+  return deHold(solve(free));
 }
 
 /**

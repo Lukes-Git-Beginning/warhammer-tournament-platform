@@ -31,6 +31,53 @@ const ongoing = (round: number, a: string, b: string): BalancedMatchRow => ({
   status: 'ONGOING',
 });
 
+describe('planPairings — #36 abundance de-hold', () => {
+  it('commits free-free pairs instead of holding everyone when many same-band players are still incoming', () => {
+    // 4 free b3 (two completed R1 matches) + 6 incoming b3 (three ongoing R1 matches). The old
+    // engine held all four free players (tie-break bonus 30−5p is minimised by committing
+    // nothing → they idled). The cost-neutral de-hold must commit the two clean (Δ0, non-
+    // rematch) free-free pairs instead.
+    const participants = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'].map((id) => P(id, 3));
+    const matches: BalancedMatchRow[] = [
+      done(1, 'a', 'b', 'a'), // a, b → free for R2
+      done(1, 'c', 'd', 'c'), // c, d → free for R2
+      ongoing(1, 'e', 'f'), // e, f → incoming to R2
+      ongoing(1, 'g', 'h'), // g, h → incoming to R2
+      ongoing(1, 'i', 'j'), // i, j → incoming to R2
+    ];
+    const plan = planPairings(participants, matches, 3);
+    const r2 = plan.pairings.filter((p) => p.round === 2);
+    expect(r2).toHaveLength(2); // was 0 before the fix
+    const freeSet = new Set(['a', 'b', 'c', 'd']);
+    for (const p of r2) {
+      expect(freeSet.has(p.player1_id) && freeSet.has(p.player2_id)).toBe(true);
+      const pair = new Set([p.player1_id, p.player2_id]);
+      expect(pair).not.toEqual(new Set(['a', 'b'])); // no forced immediate rematch
+      expect(pair).not.toEqual(new Set(['c', 'd']));
+    }
+    expect(plan.byes.filter((b) => b.round === 2)).toHaveLength(0); // nobody stranded
+  });
+
+  it('still HOLDS a lone off-band free player for a closer incoming one (scarcity, not abundance)', () => {
+    // Free b2 + b4 (from two completed R1 matches), incoming b2 + b4 still playing. Committing
+    // the two free players together would be a Δ2 stomp; the de-hold must NOT do it — each waits
+    // for their same-band incoming partner. So no R2 pairing is committed yet.
+    const participants = [P('a', 2), P('b', 4), P('x1', 2), P('x2', 2), P('y1', 4), P('y2', 4)];
+    const matches: BalancedMatchRow[] = [
+      done(1, 'a', 'b', 'a'), // a(b2), b(b4) → free (their only free partner is each other = Δ2)
+      ongoing(1, 'x1', 'x2'), // incoming b2
+      ongoing(1, 'y1', 'y2'), // incoming b4
+    ];
+    const plan = planPairings(participants, matches, 3);
+    const r2 = plan.pairings.filter((p) => p.round === 2);
+    // a×b (Δ2) must NOT be committed — held for the incoming same-band partners.
+    for (const p of r2) {
+      const pair = new Set([p.player1_id, p.player2_id]);
+      expect(pair).not.toEqual(new Set(['a', 'b']));
+    }
+  });
+});
+
 describe('planPairings — round 1 (batch)', () => {
   it('pairs every waiting player when the count is even', () => {
     const plan = planPairings([P('a', 3), P('b', 3), P('c', 3), P('d', 3)], [], 3);
