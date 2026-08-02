@@ -887,10 +887,14 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      // Validate draft-only fields: format, mode, visibility, faction_pool
-      // These can only be changed while the tournament is still in DRAFT.
+      // Validate draft-only fields: format, mode, faction_pool. These are STRUCTURAL —
+      // matches, standings and faction assignments depend on them — so they can only change
+      // while the tournament is still in DRAFT. visibility is deliberately NOT here: it's a
+      // pure access/listing flag with no structural dependency, so a manager may flip
+      // PUBLIC/PRIVATE at any time (e.g. private during setup → public on announce, or hide a
+      // finished event). The route already requires canManageTournament.
       if (tournament.status !== 'DRAFT') {
-        const draftOnlyAttempted = (['format', 'mode', 'visibility'] as const).filter(
+        const draftOnlyAttempted = (['format', 'mode'] as const).filter(
           (f) => rest[f] !== undefined,
         );
         if (draftOnlyAttempted.length > 0) {
