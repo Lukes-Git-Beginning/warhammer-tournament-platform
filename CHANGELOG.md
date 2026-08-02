@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.26.2] — 2026-08-02 — Replay uploads are validated
+### Fixed
+- **Security: replay uploads are now checked.** Both upload paths accepted *any* file — a player could upload a `.jpg` in place of a `.replay` and it was stored and served. An upload must now be a real Total War replay: a `.replay`/`.rec`/`.wrep` name **and** the actual ESF file signature, so a renamed image is rejected too.
+
 ## [1.26.1] — 2026-08-02 — Visibility editable in the Edit dialog
 ### Fixed
 - **The Edit Tournament dialog now lets you change Public/Private after the draft too** — the dropdown was still disabled ("Locked — registration is open") for non-draft tournaments, mirroring the old rule. It matches v1.26.0 now: a host can flip visibility any time from the dialog, no console needed.
