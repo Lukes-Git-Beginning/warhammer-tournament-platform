@@ -14,23 +14,29 @@ export const REPLAY_DIR =
   process.env.REPLAY_UPLOAD_DIR ?? join(process.cwd(), 'uploads', 'replays');
 
 /**
- * A Total War replay is an ESF file — its first four bytes are the magic CB AB 00 00.
- * (A JPEG starts FF D8 FF, a PNG 89 50 4E 47, … — those must be rejected.)
+ * A Total War replay is an ESF file. Its 2-byte signature is a variant marker (0xCA–0xCF,
+ * which differs by game/patch) followed by 0xAB — e.g. `CB AB` (the common TWW3 export) or
+ * `CA AB`. The two bytes AFTER the signature are a version/flags field and DO vary in the
+ * wild (`00 00`, `20 20`, …), so only the 2-byte SIGNATURE is checked — a fixed 4-byte magic
+ * would wrongly reject valid replays from other patches. (A JPEG starts `FF D8`, a PNG
+ * `89 50` — neither has 0xAB as its second byte, so both are still rejected.)
  */
-const REPLAY_MAGIC = Buffer.from([0xcb, 0xab, 0x00, 0x00]);
+function hasEsfSignature(buffer: Buffer): boolean {
+  return buffer.length >= 2 && buffer[1] === 0xab && buffer[0]! >= 0xca && buffer[0]! <= 0xcf;
+}
 
 /**
- * Validate an uploaded replay: it must be named `*.replay` AND actually be an ESF file
- * (magic bytes), so a renamed .jpg/.png is caught too. Returns an error message to send to
- * the client, or `null` when the upload is a valid replay.
+ * Validate an uploaded replay: it must be named `*.replay` AND actually carry the ESF
+ * signature, so a renamed .jpg/.png is caught too. Returns an error message to send to the
+ * client, or `null` when the upload is a valid replay.
  */
 export function validateReplayUpload(filename: string | undefined, buffer: Buffer): string | null {
   // Accept the same extensions the picker offers (.replay/.rec/.wrep). The extension is only a
-  // first-line hint — the magic-byte check below is the real gate (it rejects a renamed .jpg).
+  // first-line hint — the signature check below is the real gate (it rejects a renamed .jpg).
   if (!filename || !/\.(replay|rec|wrep)$/i.test(filename)) {
     return 'Only Total War replay files (.replay) are accepted.';
   }
-  if (buffer.length < REPLAY_MAGIC.length || !buffer.subarray(0, REPLAY_MAGIC.length).equals(REPLAY_MAGIC)) {
+  if (!hasEsfSignature(buffer)) {
     return 'That file is not a Total War replay — its contents do not match the replay format.';
   }
   return null;
