@@ -41,6 +41,7 @@ function serializeGame(game: {
   confirmed_at: Date | null;
   replay_url: string | null;
   played_at: Date | null;
+  verification: unknown;
   map_decision: {
     mode: string;
     top_player_id: string;
@@ -75,6 +76,10 @@ function serializeGame(game: {
     confirmedAt: game.confirmed_at?.toISOString() ?? null,
     replayUrl: game.replay_url,
     playedAt: game.played_at?.toISOString() ?? null,
+    // Replay-mismatch verification {issues, explanation} — participants/staff only (host review).
+    verification: includeSensitive
+      ? (game.verification as { issues?: { type: string; message: string }[]; explanation?: string } | null) ?? null
+      : null,
     decision: game.map_decision
       ? {
           mode: game.map_decision.mode,
@@ -127,6 +132,7 @@ const GAME_SELECT = {
   confirmed_at: true,
   replay_url: true,
   played_at: true,
+  verification: true,
   map_decision: true,
   blind_pick: true,
 } as const;

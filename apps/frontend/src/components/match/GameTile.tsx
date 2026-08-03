@@ -306,8 +306,24 @@ export function GameTile({
 
       {/* DISPUTED */}
       {game.status === 'DISPUTED' && (
-        <div className="rounded-lg border border-yellow-600/50 bg-yellow-900/20 p-3 text-sm text-yellow-300 text-center">
-          Result disputed — waiting for host to resolve.
+        <div className="rounded-lg border border-yellow-600/50 bg-yellow-900/20 p-3 text-sm text-yellow-300">
+          <p className="text-center">Result disputed — waiting for host to resolve.</p>
+          {game.verification?.issues && game.verification.issues.length > 0 && (
+            <div className="mt-2 rounded border border-amber-700/50 bg-amber-950/30 p-2 text-xs text-amber-200/90">
+              <p className="font-semibold text-amber-300">Replay didn&apos;t match the report:</p>
+              <ul className="ml-1 mt-1 list-disc pl-4">
+                {game.verification.issues.map((iss, i) => (
+                  <li key={i}>{iss.message}</li>
+                ))}
+              </ul>
+              {game.verification.explanation && (
+                <p className="mt-2">
+                  <span className="font-semibold text-amber-300">Reporter&apos;s explanation:</span>{' '}
+                  {game.verification.explanation}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

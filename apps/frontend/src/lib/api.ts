@@ -1594,6 +1594,8 @@ export interface GameDto {
   confirmedAt: string | null;
   replayUrl: string | null;
   playedAt: string | null;
+  /** Replay-mismatch verification (participants/staff only): the discrepancies + reporter explanation. */
+  verification: { issues?: ReplayIssue[]; explanation?: string } | null;
   decision: MatchDecisionState | null;
   blindPick: {
     player1Locked: boolean;
