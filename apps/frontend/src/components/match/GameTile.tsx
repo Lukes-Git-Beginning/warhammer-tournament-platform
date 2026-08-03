@@ -11,7 +11,7 @@ declare module '@tanstack/react-router' {
     freshDecision?: boolean;
   }
 }
-import { reportGameResult, startMatchDecision, voidDroppedMatch } from '@/lib/api';
+import { reportGameResult, startMatchDecision, voidDroppedMatch, type ReplayIssue } from '@/lib/api';
 import type { GameDto, MapDto } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { LobbyCodeField } from './LobbyCodeField';
@@ -69,6 +69,10 @@ export function GameTile({
   const [selectedWinnerId, setSelectedWinnerId] = useState<string | null>(null);
   const [replayFile, setReplayFile] = useState<File | null>(null);
   const [replayError, setReplayError] = useState<string | null>(null);
+  // Replay-verification mismatch: the uploaded replay doesn't match the report → prompt the
+  // reporter to upload the correct replay (A) or explain the deviation for host review (B).
+  const [mismatch, setMismatch] = useState<ReplayIssue[] | null>(null);
+  const [explanation, setExplanation] = useState('');
   const [mapLightbox, setMapLightbox] = useState(false);
 
   const pickedMap = maps.find((m) => m.id === game.decision?.pickedMapId) ?? null;
@@ -92,13 +96,22 @@ export function GameTile({
   });
 
   const reportMutation = useMutation({
-    mutationFn: ({ winnerId, file }: { winnerId: string; file: File | null }) =>
-      reportGameResult(matchId, game.gameNumber, winnerId, file ?? undefined),
-    onSuccess: () => {
+    mutationFn: ({ winnerId, file, explanation: expl }: { winnerId: string; file: File | null; explanation?: string }) =>
+      reportGameResult(matchId, game.gameNumber, winnerId, file ?? undefined, expl),
+    onSuccess: (res) => {
+      // Replay didn't match the report and no explanation given yet → show the mismatch prompt.
+      if (res.mismatch) {
+        setMismatch(res.issues ?? []);
+        setReplayError(null);
+        return;
+      }
+      // confirmed / held-for-review / disputed → done; refresh + reset.
       void queryClient.invalidateQueries({ queryKey: ['match-games', matchId] });
       setSelectedWinnerId(null);
       setReplayFile(null);
       setReplayError(null);
+      setMismatch(null);
+      setExplanation('');
     },
     onError: (err: Error) => {
       setReplayError(err.message);
@@ -485,14 +498,63 @@ export function GameTile({
                       {replayError && (
                         <p className="text-xs text-red-400">{replayError}</p>
                       )}
-                      <Button
-                        variant="forge"
-                        size="sm"
-                        onClick={handleSubmit}
-                        disabled={reportMutation.isPending}
-                      >
-                        {reportMutation.isPending ? 'Submitting…' : 'Submit Result'}
-                      </Button>
+                      {!mismatch && (
+                        <Button
+                          variant="forge"
+                          size="sm"
+                          onClick={handleSubmit}
+                          disabled={reportMutation.isPending}
+                        >
+                          {reportMutation.isPending ? 'Submitting…' : 'Submit Result'}
+                        </Button>
+                      )}
+
+                      {/* Replay-verification mismatch prompt (paths A / B). */}
+                      {mismatch && (
+                        <div className="flex flex-col gap-2 rounded-lg border border-amber-700/60 bg-amber-950/20 p-3">
+                          <p className="text-xs font-semibold text-amber-300">
+                            ⚠️ This replay doesn&apos;t look like this game:
+                          </p>
+                          <ul className="ml-1 list-disc pl-4 text-xs text-amber-200/90">
+                            {mismatch.map((iss, i) => (
+                              <li key={i}>{iss.message}</li>
+                            ))}
+                          </ul>
+                          {/* Path A — upload the correct replay and re-submit. */}
+                          <p className="mt-1 text-xs text-rizzotto-stone-300">
+                            Attached the wrong file? Choose the correct replay above, then:
+                          </p>
+                          <Button
+                            variant="forge"
+                            size="sm"
+                            onClick={() => reportMutation.mutate({ winnerId: selectedWinnerId!, file: replayFile })}
+                            disabled={reportMutation.isPending}
+                          >
+                            {reportMutation.isPending ? 'Checking…' : 'Re-check corrected replay'}
+                          </Button>
+                          {/* Path B — assert the report is correct, explain the deviation. */}
+                          <p className="mt-1 text-xs text-rizzotto-stone-300">
+                            Report is correct (e.g. you agreed to play a different matchup)? Explain it —
+                            the match is only scored once a host/admin has reviewed it, and your opponent is notified.
+                          </p>
+                          <textarea
+                            value={explanation}
+                            onChange={(e) => setExplanation(e.target.value)}
+                            rows={2}
+                            maxLength={2000}
+                            placeholder="Report is correct because…"
+                            className="w-full rounded border border-rizzotto-iron-600 bg-rizzotto-iron-900 px-2 py-1 text-xs text-rizzotto-stone-100 placeholder:text-rizzotto-stone-500 focus:border-rizzotto-gold-500/60 focus:outline-none"
+                          />
+                          <Button
+                            variant="iron"
+                            size="sm"
+                            onClick={() => reportMutation.mutate({ winnerId: selectedWinnerId!, file: replayFile, explanation: explanation.trim() })}
+                            disabled={reportMutation.isPending || explanation.trim().length === 0}
+                          >
+                            Submit for review with explanation
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

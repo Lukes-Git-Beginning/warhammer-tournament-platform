@@ -1673,15 +1673,36 @@ export function setLobbyPassword(
   });
 }
 
+/** A replay-verification discrepancy surfaced when the uploaded replay doesn't match the report. */
+export interface ReplayIssue {
+  type: 'FACTIONS' | 'MAP' | 'PLAYER' | 'RECORDED_TIME';
+  message: string;
+}
+
+export interface ReportGameResponse {
+  provisional?: boolean;
+  confirmed?: boolean;
+  disputed?: boolean;
+  /** The replay didn't match the report — the reporter must upload the right replay or explain. */
+  mismatch?: boolean;
+  /** Set when an explained mismatch was held for host/admin review. */
+  held?: boolean;
+  issues?: ReplayIssue[];
+  winnerId?: string;
+  autoConfirmsAt?: string;
+}
+
 export async function reportGameResult(
   matchId: string,
   gameNumber: number,
   winnerId: string,
   replayFile?: File,
-): Promise<{ provisional?: boolean; confirmed?: boolean; disputed?: boolean; winnerId?: string; autoConfirmsAt?: string }> {
+  explanation?: string,
+): Promise<ReportGameResponse> {
   const form = new FormData();
   form.append('winner_id', winnerId);
   if (replayFile) form.append('replay', replayFile);
+  if (explanation) form.append('explanation', explanation);
 
   const res = await fetch(`/api/matches/${matchId}/games/${gameNumber}/result`, {
     method: 'POST',
@@ -1692,7 +1713,7 @@ export async function reportGameResult(
     const body = await res.json().catch(() => ({})) as { message?: string };
     throw new Error(body.message ?? res.statusText);
   }
-  return res.json() as Promise<{ provisional?: boolean; confirmed?: boolean; disputed?: boolean; winnerId?: string; autoConfirmsAt?: string }>;
+  return res.json() as Promise<ReportGameResponse>;
 }
 
 // ---------------------------------------------------------------------------
