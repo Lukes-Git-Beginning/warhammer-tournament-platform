@@ -347,6 +347,31 @@ export async function notifyOpenPlayDispute(matchId: string, reporterDiscordId: 
   }
 }
 
+/**
+ * DM the OPPONENT when a report was held for a replay/report mismatch with an explanation.
+ * They can confirm (do nothing — a host/admin will approve) or dispute it at the match page.
+ */
+export async function notifyReplayMismatchHeld(
+  matchId: string,
+  opponentUserId: string,
+  explanation: string,
+): Promise<void> {
+  if (!getToken()) return;
+  try {
+    const opponent = await prisma.user.findUnique({ where: { id: opponentUserId }, select: { discord_id: true } });
+    if (!opponent?.discord_id) return;
+    const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${matchId}`;
+    const message =
+      `**[RizzOtto's Arena] ⚠️ A result needs your check**\n\n` +
+      `Your opponent reported a game whose replay didn't match the recorded matchup, and explained:\n` +
+      `> ${explanation.slice(0, 500)}\n\n` +
+      `If that's right, no action is needed — a host/admin will confirm it. If you disagree, open the match and dispute it: <${matchUrl}>`;
+    await sendDm(opponent.discord_id, message);
+  } catch (err) {
+    console.warn('[discord-notify] notifyReplayMismatchHeld error (non-fatal):', err);
+  }
+}
+
 async function sendEmbed(channelId: string, embed: object): Promise<void> {
   // parse: [] keeps any <@id> mentions in the embed clickable but silent — no
   // notification spam when a pairing list names the whole field.

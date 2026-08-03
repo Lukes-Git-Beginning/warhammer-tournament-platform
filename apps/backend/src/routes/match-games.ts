@@ -9,7 +9,7 @@ import { REPLAY_DIR, validateReplayUpload } from '../lib/replays.js';
 import { verifyGameReplay } from '../lib/verify-report.js';
 import type { ReplayIssue, ReplayVerification } from '../lib/replay-verify.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
-import { notifyOpenPlayDispute } from '../lib/discord-notify.js';
+import { notifyOpenPlayDispute, notifyReplayMismatchHeld } from '../lib/discord-notify.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { invalidate } from '../lib/cache.js';
 import { emitBracketUpdate } from '../lib/emit.js';
@@ -150,12 +150,13 @@ async function settleVerifiedReport(
     gameNumber: number;
     tournamentId: string | null;
     reporterId: string;
+    opponentId: string | null;
     winnerId: string;
     verification: ReplayVerification;
     explanation: string;
   },
 ): Promise<SettleResult> {
-  const { gameId, matchId, gameNumber, tournamentId, reporterId, winnerId, verification, explanation } = args;
+  const { gameId, matchId, gameNumber, tournamentId, reporterId, opponentId, winnerId, verification, explanation } = args;
 
   if (verification.ok) {
     await fastify.prisma.matchGame.update({ where: { id: gameId }, data: { verification: Prisma.DbNull } });
@@ -174,6 +175,8 @@ async function settleVerifiedReport(
       const reporter = await fastify.prisma.user.findUnique({ where: { id: reporterId }, select: { discord_id: true } });
       if (reporter?.discord_id) setImmediate(() => void notifyOpenPlayDispute(matchId, reporter.discord_id!));
     }
+    // Tell the opponent — they can confirm (do nothing) or dispute at the match page.
+    if (opponentId) setImmediate(() => void notifyReplayMismatchHeld(matchId, opponentId, explanation));
     if (fastify.io) {
       fastify.io.to(`match_decision_${matchId}`).emit('match.game.updated', {
         matchId, gameNumber, status: 'DISPUTED', winnerId: null, lobbyCode: null,
@@ -842,7 +845,9 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         const verification = await verifyGameReplay(fastify.prisma, gameId, buffer);
         const settled = await settleVerifiedReport(fastify, {
           gameId, matchId, gameNumber, tournamentId: match.tournament_id,
-          reporterId: userId, winnerId: winnerIdField, verification, explanation,
+          reporterId: userId,
+          opponentId: userId === match.player1_id ? match.player2_id : match.player1_id,
+          winnerId: winnerIdField, verification, explanation,
         });
         if (settled.kind === 'confirmed') return reply.code(200).send({ confirmed: true, winnerId: winnerIdField });
         if (settled.kind === 'disputed') return reply.code(200).send({ held: true, disputed: true, issues: settled.issues });
@@ -872,7 +877,9 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           const verification = await verifyGameReplay(fastify.prisma, gameId, buffer);
           const settled = await settleVerifiedReport(fastify, {
             gameId, matchId, gameNumber, tournamentId: match.tournament_id,
-            reporterId: userId, winnerId: winnerIdField, verification, explanation,
+            reporterId: userId,
+            opponentId: userId === match.player1_id ? match.player2_id : match.player1_id,
+            winnerId: winnerIdField, verification, explanation,
           });
           if (settled.kind === 'confirmed') return reply.code(200).send({ confirmed: true, winnerId: winnerIdField });
           if (settled.kind === 'disputed') return reply.code(200).send({ held: true, disputed: true, issues: settled.issues });
@@ -881,7 +888,9 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         if (explanation) {
           const settled = await settleVerifiedReport(fastify, {
             gameId, matchId, gameNumber, tournamentId: match.tournament_id,
-            reporterId: userId, winnerId: winnerIdField,
+            reporterId: userId,
+            opponentId: userId === match.player1_id ? match.player2_id : match.player1_id,
+            winnerId: winnerIdField,
             verification: { ok: false, issues: (heldV.issues as ReplayIssue[]) ?? [] }, explanation,
           });
           return reply.code(200).send({ held: true, disputed: settled.kind === 'disputed', issues: settled.kind === 'mismatch' ? settled.issues : (heldV.issues as ReplayIssue[]) });
