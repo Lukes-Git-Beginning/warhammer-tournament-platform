@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.27.0] — 2026-08-03 — Replay verification
+### Added
+- **Uploaded replays are now verified against the reported game.** When you report a result, the replay is checked against what was recorded — the **factions**, the **map**, the **players** (via their Steam names) and the **recording time** (so an old replay can't be recycled). If everything matches, nothing changes. If the replay doesn't match, you're shown exactly what's off and can either **upload the correct replay** or, if the report really is right (e.g. you agreed to play a different matchup), **explain the deviation** — which holds the game for a host/admin to review and notifies your opponent. In Open Play a held result doesn't lock you: both players are free to queue again while it's pending. Verification is fail-open — it never blocks an honest report on a parser hiccup.
+
 ## [1.26.2] — 2026-08-02 — Replay uploads are validated
 ### Fixed
 - **Security: replay uploads are now checked.** Both upload paths accepted *any* file — a player could upload a `.jpg` in place of a `.replay` and it was stored and served. An upload must now be a real Total War replay: a `.replay`/`.rec`/`.wrep` name **and** the actual ESF file signature, so a renamed image is rejected too.
