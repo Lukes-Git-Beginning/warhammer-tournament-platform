@@ -18,8 +18,10 @@ export const TOKEN_TO_FACTION: Record<string, string> = {
   tze: 'tzeentch', sla: 'slaanesh',
 };
 
-/** The mono-god factions whose UNIT tokens also appear inside a daemons_of_chaos army. */
-const MONO_GODS = new Set(['khorne', 'nurgle', 'tzeentch', 'slaanesh']);
+/** Unit-key category segments that follow the race token (so `wh3_main_nur_inf_...` is a UNIT,
+ *  whereas `wh3_main_nur_nurgle` is the faction DESIGNATION). Anything not in this set after the
+ *  token marks a culture-level designation key. */
+const UNIT_CATEGORIES = new Set(['inf', 'cav', 'mon', 'cha', 'art', 'veh', 'feral', 'mor', 'sub']);
 
 export interface ReplayMeta {
   /** Recording time from the ESF header (offset-8 uint32 LE, UTC). */
@@ -56,43 +58,51 @@ export function extractMapTerrain(buf: Buffer): string | null {
   return null;
 }
 
-/** Detect the two factions. Token frequency (each faction's units carry its token dozens of times)
- *  is the primary signal; a daemons_of_chaos DESIGNATION slug overrides a mono-god that only shows
- *  up as units. A single dominant token → mirror match (both players same faction). */
+/** Detect the two factions. SLUG-PRIMARY: a faction's culture-level DESIGNATION key
+ *  (`wh3_main_nur_nurgle`, `wh_dlc05_wef_wood_elves`, …) names the faction directly and, unlike
+ *  unit-token frequency, is NOT fooled by mono-god armies (a daemons_of_chaos player fields
+ *  Nurgle *units* but only carries the `dae_daemons` designation, not `nur_nurgle`). Token
+ *  frequency is used only to order/disambiguate when strays produce >2 designations, or as a
+ *  fallback when no designation is found. One faction → mirror match (both players same). */
 export function extractFactions(buf: Buffer): string[] {
   const text = buf.toString('latin1');
-  // count race tokens across all wh keys
+
+  // Token frequency across all wh keys (for ordering + fallback + mirror detection).
   const counts = new Map<string, number>();
-  const re = /wh[0-9]?_[a-z0-9]+_([a-z]{3})_/g;
+  const tokRe = /wh[0-9]?_[a-z0-9]+_([a-z]{3})_/g;
   let mm: RegExpExecArray | null;
-  while ((mm = re.exec(text)) !== null) {
-    const tok = mm[1]!;
-    if (TOKEN_TO_FACTION[tok]) counts.set(tok, (counts.get(tok) ?? 0) + 1);
+  while ((mm = tokRe.exec(text)) !== null) {
+    if (TOKEN_TO_FACTION[mm[1]!]) counts.set(mm[1]!, (counts.get(mm[1]!) ?? 0) + 1);
   }
   if (counts.size === 0) return [];
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-
-  // Daemons override: if a daemons DESIGNATION slug is present, the daemons player's mono-god
-  // unit tokens must not masquerade as a mono-god faction.
-  const hasDaemonsDesignation = /wh[0-9]?_[a-z0-9]+_dae_daemons\b/.test(text);
-
-  const slugs: string[] = [];
+  const factionsByFreq: string[] = [];
   for (const [tok] of ranked) {
-    let slug = TOKEN_TO_FACTION[tok]!;
-    // a mono-god token that is really the daemons player → daemons_of_chaos
-    if (MONO_GODS.has(slug) && hasDaemonsDesignation && !slugs.includes('daemons_of_chaos')) {
-      slug = 'daemons_of_chaos';
-    }
-    if (!slugs.includes(slug)) slugs.push(slug);
-    // mirror match: exactly one real faction present — every other token is a stray (ability /
-    // cross-reference), which occurs only once or twice. A genuine 2nd faction shows many units.
-    if (slugs.length === 1 && ranked.length > 1) {
-      const [, second] = ranked[1]!;
-      if (second <= 2) return [slug, slug];
-    }
-    if (slugs.length === 2) break;
+    const f = TOKEN_TO_FACTION[tok]!;
+    if (!factionsByFreq.includes(f)) factionsByFreq.push(f);
   }
-  return slugs.slice(0, 2);
+
+  // Designation factions: `wh*_<set>_<token>_<name>` where <name> is NOT a unit category.
+  const designation = new Set<string>();
+  const desRe = /wh[0-9]?_[a-z0-9]+_([a-z]{3})_([a-z]+)/g;
+  let dm: RegExpExecArray | null;
+  while ((dm = desRe.exec(text)) !== null) {
+    const faction = TOKEN_TO_FACTION[dm[1]!];
+    if (faction && !UNIT_CATEGORIES.has(dm[2]!)) designation.add(faction);
+  }
+
+  // Order designation factions by token frequency (drops stray designations to the tail).
+  const ordered = factionsByFreq.filter((f) => designation.has(f));
+  // Fill from raw frequency if fewer than 2 designations were found (fallback).
+  for (const f of factionsByFreq) if (!ordered.includes(f)) ordered.push(f);
+
+  // Mirror match: only one faction is really present — the 2nd-most-frequent token is a stray
+  // (≤2 occurrences; a genuine 2nd faction fields dozens of unit keys). Frequency-based so a
+  // stray DESIGNATION (e.g. an ability's cross-reference to another culture) can't defeat it.
+  if (ranked.length > 1 && ranked[1]![1] <= 2) {
+    return [ordered[0]!, ordered[0]!];
+  }
+  return ordered.slice(0, 2);
 }
 
 /** Whether a display name occurs in the replay (UTF-16LE, case-insensitive) — used to check a

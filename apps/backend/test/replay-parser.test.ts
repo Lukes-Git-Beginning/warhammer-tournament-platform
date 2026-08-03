@@ -51,11 +51,18 @@ describe('replay-parser', () => {
     expect(facs).toEqual(['grand_cathay', 'grand_cathay']);
   });
 
-  it('maps a daemons army with god-flavoured units to daemons_of_chaos, not the god', () => {
+  it('maps a daemons army with god-flavoured units to daemons_of_chaos via the designation slug', () => {
     // dark_elves opponent (def) + a daemons player fielding many Slaanesh units + the dae designation
     const facs = extractFactions(withText(esfHeader(),
       `${army('def', 20)} ${army('sla', 8)} wh3_main_dae_daemons wh3_main_dae_daemon_prince`));
     expect(new Set(facs)).toEqual(new Set(['dark_elves', 'daemons_of_chaos']));
+  });
+
+  it('keeps a mono-god faction as the god (designation), not daemons — slug-primary', () => {
+    // A Nurgle faction (nur_nurgle designation) fielding some shared daemon units vs Kislev.
+    const facs = extractFactions(withText(esfHeader(),
+      `${army('ksl', 20)} ${army('nur', 16)} wh3_main_nur_nurgle wh3_main_ksl_kislev wh3_main_dae_inf_plaguebearers_0`));
+    expect(new Set(facs)).toEqual(new Set(['kislev', 'nurgle']));
   });
 
   it('finds a player display name (UTF-16, case-insensitive)', () => {
