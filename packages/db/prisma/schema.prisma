@@ -516,6 +516,11 @@ model MatchGame {
   reported_at        DateTime?
   confirmed_at       DateTime?   // set on opponent-confirm OR cron auto-confirm
   replay_url             String?     // required on first report (anti-farming)
+  // Replay verification (report time): when the replay contradicts the reported game, this holds
+  // { issues: [{type,message}], explanation? }. The reporter must upload the right replay or
+  // explain the deviation; a held game sits DISPUTED (result pending host/admin) but frees the
+  // Open Play players. Null = verified clean (or no check).
+  verification           Json?
   played_at              DateTime?
   counts_for_leaderboard Boolean     @default(true)
   created_at             DateTime    @default(now())

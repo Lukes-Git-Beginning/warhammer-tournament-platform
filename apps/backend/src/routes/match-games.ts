@@ -4,7 +4,10 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ensureMatchGame, finalizeGameResult } from '../lib/match-games.js';
+import { Prisma } from '@rizzotto/db';
 import { REPLAY_DIR, validateReplayUpload } from '../lib/replays.js';
+import { verifyGameReplay } from '../lib/verify-report.js';
+import type { ReplayIssue, ReplayVerification } from '../lib/replay-verify.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
 import { notifyOpenPlayDispute } from '../lib/discord-notify.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
@@ -127,6 +130,66 @@ const GAME_SELECT = {
   map_decision: true,
   blind_pick: true,
 } as const;
+
+// ---------------------------------------------------------------------------
+// Replay-verification settle: given a verification outcome, either finalize the game (clean),
+// hold it DISPUTED with the reporter's explanation (path B — result pending host/admin, but an
+// Open Play match freed since DISPUTED is not queue-blocking), or hold it for the reporter to
+// correct/explain (mismatch, no explanation yet).
+// ---------------------------------------------------------------------------
+type SettleResult =
+  | { kind: 'confirmed'; winnerId: string }
+  | { kind: 'mismatch'; issues: ReplayIssue[] }
+  | { kind: 'disputed'; issues: ReplayIssue[] };
+
+async function settleVerifiedReport(
+  fastify: Parameters<FastifyPluginAsync>[0],
+  args: {
+    gameId: string;
+    matchId: string;
+    gameNumber: number;
+    tournamentId: string | null;
+    reporterId: string;
+    winnerId: string;
+    verification: ReplayVerification;
+    explanation: string;
+  },
+): Promise<SettleResult> {
+  const { gameId, matchId, gameNumber, tournamentId, reporterId, winnerId, verification, explanation } = args;
+
+  if (verification.ok) {
+    await fastify.prisma.matchGame.update({ where: { id: gameId }, data: { verification: Prisma.DbNull } });
+    await finalizeGameResult(fastify, gameId);
+    return { kind: 'confirmed', winnerId };
+  }
+
+  if (explanation) {
+    // Path B — hold the result for host/admin review (DISPUTED), keep the explanation + issues.
+    await fastify.prisma.matchGame.update({
+      where: { id: gameId },
+      data: { status: 'DISPUTED', verification: { issues: verification.issues, explanation } as unknown as Prisma.InputJsonValue },
+    });
+    fastify.log.warn({ matchId, gameId }, 'Replay mismatch — held DISPUTED with explanation for review');
+    if (!tournamentId) {
+      const reporter = await fastify.prisma.user.findUnique({ where: { id: reporterId }, select: { discord_id: true } });
+      if (reporter?.discord_id) setImmediate(() => void notifyOpenPlayDispute(matchId, reporter.discord_id!));
+    }
+    if (fastify.io) {
+      fastify.io.to(`match_decision_${matchId}`).emit('match.game.updated', {
+        matchId, gameNumber, status: 'DISPUTED', winnerId: null, lobbyCode: null,
+        reportedWinnerId: winnerId, reportedAt: new Date().toISOString(), confirmedAt: null,
+      });
+    }
+    return { kind: 'disputed', issues: verification.issues };
+  }
+
+  // Mismatch, no explanation yet — hold for the reporter to upload the right replay or explain.
+  await fastify.prisma.matchGame.update({
+    where: { id: gameId },
+    data: { verification: { issues: verification.issues } as unknown as Prisma.InputJsonValue },
+  });
+  return { kind: 'mismatch', issues: verification.issues };
+}
 
 // ---------------------------------------------------------------------------
 // Routes
@@ -698,6 +761,10 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      // Optional explanation (path B of the replay-mismatch prompt): the reporter asserts the
+      // report is correct despite the replay not matching, for host/admin review.
+      const explanation = ((data?.fields['explanation'] as { value?: string } | undefined)?.value ?? '').trim();
+
       const gameId = await ensureMatchGame(fastify.prisma, matchId, gameNumber);
       const existingGame = await fastify.prisma.matchGame.findUnique({
         where: { id: gameId },
@@ -707,6 +774,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           reported_winner_id: true,
           reporter_id: true,
           status: true,
+          verification: true,
         },
       });
 
@@ -759,8 +827,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         const replayUrl = `/uploads/replays/${matchId}/${filename}`;
         const now = new Date();
 
-        // Store report metadata (replay, reporter) then finalize immediately.
-        // The bracket advances right away — disputes go via the host override.
+        // Store report metadata (replay, reporter) before verifying.
         await fastify.prisma.matchGame.update({
           where: { id: gameId },
           data: {
@@ -771,9 +838,55 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
-        await finalizeGameResult(fastify, gameId);
+        // Verify the replay against the reported game (fail-open) then finalize / hold / dispute.
+        const verification = await verifyGameReplay(fastify.prisma, gameId, buffer);
+        const settled = await settleVerifiedReport(fastify, {
+          gameId, matchId, gameNumber, tournamentId: match.tournament_id,
+          reporterId: userId, winnerId: winnerIdField, verification, explanation,
+        });
+        if (settled.kind === 'confirmed') return reply.code(200).send({ confirmed: true, winnerId: winnerIdField });
+        if (settled.kind === 'disputed') return reply.code(200).send({ held: true, disputed: true, issues: settled.issues });
+        return reply.code(200).send({ mismatch: true, issues: settled.issues });
+      }
 
-        return reply.code(200).send({ confirmed: true, winnerId: winnerIdField });
+      // -----------------------------------------------------------------------
+      // Held replay-mismatch resubmission by the ORIGINAL reporter (before dual-submit).
+      // A game held for a mismatch (verification issues stored, not yet DISPUTED/COMPLETED) lets
+      // the reporter either upload the correct replay (re-verify) or explain the deviation.
+      // -----------------------------------------------------------------------
+      // (COMPLETED / DISPUTED already returned above, so status is neither here.)
+      const heldV = existingGame.verification as { issues?: unknown[]; explanation?: string } | null;
+      const isHeld = !!heldV?.issues && !heldV.explanation;
+      if (isHeld && existingGame.reporter_id === userId) {
+        if (buffer && buffer.length > 0) {
+          const replayError = validateReplayUpload(data?.filename, buffer);
+          if (replayError) return reply.code(400).send({ error: 'BadRequest', message: replayError, statusCode: 400 });
+          const filename = `${randomUUID()}.replay`;
+          const matchDir = join(REPLAY_DIR, matchId);
+          await mkdir(matchDir, { recursive: true });
+          await writeFile(join(matchDir, filename), buffer);
+          await fastify.prisma.matchGame.update({
+            where: { id: gameId },
+            data: { reported_winner_id: winnerIdField, replay_url: `/uploads/replays/${matchId}/${filename}` },
+          });
+          const verification = await verifyGameReplay(fastify.prisma, gameId, buffer);
+          const settled = await settleVerifiedReport(fastify, {
+            gameId, matchId, gameNumber, tournamentId: match.tournament_id,
+            reporterId: userId, winnerId: winnerIdField, verification, explanation,
+          });
+          if (settled.kind === 'confirmed') return reply.code(200).send({ confirmed: true, winnerId: winnerIdField });
+          if (settled.kind === 'disputed') return reply.code(200).send({ held: true, disputed: true, issues: settled.issues });
+          return reply.code(200).send({ mismatch: true, issues: settled.issues });
+        }
+        if (explanation) {
+          const settled = await settleVerifiedReport(fastify, {
+            gameId, matchId, gameNumber, tournamentId: match.tournament_id,
+            reporterId: userId, winnerId: winnerIdField,
+            verification: { ok: false, issues: (heldV.issues as ReplayIssue[]) ?? [] }, explanation,
+          });
+          return reply.code(200).send({ held: true, disputed: settled.kind === 'disputed', issues: settled.kind === 'mismatch' ? settled.issues : (heldV.issues as ReplayIssue[]) });
+        }
+        return reply.code(400).send({ error: 'BadRequest', message: 'Upload the correct replay, or explain the deviation.', statusCode: 400 });
       }
 
       // -----------------------------------------------------------------------
