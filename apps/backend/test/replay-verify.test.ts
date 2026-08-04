@@ -27,6 +27,20 @@ describe('verifyReplayMeta', () => {
     expect(r.issues.map((i) => i.type)).toContain('FACTIONS');
   });
 
+  it('suppresses a faction diff confined to the Chaos-god family (unreliable)', () => {
+    // Reported nurgle/daemons, replay reads daemons/tzeentch → diff {nurgle,tzeentch} both chaos-gods.
+    const chaosBase = { ...base, factionSlugs: ['nurgle', 'daemons_of_chaos'] };
+    const r = verifyReplayMeta(meta({ factions: ['daemons_of_chaos', 'tzeentch'] }), allNames, chaosBase);
+    expect(r.issues.map((i) => i.type)).not.toContain('FACTIONS');
+  });
+
+  it('still flags when a clean faction is part of the diff, even alongside a chaos-god', () => {
+    // Reported dark_elves/warriors, replay reads empire/warriors → diff {dark_elves,empire} clean.
+    const b2 = { ...base, factionSlugs: ['dark_elves', 'warriors_of_chaos'] };
+    const r = verifyReplayMeta(meta({ factions: ['empire', 'warriors_of_chaos'] }), allNames, b2);
+    expect(r.issues.map((i) => i.type)).toContain('FACTIONS');
+  });
+
   it('flags a map mismatch', () => {
     const r = verifyReplayMeta(meta({ mapTerrain: 'test_domination_hasuts_dom' }), allNames, base);
     expect(r.issues.map((i) => i.type)).toContain('MAP');

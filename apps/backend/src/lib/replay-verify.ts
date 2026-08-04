@@ -45,6 +45,19 @@ const sameSet = (a: string[], b: string[]): boolean => {
   return A.length === B.length && A.every((x, i) => x === B[i]);
 };
 
+/** The Chaos-god factions. Distinguishing these from each other and from daemons_of_chaos /
+ *  Warriors of Chaos in a replay is genuinely ambiguous (a daemons army fields god units; mono-god
+ *  and Warriors rosters overlap), so a faction diff *entirely within this family* is unreliable and
+ *  must not raise a false flag — validated over 2209 prod replays (86% of faction-only flags were
+ *  chaos-god). A real wrong replay by such a player is still caught by the map / name / time signals. */
+const CHAOS_GODS = new Set(['daemons_of_chaos', 'khorne', 'nurgle', 'tzeentch', 'slaanesh', 'warriors_of_chaos']);
+/** True when every faction that differs between the two sets is a Chaos-god (→ suppress the flag). */
+const diffIsChaosGodOnly = (a: string[], b: string[]): boolean => {
+  const A = new Set(a), B = new Set(b);
+  const diff = [...new Set([...a, ...b])].filter((f) => A.has(f) !== B.has(f));
+  return diff.length > 0 && diff.every((f) => CHAOS_GODS.has(f));
+};
+
 /** Compare an already-extracted replay against the expected game. Pure + synchronous. */
 export function verifyReplayMeta(
   meta: ReturnType<typeof parseReplayMeta>,
@@ -54,9 +67,10 @@ export function verifyReplayMeta(
   const issues: ReplayIssue[] = [];
 
   // Factions — only when the replay yielded two (or a mirror pair). Empty/partial → inconclusive.
+  // A discrepancy confined to the Chaos-god family is suppressed (unreliable to tell apart).
   if (meta.factions.length >= 1 && expected.factionSlugs.length === 2) {
     const got = meta.factions.length === 1 ? [meta.factions[0]!, meta.factions[0]!] : meta.factions;
-    if (!sameSet(got, expected.factionSlugs)) {
+    if (!sameSet(got, expected.factionSlugs) && !diffIsChaosGodOnly(got, expected.factionSlugs)) {
       issues.push({
         type: 'FACTIONS',
         message: `Reported ${expected.factionSlugs.map(titleCase).join(' vs ')} — replay shows ${got.map(titleCase).join(' vs ')}`,
