@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { PrismaClient } from '@rizzotto/db';
 import { REPLAY_DIR } from './replays.js';
-import { parseReplayMeta, replayContainsName, attributeFaction } from './replay-parser.js';
+import { parseReplayMeta, replayContainsName, attributeFaction, extractReplayPlayers, type ReplayPlayer } from './replay-parser.js';
 import { verifyReplayMeta, type ReplayIssue } from './replay-verify.js';
 import { fetchSteamPersonaNames } from './steam.js';
 
@@ -27,6 +27,8 @@ export interface AuditRow {
     /** Faction attributed to this player IN the replay (nearest faction display to their name). */
     replayFaction: string | null;
   }>;
+  /** The actual player names + factions read FROM the replay (best-effort) — so a human can compare. */
+  replayPlayers: ReplayPlayer[];
 }
 
 export interface AuditReport {
@@ -133,6 +135,7 @@ export async function auditReplays(prisma: PrismaClient, limit = 5000): Promise<
         player2: g.match.player2?.username ?? null,
         issues: v.issues,
         players,
+        replayPlayers: extractReplayPlayers(buf),
       });
     }
   }

@@ -149,6 +149,44 @@ export function attributeFaction(buf: Buffer, playerName: string): string | null
   return best.slug;
 }
 
+/** A player entry read from the replay: their in-game name + the faction attributed to them. */
+export interface ReplayPlayer { name: string; faction: string | null }
+
+/** Best-effort extraction of the actual player names (+ their factions) recorded in the replay,
+ *  so a human can eyeball whether a flagged game is a rename, a faction misreport or a wrong replay.
+ *  Player names are handle-like strings (digits / _ / | / a lone lowercase token) sitting in the
+ *  player-setup region next to their own faction display name. This is a heuristic — it surfaces the
+ *  real handles near the top but may include the odd unit name; it is NOT a byte-perfect parser. */
+export function extractReplayPlayers(buf: Buffer): ReplayPlayer[] {
+  const hay = buf.toString('latin1');
+  const positions = factionDisplayPositions(buf);
+  if (positions.length === 0) return [];
+  const nearestFaction = (off: number): string =>
+    positions.reduce((b, p) => (Math.abs(p.off - off) < Math.abs(b.off - off) ? p : b), positions[0]!).slug;
+  const displayNames = new Set(Object.keys(FACTION_DISPLAY_TO_SLUG));
+
+  // eslint-disable-next-line no-control-regex -- \x00 is intentional: matches UTF-16LE strings.
+  const re = /(?:[\x20-\x7e]\x00){3,30}/g;
+  const scored: Array<{ score: number; name: string; faction: string }> = [];
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(hay)) !== null) {
+    const s = Buffer.from(m[0], 'latin1').toString('utf16le').trim();
+    if (s.length < 3 || s.includes('(') || s.includes(')') || displayNames.has(s) || /^\d+$/.test(s)) continue;
+    if (seen.has(s.toLowerCase())) continue;
+    // Only strings sitting near a faction block (the player-setup region), not army-list noise elsewhere.
+    const off = m.index;
+    if (positions.every((p) => Math.abs(p.off - off) > 600)) continue;
+    // Handle-like: digits / underscore / pipe, or a single all-lowercase token.
+    const handleish = /[0-9_|]/.test(s) || (!/\s/.test(s) && s === s.toLowerCase());
+    if (!handleish) continue;
+    seen.add(s.toLowerCase());
+    scored.push({ score: /[0-9_|]/.test(s) ? 3 : 2, name: s, faction: nearestFaction(off) });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 4).map(({ name, faction }) => ({ name, faction }));
+}
+
 /** Whether a display name occurs in the replay (UTF-16LE, case-insensitive) — used to check a
  *  participant's live Steam persona name against the recorded players. */
 export function replayContainsName(buf: Buffer, name: string): boolean {
