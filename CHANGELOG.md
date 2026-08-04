@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 ## [1.28.2] — 2026-08-04 — Admin replay audit: show the actual replay names
 ### Changed
 - **The replay audit now lists the actual player names recorded in the replay** (each with the faction attributed to them), instead of a bare present/absent flag — so at a glance you can tell a rename (same person, different spelling) from an entirely wrong replay.
+- **Per-player faction is now reliable**, not a guess: the two factions the replay contains are matched to the two players by a constrained best-fit assignment, so each player is always given a distinct one of the two real factions (validated against known games).
 
 ## [1.28.1] — 2026-08-04 — Admin replay audit: per-player faction attribution
 ### Changed

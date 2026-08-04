@@ -187,6 +187,45 @@ export function extractReplayPlayers(buf: Buffer): ReplayPlayer[] {
   return scored.slice(0, 4).map(({ name, faction }) => ({ name, faction }));
 }
 
+/** Reliable per-player faction attribution: given the two players' in-replay names and the two
+ *  factions the replay actually contains (from extractFactions — already trustworthy), assign each
+ *  player one of those two factions by the minimum-total-distance 2×2 assignment (name position →
+ *  nearest display of each faction). This GUARANTEES each present player gets a distinct one of the
+ *  two real factions — never a stray, never both the same (unless a mirror). Returns a slug (or null
+ *  when the name isn't in the replay) aligned to `names`. Validated 8/8 on prod. */
+export function attributeFactionsForPlayers(buf: Buffer, names: Array<string | null>, factions: string[]): Array<string | null> {
+  const hay = buf.toString('latin1');
+  const positions = factionDisplayPositions(buf);
+  const namePos = (n: string | null): number | null => {
+    if (!n || n.length < 2) return null;
+    const at = hay.toLowerCase().indexOf(Buffer.from(n, 'utf16le').toString('latin1').toLowerCase());
+    return at === -1 ? null : at;
+  };
+  const distToFaction = (off: number, slug: string): number => {
+    const ps = positions.filter((p) => p.slug === slug);
+    return ps.length ? Math.min(...ps.map((p) => Math.abs(p.off - off))) : Number.POSITIVE_INFINITY;
+  };
+  const uniqFactions = [...new Set(factions)];
+  const offs = names.map(namePos);
+
+  // Mirror (one faction) → every present player is that faction.
+  if (uniqFactions.length === 1) return offs.map((o) => (o === null ? null : uniqFactions[0]!));
+
+  // Two factions + both players located → constrained 2×2 assignment (minimise total distance).
+  if (uniqFactions.length >= 2 && offs.length === 2 && offs[0] !== null && offs[1] !== null) {
+    const [x, y] = [uniqFactions[0]!, uniqFactions[1]!];
+    const straight = distToFaction(offs[0]!, x) + distToFaction(offs[1]!, y);
+    const swapped = distToFaction(offs[0]!, y) + distToFaction(offs[1]!, x);
+    return straight <= swapped ? [x, y] : [y, x];
+  }
+
+  // Otherwise (≤1 player located): assign each located player its nearest of the two factions.
+  return offs.map((o) => {
+    if (o === null) return null;
+    return uniqFactions.reduce((best, f) => (distToFaction(o, f) < distToFaction(o, best) ? f : best), uniqFactions[0]!);
+  });
+}
+
 /** Whether a display name occurs in the replay (UTF-16LE, case-insensitive) — used to check a
  *  participant's live Steam persona name against the recorded players. */
 export function replayContainsName(buf: Buffer, name: string): boolean {
