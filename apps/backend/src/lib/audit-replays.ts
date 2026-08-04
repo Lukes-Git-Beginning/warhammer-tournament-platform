@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { PrismaClient } from '@rizzotto/db';
 import { REPLAY_DIR } from './replays.js';
-import { parseReplayMeta, replayContainsName, attributeFactionsForPlayers, extractReplayPlayers, type ReplayPlayer } from './replay-parser.js';
+import { parseReplayMeta, replayContainsName, extractReplayPlayers, type ReplayPlayer } from './replay-parser.js';
 import { verifyReplayMeta, type ReplayIssue } from './replay-verify.js';
 import { fetchSteamPersonaNames } from './steam.js';
 
@@ -16,7 +16,9 @@ export interface AuditRow {
   player1: string | null;
   player2: string | null;
   issues: ReplayIssue[];
-  /** Per-player comparison: reported name/faction vs what the replay shows (attributed). */
+  /** Per-player comparison: reported name/faction (from the site) vs presence in the replay.
+   *  Faction is NOT attributed per player — the replay doesn't encode that recoverably; use the
+   *  reliable `replayFactions` set below plus the reported per-player faction to judge a mismatch. */
   players: Array<{
     reportedName: string | null;
     reportedFaction: string | null;
@@ -24,10 +26,10 @@ export interface AuditRow {
     persona: string | null;
     /** Whether that persona appears in the replay (false ⇒ rename or wrong replay). */
     inReplay: boolean;
-    /** Faction attributed to this player IN the replay (nearest faction display to their name). */
-    replayFaction: string | null;
   }>;
-  /** The actual player names + factions read FROM the replay (best-effort) — so a human can compare. */
+  /** The two factions the replay actually contains (reliable set, ~98%) — order is not meaningful. */
+  replayFactions: string[];
+  /** The actual player handles read FROM the replay (best-effort, names only) — so a human can compare. */
   replayPlayers: ReplayPlayer[];
 }
 
@@ -105,19 +107,14 @@ export async function auditReplays(prisma: PrismaClient, limit = 5000): Promise<
       { uid: g.match.player1_id, name: g.match.player1?.username ?? null, reportedFaction: g.player1_faction_id },
       { uid: g.match.player2_id, name: g.match.player2?.username ?? null, reportedFaction: g.player2_faction_id },
     ];
-    const personas = sides.map((s) => (s.uid ? personaByUser(s.uid) : null));
-    // Reliable per-player attribution: constrained 2×2 assignment of the two real factions
-    // (meta.factions) to the two personas by nearest faction display.
-    const attributed = attributeFactionsForPlayers(buf, personas, meta.factions);
-    const players = sides.map((s, i) => {
-      const pers = personas[i]!;
+    const players = sides.map((s) => {
+      const pers = s.uid ? personaByUser(s.uid) : null;
       const inReplay = pers ? replayContainsName(buf, pers) : false;
       return {
         reportedName: s.name,
         reportedFaction: s.reportedFaction,
         persona: pers,
         inReplay,
-        replayFaction: inReplay ? attributed[i] ?? null : null,
       };
     });
     const steamPersonaNames = players.map((p) => p.persona).filter(Boolean) as string[];
@@ -139,6 +136,7 @@ export async function auditReplays(prisma: PrismaClient, limit = 5000): Promise<
         player2: g.match.player2?.username ?? null,
         issues: v.issues,
         players,
+        replayFactions: meta.factions,
         replayPlayers: extractReplayPlayers(buf),
       });
     }

@@ -5,10 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
-## [1.28.2] — 2026-08-04 — Admin replay audit: show the actual replay names
+## [1.28.2] — 2026-08-04 — Admin replay audit: actual names + reliable faction set
 ### Changed
-- **The replay audit now lists the actual player names recorded in the replay** (each with the faction attributed to them), instead of a bare present/absent flag — so at a glance you can tell a rename (same person, different spelling) from an entirely wrong replay.
-- **Per-player faction is now reliable**, not a guess: the two factions the replay contains are matched to the two players by a constrained best-fit assignment, so each player is always given a distinct one of the two real factions (validated against known games).
+- **The replay audit now lists the actual player handles recorded in the replay** and the **two factions the replay actually contains** (a reliable ~98% set), instead of a bare present/absent flag — so at a glance you can tell a rename (same person, different spelling) from an entirely wrong replay.
+- **Removed the per-player faction attribution added in 1.28.1.** Validated at scale (100+ real games), pinning *which* player had *which* faction from the replay was only ~60% correct — the file doesn't co-locate a player's name with their own faction recoverably. The reliable faction *set* plus the reported per-player faction are enough to spot a mismatch; the misleading per-player guess is gone.
 
 ## [1.28.1] — 2026-08-04 — Admin replay audit: per-player faction attribution
 ### Changed

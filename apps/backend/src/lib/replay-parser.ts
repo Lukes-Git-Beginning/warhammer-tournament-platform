@@ -106,7 +106,9 @@ export function extractFactions(buf: Buffer): string[] {
 }
 
 /** Faction DISPLAY name (as it appears in the replay's player-setup region) → platform slug.
- *  Used to attribute a faction to a specific player by proximity (see attributeFaction). */
+ *  Used only to locate the player-setup REGION (where the handle-like player names sit). Note: the
+ *  per-player faction is NOT recoverable from display-name proximity — validated at scale, that is
+ *  only ~60% correct (a coin flip). Only the faction SET (extractFactions) is reliable. */
 export const FACTION_DISPLAY_TO_SLUG: Record<string, string> = {
   Empire: 'empire', Bretonnia: 'bretonnia', Kislev: 'kislev', 'Grand Cathay': 'grand_cathay',
   Dwarfs: 'dwarfs', 'High Elves': 'high_elves', Lizardmen: 'lizardmen', Greenskins: 'greenskins',
@@ -132,42 +134,25 @@ function factionDisplayPositions(buf: Buffer): Array<{ off: number; slug: string
   return out;
 }
 
-/** Attribute a faction to a specific player: find the player's name in the replay's setup region
- *  and return the slug of the NEAREST faction display name (by byte distance) — validated against
- *  prod (the per-player army block carries its own faction display name). Null when the name isn't
- *  found or no faction display is present. Requires the player's actual in-replay name (Steam persona). */
-export function attributeFaction(buf: Buffer, playerName: string): string | null {
-  if (!playerName || playerName.length < 2) return null;
-  const hay = buf.toString('latin1').toLowerCase();
-  const needle = Buffer.from(playerName, 'utf16le').toString('latin1').toLowerCase();
-  const at = hay.indexOf(needle);
-  if (at === -1) return null;
-  const positions = factionDisplayPositions(buf);
-  if (positions.length === 0) return null;
-  let best = positions[0]!;
-  for (const p of positions) if (Math.abs(p.off - at) < Math.abs(best.off - at)) best = p;
-  return best.slug;
-}
+/** A player handle read from the replay. Faction is deliberately NOT attributed per player: the
+ *  replay does not co-locate a player's name with their own faction in a positionally recoverable
+ *  way (validated at scale — see FACTION_DISPLAY_TO_SLUG). Use extractFactions for the reliable set. */
+export interface ReplayPlayer { name: string }
 
-/** A player entry read from the replay: their in-game name + the faction attributed to them. */
-export interface ReplayPlayer { name: string; faction: string | null }
-
-/** Best-effort extraction of the actual player names (+ their factions) recorded in the replay,
- *  so a human can eyeball whether a flagged game is a rename, a faction misreport or a wrong replay.
- *  Player names are handle-like strings (digits / _ / | / a lone lowercase token) sitting in the
- *  player-setup region next to their own faction display name. This is a heuristic — it surfaces the
- *  real handles near the top but may include the odd unit name; it is NOT a byte-perfect parser. */
+/** Best-effort extraction of the actual player handles recorded in the replay, so a human can eyeball
+ *  whether a flagged game is a rename or an entirely wrong replay. Handles are handle-like strings
+ *  (digits / _ / | / a lone lowercase token) sitting in the player-setup region (near the faction
+ *  display block). This is a heuristic — it surfaces the real handles near the top but may include the
+ *  odd unit name; it is NOT a byte-perfect parser, and it does NOT claim which faction each handle had. */
 export function extractReplayPlayers(buf: Buffer): ReplayPlayer[] {
   const hay = buf.toString('latin1');
   const positions = factionDisplayPositions(buf);
   if (positions.length === 0) return [];
-  const nearestFaction = (off: number): string =>
-    positions.reduce((b, p) => (Math.abs(p.off - off) < Math.abs(b.off - off) ? p : b), positions[0]!).slug;
   const displayNames = new Set(Object.keys(FACTION_DISPLAY_TO_SLUG));
 
   // eslint-disable-next-line no-control-regex -- \x00 is intentional: matches UTF-16LE strings.
   const re = /(?:[\x20-\x7e]\x00){3,30}/g;
-  const scored: Array<{ score: number; name: string; faction: string }> = [];
+  const scored: Array<{ score: number; name: string }> = [];
   const seen = new Set<string>();
   let m: RegExpExecArray | null;
   while ((m = re.exec(hay)) !== null) {
@@ -181,49 +166,10 @@ export function extractReplayPlayers(buf: Buffer): ReplayPlayer[] {
     const handleish = /[0-9_|]/.test(s) || (!/\s/.test(s) && s === s.toLowerCase());
     if (!handleish) continue;
     seen.add(s.toLowerCase());
-    scored.push({ score: /[0-9_|]/.test(s) ? 3 : 2, name: s, faction: nearestFaction(off) });
+    scored.push({ score: /[0-9_|]/.test(s) ? 3 : 2, name: s });
   }
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, 4).map(({ name, faction }) => ({ name, faction }));
-}
-
-/** Reliable per-player faction attribution: given the two players' in-replay names and the two
- *  factions the replay actually contains (from extractFactions — already trustworthy), assign each
- *  player one of those two factions by the minimum-total-distance 2×2 assignment (name position →
- *  nearest display of each faction). This GUARANTEES each present player gets a distinct one of the
- *  two real factions — never a stray, never both the same (unless a mirror). Returns a slug (or null
- *  when the name isn't in the replay) aligned to `names`. Validated 8/8 on prod. */
-export function attributeFactionsForPlayers(buf: Buffer, names: Array<string | null>, factions: string[]): Array<string | null> {
-  const hay = buf.toString('latin1');
-  const positions = factionDisplayPositions(buf);
-  const namePos = (n: string | null): number | null => {
-    if (!n || n.length < 2) return null;
-    const at = hay.toLowerCase().indexOf(Buffer.from(n, 'utf16le').toString('latin1').toLowerCase());
-    return at === -1 ? null : at;
-  };
-  const distToFaction = (off: number, slug: string): number => {
-    const ps = positions.filter((p) => p.slug === slug);
-    return ps.length ? Math.min(...ps.map((p) => Math.abs(p.off - off))) : Number.POSITIVE_INFINITY;
-  };
-  const uniqFactions = [...new Set(factions)];
-  const offs = names.map(namePos);
-
-  // Mirror (one faction) → every present player is that faction.
-  if (uniqFactions.length === 1) return offs.map((o) => (o === null ? null : uniqFactions[0]!));
-
-  // Two factions + both players located → constrained 2×2 assignment (minimise total distance).
-  if (uniqFactions.length >= 2 && offs.length === 2 && offs[0] !== null && offs[1] !== null) {
-    const [x, y] = [uniqFactions[0]!, uniqFactions[1]!];
-    const straight = distToFaction(offs[0]!, x) + distToFaction(offs[1]!, y);
-    const swapped = distToFaction(offs[0]!, y) + distToFaction(offs[1]!, x);
-    return straight <= swapped ? [x, y] : [y, x];
-  }
-
-  // Otherwise (≤1 player located): assign each located player its nearest of the two factions.
-  return offs.map((o) => {
-    if (o === null) return null;
-    return uniqFactions.reduce((best, f) => (distToFaction(o, f) < distToFaction(o, best) ? f : best), uniqFactions[0]!);
-  });
+  return scored.slice(0, 4).map(({ name }) => ({ name }));
 }
 
 /** Whether a display name occurs in the replay (UTF-16LE, case-insensitive) — used to check a

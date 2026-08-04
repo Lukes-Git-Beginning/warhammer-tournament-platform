@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  isEsf, readRecordedAt, extractMapTerrain, extractFactions, replayContainsName, attributeFaction,
-  attributeFactionsForPlayers, TOKEN_TO_FACTION,
+  isEsf, readRecordedAt, extractMapTerrain, extractFactions, replayContainsName, extractReplayPlayers, TOKEN_TO_FACTION,
 } from '../src/lib/replay-parser.js';
 import { mapNameFromTerrain } from '../src/lib/replay-maps.js';
 
@@ -76,36 +75,19 @@ describe('replay-parser', () => {
     expect(new Set(Object.values(TOKEN_TO_FACTION)).size).toBe(24);
   });
 
-  it('attributes a faction to a player by the nearest faction display name', () => {
-    // Two player blocks: [Skaven … Reck1355] [Lizardmen … Ti_Elle] as UTF-16 strings.
+  it('extracts handle-like player names near the faction block (names only, no faction claim)', () => {
+    // Player-setup region: faction display names with handle-like player names sitting next to them.
     const u16 = (s: string) => Buffer.from(s, 'utf16le');
-    const gap = Buffer.alloc(200);
+    const gap = Buffer.alloc(120);
     const buf = Buffer.concat([
-      u16('Skaven'), gap, u16('Reck1355'), gap, gap, gap,
+      u16('Skaven'), gap, u16('Reck1355'), gap,
       u16('Lizardmen'), gap, u16('Ti_Elle'),
     ]);
-    expect(attributeFaction(buf, 'Reck1355')).toBe('skaven');
-    expect(attributeFaction(buf, 'Ti_Elle')).toBe('lizardmen');
-    expect(attributeFaction(buf, 'NotPresent')).toBeNull();
-  });
-
-  it('assigns each player a distinct one of the two real factions (constrained 2x2)', () => {
-    const u16 = (s: string) => Buffer.from(s, 'utf16le');
-    const gap = Buffer.alloc(200);
-    const buf = Buffer.concat([
-      u16('Skaven'), gap, u16('Reck1355'), gap, gap, gap,
-      u16('Lizardmen'), gap, u16('Ti_Elle'),
-    ]);
-    expect(attributeFactionsForPlayers(buf, ['Reck1355', 'Ti_Elle'], ['skaven', 'lizardmen']))
-      .toEqual(['skaven', 'lizardmen']);
-    // order of the names shouldn't matter — each still gets its own block's faction
-    expect(attributeFactionsForPlayers(buf, ['Ti_Elle', 'Reck1355'], ['skaven', 'lizardmen']))
-      .toEqual(['lizardmen', 'skaven']);
-    // an absent player → null, the present one still resolves
-    expect(attributeFactionsForPlayers(buf, ['Reck1355', 'Gone'], ['skaven', 'lizardmen']))
-      .toEqual(['skaven', null]);
-    // mirror match → both the same faction
-    expect(attributeFactionsForPlayers(buf, ['Reck1355', 'Ti_Elle'], ['skaven', 'skaven']))
-      .toEqual(['skaven', 'skaven']);
+    const players = extractReplayPlayers(buf);
+    const names = players.map((p) => p.name);
+    expect(names).toContain('Reck1355');
+    expect(names).toContain('Ti_Elle');
+    // faction is deliberately not attributed per player
+    expect(players.every((p) => !('faction' in p))).toBe(true);
   });
 });
