@@ -497,7 +497,7 @@ export function GameTile({
                         <input
                           ref={fileInputRef}
                           type="file"
-                          accept=".rec,.replay,.wrep"
+                          accept=".replay"
                           className="hidden"
                           onChange={(e) => {
                             setReplayFile(e.target.files?.[0] ?? null);
@@ -778,7 +778,7 @@ function ProvisionalPanel({
             <input
               ref={fileInputRef}
               type="file"
-              accept=".rec,.replay,.wrep"
+              accept=".replay"
               className="hidden"
               onChange={(e) => setConfirmFile(e.target.files?.[0] ?? null)}
             />

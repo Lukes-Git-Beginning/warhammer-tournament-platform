@@ -13,9 +13,10 @@ describe('validateReplayUpload', () => {
     expect(validateReplayUpload('GAME.REPLAY', esf())).toBeNull();
   });
 
-  it('accepts the other picker extensions (.rec/.wrep) when the content is a real replay', () => {
-    expect(validateReplayUpload('game.rec', esf())).toBeNull();
-    expect(validateReplayUpload('game.wrep', esf())).toBeNull();
+  it('rejects non-.replay extensions even when the content is a real ESF file', () => {
+    // Only the real Total War export extension (.replay) is accepted.
+    expect(validateReplayUpload('game.rec', esf())).toMatch(/Total War replay files/i);
+    expect(validateReplayUpload('game.wrep', esf())).toMatch(/Total War replay files/i);
   });
 
   it('accepts ESF signature variants seen in the wild (different game/patch)', () => {

@@ -31,9 +31,9 @@ function hasEsfSignature(buffer: Buffer): boolean {
  * client, or `null` when the upload is a valid replay.
  */
 export function validateReplayUpload(filename: string | undefined, buffer: Buffer): string | null {
-  // Accept the same extensions the picker offers (.replay/.rec/.wrep). The extension is only a
-  // first-line hint — the signature check below is the real gate (it rejects a renamed .jpg).
-  if (!filename || !/\.(replay|rec|wrep)$/i.test(filename)) {
+  // Total War: Warhammer exports replays as `.replay` — the only extension we accept. (The
+  // extension is a first-line hint; the ESF signature check below is the real gate.)
+  if (!filename || !/\.replay$/i.test(filename)) {
     return 'Only Total War replay files (.replay) are accepted.';
   }
   if (!hasEsfSignature(buffer)) {
