@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.28.2] — 2026-08-04 — Admin replay audit: show the actual replay names
+### Changed
+- **The replay audit now lists the actual player names recorded in the replay** (each with the faction attributed to them), instead of a bare present/absent flag — so at a glance you can tell a rename (same person, different spelling) from an entirely wrong replay.
+
 ## [1.28.1] — 2026-08-04 — Admin replay audit: per-player faction attribution
 ### Changed
 - **The admin replay-audit now reports, per player, the faction they actually had in the replay** (attributed by locating the player next to their own army) and whether their Steam name is present — alongside the reported name/faction. Makes it clear at a glance whether a flagged game is a rename, a faction misreport, or an entirely wrong replay.
