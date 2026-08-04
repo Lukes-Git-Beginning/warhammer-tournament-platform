@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.28.0] — 2026-08-04 — Admin: search the All Games list
+### Added
+- **The admin All Games list is searchable.** One smart box: type player names to find their games (e.g. `RizzOtto Welshlion` for a head-to-head), or use operators — `winner:`, `map:`, `faction:`, `tournament:` (and a bare `ladder` for Open Play) — combined and case-insensitive, so a specific game is easy to locate and fix. Searches the whole history server-side, not just the current page.
+
 ## [1.27.1] — 2026-08-04 — Replay uploads: .replay only
 ### Fixed
 - **Only the real `.replay` extension is accepted now.** The upload picker and validator previously also allowed `.rec`/`.wrep` — extensions Total War: Warhammer doesn't actually export. Tidied to `.replay` only (the ESF signature check remains the real gate).
