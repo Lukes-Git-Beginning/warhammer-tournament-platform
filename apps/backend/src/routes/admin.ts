@@ -10,6 +10,7 @@ import { advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
 import { emitBracketUpdate } from '../lib/emit.js';
 import { addLateParticipant, setParticipantFactionOp, createManualMatch } from '../lib/tournament-management.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
+import { auditReplays } from '../lib/audit-replays.js';
 import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM, OPPONENT_SHARE_WARN } from '../lib/scoring-service.js';
 import { getNonGuildMemberIds, isGuildLookupConfigured } from '../lib/discord-notify.js';
 import {
@@ -754,6 +755,15 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   //      Steam-gated play).
   //  (2) fully-verified users who have never completed a game (dormant — worth a
   //      nudge). "Never played" = no COMPLETED match as either player.
+  // GET /api/admin/replay-audit?limit=N — run the full replay verification (factions, map, players,
+  // recorded time) over every completed game with a replay and return the discrepancies. Heavy
+  // (parses every replay + fetches Steam personas); a hardening / historical-audit tool. Name flags
+  // on old games can be stale (players rename on Steam) — read faction/map/time as the robust signals.
+  fastify.get('/api/admin/replay-audit', async (request) => {
+    const limit = Math.min(Number((request.query as { limit?: string }).limit) || 5000, 10000);
+    return auditReplays(fastify.prisma, limit);
+  });
+
   fastify.get('/api/admin/reports/engagement', async () => {
     const [notSteamVerified, verifiedNeverPlayed] = await Promise.all([
       fastify.prisma.user.findMany({

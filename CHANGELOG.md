@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 ## [1.27.0] — 2026-08-03 — Replay verification
 ### Added
 - **Uploaded replays are now verified against the reported game.** When you report a result, the replay is checked against what was recorded — the **factions**, the **map**, the **players** (via their Steam names) and the **recording time** (so an old replay can't be recycled). If everything matches, nothing changes. If the replay doesn't match, you're shown exactly what's off and can either **upload the correct replay** or, if the report really is right (e.g. you agreed to play a different matchup), **explain the deviation** — which holds the game for a host/admin to review and notifies your opponent. In Open Play a held result doesn't lock you: both players are free to queue again while it's pending. Verification is fail-open — it never blocks an honest report on a parser hiccup.
+- **Admin: a one-shot replay audit** (`/api/admin/replay-audit`) runs the full verification across every stored replay to surface historical discrepancies — validated over 2209 real replays (94% clean, the flags a mix of genuine wrong-replay uploads and known-ambiguous Chaos-god matchups, which the engine now deliberately doesn't false-flag).
 
 ## [1.26.2] — 2026-08-02 — Replay uploads are validated
 ### Fixed
