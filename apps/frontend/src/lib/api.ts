@@ -1918,8 +1918,23 @@ export function getTournamentGames(slug: string): Promise<{ games: GameHistoryEn
   );
 }
 
-export function getMetaGames(page = 1, limit = 50): Promise<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }> {
-  return apiFetch<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }>(`/api/meta/games?page=${page}&limit=${limit}`);
+/** Structured filters for the games list — the admin All Games search parses its query into these. */
+export interface GameSearchFilters {
+  q?: string;          // player-name words
+  winner?: string;     // winner username
+  map?: string;        // map name
+  faction?: string;    // faction slug
+  tournament?: string; // tournament name, or "ladder"/"open play" for Open Play
+}
+
+export function getMetaGames(
+  page = 1,
+  limit = 50,
+  filters: GameSearchFilters = {},
+): Promise<{ games: GameHistoryEntry[]; total: number; page: number; limit: number }> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  for (const [k, v] of Object.entries(filters)) if (v?.trim()) params.set(k, v.trim());
+  return apiFetch(`/api/meta/games?${params.toString()}`);
 }
 
 // Admin data-cleanup audit: every COMPLETED game flagged with ≥1 anomaly.

@@ -1,7 +1,7 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { getMetaGames, getGameAudit, getFactions, getMaps, editGame, deleteGame } from '@/lib/api';
+import { getMetaGames, getGameAudit, getFactions, getMaps, editGame, deleteGame, type GameSearchFilters } from '@/lib/api';
 import type { GameAuditIssue } from '@/lib/api';
 import type { GameHistoryEntry } from '@rizzotto/types';
 
@@ -21,6 +21,43 @@ const selectClass =
 
 type EditBody = Parameters<typeof editGame>[2];
 
+/** Debounce a value by `ms` — avoids a query per keystroke while typing a search. */
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
+/**
+ * Parse the All Games search box into structured filters. Plain words become player-name search;
+ * `key:value` tokens (winner / map / faction / tournament) filter that dimension; a bare
+ * "ladder"/"open play" becomes the tournament=ladder shortcut. Values may be "quoted" for spaces.
+ */
+export function parseGameSearch(input: string): GameSearchFilters {
+  const f: GameSearchFilters = {};
+  const words: string[] = [];
+  // Match key:value (value optionally quoted) or a bare word/quoted phrase.
+  const re = /(\w+):"([^"]+)"|(\w+):(\S+)|"([^"]+)"|(\S+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(input)) !== null) {
+    const key = (m[1] ?? m[3])?.toLowerCase();
+    const val = m[2] ?? m[4];
+    const bare = m[5] ?? m[6];
+    if (key && val) {
+      if (key === 'winner' || key === 'map' || key === 'faction' || key === 'tournament') f[key] = val;
+      else words.push(`${key}:${val}`); // unknown key → treat literally as a name word
+    } else if (bare) {
+      if (/^(ladder|open|openplay|queue)$/i.test(bare)) f.tournament = 'ladder';
+      else words.push(bare);
+    }
+  }
+  if (words.length) f.q = words.join(' ');
+  return f;
+}
+
 /**
  * Admin-only global game list with inline editing. Every field writes through the
  * shared PATCH /api/matches/:id/games/:gameNumber endpoint (canManageTournament),
@@ -34,9 +71,15 @@ export function AdminAllGamesTab() {
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search, 350);
+  const filters = parseGameSearch(debouncedSearch);
+  const filterKey = JSON.stringify(filters);
+  // Reset to page 1 whenever the search changes.
+  useEffect(() => { setPage(1); }, [filterKey]);
   const { data, isLoading: allLoading } = useQuery({
-    queryKey: ['admin-all-games', page],
-    queryFn: () => getMetaGames(page, PAGE_SIZE),
+    queryKey: ['admin-all-games', page, filterKey],
+    queryFn: () => getMetaGames(page, PAGE_SIZE, filters),
     enabled: !flaggedOnly,
   });
   const { data: auditData, isLoading: auditLoading } = useQuery({
@@ -142,6 +185,34 @@ export function AdminAllGamesTab() {
           </div>
         )}
       </div>
+
+      {/* Search — plain words match player names; operators winner: / map: / faction: /
+          tournament: (and "ladder") filter those dimensions. All AND-combined. */}
+      {!flaggedOnly && (
+        <div className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder='Search — e.g. "RizzOtto Welshlion", winner:RizzOtto, map:jade, faction:kislev, tournament:saturday, ladder'
+              className="w-full rounded border border-rizzotto-iron-700 bg-rizzotto-iron-950 px-3 py-2 pr-16 text-sm text-stone-100 placeholder:text-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-0.5 text-xs text-stone-500 hover:text-stone-300"
+              >
+                clear
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-[11px] text-stone-600">
+            Operators: <code>winner:</code> <code>map:</code> <code>faction:</code> <code>tournament:</code> · use quotes for spaces (<code>map:&quot;Jade Tomb&quot;</code>) · plain words search player names.
+          </p>
+        </div>
+      )}
 
       <p className="mb-3 text-xs text-stone-500">
         Inline-edit factions, map, winner and the Official flag (Official games count for every

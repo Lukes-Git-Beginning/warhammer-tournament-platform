@@ -198,6 +198,12 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       factionId: z.string().optional(),
       opponentFactionId: z.string().optional(),
       playerId: z.string().uuid().optional(),
+      // Admin "All Games" search (all optional, AND-combined, case-insensitive substrings):
+      q: z.string().trim().optional(),            // player-name words (each must match a player)
+      winner: z.string().trim().optional(),       // winner's username
+      map: z.string().trim().optional(),          // picked map name
+      faction: z.string().trim().optional(),      // either faction slug
+      tournament: z.string().trim().optional(),   // tournament name, or "ladder"/"open"/"queue" for Open Play
     }).safeParse(request.query);
 
     if (!parsed.success) {
@@ -205,7 +211,25 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const { page, limit, tournamentSlug, factionId, opponentFactionId, playerId } = parsed.data;
+    const { q, winner, map: mapQ, faction: factionQ, tournament: tournamentQ } = parsed.data;
     const skip = (page - 1) * limit;
+    const ci = (contains: string) => ({ contains, mode: 'insensitive' as const });
+
+    // Pre-resolve the winner (username → user ids) and map (name → map ids) filters.
+    const winnerIds = winner
+      ? (await fastify.prisma.user.findMany({ where: { username: ci(winner) }, select: { id: true } })).map((u) => u.id)
+      : null;
+    const mapIdsFilter = mapQ
+      ? (await fastify.prisma.map.findMany({ where: { name: ci(mapQ) }, select: { id: true } })).map((m) => m.id)
+      : null;
+
+    // Player-name search: each word must match player1 OR player2 (so "Rizz Welsh" = their head-to-head).
+    const playerNameAnd = q
+      ? q.split(/\s+/).filter(Boolean).map((w) => ({
+          OR: [{ player1: { username: ci(w) } }, { player2: { username: ci(w) } }],
+        }))
+      : [];
+    const isLadderQ = tournamentQ ? /^(ladder|open( ?play)?|queue)$/i.test(tournamentQ) : false;
 
     // Faction filter at the game level — games are the statistical unit and now always
     // carry their own factions (no participant/match fallback). When both factionId and
@@ -228,12 +252,26 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const gameWhere = {
       status: 'COMPLETED' as const,
       ...gameFactionFilter,
+      // faction:<text> — either side's faction slug contains the text.
+      ...(factionQ ? { OR: [{ player1_faction_id: ci(factionQ) }, { player2_faction_id: ci(factionQ) }] } : {}),
+      // winner:<name> — resolved to user ids above (empty list → no match).
+      ...(winnerIds ? { winner_id: { in: winnerIds } } : {}),
+      // map:<name> — resolved to map ids above, matched via the game's map decision.
+      ...(mapIdsFilter ? { map_decision: { picked_map_id: { in: mapIdsFilter } } } : {}),
       match: {
         player1_id: { not: null },
         player2_id: { not: null },
         counts_for_leaderboard: true,
         ...(tournamentSlug ? { tournament: { slug: tournamentSlug, deleted_at: null } } : { deleted_at: null }),
         ...(playerId ? { OR: [{ player1_id: playerId }, { player2_id: playerId }] } : {}),
+        // q:<words> — each word matches at least one of the two players.
+        ...(playerNameAnd.length ? { AND: playerNameAnd } : {}),
+        // tournament:<name> or the "ladder"/"open play" shortcut for non-tournament games.
+        ...(tournamentQ
+          ? isLadderQ
+            ? { tournament_id: null }
+            : { tournament: { name: ci(tournamentQ), deleted_at: null } }
+          : {}),
       },
     };
 
