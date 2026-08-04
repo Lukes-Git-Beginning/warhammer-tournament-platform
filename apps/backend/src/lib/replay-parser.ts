@@ -33,6 +33,8 @@ export interface ReplayMeta {
   mapTerrain: string | null;
   /** Platform faction slugs detected (1 for a mirror match, else 2). */
   factions: string[];
+  /** Player handles + factions recorded in the replay (ESF tree walk). */
+  players: ReplayPlayer[];
 }
 
 /** ESF signature: byte[1]=0xAB, byte[0] in 0xCA–0xCF. */
@@ -263,5 +265,6 @@ export function parseReplayMeta(buf: Buffer): ReplayMeta {
     recordedAt: readRecordedAt(buf),
     mapTerrain: extractMapTerrain(buf),
     factions: extractFactions(buf),
+    players: extractReplayPlayers(buf),
   };
 }

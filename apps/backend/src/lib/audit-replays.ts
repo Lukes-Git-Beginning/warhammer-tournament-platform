@@ -120,7 +120,7 @@ export async function auditReplays(prisma: PrismaClient, limit = 5000): Promise<
     });
     const steamPersonaNames = players.map((p) => p.persona).filter(Boolean) as string[];
 
-    const v = verifyReplayMeta(meta, (name) => replayContainsName(buf, name), {
+    const v = verifyReplayMeta(meta, {
       factionSlugs,
       mapName: g.map_decision?.picked_map_id ? mapName.get(g.map_decision.picked_map_id) ?? null : null,
       matchCreatedAt: g.match.created_at,

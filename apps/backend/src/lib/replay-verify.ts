@@ -6,7 +6,7 @@
 // signal (empty extraction, unknown map) is skipped, so a parser edge-case never blocks an
 // honest report. Only a POSITIVE contradiction produces an issue.
 
-import { parseReplayMeta, replayContainsName } from './replay-parser.js';
+import { parseReplayMeta } from './replay-parser.js';
 import { mapNameFromTerrain } from './replay-maps.js';
 
 /** How far BEFORE the match was generated a replay may have been recorded (clock skew grace).
@@ -40,6 +40,10 @@ export interface ReplayVerification {
 
 const titleCase = (slug: string): string =>
   slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+/** Alphanumeric-only, lowercased — for name matching that ignores clan-tag brackets/pipes/spaces.
+ *  The game strips some punctuation when recording (Steam "[-ODM-] flower" → replay "-ODM- flower"),
+ *  so an exact substring check false-flags an honest replay; normalising both sides fixes that. */
+const normName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 const sameSet = (a: string[], b: string[]): boolean => {
   const A = [...a].sort(), B = [...b].sort();
   return A.length === B.length && A.every((x, i) => x === B[i]);
@@ -61,7 +65,6 @@ const diffIsChaosGodOnly = (a: string[], b: string[]): boolean => {
 /** Compare an already-extracted replay against the expected game. Pure + synchronous. */
 export function verifyReplayMeta(
   meta: ReturnType<typeof parseReplayMeta>,
-  containsName: (name: string) => boolean,
   expected: ExpectedGame,
 ): ReplayVerification {
   const issues: ReplayIssue[] = [];
@@ -95,12 +98,22 @@ export function verifyReplayMeta(
     });
   }
 
-  // Player names — each participant's Steam name should appear in the replay (played just now).
-  for (const name of expected.steamPersonaNames) {
-    if (name && !containsName(name)) {
+  // Player names — the reported participants' current Steam names should appear among the names
+  // the replay actually recorded. Match on an alphanumeric-normalised basis (the game strips
+  // clan-tag brackets etc.), and only flag when NONE of the participants match ANY recorded name:
+  // a single rename still leaves the other player matching, but an entirely foreign replay (both
+  // players absent) is caught. Skipped when the replay yielded no names (inconclusive → fail-open).
+  const replayNorms = meta.players.map((p) => normName(p.name)).filter((n) => n.length >= 3);
+  const personas = expected.steamPersonaNames.filter(Boolean);
+  if (replayNorms.length > 0 && personas.length > 0) {
+    const matches = (persona: string): boolean => {
+      const ns = normName(persona);
+      return ns.length >= 3 && replayNorms.some((rn) => rn.includes(ns) || ns.includes(rn));
+    };
+    if (!personas.some(matches)) {
       issues.push({
         type: 'PLAYER',
-        message: `"${name}" does not appear among the replay's players`,
+        message: `None of the reported players (${personas.join(', ')}) appear among the replay's recorded names (${meta.players.map((p) => p.name).join(', ')})`,
       });
     }
   }
@@ -110,6 +123,5 @@ export function verifyReplayMeta(
 
 /** Convenience: extract + verify a replay buffer against the expected game. */
 export function verifyReplay(buffer: Buffer, expected: ExpectedGame): ReplayVerification {
-  const meta = parseReplayMeta(buffer);
-  return verifyReplayMeta(meta, (name) => replayContainsName(buffer, name), expected);
+  return verifyReplayMeta(parseReplayMeta(buffer), expected);
 }

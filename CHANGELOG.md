@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.28.3] — 2026-08-04 — Replay verification: stop false-flagging honest reports on clan tags
+### Fixed
+- **A correct replay is no longer flagged as "not matching" because of a clan tag.** The game strips bracket characters when it records a name (Steam `[-ODM-] flower` is saved as `-ODM- flower` in the replay), so the exact-name check wrongly told honest players their replay didn't match. The player check now compares your current Steam name against the names the replay actually recorded on an alphanumeric basis (brackets, pipes and spacing ignored), and only flags when *neither* reported player appears — a genuine wrong-replay upload. A single rename or tag change no longer trips it.
+
 ## [1.28.2] — 2026-08-04 — Admin replay audit: reliable per-player faction (ESF tree parse)
 ### Changed
 - **The replay audit now reads each player's actual handle and faction straight from the replay's structure**, and lists the two factions the replay contains — so at a glance you can tell a rename (same person, different spelling) from a faction misreport from an entirely wrong replay.
