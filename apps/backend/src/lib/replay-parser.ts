@@ -1,9 +1,12 @@
 // Total War replay (ESF) metadata extractor — pulls the recording time, map, factions and
 // player-name presence out of a .replay buffer for report verification.
 //
-// This is NOT a full ESF tree parser: it uses targeted, empirically-validated extraction
-// (see test/replay-parser.test.ts + the prod-validation done 2026-08-03). It is meant to
-// FLAG report/replay mismatches (fail-open), not to be a byte-perfect decoder.
+// The recording time / map / faction SET use targeted, empirically-validated string extraction
+// (see test/replay-parser.test.ts + the prod-validation done 2026-08-03). Per-player faction
+// attribution (extractReplayPlayers) uses a real ESF tree walk (ported from RPFM's cbab spec),
+// because that association is NOT positionally recoverable — validated at scale: string proximity
+// is ~60% (a coin flip), the tree walk is ~98% (229/233 real games, the misses being wrong-replay
+// uploads or chaos-god ambiguity, i.e. exactly what an audit wants to surface). Fail-open throughout.
 
 /** CA race token (the 3-letter culture code in `wh*_..._<token>_...` keys) → platform faction slug.
  *  The token uniquely identifies the faction, EXCEPT daemons_of_chaos (dae) vs the four mono-gods
@@ -105,71 +108,142 @@ export function extractFactions(buf: Buffer): string[] {
   return ordered.slice(0, 2);
 }
 
-/** Faction DISPLAY name (as it appears in the replay's player-setup region) → platform slug.
- *  Used only to locate the player-setup REGION (where the handle-like player names sit). Note: the
- *  per-player faction is NOT recoverable from display-name proximity — validated at scale, that is
- *  only ~60% correct (a coin flip). Only the faction SET (extractFactions) is reliable. */
-export const FACTION_DISPLAY_TO_SLUG: Record<string, string> = {
-  Empire: 'empire', Bretonnia: 'bretonnia', Kislev: 'kislev', 'Grand Cathay': 'grand_cathay',
-  Dwarfs: 'dwarfs', 'High Elves': 'high_elves', Lizardmen: 'lizardmen', Greenskins: 'greenskins',
-  'Dark Elves': 'dark_elves', Skaven: 'skaven', Norsca: 'norsca', 'Ogre Kingdoms': 'ogre_kingdoms',
-  Beastmen: 'beastmen', Khorne: 'khorne', Nurgle: 'nurgle', Tzeentch: 'tzeentch', Slaanesh: 'slaanesh',
-  'Daemons of Chaos': 'daemons_of_chaos', 'Warriors of Chaos': 'warriors_of_chaos',
-  'Chaos Dwarfs': 'chaos_dwarfs', 'Vampire Counts': 'vampire_counts', 'Vampire Coast': 'vampire_coast',
-  'Tomb Kings': 'tomb_kings', 'Wood Elves': 'wood_elves',
-};
+// ─── Minimal ESF tree walker (ported from RPFM's cbab spec, Frodo45127/rpfm) ─────────────────────
+// Only what extractReplayPlayers needs: resolve the string pools by index and DFS the metadata tree
+// (the command log — QUEUES/SAVED_TICK — is skipped by block size). Read-only, bounds-checked.
 
-/** Byte offsets of every faction DISPLAY name in the buffer (UTF-16LE), with its slug. */
-function factionDisplayPositions(buf: Buffer): Array<{ off: number; slug: string }> {
-  const hay = buf.toString('latin1');
-  const out: Array<{ off: number; slug: string }> = [];
-  for (const [name, slug] of Object.entries(FACTION_DISPLAY_TO_SLUG)) {
-    const needle = Buffer.from(name, 'utf16le').toString('latin1');
-    let i = hay.indexOf(needle);
-    while (i !== -1) {
-      out.push({ off: i, slug });
-      i = hay.indexOf(needle, i + 1);
-    }
-  }
-  return out;
+/** CAULEB128 varint: big-endian 7-bit groups, high bit = continuation. Returns [value, nextPos]. */
+function cauleb128(b: Buffer, pos: number): [number, number] {
+  let v = 0;
+  for (;;) { const x = b[pos++]!; v = v * 128 + (x & 0x7f); if (!(x & 0x80)) break; }
+  return [v, pos];
 }
 
-/** A player handle read from the replay. Faction is deliberately NOT attributed per player: the
- *  replay does not co-locate a player's name with their own faction in a positionally recoverable
- *  way (validated at scale — see FACTION_DISPLAY_TO_SLUG). Use extractFactions for the reliable set. */
-export interface ReplayPlayer { name: string }
+/** ESF primitive field size (bytes AFTER the type byte). Missing ⇒ record/array/variable. */
+const ESF_FIELD_SIZE: Record<number, number> = {
+  0x01: 1, 0x02: 1, 0x03: 2, 0x04: 4, 0x05: 8, 0x06: 1, 0x07: 2, 0x08: 4, 0x09: 8,
+  0x0a: 4, 0x0b: 8, 0x0c: 8, 0x0d: 12, 0x0e: 4, 0x0f: 4, 0x10: 2,
+  0x12: 0, 0x13: 0, 0x14: 0, 0x15: 0, 0x16: 1, 0x17: 2, 0x18: 3,
+  0x19: 0, 0x1a: 1, 0x1b: 2, 0x1c: 3, 0x1d: 0, 0x21: 4, 0x23: 1, 0x24: 2, 0x25: 4,
+};
 
-/** Best-effort extraction of the actual player handles recorded in the replay, so a human can eyeball
- *  whether a flagged game is a rename or an entirely wrong replay. Handles are handle-like strings
- *  (digits / _ / | / a lone lowercase token) sitting in the player-setup region (near the faction
- *  display block). This is a heuristic — it surfaces the real handles near the top but may include the
- *  odd unit name; it is NOT a byte-perfect parser, and it does NOT claim which faction each handle had. */
-export function extractReplayPlayers(buf: Buffer): ReplayPlayer[] {
-  const hay = buf.toString('latin1');
-  const positions = factionDisplayPositions(buf);
-  if (positions.length === 0) return [];
-  const displayNames = new Set(Object.keys(FACTION_DISPLAY_TO_SLUG));
+interface EsfPools { RN: string[]; u16: Record<number, string>; u8: Record<number, string> }
 
-  // eslint-disable-next-line no-control-regex -- \x00 is intentional: matches UTF-16LE strings.
-  const re = /(?:[\x20-\x7e]\x00){3,30}/g;
-  const scored: Array<{ score: number; name: string }> = [];
-  const seen = new Set<string>();
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(hay)) !== null) {
-    const s = Buffer.from(m[0], 'latin1').toString('utf16le').trim();
-    if (s.length < 3 || s.includes('(') || s.includes(')') || displayNames.has(s) || /^\d+$/.test(s)) continue;
-    if (seen.has(s.toLowerCase())) continue;
-    // Only strings sitting near a faction block (the player-setup region), not army-list noise elsewhere.
-    const off = m.index;
-    if (positions.every((p) => Math.abs(p.off - off) > 600)) continue;
-    // Handle-like: digits / underscore / pipe, or a single all-lowercase token.
-    const handleish = /[0-9_|]/.test(s) || (!/\s/.test(s) && s === s.toLowerCase());
-    if (!handleish) continue;
-    seen.add(s.toLowerCase());
-    scored.push({ score: /[0-9_|]/.test(s) ? 3 : 2, name: s });
+/** Resolve the three CBAB string tables at the file tail (offset in header[12]):
+ *  record-name table `[u16 count][u16 len + ascii]…`, then the UTF-16 and UTF-8 pools, each
+ *  `[u32 count]` then entries `[u32 charLen][chars][u32 index]` (the index is what STR16[…]/KEY[…]
+ *  fields reference). This exact index mapping is the piece the old heuristic pool got wrong. */
+function buildEsfPools(b: Buffer): EsfPools {
+  const recOff = b.readUInt32LE(12);
+  let p = recOff;
+  const rnCount = b.readUInt16LE(p); p += 2;
+  const RN: string[] = [];
+  for (let i = 0; i < rnCount; i++) { const l = b.readUInt16LE(p); p += 2; RN.push(b.toString('ascii', p, p + l)); p += l; }
+  const u16: Record<number, string> = {};
+  { const c = b.readUInt32LE(p); p += 4;
+    for (let i = 0; i < c && p + 4 <= b.length; i++) {
+      const cl = b.readUInt32LE(p); p += 4;
+      if (cl > 2000 || p + 2 * cl + 4 > b.length) break;
+      const s = b.toString('utf16le', p, p + 2 * cl); p += 2 * cl;
+      u16[b.readUInt32LE(p)] = s; p += 4;
+    } }
+  const u8: Record<number, string> = {};
+  { const c = b.readUInt32LE(p); p += 4;
+    for (let i = 0; i < c && p + 4 <= b.length; i++) {
+      const l = b.readUInt32LE(p); p += 4;
+      if (l > 2000 || p + l + 4 > b.length) break;
+      const s = b.toString('ascii', p, p + l); p += l;
+      u8[b.readUInt32LE(p)] = s; p += 4;
+    } }
+  return { RN, u16, u8 };
+}
+
+type EsfVisit = (name: string | undefined, start: number, end: number) => void;
+type EsfVisitField = (type: number, pos: number, parentName: string | undefined) => void;
+
+/** DFS the ESF metadata tree from the root at 0x10, skipping the command log. `visit` fires per
+ *  record (with its byte range), `visitField` per primitive field (pos = the data byte). */
+function walkEsf(b: Buffer, RN: string[], visit: EsfVisit, visitField: EsfVisitField): void {
+  const HAS_NESTED = 0x40, HAS_NON_OPT = 0x20;
+  function fieldEnd(t: number, pos: number): number {
+    const sz = ESF_FIELD_SIZE[t];
+    if (sz !== undefined) return pos + sz;
+    if (t === 0) return pos;
+    if ((t >= 0x41 && t <= 0x50) || (t >= 0x52 && t <= 0x5d) || t === 0x26) {
+      const [byteSize, np] = cauleb128(b, pos); return np + byteSize;
+    }
+    return -1;
   }
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, 4).map(({ name }) => ({ name }));
+  function readNode(pos: number, isRoot: boolean, parentName: string | undefined): number {
+    const t = b[pos]!;
+    if (t < 0x80) { visitField(t, pos + 1, parentName); return fieldEnd(t, pos + 1); }
+    const flags = t;
+    const hasNested = (flags & HAS_NESTED) !== 0;
+    let p = pos + 1, name: number;
+    if ((flags & HAS_NON_OPT) !== 0 || isRoot) { name = b.readUInt16LE(p); p += 3; /* +2 name, +1 version */ }
+    else { name = ((flags & 1) << 8) | b[p]!; p += 1; /* version packed in flags, no bytes */ }
+    const [blockSize, afterSize] = cauleb128(b, p); p = afterSize;
+    const finalBlockOffset = p + blockSize;
+    if (finalBlockOffset > b.length || finalBlockOffset <= pos) return -1;
+    const nm = RN[name];
+    visit(nm, pos, finalBlockOffset);
+    if (nm === 'QUEUES' || nm === 'SAVED_TICK') return finalBlockOffset;
+    let groupCount = 1;
+    if (hasNested) { [groupCount, p] = cauleb128(b, p); }
+    for (let g = 0; g < groupCount; g++) {
+      let finalEntryOffset: number;
+      if (hasNested) { const [es, afterEs] = cauleb128(b, p); p = afterEs; finalEntryOffset = p + es; }
+      else finalEntryOffset = finalBlockOffset;
+      if (finalEntryOffset > finalBlockOffset) finalEntryOffset = finalBlockOffset;
+      while (p < finalEntryOffset) {
+        const e = readNode(p, false, nm);
+        if (e <= p || e > finalEntryOffset) { p = finalEntryOffset; break; }
+        p = e;
+      }
+    }
+    return finalBlockOffset;
+  }
+  readNode(0x10, true, undefined);
+}
+
+/** A player handle read from the replay, with the faction they actually fielded. */
+export interface ReplayPlayer { name: string; faction: string | null }
+
+/** Extract each player's handle + faction via the ESF tree: pair the i-th real BATTLE_SETUP_ARMY
+ *  (faction = its dominant unit-race token) with the i-th distinct PLAYER_DATA name. Validated 8/8
+ *  on labelled replays and 229/233 across prod (misses = wrong-replay uploads / chaos-god ambiguity,
+ *  which the audit wants surfaced). Fail-open: any parse trouble ⇒ [] rather than throwing. */
+export function extractReplayPlayers(buf: Buffer): ReplayPlayer[] {
+  if (!isEsf(buf) || buf.length < 16) return [];
+  try {
+    const { RN, u16, u8 } = buildEsfPools(buf);
+    const armies: Array<{ start: number; end: number; tokens: Map<string, number> }> = [];
+    const keyHits: Array<{ pos: number; str: string }> = [];
+    const names: string[] = [];
+    walkEsf(buf, RN,
+      (nm, start, end) => { if (nm === 'BATTLE_SETUP_ARMY') armies.push({ start, end, tokens: new Map() }); },
+      (t, pos, parent) => {
+        if (t === 0x0f) { const s = u8[buf.readUInt32LE(pos)]; if (s) keyHits.push({ pos, str: s }); }
+        else if (t === 0x0e && parent === 'PLAYER_DATA') { const s = u16[buf.readUInt32LE(pos)]; if (s !== undefined) names.push(s); }
+      });
+    // Tally unit-race tokens into the army whose byte-range contains each key → dominant = faction.
+    const tokenRe = /wh[0-9]?_[a-z0-9]+_([a-z]{2,4})_/;
+    for (const k of keyHits) {
+      const m = tokenRe.exec(k.str);
+      const slug = m ? TOKEN_TO_FACTION[m[1]!] : undefined;
+      if (!slug) continue;
+      const a = armies.find((army) => k.pos >= army.start && k.pos < army.end);
+      if (!a) continue;
+      a.tokens.set(m![1]!, (a.tokens.get(m![1]!) ?? 0) + 1);
+    }
+    const armyFactions = armies
+      .map((a) => { const r = [...a.tokens.entries()].sort((x, y) => y[1] - x[1]); return r.length ? TOKEN_TO_FACTION[r[0]![0]]! : null; })
+      .filter((f): f is string => f !== null);
+    const distinctNames = [...new Set(names)];
+    const out: ReplayPlayer[] = [];
+    for (let i = 0; i < distinctNames.length; i++) out.push({ name: distinctNames[i]!, faction: armyFactions[i] ?? null });
+    return out.slice(0, 4);
+  } catch { return []; }
 }
 
 /** Whether a display name occurs in the replay (UTF-16LE, case-insensitive) — used to check a

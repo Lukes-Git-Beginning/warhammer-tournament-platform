@@ -5,10 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
-## [1.28.2] — 2026-08-04 — Admin replay audit: actual names + reliable faction set
+## [1.28.2] — 2026-08-04 — Admin replay audit: reliable per-player faction (ESF tree parse)
 ### Changed
-- **The replay audit now lists the actual player handles recorded in the replay** and the **two factions the replay actually contains** (a reliable ~98% set), instead of a bare present/absent flag — so at a glance you can tell a rename (same person, different spelling) from an entirely wrong replay.
-- **Removed the per-player faction attribution added in 1.28.1.** Validated at scale (100+ real games), pinning *which* player had *which* faction from the replay was only ~60% correct — the file doesn't co-locate a player's name with their own faction recoverably. The reliable faction *set* plus the reported per-player faction are enough to spot a mismatch; the misleading per-player guess is gone.
+- **The replay audit now reads each player's actual handle and faction straight from the replay's structure**, and lists the two factions the replay contains — so at a glance you can tell a rename (same person, different spelling) from a faction misreport from an entirely wrong replay.
+- **Per-player faction is now reliable (~98%), not a guess.** The attribution added in 1.28.1 located players by text proximity, which validated at scale to only ~60% (a coin flip — the replay doesn't place a player's name next to their own faction). This replaces it with a real ESF tree walk that pairs each army with its player through the file's actual record structure — verified 8/8 on labelled replays and 229/233 across production games, where the few misses are genuine wrong-replay uploads or Chaos-god ambiguity (exactly what the audit should surface).
 
 ## [1.28.1] — 2026-08-04 — Admin replay audit: per-player faction attribution
 ### Changed

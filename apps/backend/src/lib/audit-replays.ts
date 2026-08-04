@@ -29,7 +29,8 @@ export interface AuditRow {
   }>;
   /** The two factions the replay actually contains (reliable set, ~98%) — order is not meaningful. */
   replayFactions: string[];
-  /** The actual player handles read FROM the replay (best-effort, names only) — so a human can compare. */
+  /** The actual player handles + factions read FROM the replay via the ESF tree walk (~98% correct
+   *  per-player) — so a human can see exactly who fielded what and compare against the report. */
   replayPlayers: ReplayPlayer[];
 }
 
