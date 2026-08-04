@@ -73,6 +73,14 @@ describe('verifyReplayMeta', () => {
     expect(r.issues.map((i) => i.type)).toContain('PLAYER');
   });
 
+  it('normalises non-ASCII glyphs (Steam "[-ODM-] Tzar♘" == replay "-ODM- Tzar♘")', () => {
+    // Real prod case: the game strips the [ ] brackets AND the ♘ glyph is non-alphanumeric, so both
+    // sides collapse to "odmtzar" under normName — must not raise a PLAYER flag.
+    const tzarBase = { ...base, steamPersonaNames: ['[-ODM-] Tzar♘', 'Reck1355'] };
+    const r = verifyReplayMeta(meta({ players: [{ name: '-ODM- Tzar♘', faction: null }, { name: 'Reck1355', faction: null }] }), tzarBase);
+    expect(r.issues.map((i) => i.type)).not.toContain('PLAYER');
+  });
+
   it('does NOT flag when only one player renamed (the other still matches)', () => {
     const renamed = { ...base, steamPersonaNames: ['pan_sarin', 'CompletelyNewHandle'] };
     const r = verifyReplayMeta(meta({}), renamed);
