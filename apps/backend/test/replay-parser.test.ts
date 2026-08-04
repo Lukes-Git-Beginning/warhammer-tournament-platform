@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  isEsf, readRecordedAt, extractMapTerrain, extractFactions, replayContainsName, TOKEN_TO_FACTION,
+  isEsf, readRecordedAt, extractMapTerrain, extractFactions, replayContainsName, attributeFaction, TOKEN_TO_FACTION,
 } from '../src/lib/replay-parser.js';
 import { mapNameFromTerrain } from '../src/lib/replay-maps.js';
 
@@ -73,5 +73,18 @@ describe('replay-parser', () => {
 
   it('has all 24 factions in the token map', () => {
     expect(new Set(Object.values(TOKEN_TO_FACTION)).size).toBe(24);
+  });
+
+  it('attributes a faction to a player by the nearest faction display name', () => {
+    // Two player blocks: [Skaven … Reck1355] [Lizardmen … Ti_Elle] as UTF-16 strings.
+    const u16 = (s: string) => Buffer.from(s, 'utf16le');
+    const gap = Buffer.alloc(200);
+    const buf = Buffer.concat([
+      u16('Skaven'), gap, u16('Reck1355'), gap, gap, gap,
+      u16('Lizardmen'), gap, u16('Ti_Elle'),
+    ]);
+    expect(attributeFaction(buf, 'Reck1355')).toBe('skaven');
+    expect(attributeFaction(buf, 'Ti_Elle')).toBe('lizardmen');
+    expect(attributeFaction(buf, 'NotPresent')).toBeNull();
   });
 });

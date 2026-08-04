@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { PrismaClient } from '@rizzotto/db';
 import { REPLAY_DIR } from './replays.js';
-import { parseReplayMeta, replayContainsName } from './replay-parser.js';
+import { parseReplayMeta, replayContainsName, attributeFaction } from './replay-parser.js';
 import { verifyReplayMeta, type ReplayIssue } from './replay-verify.js';
 import { fetchSteamPersonaNames } from './steam.js';
 
@@ -16,6 +16,17 @@ export interface AuditRow {
   player1: string | null;
   player2: string | null;
   issues: ReplayIssue[];
+  /** Per-player comparison: reported name/faction vs what the replay shows (attributed). */
+  players: Array<{
+    reportedName: string | null;
+    reportedFaction: string | null;
+    /** The player's current Steam persona (what we search the replay for). */
+    persona: string | null;
+    /** Whether that persona appears in the replay (false ⇒ rename or wrong replay). */
+    inReplay: boolean;
+    /** Faction attributed to this player IN the replay (nearest faction display to their name). */
+    replayFaction: string | null;
+  }>;
 }
 
 export interface AuditReport {
@@ -71,6 +82,10 @@ export async function auditReplays(prisma: PrismaClient, limit = 5000): Promise<
     const batch = await fetchSteamPersonaNames(allSteamIds.slice(i, i + 100));
     for (const [k, v] of batch) persona.set(k, v);
   }
+  const personaByUser = (uid: string): string | null => {
+    const sid = steamByUser.get(uid);
+    return sid ? persona.get(sid) ?? null : null;
+  };
 
   const report: AuditReport = { checked: 0, flagged: 0, skippedNoFile: 0, byType: {}, rows: [] };
   for (const g of games) {
@@ -82,10 +97,24 @@ export async function auditReplays(prisma: PrismaClient, limit = 5000): Promise<
 
     const meta = parseReplayMeta(buf);
     const factionSlugs = g.player1_faction_id && g.player2_faction_id ? [g.player1_faction_id, g.player2_faction_id] : [];
-    const steamPersonaNames = [g.match.player1_id, g.match.player2_id]
-      .map((uid) => (uid ? steamByUser.get(uid) : undefined))
-      .map((sid) => (sid ? persona.get(sid) : undefined))
-      .filter(Boolean) as string[];
+
+    // Per-player comparison (aligned to match player1/player2): reported vs replay.
+    const sides = [
+      { uid: g.match.player1_id, name: g.match.player1?.username ?? null, reportedFaction: g.player1_faction_id },
+      { uid: g.match.player2_id, name: g.match.player2?.username ?? null, reportedFaction: g.player2_faction_id },
+    ];
+    const players = sides.map((s) => {
+      const pers = s.uid ? personaByUser(s.uid) : null;
+      const inReplay = pers ? replayContainsName(buf, pers) : false;
+      return {
+        reportedName: s.name,
+        reportedFaction: s.reportedFaction,
+        persona: pers,
+        inReplay,
+        replayFaction: inReplay && pers ? attributeFaction(buf, pers) : null,
+      };
+    });
+    const steamPersonaNames = players.map((p) => p.persona).filter(Boolean) as string[];
 
     const v = verifyReplayMeta(meta, (name) => replayContainsName(buf, name), {
       factionSlugs,
@@ -103,6 +132,7 @@ export async function auditReplays(prisma: PrismaClient, limit = 5000): Promise<
         player1: g.match.player1?.username ?? null,
         player2: g.match.player2?.username ?? null,
         issues: v.issues,
+        players,
       });
     }
   }

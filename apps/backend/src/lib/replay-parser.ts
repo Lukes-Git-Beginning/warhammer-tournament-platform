@@ -105,6 +105,50 @@ export function extractFactions(buf: Buffer): string[] {
   return ordered.slice(0, 2);
 }
 
+/** Faction DISPLAY name (as it appears in the replay's player-setup region) → platform slug.
+ *  Used to attribute a faction to a specific player by proximity (see attributeFaction). */
+export const FACTION_DISPLAY_TO_SLUG: Record<string, string> = {
+  Empire: 'empire', Bretonnia: 'bretonnia', Kislev: 'kislev', 'Grand Cathay': 'grand_cathay',
+  Dwarfs: 'dwarfs', 'High Elves': 'high_elves', Lizardmen: 'lizardmen', Greenskins: 'greenskins',
+  'Dark Elves': 'dark_elves', Skaven: 'skaven', Norsca: 'norsca', 'Ogre Kingdoms': 'ogre_kingdoms',
+  Beastmen: 'beastmen', Khorne: 'khorne', Nurgle: 'nurgle', Tzeentch: 'tzeentch', Slaanesh: 'slaanesh',
+  'Daemons of Chaos': 'daemons_of_chaos', 'Warriors of Chaos': 'warriors_of_chaos',
+  'Chaos Dwarfs': 'chaos_dwarfs', 'Vampire Counts': 'vampire_counts', 'Vampire Coast': 'vampire_coast',
+  'Tomb Kings': 'tomb_kings', 'Wood Elves': 'wood_elves',
+};
+
+/** Byte offsets of every faction DISPLAY name in the buffer (UTF-16LE), with its slug. */
+function factionDisplayPositions(buf: Buffer): Array<{ off: number; slug: string }> {
+  const hay = buf.toString('latin1');
+  const out: Array<{ off: number; slug: string }> = [];
+  for (const [name, slug] of Object.entries(FACTION_DISPLAY_TO_SLUG)) {
+    const needle = Buffer.from(name, 'utf16le').toString('latin1');
+    let i = hay.indexOf(needle);
+    while (i !== -1) {
+      out.push({ off: i, slug });
+      i = hay.indexOf(needle, i + 1);
+    }
+  }
+  return out;
+}
+
+/** Attribute a faction to a specific player: find the player's name in the replay's setup region
+ *  and return the slug of the NEAREST faction display name (by byte distance) — validated against
+ *  prod (the per-player army block carries its own faction display name). Null when the name isn't
+ *  found or no faction display is present. Requires the player's actual in-replay name (Steam persona). */
+export function attributeFaction(buf: Buffer, playerName: string): string | null {
+  if (!playerName || playerName.length < 2) return null;
+  const hay = buf.toString('latin1').toLowerCase();
+  const needle = Buffer.from(playerName, 'utf16le').toString('latin1').toLowerCase();
+  const at = hay.indexOf(needle);
+  if (at === -1) return null;
+  const positions = factionDisplayPositions(buf);
+  if (positions.length === 0) return null;
+  let best = positions[0]!;
+  for (const p of positions) if (Math.abs(p.off - at) < Math.abs(best.off - at)) best = p;
+  return best.slug;
+}
+
 /** Whether a display name occurs in the replay (UTF-16LE, case-insensitive) — used to check a
  *  participant's live Steam persona name against the recorded players. */
 export function replayContainsName(buf: Buffer, name: string): boolean {
