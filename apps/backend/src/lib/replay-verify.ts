@@ -98,17 +98,19 @@ export function verifyReplayMeta(
     });
   }
 
-  // Player names — the reported participants' current Steam names should appear among the names
-  // the replay actually recorded. Match on an alphanumeric-normalised basis (the game strips
-  // clan-tag brackets etc.), and only flag when NONE of the participants match ANY recorded name:
-  // a single rename still leaves the other player matching, but an entirely foreign replay (both
-  // players absent) is caught. Skipped when the replay yielded no names (inconclusive → fail-open).
-  const replayNorms = meta.players.map((p) => normName(p.name)).filter((n) => n.length >= 3);
+  // Player names — the reported participants' current Steam names vs the names the replay actually
+  // recorded, by EXACT alphanumeric-normalised equality (case, brackets, pipes, spaces and glyphs
+  // collapse, so Steam "[-ODM-] flower" == replay "-ODM- flower"). Exact, NOT substring: a shared
+  // clan token (`odm`, `rtk`, … — present in a large share of names) must never make two different
+  // people match. Flag PLAYER only when NEITHER reported player equals any recorded name (a wholly
+  // foreign replay); a single rename/tag change still leaves the other player matching. Skipped when
+  // the replay yielded no names (inconclusive → fail-open).
+  const replayNorms = new Set(meta.players.map((p) => normName(p.name)).filter((n) => n.length >= 2));
   const personas = expected.steamPersonaNames.filter(Boolean);
-  if (replayNorms.length > 0 && personas.length > 0) {
+  if (replayNorms.size > 0 && personas.length > 0) {
     const matches = (persona: string): boolean => {
       const ns = normName(persona);
-      return ns.length >= 3 && replayNorms.some((rn) => rn.includes(ns) || ns.includes(rn));
+      return ns.length >= 2 && replayNorms.has(ns);
     };
     if (!personas.some(matches)) {
       issues.push({

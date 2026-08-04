@@ -65,6 +65,14 @@ describe('verifyReplayMeta', () => {
     expect(r.issues.map((i) => i.type)).not.toContain('PLAYER');
   });
 
+  it('does NOT match two different people on a shared clan token (exact, not substring)', () => {
+    // Wrong replay: two OTHER -ODM- members. The reported -ODM- player shares the "odm" token but is
+    // a different person — a substring rule would false-match; exact-normalised equality must not.
+    const odmBase = { ...base, steamPersonaNames: ['[-ODM-] flower', 'victim'] };
+    const r = verifyReplayMeta(meta({ players: [{ name: '-ODM- somebodyelse', faction: null }, { name: 'stranger', faction: null }] }), odmBase);
+    expect(r.issues.map((i) => i.type)).toContain('PLAYER');
+  });
+
   it('does NOT flag when only one player renamed (the other still matches)', () => {
     const renamed = { ...base, steamPersonaNames: ['pan_sarin', 'CompletelyNewHandle'] };
     const r = verifyReplayMeta(meta({}), renamed);
