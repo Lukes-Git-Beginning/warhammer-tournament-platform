@@ -302,11 +302,19 @@ export async function runBalancedPairingTick(
         ).map((s) => [s.userId, s.score]),
       );
       const bandByUser = new Map(participants.map((p) => [p.user_id, p.skill_band ?? DEFAULT_BAND]));
+      // "Never bye the same player twice" — but a CATCHUP_BYE is a 0-point late-join placeholder,
+      // NOT a rest, so it must not disqualify a catching-up player from a genuine bye (Alex
+      // 2026-08-06). Counting it did: a peerless late joiner (e.g. a lone top-band player admitted
+      // mid-event) was excluded from the odd-round bye, so the bye went to someone else and the
+      // late joiner was FORCE-PAIRED into a far-band stomp — and that stomp then raised the round's
+      // worst gap, letting a later reclaim of the same size slip past isLegalLateJoinReclaim.
+      // Only real (scored BYE) and provisional (PENDING_BYE) rest-byes count; a still-catching-up
+      // player's byes are always CATCHUP_BYE, so they stay bye-eligible until they play a real game.
       const hadBye = new Set(
         matches
           .filter(
             (m) =>
-              (m.status === 'BYE' || m.status === 'CATCHUP_BYE' || m.status === 'PENDING_BYE') &&
+              (m.status === 'BYE' || m.status === 'PENDING_BYE') &&
               m.player1_id &&
               !m.player2_id,
           )
