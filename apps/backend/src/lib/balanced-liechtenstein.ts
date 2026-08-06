@@ -422,6 +422,20 @@ export function planPairings(
         }
       } else if (ACTIVE.has(m.status)) {
         pr.activeRound = m.round;
+        // A match in progress already fixes who this player will have "just played" when they
+        // enter the NEXT round's pool — register the opponent now (last-opponent + met-before)
+        // so the immediate-rematch block fires BEFORE the result lands. Without this, two
+        // players still playing EACH OTHER look like valid next-round partners: the optimiser
+        // treats that (eventual) rematch as a free Δ0 edge, reserves it, commits their real
+        // partners elsewhere, and then force-rematches them once they finish in a now-closed
+        // pool (the-dimwitted-ones R2: RizzOtto & PJs, who finished their round last).
+        if (opp && roster.has(opp)) {
+          pr.pastOpponents.add(opp);
+          if (m.round >= pr.lastPlayedRound) {
+            pr.lastPlayedRound = m.round;
+            pr.lastOpponentId = opp;
+          }
+        }
       }
       // CANCELLED / voided statuses are ignored (the round will be re-paired).
     }
