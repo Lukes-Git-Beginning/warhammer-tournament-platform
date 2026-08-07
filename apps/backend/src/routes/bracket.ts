@@ -10,6 +10,7 @@ import {
   assignSkillBandsForTournament,
   runBalancedPairingTick,
   startBalancedPlayoffs,
+  describeBalancedPlayoffPreview,
 } from '../lib/balanced-liechtenstein-service.js';
 import {
   generateSwissRound,
@@ -787,6 +788,30 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   /**
+   * GET /api/tournaments/:id/balanced-playoff-preview
+   * Host tool (canManage). Read-only per-division playoff preview for Balanced Liechtenstein:
+   * current seeds, readiness, already-generated, and the blockers a force would skip. Drives the
+   * per-division "force generate" UI in the playoff plan preview.
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/api/tournaments/:id/balanced-playoff-preview',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id } = request.params;
+      const t = await fastify.prisma.tournament.findFirst({ where: { id, deleted_at: null }, select: { id: true } });
+      if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (!(await canManageTournament(fastify.prisma, t.id, request.user.sub, request.user.role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the host can preview playoffs', statusCode: 403 });
+      }
+      const preview = await describeBalancedPlayoffPreview(fastify, id);
+      if ('error' in preview) {
+        return reply.code(400).send({ error: 'BadRequest', message: preview.error, statusCode: 400 });
+      }
+      return reply.code(200).send(preview);
+    },
+  );
+
+  /**
    * POST /api/tournaments/:id/start-playoffs
    * Auth required. Host or MOD/ADMIN only.
    * Generates the playoff bracket from the final Swiss standings.
@@ -827,9 +852,15 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Balanced Liechtenstein uses division playoffs (one final per skill level),
-      // not a single shared bracket — handled by its own service.
+      // not a single shared bracket — handled by its own service. An optional
+      // `forceBands` body (host force tool) generates those divisions early, seeded from
+      // the current standings even if a borrowed band is not yet complete.
       if (tournament.format === TournamentFormat.BALANCED_LIECHTENSTEIN) {
-        const result = await startBalancedPlayoffs(fastify, id);
+        const body = (request.body ?? {}) as { forceBands?: unknown };
+        const forceBands = Array.isArray(body.forceBands)
+          ? body.forceBands.filter((b): b is number => typeof b === 'number')
+          : undefined;
+        const result = await startBalancedPlayoffs(fastify, id, { forceBands });
         if ('error' in result) {
           return reply.code(400).send({ error: 'BadRequest', message: result.error, statusCode: 400 });
         }

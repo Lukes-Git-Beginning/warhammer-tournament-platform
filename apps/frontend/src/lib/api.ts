@@ -19,6 +19,7 @@ import type {
   PlayerOpponentBreakdownDto,
   FactionMatchupMatrixResponse,
   PlayerFactionProficiencyResponse,
+  PlayoffPreview,
 } from '@rizzotto/types';
 
 export type {
@@ -585,8 +586,20 @@ export function startNextSwissRound(tournamentId: string): Promise<{ ok: true }>
   });
 }
 
-export function startPlayoffs(tournamentId: string): Promise<{ tournamentId: string; format: string; matches_created: number }> {
-  return apiFetch(`/api/tournaments/${tournamentId}/start-playoffs`, { method: 'POST' });
+export function startPlayoffs(
+  tournamentId: string,
+  forceBands?: number[],
+): Promise<{ tournamentId: string; format: string; matches_created: number }> {
+  // forceBands (Balanced Liechtenstein host tool): generate those divisions early, seeded from the
+  // current standings, bypassing the borrowed-band completeness wait. Omitted → normal generation.
+  return apiFetch(`/api/tournaments/${tournamentId}/start-playoffs`, {
+    method: 'POST',
+    ...(forceBands && forceBands.length > 0 ? { body: JSON.stringify({ forceBands }) } : {}),
+  });
+}
+
+export function getBalancedPlayoffPreview(tournamentId: string): Promise<PlayoffPreview> {
+  return apiFetch<PlayoffPreview>(`/api/tournaments/${tournamentId}/balanced-playoff-preview`);
 }
 
 export function advancePlayoffs(tournamentId: string): Promise<{ phase: string; matches_created: number }> {

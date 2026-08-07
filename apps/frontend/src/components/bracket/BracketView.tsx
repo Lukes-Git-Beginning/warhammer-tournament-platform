@@ -12,6 +12,7 @@ import { MatchScoreModal } from './MatchScoreModal';
 import { MatchReadOnlyModal } from './MatchReadOnlyModal';
 import { SwissStandings } from './SwissStandings';
 import { PlayoffPlanPreview } from './PlayoffPlanPreview';
+import { BalancedPlayoffForce } from './BalancedPlayoffForce';
 
 /** Human summary of the projected playoff shape for the "current plan" header. */
 function describePlayoff(divisions: ProjectedDivision[]): string {
@@ -411,6 +412,18 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
       {swiss?.plan && !hasPlayoffMatches && data.status !== 'COMPLETED' && (
         <PlayoffPlanPreview divisions={swiss.plan.divisions} />
       )}
+
+      {/* Host force tool — force a single BaLi division's playoff early. Shown once the field is in
+          its last group round (blocked/stuck divisions surface exactly there), NOT gated on the round
+          being fully complete — a division stuck on a straggler is the main case. Self-hides when
+          there is nothing left to force. */}
+      {isBalanced &&
+        canManage &&
+        data.status !== 'COMPLETED' &&
+        swiss !== undefined &&
+        swiss.currentRound >= swiss.recommendedRounds && (
+          <BalancedPlayoffForce tournamentId={tournamentId} slug={slug} />
+        )}
 
       {/* Next Swiss Round button — host only */}
       {showNextRoundButton && (

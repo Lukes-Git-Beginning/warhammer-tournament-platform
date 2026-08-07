@@ -74,6 +74,37 @@ export interface BracketPlan {
   divisions: ProjectedDivision[];
 }
 
+/** One player reference in the playoff preview (host force tool). */
+export interface PlayoffPreviewPlayer {
+  userId: string;
+  username: string;
+}
+
+/**
+ * A real, seeded division in the Balanced Liechtenstein playoff preview — the host-force view.
+ * Unlike ProjectedDivision (shape only) this carries the actual current seeds + a readiness verdict
+ * so the host can force-generate a single division early, with a warning listing what still blocks it.
+ */
+export interface PlayoffPreviewDivision {
+  /** The pool's own skill band (its identity for a force request). */
+  band: number;
+  size: number;
+  format: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
+  /** Current seeds, best first (may still shift while blockers remain). */
+  seeds: PlayoffPreviewPlayer[];
+  /** True once every band this division draws from is complete → it would auto-generate. */
+  ready: boolean;
+  /** True once this division's bracket already exists (nothing left to force). */
+  alreadyGenerated: boolean;
+  /** Contenders in the spanned bands who are still playing — forcing now freezes seeding without them. */
+  blockers: PlayoffPreviewPlayer[];
+}
+
+/** Response of GET /api/tournaments/:id/balanced-playoff-preview (host tool). */
+export interface PlayoffPreview {
+  divisions: PlayoffPreviewDivision[];
+}
+
 export interface SwissMeta {
   recommendedRounds: number;
   currentRound: number;

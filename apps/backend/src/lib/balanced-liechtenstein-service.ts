@@ -14,6 +14,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import type { Prisma, MatchStatus, MatchPhase } from '@rizzotto/db';
+import type { PlayoffPreview, PlayoffPreviewDivision } from '@rizzotto/types';
 import {
   planPairings,
   formDivisionPools,
@@ -854,7 +855,13 @@ export async function provisionalPlayoffQualifiers(
 export async function startBalancedPlayoffs(
   fastify: FastifyInstance,
   tournamentId: string,
+  opts: { forceBands?: number[] } = {},
 ): Promise<BalancedPlayoffResult | { error: string }> {
+  // forceBands: pool bands the host chose to FORCE — generate that division now, seeded from the
+  // CURRENT standings, even though a band it draws from is not yet complete. Only the readiness
+  // gate is bypassed; the < 2 seeds and already-generated guards still hold. Empty on the normal
+  // (tick / reconciler) path, so automatic generation is unchanged.
+  const forceBands = new Set(opts.forceBands ?? []);
   const tournament = await fastify.prisma.tournament.findFirst({
     where: { id: tournamentId, deleted_at: null },
     select: { format: true, status: true, rounds_count: true, playoff_format: true },
@@ -999,7 +1006,8 @@ export async function startBalancedPlayoffs(
     if (pool.seeds.length < 2) continue; // a lone champion needs no bracket
     if (pool.seeds.some((s) => alreadyInPlayoff.has(s))) continue; // already generated
     const spanBands = new Set(pool.players.map((p) => p.band));
-    if (![...spanBands].every(bandComplete)) continue; // wait for borrowed bands to finish
+    // Host force: skip the borrowed-band completeness wait for this division only.
+    if (!forceBands.has(pool.band) && ![...spanBands].every(bandComplete)) continue;
     const built = buildDivisionBracket(pool.seeds, tournamentId, playoffRound, nextNumber);
     rows.push(...built.rows);
     allPlayable.push(...built.playable);
@@ -1019,4 +1027,133 @@ export async function startBalancedPlayoffs(
   }
 
   return { pools: pools.length, finals: brackets };
+}
+
+/**
+ * Read-only playoff preview for the host force tool. Recomputes the exact same division pools +
+ * per-division readiness as startBalancedPlayoffs (no side effects), and reports, per division, the
+ * current seeds, whether it is ready / already generated, and which contenders in its spanned bands
+ * are still playing (the "what still blocks this" list a force must warn about). Mirrors the
+ * generation logic so the preview can never disagree with what a force would actually build.
+ */
+export async function describeBalancedPlayoffPreview(
+  fastify: FastifyInstance,
+  tournamentId: string,
+): Promise<PlayoffPreview | { error: string }> {
+  const tournament = await fastify.prisma.tournament.findFirst({
+    where: { id: tournamentId, deleted_at: null },
+    select: { format: true, rounds_count: true, playoff_format: true },
+  });
+  if (!tournament || tournament.format !== 'BALANCED_LIECHTENSTEIN') {
+    return { error: 'Not a Balanced Liechtenstein tournament' };
+  }
+  const roundsCount = tournament.rounds_count ?? 5;
+
+  const matches = await fastify.prisma.match.findMany({
+    where: { tournament_id: tournamentId, deleted_at: null },
+    select: {
+      round: true,
+      player1_id: true,
+      player2_id: true,
+      winner_id: true,
+      status: true,
+      phase: true,
+      games: { select: { status: true, winner_id: true } },
+    },
+  });
+  const roster = await fastify.prisma.tournamentParticipant.findMany({
+    where: {
+      tournament_id: tournamentId,
+      deleted_at: null,
+      status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
+    },
+    select: { user_id: true, skill_band: true, status: true, user: { select: { username: true } } },
+  });
+  const usernameById = new Map(roster.map((p) => [p.user_id, p.user?.username ?? 'Unknown']));
+  const withdrawnIds = new Set(roster.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
+  const active = roster.filter((p) => p.status !== 'WITHDREW');
+  const anyCheckedIn = active.some((p) => p.status === 'CHECKED_IN');
+  const contenders = anyCheckedIn ? active.filter((p) => p.status === 'CHECKED_IN') : active;
+
+  const participantIds = roster.map((p) => p.user_id);
+  const completed: CompletedMatchRecord[] = matches
+    .filter(
+      (m) =>
+        (m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST') &&
+        (m.phase === null || m.phase === 'SWISS'),
+    )
+    .map((m) => ({
+      round: m.round,
+      player1_id: m.player1_id,
+      player2_id: m.player2_id,
+      winner_id: m.winner_id,
+      status: m.status,
+      player1_game_wins: m.games.some((g) => g.status === 'COMPLETED')
+        ? m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length
+        : undefined,
+      player2_game_wins: m.games.some((g) => g.status === 'COMPLETED')
+        ? m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length
+        : undefined,
+    }));
+  const sorted = sortSwissStandings(
+    computeSwissStandings(participantIds, completed, withdrawnIds),
+    completed,
+    tournamentId,
+  );
+  const bandByUser = new Map(roster.map((p) => [p.user_id, p.skill_band ?? DEFAULT_BAND]));
+  const contenderIds = new Set(contenders.map((p) => p.user_id));
+  const ranked = sorted
+    .filter((s) => contenderIds.has(s.userId) && !withdrawnIds.has(s.userId))
+    .map((s, i) => ({ userId: s.userId, band: bandByUser.get(s.userId) ?? DEFAULT_BAND, rank: i + 1, rawScore: s.score }));
+  const pools = formDivisionPools(ranked, roundsCount, targetPoolSizeFromFormat(tournament.playoff_format));
+
+  // Per-division readiness — identical to startBalancedPlayoffs.
+  const completedByUser = new Map<string, number>();
+  const activeUsers = new Set<string>();
+  for (const m of matches) {
+    if (m.phase && m.phase !== 'SWISS') continue;
+    for (const uid of [m.player1_id, m.player2_id]) {
+      if (!uid) continue;
+      if (BL_ADVANCING.has(m.status)) completedByUser.set(uid, (completedByUser.get(uid) ?? 0) + 1);
+      else if (BL_ACTIVE.has(m.status)) activeUsers.add(uid);
+    }
+  }
+  const contenderIsComplete = (uid: string) =>
+    (completedByUser.get(uid) ?? 0) >= roundsCount && !activeUsers.has(uid);
+  const contendersByBand = new Map<number, string[]>();
+  for (const c of contenders) {
+    const b = bandByUser.get(c.user_id) ?? DEFAULT_BAND;
+    const list = contendersByBand.get(b) ?? [];
+    list.push(c.user_id);
+    contendersByBand.set(b, list);
+  }
+  const bandComplete = (b: number) => (contendersByBand.get(b) ?? []).every(contenderIsComplete);
+
+  const alreadyInPlayoff = new Set<string>();
+  for (const m of matches) {
+    if (m.phase && m.phase !== 'SWISS') {
+      if (m.player1_id) alreadyInPlayoff.add(m.player1_id);
+      if (m.player2_id) alreadyInPlayoff.add(m.player2_id);
+    }
+  }
+
+  const divisions: PlayoffPreviewDivision[] = pools
+    .filter((pool) => pool.seeds.length >= 2)
+    .map((pool) => {
+      const spanBands = [...new Set(pool.players.map((p) => p.band))];
+      const blockerIds = spanBands
+        .flatMap((b) => contendersByBand.get(b) ?? [])
+        .filter((uid) => !contenderIsComplete(uid));
+      return {
+        band: pool.band,
+        size: pool.seeds.length,
+        format: divisionPlayoffFormat(pool.seeds.length),
+        seeds: pool.seeds.map((uid) => ({ userId: uid, username: usernameById.get(uid) ?? 'Unknown' })),
+        ready: spanBands.every(bandComplete),
+        alreadyGenerated: pool.seeds.some((s) => alreadyInPlayoff.has(s)),
+        blockers: blockerIds.map((uid) => ({ userId: uid, username: usernameById.get(uid) ?? 'Unknown' })),
+      };
+    });
+
+  return { divisions };
 }
