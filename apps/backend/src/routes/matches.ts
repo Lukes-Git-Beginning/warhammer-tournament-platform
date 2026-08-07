@@ -7,7 +7,12 @@ import { canManageTournament } from '../lib/tournament-utils.js';
 import { notifyHostsOfMatchReport } from '../lib/discord-notify.js';
 import { runBalancedPairingTick } from '../lib/balanced-liechtenstein-service.js';
 import { computeSwissStandings, sortSwissStandings } from '../lib/swiss.js';
-import { DEFAULT_BAND } from '../lib/balanced-liechtenstein.js';
+import {
+  DEFAULT_BAND,
+  formDivisionPools,
+  targetPoolSizeFromFormat,
+  type RankedPlayer,
+} from '../lib/balanced-liechtenstein.js';
 import { invalidate } from '../lib/cache.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 
@@ -729,20 +734,47 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         tournamentId,
       );
 
-      const tournament = await fastify.prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true } });
+      const tournament = await fastify.prisma.tournament.findUnique({
+        where: { id: tournamentId },
+        select: { format: true, rounds_count: true, playoff_format: true },
+      });
       const isBaLi = tournament?.format === 'BALANCED_LIECHTENSTEIN';
-      const survivorBand = bandByUser.get(survivorId) ?? DEFAULT_BAND;
 
-      const seed = ranked.find(
-        (s) =>
-          !s.dropped &&
-          !withdrawnIds.has(s.userId) &&
-          !inPlayoffs.has(s.userId) &&
-          (!isBaLi || (bandByUser.get(s.userId) ?? DEFAULT_BAND) === survivorBand),
-      );
-      if (!seed) {
+      // A live standings seat that is not already placed somewhere in the playoffs.
+      const eligible = (userId: string, dropped: boolean) =>
+        !dropped && !withdrawnIds.has(userId) && !inPlayoffs.has(userId);
+
+      let seedUserId: string | undefined;
+      if (isBaLi) {
+        // Balanced Liechtenstein: draw the replacement from the SURVIVOR'S OWN DIVISION POOL —
+        // not merely "same band". A division pool borrows the best of the levels below and merges
+        // a short trailing level (formDivisionPools), so a pool spans several bands: a plain
+        // same-band filter both misses legitimately borrowed members and can pull a player who
+        // never belonged to this division. Rebuild the pools exactly as startBalancedPlayoffs did
+        // (same ranked shape, roundsCount, target size) and walk the survivor's pool in seed order.
+        const rankedPlayers: RankedPlayer[] = ranked.map((s, i) => ({
+          userId: s.userId,
+          band: bandByUser.get(s.userId) ?? DEFAULT_BAND,
+          rank: i + 1,
+          rawScore: s.score,
+        }));
+        const pools = formDivisionPools(
+          rankedPlayers,
+          tournament?.rounds_count ?? 1,
+          targetPoolSizeFromFormat(tournament?.playoff_format),
+        );
+        const survivorPool = pools.find((p) => p.seeds.includes(survivorId));
+        seedUserId = survivorPool?.seeds.find((uid) => {
+          const st = ranked.find((s) => s.userId === uid);
+          return st ? eligible(uid, st.dropped) : false;
+        });
+      } else {
+        seedUserId = ranked.find((s) => eligible(s.userId, s.dropped))?.userId;
+      }
+      if (!seedUserId) {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'No eligible next seed available to backfill', statusCode: 422 });
       }
+      const seed = { userId: seedUserId };
 
       // Clear withdrawn_player_id: filling the open slot with a live replacement resolves the
       // withdrawal, so the "opponent withdrew" marker must not linger (it would keep blocking
