@@ -217,5 +217,7 @@ export async function createManualMatch(
     select: { id: true, round: true, match_number: true },
   });
   emitBracketUpdate(io, tournament.id);
-  return { status: 201, body: { match } };
+  // Return the tournament id so the caller can run a pairing tick (Balanced Liechtenstein:
+  // a manually-added node / bye may complete the field → generate playoffs).
+  return { status: 201, body: { match, tournamentId: tournament.id } };
 }

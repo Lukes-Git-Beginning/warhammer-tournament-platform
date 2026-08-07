@@ -7,6 +7,7 @@ import { TournamentFormat, Prisma } from '@rizzotto/db';
 import { ImportLogListResponseSchema } from '@rizzotto/types';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
+import { runBalancedPairingTick } from '../lib/balanced-liechtenstein-service.js';
 import { emitBracketUpdate } from '../lib/emit.js';
 import { addLateParticipant, setParticipantFactionOp, createManualMatch } from '../lib/tournament-management.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
@@ -1957,9 +1958,12 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // DELETE /api/admin/matches/:matchId — soft-delete a match (sets deleted_at)
   fastify.delete('/api/admin/matches/:matchId', async (request, reply) => {
     const { matchId } = request.params as { matchId: string };
-    const match = await fastify.prisma.match.findUnique({ where: { id: matchId }, select: { id: true } });
+    const match = await fastify.prisma.match.findUnique({ where: { id: matchId }, select: { id: true, tournament_id: true } });
     if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
     await fastify.prisma.match.update({ where: { id: matchId }, data: { deleted_at: new Date() } });
+    // Deleting a node changes the field — for Balanced Liechtenstein re-pair / let playoffs
+    // generate off the new state. No-ops for other formats.
+    if (match.tournament_id) void runBalancedPairingTick(fastify, match.tournament_id);
     return reply.code(200).send({ ok: true });
   });
 
@@ -2008,6 +2012,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/api/admin/tournaments/:slug/create-match', async (request, reply) => {
     const { slug } = request.params as { slug: string };
     const r = await createManualMatch(fastify.prisma, fastify.io, slug, request.body);
+    const createdTid = (r.body as { tournamentId?: string }).tournamentId;
+    if (createdTid) void runBalancedPairingTick(fastify, createdTid); // BaLi: a new node may complete the field
     return reply.code(r.status).send(r.body);
   });
 

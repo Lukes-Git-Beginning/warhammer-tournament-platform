@@ -1544,6 +1544,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your tournament', statusCode: 403 });
       }
       const r = await createManualMatch(fastify.prisma, fastify.io, slug, request.body);
+      const createdTid = (r.body as { tournamentId?: string }).tournamentId;
+      if (createdTid) void runBalancedPairingTick(fastify, createdTid); // BaLi: a new node may complete the field
       return reply.code(r.status).send(r.body);
     },
   );

@@ -927,6 +927,9 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.match.update({ where: { id: matchId }, data: { status: 'FORFEIT', winner_id: winnerId } }),
         fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } }),
       ]);
+      // A forfeit completes this match — for Balanced Liechtenstein that may be the final piece
+      // that lets the next round / division playoffs generate. The tick no-ops for other formats.
+      void runBalancedPairingTick(fastify, match.tournament_id);
       return reply.code(200).send({ ok: true, winnerId });
     },
   );
