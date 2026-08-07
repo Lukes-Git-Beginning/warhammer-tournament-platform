@@ -544,6 +544,27 @@ export async function runBalancedPairingTick(
 }
 
 /**
+ * Reconciler safety net (Alex 2026-08-07): run a pairing tick for every ONGOING Balanced
+ * Liechtenstein tournament on a fixed cadence, independent of the completion / forfeit / manual-edit
+ * hooks. The tick is idempotent and Redis-lock-guarded; mid-round it is a no-op, and its playoff
+ * generation skips already-generated divisions. So this only ever closes a genuine gap — a missed
+ * trigger that left a finished field un-paired or its per-division playoffs un-generated (the
+ * "playoffs stuck, nothing generates" case). Returns the number of tournaments reconciled.
+ */
+export async function reconcileBalancedTournaments(fastify: FastifyInstance): Promise<number> {
+  const tournaments = await fastify.prisma.tournament.findMany({
+    where: { format: 'BALANCED_LIECHTENSTEIN', status: 'ONGOING', deleted_at: null },
+    select: { id: true },
+  });
+  for (const t of tournaments) {
+    await runBalancedPairingTick(fastify, t.id).catch((err) =>
+      fastify.log.error({ err, tournamentId: t.id }, 'BaLi reconcile tick failed'),
+    );
+  }
+  return tournaments.length;
+}
+
+/**
  * Admit a single late joiner into a running Balanced Liechtenstein tournament:
  * 1. Assigns their skill band (mirrors assignSkillBandsForTournament for one player).
  * 2. Creates A-1 CATCHUP_BYE placeholder rows for rounds 1..A-1 so that their

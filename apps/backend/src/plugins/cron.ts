@@ -10,6 +10,7 @@ import { advanceAutoSwissRound, repairBrokenAutoSwiss } from '../lib/auto-swiss-
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 import { notifyChallengeMatchFound, notifyScheduledMatchReminder, notifyReQueuePrompt } from '../lib/discord-notify.js';
 import { runMatchmakingTick } from '../lib/matchmaking-tick.js';
+import { reconcileBalancedTournaments } from '../lib/balanced-liechtenstein-service.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -339,6 +340,29 @@ export default fp(
     });
 
     // -----------------------------------------------------------------------
+    // Balanced Liechtenstein reconciler — every minute.
+    // Safety net for the pairing/playoff triggers: runs an (idempotent, lock-guarded)
+    // pairing tick on every ONGOING Balanced Liechtenstein tournament, so a missed trigger
+    // (manual field edit, a burst of withdrawals, a forfeit path that didn't fire) cannot
+    // leave a finished field un-paired or its per-division playoffs un-generated. Mid-round
+    // it is a cheap no-op.
+    // -----------------------------------------------------------------------
+    const baliReconcileTask = cron.schedule(
+      '* * * * *',
+      async () => {
+        try {
+          const count = await reconcileBalancedTournaments(fastify);
+          if (count > 0) {
+            fastify.log.debug({ count }, 'BaLi reconciler ticked ongoing tournaments');
+          }
+        } catch (err) {
+          fastify.log.error({ err }, 'BaLi reconciler cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    // -----------------------------------------------------------------------
     // Matrix auto-resolve — every 15 seconds via setInterval
     // Ban/pick timeout is 15s, too short for node-cron (1-minute resolution).
     // -----------------------------------------------------------------------
@@ -479,7 +503,7 @@ export default fp(
       }
     }, { timezone: 'UTC' });
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, matchupReminderTask, scheduledMatchupActivationTask]);
+    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
@@ -491,6 +515,7 @@ export default fp(
       reQueueReminderTask.stop();
       staleOpenPlayTask.stop();
       autoSwissTask.stop();
+      baliReconcileTask.stop();
       matchupReminderTask.stop();
       scheduledMatchupActivationTask.stop();
       clearInterval(matrixInterval);
