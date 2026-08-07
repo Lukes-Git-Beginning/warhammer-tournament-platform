@@ -342,6 +342,7 @@ export async function runBalancedPairingTick(
         roundsCount,
         tournamentId,
         pickBye,
+        hadBye, // never-bye-twice: force-match already-rested players (no far-band stomp) — see MUST_PAIR_BONUS
       );
       if (plan.pairings.length === 0 && plan.byes.length === 0) break;
 

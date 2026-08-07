@@ -67,6 +67,14 @@ const edgeBonus = (lowFree: boolean, highFree: boolean, bandA: number, bandB: nu
  *  opponent, but replaying still beats double-byeing two locked leftovers (#3). Never used
  *  while the pool is still open (there an immediate rematch has no edge at all → hold). */
 const IMMEDIATE_LAST_RESORT = 1_000;
+/** Force-match weight for a player who may NOT take a bye (already rested — never-bye-twice).
+ *  The max-weight matching otherwise leaves the highest-cost node (a lone top-band player)
+ *  unmatched as a bye — but if they already byed, the rule forbids that and they get stomped
+ *  at a far band instead (the R4 "knife" case). Adding this to EVERY edge touching such a
+ *  player makes the matching always pair them; it is constant across their edges, so it forces
+ *  matching WITHOUT distorting which partner (the blossom still picks their min-cost one). It
+ *  dwarfs any real cost/bonus so a can't-bye player is never the leftover unless everyone is. */
+const MUST_PAIR_BONUS = 100_000_000;
 
 /** Terminal statuses that count as a played round toward a player's progress. A
  *  PENDING_BYE advances the holder too (so the tournament flows), but stays reclaimable
@@ -192,6 +200,9 @@ function pairPool(
   incoming: Waiter[],
   seedKey: string,
   pickBye?: (candidateUserIds: string[]) => string[],
+  // Players who may NOT take a bye (already rested — never-bye-twice). They are force-matched so
+  // the incremental matching never reserves them a bye it will later forbid (→ far-band stomp).
+  noBye?: Set<string>,
 ): { pairs: [Waiter, Waiter][]; byes: Waiter[] } {
   // Order by id then seeded-shuffle → the pool's output depends only on the SET of
   // players (+ seed), not on the DB row order, and equal-cost optima are reproducible.
@@ -238,7 +249,9 @@ function pairPool(
         for (let j = i + 1; j < n; j++) {
           const s = edgeScaled(nodes[i]!, nodes[j]!);
           if (s === null) continue;
-          const bonus = edgeBonus(isFree(i), isFree(j), nodes[i]!.band, nodes[j]!.band);
+          const mustPair =
+            noBye && (noBye.has(nodes[i]!.userId) || noBye.has(nodes[j]!.userId)) ? MUST_PAIR_BONUS : 0;
+          const bonus = edgeBonus(isFree(i), isFree(j), nodes[i]!.band, nodes[j]!.band) + mustPair;
           edges.push([i, j, K - s + bonus]);
         }
       if (edges.length > 0) {
@@ -381,6 +394,9 @@ export function planPairings(
   // has the standings) supplies the ranking; the engine then byes whichever of them creates the
   // fewest play-ups, tie-broken by weakest. An empty array falls back to the Blossom-leftover bye.
   pickBye?: (candidateUserIds: string[], round: number) => string[],
+  // Players who may NOT take a bye (already rested — never-bye-twice). Force-matched in every
+  // pool so the incremental matching never reserves them a bye the rule will later forbid.
+  noBye: Set<string> = new Set<string>(),
 ): PairingPlan {
   const roster = new Set(participants.map((p) => p.userId));
   const bandOf = new Map(participants.map((p) => [p.userId, p.band ?? DEFAULT_BAND]));
@@ -479,6 +495,7 @@ export function planPairings(
       incomingByRound.get(round) ?? [],
       `${tournamentId}:${round}`,
       pickBye ? (ids) => pickBye(ids, round) : undefined,
+      noBye,
     );
     for (const [a, b] of pairs) {
       pairings.push({ round, player1_id: a.userId, player2_id: b.userId });
