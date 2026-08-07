@@ -957,10 +957,17 @@ export async function startBalancedPlayoffs(
   }
 
   // Playoff round follows the last GROUP round (stable as more divisions are added);
-  // match numbers follow the global max so they never collide with existing rows.
+  // match numbers must clear the highest number of ANY existing row — INCLUDING
+  // soft-deleted ones, because the unique key (tournament_id, round, match_number) still
+  // counts deleted rows. `matches` above is deleted_at-filtered, so a prior (deleted or
+  // regenerated) playoff attempt would otherwise reuse a number and collide on createMany.
   const groupRounds = matches.filter((m) => m.phase === null || m.phase === 'SWISS');
   const playoffRound = groupRounds.reduce((mx, m) => Math.max(mx, m.round), 0) + 1;
-  let nextNumber = matches.reduce((mx, m) => Math.max(mx, m.match_number), 0) + 1;
+  const maxNumberAgg = await fastify.prisma.match.aggregate({
+    where: { tournament_id: tournamentId }, // no deleted_at filter — deleted rows still hold their slot
+    _max: { match_number: true },
+  });
+  let nextNumber = (maxNumberAgg._max.match_number ?? 0) + 1;
   const rows: Prisma.MatchCreateManyInput[] = [];
   const allPlayable: Array<{ id: string; round: number; player1_id: string; player2_id: string }> = [];
   let brackets = 0;
