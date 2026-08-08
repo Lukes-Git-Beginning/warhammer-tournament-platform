@@ -23,7 +23,14 @@ import {
   DEFAULT_BAND,
   seededShuffle,
   MAX_BAND,
+  type RankedPlayer,
 } from './balanced-liechtenstein.js';
+import {
+  derivePlayoffPlan,
+  resolvePoolsFromPlan,
+  bracketSeeds,
+  type PlayoffPlan,
+} from './bali-playoff-plan.js';
 import { isLegalLateJoinReclaim } from './bali-pairing-cost.js';
 import { computeSwissStandings, sortSwissStandings, type CompletedMatchRecord } from './swiss.js';
 import { getPlayerClassification } from './skill-classification-service.js';
@@ -864,7 +871,7 @@ export async function startBalancedPlayoffs(
   const forceBands = new Set(opts.forceBands ?? []);
   const tournament = await fastify.prisma.tournament.findFirst({
     where: { id: tournamentId, deleted_at: null },
-    select: { format: true, status: true, rounds_count: true, playoff_format: true },
+    select: { format: true, status: true, rounds_count: true, playoff_format: true, playoff_plan: true },
   });
   if (!tournament || tournament.format !== 'BALANCED_LIECHTENSTEIN') {
     return { error: 'Not a Balanced Liechtenstein tournament' };
@@ -945,11 +952,22 @@ export async function startBalancedPlayoffs(
       rawScore: s.score,
     }));
 
-  const pools = formDivisionPools(
+  // Division pools. Before any division is generated the structure is fluid, so compute it live
+  // from the current field (formDivisionPools). The moment the FIRST division generates we freeze the
+  // structural skeleton (see below); from then on we RESOLVE the pools from that frozen plan so a
+  // later drop can't re-merge / re-count divisions or strand players — only membership flexes, the
+  // division count + band anchors stay put. Either way the seat order applies the 0-point gate
+  // (earners ahead of organic-zero players) via bracketSeeds.
+  const freshPools = formDivisionPools(
     ranked,
     roundsCount,
     targetPoolSizeFromFormat(tournament.playoff_format),
   );
+  const frozenPlan = tournament.playoff_plan as unknown as PlayoffPlan | null;
+  const pools: Array<{ band: number; players: RankedPlayer[]; seeds: string[] }> =
+    frozenPlan && Array.isArray(frozenPlan.divisions) && frozenPlan.divisions.length > 0
+      ? resolvePoolsFromPlan(frozenPlan, ranked, roundsCount)
+      : freshPools.map((p) => ({ band: p.band, players: p.players, seeds: bracketSeeds(p.players) }));
 
   // Per-division readiness. A contender is complete once they have played all rounds
   // with no active match; a band is complete once all its contenders are. A division
@@ -1018,6 +1036,15 @@ export async function startBalancedPlayoffs(
   if (rows.length > 0) {
     await fastify.prisma.match.createMany({ data: rows });
     emitBracketUpdate(fastify.io, tournamentId);
+    // Freeze the structural skeleton the first time any division generates (from the live field at
+    // this moment), so subsequent ticks resolve from it instead of re-deriving — see the pools branch
+    // above and plans/bali-playoff-plan-freeze.md. Only written once, while no plan exists yet.
+    if (!frozenPlan) {
+      await fastify.prisma.tournament.update({
+        where: { id: tournamentId },
+        data: { playoff_plan: derivePlayoffPlan(freshPools) as unknown as Prisma.InputJsonValue },
+      });
+    }
     // Announce only the first playoff round's ready matches (both players present).
     const firstRound = Math.min(...allPlayable.map((m) => m.round));
     const firstRoundPlayable = allPlayable.filter((m) => m.round === firstRound);
@@ -1042,7 +1069,7 @@ export async function describeBalancedPlayoffPreview(
 ): Promise<PlayoffPreview | { error: string }> {
   const tournament = await fastify.prisma.tournament.findFirst({
     where: { id: tournamentId, deleted_at: null },
-    select: { format: true, rounds_count: true, playoff_format: true },
+    select: { format: true, rounds_count: true, playoff_format: true, playoff_plan: true },
   });
   if (!tournament || tournament.format !== 'BALANCED_LIECHTENSTEIN') {
     return { error: 'Not a Balanced Liechtenstein tournament' };
@@ -1105,7 +1132,15 @@ export async function describeBalancedPlayoffPreview(
   const ranked = sorted
     .filter((s) => contenderIds.has(s.userId) && !withdrawnIds.has(s.userId))
     .map((s, i) => ({ userId: s.userId, band: bandByUser.get(s.userId) ?? DEFAULT_BAND, rank: i + 1, rawScore: s.score }));
-  const pools = formDivisionPools(ranked, roundsCount, targetPoolSizeFromFormat(tournament.playoff_format));
+  // Mirror startBalancedPlayoffs: once the plan is frozen, resolve from it so the preview shows the
+  // same structure a (forced or automatic) generation would build; otherwise compute it live.
+  const frozenPlan = tournament.playoff_plan as unknown as PlayoffPlan | null;
+  const pools: Array<{ band: number; players: RankedPlayer[]; seeds: string[] }> =
+    frozenPlan && Array.isArray(frozenPlan.divisions) && frozenPlan.divisions.length > 0
+      ? resolvePoolsFromPlan(frozenPlan, ranked, roundsCount)
+      : formDivisionPools(ranked, roundsCount, targetPoolSizeFromFormat(tournament.playoff_format)).map(
+          (p) => ({ band: p.band, players: p.players, seeds: bracketSeeds(p.players) }),
+        );
 
   // Per-division readiness — identical to startBalancedPlayoffs.
   const completedByUser = new Map<string, number>();
