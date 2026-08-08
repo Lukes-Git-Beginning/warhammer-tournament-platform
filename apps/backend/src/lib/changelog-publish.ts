@@ -48,6 +48,9 @@ export const DEPLOY_TIMESTAMPS: Record<string, number> = {
   '1.16.0': 1784646227,
   '1.16.1': 1784909420,
   '1.17.0': 1784962802,
+  // 1.28.4 is backfilled late (its deploy 158fd42 shipped before the changelog entry), so stamp
+  // its real deploy time; 1.29.0 falls back to now = the boot right after its deploy = accurate.
+  '1.28.4': 1786108792,
 };
 
 export function changelogChannelId(): string {

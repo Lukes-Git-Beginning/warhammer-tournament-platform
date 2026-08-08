@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.29.0] — 2026-08-08 — Balanced Liechtenstein: host force-playoffs + pairing/playoff robustness
+### Added
+- **Hosts can force a single division's playoff early.** In the playoff plan preview each division now has a "Force generate" control — seeded from the current standings — for when a division is still waiting on another skill band or failed to generate on its own. It shows the current seeds, warns you exactly which players are still playing, requires an explicit override for a blocked division, and asks a second confirmation before it commits. Ready divisions still generate on their own; this is the manual escape hatch.
+### Fixed
+- **Playoffs no longer get stranded after a manual fix.** Forfeiting a match, or creating/deleting a match by hand, now re-runs the pairing step — so completing the field manually generates the playoffs instead of leaving them stuck. (Previously only the normal result-report path triggered generation, which is why a manually-dropped no-show could leave playoffs un-generated.)
+- **A far-band mismatch that a better pairing could avoid is gone.** In the last group round the engine could strand the lone top-band player into a three-band play-up, because the "never bye twice" rule wasn't known to the incremental matcher. A player who can't take another bye is now force-matched, so the pairing picks the minimal-gap option instead.
+- **The semi-final drop replacement now comes from the right pool.** When a semi-finalist withdraws, the backfill pulls the next seed from that division's actual pool — which can span several bands because a short division borrows from below — rather than only the survivor's own band.
+- **A safety net regenerates stuck playoffs on its own.** Once a minute a reconciler re-checks every running Balanced Liechtenstein tournament and generates any playoffs a missed trigger left behind. It's idempotent (never double-creates) and a no-op mid-round.
+
+## [1.28.4] — 2026-08-07 — Balanced Liechtenstein: three live-tournament pairing & playoff fixes
+### Fixed
+- **A caught-up late joiner is no longer shoved into a big skill mismatch.** The "never bye twice" rule was counting a late joiner's 0-point catch-up bye as a real rest, so a player with no peer in their own band got force-matched three bands up instead of resting. Catch-up byes no longer count toward that rule, so the pairing keeps the band gap minimal.
+- **You can't be handed an immediate rematch out of a still-running match.** While two players were still playing their current-round match, the engine hadn't yet registered them as opponents, so it could pair them again the very next round. An ongoing match now counts as already-played for rematch avoidance.
+- **"Start playoffs" no longer fails on a division that had matches removed.** Generating the division playoffs could collide on an internal match number when earlier rows had been deleted, which blocked the button. Numbering now accounts for those removed rows.
+
 ## [1.28.3] — 2026-08-04 — Replay verification: stop false-flagging honest reports on clan tags
 ### Fixed
 - **A correct replay is no longer flagged as "not matching" because of a clan tag.** The game strips bracket characters when it records a name (Steam `[-ODM-] flower` is saved as `-ODM- flower` in the replay), so the exact-name check wrongly told honest players their replay didn't match. The player check now compares your current Steam name against the names the replay actually recorded on an alphanumeric basis (brackets, pipes and spacing ignored), and only flags when *neither* reported player appears — a genuine wrong-replay upload. A single rename or tag change no longer trips it.
