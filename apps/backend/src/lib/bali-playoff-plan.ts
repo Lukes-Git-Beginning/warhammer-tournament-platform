@@ -138,3 +138,33 @@ export function bracketSeeds(pool: RankedPlayer[]): string[] {
 export function planDivisionFormat(pool: RankedPlayer[]): 'TOP2' | 'TOP4' | 'TOP8' {
   return divisionPlayoffFormat(pool.length);
 }
+
+/** A division resolved from the frozen plan against the current field: anchor + members + seed order. */
+export interface ResolvedDivision {
+  band: number;
+  players: RankedPlayer[];
+  seeds: string[];
+}
+
+/**
+ * Resolve every division from the frozen plan against the current field, top division first. Each
+ * division claims its resolved members so lower divisions draw from what remains — so a shortfall in
+ * an upper division borrows down and the shrinkage **cascades to the bottom** division rather than
+ * re-merging or stranding anyone. The division count and band anchors stay fixed (the plan), only the
+ * membership flexes. Already-generated divisions reproduce their members (their bands are settled), so
+ * the caller's existing "already in playoff → skip" guard still recognises them.
+ */
+export function resolvePoolsFromPlan(
+  plan: PlayoffPlan,
+  field: RankedPlayer[],
+  rounds: number,
+): ResolvedDivision[] {
+  const claimed = new Set<string>();
+  const out: ResolvedDivision[] = [];
+  for (const div of plan.divisions) {
+    const pool = resolveDivisionPool(div, field, rounds, claimed);
+    for (const p of pool) claimed.add(p.userId);
+    out.push({ band: div.anchorBand, players: pool, seeds: bracketSeeds(pool) });
+  }
+  return out;
+}

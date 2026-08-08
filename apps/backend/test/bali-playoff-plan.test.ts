@@ -7,8 +7,10 @@ import type { RankedPlayer, DivisionPool } from '../src/lib/balanced-liechtenste
 import {
   derivePlayoffPlan,
   resolveDivisionPool,
+  resolvePoolsFromPlan,
   bracketSeeds,
   type PlanDivision,
+  type PlayoffPlan,
 } from '../src/lib/bali-playoff-plan.js';
 
 const rp = (userId: string, band: number, rank: number, rawScore: number): RankedPlayer => ({
@@ -107,6 +109,45 @@ describe('resolveDivisionPool — borrow precedence: lower-top before higher-bot
     expect(ids.has('hiBot')).toBe(true); // the BOTTOM of the higher band
     expect(ids.has('hiTop')).toBe(false);
     expect(ids.has('hiMid')).toBe(false);
+  });
+});
+
+describe('resolvePoolsFromPlan — top-first partition, shrinkage cascades, no stranding', () => {
+  const plan: PlayoffPlan = {
+    divisions: [
+      { ordinal: 0, anchorBand: 5, targetSize: 4, draws: [{ band: 5, count: 2 }, { band: 4, count: 2 }] },
+      { ordinal: 1, anchorBand: 3, targetSize: 4, draws: [{ band: 3, count: 2 }, { band: 2, count: 2 }] },
+    ],
+  };
+
+  it('partitions the intact field into the two frozen divisions, no overlap', () => {
+    const field = [
+      rp('a', 5, 1, 4), rp('b', 5, 2, 3),
+      rp('c', 4, 3, 3), rp('d', 4, 4, 2),
+      rp('e', 3, 5, 2), rp('f', 3, 6, 1),
+      rp('g', 2, 7, 2), rp('h', 2, 8, 1),
+    ];
+    const [top, bottom] = resolvePoolsFromPlan(plan, field, 5);
+    expect(new Set(top.players.map((p) => p.userId))).toEqual(new Set(['a', 'b', 'c', 'd']));
+    expect(new Set(bottom.players.map((p) => p.userId))).toEqual(new Set(['e', 'f', 'g', 'h']));
+    // No player appears in both.
+    expect(top.players.some((p) => bottom.players.find((q) => q.userId === p.userId))).toBe(false);
+  });
+
+  it('absorbs a lower-band drop into the bottom division without stranding anyone', () => {
+    // 'e' (a band-3 player) dropped. Bottom division draws want 2 band-3 but only 1 is left.
+    const field = [
+      rp('a', 5, 1, 4), rp('b', 5, 2, 3),
+      rp('c', 4, 3, 3), rp('d', 4, 4, 2),
+      rp('f', 3, 6, 1), // only 1 band-3 now
+      rp('g', 2, 7, 2), rp('h', 2, 8, 1), rp('i', 2, 9, 1), // 3 band-2
+    ];
+    const [top, bottom] = resolvePoolsFromPlan(plan, field, 5);
+    // Top is untouched; bottom borrows the extra band-2 to cover the missing band-3. Everyone placed.
+    expect(new Set(top.players.map((p) => p.userId))).toEqual(new Set(['a', 'b', 'c', 'd']));
+    const placed = [...top.players, ...bottom.players].map((p) => p.userId);
+    expect(new Set(placed)).toEqual(new Set(['a', 'b', 'c', 'd', 'f', 'g', 'h', 'i']));
+    expect(new Set(placed).size).toBe(placed.length); // no double-placement
   });
 });
 
