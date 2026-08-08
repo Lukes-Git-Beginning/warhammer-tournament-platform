@@ -1057,6 +1057,73 @@ export async function startBalancedPlayoffs(
 }
 
 /**
+ * The next eligible replacement seed for a vacated bracket slot in `survivorId`'s division: the
+ * highest-seeded EARNER (organic Swiss score > 0) in that division's pool who is live and not already
+ * placed anywhere in the playoffs. Resolves the division from the frozen plan when present (else a
+ * live formDivisionPools), so it agrees with generation. Shared by the manual backfill endpoint and
+ * the survivor "not played → reseed" path. Returns null for non-BaLi tournaments or when the division
+ * has no eligible earner left (a 0-point player counts for pool size but is never a backfill seed).
+ */
+export async function findNextDivisionSeed(
+  fastify: FastifyInstance,
+  tournamentId: string,
+  survivorId: string,
+): Promise<string | null> {
+  const tournament = await fastify.prisma.tournament.findFirst({
+    where: { id: tournamentId, deleted_at: null },
+    select: { format: true, rounds_count: true, playoff_format: true, playoff_plan: true },
+  });
+  if (!tournament || tournament.format !== 'BALANCED_LIECHTENSTEIN') return null;
+  const roundsCount = tournament.rounds_count ?? 5;
+
+  const matches = await fastify.prisma.match.findMany({
+    where: { tournament_id: tournamentId, deleted_at: null },
+    select: { round: true, player1_id: true, player2_id: true, winner_id: true, status: true, phase: true },
+  });
+  const participants = await fastify.prisma.tournamentParticipant.findMany({
+    where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] } },
+    select: { user_id: true, status: true, skill_band: true },
+  });
+  const bandByUser = new Map(participants.map((p) => [p.user_id, p.skill_band ?? DEFAULT_BAND]));
+  const withdrawnIds = new Set(participants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
+  const inPlayoffs = new Set<string>();
+  for (const m of matches) {
+    if (!m.phase?.startsWith('PLAYOFF')) continue;
+    if (m.player1_id) inPlayoffs.add(m.player1_id);
+    if (m.player2_id) inPlayoffs.add(m.player2_id);
+  }
+  const groupCompleted = matches
+    .filter((m) => !m.phase?.startsWith('PLAYOFF'))
+    .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST')
+    .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
+  const participantIds = participants.map((p) => p.user_id);
+  const ranked = sortSwissStandings(
+    computeSwissStandings(participantIds, groupCompleted, withdrawnIds),
+    groupCompleted,
+    tournamentId,
+  );
+  const rankedPlayers: RankedPlayer[] = ranked.map((s, i) => ({
+    userId: s.userId,
+    band: bandByUser.get(s.userId) ?? DEFAULT_BAND,
+    rank: i + 1,
+    rawScore: s.score,
+  }));
+  const frozenPlan = tournament.playoff_plan as unknown as PlayoffPlan | null;
+  const pools =
+    frozenPlan && Array.isArray(frozenPlan.divisions) && frozenPlan.divisions.length > 0
+      ? resolvePoolsFromPlan(frozenPlan, rankedPlayers, roundsCount)
+      : formDivisionPools(rankedPlayers, roundsCount, targetPoolSizeFromFormat(tournament.playoff_format)).map(
+          (p) => ({ band: p.band, players: p.players, seeds: bracketSeeds(p.players) }),
+        );
+  const survivorPool = pools.find((p) => p.seeds.includes(survivorId));
+  const next = survivorPool?.seeds.find((uid) => {
+    const st = ranked.find((s) => s.userId === uid);
+    return st ? !st.dropped && !withdrawnIds.has(uid) && !inPlayoffs.has(uid) && st.score > 0 : false;
+  });
+  return next ?? null;
+}
+
+/**
  * Read-only playoff preview for the host force tool. Recomputes the exact same division pools +
  * per-division readiness as startBalancedPlayoffs (no side effects), and reports, per division, the
  * current seeds, whether it is ready / already generated, and which contenders in its spanned bands

@@ -5,7 +5,7 @@ import { InvalidActionError } from '../lib/draft-service.js';
 import { completeMatch } from '../lib/complete-match.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
 import { notifyHostsOfMatchReport } from '../lib/discord-notify.js';
-import { runBalancedPairingTick } from '../lib/balanced-liechtenstein-service.js';
+import { runBalancedPairingTick, findNextDivisionSeed } from '../lib/balanced-liechtenstein-service.js';
 import { computeSwissStandings, sortSwissStandings } from '../lib/swiss.js';
 import {
   DEFAULT_BAND,
@@ -1051,16 +1051,35 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         match.phase === 'PLAYOFF_THIRD_PLACE';
 
       if (isPlayoffPhase) {
-        // Playoff bracket match: the bracket is fixed, so a drop is a walkover — the
-        // survivor takes the win and ADVANCES. completeMatch runs the bracket progression
-        // (a plain FORFEIT update would leave the next match unfilled). No re-pairing here
-        // regardless of format (a BaLi playoff match must not fall into the re-pair branch).
         if (!survivorId) {
           return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Cannot determine survivor for walkover', statusCode: 422 });
         }
-        await fastify.prisma.match.update({ where: { id: matchId }, data: { withdrawn_player_id: droppedParticipant } });
-        await fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } });
-        await completeMatch(fastify, { matchId, winnerId: survivorId, actorId: callerId, walkover: true });
+        // The survivor declared "not played". For a BaLi ENTRY-round seed slot (not fed by a previous
+        // playoff winner), reseed the next eligible group seed into the withdrawn player's slot rather
+        // than hand the survivor a free walkover — the withdrawn player never played, so the next seed
+        // deserves the spot. A later-round slot (fed by a previous match) or a format without a seed
+        // pool falls through to the walkover: the survivor takes the win and ADVANCES (completeMatch
+        // runs the bracket progression; a plain FORFEIT would leave the next match unfilled).
+        const fedByPrevious = await fastify.prisma.match.count({
+          where: { tournament_id: match.tournament_id, next_match_id: matchId, deleted_at: null },
+        });
+        const reseedId =
+          fedByPrevious === 0 && format === 'BALANCED_LIECHTENSTEIN'
+            ? await findNextDivisionSeed(fastify, match.tournament_id, survivorId)
+            : null;
+        if (reseedId) {
+          const openSlot: 'player1_id' | 'player2_id' =
+            match.player1_id === droppedParticipant ? 'player1_id' : 'player2_id';
+          await fastify.prisma.match.update({
+            where: { id: matchId },
+            data: { [openSlot]: reseedId, status: 'PENDING', withdrawn_player_id: null },
+          });
+          await fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } });
+        } else {
+          await fastify.prisma.match.update({ where: { id: matchId }, data: { withdrawn_player_id: droppedParticipant } });
+          await fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } });
+          await completeMatch(fastify, { matchId, winnerId: survivorId, actorId: callerId, walkover: true });
+        }
       } else if (format === 'BALANCED_LIECHTENSTEIN') {
         // BaLi group phase: CANCELLED → re-pair the survivor.
         await fastify.prisma.match.update({
