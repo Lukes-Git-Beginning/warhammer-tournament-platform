@@ -13,6 +13,7 @@ import {
   targetPoolSizeFromFormat,
   type RankedPlayer,
 } from '../lib/balanced-liechtenstein.js';
+import { resolvePoolsFromPlan, bracketSeeds, type PlayoffPlan } from '../lib/bali-playoff-plan.js';
 import { invalidate } from '../lib/cache.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 
@@ -736,7 +737,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findUnique({
         where: { id: tournamentId },
-        select: { format: true, rounds_count: true, playoff_format: true },
+        select: { format: true, rounds_count: true, playoff_format: true, playoff_plan: true },
       });
       const isBaLi = tournament?.format === 'BALANCED_LIECHTENSTEIN';
 
@@ -746,27 +747,29 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
       let seedUserId: string | undefined;
       if (isBaLi) {
-        // Balanced Liechtenstein: draw the replacement from the SURVIVOR'S OWN DIVISION POOL —
-        // not merely "same band". A division pool borrows the best of the levels below and merges
-        // a short trailing level (formDivisionPools), so a pool spans several bands: a plain
-        // same-band filter both misses legitimately borrowed members and can pull a player who
-        // never belonged to this division. Rebuild the pools exactly as startBalancedPlayoffs did
-        // (same ranked shape, roundsCount, target size) and walk the survivor's pool in seed order.
+        // Balanced Liechtenstein: draw the replacement from the SURVIVOR'S OWN DIVISION POOL. Once the
+        // playoff plan is frozen, resolve that division from the plan (stable structure + neighbour-bench
+        // borrow); before the freeze, fall back to a live formDivisionPools. Then walk the survivor's
+        // pool in seed order (earners first) — the replacement must be live, unplaced, AND an earner
+        // (a 0-point player counts for pool size but is never a bracket seat — see the plan freeze).
         const rankedPlayers: RankedPlayer[] = ranked.map((s, i) => ({
           userId: s.userId,
           band: bandByUser.get(s.userId) ?? DEFAULT_BAND,
           rank: i + 1,
           rawScore: s.score,
         }));
-        const pools = formDivisionPools(
-          rankedPlayers,
-          tournament?.rounds_count ?? 1,
-          targetPoolSizeFromFormat(tournament?.playoff_format),
-        );
+        const rounds = tournament?.rounds_count ?? 1;
+        const frozenPlan = tournament?.playoff_plan as unknown as PlayoffPlan | null;
+        const pools =
+          frozenPlan && Array.isArray(frozenPlan.divisions) && frozenPlan.divisions.length > 0
+            ? resolvePoolsFromPlan(frozenPlan, rankedPlayers, rounds)
+            : formDivisionPools(rankedPlayers, rounds, targetPoolSizeFromFormat(tournament?.playoff_format)).map(
+                (p) => ({ band: p.band, players: p.players, seeds: bracketSeeds(p.players) }),
+              );
         const survivorPool = pools.find((p) => p.seeds.includes(survivorId));
         seedUserId = survivorPool?.seeds.find((uid) => {
           const st = ranked.find((s) => s.userId === uid);
-          return st ? eligible(uid, st.dropped) : false;
+          return st ? eligible(uid, st.dropped) && st.score > 0 : false;
         });
       } else {
         seedUserId = ranked.find((s) => eligible(s.userId, s.dropped))?.userId;
