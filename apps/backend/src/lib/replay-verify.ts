@@ -43,7 +43,7 @@ const titleCase = (slug: string): string =>
 /** Alphanumeric-only, lowercased — for name matching that ignores clan-tag brackets/pipes/spaces.
  *  The game strips some punctuation when recording (Steam "[-ODM-] flower" → replay "-ODM- flower"),
  *  so an exact substring check false-flags an honest replay; normalising both sides fixes that. */
-const normName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+export const normName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 const sameSet = (a: string[], b: string[]): boolean => {
   const A = [...a].sort(), B = [...b].sort();
   return A.length === B.length && A.every((x, i) => x === B[i]);
@@ -54,9 +54,9 @@ const sameSet = (a: string[], b: string[]): boolean => {
  *  and Warriors rosters overlap), so a faction diff *entirely within this family* is unreliable and
  *  must not raise a false flag — validated over 2209 prod replays (86% of faction-only flags were
  *  chaos-god). A real wrong replay by such a player is still caught by the map / name / time signals. */
-const CHAOS_GODS = new Set(['daemons_of_chaos', 'khorne', 'nurgle', 'tzeentch', 'slaanesh', 'warriors_of_chaos']);
+export const CHAOS_GODS = new Set(['daemons_of_chaos', 'khorne', 'nurgle', 'tzeentch', 'slaanesh', 'warriors_of_chaos']);
 /** True when every faction that differs between the two sets is a Chaos-god (→ suppress the flag). */
-const diffIsChaosGodOnly = (a: string[], b: string[]): boolean => {
+export const diffIsChaosGodOnly = (a: string[], b: string[]): boolean => {
   const A = new Set(a), B = new Set(b);
   const diff = [...new Set([...a, ...b])].filter((f) => A.has(f) !== B.has(f));
   return diff.length > 0 && diff.every((f) => CHAOS_GODS.has(f));
