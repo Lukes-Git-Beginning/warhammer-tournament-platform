@@ -1127,6 +1127,9 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.match.update({ where: { id: matchId }, data: { status: 'NO_CONTEST', winner_id: null } }),
         fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } }),
       ]);
+      // NO_CONTEST completes the round for both players (ADVANCING) — re-pair them for the next round.
+      // Same trigger the forfeit / void-dropped / manual-edit paths use; a no-op for non-BaLi formats.
+      if (match.tournament_id) void runBalancedPairingTick(fastify, match.tournament_id);
       return reply.code(200).send({ ok: true });
     },
   );
