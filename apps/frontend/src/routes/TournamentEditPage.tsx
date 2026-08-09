@@ -74,6 +74,8 @@ type EditFormData = {
   swiss_match_format: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   playoff_match_format: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   finale_match_format: 'BO1' | 'BO2' | 'BO3' | 'BO5';
+  grand_final_reset: boolean;
+  grand_final_reset_format: '' | 'BO1' | 'BO3' | 'BO5';
   auto_sizing: boolean;
   allow_late_join_requests: boolean;
   map_decision_mode: MapDecisionMode;
@@ -233,6 +235,8 @@ function buildInitialForm(t: Tournament): EditFormData {
     swiss_match_format: t.swiss_match_format ?? 'BO1',
     playoff_match_format: t.playoff_match_format ?? 'BO1',
     finale_match_format: t.finale_match_format ?? 'BO1',
+    grand_final_reset: t.grand_final_reset ?? true,
+    grand_final_reset_format: (t.grand_final_reset_format ?? '') as '' | 'BO1' | 'BO3' | 'BO5',
     auto_sizing: t.auto_sizing ?? t.format === 'BALANCED_LIECHTENSTEIN',
     allow_late_join_requests: t.allow_late_join_requests ?? false,
     map_decision_mode: t.map_decision_mode ?? 'RANDOM_PICK_BAN',
@@ -310,6 +314,8 @@ function buildPatchBody(
   if (form.swiss_match_format !== (current.swiss_match_format ?? 'BO1')) body.swiss_match_format = form.swiss_match_format;
   if (form.playoff_match_format !== (current.playoff_match_format ?? 'BO1')) body.playoff_match_format = form.playoff_match_format;
   if (form.finale_match_format !== (current.finale_match_format ?? 'BO1')) body.finale_match_format = form.finale_match_format;
+  if (form.grand_final_reset !== (current.grand_final_reset ?? true)) body.grand_final_reset = form.grand_final_reset;
+  if ((form.grand_final_reset_format || null) !== (current.grand_final_reset_format ?? null)) body.grand_final_reset_format = form.grand_final_reset_format || null;
   if (form.auto_sizing !== (current.auto_sizing ?? current.format === 'BALANCED_LIECHTENSTEIN')) body.auto_sizing = form.auto_sizing;
   if (form.allow_late_join_requests !== (current.allow_late_join_requests ?? false)) body.allow_late_join_requests = form.allow_late_join_requests;
   if (form.map_decision_mode !== (current.map_decision_mode ?? 'RANDOM_PICK_BAN')) body.map_decision_mode = form.map_decision_mode;
@@ -1168,6 +1174,35 @@ export function TournamentEditPage() {
                   </Select>
                 </div>
               </div>
+              {form.format === 'DOUBLE_ELIMINATION' && (
+                <div className="space-y-3">
+                  <label className="flex items-start gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      name="grand_final_reset"
+                      checked={form.grand_final_reset}
+                      onChange={handleChange}
+                      disabled={ongoingLocked}
+                      className="mt-0.5 accent-rizzotto-gold-400 h-4 w-4 disabled:opacity-50"
+                    />
+                    <span>
+                      <span className="text-sm font-medium text-rizzotto-stone-200">Bracket reset (true double elimination)</span>
+                      <span className="block text-xs text-rizzotto-stone-500">On: if the Losers-bracket finalist wins the Grand Final, a second, decisive final is played (both have one loss). Off: a single Grand Final decides it.</span>
+                    </span>
+                  </label>
+                  {form.grand_final_reset && (
+                    <div className="sm:max-w-xs">
+                      <Label htmlFor="tef-reset-fmt">Bracket Reset Format</Label>
+                      <Select id="tef-reset-fmt" name="grand_final_reset_format" value={form.grand_final_reset_format} onChange={handleChange} disabled={ongoingLocked}>
+                        <option value="">Same as Grand Final</option>
+                        <option value="BO1">Best of 1</option>
+                        <option value="BO3">Best of 3</option>
+                        <option value="BO5">Best of 5</option>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )}
               {form.format === 'SINGLE_ELIMINATION' && (
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input

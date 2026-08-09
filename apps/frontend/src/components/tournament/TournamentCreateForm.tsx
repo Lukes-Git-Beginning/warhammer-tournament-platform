@@ -43,6 +43,8 @@ const TournamentCreateSchema = z.object({
   swiss_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).default('BO1'),
   playoff_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).default('BO1'),
   finale_match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).default('BO1'),
+  grand_final_reset: z.boolean().default(true),
+  grand_final_reset_format: z.enum(['', 'BO1', 'BO3', 'BO5']).default(''),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).default('RANDOM_PICK_BAN'),
   map_pool: z.array(z.string()).max(36).default([]),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -183,6 +185,8 @@ export function TournamentCreateForm() {
     swiss_match_format: 'BO1',
     playoff_match_format: 'BO1',
     finale_match_format: 'BO1',
+    grand_final_reset: true,
+    grand_final_reset_format: '',
     map_decision_mode: 'RANDOM_PICK_BAN',
     map_pool: [],
     map_preset_config: null,
@@ -379,6 +383,8 @@ export function TournamentCreateForm() {
 
     mutation.mutate({
       ...rest,
+      // '' (Same as Grand Final) → null so the reset match inherits finale_match_format.
+      grand_final_reset_format: rest.grand_final_reset_format || null,
       start_date: toIsoOrInvalid(start_date),
       ...(max_participants ? { max_participants: Number(max_participants) } : {}),
       ...(min_participants ? { min_participants: Number(min_participants) } : {}),
@@ -860,6 +866,34 @@ export function TournamentCreateForm() {
                 </Select>
               </div>
             </div>
+            {form.format === 'DOUBLE_ELIMINATION' && (
+              <div className="space-y-3">
+                <label className="flex items-start gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    name="grand_final_reset"
+                    checked={form.grand_final_reset ?? true}
+                    onChange={handleChange}
+                    className="mt-0.5 accent-rizzotto-gold-400 h-4 w-4"
+                  />
+                  <span>
+                    <span className="text-sm font-medium text-rizzotto-stone-200">Bracket reset (true double elimination)</span>
+                    <span className="block text-xs text-rizzotto-stone-500">On: if the Losers-bracket finalist wins the Grand Final, a second, decisive final is played (both have one loss). Off: a single Grand Final decides it.</span>
+                  </span>
+                </label>
+                {(form.grand_final_reset ?? true) && (
+                  <div className="sm:max-w-xs">
+                    <Label htmlFor="tcf-reset-fmt">Bracket Reset Format</Label>
+                    <Select id="tcf-reset-fmt" name="grand_final_reset_format" value={form.grand_final_reset_format ?? ''} onChange={handleChange}>
+                      <option value="">Same as Grand Final</option>
+                      <option value="BO1">Best of 1</option>
+                      <option value="BO3">Best of 3</option>
+                      <option value="BO5">Best of 5</option>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
             {form.format === 'SINGLE_ELIMINATION' && (
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input

@@ -94,6 +94,8 @@ export interface Tournament {
   swiss_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5' | null;
   playoff_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5' | null;
   finale_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5' | null;
+  grand_final_reset?: boolean | null;
+  grand_final_reset_format?: 'BO1' | 'BO3' | 'BO5' | null;
   auto_sizing?: boolean;
   auto_advance?: boolean;
   allow_late_join_requests?: boolean;
@@ -205,6 +207,8 @@ export interface TournamentCreate {
   swiss_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   finale_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
+  grand_final_reset?: boolean;
+  grand_final_reset_format?: 'BO1' | 'BO3' | 'BO5' | null;
   map_decision_mode?: MapDecisionMode;
   map_preset_config?: MapPresetConfig | null;
   map_pool?: string[];
@@ -245,6 +249,8 @@ export interface TournamentPatchInput {
   swiss_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   finale_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
+  grand_final_reset?: boolean;
+  grand_final_reset_format?: 'BO1' | 'BO3' | 'BO5' | null;
   map_decision_mode?: MapDecisionMode;
   map_preset_config?: MapPresetConfig | null;
   map_pool?: string[];
