@@ -52,6 +52,29 @@ const BL_ADVANCING = new Set(['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST', 'CATC
 const BL_ACTIVE = new Set(['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED']);
 
 /**
+ * Players who have already had a rest-bye and must not get another (never-bye-twice). Pure.
+ * - A real (BYE) or provisional (PENDING_BYE) rest-bye counts — the holder sat out alone (no opponent).
+ * - A NO_CONTEST counts for BOTH players: it is a technical-abort double-bye (both got a bye point with
+ *   no decisive game), so treating it as a rest-bye stops a no-contest player being handed another free
+ *   bye on top (two free points, fewer real games — the very inequity the rule guards against).
+ * - A CATCHUP_BYE does NOT count: a still-catching-up player stays bye-eligible until they play a real game.
+ */
+export function computeRestByePlayers(
+  matches: Array<{ status: string; player1_id: string | null; player2_id: string | null }>,
+): Set<string> {
+  const set = new Set<string>();
+  for (const m of matches) {
+    if ((m.status === 'BYE' || m.status === 'PENDING_BYE') && m.player1_id && !m.player2_id) {
+      set.add(m.player1_id);
+    } else if (m.status === 'NO_CONTEST') {
+      if (m.player1_id) set.add(m.player1_id);
+      if (m.player2_id) set.add(m.player2_id);
+    }
+  }
+  return set;
+}
+
+/**
  * Fix every participant's skill division (matchmakingBand 1..5) on the tournament
  * for skill-based pairing + division playoffs. Called at start (authoritative,
  * before round 1 is paired) so it captures any calibration done up to that point.
@@ -316,18 +339,9 @@ export async function runBalancedPairingTick(
       // mid-event) was excluded from the odd-round bye, so the bye went to someone else and the
       // late joiner was FORCE-PAIRED into a far-band stomp — and that stomp then raised the round's
       // worst gap, letting a later reclaim of the same size slip past isLegalLateJoinReclaim.
-      // Only real (scored BYE) and provisional (PENDING_BYE) rest-byes count; a still-catching-up
-      // player's byes are always CATCHUP_BYE, so they stay bye-eligible until they play a real game.
-      const hadBye = new Set(
-        matches
-          .filter(
-            (m) =>
-              (m.status === 'BYE' || m.status === 'PENDING_BYE') &&
-              m.player1_id &&
-              !m.player2_id,
-          )
-          .map((m) => m.player1_id!),
-      );
+      // Who has already had a rest-bye and must not get another (never-bye-twice) — see
+      // computeRestByePlayers. Includes NO_CONTEST (a double-bye), excludes CATCHUP_BYE.
+      const hadBye = computeRestByePlayers(matches);
       const pickBye = (candidateIds: string[], round: number): string[] => {
         const eligible = candidateIds.filter((id) => !hadBye.has(id));
         const pool = eligible.length > 0 ? eligible : candidateIds; // all already byed → any
