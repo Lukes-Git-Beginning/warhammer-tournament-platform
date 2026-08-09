@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.31.0] — 2026-08-09 — Replay disputes resolve themselves
+### Added
+- **A replay that doesn't match the report is now sorted out by the players, not stuck waiting for a host.** When the factions or map in your uploaded replay don't match what you reported, you can either replace the file or say "the replay is correct" — the platform reads the replay's actual factions and map and asks your opponent to confirm it's the game you played. On confirm, those values are applied and the result is recorded (the reported winner stands — a replay can't tell who won, and your opponent would reject it if it were wrong). An ambiguous replay (e.g. a Chaos-god matchup that can't be read cleanly) or a rejection goes to a host, who now has a one-click "approve the result" that finalises the game and completes the match. In Open Play, if your opponent never responds you can escalate to an admin — which frees you both to queue again.
+
+## [1.30.3] — 2026-08-09 — Edit a bracket's Semis & Grand Final format
+### Fixed
+- **Editing a Single/Double Elimination tournament now exposes the Semis and Grand Final formats**, not just the base Match format — the same three you can set when creating it.
+
+## [1.30.2] — 2026-08-09 — Balanced Liechtenstein: No Contest fairness
+### Fixed
+- **A No Contest frees both players for the next round immediately** — previously they were only re-paired on the once-a-minute safety-net pass, so it looked like nothing happened.
+- **A No Contest now counts as a rest-bye.** It is a double-bye (both players get a bye point with no decisive game), so a player who has had one is no longer also handed a free bye on top — which had let a player reach the semi-finals on two bye points and no wins.
+
+## [1.30.1] — 2026-08-09 — Reopen a tournament's registration
+### Fixed
+- **A host can undo an accidental "close registration".** Registration status was strictly one-way; reopening (Registration closed → Open registration) is now allowed — safe because no matches exist before the tournament starts.
+
 ## [1.30.0] — 2026-08-09 — Balanced Liechtenstein: division playoffs stay stable when the field changes
 ### Fixed
 - **Once the first division's playoff starts, the playoff structure is locked in.** Previously a drop after playoffs had begun could re-shuffle how the remaining divisions were formed — in the worst case a small lower division folded into an already-running upper one and its players were left with no bracket at all. Now the structure (how many divisions, their skill anchors and target sizes) is frozen the moment the first division generates; only the membership flexes, and a division that comes up short pulls the nearest replacement from a neighbouring division — the just-missed players first — instead of stranding anyone.
