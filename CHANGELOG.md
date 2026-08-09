@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.30.1] — 2026-08-09 — Reopen a tournament's registration
+### Fixed
+- **A host can undo an accidental "close registration".** Registration status was strictly one-way, so a mis-click to *Registration closed* couldn't be reverted without a database edit. Reopening (Registration closed → Open registration) is now allowed — it's safe because no matches exist before the tournament starts.
+
 ## [1.30.0] — 2026-08-09 — Balanced Liechtenstein: division playoffs stay stable when the field changes
 ### Fixed
 - **Once the first division's playoff starts, the playoff structure is locked in.** Previously a drop after playoffs had begun could re-shuffle how the remaining divisions were formed — in the worst case a small lower division folded into an already-running upper one and its players were left with no bracket at all. Now the structure (how many divisions, their skill anchors and target sizes) is frozen the moment the first division generates; only the membership flexes, and a division that comes up short pulls the nearest replacement from a neighbouring division — the just-missed players first — instead of stranding anyone.
