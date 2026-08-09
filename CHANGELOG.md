@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.32.1] — 2026-08-09 — Replay dispute: resolve it where you report
+### Changed
+- **The "the replay is correct → ask my opponent to confirm" step now sits right in the game tile** where a replay mismatch appears — so you no longer have to open the separate match page to start it.
+
 ## [1.32.0] — 2026-08-09 — Double Elimination: bracket reset (true double elim)
 ### Added
 - **Double Elimination now plays a bracket reset.** If the Losers-bracket finalist wins the Grand Final, a second, decisive final is played — both have one loss at that point, so it's only fair. The Winners-bracket finalist, who reached the final undefeated, still needs just one win. It's **on by default** for new Double Elimination tournaments and can be toggled off (a single Grand Final) when creating or editing one; you can also give the reset match its own Best-of (default: same as the Grand Final).

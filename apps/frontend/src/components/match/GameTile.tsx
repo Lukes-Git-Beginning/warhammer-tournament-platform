@@ -11,7 +11,7 @@ declare module '@tanstack/react-router' {
     freshDecision?: boolean;
   }
 }
-import { reportGameResult, startMatchDecision, voidDroppedMatch, type ReplayIssue } from '@/lib/api';
+import { reportGameResult, startMatchDecision, voidDroppedMatch, assertReplayCorrect, type ReplayIssue } from '@/lib/api';
 import type { GameDto, MapDto } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { LobbyCodeField } from './LobbyCodeField';
@@ -116,6 +116,21 @@ export function GameTile({
     onError: (err: Error) => {
       setReplayError(err.message);
     },
+  });
+
+  // Player-driven dispute: the reporter asserts the uploaded replay IS this game → the opponent is
+  // asked to confirm (or, for an ambiguous replay, it goes to a host). No detached page needed.
+  const assertMutation = useMutation({
+    mutationFn: () => assertReplayCorrect(matchId, game.gameNumber),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['match-games', matchId] });
+      setSelectedWinnerId(null);
+      setReplayFile(null);
+      setReplayError(null);
+      setMismatch(null);
+      setExplanation('');
+    },
+    onError: (err: Error) => setReplayError(err.message),
   });
 
   const voidDroppedMutation = useMutation({
@@ -548,9 +563,23 @@ export function GameTile({
                           >
                             {reportMutation.isPending ? 'Checking…' : 'Re-check corrected replay'}
                           </Button>
-                          {/* Path B — assert the report is correct, explain the deviation. */}
+                          {/* Path B — the replay IS this game (report used a wrong faction/map): the opponent
+                              confirms and the replay's factions/map are applied. No host needed. */}
                           <p className="mt-1 text-xs text-rizzotto-stone-300">
-                            Report is correct (e.g. you agreed to play a different matchup)? Explain it —
+                            The replay <em>is</em> this game (your report just had the wrong faction/map)? Ask your
+                            opponent to confirm it — the replay&apos;s factions and map are applied, no host review needed.
+                          </p>
+                          <Button
+                            variant="forge"
+                            size="sm"
+                            onClick={() => assertMutation.mutate()}
+                            disabled={assertMutation.isPending}
+                          >
+                            {assertMutation.isPending ? 'Sending…' : 'The replay is correct — ask opponent to confirm'}
+                          </Button>
+                          {/* Path C — a genuine deviation the replay can't settle: explain it for host review. */}
+                          <p className="mt-1 text-xs text-rizzotto-stone-300">
+                            Something else off (e.g. you agreed to play a different matchup)? Explain it —
                             the match is only scored once a host/admin has reviewed it, and your opponent is notified.
                           </p>
                           <textarea
