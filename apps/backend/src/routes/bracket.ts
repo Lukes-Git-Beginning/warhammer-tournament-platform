@@ -314,6 +314,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           playoff_format: true,
           auto_sizing: true,
           has_third_place_match: true,
+          grand_final_reset: true,
+          grand_final_reset_format: true,
           start_date: true,
         },
       });
@@ -410,7 +412,10 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         case TournamentFormat.DOUBLE_ELIMINATION: {
-          bracketMatches = generateDoubleElim(tournament.id, participantIds);
+          bracketMatches = generateDoubleElim(tournament.id, participantIds, {
+            bracketReset: tournament.grand_final_reset,
+            resetFormat: tournament.grand_final_reset_format,
+          });
           break;
         }
 
@@ -491,6 +496,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             bracket_side: m.bracket_side ?? null,
             winner_id: m.winner_id,
             phase: (m.phase ?? (tournament.format === TournamentFormat.SWISS ? 'SWISS' : null)) as import('@rizzotto/db').MatchPhase | null,
+            match_format: (m as { match_format?: import('@rizzotto/db').MatchFormat | null }).match_format ?? null,
           })),
         });
 

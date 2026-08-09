@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { SingleElimination } from 'tournament-pairings';
-import type { BracketSide, MatchStatus } from '@rizzotto/db';
+import type { BracketSide, MatchStatus, MatchFormat } from '@rizzotto/db';
 
 export interface BracketMatchInput {
   id: string;
@@ -19,6 +19,8 @@ export interface BracketMatchInput {
 export interface DEBracketMatchInput extends BracketMatchInput {
   loser_next_match_id: string | null;
   bracket_side: BracketSide;
+  /** Per-match format override (the DE bracket-reset final may differ from the Grand Final). */
+  match_format?: MatchFormat | null;
 }
 
 /**
@@ -260,7 +262,13 @@ function seedSlotOrder(size: number): number[] {
 export function generateDoubleElim(
   tournamentId: string,
   participantIds: string[],
+  opts?: { bracketReset?: boolean; resetFormat?: MatchFormat | null },
 ): DEBracketMatchInput[] {
+  // Bracket reset (true double elimination): default ON. When on, a second decisive Grand Final is
+  // wired after the first; handleGrandFinalProgression (complete-match.ts) fills it only if the LB
+  // champion wins the first, else forfeits it to the WB champion.
+  const bracketReset = opts?.bracketReset ?? true;
+  const resetFormat = opts?.resetFormat ?? null; // null → the reset inherits finale_match_format
   const S = nextPow2(Math.max(participantIds.length, 2));
   const R_W = Math.log2(S); // WB rounds
   const R_L = 2 * R_W - 2; // LB rounds (no phantom final round)
@@ -297,7 +305,7 @@ export function generateDoubleElim(
   }
 
   const grandFinalId = randomUUID();
-  // No reset match — GF is Bo3 by default, so a single match suffices.
+  const grandFinalResetId = bracketReset ? randomUUID() : null;
 
   // -------------------------------------------------------------------------
   // 2. Build match objects.
@@ -405,7 +413,8 @@ export function generateDoubleElim(
   }
 
   // --- Grand Final ---
-  // player1 = WB champion (filled by WB final winner_progression), player2 = LB champion
+  // player1 = WB champion (filled by WB final winner_progression), player2 = LB champion.
+  // next_match_id → the reset match when the bracket reset is on (else null = single decisive final).
   all.push({
     id: grandFinalId,
     tournament_id: tournamentId,
@@ -414,12 +423,33 @@ export function generateDoubleElim(
     player1_id: null,
     player2_id: null,
     status: 'PENDING',
-    next_match_id: null,
+    next_match_id: grandFinalResetId,
     loser_next_match_id: null,
     bracket_side: 'GRAND_FINAL',
     winner_id: null,
     phase: 'PLAYOFF_FINAL',
   });
+
+  // --- Grand Final reset (bracket reset) — only when enabled ---
+  // A higher round than the GF, so finalize-tournament picks its winner as champion when it is
+  // played; when the WB champion won the GF it is FORFEIT'd to them (handleGrandFinalProgression).
+  if (grandFinalResetId) {
+    all.push({
+      id: grandFinalResetId,
+      tournament_id: tournamentId,
+      round: R_W + R_L + 2,
+      match_number: 1,
+      player1_id: null,
+      player2_id: null,
+      status: 'PENDING',
+      next_match_id: null,
+      loser_next_match_id: null,
+      bracket_side: 'GRAND_FINAL',
+      winner_id: null,
+      phase: 'PLAYOFF_FINAL',
+      match_format: resetFormat,
+    });
+  }
 
   // -------------------------------------------------------------------------
   // 3. Resolve byes and phantom matches up-front via a topological pass.

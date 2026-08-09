@@ -90,7 +90,11 @@ async function drawTwoD3GameFactions(
 function resolveMatchFormat(
   tournament: { swiss_match_format: string; playoff_match_format: string; finale_match_format: string },
   phase: string | null,
+  matchFormat?: string | null,
 ): 'BO1' | 'BO2' | 'BO3' | 'BO5' {
+  // A per-match override wins (the DE bracket-reset final can differ from the Grand Final); else
+  // derive from the phase.
+  if (matchFormat) return matchFormat as 'BO1' | 'BO2' | 'BO3' | 'BO5';
   if (phase === 'PLAYOFF_FINAL') return tournament.finale_match_format as 'BO1' | 'BO2' | 'BO3' | 'BO5';
   if (phase?.startsWith('PLAYOFF')) return tournament.playoff_match_format as 'BO1' | 'BO2' | 'BO3' | 'BO5';
   return tournament.swiss_match_format as 'BO1' | 'BO2' | 'BO3' | 'BO5';
@@ -135,6 +139,7 @@ export async function finalizeGameResult(
           player1_faction_id: true,
           player2_faction_id: true,
           phase: true,
+          match_format: true,
           tournament: {
             select: {
               mode: true,
@@ -288,7 +293,7 @@ export async function finalizeGameResult(
   // Series completion: count wins and decide whether to continue or complete
   let format: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   if (game.match.tournament) {
-    format = resolveMatchFormat(game.match.tournament, game.match.phase ?? null);
+    format = resolveMatchFormat(game.match.tournament, game.match.phase ?? null, game.match.match_format);
   } else {
     // Open Play: format comes from the ScheduledMatchup (queue matches default to BO1)
     const matchup = await fastify.prisma.scheduledMatchup.findUnique({

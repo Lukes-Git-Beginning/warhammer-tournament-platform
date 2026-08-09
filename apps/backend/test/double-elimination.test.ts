@@ -42,12 +42,20 @@ const T_ID = 'bbbbbbbb-0000-0000-0000-000000000001';
 // ---------------------------------------------------------------------------
 
 describe('generateDoubleElim — structure', () => {
-  it('4-player → 6 matches total', () => {
+  it('4-player → 7 matches total (bracket reset on by default)', () => {
     const matches = generateDoubleElim(T_ID, fakeIds(4));
-    expect(matches).toHaveLength(6);
+    expect(matches).toHaveLength(7);
   });
 
-  it('4-player → correct bracket_side distribution', () => {
+  it('4-player → 6 matches total when the bracket reset is off', () => {
+    const matches = generateDoubleElim(T_ID, fakeIds(4), { bracketReset: false });
+    expect(matches).toHaveLength(6);
+    const gf = matches.filter((m) => m.bracket_side === 'GRAND_FINAL');
+    expect(gf).toHaveLength(1); // single decisive final
+    expect(gf[0]!.next_match_id).toBeNull();
+  });
+
+  it('4-player → correct bracket_side distribution (with reset)', () => {
     const matches = generateDoubleElim(T_ID, fakeIds(4));
     const winners = matches.filter((m) => m.bracket_side === 'WINNERS');
     const losers = matches.filter((m) => m.bracket_side === 'LOSERS');
@@ -55,14 +63,17 @@ describe('generateDoubleElim — structure', () => {
 
     expect(winners).toHaveLength(3);
     expect(losers).toHaveLength(2);
-    expect(gf).toHaveLength(1); // single GF, no reset
+    expect(gf).toHaveLength(2); // Grand Final + bracket-reset GF
   });
 
-  it('4-player → Grand Final has null next_match_id (no reset match)', () => {
+  it('4-player → the GF points to the reset match (higher round, null next)', () => {
     const matches = generateDoubleElim(T_ID, fakeIds(4));
-    const gfMatches = matches.filter((m) => m.bracket_side === 'GRAND_FINAL');
-    expect(gfMatches).toHaveLength(1);
-    expect(gfMatches[0]!.next_match_id).toBeNull();
+    const gfMatches = matches.filter((m) => m.bracket_side === 'GRAND_FINAL').sort((a, b) => a.round - b.round);
+    expect(gfMatches).toHaveLength(2);
+    const [gf, reset] = gfMatches;
+    expect(gf!.next_match_id).toBe(reset!.id);
+    expect(reset!.round).toBeGreaterThan(gf!.round);
+    expect(reset!.next_match_id).toBeNull();
   });
 
   it('4-player → Grand Final has PLAYOFF_FINAL phase label', () => {
@@ -115,16 +126,16 @@ describe('generateDoubleElim — structure', () => {
     }
   });
 
-  it('8-player → 14 matches total', () => {
+  it('8-player → 15 matches total (bracket reset on)', () => {
     const matches = generateDoubleElim(T_ID, fakeIds(8));
-    expect(matches).toHaveLength(14);
+    expect(matches).toHaveLength(15);
   });
 
-  it('8-player → 7 WB + 6 LB + 1 GRAND_FINAL', () => {
+  it('8-player → 7 WB + 6 LB + 2 GRAND_FINAL (GF + reset)', () => {
     const matches = generateDoubleElim(T_ID, fakeIds(8));
     expect(matches.filter((m) => m.bracket_side === 'WINNERS')).toHaveLength(7);
     expect(matches.filter((m) => m.bracket_side === 'LOSERS')).toHaveLength(6);
-    expect(matches.filter((m) => m.bracket_side === 'GRAND_FINAL')).toHaveLength(1);
+    expect(matches.filter((m) => m.bracket_side === 'GRAND_FINAL')).toHaveLength(2);
   });
 
   it('8-player → no duplicate (round, match_number) pairs', () => {
@@ -144,9 +155,9 @@ describe('generateDoubleElim — structure', () => {
     }
   });
 
-  it('16-player → 30 matches total', () => {
+  it('16-player → 31 matches total (bracket reset on)', () => {
     const matches = generateDoubleElim(T_ID, fakeIds(16));
-    expect(matches).toHaveLength(30);
+    expect(matches).toHaveLength(31);
   });
 
   it('16-player → no duplicate (round, match_number) pairs', () => {
@@ -155,10 +166,10 @@ describe('generateDoubleElim — structure', () => {
     expect(new Set(keys).size).toBe(matches.length);
   });
 
-  // Non-power-of-2: 5 players → padded to S=8 → same structure as 8 players = 14 matches.
-  it('5-player → padded to 8 (14 matches), 3 WB R1 BYE matches', () => {
+  // Non-power-of-2: 5 players → padded to S=8 → same structure as 8 players = 15 matches (incl. reset).
+  it('5-player → padded to 8 (15 matches), 3 WB R1 BYE matches', () => {
     const matches = generateDoubleElim(T_ID, fakeIds(5));
-    expect(matches).toHaveLength(14);
+    expect(matches).toHaveLength(15);
 
     const wbR1 = matches.filter((m) => m.bracket_side === 'WINNERS' && m.round === 1);
     expect(wbR1).toHaveLength(4);
@@ -298,7 +309,7 @@ describe('POST /api/tournaments/:id/start — DOUBLE_ELIMINATION', () => {
       orderBy: [{ round: 'asc' }, { match_number: 'asc' }],
     });
 
-    expect(dbMatches).toHaveLength(6);
+    expect(dbMatches).toHaveLength(7); // 3 WB + 2 LB + GF + bracket-reset GF (reset on by default)
     expect(dbMatches.some((m) => m.bracket_side === 'WINNERS')).toBe(true);
     expect(dbMatches.some((m) => m.bracket_side === 'LOSERS')).toBe(true);
     expect(dbMatches.some((m) => m.bracket_side === 'GRAND_FINAL')).toBe(true);

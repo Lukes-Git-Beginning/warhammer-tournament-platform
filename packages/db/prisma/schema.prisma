@@ -339,6 +339,11 @@ model Tournament {
   swiss_match_format     MatchFormat          @default(BO1)
   playoff_match_format   MatchFormat          @default(BO1) // Bo3/Bo5 re-enable with series support
   finale_match_format    MatchFormat          @default(BO1)
+  // Double Elimination "bracket reset": when on, a Losers-bracket champion who wins the Grand
+  // Final forces a second, decisive final (true double elim). grand_final_reset_format is the
+  // reset match's format; null = inherit finale_match_format.
+  grand_final_reset      Boolean              @default(true)
+  grand_final_reset_format MatchFormat?
   map_decision_mode      MapDecisionMode      @default(PICK_BAN)
   map_preset_config      Json?                // HOST_PRESET / HOST_PRESET_PICK_BAN: runden-spez. Map-Konfiguration
   random_map_pool_played String[]             @default([]) // RANDOM_NO_REPEAT / RANDOM_PICK_BAN: turnierweit gespielte Maps
@@ -463,6 +468,7 @@ model Match {
   loser_next_match_id String?          @db.Uuid // DE: where the losing player drops to in lower bracket (NULL for SE/Swiss)
   bracket_side        BracketSide? // DE: WINNERS / LOSERS / GRAND_FINAL (NULL for SE/Swiss/RR)
   phase               MatchPhase? // Welle 2: discriminator between Swiss/Playoff phases (NULL = legacy/SE/RR)
+  match_format        MatchFormat? // per-match format override (NULL = derive from phase); used by the DE bracket-reset final
   player1_faction_id  String?
   player2_faction_id  String?
   // Withdraw→Void: the player who dropped, flagging the survivor's still-open match
