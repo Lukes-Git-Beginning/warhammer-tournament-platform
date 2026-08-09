@@ -1,11 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ensureMatchGame, finalizeGameResult } from '../lib/match-games.js';
 import { Prisma } from '@rizzotto/db';
 import { REPLAY_DIR, validateReplayUpload } from '../lib/replays.js';
+import { resolveReplayValues } from '../lib/replay-apply.js';
 import { verifyGameReplay } from '../lib/verify-report.js';
 import type { ReplayIssue, ReplayVerification } from '../lib/replay-verify.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
@@ -589,6 +590,232 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
       return reply.code(200).send({ resolved: true, winnerId: approvedWinner });
+    },
+  );
+
+  // Read a stored replay buffer from its /uploads/replays/<match>/<file> url.
+  async function readStoredReplay(replayUrl: string | null): Promise<Buffer | null> {
+    if (!replayUrl) return null;
+    const m = replayUrl.match(/\/uploads\/replays\/(.+)$/);
+    if (!m) return null;
+    try {
+      return await readFile(join(REPLAY_DIR, m[1]!));
+    } catch {
+      return null;
+    }
+  }
+
+  // Shape stored in the game's `verification` JSON while an opponent confirmation is pending.
+  type AwaitingVerification = {
+    awaitingOpponent: true;
+    replayValues: { player1FactionSlug: string | null; player2FactionSlug: string | null; mapId: string | null; mapName: string | null };
+    issues?: ReplayIssue[];
+    explanation?: string;
+  };
+
+  // -------------------------------------------------------------------------
+  // POST /api/matches/:id/games/:gameNumber/assert-replay-correct — participant (the reporter).
+  // The reporter, faced with a replay mismatch, asserts the uploaded replay IS the game that was
+  // played (their report used a wrong faction/map). We read the replay's actual factions + map and,
+  // unless attribution is ambiguous, hold the game DISPUTED with an `awaitingOpponent` marker + the
+  // parsed values, and DM the opponent to confirm. Ambiguous (e.g. Chaos-god) → straight to host review.
+  // -------------------------------------------------------------------------
+  fastify.post(
+    '/api/matches/:id/games/:gameNumber/assert-replay-correct',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId, gameNumber: gnRaw } = request.params as { id: string; gameNumber: string };
+      const gameNumber = Number(gnRaw);
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: {
+          id: true,
+          tournament_id: true,
+          player1_id: true,
+          player2_id: true,
+          games: {
+            select: {
+              id: true, game_number: true, status: true, reported_winner_id: true, reporter_id: true,
+              replay_url: true, player1_faction_id: true, player2_faction_id: true, verification: true,
+            },
+          },
+        },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+
+      const { sub: userId } = request.user;
+      if (userId !== match.player1_id && userId !== match.player2_id) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only a match participant can assert the replay', statusCode: 403 });
+      }
+      const game = match.games.find((g) => g.game_number === gameNumber);
+      if (!game) return reply.code(404).send({ error: 'NotFound', message: 'Game not found', statusCode: 404 });
+      if (game.status === 'COMPLETED') return reply.code(409).send({ error: 'Conflict', message: 'Game already completed', statusCode: 409 });
+      if (!game.reported_winner_id) return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Report the result first', statusCode: 422 });
+
+      const buffer = await readStoredReplay(game.replay_url);
+      const reportedSlugs = game.player1_faction_id && game.player2_faction_id ? [game.player1_faction_id, game.player2_faction_id] : [];
+      const values = buffer
+        ? await resolveReplayValues(fastify.prisma, buffer, { player1Id: match.player1_id, player2Id: match.player2_id, reportedSlugs })
+        : { player1FactionSlug: null, player2FactionSlug: null, mapId: null, mapName: null, ambiguous: true };
+
+      const opponentId = userId === match.player1_id ? match.player2_id : match.player1_id;
+      const priorExplanation =
+        game.verification && typeof game.verification === 'object' && !Array.isArray(game.verification)
+          ? ((game.verification as { explanation?: string }).explanation ?? undefined)
+          : undefined;
+
+      if (values.ambiguous) {
+        // Can't reliably read who fielded what → host review (the shipped resolve-dispute action).
+        await fastify.prisma.matchGame.update({
+          where: { id: game.id },
+          data: { status: 'DISPUTED', verification: { escalatedToHost: true, explanation: priorExplanation } as unknown as Prisma.InputJsonValue },
+        });
+        if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
+        return reply.code(200).send({ escalatedToHost: true });
+      }
+
+      const verification: AwaitingVerification = {
+        awaitingOpponent: true,
+        replayValues: {
+          player1FactionSlug: values.player1FactionSlug,
+          player2FactionSlug: values.player2FactionSlug,
+          mapId: values.mapId,
+          mapName: values.mapName,
+        },
+        explanation: priorExplanation,
+      };
+      await fastify.prisma.matchGame.update({
+        where: { id: game.id },
+        data: { status: 'DISPUTED', verification: verification as unknown as Prisma.InputJsonValue },
+      });
+      if (opponentId) setImmediate(() => void notifyReplayMismatchHeld(matchId, opponentId, priorExplanation ?? 'The uploader says the replay is correct — please confirm it is your game.'));
+      if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
+      return reply.code(200).send({ awaitingOpponent: true, replayValues: verification.replayValues });
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // POST /api/matches/:id/games/:gameNumber/opponent-confirm — the OTHER participant confirms the
+  // replay is their game. Applies the replay's factions + map (+ the reported winner) and finalises →
+  // completeMatch. POST .../opponent-reject → keep DISPUTED for the host (the confirmation is off).
+  // -------------------------------------------------------------------------
+  const loadAwaiting = async (matchId: string, gameNumber: number) => {
+    const match = await fastify.prisma.match.findFirst({
+      where: { id: matchId, deleted_at: null },
+      select: {
+        id: true, tournament_id: true, player1_id: true, player2_id: true,
+        games: { select: { id: true, game_number: true, status: true, reporter_id: true, verification: true } },
+      },
+    });
+    const game = match?.games.find((g) => g.game_number === gameNumber);
+    return { match, game };
+  };
+
+  fastify.post(
+    '/api/matches/:id/games/:gameNumber/opponent-confirm',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId, gameNumber: gnRaw } = request.params as { id: string; gameNumber: string };
+      const gameNumber = Number(gnRaw);
+      const { match, game } = await loadAwaiting(matchId, gameNumber);
+      if (!match || !game) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+
+      const { sub: userId } = request.user;
+      const isParticipant = userId === match.player1_id || userId === match.player2_id;
+      if (!isParticipant || userId === game.reporter_id) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the opponent can confirm the replay', statusCode: 403 });
+      }
+      const v = game.verification as AwaitingVerification | null;
+      if (game.status !== 'DISPUTED' || !v?.awaitingOpponent) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'This game is not awaiting your confirmation', statusCode: 422 });
+      }
+
+      // Apply the replay's factions + map, clear the hold, then finalise (→ completeMatch).
+      await fastify.prisma.matchGame.update({
+        where: { id: game.id },
+        data: {
+          status: 'AWAITING_CONFIRMATION',
+          verification: Prisma.DbNull,
+          ...(v.replayValues.player1FactionSlug ? { player1_faction_id: v.replayValues.player1FactionSlug } : {}),
+          ...(v.replayValues.player2FactionSlug ? { player2_faction_id: v.replayValues.player2FactionSlug } : {}),
+        },
+      });
+      if (v.replayValues.mapId && match.player1_id && match.player2_id) {
+        await fastify.prisma.matchMapDecision.upsert({
+          where: { game_id: game.id },
+          update: { picked_map_id: v.replayValues.mapId, decided_at: new Date() },
+          create: { game_id: game.id, mode: 'HOST_PRESET', coin_flip_seed: 'replay-confirm', top_player_id: match.player1_id, bottom_player_id: match.player2_id, picked_map_id: v.replayValues.mapId, decided_at: new Date() },
+        });
+      }
+      await finalizeGameResult(fastify, game.id);
+      if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
+      return reply.code(200).send({ confirmed: true });
+    },
+  );
+
+  fastify.post(
+    '/api/matches/:id/games/:gameNumber/opponent-reject',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId, gameNumber: gnRaw } = request.params as { id: string; gameNumber: string };
+      const gameNumber = Number(gnRaw);
+      const { match, game } = await loadAwaiting(matchId, gameNumber);
+      if (!match || !game) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+
+      const { sub: userId } = request.user;
+      const isParticipant = userId === match.player1_id || userId === match.player2_id;
+      if (!isParticipant || userId === game.reporter_id) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only the opponent can reject the replay', statusCode: 403 });
+      }
+      const v = game.verification as AwaitingVerification | null;
+      if (!v?.awaitingOpponent) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'This game is not awaiting your confirmation', statusCode: 422 });
+      }
+      // Keep it DISPUTED, drop the self-service marker → a host must resolve it now.
+      await fastify.prisma.matchGame.update({
+        where: { id: game.id },
+        data: { status: 'DISPUTED', verification: { escalatedToHost: true, explanation: v.explanation } as unknown as Prisma.InputJsonValue },
+      });
+      const reporter = game.reporter_id ? await fastify.prisma.user.findUnique({ where: { id: game.reporter_id }, select: { discord_id: true } }) : null;
+      if (reporter?.discord_id) setImmediate(() => void notifyOpenPlayDispute(matchId, reporter.discord_id!));
+      if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
+      return reply.code(200).send({ rejected: true });
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // POST /api/matches/:id/games/:gameNumber/escalate — Open Play only. The waiting reporter reports
+  // that the opponent isn't responding to the confirmation: notify mods/admins and (since a DISPUTED
+  // Open Play result already frees both players to re-queue) leave the result pending for admin review.
+  // -------------------------------------------------------------------------
+  fastify.post(
+    '/api/matches/:id/games/:gameNumber/escalate',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId, gameNumber: gnRaw } = request.params as { id: string; gameNumber: string };
+      const gameNumber = Number(gnRaw);
+      const { match, game } = await loadAwaiting(matchId, gameNumber);
+      if (!match || !game) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      if (match.tournament_id) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Escalation is for Open Play; a tournament host resolves it directly', statusCode: 422 });
+      }
+      const { sub: userId } = request.user;
+      if (userId !== match.player1_id && userId !== match.player2_id) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only a match participant can escalate', statusCode: 403 });
+      }
+      const v = game.verification as AwaitingVerification | null;
+      if (!v?.awaitingOpponent) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Nothing is awaiting a confirmation here', statusCode: 422 });
+      }
+      // Drop the self-service marker (admin owns it now); the DISPUTED result stays pending and both
+      // players are already free to queue (Open Play held-result rule).
+      await fastify.prisma.matchGame.update({
+        where: { id: game.id },
+        data: { status: 'DISPUTED', verification: { escalatedToHost: true, explanation: v.explanation } as unknown as Prisma.InputJsonValue },
+      });
+      const reporter = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { discord_id: true } });
+      if (reporter?.discord_id) setImmediate(() => void notifyOpenPlayDispute(matchId, reporter.discord_id!));
+      return reply.code(200).send({ escalated: true });
     },
   );
 
