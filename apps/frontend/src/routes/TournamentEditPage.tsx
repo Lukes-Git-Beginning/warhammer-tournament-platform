@@ -1141,13 +1141,32 @@ export function TournamentEditPage() {
             </>
           ) : !isAutoSwiss ? (
             <>
-              <div>
-                <Label htmlFor="tef-elim-fmt">Match Format</Label>
-                <Select id="tef-elim-fmt" name="swiss_match_format" value={form.swiss_match_format} onChange={handleChange} disabled={ongoingLocked}>
-                  <option value="BO1">Best of 1</option>
-                  <option value="BO3">Best of 3</option>
-                  <option value="BO5">Best of 5</option>
-                </Select>
+              {/* Match / Semis / Grand Final format — mirror the create form (all three editable). */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <Label htmlFor="tef-elim-fmt">Match Format</Label>
+                  <Select id="tef-elim-fmt" name="swiss_match_format" value={form.swiss_match_format} onChange={handleChange} disabled={ongoingLocked}>
+                    <option value="BO1">Best of 1</option>
+                    <option value="BO3">Best of 3</option>
+                    <option value="BO5">Best of 5</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="tef-elim-semis-fmt">Semis Format</Label>
+                  <Select id="tef-elim-semis-fmt" name="playoff_match_format" value={form.playoff_match_format} onChange={handleChange} disabled={ongoingLocked}>
+                    <option value="BO1">Best of 1</option>
+                    <option value="BO3">Best of 3</option>
+                    <option value="BO5">Best of 5</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="tef-elim-finale-fmt">Grand Final Format</Label>
+                  <Select id="tef-elim-finale-fmt" name="finale_match_format" value={form.finale_match_format} onChange={handleChange} disabled={ongoingLocked}>
+                    <option value="BO1">Best of 1</option>
+                    <option value="BO3">Best of 3</option>
+                    <option value="BO5">Best of 5</option>
+                  </Select>
+                </div>
               </div>
               {form.format === 'SINGLE_ELIMINATION' && (
                 <label className="flex items-center gap-2 cursor-pointer select-none">
