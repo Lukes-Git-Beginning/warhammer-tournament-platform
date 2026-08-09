@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.31.1] — 2026-08-09 — Reopen registration button
+### Added
+- **A "Reopen registration" button** now sits next to "Start tournament" once registration is closed — so undoing an accidental close is a click, no console needed.
+
 ## [1.31.0] — 2026-08-09 — Replay disputes resolve themselves
 ### Added
 - **A replay that doesn't match the report is now sorted out by the players, not stuck waiting for a host.** When the factions or map in your uploaded replay don't match what you reported, you can either replace the file or say "the replay is correct" — the platform reads the replay's actual factions and map and asks your opponent to confirm it's the game you played. On confirm, those values are applied and the result is recorded (the reported winner stands — a replay can't tell who won, and your opponent would reject it if it were wrong). An ambiguous replay (e.g. a Chaos-god matchup that can't be read cleanly) or a rejection goes to a host, who now has a one-click "approve the result" that finalises the game and completes the match. In Open Play, if your opponent never responds you can escalate to an admin — which frees you both to queue again.

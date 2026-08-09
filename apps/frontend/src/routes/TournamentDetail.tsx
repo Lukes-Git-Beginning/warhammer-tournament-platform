@@ -426,6 +426,20 @@ export function TournamentDetail() {
           {tournament.status === 'REGISTRATION_CLOSED' && (
             <button
               type="button"
+              disabled={publishMutation.isPending}
+              className="rounded border border-rizzotto-gold-500 px-4 py-1.5 text-sm text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => {
+                if (confirm(`Reopen registration for "${tournament.name}"? Players will be able to register again.`)) {
+                  publishMutation.mutate();
+                }
+              }}
+            >
+              Reopen registration
+            </button>
+          )}
+          {tournament.status === 'REGISTRATION_CLOSED' && (
+            <button
+              type="button"
               disabled={startMutation.isPending}
               className="rounded bg-rizzotto-gold-500 px-4 py-1.5 text-sm font-semibold text-rizzotto-iron-950 hover:bg-rizzotto-gold-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => {
