@@ -69,14 +69,15 @@ export function generateSlug(name: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Allowed one-way status transitions for a tournament.
+ * Allowed status transitions for a tournament.
  * DRAFT → OPEN_REGISTRATION → REGISTRATION_CLOSED → ONGOING → COMPLETED.
- * No backwards transitions are permitted.
+ * The only permitted backwards step is REGISTRATION_CLOSED → OPEN_REGISTRATION ("reopen
+ * registration" — safe pre-start: no matches exist yet), so a host can undo an accidental close.
  */
 const ALLOWED_TRANSITIONS: Record<TournamentStatus, TournamentStatus[]> = {
   [TournamentStatus.DRAFT]: [TournamentStatus.OPEN_REGISTRATION],
   [TournamentStatus.OPEN_REGISTRATION]: [TournamentStatus.REGISTRATION_CLOSED],
-  [TournamentStatus.REGISTRATION_CLOSED]: [TournamentStatus.ONGOING],
+  [TournamentStatus.REGISTRATION_CLOSED]: [TournamentStatus.ONGOING, TournamentStatus.OPEN_REGISTRATION],
   [TournamentStatus.ONGOING]: [TournamentStatus.COMPLETED],
   [TournamentStatus.COMPLETED]: [],
 };
