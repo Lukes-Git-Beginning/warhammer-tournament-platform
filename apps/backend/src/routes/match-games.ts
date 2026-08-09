@@ -523,6 +523,76 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // -------------------------------------------------------------------------
+  // POST /api/matches/:id/games/:gameNumber/resolve-dispute — canManage.
+  // A replay-verification mismatch that the reporter "explained" is held DISPUTED: the game keeps its
+  // reported winner but is never finalized, so the MATCH never completes (the reported points show on
+  // the game, but the bracket node stays open). This is the host's "approve the reported result"
+  // action the report flow points to ("host must resolve it") but which had no home. It clears the
+  // verification hold and finalizes the game, which runs the normal series → completeMatch path so the
+  // bracket node + standings update. An optional winnerId approves a corrected winner instead.
+  fastify.post(
+    '/api/matches/:id/games/:gameNumber/resolve-dispute',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId, gameNumber: gameNumberRaw } = request.params as { id: string; gameNumber: string };
+      const gameNumber = Number(gameNumberRaw);
+      const winnerId = (request.body as { winnerId?: string } | undefined)?.winnerId;
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: {
+          id: true,
+          tournament_id: true,
+          player1_id: true,
+          player2_id: true,
+          games: { select: { id: true, game_number: true, status: true, reported_winner_id: true } },
+        },
+      });
+      if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+
+      const { role, sub: userId } = request.user;
+      if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Only a tournament manager can resolve a dispute', statusCode: 403 });
+      }
+
+      const game = match.games.find((g) => g.game_number === gameNumber);
+      if (!game) return reply.code(404).send({ error: 'NotFound', message: 'Game not found', statusCode: 404 });
+      if (game.status !== 'DISPUTED') {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Game is not disputed', statusCode: 422 });
+      }
+
+      const approvedWinner = winnerId ?? game.reported_winner_id;
+      if (!approvedWinner || (approvedWinner !== match.player1_id && approvedWinner !== match.player2_id)) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'No valid winner to approve for this game', statusCode: 422 });
+      }
+
+      // Clear the verification hold + set the approved winner, then finalize (→ completeMatch).
+      await fastify.prisma.matchGame.update({
+        where: { id: game.id },
+        data: { reported_winner_id: approvedWinner, verification: Prisma.DbNull },
+      });
+      await finalizeGameResult(fastify, game.id);
+
+      await fastify.prisma.auditLog
+        .create({
+          data: {
+            entity_type: 'MatchGame',
+            entity_id: game.id,
+            action: 'dispute_resolved',
+            actor_id: userId,
+            new_value: { winner_id: approvedWinner },
+          },
+        })
+        .catch(() => {
+          /* non-critical */
+        });
+
+      if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
+      return reply.code(200).send({ resolved: true, winnerId: approvedWinner });
+    },
+  );
+
+  // -------------------------------------------------------------------------
   // DELETE /api/matches/:id/games/:gameNumber
   // Staff hard-delete of a single recorded game (admin cleanup). Cascades its map
   // decision / blind pick / matrix, rebuilds stats and busts caches. The match's own

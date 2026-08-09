@@ -1625,6 +1625,22 @@ export function getMatchGames(matchId: string): Promise<{ games: GameDto[]; play
   return apiFetch<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }>(`/api/matches/${matchId}/games`);
 }
 
+/**
+ * Host/staff: resolve a replay-mismatch DISPUTED game by approving its result — finalises the game and
+ * completes the match (bracket + standings). Optional winnerId approves a corrected winner instead of
+ * the originally reported one.
+ */
+export function resolveGameDispute(
+  matchId: string,
+  gameNumber: number,
+  winnerId?: string,
+): Promise<{ resolved: boolean; winnerId: string }> {
+  return apiFetch(`/api/matches/${matchId}/games/${gameNumber}/resolve-dispute`, {
+    method: 'POST',
+    ...(winnerId ? { body: JSON.stringify({ winnerId }) } : {}),
+  });
+}
+
 /** Staff-only correction of a recorded game's factions, map and/or winner. */
 export function editGame(
   matchId: string,

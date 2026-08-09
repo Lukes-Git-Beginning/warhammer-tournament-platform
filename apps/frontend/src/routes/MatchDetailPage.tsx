@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from '@tanstack/react-router';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, joinQueue, voidMatch, cancelOpenPlayMatch, type GameDto, type MapDto } from '@/lib/api.js';
+import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, joinQueue, voidMatch, cancelOpenPlayMatch, resolveGameDispute, type GameDto, type MapDto } from '@/lib/api.js';
 import type { MatchDetailDto, MatchScoringBreakdownDto } from '@/lib/api.js';
 import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth.js';
@@ -262,8 +262,19 @@ export function MatchDetailPage() {
   const { data: gamesData } = useQuery({
     queryKey: ['match-games', matchId],
     queryFn: () => getMatchGames(matchId),
-    enabled: isOpenPlay,
-    refetchInterval: 5_000,
+    // Open Play polls its games; for a tournament match, also fetch when the viewer can manage it —
+    // needed to surface a replay-DISPUTED game so the host can approve it (resolve-dispute).
+    enabled: isOpenPlay || !!match?.can_manage,
+    refetchInterval: isOpenPlay ? 5_000 : false,
+  });
+
+  const resolveDisputeMutation = useMutation({
+    mutationFn: (gameNumber: number) => resolveGameDispute(matchId, gameNumber),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      void queryClient.invalidateQueries({ queryKey: ['match-games', matchId] });
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+    },
   });
 
   const { data: mapsData } = useQuery({
@@ -678,6 +689,41 @@ export function MatchDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Replay dispute — host approval. A replay-mismatch result the reporter "explained" is held
+          DISPUTED (reported points show, but the match never completes). Approving finalises the game
+          → the bracket node + standings update. */}
+      {isPrivileged && !isOpenPlay && gamesData && (() => {
+        const disputed = gamesData.games.find((g) => g.status === 'DISPUTED');
+        if (!disputed) return null;
+        return (
+          <div className="mb-4 rounded border border-orange-800/50 bg-orange-950/30 p-4">
+            <p className="text-sm font-medium text-orange-300">Replay dispute — awaiting your review</p>
+            <p className="mt-1 text-xs text-rizzotto-stone-400">
+              The reported result was held because the replay didn&apos;t match (e.g. a different faction was
+              played). Approving it finalises the game and completes the match — the bracket and standings update.
+            </p>
+            {disputed.verification?.explanation && (
+              <p className="mt-1 text-xs italic text-rizzotto-stone-500">
+                Reporter&apos;s note: {disputed.verification.explanation}
+              </p>
+            )}
+            {resolveDisputeMutation.isError && (
+              <p className="mt-2 text-sm text-red-400">Error: {(resolveDisputeMutation.error as Error).message}</p>
+            )}
+            <div className="mt-3 flex justify-end">
+              <Button
+                variant="forge"
+                size="sm"
+                disabled={resolveDisputeMutation.isPending}
+                onClick={() => resolveDisputeMutation.mutate(disputed.gameNumber)}
+              >
+                {resolveDisputeMutation.isPending ? 'Approving…' : 'Approve reported result'}
+              </Button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ------------------------------------------------------------------ */}
       {/* Result Reporting                                                     */}
