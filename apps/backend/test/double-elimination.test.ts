@@ -301,8 +301,8 @@ describe('POST /api/tournaments/:id/start — DOUBLE_ELIMINATION', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ tournamentId: string; matches_created: number; rounds: number }>();
     expect(body.tournamentId).toBe(TOURNAMENT_ID);
-    // 4 players → 6 matches (WB:3 + LB:2 + GF:1)
-    expect(body.matches_created).toBe(6);
+    // 4 players → 7 matches (WB:3 + LB:2 + GF + bracket-reset GF)
+    expect(body.matches_created).toBe(7);
 
     const dbMatches = await prisma.match.findMany({
       where: { tournament_id: TOURNAMENT_ID, deleted_at: null },
