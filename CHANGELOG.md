@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.30.0] — 2026-08-09 — Balanced Liechtenstein: division playoffs stay stable when the field changes
+### Fixed
+- **Once the first division's playoff starts, the playoff structure is locked in.** Previously a drop after playoffs had begun could re-shuffle how the remaining divisions were formed — in the worst case a small lower division folded into an already-running upper one and its players were left with no bracket at all. Now the structure (how many divisions, their skill anchors and target sizes) is frozen the moment the first division generates; only the membership flexes, and a division that comes up short pulls the nearest replacement from a neighbouring division — the just-missed players first — instead of stranding anyone.
+- **A seat vacated before it's played is refilled, not walked over.** When a seeded player withdraws before their playoff match has been played, the surviving opponent's "we didn't play" now reseeds the next eligible player from that division's own pool into the slot, rather than handing out a free walkover. A player who never won a group game (an organic 0-point record) still counts toward a division's size but is never given a bracket seat.
+
 ## [1.29.0] — 2026-08-08 — Balanced Liechtenstein: host force-playoffs + pairing/playoff robustness
 ### Added
 - **Hosts can force a single division's playoff early.** In the playoff plan preview each division now has a "Force generate" control — seeded from the current standings — for when a division is still waiting on another skill band or failed to generate on its own. It shows the current seeds, warns you exactly which players are still playing, requires an explicit override for a blocked division, and asks a second confirmation before it commits. Ready divisions still generate on their own; this is the manual escape hatch.
