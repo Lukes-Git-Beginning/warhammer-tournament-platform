@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from '@tanstack/react-router';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, joinQueue, voidMatch, cancelOpenPlayMatch, resolveGameDispute, type GameDto, type MapDto } from '@/lib/api.js';
+import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, joinQueue, voidMatch, cancelOpenPlayMatch, resolveGameDispute, assertReplayCorrect, opponentConfirmReplay, opponentRejectReplay, escalateReplayDispute, type GameDto, type MapDto } from '@/lib/api.js';
 import type { MatchDetailDto, MatchScoringBreakdownDto } from '@/lib/api.js';
 import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth.js';
@@ -262,20 +262,28 @@ export function MatchDetailPage() {
   const { data: gamesData } = useQuery({
     queryKey: ['match-games', matchId],
     queryFn: () => getMatchGames(matchId),
-    // Open Play polls its games; for a tournament match, also fetch when the viewer can manage it —
-    // needed to surface a replay-DISPUTED game so the host can approve it (resolve-dispute).
-    enabled: isOpenPlay || !!match?.can_manage,
+    // Open Play polls its games; for a tournament match, also fetch for the participants + managers —
+    // needed to surface the replay-dispute flow (assert / opponent-confirm / host-resolve).
+    enabled:
+      isOpenPlay ||
+      !!match?.can_manage ||
+      (!!user && (match?.player1_id === user.id || match?.player2_id === user.id)),
     refetchInterval: isOpenPlay ? 5_000 : false,
   });
 
+  const invalidateMatch = () => {
+    void queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+    void queryClient.invalidateQueries({ queryKey: ['match-games', matchId] });
+    void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+  };
   const resolveDisputeMutation = useMutation({
     mutationFn: (gameNumber: number) => resolveGameDispute(matchId, gameNumber),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['match', matchId] });
-      void queryClient.invalidateQueries({ queryKey: ['match-games', matchId] });
-      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
-    },
+    onSuccess: invalidateMatch,
   });
+  const assertMutation = useMutation({ mutationFn: (n: number) => assertReplayCorrect(matchId, n), onSuccess: invalidateMatch });
+  const confirmReplayMutation = useMutation({ mutationFn: (n: number) => opponentConfirmReplay(matchId, n), onSuccess: invalidateMatch });
+  const rejectReplayMutation = useMutation({ mutationFn: (n: number) => opponentRejectReplay(matchId, n), onSuccess: invalidateMatch });
+  const escalateMutation = useMutation({ mutationFn: (n: number) => escalateReplayDispute(matchId, n), onSuccess: invalidateMatch });
 
   const { data: mapsData } = useQuery({
     queryKey: ['maps'],
@@ -690,39 +698,116 @@ export function MatchDetailPage() {
         </div>
       )}
 
-      {/* Replay dispute — host approval. A replay-mismatch result the reporter "explained" is held
-          DISPUTED (reported points show, but the match never completes). Approving finalises the game
-          → the bracket node + standings update. */}
-      {isPrivileged && !isOpenPlay && gamesData && (() => {
-        const disputed = gamesData.games.find((g) => g.status === 'DISPUTED');
-        if (!disputed) return null;
-        return (
-          <div className="mb-4 rounded border border-orange-800/50 bg-orange-950/30 p-4">
-            <p className="text-sm font-medium text-orange-300">Replay dispute — awaiting your review</p>
-            <p className="mt-1 text-xs text-rizzotto-stone-400">
-              The reported result was held because the replay didn&apos;t match (e.g. a different faction was
-              played). Approving it finalises the game and completes the match — the bracket and standings update.
-            </p>
-            {disputed.verification?.explanation && (
-              <p className="mt-1 text-xs italic text-rizzotto-stone-500">
-                Reporter&apos;s note: {disputed.verification.explanation}
-              </p>
-            )}
-            {resolveDisputeMutation.isError && (
-              <p className="mt-2 text-sm text-red-400">Error: {(resolveDisputeMutation.error as Error).message}</p>
-            )}
-            <div className="mt-3 flex justify-end">
-              <Button
-                variant="forge"
-                size="sm"
-                disabled={resolveDisputeMutation.isPending}
-                onClick={() => resolveDisputeMutation.mutate(disputed.gameNumber)}
-              >
-                {resolveDisputeMutation.isPending ? 'Approving…' : 'Approve reported result'}
-              </Button>
-            </div>
-          </div>
+      {/* Replay dispute — player-driven resolution (see plans/replay-dispute-player-resolution.md).
+          The uploader asserts the replay is their game → the opponent confirms → the replay's factions
+          + map are applied and the match completes. Ambiguous replays / rejection fall back to a host. */}
+      {gamesData && (() => {
+        const g = gamesData.games.find(
+          (x) => x.verification && (x.verification.awaitingOpponent || x.verification.escalatedToHost || (x.verification.issues?.length ?? 0) > 0),
         );
+        if (!g || !g.verification) return null;
+        const v = g.verification;
+        const fac = (s: string | null) => (s ? s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '—');
+        const isReporter = !!user && g.reporterId === user.id;
+        const isOpponentSide = (isPlayer1 || isPlayer2) && !isReporter;
+        const box = 'mb-4 rounded border border-orange-800/50 bg-orange-950/30 p-4';
+
+        // Replay values panel (what the replay actually contains) — shown to both sides.
+        const replayPanel = v.replayValues ? (
+          <div className="mt-2 rounded border border-rizzotto-iron-700 bg-black/30 p-2 text-xs text-rizzotto-stone-300">
+            <span className="text-rizzotto-stone-500">Replay shows:</span>{' '}
+            P1 <span className="text-rizzotto-stone-100">{fac(v.replayValues.player1FactionSlug)}</span> vs{' '}
+            P2 <span className="text-rizzotto-stone-100">{fac(v.replayValues.player2FactionSlug)}</span>
+            {v.replayValues.mapName ? <> · Map <span className="text-rizzotto-stone-100">{v.replayValues.mapName}</span></> : null}
+          </div>
+        ) : null;
+
+        // 1) Opponent is asked to confirm the replay is their game.
+        if (v.awaitingOpponent && isOpponentSide) {
+          return (
+            <div className={box}>
+              <p className="text-sm font-medium text-orange-300">Confirm the replay</p>
+              <p className="mt-1 text-xs text-rizzotto-stone-400">
+                Your opponent uploaded a replay whose factions/map didn&apos;t match the report and says it is the
+                game you played. Confirm it is your match — the replay&apos;s factions + map will be applied and the
+                result recorded.
+              </p>
+              {replayPanel}
+              {(confirmReplayMutation.isError || rejectReplayMutation.isError) && (
+                <p className="mt-2 text-sm text-red-400">Error: {((confirmReplayMutation.error || rejectReplayMutation.error) as Error)?.message}</p>
+              )}
+              <div className="mt-3 flex justify-end gap-2">
+                <Button variant="ghost" size="sm" disabled={rejectReplayMutation.isPending} onClick={() => rejectReplayMutation.mutate(g.gameNumber)}>
+                  This isn&apos;t our game
+                </Button>
+                <Button variant="forge" size="sm" disabled={confirmReplayMutation.isPending} onClick={() => confirmReplayMutation.mutate(g.gameNumber)}>
+                  {confirmReplayMutation.isPending ? 'Confirming…' : 'Yes, this is our match'}
+                </Button>
+              </div>
+            </div>
+          );
+        }
+
+        // 2) Reporter is waiting for the opponent — Open Play lets them escalate to an admin.
+        if (v.awaitingOpponent && isReporter) {
+          return (
+            <div className={box}>
+              <p className="text-sm font-medium text-orange-300">Waiting for your opponent to confirm the replay</p>
+              <p className="mt-1 text-xs text-rizzotto-stone-400">They&apos;ve been notified. Once they confirm, the result is recorded.</p>
+              {replayPanel}
+              {isOpenPlay && (
+                <div className="mt-3 flex justify-end">
+                  <Button variant="ghost" size="sm" disabled={escalateMutation.isPending} onClick={() => escalateMutation.mutate(g.gameNumber)}>
+                    {escalateMutation.isPending ? 'Escalating…' : "Opponent isn't responding — escalate to admin"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        // 3) Reporter hit a mismatch and hasn't chosen yet — offer "the replay is correct".
+        if (!v.awaitingOpponent && !v.escalatedToHost && (v.issues?.length ?? 0) > 0 && isReporter) {
+          return (
+            <div className={box}>
+              <p className="text-sm font-medium text-orange-300">The replay didn&apos;t match your report</p>
+              <ul className="mt-1 list-disc pl-5 text-xs text-rizzotto-stone-400">
+                {v.issues!.map((iss, i) => <li key={i}>{iss.message}</li>)}
+              </ul>
+              <p className="mt-2 text-xs text-rizzotto-stone-400">
+                If you uploaded the wrong file, use <span className="text-rizzotto-stone-200">Report Result</span> to replace it.
+                If the replay <em>is</em> your game (your report used the wrong faction/map), ask your opponent to confirm it.
+              </p>
+              {assertMutation.isError && <p className="mt-2 text-sm text-red-400">Error: {(assertMutation.error as Error).message}</p>}
+              <div className="mt-3 flex justify-end">
+                <Button variant="forge" size="sm" disabled={assertMutation.isPending} onClick={() => assertMutation.mutate(g.gameNumber)}>
+                  {assertMutation.isPending ? 'Sending…' : 'The replay is correct — ask opponent to confirm'}
+                </Button>
+              </div>
+            </div>
+          );
+        }
+
+        // 4) Host fallback — escalated (ambiguous replay / opponent rejected / Open Play escalation).
+        if (isPrivileged && (v.escalatedToHost || (!v.awaitingOpponent && g.status === 'DISPUTED'))) {
+          return (
+            <div className={box}>
+              <p className="text-sm font-medium text-orange-300">Replay dispute — awaiting your review</p>
+              <p className="mt-1 text-xs text-rizzotto-stone-400">
+                This result couldn&apos;t be auto-resolved (ambiguous replay, or the opponent rejected it). Approving it
+                finalises the reported result and completes the match.
+              </p>
+              {replayPanel}
+              {resolveDisputeMutation.isError && <p className="mt-2 text-sm text-red-400">Error: {(resolveDisputeMutation.error as Error).message}</p>}
+              <div className="mt-3 flex justify-end">
+                <Button variant="forge" size="sm" disabled={resolveDisputeMutation.isPending} onClick={() => resolveDisputeMutation.mutate(g.gameNumber)}>
+                  {resolveDisputeMutation.isPending ? 'Approving…' : 'Approve reported result'}
+                </Button>
+              </div>
+            </div>
+          );
+        }
+        return null;
       })()}
 
       {/* ------------------------------------------------------------------ */}

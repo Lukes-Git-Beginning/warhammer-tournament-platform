@@ -1607,8 +1607,21 @@ export interface GameDto {
   confirmedAt: string | null;
   replayUrl: string | null;
   playedAt: string | null;
-  /** Replay-mismatch verification (participants/staff only): the discrepancies + reporter explanation. */
-  verification: { issues?: ReplayIssue[]; explanation?: string } | null;
+  /** Replay-mismatch verification (participants/staff only): the discrepancies + reporter explanation,
+   *  and — for the player-driven flow — whether it awaits the opponent's confirmation (with the
+   *  replay's parsed values) or has been escalated to a host. */
+  verification: {
+    issues?: ReplayIssue[];
+    explanation?: string;
+    awaitingOpponent?: boolean;
+    escalatedToHost?: boolean;
+    replayValues?: {
+      player1FactionSlug: string | null;
+      player2FactionSlug: string | null;
+      mapId: string | null;
+      mapName: string | null;
+    };
+  } | null;
   decision: MatchDecisionState | null;
   blindPick: {
     player1Locked: boolean;
@@ -1639,6 +1652,29 @@ export function resolveGameDispute(
     method: 'POST',
     ...(winnerId ? { body: JSON.stringify({ winnerId }) } : {}),
   });
+}
+
+/** Player-driven replay dispute. Reporter asserts the uploaded replay IS their game → the opponent
+ *  is asked to confirm (or it escalates to the host when the replay is ambiguous). */
+export function assertReplayCorrect(matchId: string, gameNumber: number): Promise<
+  { awaitingOpponent: true; replayValues: { player1FactionSlug: string | null; player2FactionSlug: string | null; mapId: string | null; mapName: string | null } } | { escalatedToHost: true }
+> {
+  return apiFetch(`/api/matches/${matchId}/games/${gameNumber}/assert-replay-correct`, { method: 'POST' });
+}
+
+/** Opponent confirms the replay is their game → the replay's factions/map are applied and the match completes. */
+export function opponentConfirmReplay(matchId: string, gameNumber: number): Promise<{ confirmed: true }> {
+  return apiFetch(`/api/matches/${matchId}/games/${gameNumber}/opponent-confirm`, { method: 'POST' });
+}
+
+/** Opponent rejects ("not our game") → the game goes to host review. */
+export function opponentRejectReplay(matchId: string, gameNumber: number): Promise<{ rejected: true }> {
+  return apiFetch(`/api/matches/${matchId}/games/${gameNumber}/opponent-reject`, { method: 'POST' });
+}
+
+/** Open Play: the opponent isn't responding → notify admins; the pending result frees both to re-queue. */
+export function escalateReplayDispute(matchId: string, gameNumber: number): Promise<{ escalated: true }> {
+  return apiFetch(`/api/matches/${matchId}/games/${gameNumber}/escalate`, { method: 'POST' });
 }
 
 /** Staff-only correction of a recorded game's factions, map and/or winner. */
