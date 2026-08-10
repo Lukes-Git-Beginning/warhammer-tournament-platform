@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from '@tanstack/react-router';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, joinQueue, voidMatch, cancelOpenPlayMatch, resolveGameDispute, assertReplayCorrect, opponentConfirmReplay, opponentRejectReplay, escalateReplayDispute, type GameDto, type MapDto } from '@/lib/api.js';
+import { getMatchDetail, getMatchDecision, getMatchScoringBreakdown, getMatchGames, getMaps, getFactions, joinQueue, voidMatch, cancelOpenPlayMatch, resolveGameDispute, assertReplayCorrect, opponentConfirmReplay, opponentRejectReplay, escalateReplayDispute, type MapDto } from '@/lib/api.js';
 import type { MatchDetailDto, MatchScoringBreakdownDto } from '@/lib/api.js';
 import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth.js';
@@ -804,6 +804,22 @@ export function MatchDetailPage() {
                   {resolveDisputeMutation.isPending ? 'Approving…' : 'Approve reported result'}
                 </Button>
               </div>
+            </div>
+          );
+        }
+
+        // 5) Opponent-side fallback — the result is escalated (ambiguous replay / rejected) or a
+        //    bare DISPUTED with no self-service step. Show a clear "under review" note instead of
+        //    leaving the opponent with only the GameTile's context-free "waiting for host" line.
+        if (isOpponentSide && (v.escalatedToHost || g.status === 'DISPUTED')) {
+          return (
+            <div className={box}>
+              <p className="text-sm font-medium text-orange-300">Result disputed — under review</p>
+              <p className="mt-1 text-xs text-rizzotto-stone-400">
+                Your opponent&apos;s report couldn&apos;t be auto-confirmed, so {isOpenPlay ? 'an admin' : 'the tournament host'} is
+                reviewing it. Nothing is needed from you right now — you&apos;ll be notified once it&apos;s resolved.
+              </p>
+              {replayPanel}
             </div>
           );
         }

@@ -10,7 +10,7 @@ import { resolveReplayValues } from '../lib/replay-apply.js';
 import { verifyGameReplay } from '../lib/verify-report.js';
 import type { ReplayIssue, ReplayVerification } from '../lib/replay-verify.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
-import { notifyOpenPlayDispute, notifyReplayMismatchHeld } from '../lib/discord-notify.js';
+import { notifyOpenPlayDispute, notifyReplayMismatchHeld, notifyHostsOfMatchReport } from '../lib/discord-notify.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { invalidate } from '../lib/cache.js';
 import { emitBracketUpdate } from '../lib/emit.js';
@@ -138,6 +138,39 @@ const GAME_SELECT = {
   blind_pick: true,
 } as const;
 
+// Read a stored replay buffer from its /uploads/replays/<match>/<file> url.
+async function readStoredReplay(replayUrl: string | null): Promise<Buffer | null> {
+  if (!replayUrl) return null;
+  const m = replayUrl.match(/\/uploads\/replays\/(.+)$/);
+  if (!m) return null;
+  try {
+    return await readFile(join(REPLAY_DIR, m[1]!));
+  } catch {
+    return null;
+  }
+}
+
+// Notify whoever must resolve a dispute manually: Open Play → mods/admins; a tournament →
+// its host + co-hosts (+ mods). Fire-and-forget safe; call inside setImmediate at every
+// escalation point so a DISPUTED result never goes unseen.
+async function notifyDisputeEscalation(
+  fastify: Parameters<FastifyPluginAsync>[0],
+  args: { matchId: string; tournamentId: string | null; reporterId: string | null },
+): Promise<void> {
+  const { matchId, tournamentId, reporterId } = args;
+  try {
+    if (!reporterId) return;
+    if (tournamentId) {
+      await notifyHostsOfMatchReport(tournamentId, matchId, reporterId, 'A reported game result is disputed and needs your review.');
+      return;
+    }
+    const reporter = await fastify.prisma.user.findUnique({ where: { id: reporterId }, select: { discord_id: true } });
+    if (reporter?.discord_id) await notifyOpenPlayDispute(matchId, reporter.discord_id);
+  } catch (err) {
+    fastify.log.warn({ err, matchId }, 'notifyDisputeEscalation failed (non-fatal)');
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Replay-verification settle: given a verification outcome, either finalize the game (clean),
 // hold it DISPUTED with the reporter's explanation (path B — result pending host/admin, but an
@@ -161,9 +194,12 @@ async function settleVerifiedReport(
     winnerId: string;
     verification: ReplayVerification;
     explanation: string;
+    buffer: Buffer | null;
+    player1Id: string | null;
+    player2Id: string | null;
   },
 ): Promise<SettleResult> {
-  const { gameId, matchId, gameNumber, tournamentId, reporterId, opponentId, winnerId, verification, explanation } = args;
+  const { gameId, matchId, gameNumber, tournamentId, reporterId, opponentId, winnerId, verification, explanation, buffer, player1Id, player2Id } = args;
 
   if (verification.ok) {
     await fastify.prisma.matchGame.update({ where: { id: gameId }, data: { verification: Prisma.DbNull } });
@@ -172,18 +208,47 @@ async function settleVerifiedReport(
   }
 
   if (explanation) {
-    // Path B — hold the result for host/admin review (DISPUTED), keep the explanation + issues.
-    await fastify.prisma.matchGame.update({
+    // Path B — the reporter asserts their report is right despite the replay mismatch. Read the
+    // replay's actual factions/map and, if attributable, hold the game for the OPPONENT to confirm
+    // (awaitingOpponent) — exactly like the on-page "the replay is correct" flow — so the opponent
+    // always gets a confirm/reject step. If the replay is unreadable/ambiguous, escalate to a
+    // host/admin and notify them. Either way the game is DISPUTED (frees an Open Play match).
+    const g = await fastify.prisma.matchGame.findUnique({
       where: { id: gameId },
-      data: { status: 'DISPUTED', verification: { issues: verification.issues, explanation } as unknown as Prisma.InputJsonValue },
+      select: { replay_url: true, player1_faction_id: true, player2_faction_id: true },
     });
-    fastify.log.warn({ matchId, gameId }, 'Replay mismatch — held DISPUTED with explanation for review');
-    if (!tournamentId) {
-      const reporter = await fastify.prisma.user.findUnique({ where: { id: reporterId }, select: { discord_id: true } });
-      if (reporter?.discord_id) setImmediate(() => void notifyOpenPlayDispute(matchId, reporter.discord_id!));
+    const replayBuf = buffer ?? (await readStoredReplay(g?.replay_url ?? null));
+    const reportedSlugs = g?.player1_faction_id && g?.player2_faction_id ? [g.player1_faction_id, g.player2_faction_id] : [];
+    const values = replayBuf
+      ? await resolveReplayValues(fastify.prisma, replayBuf, { player1Id, player2Id, reportedSlugs })
+      : { player1FactionSlug: null, player2FactionSlug: null, mapId: null, mapName: null, ambiguous: true };
+
+    if (!values.ambiguous) {
+      const awaiting = {
+        awaitingOpponent: true as const,
+        replayValues: {
+          player1FactionSlug: values.player1FactionSlug,
+          player2FactionSlug: values.player2FactionSlug,
+          mapId: values.mapId,
+          mapName: values.mapName,
+        },
+        explanation,
+      };
+      await fastify.prisma.matchGame.update({
+        where: { id: gameId },
+        data: { status: 'DISPUTED', verification: awaiting as unknown as Prisma.InputJsonValue },
+      });
+      fastify.log.warn({ matchId, gameId }, 'Replay mismatch — awaiting opponent confirmation (explained)');
+      // Tell the opponent — they can confirm the replay is their game or reject it at the match page.
+      if (opponentId) setImmediate(() => void notifyReplayMismatchHeld(matchId, opponentId, explanation));
+    } else {
+      await fastify.prisma.matchGame.update({
+        where: { id: gameId },
+        data: { status: 'DISPUTED', verification: { escalatedToHost: true, explanation } as unknown as Prisma.InputJsonValue },
+      });
+      fastify.log.warn({ matchId, gameId }, 'Replay mismatch — ambiguous replay, escalated to host/admin');
+      setImmediate(() => void notifyDisputeEscalation(fastify, { matchId, tournamentId, reporterId }));
     }
-    // Tell the opponent — they can confirm (do nothing) or dispute at the match page.
-    if (opponentId) setImmediate(() => void notifyReplayMismatchHeld(matchId, opponentId, explanation));
     if (fastify.io) {
       fastify.io.to(`match_decision_${matchId}`).emit('match.game.updated', {
         matchId, gameNumber, status: 'DISPUTED', winnerId: null, lobbyCode: null,
@@ -593,17 +658,6 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // Read a stored replay buffer from its /uploads/replays/<match>/<file> url.
-  async function readStoredReplay(replayUrl: string | null): Promise<Buffer | null> {
-    if (!replayUrl) return null;
-    const m = replayUrl.match(/\/uploads\/replays\/(.+)$/);
-    if (!m) return null;
-    try {
-      return await readFile(join(REPLAY_DIR, m[1]!));
-    } catch {
-      return null;
-    }
-  }
 
   // Shape stored in the game's `verification` JSON while an opponent confirmation is pending.
   type AwaitingVerification = {
@@ -671,6 +725,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           data: { status: 'DISPUTED', verification: { escalatedToHost: true, explanation: priorExplanation } as unknown as Prisma.InputJsonValue },
         });
         if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
+        setImmediate(() => void notifyDisputeEscalation(fastify, { matchId, tournamentId: match.tournament_id, reporterId: game.reporter_id ?? userId }));
         return reply.code(200).send({ escalatedToHost: true });
       }
 
@@ -776,8 +831,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: game.id },
         data: { status: 'DISPUTED', verification: { escalatedToHost: true, explanation: v.explanation } as unknown as Prisma.InputJsonValue },
       });
-      const reporter = game.reporter_id ? await fastify.prisma.user.findUnique({ where: { id: game.reporter_id }, select: { discord_id: true } }) : null;
-      if (reporter?.discord_id) setImmediate(() => void notifyOpenPlayDispute(matchId, reporter.discord_id!));
+      setImmediate(() => void notifyDisputeEscalation(fastify, { matchId, tournamentId: match.tournament_id, reporterId: game.reporter_id }));
       if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
       return reply.code(200).send({ rejected: true });
     },
@@ -813,8 +867,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: game.id },
         data: { status: 'DISPUTED', verification: { escalatedToHost: true, explanation: v.explanation } as unknown as Prisma.InputJsonValue },
       });
-      const reporter = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { discord_id: true } });
-      if (reporter?.discord_id) setImmediate(() => void notifyOpenPlayDispute(matchId, reporter.discord_id!));
+      setImmediate(() => void notifyDisputeEscalation(fastify, { matchId, tournamentId: match.tournament_id, reporterId: userId }));
       return reply.code(200).send({ escalated: true });
     },
   );
@@ -1151,6 +1204,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           reporterId: userId,
           opponentId: userId === match.player1_id ? match.player2_id : match.player1_id,
           winnerId: winnerIdField, verification, explanation,
+          buffer, player1Id: match.player1_id, player2Id: match.player2_id,
         });
         if (settled.kind === 'confirmed') return reply.code(200).send({ confirmed: true, winnerId: winnerIdField });
         if (settled.kind === 'disputed') return reply.code(200).send({ held: true, disputed: true, issues: settled.issues });
@@ -1183,6 +1237,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
             reporterId: userId,
             opponentId: userId === match.player1_id ? match.player2_id : match.player1_id,
             winnerId: winnerIdField, verification, explanation,
+            buffer, player1Id: match.player1_id, player2Id: match.player2_id,
           });
           if (settled.kind === 'confirmed') return reply.code(200).send({ confirmed: true, winnerId: winnerIdField });
           if (settled.kind === 'disputed') return reply.code(200).send({ held: true, disputed: true, issues: settled.issues });
@@ -1195,6 +1250,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
             opponentId: userId === match.player1_id ? match.player2_id : match.player1_id,
             winnerId: winnerIdField,
             verification: { ok: false, issues: (heldV.issues as ReplayIssue[]) ?? [] }, explanation,
+            buffer: null, player1Id: match.player1_id, player2Id: match.player2_id,
           });
           return reply.code(200).send({ held: true, disputed: settled.kind === 'disputed', issues: settled.kind === 'mismatch' ? settled.issues : (heldV.issues as ReplayIssue[]) });
         }
@@ -1226,17 +1282,9 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
 
       fastify.log.warn({ matchId, gameId }, 'Game result disputed — host must resolve');
 
-      // Open Play has no tournament host — notify mods/admins so on-site disputes
-      // don't go unnoticed (replaces the removed Discord dispute button).
-      if (!match.tournament_id) {
-        const reporter = await fastify.prisma.user.findUnique({
-          where: { id: userId },
-          select: { discord_id: true },
-        });
-        if (reporter?.discord_id) {
-          setImmediate(() => void notifyOpenPlayDispute(matchId, reporter.discord_id!));
-        }
-      }
+      // Notify whoever resolves it so a dispute never goes unseen: Open Play → mods/admins;
+      // a tournament → its host + co-hosts (+ mods).
+      setImmediate(() => void notifyDisputeEscalation(fastify, { matchId, tournamentId: match.tournament_id, reporterId: userId }));
 
       if (fastify.io) {
         fastify.io.to(`match_decision_${matchId}`).emit('match.game.updated', {
