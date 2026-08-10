@@ -379,15 +379,20 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         .send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
     }
 
-    // Optional auth — compute whether the viewer may manage this match's
-    // tournament (host, co-host, mod, admin), so the UI can scope management
-    // controls to the owner instead of showing them to every HOST globally (B12).
+    // Optional auth — compute whether the viewer may manage this match, so the UI
+    // can scope management controls to the owner instead of showing them to every
+    // HOST globally (B12). canManageTournament grants ADMIN/MODERATOR regardless of
+    // the tournament id, so an empty id (Open Play, tournament_id = null) still lets
+    // staff manage it — needed to resolve Open Play replay disputes (no host exists).
     let can_manage = false;
     try {
       await request.jwtVerify();
-      if (match.tournament?.id) {
-        can_manage = await canManageTournament(fastify.prisma, match.tournament.id, request.user.sub, request.user.role);
-      }
+      can_manage = await canManageTournament(
+        fastify.prisma,
+        match.tournament?.id ?? '',
+        request.user.sub,
+        request.user.role,
+      );
     } catch {
       // unauthenticated — fine, can_manage stays false
     }

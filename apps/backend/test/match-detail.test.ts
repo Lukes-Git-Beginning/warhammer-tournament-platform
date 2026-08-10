@@ -271,3 +271,77 @@ describe('GET /api/matches/:id', () => {
     expect(body.played_at).toBe(playedAt.toISOString());
   });
 });
+
+// ---------------------------------------------------------------------------
+// can_manage for Open Play matches (tournament_id = null).
+// Regression: the endpoint used to gate the canManageTournament call behind
+// `if (match.tournament?.id)`, so staff never got can_manage=true on an Open Play
+// match — making its replay disputes unresolvable (no host exists there).
+// ---------------------------------------------------------------------------
+
+describe('GET /api/matches/:id — can_manage on Open Play', () => {
+  async function createOpenPlayMatch(): Promise<string> {
+    const id = randomUUID();
+    matchIds.push(id);
+    await prisma.match.create({
+      data: {
+        id,
+        tournament_id: null,
+        round: 0,
+        match_number: 0,
+        player1_id: player1.id,
+        player2_id: player2.id,
+        status: 'ONGOING' as never,
+      },
+    });
+    return id;
+  }
+
+  it('5. an ADMIN viewer can manage an Open Play match', async () => {
+    const matchId = await createOpenPlayMatch();
+    const admin = await createTestUser({ username: 'DetailAdmin' });
+    await prisma.user.update({ where: { id: admin.id }, data: { role: 'ADMIN' } });
+    const token = app.jwt.sign({ sub: admin.id, username: admin.username, role: 'ADMIN' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/matches/${matchId}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<Record<string, unknown>>();
+    expect(body.tournament_id).toBeNull();
+    expect(body.can_manage).toBe(true);
+
+    await cleanupUsers([admin.id]);
+  });
+
+  it('6. a non-staff stranger cannot manage an Open Play match', async () => {
+    const matchId = await createOpenPlayMatch();
+    const stranger = await createTestUser({ username: 'DetailStranger' });
+    const token = app.jwt.sign({ sub: stranger.id, username: stranger.username, role: 'USER' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/matches/${matchId}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<Record<string, unknown>>();
+    expect(body.can_manage).toBe(false);
+
+    await cleanupUsers([stranger.id]);
+  });
+
+  it('7. an unauthenticated viewer cannot manage an Open Play match', async () => {
+    const matchId = await createOpenPlayMatch();
+
+    const res = await app.inject({ method: 'GET', url: `/api/matches/${matchId}` });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<Record<string, unknown>>();
+    expect(body.can_manage).toBe(false);
+  });
+});
