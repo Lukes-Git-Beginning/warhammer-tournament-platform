@@ -5,12 +5,25 @@ const bands = (spec: Record<number, number>): number[] =>
   Object.entries(spec).flatMap(([band, n]) => Array<number>(n).fill(Number(band)));
 
 describe('projectBracketPlan', () => {
-  it('Swiss / Auto Swiss: rounds_count + a single bracket at the playoff cutoff', () => {
+  it('Swiss / Auto Swiss: rounds_count + a single bracket at the effective playoff format', () => {
     expect(projectBracketPlan({ format: 'SWISS', playoffFormat: 'TOP4', roundsCount: 5, activeBands: bands({ 3: 10 }) }))
       .toEqual({ groupRounds: 5, divisions: [{ size: 4, format: 'TOP4' }] });
-    // Fewer active than the cutoff → the bracket shrinks to the field.
+    // Fewer than 8 active → TOP4 falls back to TOP2, mirroring generatePlayoffBracket
+    // (was a ghost TOP4 in the preview before the head-count fallback was applied here).
     expect(projectBracketPlan({ format: 'SWISS', playoffFormat: 'TOP4', roundsCount: 4, activeBands: bands({ 3: 3 }) }).divisions)
-      .toEqual([{ size: 3, format: 'TOP4' }]);
+      .toEqual([{ size: 2, format: 'TOP2' }]);
+  });
+
+  it('Swiss TOP8 previews the effective format via the head-count fallback (NI-8a)', () => {
+    // ≥16 active → TOP8 stands.
+    expect(projectBracketPlan({ format: 'SWISS', playoffFormat: 'TOP8', roundsCount: 5, activeBands: bands({ 3: 16 }) }).divisions)
+      .toEqual([{ size: 8, format: 'TOP8' }]);
+    // <16 active → TOP4 (the reported bug: a 15-player field used to preview a ghost TOP8).
+    expect(projectBracketPlan({ format: 'SWISS', playoffFormat: 'TOP8', roundsCount: 5, activeBands: bands({ 3: 15 }) }).divisions)
+      .toEqual([{ size: 4, format: 'TOP4' }]);
+    // <8 active → TOP2.
+    expect(projectBracketPlan({ format: 'SWISS', playoffFormat: 'TOP8', roundsCount: 4, activeBands: bands({ 3: 6 }) }).divisions)
+      .toEqual([{ size: 2, format: 'TOP2' }]);
   });
 
   it('Swiss with no playoff → no bracket divisions', () => {

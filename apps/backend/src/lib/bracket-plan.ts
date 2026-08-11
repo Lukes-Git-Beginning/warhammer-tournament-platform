@@ -64,8 +64,19 @@ export function projectBracketPlan(opts: {
     opts.playoffFormat === 'TOP8' || opts.playoffFormat === 'TOP4' || opts.playoffFormat === 'TOP2'
       ? opts.playoffFormat
       : 'NONE';
-  const cutoff = fmt === 'TOP8' ? 8 : fmt === 'TOP4' ? 4 : fmt === 'TOP2' ? 2 : 0;
+  // Apply the same head-count fallback generatePlayoffBracket uses at real generation time,
+  // so the preview shows the EFFECTIVE format live (a TOP8 config with 10 active players
+  // previews as TOP4, not a ghost TOP8). Thresholds mirror the generator: TOP8 needs ≥16,
+  // TOP4 needs ≥8; below that each drops one tier.
+  let effectiveFmt: ProjectedPlayoffFormat = fmt;
+  if (fmt === 'TOP8') {
+    if (active < 8) effectiveFmt = 'TOP2';
+    else if (active < 16) effectiveFmt = 'TOP4';
+  } else if (fmt === 'TOP4') {
+    if (active < 8) effectiveFmt = 'TOP2';
+  }
+  const cutoff = effectiveFmt === 'TOP8' ? 8 : effectiveFmt === 'TOP4' ? 4 : effectiveFmt === 'TOP2' ? 2 : 0;
   const divisions: ProjectedDivision[] =
-    cutoff > 0 && active >= 2 ? [{ size: Math.min(cutoff, active), format: fmt }] : [];
+    cutoff > 0 && active >= 2 ? [{ size: Math.min(cutoff, active), format: effectiveFmt }] : [];
   return { groupRounds, divisions };
 }
