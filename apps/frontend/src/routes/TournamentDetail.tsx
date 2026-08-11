@@ -1062,6 +1062,7 @@ export function TournamentDetail() {
             hideStandings
             playoffFormat={tournament.playoff_format ?? 'NONE'}
             format={tournament.format}
+            hasThirdPlaceMatch={tournament.has_third_place_match}
           />
         </section>
       )}

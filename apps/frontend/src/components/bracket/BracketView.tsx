@@ -11,7 +11,6 @@ import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
 import { MatchReadOnlyModal } from './MatchReadOnlyModal';
 import { SwissStandings } from './SwissStandings';
-import { PlayoffPlanPreview } from './PlayoffPlanPreview';
 import { BalancedPlayoffForce } from './BalancedPlayoffForce';
 
 /** Human summary of the projected playoff shape for the "current plan" header. */
@@ -32,9 +31,11 @@ interface BracketViewProps {
   hideStandings?: boolean;
   playoffFormat?: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' | null;
   format?: string;
+  /** Whether the tournament has a 3rd-place match — passed to placeholder shape. */
+  hasThirdPlaceMatch?: boolean;
 }
 
-export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false, playoffFormat, format }: BracketViewProps) {
+export function BracketView({ slug, tournamentId, canManage = false, hideStandings = false, playoffFormat, format, hasThirdPlaceMatch }: BracketViewProps) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [readOnlyMatchId, setReadOnlyMatchId] = useState<string | null>(null);
   const [byeMatchId, setByeMatchId] = useState<string | null>(null);
@@ -345,14 +346,14 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
     seMatches
       .filter((m) => m.round === maxSERound - 1)
       .every((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT');
-  const hasThirdPlaceMatch = playoffPhases.some((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
+  const hasThirdPlaceNode = playoffPhases.some((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
   const thirdPlaceNode = playoffPhases.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE');
   const thirdPlaceNeedsRepair = !!thirdPlaceNode && !thirdPlaceNode.player1Id && !thirdPlaceNode.player2Id;
   const showAddThirdPlaceButton =
     canManage &&
     !isBalanced &&
     (hasFinalMatch || seSFsDone) &&
-    (!hasThirdPlaceMatch || thirdPlaceNeedsRepair);
+    (!hasThirdPlaceNode || thirdPlaceNeedsRepair);
 
   const isDE = data.matches.some((m) => m.bracketSide !== null);
   const allDone = data.matches.every(
@@ -407,10 +408,13 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
         />
       )}
 
-      {/* Provisional playoff bracket — the projected shape as TBD placeholders, shown until the
-          real playoffs are generated (then the real bracket below takes over). */}
+      {/* Provisional playoff plan banner — shown until real playoffs are generated.
+          The actual TBD placeholder nodes appear inside the SVGBracket below. */}
       {swiss?.plan && !hasPlayoffMatches && data.status !== 'COMPLETED' && (
-        <PlayoffPlanPreview divisions={swiss.plan.divisions} />
+        <div className="mb-2 flex items-center gap-2 text-[10px] text-stone-600 italic px-1">
+          <span className="inline-block h-2 w-2 rounded-full border border-dashed border-stone-600" />
+          Projected playoffs shown as placeholders — fills in when the group phase ends
+        </div>
       )}
 
       {/* Host force tool — force a single BaLi division's playoff early. Shown once the field is in
@@ -591,6 +595,12 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                   tournamentMode={data.mode}
                   format={format}
                   bandByUser={bandByUser}
+                  projectedDivisions={
+                    swiss?.plan && !hasPlayoffMatches && data.status !== 'COMPLETED'
+                      ? swiss.plan.divisions
+                      : undefined
+                  }
+                  hasThirdPlaceMatch={hasThirdPlaceMatch}
                   onMatchClick={(matchId) => {
                     const m = data.matches.find((x) => x.matchId === matchId);
                     if (canManage) {

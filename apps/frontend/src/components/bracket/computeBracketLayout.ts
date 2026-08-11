@@ -1,4 +1,4 @@
-import type { BracketNode } from '@rizzotto/types';
+import type { BracketNode, ProjectedDivision } from '@rizzotto/types';
 
 export interface MatchPosition {
   x: number;
@@ -21,6 +21,233 @@ export interface BracketLayout {
   height: number;
   /** Present when the bracket is split into labelled sections (Balanced divisions). */
   groups?: BracketGroup[];
+}
+
+/** A single placeholder node in a projected (pre-generated) playoff bracket. */
+export interface PlaceholderNode {
+  id: string;
+  /** The id of the next placeholder this node's winner feeds into (null for finals). */
+  nextId: string | null;
+  /** The id of the next placeholder this node's loser feeds into (3rd-place match only). */
+  loserNextId: string | null;
+  /** Display label for the match type. */
+  phase: 'QF' | 'SF' | 'Final' | '3rd Place';
+  /** Division index (0-based) — used for the group label. */
+  divisionIndex: number;
+}
+
+/** Pre-computed layout for placeholder (projected) playoff matches. */
+export interface PlaceholderLayout {
+  positions: Map<string, MatchPosition>;
+  nodes: PlaceholderNode[];
+  width: number;
+  height: number;
+  /** One entry per projected division; parallels the structure of BracketLayout.groups. */
+  groups: Array<{
+    nodeIds: string[];
+    x: number;
+    y: number;
+    /** Division label text (e.g. "Division 1", or null for single-division tournaments). */
+    label: string | null;
+    /** Format string for the label (e.g. "Top 4 · 8 seeds"). */
+    detail: string;
+  }>;
+}
+
+// ---------------------------------------------------------------------------
+// Placeholder layout helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the placeholder nodes for a single projected division bracket.
+ * Returns nodes in draw order (QF left, then SF, then Final+3rd-place).
+ * The division prefix is used to generate unique IDs.
+ */
+function buildPlaceholderNodes(
+  divIdx: number,
+  format: ProjectedDivision['format'],
+  hasThirdPlace: boolean,
+): PlaceholderNode[] {
+  const prefix = `__ph_d${divIdx}`;
+  const nodes: PlaceholderNode[] = [];
+
+  if (format === 'TOP8') {
+    // QF: 4 matches → SF: 2 matches → Final + optional 3rd place
+    const qfIds = [0, 1, 2, 3].map((i) => `${prefix}_qf${i}`);
+    const sfIds = [0, 1].map((i) => `${prefix}_sf${i}`);
+    const finalId = `${prefix}_final`;
+    const thirdId = `${prefix}_3rd`;
+
+    qfIds.forEach((id, i) => {
+      nodes.push({ id, nextId: sfIds[Math.floor(i / 2)]!, loserNextId: null, phase: 'QF', divisionIndex: divIdx });
+    });
+    sfIds.forEach((id, i) => {
+      nodes.push({ id, nextId: finalId, loserNextId: hasThirdPlace ? thirdId : null, phase: 'SF', divisionIndex: divIdx });
+    });
+    nodes.push({ id: finalId, nextId: null, loserNextId: null, phase: 'Final', divisionIndex: divIdx });
+    if (hasThirdPlace) {
+      nodes.push({ id: thirdId, nextId: null, loserNextId: null, phase: '3rd Place', divisionIndex: divIdx });
+    }
+  } else if (format === 'TOP4') {
+    // SF: 2 matches → Final + optional 3rd place
+    const sfIds = [0, 1].map((i) => `${prefix}_sf${i}`);
+    const finalId = `${prefix}_final`;
+    const thirdId = `${prefix}_3rd`;
+
+    sfIds.forEach((id) => {
+      nodes.push({ id, nextId: finalId, loserNextId: hasThirdPlace ? thirdId : null, phase: 'SF', divisionIndex: divIdx });
+    });
+    nodes.push({ id: finalId, nextId: null, loserNextId: null, phase: 'Final', divisionIndex: divIdx });
+    if (hasThirdPlace) {
+      nodes.push({ id: thirdId, nextId: null, loserNextId: null, phase: '3rd Place', divisionIndex: divIdx });
+    }
+  } else {
+    // TOP2: Final only + optional 3rd place (no feeders)
+    const finalId = `${prefix}_final`;
+    const thirdId = `${prefix}_3rd`;
+    nodes.push({ id: finalId, nextId: null, loserNextId: null, phase: 'Final', divisionIndex: divIdx });
+    if (hasThirdPlace) {
+      nodes.push({ id: thirdId, nextId: null, loserNextId: null, phase: '3rd Place', divisionIndex: divIdx });
+    }
+  }
+
+  return nodes;
+}
+
+/**
+ * Compute positions for a flat list of placeholder nodes using the same midpoint
+ * algorithm as computeLinearLayout — but operating on PlaceholderNode instead of BracketNode.
+ * Round membership is determined by the phase: QF=0, SF=1, Final=2, 3rd=2 (same column as Final).
+ */
+function placeholderLinearLayout(
+  nodes: PlaceholderNode[],
+  xBase: number,
+  yBase: number,
+): Map<string, MatchPosition> {
+  const positions = new Map<string, MatchPosition>();
+  if (nodes.length === 0) return positions;
+
+  const phaseCol: Record<PlaceholderNode['phase'], number> = {
+    QF: 0,
+    SF: 1,
+    Final: 2,
+    '3rd Place': 2,
+  };
+
+  // Adjust for formats that start at SF or Final so col 0 is always leftmost.
+  const minCol = Math.min(...nodes.map((n) => phaseCol[n.phase]));
+
+  // Group by column
+  const byCol = new Map<number, PlaceholderNode[]>();
+  for (const n of nodes) {
+    const col = phaseCol[n.phase] - minCol;
+    if (!byCol.has(col)) byCol.set(col, []);
+    byCol.get(col)!.push(n);
+  }
+
+  const sortedCols = Array.from(byCol.keys()).sort((a, b) => a - b);
+
+  // First column: evenly spaced from yBase (only non-3rd-place nodes in col 0)
+  const firstColNodes = byCol.get(0) ?? [];
+  // Filter 3rd place out of column 0 (it's always in the Final column)
+  const firstColMain = firstColNodes.filter((n) => n.phase !== '3rd Place');
+  firstColMain.forEach((n, i) => {
+    positions.set(n.id, {
+      x: xBase,
+      y: yBase + i * (MATCH_HEIGHT + ROW_GAP),
+    });
+  });
+
+  // Subsequent columns: position by midpoint of feeders
+  for (let ci = 1; ci < sortedCols.length; ci++) {
+    const col = sortedCols[ci]!;
+    const colNodes = (byCol.get(col) ?? []).filter((n) => n.phase !== '3rd Place');
+    let minY = yBase;
+    const x = xBase + col * (MATCH_WIDTH + ROUND_GAP);
+
+    for (const n of colNodes) {
+      const feeders = nodes.filter((f) => f.nextId === n.id);
+      let y: number;
+      if (feeders.length > 0) {
+        const feederYs = feeders.map((f) => positions.get(f.id)?.y ?? yBase);
+        y = feederYs.reduce((s, v) => s + v, 0) / feederYs.length;
+      } else {
+        y = minY;
+      }
+      if (y < minY) y = minY;
+      positions.set(n.id, { x, y });
+      minY = y + MATCH_HEIGHT + ROW_GAP;
+    }
+  }
+
+  // 3rd place match: same column as Final, directly below it
+  const finalNode = nodes.find((n) => n.phase === 'Final');
+  const thirdNode = nodes.find((n) => n.phase === '3rd Place');
+  if (thirdNode && finalNode) {
+    const finalPos = positions.get(finalNode.id);
+    if (finalPos) {
+      positions.set(thirdNode.id, {
+        x: finalPos.x,
+        y: finalPos.y + MATCH_HEIGHT + ROW_GAP,
+      });
+    }
+  }
+
+  return positions;
+}
+
+/**
+ * Compute the full placeholder layout for all projected divisions.
+ * For a single division (Swiss/Liechtenstein) the result is left-aligned.
+ * For BaLi (multiple divisions) the divisions stack vertically like real matches
+ * in computeBalancedPlayoffLayout — xBase is shifted right if there are swiss matches.
+ */
+export function computePlaceholderLayout(
+  divisions: ProjectedDivision[],
+  hasThirdPlace: boolean,
+  /** x offset to position placeholders to the right of existing swiss matches */
+  xBase = 0,
+): PlaceholderLayout {
+  const real = divisions.filter((d) => d.format !== 'NONE' && d.size >= 2);
+  const positions = new Map<string, MatchPosition>();
+  const allNodes: PlaceholderNode[] = [];
+  const groups: PlaceholderLayout['groups'] = [];
+
+  let yOffset = 0;
+
+  real.forEach((div, i) => {
+    const nodes = buildPlaceholderNodes(i, div.format, hasThirdPlace);
+    const divPositions = placeholderLinearLayout(nodes, xBase, yOffset + DIVISION_LABEL_HEIGHT);
+    for (const [id, pos] of divPositions) positions.set(id, pos);
+
+    // Compute height of this division
+    let maxY = yOffset + DIVISION_LABEL_HEIGHT;
+    for (const pos of divPositions.values()) {
+      const bottom = pos.y + MATCH_HEIGHT;
+      if (bottom > maxY) maxY = bottom;
+    }
+
+    groups.push({
+      nodeIds: nodes.map((n) => n.id),
+      x: xBase,
+      y: yOffset,
+      label: real.length > 1 ? `Division ${i + 1}` : null,
+      detail: `${div.format.replace('TOP', 'Top ')} · ${div.size} seeds`,
+    });
+
+    allNodes.push(...nodes);
+    yOffset = maxY + SECTION_GAP;
+  });
+
+  // Compute bounding box
+  let maxX = 0;
+  let maxY = 0;
+  for (const pos of positions.values()) {
+    if (pos.x + MATCH_WIDTH > maxX) maxX = pos.x + MATCH_WIDTH;
+    if (pos.y + MATCH_HEIGHT > maxY) maxY = pos.y + MATCH_HEIGHT;
+  }
+
+  return { positions, nodes: allNodes, width: maxX - xBase, height: maxY, groups };
 }
 
 export const MATCH_WIDTH = 200;
