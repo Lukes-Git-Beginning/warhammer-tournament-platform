@@ -179,6 +179,42 @@ describe('min-weight pairing (B8)', () => {
   });
 });
 
+describe('Faction War fairness cost', () => {
+  const fw = (id: string, score: number, factionId: string): SwissPlayer => ({
+    userId: id,
+    score,
+    avoid: [],
+    receivedBye: false,
+    factionId,
+  });
+  const ids = fakeIds(4);
+  // x–y and z–w are coin-flips (0 surcharge); every cross pairing is lopsided (max surcharge).
+  const balanced = new Set(['x|y', 'y|x', 'z|w', 'w|z']);
+  const cost = (a: SwissPlayer, b: SwissPlayer) =>
+    balanced.has(`${a.factionId}|${b.factionId}`) ? 0 : 50;
+  const paired = (matches: SwissMatchInput[], a: string, b: string) =>
+    matches.some(
+      (m) =>
+        (m.player1_id === a && m.player2_id === b) || (m.player1_id === b && m.player2_id === a),
+    );
+
+  it('round 1 (all equal score) pairs the fairest faction matchups', () => {
+    const players = [fw(ids[0]!, 0, 'x'), fw(ids[1]!, 0, 'y'), fw(ids[2]!, 0, 'z'), fw(ids[3]!, 0, 'w')];
+    const matches = generateSwissRound(T_ID, players, 1, cost);
+    expect(paired(matches, ids[0]!, ids[1]!)).toBe(true); // x vs y — a coin-flip
+    expect(paired(matches, ids[2]!, ids[3]!)).toBe(true); // z vs w — a coin-flip
+  });
+
+  it('never outranks the Swiss score gap (score stays primary in later rounds)', () => {
+    // The two score-2 players have factions that make a fair matchup only *across* the score gap.
+    const players = [fw(ids[0]!, 2, 'x'), fw(ids[1]!, 2, 'z'), fw(ids[2]!, 0, 'y'), fw(ids[3]!, 0, 'w')];
+    const matches = generateSwissRound(T_ID, players, 2, cost);
+    // Even though x–y / z–w would be fairer, the equal-score pairs must stay together.
+    expect(paired(matches, ids[0]!, ids[1]!)).toBe(true); // both score 2
+    expect(paired(matches, ids[2]!, ids[3]!)).toBe(true); // both score 0
+  });
+});
+
 // ---------- computeSwissStandings ----------
 
 describe('computeSwissStandings', () => {

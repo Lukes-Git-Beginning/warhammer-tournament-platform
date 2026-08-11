@@ -91,7 +91,15 @@ function seededShuffle<T>(arr: T[], seed: string): T[] {
   return out;
 }
 
-function pairCost(a: SwissPlayer, b: SwissPlayer): number {
+/**
+ * Optional per-pair fairness surcharge (Faction War). Must stay BELOW the cost of one
+ * 0.5-point score step (SCALE_SCORE = 100) so the Swiss score gap always outranks it — it
+ * only breaks ties *within* a score group toward the more balanced faction matchup. In round 1
+ * (all scores equal) every score term is 0, so fairness drives the whole pairing.
+ */
+export type FairnessCost = (a: SwissPlayer, b: SwissPlayer) => number;
+
+function pairCost(a: SwissPlayer, b: SwissPlayer, fairnessCost?: FairnessCost): number {
   const dScaled = Math.round(Math.abs(a.score - b.score) * 2); // 0.5-point steps → integer
   let cost = dScaled * dScaled * SCALE_SCORE;
   const noContest =
@@ -101,11 +109,15 @@ function pairCost(a: SwissPlayer, b: SwissPlayer): number {
   if (noContest) cost += P_NOCONTEST;
   else if (rematch) cost += P_REMATCH;
   if (a.factionId && b.factionId && a.factionId === b.factionId) cost += P_MIRROR;
+  if (fairnessCost) cost += fairnessCost(a, b);
   return cost;
 }
 
 /** Minimum-cost perfect matching over an even-sized set (Edmonds blossom, max-weight). */
-function pairByMinWeight(active: SwissPlayer[]): Array<[SwissPlayer, SwissPlayer]> {
+function pairByMinWeight(
+  active: SwissPlayer[],
+  fairnessCost?: FairnessCost,
+): Array<[SwissPlayer, SwissPlayer]> {
   const n = active.length;
   if (n < 2) return [];
   if (n === 2) return [[active[0]!, active[1]!]];
@@ -114,7 +126,7 @@ function pairByMinWeight(active: SwissPlayer[]): Array<[SwissPlayer, SwissPlayer
   const cost: number[][] = Array.from({ length: n }, () => new Array<number>(n).fill(0));
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      const c = pairCost(active[i]!, active[j]!);
+      const c = pairCost(active[i]!, active[j]!, fairnessCost);
       cost[i]![j] = c;
       cost[j]![i] = c;
       if (c > maxCost) maxCost = c;
@@ -154,6 +166,7 @@ export function generateSwissRound(
   tournamentId: string,
   players: SwissPlayer[],
   round: number,
+  fairnessCost?: FairnessCost,
 ): SwissMatchInput[] {
   let activePlayers = players;
   let byePlayer: SwissPlayer | null = null;
@@ -177,7 +190,7 @@ export function generateSwissRound(
   // replaces the greedy score-bucket pairer + cross-group fallback + the mirror
   // post-processor (mirror avoidance is now folded into the edge cost).
   const ordered = seededShuffle(activePlayers, `${tournamentId}:${round}`);
-  const pairs = pairByMinWeight(ordered);
+  const pairs = pairByMinWeight(ordered, fairnessCost);
 
   const result: SwissMatchInput[] = pairs.map(([a, b], idx) => ({
     id: randomUUID(),

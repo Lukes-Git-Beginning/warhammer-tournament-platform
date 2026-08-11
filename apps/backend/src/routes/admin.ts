@@ -1757,7 +1757,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // Trigger playoff generation via the standard auto-swiss service
-    await advanceAutoSwissRound(fastify.prisma, id);
+    await advanceAutoSwissRound(fastify.prisma, id, fastify.redis);
 
     const newPlayoffs = await fastify.prisma.match.findMany({
       where: { tournament_id: id, deleted_at: null, phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] } },

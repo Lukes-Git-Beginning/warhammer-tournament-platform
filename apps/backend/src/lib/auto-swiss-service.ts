@@ -9,11 +9,13 @@
 
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@rizzotto/db';
+import type { Redis } from 'ioredis';
 import {
   generateSwissRound,
   computeSwissStandings,
   sortSwissStandings,
 } from './swiss.js';
+import { resolveFactionWarFairness } from './matchmaking-service.js';
 import {
   notifyRoundPairings,
   notifyMatchesCreated,
@@ -145,7 +147,15 @@ export async function reapplyDynamicSizing(
 // startAutoSwiss — called by cron at start_date
 // ---------------------------------------------------------------------------
 
-export async function startAutoSwiss(prisma: PrismaClient, tournamentId: string): Promise<void> {
+export async function startAutoSwiss(
+  prisma: PrismaClient,
+  tournamentId: string,
+  redis?: Redis,
+): Promise<void> {
+  const t = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: { mode: true },
+  });
   const participants = await prisma.tournamentParticipant.findMany({
     where: { tournament_id: tournamentId, status: 'CHECKED_IN', deleted_at: null },
     select: { user_id: true, faction_id: true },
@@ -176,7 +186,8 @@ export async function startAutoSwiss(prisma: PrismaClient, tournamentId: string)
     factionId: factionById.get(userId) ?? null,
   }));
 
-  const round1Matches = generateSwissRound(tournamentId, swissPlayers, 1);
+  const fairnessCost = await resolveFactionWarFairness(prisma, redis, t?.mode);
+  const round1Matches = generateSwissRound(tournamentId, swissPlayers, 1, fairnessCost);
 
   await prisma.$transaction(async (tx) => {
     await tx.tournament.update({
@@ -223,11 +234,15 @@ export async function startAutoSwiss(prisma: PrismaClient, tournamentId: string)
 // advanceAutoSwissRound — called by cron every minute
 // ---------------------------------------------------------------------------
 
-export async function advanceAutoSwissRound(prisma: PrismaClient, tournamentId: string): Promise<void> {
+export async function advanceAutoSwissRound(
+  prisma: PrismaClient,
+  tournamentId: string,
+  redis?: Redis,
+): Promise<void> {
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
     select: {
-      id: true, name: true, slug: true, start_date: true,
+      id: true, name: true, slug: true, start_date: true, mode: true,
       rounds_count: true, playoff_format: true, has_third_place_match: true,
       pending_resize_notice: true,
     },
@@ -261,7 +276,7 @@ export async function advanceAutoSwissRound(prisma: PrismaClient, tournamentId: 
 
   // More Swiss rounds to play
   if (maxSwissRound < tournament.rounds_count) {
-    await generateNextSwissRound(prisma, tournament, swissMatches, maxSwissRound + 1);
+    await generateNextSwissRound(prisma, tournament, swissMatches, maxSwissRound + 1, redis);
     // P6 (#40): if dynamic sizing changed the bracket during the round that just
     // finished, tell the active players once — now that the next pairings are up.
     if (tournament.pending_resize_notice) {
@@ -284,9 +299,10 @@ export async function advanceAutoSwissRound(prisma: PrismaClient, tournamentId: 
 
 async function generateNextSwissRound(
   prisma: PrismaClient,
-  tournament: { id: string; name: string; slug: string; start_date: Date; rounds_count: number | null; playoff_format: string | null },
+  tournament: { id: string; name: string; slug: string; start_date: Date; rounds_count: number | null; playoff_format: string | null; mode: string | null },
   swissMatches: { id: string; round: number; phase: string | null; status: string; player1_id: string | null; player2_id: string | null; winner_id: string | null; match_number: number }[],
   targetRound: number,
+  redis?: Redis,
 ): Promise<void> {
   const matchPlayerIds = swissMatches.flatMap((m) =>
     [m.player1_id, m.player2_id].filter((id): id is string => id !== null),
@@ -349,7 +365,8 @@ async function generateNextSwissRound(
     noContestAvoid: noContestMap.get(s.userId) ?? [],
   }));
 
-  const newMatches = generateSwissRound(tournament.id, swissPlayers, targetRound);
+  const fairnessCost = await resolveFactionWarFairness(prisma, redis, tournament.mode);
+  const newMatches = generateSwissRound(tournament.id, swissPlayers, targetRound, fairnessCost);
 
   await prisma.$transaction(async (tx) => {
     await tx.match.createMany({

@@ -25,6 +25,7 @@ import {
 } from '../lib/playoff-generator.js';
 import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
 import { autoSwissConfig } from '../lib/auto-swiss-service.js';
+import { resolveFactionWarFairness } from '../lib/matchmaking-service.js';
 import { projectBracketPlan } from '../lib/bracket-plan.js';
 import { DEFAULT_BAND } from '../lib/balanced-liechtenstein.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
@@ -315,6 +316,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           slug: true,
           status: true,
           format: true,
+          mode: true,
           host_id: true,
           rounds_count: true,
           playoff_format: true,
@@ -443,7 +445,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             receivedBye: false,
             factionId: factionById.get(userId) ?? null,
           }));
-          bracketMatches = generateSwissRound(tournament.id, swissPlayers, 1);
+          // Faction War: bias round 1 toward the fairest faction matchups (no-op otherwise).
+          const fairnessCost = await resolveFactionWarFairness(
+            fastify.prisma,
+            fastify.redis,
+            tournament.mode,
+          );
+          bracketMatches = generateSwissRound(tournament.id, swissPlayers, 1, fairnessCost);
           break;
         }
 
@@ -586,6 +594,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           status: true,
           format: true,
+          mode: true,
           host_id: true,
           rounds_count: true,
         },
@@ -755,7 +764,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         noContestAvoid: noContestMap.get(s.userId) ?? [],
       }));
 
-      const newMatches = generateSwissRound(tournament.id, swissPlayers, targetRound);
+      // Faction War: keep the score gap primary but break ties toward fairer faction matchups.
+      const fairnessCost = await resolveFactionWarFairness(
+        fastify.prisma,
+        fastify.redis,
+        tournament.mode,
+      );
+      const newMatches = generateSwissRound(tournament.id, swissPlayers, targetRound, fairnessCost);
 
       await fastify.prisma.$transaction(async (tx) => {
         await tx.match.createMany({

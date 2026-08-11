@@ -330,7 +330,7 @@ export default fp(
           select: { id: true },
         });
         for (const t of ongoingTournaments) {
-          await advanceAutoSwissRound(fastify.prisma, t.id).catch((err) =>
+          await advanceAutoSwissRound(fastify.prisma, t.id, fastify.redis).catch((err) =>
             fastify.log.error({ err, tournamentId: t.id }, 'Auto Swiss advance failed'),
           );
         }
