@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.32.3] — 2026-08-11 — Set the map when overriding an Open Play result
+### Fixed
+- **The result-override modal now lets you pick the map for Open Play / Ladder matches too.** It loaded maps only from a tournament's pool, so overriding an Open Play result showed the factions and winner for each game but no map selector at all. It now falls back to the full map list when the match isn't part of a tournament.
+
 ## [1.32.2] — 2026-08-11 — Open Play replay disputes: resolvable, never a dead-end
 ### Fixed
 - **An Open Play replay dispute can now actually be resolved.** Open Play has no tournament host, so a disputed replay had no owner — the game just sat on "waiting for host to resolve" with no way forward, for anyone. Staff can now resolve Open Play disputes directly (the one-click "approve the result" that already exists for tournaments), and every escalation reliably pings the right people: mods/admins for Open Play, the host for a tournament (previously some escalations notified no one at all).
