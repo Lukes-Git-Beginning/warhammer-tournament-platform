@@ -67,11 +67,16 @@ Balanced = `|CtW − 0.5| ≤ 0.025` (the 47.5–52.5% band).
 These are the round-4 questions, reframed now that the picture is clear. I'll fill in my
 recommended default; Alex confirms or changes:
 
-1. **`muTilt` source** — where does "faction X vs faction Y balance" come from? Options: the
-   measured 3×3 matchup matrix (real head-to-head win-rates, but thin with little data) vs.
-   the rating-model faction Model-Strength delta (robust, but not matchup-specific) vs. a
-   blend (matrix where data is thick, else Model-Strength). **Rec: blend** — it degrades
-   gracefully while the data is young. *(Alex was unsure; needs a call once explained.)*
+1. **`muTilt` source** — **DECIDED (Alex, 2026-08-11): the measured matchup matrix (real
+   faction-vs-faction win-rates), NOT Model-Strength.** Model-Strength measures a faction's
+   *absolute* strength and is worthless for balance because it misses targeted counters.
+   Alex's example: **Slaanesh is the strongest faction overall yet has no chance vs Bretonnia** —
+   Model-Strength would call Slaanesh a heavy favourite; the real matchup is the opposite.
+   Thin-data handling is NOT a Model-Strength fallback but a **neutral prior**: shrink each
+   matrix cell toward 50% by sample size (few games → near 50% "unknown"; many games → the real
+   rate), so a rarely-played pairing reads as "coin-flip / we don't know", never as a false tilt.
+   Consequence to accept: while the matchup data is young, most cells sit near the 50% prior, so
+   the finder leans mostly on player faction-proficiency at first and sharpens as games accrue.
 2. **Weights `k_prof`, `k_mu`** — how much the player-skill gap vs. the faction-matchup tilt
    each move the needle. **Rec: start with proficiency dominant, calibrate against real games
    later** (same iterate-against-the-sim approach as BaLi). Not a product decision — I pick
