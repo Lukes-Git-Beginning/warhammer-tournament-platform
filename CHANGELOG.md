@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.32.2] — 2026-08-11 — Open Play replay disputes: resolvable, never a dead-end
+### Fixed
+- **An Open Play replay dispute can now actually be resolved.** Open Play has no tournament host, so a disputed replay had no owner — the game just sat on "waiting for host to resolve" with no way forward, for anyone. Staff can now resolve Open Play disputes directly (the one-click "approve the result" that already exists for tournaments), and every escalation reliably pings the right people: mods/admins for Open Play, the host for a tournament (previously some escalations notified no one at all).
+- **The opponent always gets a say now.** When a reporter says their replay is correct, the opponent is always asked to confirm or reject it — before, depending on how the mismatch was flagged, the opponent could be stuck with only a "waiting" message and no button. An unreadable replay goes to staff for review (who are notified), and the opponent sees a clear "under review" note rather than a silent dead-end.
+
 ## [1.32.1] — 2026-08-09 — Replay dispute: resolve it where you report
 ### Changed
 - **The "the replay is correct → ask my opponent to confirm" step now sits right in the game tile** where a replay mismatch appears — so you no longer have to open the separate match page to start it.
