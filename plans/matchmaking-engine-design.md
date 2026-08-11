@@ -72,11 +72,18 @@ recommended default; Alex confirms or changes:
    *absolute* strength and is worthless for balance because it misses targeted counters.
    Alex's example: **Slaanesh is the strongest faction overall yet has no chance vs Bretonnia** —
    Model-Strength would call Slaanesh a heavy favourite; the real matchup is the opposite.
-   Thin-data handling is NOT a Model-Strength fallback but a **neutral prior**: shrink each
-   matrix cell toward 50% by sample size (few games → near 50% "unknown"; many games → the real
-   rate), so a rarely-played pairing reads as "coin-flip / we don't know", never as a false tilt.
-   Consequence to accept: while the matchup data is young, most cells sit near the 50% prior, so
-   the finder leans mostly on player faction-proficiency at first and sharpens as games accrue.
+   **Use the raw measured rate whenever there's ≥1 game — no shrinkage toward 50%** (Alex trusts
+   the real data; he's the domain expert, and even a small sample carries real signal). Never-
+   played pairings (0 games) are handled PER CONTEXT — DECIDED (Alex, 2026-08-11):
+   - **Single-challenge finder: a never-played matchup is simply NOT offered.** A challenge wants
+     a *known* coin-flip, not a guess — the finder only proposes faction pairings that have real
+     data, and skips the rest. No fallback needed.
+   - **Faction War: a never-played pairing falls back to the Model-Strength delta** (the rough
+     absolute-strength guess), NOT 50% — Alex: "Model-Strength is better than 50% at zero data."
+     The global round-pairing must assign *every* match, and with no real data a rough guess
+     beats a pure coin-flip. This does NOT contradict "Model-Strength is worthless": it's
+     worthless only *relative to real matchup data*, which by definition doesn't exist for a
+     never-played cell. Precedence, then: **real matchup rate (≥1 game) → Model-Strength (0 games).**
 2. **Weights `k_prof`, `k_mu`** — how much the player-skill gap vs. the faction-matchup tilt
    each move the needle. **Rec: start with proficiency dominant, calibrate against real games
    later** (same iterate-against-the-sim approach as BaLi). Not a product decision — I pick
