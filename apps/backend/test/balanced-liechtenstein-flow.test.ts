@@ -164,12 +164,19 @@ describe('Balanced Liechtenstein — incremental pairing flow', () => {
   });
 });
 
-/** Run the whole group phase to completion (finish every pending match, re-tick). */
-async function runGroupPhase(tournamentId: string, rounds: number): Promise<void> {
+/** Run the whole group phase to completion (finish every pending match, re-tick).
+ *  By default player1 wins; pass `winnerOf` to choose a deterministic winner (e.g. the
+ *  stronger seed) so the resulting Swiss standings have a guaranteed spread instead of a
+ *  shuffle-dependent all-square tie. */
+async function runGroupPhase(
+  tournamentId: string,
+  rounds: number,
+  winnerOf: (m: { player1_id: string | null; player2_id: string | null }) => string = (m) => m.player1_id!,
+): Promise<void> {
   await runBalancedPairingTick(app, tournamentId);
   for (let r = 1; r <= rounds; r++) {
     const pending = (await liveMatches(tournamentId)).filter((m) => m.status === 'PENDING');
-    for (const m of pending) await finish(m.id, m.player1_id!);
+    for (const m of pending) await finish(m.id, winnerOf(m));
     await runBalancedPairingTick(app, tournamentId);
   }
 }
@@ -321,14 +328,24 @@ describe('Balanced Liechtenstein — division playoffs', () => {
 
   it('finalizes to complete, distinct placements after division finals', async () => {
     const { tournamentId, users } = await setup([5, 5, 5, 5, 3, 3, 3, 3], 2);
-    await runGroupPhase(tournamentId, 2); // auto-launches the division playoffs
+    // Deterministic results: the stronger seed (lower index) always wins, so the Swiss
+    // standings get a guaranteed spread. (The old "player1 always wins" made the outcome
+    // shuffle-dependent — some pairings left every player all-square, so every placement
+    // was 1 and the distinctness check flaked.)
+    const rank = new Map(users.map((u, i) => [u.id, i]));
+    const strongerWins = (m: { player1_id: string | null; player2_id: string | null }): string => {
+      const p1 = m.player1_id!;
+      if (!m.player2_id) return p1;
+      return (rank.get(p1) ?? 0) <= (rank.get(m.player2_id) ?? 0) ? p1 : m.player2_id;
+    };
+    await runGroupPhase(tournamentId, 2, strongerWins); // auto-launches the division playoffs
 
-    // Play out the division finals.
+    // Play out the division finals (stronger seed wins).
     const finals = await prisma.match.findMany({
       where: { tournament_id: tournamentId, phase: 'PLAYOFF_FINAL', deleted_at: null },
-      select: { id: true, player1_id: true },
+      select: { id: true, player1_id: true, player2_id: true },
     });
-    for (const f of finals) await finish(f.id, f.player1_id!);
+    for (const f of finals) await finish(f.id, strongerWins(f));
 
     const result = await finalizeTournament(prisma, tournamentId, users[0]!.id);
     expect(result.resultCount).toBe(8);
