@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.33.0] — 2026-08-11 — Skill-gated tournaments, faction analytics & UX polish
+### Added
+- **Hosts can gate a tournament by skill band.** When creating or editing any tournament, a host can set a min/max skill-band range — only players whose band falls inside it can register. Players who haven't been classified yet are asked to complete the quick skill questionnaire first, then the gate applies.
+- **The Factions page gained two new charts.** Alongside Popularity (games played), there are now Model Strength (skill-adjusted win-chance) and Win-rate charts, and each faction tile shows its Model Strength as a percentage — the same figure as on the faction page.
+- **Balanced Liechtenstein hosts can turn the third-place match off.** Each division's small final used to be forced on; it's now a toggle (default on) in the create and edit forms.
+### Changed
+- **The landing page orders live tournaments more sensibly.** Ongoing tournaments stay pinned at the top; upcoming ones are now sorted soonest-first instead of newest-first.
+- **In Open Play, entering a lobby code auto-fills the password with `123`** (still editable), so a freshly shared lobby is always joinable.
+- **In 2D3, the drawn faction now shows on the bracket node as soon as it's rolled** — previously it only appeared after the game was reported.
+### Fixed
+- **The Swiss playoff preview now shows the format you'll actually get.** With fewer than 16 (or 8) checked-in players it previews Top 4 (or Top 2) live as the field changes, instead of a ghost Top 8.
+
 ## [1.32.3] — 2026-08-11 — Set the map when overriding an Open Play result
 ### Fixed
 - **The result-override modal now lets you pick the map for Open Play / Ladder matches too.** It loaded maps only from a tournament's pool, so overriding an Open Play result showed the factions and winner for each game but no map selector at all. It now falls back to the full map list when the match isn't part of a tournament.
