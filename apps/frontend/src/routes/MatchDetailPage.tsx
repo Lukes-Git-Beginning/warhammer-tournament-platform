@@ -500,7 +500,7 @@ export function MatchDetailPage() {
 
           <FactionChip faction={match.player1_faction} />
 
-          {match.player1_points != null && (
+          {!isOpenPlay && match.player1_points != null && (
             <span className="mt-1 text-2xl font-bold font-display text-rizzotto-stone-100">
               {match.player1_points}
             </span>
@@ -567,7 +567,7 @@ export function MatchDetailPage() {
 
           <FactionChip faction={match.player2_faction} />
 
-          {match.player2_points != null && (
+          {!isOpenPlay && match.player2_points != null && (
             <span className="mt-1 text-2xl font-bold font-display text-rizzotto-stone-100">
               {match.player2_points}
             </span>
