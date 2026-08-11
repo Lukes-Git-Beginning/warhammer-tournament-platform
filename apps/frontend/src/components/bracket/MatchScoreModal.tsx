@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
-import { reportMatchResult, overrideMatchResult, getTournamentMaps, getFactions, getMatchGames, restoreMatch, cancelMatch, fullResetMatch, backfillNextSeed, swapPlayer, deleteMatch, getParticipants, forfeitMatch, setMatchNoContest } from '@/lib/api';
+import { reportMatchResult, overrideMatchResult, getTournamentMaps, getMaps, getFactions, getMatchGames, restoreMatch, cancelMatch, fullResetMatch, backfillNextSeed, swapPlayer, deleteMatch, getParticipants, forfeitMatch, setMatchNoContest } from '@/lib/api';
 import type { OverrideGameInput } from '@/lib/api';
 import { useEffect, useState } from 'react';
 
@@ -200,10 +200,12 @@ export function MatchScoreModal({
   const [p1FactionId, setP1FactionId] = useState(initialP1FactionId ?? '');
   const [p2FactionId, setP2FactionId] = useState(initialP2FactionId ?? '');
 
+  // Tournament matches use the tournament's map pool; Open Play / Ladder matches have no
+  // tournament, so fall back to the global map list — otherwise the override modal shows no
+  // map selector at all (the per-game rows would have factions + winner but no map).
   const { data: mapsData } = useQuery({
-    queryKey: ['tournament-maps', tournamentSlug],
-    queryFn: () => getTournamentMaps(tournamentSlug!),
-    enabled: !!tournamentSlug,
+    queryKey: tournamentSlug ? ['tournament-maps', tournamentSlug] : ['maps'],
+    queryFn: () => (tournamentSlug ? getTournamentMaps(tournamentSlug) : getMaps()),
     staleTime: 5 * 60_000,
   });
   const maps = mapsData?.data ?? [];
