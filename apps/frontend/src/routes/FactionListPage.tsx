@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { getFactions } from '@/lib/api';
+import { getFactions, getMatchupMatrix } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
-import { FactionPopularityChart } from '@/components/meta/FactionPopularityChart';
+import { FactionBarChart } from '@/components/meta/FactionPopularityChart';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/ui/empty-state';
-import type { FactionWithStatsDto } from '@rizzotto/types';
+import type { FactionWithStatsDto, FactionStrengthDto } from '@rizzotto/types';
 
-function FactionCard({ entry }: { entry: FactionWithStatsDto }) {
+function FactionCard({ entry, strength }: { entry: FactionWithStatsDto; strength?: FactionStrengthDto }) {
   const { t } = useTranslation();
   const { faction, stats } = entry;
 
@@ -29,7 +29,7 @@ function FactionCard({ entry }: { entry: FactionWithStatsDto }) {
         {faction.name}
       </span>
       {stats ? (
-        <div className="flex gap-3 text-xs text-rizzotto-stone-500">
+        <div className="flex flex-wrap justify-center gap-3 text-xs text-rizzotto-stone-500">
           <span>{t('factions_page.matches_count', { count: stats.matches_played })}</span>
           <span>
             {stats.win_rate !== null
@@ -38,6 +38,14 @@ function FactionCard({ entry }: { entry: FactionWithStatsDto }) {
                 })
               : '—'}
           </span>
+          {strength && (
+            <span
+              className={strength.meanNeutralWinChance >= 0.5 ? 'text-emerald-400' : 'text-red-400'}
+              title="Model Strength — skill-adjusted win-chance of this faction's players vs a neutral opponent"
+            >
+              {Math.round(strength.meanNeutralWinChance * 100)}%
+            </span>
+          )}
         </div>
       ) : (
         <div className="text-xs text-rizzotto-stone-600">{t('factions_page.no_stats')}</div>
@@ -52,9 +60,18 @@ export function FactionListPage() {
     queryKey: ['factions'],
     queryFn: () => getFactions(),
   });
+  // Model Strength lives in the matchup-matrix payload (#13), same query the detail page uses.
+  const { data: modelMatrix } = useQuery({
+    queryKey: ['matchup-matrix'],
+    queryFn: () => getMatchupMatrix(),
+    staleTime: 2 * 60 * 1000,
+  });
 
   const hasNoSeason = !!data && !data.season;
   const hasData = !!data?.season && data.data.length > 0;
+
+  const strengthById = new Map((modelMatrix?.factionStrengths ?? []).map((s) => [s.factionId, s]));
+  const nameById = new Map((data?.data ?? []).map((e) => [e.faction.id, e.faction.name]));
 
   return (
     <PageShell variant="wide">
@@ -94,14 +111,38 @@ export function FactionListPage() {
       {hasData && data && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {data.data.map((entry) => (
-            <FactionCard key={entry.faction.id} entry={entry} />
+            <FactionCard
+              key={entry.faction.id}
+              entry={entry}
+              strength={strengthById.get(entry.faction.id)}
+            />
           ))}
         </div>
       )}
 
       {hasData && data && (
-        <div className="mt-8">
-          <FactionPopularityChart factions={data.data} />
+        <div className="mt-8 space-y-6">
+          <FactionBarChart
+            title="Model Strength — skill-adjusted win-chance"
+            valueLabel="Strength %"
+            data={(modelMatrix?.factionStrengths ?? []).map((s) => ({
+              name: nameById.get(s.factionId) ?? s.factionId,
+              value: Math.round(s.meanNeutralWinChance * 100),
+            }))}
+          />
+          <FactionBarChart
+            title="Win rate"
+            valueLabel="Win %"
+            data={data.data.map((e) => ({
+              name: e.faction.name,
+              value: Math.round((e.stats?.win_rate ?? 0) * 100),
+            }))}
+          />
+          <FactionBarChart
+            title="Popularity — games played"
+            valueLabel="Games"
+            data={data.data.map((e) => ({ name: e.faction.name, value: e.stats?.matches_played ?? 0 }))}
+          />
         </div>
       )}
     </PageShell>
