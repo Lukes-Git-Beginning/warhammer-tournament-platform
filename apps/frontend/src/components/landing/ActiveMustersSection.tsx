@@ -140,7 +140,13 @@ export function ActiveMustersSection() {
   const all = data?.data ?? [];
   const tournaments = all
     .filter((t) => t.status === 'ONGOING' || t.status === 'OPEN_REGISTRATION' || t.status === 'REGISTRATION_CLOSED')
-    .sort((a, b) => (a.status === 'ONGOING' ? -1 : b.status === 'ONGOING' ? 1 : 0))
+    .sort((a, b) => {
+      // ONGOING pinned to the top, then upcoming ascending by start date (soonest first)
+      const aLive = a.status === 'ONGOING';
+      const bLive = b.status === 'ONGOING';
+      if (aLive !== bLive) return aLive ? -1 : 1;
+      return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
+    })
     .slice(0, 6);
   const hasTournaments = tournaments.length > 0;
 
