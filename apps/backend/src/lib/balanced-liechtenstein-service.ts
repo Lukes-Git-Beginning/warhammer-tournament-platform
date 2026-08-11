@@ -723,6 +723,7 @@ export function buildDivisionBracket(
   tournamentId: string,
   playoffRound: number,
   startMatchNumber: number,
+  hasThirdPlace: boolean,
 ): {
   rows: Prisma.MatchCreateManyInput[];
   playable: Array<{ id: string; round: number; player1_id: string; player2_id: string }>;
@@ -755,22 +756,25 @@ export function buildDivisionBracket(
 
   if (fmt === 'TOP2') {
     rows.push(row(randomUUID(), playoffRound, seeds[0] ?? null, seeds[1] ?? null, 'PLAYOFF_FINAL', null, null));
-    if (seeds[2] && seeds[3]) {
+    if (hasThirdPlace && seeds[2] && seeds[3]) {
       rows.push(row(randomUUID(), playoffRound, seeds[2], seeds[3], 'PLAYOFF_THIRD_PLACE', null, null));
     }
   } else if (fmt === 'TOP4') {
     const gfId = randomUUID();
-    const thirdId = randomUUID();
+    // No third-place match → the SF losers advance nowhere (loser_next_match_id stays null).
+    const thirdId = hasThirdPlace ? randomUUID() : null;
     rows.push(
       row(randomUUID(), playoffRound, seeds[0]!, seeds[3]!, 'PLAYOFF_SF', gfId, thirdId),
       row(randomUUID(), playoffRound, seeds[1]!, seeds[2]!, 'PLAYOFF_SF', gfId, thirdId),
       row(gfId, playoffRound + 1, null, null, 'PLAYOFF_FINAL', null, null),
-      row(thirdId, playoffRound + 1, null, null, 'PLAYOFF_THIRD_PLACE', null, null),
     );
+    if (thirdId) {
+      rows.push(row(thirdId, playoffRound + 1, null, null, 'PLAYOFF_THIRD_PLACE', null, null));
+    }
   } else {
     // TOP8 — QF (round N), SF (N+1), GF + 3rd (N+2). Seeding 1v8 / 4v5 / 3v6 / 2v7.
     const gfId = randomUUID();
-    const thirdId = randomUUID();
+    const thirdId = hasThirdPlace ? randomUUID() : null;
     const sf1Id = randomUUID();
     const sf2Id = randomUUID();
     rows.push(
@@ -781,8 +785,10 @@ export function buildDivisionBracket(
       row(sf1Id, playoffRound + 1, null, null, 'PLAYOFF_SF', gfId, thirdId),
       row(sf2Id, playoffRound + 1, null, null, 'PLAYOFF_SF', gfId, thirdId),
       row(gfId, playoffRound + 2, null, null, 'PLAYOFF_FINAL', null, null),
-      row(thirdId, playoffRound + 2, null, null, 'PLAYOFF_THIRD_PLACE', null, null),
     );
+    if (thirdId) {
+      rows.push(row(thirdId, playoffRound + 2, null, null, 'PLAYOFF_THIRD_PLACE', null, null));
+    }
   }
 
   const playable = rows
@@ -885,7 +891,7 @@ export async function startBalancedPlayoffs(
   const forceBands = new Set(opts.forceBands ?? []);
   const tournament = await fastify.prisma.tournament.findFirst({
     where: { id: tournamentId, deleted_at: null },
-    select: { format: true, status: true, rounds_count: true, playoff_format: true, playoff_plan: true },
+    select: { format: true, status: true, rounds_count: true, playoff_format: true, playoff_plan: true, has_third_place_match: true },
   });
   if (!tournament || tournament.format !== 'BALANCED_LIECHTENSTEIN') {
     return { error: 'Not a Balanced Liechtenstein tournament' };
@@ -1040,7 +1046,7 @@ export async function startBalancedPlayoffs(
     const spanBands = new Set(pool.players.map((p) => p.band));
     // Host force: skip the borrowed-band completeness wait for this division only.
     if (!forceBands.has(pool.band) && ![...spanBands].every(bandComplete)) continue;
-    const built = buildDivisionBracket(pool.seeds, tournamentId, playoffRound, nextNumber);
+    const built = buildDivisionBracket(pool.seeds, tournamentId, playoffRound, nextNumber, tournament.has_third_place_match);
     rows.push(...built.rows);
     allPlayable.push(...built.playable);
     nextNumber = built.nextMatchNumber;

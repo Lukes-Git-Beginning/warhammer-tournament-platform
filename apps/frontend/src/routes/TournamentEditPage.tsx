@@ -1113,6 +1113,21 @@ export function TournamentEditPage() {
                 </FieldHint>
               </div>
 
+              {/* Third-place match — BaLi always has playoffs; host toggles the per-division 3rd place. */}
+              {form.playoff_format !== 'NONE' && (
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    name="has_third_place_match"
+                    checked={form.has_third_place_match}
+                    onChange={handleChange}
+                    disabled={ongoingLocked}
+                    className="accent-rizzotto-gold-400 h-4 w-4 disabled:opacity-50"
+                  />
+                  <span className="text-sm text-rizzotto-stone-300">Third-place match (per division)</span>
+                </label>
+              )}
+
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <Label htmlFor="tef-bali-swiss-fmt">Group Format</Label>
@@ -1142,7 +1157,7 @@ export function TournamentEditPage() {
               </div>
 
               <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-3 text-sm text-rizzotto-stone-300">
-                <p>Players are paired within their own skill division each round. When the group stage ends, each division runs its own playoff bracket (with a third-place match). The playoff size above controls how divisions are formed — smaller keeps them band-pure, larger merges them into fewer, bigger mixed brackets.</p>
+                <p>Players are paired within their own skill division each round. When the group stage ends, each division runs its own playoff bracket (with an optional third-place match, toggled above). The playoff size above controls how divisions are formed — smaller keeps them band-pure, larger merges them into fewer, bigger mixed brackets.</p>
               </div>
             </>
           ) : !isAutoSwiss ? (

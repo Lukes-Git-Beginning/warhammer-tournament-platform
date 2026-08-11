@@ -302,7 +302,7 @@ export function TournamentCreateForm() {
               auto_sizing: value === 'BALANCED_LIECHTENSTEIN',
               // BaLi playoff size is a host choice (division formation), no longer
               // auto-derived — default it to homogeneous Top 2 on format select.
-              ...(value === 'BALANCED_LIECHTENSTEIN' ? { playoff_format: 'TOP2' as const } : {}),
+              ...(value === 'BALANCED_LIECHTENSTEIN' ? { playoff_format: 'TOP2' as const, has_third_place_match: true } : {}),
             }
           : {
               finale_match_format: value === 'DOUBLE_ELIMINATION' ? 'BO3' : 'BO1',
@@ -311,7 +311,7 @@ export function TournamentCreateForm() {
               auto_sizing: value === 'BALANCED_LIECHTENSTEIN',
               // BaLi playoff size is a host choice (division formation), no longer
               // auto-derived — default it to homogeneous Top 2 on format select.
-              ...(value === 'BALANCED_LIECHTENSTEIN' ? { playoff_format: 'TOP2' as const } : {}),
+              ...(value === 'BALANCED_LIECHTENSTEIN' ? { playoff_format: 'TOP2' as const, has_third_place_match: true } : {}),
             }
         : {}),
       ...(name === 'mode' && value === 'ONE_V_THREE'
@@ -620,7 +620,7 @@ export function TournamentCreateForm() {
             {(form.auto_sizing ?? true)
               ? 'The round count is set automatically from how many players check in (4–7: 3R, 8–15: 5R, 16+: 4R).'
               : 'You set a fixed round count below.'}{' '}
-            When the group stage ends, every division runs its own playoff bracket sized to that division (TOP 2 / 4 / 8, each with a third-place match).
+            When the group stage ends, every division runs its own playoff bracket sized to that division (TOP 2 / 4 / 8, each with an optional third-place match).
           </p>
         </div>
       )}
@@ -762,9 +762,9 @@ export function TournamentCreateForm() {
               )}
             </div>
 
-            {/* Third-place match — only when playoffs are enabled (SE uses its own below).
-                Balanced Liechtenstein runs a third-place match per division automatically. */}
-            {!isBalanced && form.playoff_format && form.playoff_format !== 'NONE' && (
+            {/* Third-place match — when playoffs are enabled (SE uses its own below). Balanced
+                Liechtenstein always has playoffs; its host can toggle the per-division 3rd place. */}
+            {(isBalanced || (form.playoff_format && form.playoff_format !== 'NONE')) && (
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
