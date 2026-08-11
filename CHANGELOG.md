@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.33.1] — 2026-08-11 — Open Play dispute-flow fixes
+### Fixed
+- **The "the replay is correct" prompt no longer flickers away.** When your reported replay didn't match, the prompt with its three options (upload the right file / "the replay is correct → ask opponent" / explain) could vanish on the next background refresh, leaving only a single button. It now stays put until you pick an option.
+- **Open Play matches no longer show tournament points.** A stray points number (a Swiss-scoring value) was shown next to Open Play players; only the game score (e.g. 0–1) belongs there, so the points are now hidden in Open Play.
+
 ## [1.33.0] — 2026-08-11 — Skill-gated tournaments, faction analytics & UX polish
 ### Added
 - **Hosts can gate a tournament by skill band.** When creating or editing any tournament, a host can set a min/max skill-band range — only players whose band falls inside it can register. Players who haven't been classified yet are asked to complete the quick skill questionnaire first, then the gate applies.
