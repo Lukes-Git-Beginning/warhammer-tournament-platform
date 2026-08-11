@@ -133,6 +133,7 @@ export function computeSlotLabels(
 
 export function SVGBracket({ data, players, factionMap, tournamentMode, format, bandByUser, onMatchClick }: SVGBracketProps) {
   const isSft = tournamentMode === 'SFT';
+  const is2d3 = tournamentMode === 'TWO_D_THREE';
   const layout = computeBracketLayout(data.matches, bandByUser);
 
   const slotLabels = computeSlotLabels(data.matches, players);
@@ -211,8 +212,9 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, format, 
         const p2 = m.player2Id ? players?.get(m.player2Id) : undefined;
         const f1 = m.player1FactionId ? factionMap?.get(m.player1FactionId) : undefined;
         const f2 = m.player2FactionId ? factionMap?.get(m.player2FactionId) : undefined;
-        // Show faction logo for SFT (fixed faction per event) or BPT Bo1 (single game → faction is unambiguous).
-        const showFaction = isSft || m.matchFormat === 'BO1';
+        // Show faction logo for SFT (fixed faction per event), 2D3 (drawn per game at creation),
+        // or Bo1 (single game → faction is unambiguous).
+        const showFaction = isSft || is2d3 || m.matchFormat === 'BO1';
         const labels = slotLabels.get(m.matchId);
         const p1Band = m.player1Id ? bandByUser?.get(m.player1Id) : undefined;
         const p2Band = m.player2Id ? bandByUser?.get(m.player2Id) : undefined;

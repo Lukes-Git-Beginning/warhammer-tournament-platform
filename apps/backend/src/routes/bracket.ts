@@ -166,13 +166,19 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
               ? tournament.playoff_match_format
               : tournament.swiss_match_format,
           // SFT: TournamentParticipant.faction_id is the committed faction — always authoritative.
-          // Other modes: per-match faction first, TournamentParticipant as fallback.
+          // 2D3: the faction is drawn onto each MatchGame at creation, so surface it on the node
+          // as soon as it's rolled (before the game is reported), like SFT/2FT. Other modes:
+          // per-match faction first, then the locked pick, then TournamentParticipant.
           player1FactionId: tournament.mode === TournamentMode.SFT
             ? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null)
-            : m.player1_faction_id ?? lockedFactions(m.games).p1 ?? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null),
+            : tournament.mode === TournamentMode.TWO_D_THREE
+              ? (m.games.find((g) => g.player1_faction_id)?.player1_faction_id ?? null)
+              : m.player1_faction_id ?? lockedFactions(m.games).p1 ?? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null),
           player2FactionId: tournament.mode === TournamentMode.SFT
             ? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null)
-            : m.player2_faction_id ?? lockedFactions(m.games).p2 ?? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null),
+            : tournament.mode === TournamentMode.TWO_D_THREE
+              ? (m.games.find((g) => g.player2_faction_id)?.player2_faction_id ?? null)
+              : m.player2_faction_id ?? lockedFactions(m.games).p2 ?? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null),
           player1GameWins: m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length,
           player2GameWins: m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length,
           pickedMapId: m.games.find((g) => g.map_decision?.picked_map_id)?.map_decision?.picked_map_id ?? null,
