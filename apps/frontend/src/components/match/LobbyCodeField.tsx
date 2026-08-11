@@ -17,6 +17,16 @@ export function LobbyCodeField({ matchId, gameNumber, currentCode, currentPasswo
   const queryClient = useQueryClient();
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['match-games', matchId] });
 
+  // NI-1: when a lobby code is entered and no password is set yet, default the password to
+  // "123" (still editable) so a freshly-shared lobby is always joinable. Clearing the code
+  // never sets a password.
+  const handleCodeSaved = (code: string | null) => {
+    invalidate();
+    if (code && !currentPassword) {
+      void setLobbyPassword(matchId, gameNumber, '123').then(invalidate);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-2">
       <LobbyValueRow
@@ -26,7 +36,7 @@ export function LobbyCodeField({ matchId, gameNumber, currentCode, currentPasswo
         addLabel="+ Add lobby code"
         canEdit={canEdit}
         onSave={(v) => setLobbyCode(matchId, gameNumber, v)}
-        onSaved={invalidate}
+        onSaved={handleCodeSaved}
       />
       <LobbyValueRow
         label="Lobby Password"
@@ -48,7 +58,7 @@ interface RowProps {
   addLabel: string;
   canEdit: boolean;
   onSave: (value: string | null) => Promise<unknown>;
-  onSaved: () => void;
+  onSaved: (value: string | null) => void;
 }
 
 function LobbyValueRow({ label, current, placeholder, addLabel, canEdit, onSave, onSaved }: RowProps) {
@@ -58,8 +68,8 @@ function LobbyValueRow({ label, current, placeholder, addLabel, canEdit, onSave,
 
   const mutation = useMutation({
     mutationFn: (value: string | null) => onSave(value),
-    onSuccess: () => {
-      onSaved();
+    onSuccess: (_data, value) => {
+      onSaved(value);
       setEditing(false);
     },
   });
