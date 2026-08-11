@@ -87,6 +87,8 @@ type EditFormData = {
   faction_pool: string[];
   restricted_factions: string[];
   visibility: 'PUBLIC' | 'PRIVATE';
+  min_band: number | null;
+  max_band: number | null;
 };
 
 const EditSchema = z.object({
@@ -248,6 +250,8 @@ function buildInitialForm(t: Tournament): EditFormData {
     faction_pool: t.faction_allowlist ?? [],
     restricted_factions: t.restricted_factions ?? [],
     visibility: t.visibility ?? 'PUBLIC',
+    min_band: t.min_band ?? null,
+    max_band: t.max_band ?? null,
   };
 }
 
@@ -311,6 +315,8 @@ function buildPatchBody(
   if (form.has_third_place_match !== (current.has_third_place_match ?? false)) {
     body.has_third_place_match = form.has_third_place_match;
   }
+  if (form.min_band !== (current.min_band ?? null)) body.min_band = form.min_band;
+  if (form.max_band !== (current.max_band ?? null)) body.max_band = form.max_band;
   if (form.swiss_match_format !== (current.swiss_match_format ?? 'BO1')) body.swiss_match_format = form.swiss_match_format;
   if (form.playoff_match_format !== (current.playoff_match_format ?? 'BO1')) body.playoff_match_format = form.playoff_match_format;
   if (form.finale_match_format !== (current.finale_match_format ?? 'BO1')) body.finale_match_format = form.finale_match_format;
@@ -1254,6 +1260,50 @@ export function TournamentEditPage() {
             </span>
           </label>
         )}
+
+        {/* ── Skill Gate ────────────────────────────────────────────────── */}
+        <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+          <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
+            Skill Gate
+          </legend>
+          <p className="text-xs text-rizzotto-stone-500">
+            Restrict registration to players within a band range. Unrated players will be prompted to calibrate first. Leave both as "No limit" to allow all players.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="tef-min-band">Min band (inclusive)</Label>
+              <Select
+                id="tef-min-band"
+                name="min_band"
+                value={form.min_band ?? ''}
+                onChange={(e) => set('min_band', e.target.value === '' ? null : Number(e.target.value))}
+              >
+                <option value="">No limit</option>
+                <option value="1">1 — New</option>
+                <option value="2">2 — Beginner</option>
+                <option value="3">3 — Intermediate</option>
+                <option value="4">4 — Advanced</option>
+                <option value="5">5 — Top</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="tef-max-band">Max band (inclusive)</Label>
+              <Select
+                id="tef-max-band"
+                name="max_band"
+                value={form.max_band ?? ''}
+                onChange={(e) => set('max_band', e.target.value === '' ? null : Number(e.target.value))}
+              >
+                <option value="">No limit</option>
+                <option value="1">1 — New</option>
+                <option value="2">2 — Beginner</option>
+                <option value="3">3 — Intermediate</option>
+                <option value="4">4 — Advanced</option>
+                <option value="5">5 — Top</option>
+              </Select>
+            </div>
+          </div>
+        </fieldset>
 
         {/* ── Map Pool ──────────────────────────────────────────────────── */}
         <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">

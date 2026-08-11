@@ -50,6 +50,8 @@ const TournamentCreateSchema = z.object({
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   faction_pool: z.array(z.string()).optional(),
   restricted_factions: z.array(z.string()).optional(),
+  min_band: z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().int().min(1).max(5).nullable()).optional(),
+  max_band: z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().int().min(1).max(5).nullable()).optional(),
 });
 
 type FormData = z.infer<typeof TournamentCreateSchema>;
@@ -190,6 +192,8 @@ export function TournamentCreateForm() {
     map_decision_mode: 'RANDOM_PICK_BAN',
     map_pool: [],
     map_preset_config: null,
+    min_band: null,
+    max_band: null,
   });
   const [mapSearch, setMapSearch] = useState('');
   const [factionPoolEnabled, setFactionPoolEnabled] = useState(false);
@@ -908,6 +912,50 @@ export function TournamentCreateForm() {
             )}
           </>
         ) : null}
+      </fieldset>
+
+      {/* ─── Skill Gate ─────────────────────────────────────────────────── */}
+      <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+        <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
+          Skill Gate
+        </legend>
+        <p className="text-xs text-rizzotto-stone-500">
+          Restrict registration to players within a band range. Unrated players will be prompted to calibrate first. Leave both as "No limit" to allow all players.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="tcf-min-band">Min band (inclusive)</Label>
+            <Select
+              id="tcf-min-band"
+              name="min_band"
+              value={form.min_band ?? ''}
+              onChange={handleChange}
+            >
+              <option value="">No limit</option>
+              <option value="1">1 — New</option>
+              <option value="2">2 — Beginner</option>
+              <option value="3">3 — Intermediate</option>
+              <option value="4">4 — Advanced</option>
+              <option value="5">5 — Top</option>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="tcf-max-band">Max band (inclusive)</Label>
+            <Select
+              id="tcf-max-band"
+              name="max_band"
+              value={form.max_band ?? ''}
+              onChange={handleChange}
+            >
+              <option value="">No limit</option>
+              <option value="1">1 — New</option>
+              <option value="2">2 — Beginner</option>
+              <option value="3">3 — Intermediate</option>
+              <option value="4">4 — Advanced</option>
+              <option value="5">5 — Top</option>
+            </Select>
+          </div>
+        </div>
       </fieldset>
 
       {/* ─── Map Pool ──────────────────────────────────────────────────── */}

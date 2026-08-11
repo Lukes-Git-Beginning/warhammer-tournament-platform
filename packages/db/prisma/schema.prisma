@@ -321,6 +321,9 @@ model Tournament {
   rounds_count           Int                  @default(5) // 3–6 via constraint
   has_third_place_match  Boolean              @default(false)
   playoff_format         PlayoffFormat        @default(NONE)
+  // NI-5: skill-gate — a host restricts registration to a gating-band range (1..5). null = open.
+  min_band               Int?
+  max_band               Int?
   // #37: the two behaviours that used to be baked into AUTO_SWISS, now opt-in for
   // any format. auto_sizing = derive rounds + playoff from the check-in count at
   // start; auto_advance = the cron advances rounds + generates playoffs.

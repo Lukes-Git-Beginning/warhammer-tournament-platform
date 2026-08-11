@@ -10,7 +10,7 @@ import {
   getTakenFactions,
   getPlayerClassification,
 } from '@/lib/api';
-import type { Tournament, ParticipantStatus } from '@/lib/api';
+import type { Tournament, ParticipantStatus, ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { CalibrationWizard } from '@/components/meta/CalibrationWizard';
@@ -331,6 +331,10 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
   const [pickingFaction, setPickingFaction] = useState(false);
   const [selectedFactions, setSelectedFactions] = useState<string[]>([]);
   const [pickingBand, setPickingBand] = useState(false);
+  // Skill-gate: when the backend returns CalibrationRequired (unrated player
+  // trying to register for a band-gated tournament), open the wizard so they
+  // can calibrate and retry immediately.
+  const [calibrationOpen, setCalibrationOpen] = useState(false);
   // FREE_PICK: first the player chooses a fixed faction (SFT-like) or to pick
   // match-by-match; 'fixed' then flows into the normal faction picker.
   const [freePickChoice, setFreePickChoice] = useState<'fixed' | 'later' | null>(null);
@@ -386,6 +390,11 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
       void queryClient.invalidateQueries({ queryKey: ['tournament', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['participant-me', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['tournament-participants', tournament.slug] });
+    },
+    onError: (err: unknown) => {
+      if ((err as ApiError).errorCode === 'CalibrationRequired') {
+        setCalibrationOpen(true);
+      }
     },
   });
 
@@ -526,6 +535,19 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
 
   return (
     <>
+      {/* Skill-gate calibration: open when an unrated player hits a band-gated tournament */}
+      {userId && (
+        <CalibrationWizard
+          userId={userId}
+          open={calibrationOpen}
+          onOpenChange={(open) => {
+            setCalibrationOpen(open);
+            // After calibration completes, reset the register error so the user can retry
+            if (!open) register.reset();
+          }}
+        />
+      )}
+
       {/* Band picker dialog for BALANCED_LIECHTENSTEIN */}
       {isBalancedLiechtenstein && userId && (
         <BandPickerDialog
@@ -609,7 +631,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
         >
           {register.isPending ? t('tournament.register.pending') : lateJoinMode ? 'Request to join' : isReRegister ? 'Register again' : t('tournament.register.cta')}
         </Button>
-        {register.isError && (
+        {register.isError && (register.error as ApiError).errorCode !== 'CalibrationRequired' && (
           <span className="text-xs text-rizzotto-danger">{(register.error as Error).message}</span>
         )}
       </div>

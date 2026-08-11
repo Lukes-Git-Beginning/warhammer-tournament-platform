@@ -6,6 +6,8 @@ import { notifyHostsOfWithdrawal, notifyHostsLateJoinRequest, notifyLateJoinDeci
 import { addLateParticipant, setParticipantFactionOp } from '../lib/tournament-management.js';
 import { reapplyDynamicSizing } from '../lib/auto-swiss-service.js';
 import { admitBalancedLateJoiner } from '../lib/balanced-liechtenstein-service.js';
+import { getPlayerClassification } from '../lib/skill-classification-service.js';
+import { BAND_NAMES } from '../lib/skill-classification.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -53,6 +55,8 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           mode: true,
           start_date: true,
           max_participants: true,
+          min_band: true,
+          max_band: true,
           faction_allowlist: { select: { faction_id: true } },
           restricted_factions: { select: { faction_id: true } },
           _count: {
@@ -94,6 +98,25 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           message: 'Tournament is full',
           statusCode: 422,
         });
+      }
+
+      // NI-5: skill-gate — a host may restrict registration to a gating-band range. Unrated
+      // players must calibrate first (CalibrationRequired → the client opens the questionnaire).
+      if (tournament.min_band != null || tournament.max_band != null) {
+        const season = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
+        if (season) {
+          const classification = await getPlayerClassification(fastify.prisma, fastify.redis, season.id, request.user.sub);
+          if (!classification.rated) {
+            return reply.code(422).send({ error: 'CalibrationRequired', message: 'Complete your skill calibration before registering for this tournament.', statusCode: 422 });
+          }
+          const band = classification.gatingBand;
+          if (tournament.min_band != null && band < tournament.min_band) {
+            return reply.code(422).send({ error: 'UnprocessableEntity', message: `This tournament requires at least ${BAND_NAMES[tournament.min_band]!} — your skill band is ${BAND_NAMES[band]!}.`, statusCode: 422 });
+          }
+          if (tournament.max_band != null && band > tournament.max_band) {
+            return reply.code(422).send({ error: 'UnprocessableEntity', message: `This tournament is capped at ${BAND_NAMES[tournament.max_band]!} — your skill band is ${BAND_NAMES[band]!}.`, statusCode: 422 });
+          }
+        }
       }
 
       // Validate faction if provided

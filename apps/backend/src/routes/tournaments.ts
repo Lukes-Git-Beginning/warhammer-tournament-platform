@@ -192,6 +192,9 @@ const CreateTournamentSchema = z.object({
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   faction_pool: z.array(z.string().min(1)).max(24).optional(),
   restricted_factions: z.array(z.string().min(1)).max(24).optional(),
+  has_third_place_match: z.boolean().optional(),
+  min_band: z.number().int().min(1).max(5).nullable().optional(),
+  max_band: z.number().int().min(1).max(5).nullable().optional(),
 }).superRefine(refineMapPool).superRefine(refineOneVThree);
 
 const PatchTournamentSchema = z.object({
@@ -234,6 +237,8 @@ const PatchTournamentSchema = z.object({
   counts_for_leaderboard: z.boolean().optional(),
   faction_pool: z.array(z.string().min(1)).optional(),
   restricted_factions: z.array(z.string().min(1)).optional(),
+  min_band: z.number().int().min(1).max(5).nullable().optional(),
+  max_band: z.number().int().min(1).max(5).nullable().optional(),
 })
   .superRefine(refineMapPool)
   .superRefine(refineOneVThree)
@@ -494,6 +499,9 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           grand_final_reset_format: data.grand_final_reset_format ?? undefined,
           map_decision_mode: isAutoSwiss ? 'RANDOM_PICK_BAN' : data.map_decision_mode,
           map_preset_config: data.map_preset_config != null ? (data.map_preset_config as Prisma.InputJsonValue) : undefined,
+          has_third_place_match: data.has_third_place_match ?? false,
+          min_band: data.min_band ?? null,
+          max_band: data.max_band ?? null,
         },
         select: {
           id: true,
@@ -758,6 +766,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         allow_late_join_requests: true,
         map_decision_mode: true,
         map_preset_config: true,
+        min_band: true,
+        max_band: true,
         created_at: true,
         updated_at: true,
         host: { select: { id: true, username: true, avatar_url: true } },
@@ -838,6 +848,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           map_preset_config: true,
           has_third_place_match: true,
           counts_for_leaderboard: true,
+          min_band: true,
+          max_band: true,
         },
       });
 

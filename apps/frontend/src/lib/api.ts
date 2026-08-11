@@ -104,6 +104,8 @@ export interface Tournament {
   map_pool?: MapDto[];
   faction_allowlist?: string[];
   restricted_factions?: string[];
+  min_band?: number | null;
+  max_band?: number | null;
 }
 
 export type MapDecisionMode = 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
@@ -213,6 +215,8 @@ export interface TournamentCreate {
   map_preset_config?: MapPresetConfig | null;
   map_pool?: string[];
   faction_pool?: string[];
+  min_band?: number | null;
+  max_band?: number | null;
 }
 
 // Mirror of backend PatchTournamentSchema (apps/backend/src/routes/tournaments.ts).
@@ -257,6 +261,8 @@ export interface TournamentPatchInput {
   // always-editable metadata
   is_major?: boolean;
   counts_for_leaderboard?: boolean;
+  min_band?: number | null;
+  max_band?: number | null;
 }
 
 export interface TournamentPatchResponse {
@@ -272,11 +278,14 @@ export interface ApiError extends Error {
   status: number;
   /** i18n key if the error message was matched to a known backend string */
   i18nKey?: string;
+  /** Machine-readable error code from the backend `error` field (e.g. "CalibrationRequired"). */
+  errorCode?: string;
 }
 
-function makeApiError(message: string, status: number): ApiError {
+function makeApiError(message: string, status: number, errorCode?: string): ApiError {
   const err = new Error(message) as ApiError;
   err.status = status;
+  if (errorCode) err.errorCode = errorCode;
   return err;
 }
 
@@ -322,13 +331,15 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   if (!res.ok) {
     let message = res.statusText;
+    let errorCode: string | undefined;
     try {
       const body = (await res.json()) as { error?: string; message?: string };
+      errorCode = body.error;
       message = body.message ?? body.error ?? message;
     } catch {
       // ignore parse errors
     }
-    const err = makeApiError(message, res.status);
+    const err = makeApiError(message, res.status, errorCode);
     err.i18nKey = getErrorI18nKey(message);
     throw err;
   }
