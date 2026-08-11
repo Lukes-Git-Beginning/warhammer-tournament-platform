@@ -479,8 +479,10 @@ export function GameTile({
                 canEdit={isParticipant}
               />
 
-              {/* Result reporting — only for participants */}
-              {isParticipant && !game.reportedWinnerId && (
+              {/* Result reporting — only for participants. Keep it open while the mismatch
+                  prompt is showing (paths A/B/C): the report sets reported_winner_id, so the
+                  5s Open-Play refetch would otherwise pull the block out from under the prompt. */}
+              {isParticipant && (!game.reportedWinnerId || mismatch) && (
                 <div className="flex flex-col gap-3 pt-2 border-t border-rizzotto-iron-700">
                   <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider">Report Result</span>
                   <div className="flex gap-2">
