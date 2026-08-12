@@ -67,23 +67,26 @@ Balanced = `|CtW − 0.5| ≤ 0.025` (the 47.5–52.5% band).
 These are the round-4 questions, reframed now that the picture is clear. I'll fill in my
 recommended default; Alex confirms or changes:
 
-1. **`muTilt` source** — **DECIDED (Alex, 2026-08-11): the measured matchup matrix (real
-   faction-vs-faction win-rates), NOT Model-Strength.** Model-Strength measures a faction's
-   *absolute* strength and is worthless for balance because it misses targeted counters.
-   Alex's example: **Slaanesh is the strongest faction overall yet has no chance vs Bretonnia** —
-   Model-Strength would call Slaanesh a heavy favourite; the real matchup is the opposite.
-   **Use the raw measured rate whenever there's ≥1 game — no shrinkage toward 50%** (Alex trusts
-   the real data; he's the domain expert, and even a small sample carries real signal). Never-
-   played pairings (0 games) are handled PER CONTEXT — DECIDED (Alex, 2026-08-11):
-   - **Single-challenge finder: a never-played matchup is simply NOT offered.** A challenge wants
-     a *known* coin-flip, not a guess — the finder only proposes faction pairings that have real
-     data, and skips the rest. No fallback needed.
-   - **Faction War: a never-played pairing falls back to the Model-Strength delta** (the rough
-     absolute-strength guess), NOT 50% — Alex: "Model-Strength is better than 50% at zero data."
-     The global round-pairing must assign *every* match, and with no real data a rough guess
-     beats a pure coin-flip. This does NOT contradict "Model-Strength is worthless": it's
-     worthless only *relative to real matchup data*, which by definition doesn't exist for a
-     never-played cell. Precedence, then: **real matchup rate (≥1 game) → Model-Strength (0 games).**
+1. **`muTilt` source** — **DECIDED (Alex, 2026-08-12): the model's skill-adjusted matchup
+   effect (`getMatchupEffect`) — the "favourability" rating shown on the site — NOT the raw
+   win-rate, and NOT Model-Strength.**
+   - Model-Strength measures a faction's *absolute* strength and is worthless for balance
+     (Alex's example: **Slaanesh is the strongest faction overall yet has no chance vs
+     Bretonnia**). Ruled out.
+   - The **raw win-rate** is also wrong: it's contaminated by *who the opponents were*. A 50%
+     raw rate earned against weak opponents is really a sub-50% matchup. Alex caught this — the
+     favourability of Wood Elves vs Bretonnia is ~46/54% while the raw win-rate is 50%.
+   - The **favourability rating** (`logistic(getMatchupEffect)`) is the L2-fitted faction-vs-
+     faction advantage with opponent strength removed — the right, "honest" balance signal. It's
+     exactly what the FactionDetail page shows. `logistic(muTilt)` therefore equals that number.
+   Never-played pairings (0 games, no matchup effect) are handled PER CONTEXT:
+   - **Single-challenge finder: a never-played matchup is simply NOT offered** (`requireData`) —
+     a challenge wants a *known* coin-flip, not a guess.
+   - **Faction War: a never-played pair is treated as maximally uncertain** (max fairness cost,
+     still bounded below one score step) so the optimiser prefers *known* matchups rather than a
+     false 50% coin-flip. (This supersedes the earlier "Model-Strength delta at 0 games" plan,
+     which belonged to the raw-win-rate design; with a skill-adjusted effect there's no separate
+     strength scale to fall back to, and in practice ~all pairs have data — 273/276 in prod.)
 2. **Weights `k_prof`, `k_mu`** — how much the player-skill gap vs. the faction-matchup tilt
    each move the needle. **Rec: start with proficiency dominant, calibrate against real games
    later** (same iterate-against-the-sim approach as BaLi). Not a product decision — I pick
