@@ -6,7 +6,7 @@ import type { FactionDto, ProjectedDivision } from '@rizzotto/types';
 import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, addThirdPlaceMatch, getFactions, patchTournament, fillByeMatch, deleteMatch, unfinalizeTournament } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { sortStandingsByPlayoffResult, getFinalistIds, getChampionIds, getBalancedTopDivisionPodium } from '@/lib/bracketStandings';
-import { computeBracketLayout } from './computeBracketLayout';
+import { computeBracketLayout, computePlaceholderLayout, ROUND_GAP } from './computeBracketLayout';
 import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
 import { MatchReadOnlyModal } from './MatchReadOnlyModal';
@@ -160,8 +160,28 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   // the viewport to the bracket's full scaled height, so the whole bracket is
   // visible and the PAGE scrolls — no fixed-height window that clips the bottom.
   const layout = data && data.matches.length > 0 ? computeBracketLayout(data.matches) : null;
-  const layoutRef = useRef(layout);
-  layoutRef.current = layout;
+
+  // The SVG also renders projected-playoff placeholders (see SVGBracket) to the RIGHT of the group
+  // matches. fitToWidth must include their extent, or the placeholders clip on the right and the
+  // viewport is too short. Mirror SVGBracket's dimension math so the fit uses the full content size.
+  const fitDims = ((): { width: number; height: number } | null => {
+    if (!layout) return null;
+    const sw = data?.swiss;
+    const playoffPresent =
+      sw !== undefined && !!data?.matches.some((m) => m.round > sw.recommendedRounds);
+    const projected =
+      sw?.plan && !playoffPresent && data?.status !== 'COMPLETED' ? sw.plan.divisions : undefined;
+    const showPh = (projected?.filter((d) => d.format !== 'NONE' && d.size >= 2).length ?? 0) > 0;
+    if (!showPh || !projected) return { width: layout.width, height: layout.height };
+    const xBase = layout.width > 0 ? layout.width + ROUND_GAP : 0;
+    const ph = computePlaceholderLayout(projected, hasThirdPlaceMatch ?? false, xBase);
+    return {
+      width: Math.max(layout.width, xBase + ph.width),
+      height: Math.max(layout.height, ph.height),
+    };
+  })();
+  const layoutRef = useRef(fitDims);
+  layoutRef.current = fitDims;
 
   const fitToWidth = useCallback((animationMs: number) => {
     const l = layoutRef.current;
@@ -183,7 +203,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   // Re-fit whenever the bracket's dimensions change (new round) or the window resizes.
   useEffect(() => {
     fitToWidth(0);
-  }, [layout?.width, layout?.height, fitToWidth]);
+  }, [fitDims?.width, fitDims?.height, fitToWidth]);
 
   useEffect(() => {
     const onResize = () => fitToWidth(0);

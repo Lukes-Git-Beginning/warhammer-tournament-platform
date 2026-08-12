@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { BracketNode } from '@rizzotto/types';
+import type { BracketNode, ProjectedDivision } from '@rizzotto/types';
 import {
   computeBracketLayout,
+  computePlaceholderLayout,
   MATCH_HEIGHT,
   MATCH_WIDTH,
   ROW_GAP,
@@ -272,5 +273,63 @@ describe('computeBracketLayout', () => {
       const finX = layout.positions.get('finA')!.x;
       expect(finX).toBeGreaterThan(swissX);
     });
+  });
+});
+
+describe('computePlaceholderLayout (projected playoffs)', () => {
+  const div = (size: number, format: ProjectedDivision['format']): ProjectedDivision => ({
+    size,
+    format,
+  });
+
+  it('TOP8: builds QF→SF→Final and reports width from the placeholder extent', () => {
+    const l = computePlaceholderLayout([div(8, 'TOP8')], false, 0);
+    // 4 QF + 2 SF + 1 Final = 7 nodes
+    expect(l.nodes).toHaveLength(7);
+    const xs = [...l.positions.values()].map((p) => p.x);
+    const cols = [...new Set(xs)].sort((a, b) => a - b);
+    expect(cols).toHaveLength(3); // QF, SF, Final columns
+    // width spans from xBase (0) to the right edge of the Final column
+    expect(l.width).toBe(Math.max(...xs) + MATCH_WIDTH);
+  });
+
+  it('offsets every node to the right of xBase (the group-phase width)', () => {
+    const xBase = 640;
+    const l = computePlaceholderLayout([div(8, 'TOP8')], false, xBase);
+    for (const p of l.positions.values()) expect(p.x).toBeGreaterThanOrEqual(xBase);
+    // The full right edge the fit calc relies on = xBase + width
+    const rightEdge = xBase + l.width;
+    expect(rightEdge).toBe(Math.max(...[...l.positions.values()].map((p) => p.x)) + MATCH_WIDTH);
+  });
+
+  it('hasThirdPlace adds a 3rd-place node in the Final column, below the final', () => {
+    const l = computePlaceholderLayout([div(8, 'TOP8')], true, 0);
+    expect(l.nodes).toHaveLength(8);
+    const final = l.nodes.find((n) => n.phase === 'Final')!;
+    const third = l.nodes.find((n) => n.phase === '3rd Place')!;
+    const fp = l.positions.get(final.id)!;
+    const tp = l.positions.get(third.id)!;
+    expect(tp.x).toBe(fp.x); // same column
+    expect(tp.y).toBeGreaterThan(fp.y); // below
+  });
+
+  it('BaLi: multiple divisions stack vertically with per-division labels', () => {
+    const l = computePlaceholderLayout([div(4, 'TOP4'), div(4, 'TOP4')], false, 0);
+    expect(l.groups).toHaveLength(2);
+    expect(l.groups[0]!.label).toBe('Division 1');
+    expect(l.groups[1]!.label).toBe('Division 2');
+    // Division 2 sits entirely below Division 1.
+    expect(l.groups[1]!.y).toBeGreaterThan(l.groups[0]!.y);
+    const d1Bottom = Math.max(
+      ...l.groups[0]!.nodeIds.map((id) => l.positions.get(id)!.y),
+    );
+    const d2Top = Math.min(...l.groups[1]!.nodeIds.map((id) => l.positions.get(id)!.y));
+    expect(d2Top).toBeGreaterThan(d1Bottom);
+  });
+
+  it('a single division has no label (null)', () => {
+    const l = computePlaceholderLayout([div(2, 'TOP2')], false, 0);
+    expect(l.groups).toHaveLength(1);
+    expect(l.groups[0]!.label).toBeNull();
   });
 });
