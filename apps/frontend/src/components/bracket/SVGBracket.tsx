@@ -1,6 +1,6 @@
 import type React from 'react';
 import type { BracketNode, BracketResponse, FactionDto, ProjectedDivision } from '@rizzotto/types';
-import { computeBracketLayout, computePlaceholderLayout, MATCH_WIDTH, MATCH_HEIGHT, ROUND_GAP } from './computeBracketLayout';
+import { computeBracketRender, MATCH_WIDTH, MATCH_HEIGHT, ROUND_GAP } from './computeBracketLayout';
 import { MatchNode } from './MatchNode';
 import { SKILL_BAND_META } from './skillBandMeta';
 
@@ -146,32 +146,25 @@ export function computeSlotLabels(
 export function SVGBracket({ data, players, factionMap, tournamentMode, format, bandByUser, onMatchClick, projectedDivisions, hasThirdPlaceMatch }: SVGBracketProps) {
   const isSft = tournamentMode === 'SFT';
   const is2d3 = tournamentMode === 'TWO_D_THREE';
-  const layout = computeBracketLayout(data.matches, bandByUser);
+
+  // Single source of truth for real + projected-placeholder layout and the overall size (shared
+  // with BracketView.fitToWidth). For BaLi this interleaves generated and pending divisions in
+  // band order; for other formats it's the normal bracket + an optional right-side placeholder.
+  const { layout, placeholderLayout, width: totalWidth, height: totalHeight } = computeBracketRender(
+    data.matches,
+    {
+      projectedDivisions,
+      hasThirdPlace: hasThirdPlaceMatch,
+      bandByUser,
+      format,
+      isCompleted: data.status === 'COMPLETED',
+    },
+  );
 
   const slotLabels = computeSlotLabels(data.matches, players);
 
-  // Compute placeholder layout when projected divisions are provided.
-  // xBase is shifted right of the existing swiss matches so placeholders appear
-  // in the bracket area (to the right of the group-phase matches).
-  const showPlaceholders =
-    (projectedDivisions?.filter((d) => d.format !== 'NONE' && d.size >= 2).length ?? 0) > 0;
-  const placeholderXBase = layout.width > 0 ? layout.width + ROUND_GAP : 0;
-  const placeholderLayout = showPlaceholders
-    ? computePlaceholderLayout(
-        projectedDivisions!,
-        hasThirdPlaceMatch ?? false,
-        placeholderXBase,
-      )
-    : null;
-
   // Add padding so connectors and labels don't clip
   const PAD = 20;
-  const totalWidth = placeholderLayout
-    ? Math.max(layout.width, placeholderXBase + placeholderLayout.width)
-    : layout.width;
-  const totalHeight = placeholderLayout
-    ? Math.max(layout.height, placeholderLayout.height)
-    : layout.height;
   const svgWidth = totalWidth + PAD * 2;
   const svgHeight = totalHeight + PAD * 2;
 
@@ -285,20 +278,37 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, format, 
         );
       })}
 
-      {/* Placeholder division group labels */}
-      {placeholderLayout?.groups.map((g, i) => (
-        <foreignObject key={`ph-grp-${i}`} x={g.x + PAD} y={g.y + PAD} width={MATCH_WIDTH * 3} height={28}>
-          { }
-          <div {...({ xmlns: 'http://www.w3.org/1999/xhtml' } as any)} style={{ width: '100%', height: '100%' }}>
-            <div className="flex items-center gap-2">
-              {g.label && (
-                <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">{g.label}</span>
-              )}
-              <span className="text-[10px] text-stone-600 italic">{g.detail} · projected</span>
+      {/* Placeholder division group labels. For BaLi the group carries a band, so it renders the
+          same band-styled label as the real divisions (with a "· projected" tag); otherwise the
+          plain "Division N · Top 4 · projected" form. */}
+      {placeholderLayout?.groups.map((g, i) => {
+        const meta = g.band ? SKILL_BAND_META[g.band] : null;
+        return (
+          <foreignObject key={`ph-grp-${i}`} x={g.x + PAD} y={g.y + PAD} width={MATCH_WIDTH * 3} height={28}>
+            { }
+            <div {...({ xmlns: 'http://www.w3.org/1999/xhtml' } as any)} style={{ width: '100%', height: '100%' }}>
+              <div className="flex items-center gap-2">
+                {meta ? (
+                  <>
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${meta.dotCls}`} />
+                    <span className={`text-xs font-bold uppercase tracking-widest ${meta.textCls}`}>
+                      {meta.name} Division
+                    </span>
+                    <span className="text-[10px] text-stone-600 italic">· {g.detail} · projected</span>
+                  </>
+                ) : (
+                  <>
+                    {g.label && (
+                      <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">{g.label}</span>
+                    )}
+                    <span className="text-[10px] text-stone-600 italic">{g.detail} · projected</span>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        </foreignObject>
-      ))}
+          </foreignObject>
+        );
+      })}
 
       {/* Match nodes as foreignObjects */}
       {data.matches.map((m) => {

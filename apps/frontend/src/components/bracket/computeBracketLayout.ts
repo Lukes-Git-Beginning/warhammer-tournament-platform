@@ -51,6 +51,9 @@ export interface PlaceholderLayout {
     label: string | null;
     /** Format string for the label (e.g. "Top 4 · 8 seeds"). */
     detail: string;
+    /** Skill band (BaLi mixed layout) — lets SVGBracket render a band-styled label matching the
+     *  real division brackets. Absent for single-bracket / non-BaLi placeholder groups. */
+    band?: number;
   }>;
 }
 
@@ -81,7 +84,7 @@ function buildPlaceholderNodes(
     qfIds.forEach((id, i) => {
       nodes.push({ id, nextId: sfIds[Math.floor(i / 2)]!, loserNextId: null, phase: 'QF', divisionIndex: divIdx });
     });
-    sfIds.forEach((id, i) => {
+    sfIds.forEach((id) => {
       nodes.push({ id, nextId: finalId, loserNextId: hasThirdPlace ? thirdId : null, phase: 'SF', divisionIndex: divIdx });
     });
     nodes.push({ id: finalId, nextId: null, loserNextId: null, phase: 'Final', divisionIndex: divIdx });
@@ -460,6 +463,111 @@ function computeBalancedPlayoffLayout(swiss: BracketNode[], playoff: BracketNode
   return { positions, width: maxX, height: maxY, groups };
 }
 
+/** A division's band = the highest band among its players (same rule as the SVGBracket label). */
+function divisionBandOf(div: BracketNode[], bandByUser?: Map<string, number>): number {
+  let band = 0;
+  for (const m of div) {
+    for (const pid of [m.player1Id, m.player2Id]) {
+      const b = pid ? bandByUser?.get(pid) : undefined;
+      if (b && b > band) band = b;
+    }
+  }
+  return band;
+}
+
+/** The set of skill bands that already have a real (generated) playoff division. */
+export function realDivisionBands(
+  playoff: BracketNode[],
+  bandByUser?: Map<string, number>,
+): Set<number> {
+  const bands = new Set<number>();
+  for (const div of groupPlayoffDivisions(playoff)) bands.add(divisionBandOf(div, bandByUser));
+  return bands;
+}
+
+/**
+ * Balanced Liechtenstein, mixed real + projected: the shared swiss on the left, then a SINGLE
+ * vertical stack of division slots ordered by band (highest first) — each slot either a real
+ * generated bracket or a "TBD" placeholder for a division whose playoff hasn't generated yet.
+ * Returns two sub-layouts shaped like BracketLayout / PlaceholderLayout (both carrying the overall
+ * bounding box) so SVGBracket renders them with its existing real-node and placeholder-node paths
+ * at correctly interleaved coordinates.
+ */
+export function computeBalancedMixedLayout(
+  swiss: BracketNode[],
+  playoff: BracketNode[],
+  pending: ProjectedDivision[],
+  bandByUser: Map<string, number> | undefined,
+  hasThirdPlace: boolean,
+): { real: BracketLayout; placeholder: PlaceholderLayout; width: number; height: number } {
+  const realPositions = new Map<string, MatchPosition>();
+  const realGroups: BracketGroup[] = [];
+  const phPositions = new Map<string, MatchPosition>();
+  const phNodes: PlaceholderNode[] = [];
+  const phGroups: PlaceholderLayout['groups'] = [];
+
+  const swissLayout = computeLinearLayout(swiss, { xBase: 0, yBase: 0 });
+  for (const [id, pos] of swissLayout.positions) realPositions.set(id, pos);
+  const xBase = swissLayout.width > 0 ? swissLayout.width + SECTION_GAP : 0;
+
+  type Slot =
+    | { band: number; kind: 'real'; matches: BracketNode[] }
+    | { band: number; kind: 'ph'; division: ProjectedDivision };
+  const slots: Slot[] = [
+    ...groupPlayoffDivisions(playoff).map(
+      (div): Slot => ({ band: divisionBandOf(div, bandByUser), kind: 'real', matches: div }),
+    ),
+    ...pending.map((d): Slot => ({ band: d.band ?? 0, kind: 'ph', division: d })),
+  ].sort((a, b) => b.band - a.band);
+
+  let yOffset = 0;
+  let phIdx = 0;
+  for (const slot of slots) {
+    const contentY = yOffset + DIVISION_LABEL_HEIGHT;
+    if (slot.kind === 'real') {
+      const sub = computeLinearLayout(slot.matches, { xBase, yBase: contentY });
+      for (const [id, pos] of sub.positions) realPositions.set(id, pos);
+      realGroups.push({ matchIds: slot.matches.map((m) => m.matchId), x: xBase, y: yOffset });
+      yOffset = contentY + sub.height + SECTION_GAP;
+    } else {
+      const nodes = buildPlaceholderNodes(phIdx, slot.division.format, hasThirdPlace);
+      phIdx += 1;
+      const pos = placeholderLinearLayout(nodes, xBase, contentY);
+      for (const [id, p] of pos) phPositions.set(id, p);
+      phNodes.push(...nodes);
+      let bottom = contentY;
+      for (const p of pos.values()) bottom = Math.max(bottom, p.y + MATCH_HEIGHT);
+      phGroups.push({
+        nodeIds: nodes.map((n) => n.id),
+        x: xBase,
+        y: yOffset,
+        label: null,
+        detail: `${slot.division.format.replace('TOP', 'Top ')} · ${slot.division.size} seeds`,
+        band: slot.band || undefined,
+      });
+      yOffset = bottom + SECTION_GAP;
+    }
+  }
+
+  let maxX = 0;
+  let maxY = 0;
+  for (const p of realPositions.values()) {
+    maxX = Math.max(maxX, p.x + MATCH_WIDTH);
+    maxY = Math.max(maxY, p.y + MATCH_HEIGHT);
+  }
+  for (const p of phPositions.values()) {
+    maxX = Math.max(maxX, p.x + MATCH_WIDTH);
+    maxY = Math.max(maxY, p.y + MATCH_HEIGHT);
+  }
+
+  return {
+    real: { positions: realPositions, width: maxX, height: maxY, groups: realGroups },
+    placeholder: { positions: phPositions, nodes: phNodes, width: maxX, height: maxY, groups: phGroups },
+    width: maxX,
+    height: maxY,
+  };
+}
+
 export function computeBracketLayout(matches: BracketNode[], bandByUser?: Map<string, number>): BracketLayout {
   if (matches.length === 0) {
     return { positions: new Map(), width: 0, height: 0 };
@@ -512,4 +620,64 @@ export function computeBracketLayout(matches: BracketNode[], bandByUser?: Map<st
   }
 
   return { positions, width: maxX, height: maxY };
+}
+
+/**
+ * Single source of truth for how a bracket renders: the real match layout, the (optional)
+ * projected-playoff placeholder layout, and the overall bounding box. Both consumers use this —
+ * SVGBracket to render, BracketView.fitToWidth to size the viewport — so they can never diverge.
+ *
+ * BaLi with any not-yet-generated division → the mixed band-ordered stack (real + TBD interleaved).
+ * Non-BaLi (single bracket) → the projected placeholder sits to the right of the group phase and
+ * only until the real playoff is generated. A COMPLETED tournament shows no placeholders.
+ */
+export function computeBracketRender(
+  matches: BracketNode[],
+  opts: {
+    projectedDivisions?: ProjectedDivision[];
+    hasThirdPlace?: boolean;
+    bandByUser?: Map<string, number>;
+    format?: string;
+    isCompleted?: boolean;
+  },
+): { layout: BracketLayout; placeholderLayout: PlaceholderLayout | null; width: number; height: number } {
+  const { hasThirdPlace = false, bandByUser, format, isCompleted } = opts;
+  const isBaLi = format === 'BALANCED_LIECHTENSTEIN';
+  const eligible = (isCompleted ? [] : (opts.projectedDivisions ?? [])).filter(
+    (d) => d.format !== 'NONE' && d.size >= 2,
+  );
+  const playoff = matches.filter((m) => m.phase?.startsWith('PLAYOFF'));
+  // BaLi: a projected division is still pending when no real bracket exists for its band yet.
+  const pending = isBaLi
+    ? eligible.filter((d) => d.band != null && !realDivisionBands(playoff, bandByUser).has(d.band))
+    : [];
+
+  let layout: BracketLayout;
+  let placeholderLayout: PlaceholderLayout | null = null;
+  let phRight = 0; // absolute right edge of placeholder content
+
+  if (isBaLi && pending.length > 0) {
+    const swiss = matches.filter((m) => !m.phase || m.phase === 'SWISS');
+    const mixed = computeBalancedMixedLayout(swiss, playoff, pending, bandByUser, hasThirdPlace);
+    layout = mixed.real;
+    if (mixed.placeholder.nodes.length > 0) {
+      placeholderLayout = mixed.placeholder;
+      phRight = mixed.placeholder.width; // absolute
+    }
+  } else {
+    layout = matches.length > 0 ? computeBracketLayout(matches, bandByUser) : { positions: new Map(), width: 0, height: 0 };
+    // Non-BaLi single bracket: show the projected placeholder to the right, until a real playoff exists.
+    if (!isBaLi && eligible.length > 0 && playoff.length === 0) {
+      const xBase = layout.width > 0 ? layout.width + ROUND_GAP : 0;
+      placeholderLayout = computePlaceholderLayout(eligible, hasThirdPlace, xBase);
+      phRight = xBase + placeholderLayout.width; // width is relative to xBase here
+    }
+  }
+
+  return {
+    layout,
+    placeholderLayout,
+    width: Math.max(layout.width, phRight),
+    height: Math.max(layout.height, placeholderLayout?.height ?? 0),
+  };
 }

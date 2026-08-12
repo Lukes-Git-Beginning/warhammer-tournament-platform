@@ -15,6 +15,9 @@ export interface ProjectedDivision {
   size: number;
   /** The bracket shape that pool size yields (TOP2 = final + 3rd place, etc.). */
   format: ProjectedPlayoffFormat;
+  /** Skill band this division belongs to (BaLi only) — for correlating a placeholder with its
+   *  eventual real bracket by band. Absent for single-bracket (non-BaLi) plans. */
+  band?: number;
 }
 
 export interface BracketPlan {
@@ -54,7 +57,7 @@ export function projectBracketPlan(opts: {
     const pools = formDivisionPools(ranked, groupRounds, targetPoolSizeFromFormat(opts.playoffFormat));
     const divisions: ProjectedDivision[] = pools
       .filter((p) => p.players.length >= 2)
-      .map((p) => ({ size: p.players.length, format: divisionPlayoffFormat(p.players.length) }));
+      .map((p) => ({ size: p.players.length, format: divisionPlayoffFormat(p.players.length), band: p.band }));
     return { groupRounds, divisions };
   }
 

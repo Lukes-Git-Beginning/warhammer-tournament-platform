@@ -3,6 +3,8 @@ import type { BracketNode, ProjectedDivision } from '@rizzotto/types';
 import {
   computeBracketLayout,
   computePlaceholderLayout,
+  computeBracketRender,
+  realDivisionBands,
   MATCH_HEIGHT,
   MATCH_WIDTH,
   ROW_GAP,
@@ -331,5 +333,87 @@ describe('computePlaceholderLayout (projected playoffs)', () => {
     const l = computePlaceholderLayout([div(2, 'TOP2')], false, 0);
     expect(l.groups).toHaveLength(1);
     expect(l.groups[0]!.label).toBeNull();
+  });
+});
+
+describe('computeBracketRender — BaLi mixed real + projected divisions', () => {
+  const finalNode = (id: string, p1: string, p2: string): BracketNode => ({
+    ...makeMatch(id, 3, 1, null, null, null, 'PLAYOFF_FINAL'),
+    player1Id: p1,
+    player2Id: p2,
+  });
+  const swiss: BracketNode[] = [makeMatch('s1', 1, 1), makeMatch('s2', 1, 2)];
+  const bandByUser = new Map<string, number>([['a', 5], ['b', 5]]);
+  const plan = (): ProjectedDivision[] => [
+    { size: 2, format: 'TOP2', band: 5 },
+    { size: 4, format: 'TOP4', band: 3 },
+  ];
+
+  it('realDivisionBands returns the bands of generated divisions', () => {
+    expect([...realDivisionBands([finalNode('f5', 'a', 'b')], bandByUser)]).toEqual([5]);
+  });
+
+  it('interleaves: generated band-5 bracket sits ABOVE the pending band-3 placeholder', () => {
+    const r = computeBracketRender([...swiss, finalNode('f5', 'a', 'b')], {
+      projectedDivisions: plan(),
+      bandByUser,
+      format: 'BALANCED_LIECHTENSTEIN',
+    });
+    expect(r.layout.positions.has('f5')).toBe(true);
+    expect(r.placeholderLayout).not.toBeNull();
+    const realY = r.layout.positions.get('f5')!.y;
+    const phYs = [...r.placeholderLayout!.positions.values()].map((p) => p.y);
+    expect(Math.min(...phYs)).toBeGreaterThan(realY); // band 5 above band 3
+    expect(r.placeholderLayout!.nodes).toHaveLength(3); // TOP4: 2 SF + 1 final
+    expect(r.placeholderLayout!.groups[0]!.band).toBe(3); // band-styled label
+  });
+
+  it('no pending division → no placeholders (all generated)', () => {
+    const r = computeBracketRender([...swiss, finalNode('f5', 'a', 'b')], {
+      projectedDivisions: [{ size: 2, format: 'TOP2', band: 5 }],
+      bandByUser,
+      format: 'BALANCED_LIECHTENSTEIN',
+    });
+    expect(r.placeholderLayout).toBeNull();
+    expect(r.layout.positions.has('f5')).toBe(true);
+  });
+
+  it('COMPLETED tournament shows no placeholders', () => {
+    const r = computeBracketRender(swiss, {
+      projectedDivisions: plan(),
+      bandByUser,
+      format: 'BALANCED_LIECHTENSTEIN',
+      isCompleted: true,
+    });
+    expect(r.placeholderLayout).toBeNull();
+  });
+});
+
+describe('computeBracketRender — non-BaLi single bracket', () => {
+  const swiss: BracketNode[] = [makeMatch('s1', 1, 1), makeMatch('s2', 1, 2)];
+
+  it('shows the projected placeholder to the right until the real playoff exists', () => {
+    const before = computeBracketRender(swiss, {
+      projectedDivisions: [{ size: 8, format: 'TOP8' }],
+      format: 'SWISS',
+    });
+    expect(before.placeholderLayout).not.toBeNull();
+    const swissRight = Math.max(
+      ...[...before.layout.positions.values()].map((p) => p.x + MATCH_WIDTH),
+    );
+    const phLeft = Math.min(...[...before.placeholderLayout!.positions.values()].map((p) => p.x));
+    expect(phLeft).toBeGreaterThanOrEqual(swissRight);
+  });
+
+  it('hides the placeholder once a real playoff match exists', () => {
+    const withPlayoff: BracketNode[] = [
+      ...swiss,
+      { ...makeMatch('pf', 2, 1, null, null, null, 'PLAYOFF_FINAL'), player1Id: 'a', player2Id: 'b' },
+    ];
+    const r = computeBracketRender(withPlayoff, {
+      projectedDivisions: [{ size: 8, format: 'TOP8' }],
+      format: 'SWISS',
+    });
+    expect(r.placeholderLayout).toBeNull();
   });
 });

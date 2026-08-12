@@ -6,7 +6,7 @@ import type { FactionDto, ProjectedDivision } from '@rizzotto/types';
 import { getBracket, getParticipants, startNextSwissRound, startPlayoffs, advancePlayoffs, addThirdPlaceMatch, getFactions, patchTournament, fillByeMatch, deleteMatch, unfinalizeTournament } from '@/lib/api';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { sortStandingsByPlayoffResult, getFinalistIds, getChampionIds, getBalancedTopDivisionPodium } from '@/lib/bracketStandings';
-import { computeBracketLayout, computePlaceholderLayout, ROUND_GAP } from './computeBracketLayout';
+import { computeBracketRender } from './computeBracketLayout';
 import { SVGBracket, type BracketPlayerInfo } from './SVGBracket';
 import { MatchScoreModal } from './MatchScoreModal';
 import { MatchReadOnlyModal } from './MatchReadOnlyModal';
@@ -159,27 +159,20 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
   // #25: fit the bracket to the container WIDTH (never upscale past 1:1) and grow
   // the viewport to the bracket's full scaled height, so the whole bracket is
   // visible and the PAGE scrolls — no fixed-height window that clips the bottom.
-  const layout = data && data.matches.length > 0 ? computeBracketLayout(data.matches) : null;
-
-  // The SVG also renders projected-playoff placeholders (see SVGBracket) to the RIGHT of the group
-  // matches. fitToWidth must include their extent, or the placeholders clip on the right and the
-  // viewport is too short. Mirror SVGBracket's dimension math so the fit uses the full content size.
-  const fitDims = ((): { width: number; height: number } | null => {
-    if (!layout) return null;
-    const sw = data?.swiss;
-    const playoffPresent =
-      sw !== undefined && !!data?.matches.some((m) => m.round > sw.recommendedRounds);
-    const projected =
-      sw?.plan && !playoffPresent && data?.status !== 'COMPLETED' ? sw.plan.divisions : undefined;
-    const showPh = (projected?.filter((d) => d.format !== 'NONE' && d.size >= 2).length ?? 0) > 0;
-    if (!showPh || !projected) return { width: layout.width, height: layout.height };
-    const xBase = layout.width > 0 ? layout.width + ROUND_GAP : 0;
-    const ph = computePlaceholderLayout(projected, hasThirdPlaceMatch ?? false, xBase);
-    return {
-      width: Math.max(layout.width, xBase + ph.width),
-      height: Math.max(layout.height, ph.height),
-    };
-  })();
+  // Full rendered size (real bracket + projected placeholders) from the SAME orchestrator
+  // SVGBracket renders from — so fitToWidth can never diverge from what's actually drawn.
+  const render =
+    data && data.matches.length > 0
+      ? computeBracketRender(data.matches, {
+          projectedDivisions: data.swiss?.plan?.divisions,
+          hasThirdPlace: hasThirdPlaceMatch,
+          bandByUser,
+          format,
+          isCompleted: data.status === 'COMPLETED',
+        })
+      : null;
+  const fitDims = render ? { width: render.width, height: render.height } : null;
+  const hasProjectedPreview = !!render?.placeholderLayout;
   const layoutRef = useRef(fitDims);
   layoutRef.current = fitDims;
 
@@ -428,12 +421,13 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
         />
       )}
 
-      {/* Provisional playoff plan banner — shown until real playoffs are generated.
-          The actual TBD placeholder nodes appear inside the SVGBracket below. */}
-      {swiss?.plan && !hasPlayoffMatches && data.status !== 'COMPLETED' && (
+      {/* Provisional playoff plan banner — shown while any division is still projected. The actual
+          TBD placeholder nodes appear inside the SVGBracket below, interleaved by band with any
+          already-generated divisions. */}
+      {hasProjectedPreview && (
         <div className="mb-2 flex items-center gap-2 text-[10px] text-stone-600 italic px-1">
           <span className="inline-block h-2 w-2 rounded-full border border-dashed border-stone-600" />
-          Projected playoffs shown as placeholders — fills in when the group phase ends
+          Not-yet-generated playoffs are shown as placeholders — each fills in when its division is ready
         </div>
       )}
 
@@ -591,7 +585,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                 <button
                   type="button"
                   onClick={() => {
-                    if (!layout) {
+                    if (!fitDims) {
                       resetTransform();
                       return;
                     }
@@ -616,9 +610,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                   format={format}
                   bandByUser={bandByUser}
                   projectedDivisions={
-                    swiss?.plan && !hasPlayoffMatches && data.status !== 'COMPLETED'
-                      ? swiss.plan.divisions
-                      : undefined
+                    swiss?.plan && data.status !== 'COMPLETED' ? swiss.plan.divisions : undefined
                   }
                   hasThirdPlaceMatch={hasThirdPlaceMatch}
                   onMatchClick={(matchId) => {

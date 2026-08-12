@@ -62,6 +62,10 @@ export interface SwissStandingEntry {
 export interface ProjectedDivision {
   size: number;
   format: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
+  /** Skill band this division belongs to (BaLi only) — lets the UI correlate a placeholder with
+   *  its eventual real bracket by band, so previews and generated divisions interleave in the
+   *  correct hierarchical order. Absent for single-bracket (non-BaLi) plans. */
+  band?: number;
 }
 
 /**
