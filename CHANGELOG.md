@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.34.0] — 2026-08-12 — Faction War fair pairings & in-bracket playoff preview
+### Changed
+- **Faction War now pairs every round for the fairest faction matchups.** Each round is optimised so the faction-vs-faction duels land as close to 50/50 as the data allows — using the skill-adjusted matchup rating (opponent strength removed) rather than the raw win-rate. The opening round is driven purely by fairness; later rounds keep the Swiss standings primary and use fairness only to break ties. Faction pairings with no game history are avoided rather than treated as an even guess.
+- **Projected playoffs now show inside the bracket.** During a Swiss or Balanced Liechtenstein group phase, the upcoming playoff rounds appear as greyed-out "TBD" placeholder nodes directly in the main bracket tree — replacing the old separate preview box — so the whole tournament shape is visible at a glance and fills in as the group phase ends.
+### Fixed
+- **Hardened Swiss round pairing against a rare crash.** The bracket-matching engine behind every Swiss round could throw on certain pairing constellations; the issue surfaced while building the Faction War fairness pairing and is now patched, so round generation can't fail on it.
+
 ## [1.33.1] — 2026-08-11 — Open Play dispute-flow fixes
 ### Fixed
 - **The "the replay is correct" prompt no longer flickers away.** When your reported replay didn't match, the prompt with its three options (upload the right file / "the replay is correct → ask opponent" / explain) could vanish on the next background refresh, leaving only a single button. It now stays put until you pick an option.
