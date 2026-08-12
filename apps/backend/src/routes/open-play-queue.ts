@@ -5,9 +5,9 @@ import {
   JOINED_AT_KEY,
   JOIN_SCRIPT,
   runMatchmakingTick,
-  resetContactedSet,
 } from '../lib/matchmaking-tick.js';
 import { getQueueTimeoutRemaining, recordQueueLeave } from '../lib/queue-penalty.js';
+import { cancelOpenPlayMatch } from '../lib/cancel-open-play-match.js';
 import { notifyQueueTimeout, notifyQueueWarning, notifyQueueAbuseToStaff } from '../lib/discord-notify.js';
 
 const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
@@ -186,46 +186,7 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your match', statusCode: 403 });
       }
 
-      await fastify.prisma.$transaction(async (tx) => {
-        await tx.match.update({
-          where: { id },
-          data: { status: 'CANCELLED' },
-        });
-        // A reported-but-unconfirmed game is statistically real — finalize it to its
-        // reported result instead of overwriting it with a draw.
-        const reportedGames = await tx.matchGame.findMany({
-          where: { match_id: id, status: 'PENDING', winner_id: null, reported_winner_id: { not: null } },
-          select: { id: true, reported_winner_id: true },
-        });
-        for (const game of reportedGames) {
-          await tx.matchGame.update({
-            where: { id: game.id },
-            data: { winner_id: game.reported_winner_id, status: 'COMPLETED', counts_for_leaderboard: true, played_at: new Date() },
-          });
-        }
-        // #19: remaining games without a reported result are CANCELLED and do NOT
-        // count — a cancelled match fabricates no game/result. status CANCELLED drops
-        // them from Meta (which filters COMPLETED) and counts_for_leaderboard=false
-        // keeps them out of the leaderboard/faction stats. Queue abuse is handled by
-        // the escalating queue penalty (#14), not by fake counting draws.
-        await tx.matchGame.updateMany({
-          where: { match_id: id, status: 'PENDING', winner_id: null, reported_winner_id: null },
-          data: { status: 'CANCELLED', counts_for_leaderboard: false },
-        });
-      });
-
-      await Promise.all([
-        match.player1_id
-          ? logQueueActivity(fastify.prisma, 'CANCEL', match.player1_id, { matchId: id, opponentId: match.player2_id })
-          : Promise.resolve(),
-        match.player2_id
-          ? logQueueActivity(fastify.prisma, 'CANCEL', match.player2_id, { matchId: id, opponentId: match.player1_id })
-          : Promise.resolve(),
-      ]);
-
-      // A match ending frees both players — start a fresh wait-cycle DM wave.
-      await resetContactedSet(fastify);
-      setImmediate(() => void runMatchmakingTick(fastify));
+      await cancelOpenPlayMatch(fastify, match);
 
       return reply.code(200).send({ ok: true });
     },

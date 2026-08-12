@@ -146,3 +146,35 @@ export async function recordQueueLeave(
   }
   return NO_OUTCOME;
 }
+
+/**
+ * Directly escalate the queue penalty by ONE step for a single discrete offence that is itself
+ * abusive — e.g. an Open Play blind-pick no-show (letting the faction-pick deadline pass and
+ * forcing the match to be cancelled). Unlike recordQueueLeave this does NOT wait for the
+ * 3-short-stints pattern: one no-show = one step. It shares the SAME offense record + stages, so
+ * no-shows and queue-ghosting accumulate together and decay together. First offence → level 1
+ * (warning only); repeats climb to L2 (1h) / L3 (24h). Best-effort — never throws.
+ */
+export async function escalateQueuePenalty(
+  redis: Redis,
+  userId: string,
+  nowMs: number,
+): Promise<QueueLeaveOutcome> {
+  try {
+    const offenseKey = `${OFFENSE_PREFIX}${userId}`;
+    const stored = await redis.hgetall(offenseKey);
+    const prevLevel = stored.level ? Number(stored.level) : 0;
+    const prevTs = stored.ts ? Number(stored.ts) : nowMs;
+    const level = decayedLevel(prevLevel, prevTs, nowMs) + 1;
+    await redis.hset(offenseKey, 'level', String(level), 'ts', String(nowMs));
+    await redis.pexpire(offenseKey, level * DECAY_PERIOD_MS + DECAY_PERIOD_MS);
+    const timeoutMs = timeoutMsForLevel(level);
+    if (timeoutMs > 0) {
+      await redis.set(`${TIMEOUT_PREFIX}${userId}`, '1', 'PX', timeoutMs);
+    }
+    return { tripped: true, level, timeoutSec: Math.ceil(timeoutMs / 1000) };
+  } catch {
+    /* penalty tracking is non-critical */
+  }
+  return NO_OUTCOME;
+}

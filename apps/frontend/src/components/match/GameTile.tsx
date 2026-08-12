@@ -417,7 +417,10 @@ export function GameTile({
                   )}
                   {blindPickTimeLeft && (
                     <p className="text-xs font-semibold text-rizzotto-gold-400 text-center">
-                      ⏱ {blindPickTimeLeft} until a faction is auto-picked
+                      ⏱ {blindPickTimeLeft}{' '}
+                      {tournamentMode === 'BPT'
+                        ? 'until a faction is auto-picked'
+                        : 'to pick — or the match is cancelled'}
                     </p>
                   )}
                   <Button variant="forge" size="sm" asChild>
@@ -832,9 +835,10 @@ function ProvisionalPanel({
   );
 }
 
-// Mirror of BLIND_PICK_TIMEOUT_MS in apps/backend/src/lib/blind-pick-auto-resolve.ts —
-// once one player locks, the other has this long before a random faction is assigned.
-const BLIND_PICK_TIMEOUT_MS = 2 * 60 * 1000;
+// Mirror of BLIND_PICK_TIMEOUT_MS in apps/backend/src/lib/blind-pick-auto-resolve.ts — once one
+// player locks, the other has this long to pick. In Open Play the match is then cancelled (and the
+// no-show gets a queue cooldown); in a Blind Pick Tournament a random faction is assigned instead.
+const BLIND_PICK_TIMEOUT_MS = 5 * 60 * 1000;
 
 function useCountdown(target: Date | null): string | null {
   const [remaining, setRemaining] = useState<string | null>(null);
