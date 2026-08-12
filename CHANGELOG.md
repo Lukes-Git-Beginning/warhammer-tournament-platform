@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.35.0] — 2026-08-13 — Segmented faction popularity & Open Play no-show penalty
+### Added
+- **The Factions popularity bar is now segmented by its most prolific player.** Each faction's bar shows — as a highlighted segment — how many of its games were played by the single player who plays it most; hover to see that player's name and count (e.g. Dark Elves: most RAD|ponti, 310). It's now obvious when a faction is carried by one specialist versus spread across the field.
+### Changed
+- **Open Play no longer auto-picks a random faction when you're slow — it cancels the match instead.** The blind faction pick is the one interaction that matters, so if a player hasn't picked within 5 minutes (was 2) the match is cancelled, both players are freed back into matchmaking, and the player who didn't pick takes a queue-abuse escalation step. The ladder — shared with queue-ghosting and decaying over clean time — is now explicit: warning → 1h → 24h → 7 days → permanent (until an admin lifts it). Whoever did pick walks away with no penalty. (Blind Pick Tournaments keep the random-faction fallback, since a tournament match must produce a result.)
+
 ## [1.34.1] — 2026-08-13 — Bracket-preview & ladder-stats fixes
 ### Fixed
 - **Balanced Liechtenstein playoff previews no longer vanish when the first division generates.** The in-bracket "TBD" preview was all-or-nothing — the first generated division hid the previews for all the others. Generated and not-yet-generated divisions now render together in one band-ordered stack (each slot is either the real bracket or a placeholder), so the remaining divisions stay previewed until each one is ready.
