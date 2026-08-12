@@ -81,7 +81,13 @@ recommended default; Alex confirms or changes:
      exactly what the FactionDetail page shows. `logistic(muTilt)` therefore equals that number.
    Never-played pairings (0 games, no matchup effect) are handled PER CONTEXT:
    - **Single-challenge finder: a never-played matchup is simply NOT offered** (`requireData`) —
-     a challenge wants a *known* coin-flip, not a guess.
+     a challenge wants a *known* coin-flip, not a guess. **PLUS a player-level filter (Alex,
+     2026-08-12): each player's candidate faction set is restricted to factions THAT PLAYER has
+     actually played** (`playerFactionProficiency(...).games > 0`). This is distinct from
+     `requireData` (which skips faction *pairs* nobody ever played): here we never even propose a
+     faction A has never touched, because the model has no real per-(A, faction) skill for it (only
+     the neutral prior) and a "fair" setup on a faction you don't play is unrealistic. Both filters
+     apply to the faction-specific challenge; the general/coarse skill mode is unaffected.
    - **Faction War: a never-played pair is treated as maximally uncertain** (max fairness cost,
      still bounded below one score step) so the optimiser prefers *known* matchups rather than a
      false 50% coin-flip. (This supersedes the earlier "Model-Strength delta at 0 games" plan,
