@@ -8,31 +8,34 @@
 import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { getRatingModel } from './rating-model-service.js';
-import { factionStrengths } from './breakdown-service.js';
-import { getMatchupMatrix } from './heatmap.js';
-import { makeFactionTilt, factionUnfairness, type MatchmakingData } from './matchmaking.js';
+import { factionUnfairness, type MatchmakingData } from './matchmaking.js';
 import type { FairnessCost } from './swiss.js';
 
 /**
- * Resolve everything the fairness scorer needs for one season, once. Composes the cached rating
- * model (per-player-faction skill), the live faction-vs-faction matchup matrix, and the
- * Model-Strength map (the never-played fallback). All three are cached, so this is cheap.
+ * Resolve everything the fairness scorer needs for one season, once — all from the cached rating
+ * model. `skillOf` is the per-(player, faction) skill; the faction tilt is the model's
+ * skill-adjusted matchup effect (so logistic(tilt) is the site's "favourability" rating, not the
+ * opponent-contaminated raw win-rate). `hasData` reports whether the pair has any games, for the
+ * challenge finder's never-played skip.
  */
 export async function loadMatchmakingData(
   prisma: PrismaClient,
   redis: Redis | undefined,
   seasonId: string,
 ): Promise<MatchmakingData> {
-  const [model, cells, strengths] = await Promise.all([
-    getRatingModel(prisma, redis, { seasonId }),
-    getMatchupMatrix(prisma, seasonId),
-    factionStrengths(prisma, redis, seasonId),
-  ]);
-  const strengthByFaction = new Map(strengths.map((s) => [s.factionId, s.meanNeutralWinChance]));
-  const factionTilt = makeFactionTilt(cells, strengthByFaction);
+  const model = await getRatingModel(prisma, redis, { seasonId });
+  // Canonical (X<Y) pairs that actually have decisive games.
+  const sampled = new Set<string>();
+  for (const e of model.matchupEffects) {
+    if (e.sampleSize > 0) sampled.add(`${e.factionXId}:${e.factionYId}`);
+  }
   return {
     skillOf: (playerId, factionId) => model.getPlayerFactionSkill(playerId, factionId),
-    factionTilt,
+    factionTilt: (factionX, factionY) => {
+      if (factionX === factionY) return { tilt: 0, hasData: false }; // mirror — a true coin-flip
+      const [a, b] = factionX < factionY ? [factionX, factionY] : [factionY, factionX];
+      return { tilt: model.getMatchupEffect(factionX, factionY), hasData: sampled.has(`${a}:${b}`) };
+    },
   };
 }
 
@@ -54,6 +57,11 @@ const FAIRNESS_SCALE = 100;
 export function factionWarPairingCost(data: MatchmakingData): FairnessCost {
   return (a, b) => {
     if (!a.factionId || !b.factionId) return 0;
+    const { hasData } = data.factionTilt(a.factionId, b.factionId);
+    // Never-played pair: the model has no favourability signal (it would read a false 50%
+    // coin-flip). Treat it as maximally uncertain so the optimiser prefers known matchups —
+    // still bounded below one score step, so the Swiss score gap stays primary.
+    if (!hasData) return Math.round(0.5 * FAIRNESS_SCALE);
     return Math.round(factionUnfairness(data, a.factionId, b.factionId) * FAIRNESS_SCALE);
   };
 }

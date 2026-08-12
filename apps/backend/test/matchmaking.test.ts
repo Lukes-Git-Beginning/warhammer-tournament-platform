@@ -5,7 +5,6 @@ import {
   findBalancedFactions,
   unfairness,
   factionUnfairness,
-  makeFactionTilt,
   type MatchmakingData,
 } from '../src/lib/matchmaking.js';
 import { logistic } from '../src/lib/rating-model.js';
@@ -27,45 +26,6 @@ describe('logit', () => {
     expect(logistic(logit(0.7))).toBeCloseTo(0.7);
     expect(Number.isFinite(logit(0))).toBe(true);
     expect(Number.isFinite(logit(1))).toBe(true);
-  });
-});
-
-describe('makeFactionTilt', () => {
-  it('uses the raw win-rate when the pair has games — no shrinkage', () => {
-    // Slaanesh won 2 of 10 vs Bretonnia (Alex's counter example): tilt = logit(0.2), disfavoured.
-    const tilt = makeFactionTilt(
-      [{ faction_a_id: 'bretonnia', faction_b_id: 'slaanesh', faction_a_wins: 8, faction_b_wins: 2 }],
-      new Map(),
-    );
-    const r = tilt('slaanesh', 'bretonnia');
-    expect(r.hasData).toBe(true);
-    expect(r.tilt).toBeCloseTo(logit(0.2));
-    // antisymmetric — the reverse is exactly negated (so CtW stays symmetric)
-    expect(tilt('bretonnia', 'slaanesh').tilt).toBeCloseTo(logit(0.8));
-    expect(tilt('slaanesh', 'bretonnia').tilt).toBeCloseTo(-tilt('bretonnia', 'slaanesh').tilt);
-  });
-
-  it('falls back to the Model-Strength delta only at 0 games', () => {
-    const tilt = makeFactionTilt([], new Map([['slaanesh', 0.6], ['bretonnia', 0.5]]));
-    const r = tilt('slaanesh', 'bretonnia');
-    expect(r.hasData).toBe(false);
-    expect(r.tilt).toBeCloseTo(logit(0.6) - logit(0.5));
-  });
-
-  it('never-played with no Model-Strength either → neutral 0', () => {
-    expect(makeFactionTilt([], new Map())('x', 'y')).toEqual({ tilt: 0, hasData: false });
-  });
-
-  it('a mirror matchup is a coin-flip', () => {
-    expect(makeFactionTilt([], new Map())('x', 'x')).toEqual({ tilt: 0, hasData: false });
-  });
-
-  it('one decisive game still counts as data (Alex: trust even a small sample)', () => {
-    const tilt = makeFactionTilt(
-      [{ faction_a_id: 'a', faction_b_id: 'b', faction_a_wins: 1, faction_b_wins: 0 }],
-      new Map(),
-    );
-    expect(tilt('a', 'b').hasData).toBe(true);
   });
 });
 

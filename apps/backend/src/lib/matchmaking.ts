@@ -5,10 +5,12 @@
  *
  * CtW(A with factionX  vs  B with factionY) = logistic( (skillA_X − skillB_Y) + muTilt(X,Y) )
  *   - skill = the model's per-(player,faction) log-odds (getPlayerFactionSkill)
- *   - muTilt(X,Y) = faction-vs-faction advantage in log-odds. DECIDED (Alex): the REAL measured
- *     matchup rate whenever there's ≥1 decisive game (no shrinkage toward 50%); only a
- *     never-played pair falls back to the Model-Strength delta. Model-Strength is worthless
- *     *relative to* real data but beats a blind 50% at zero data.
+ *   - muTilt(X,Y) = the model's skill-adjusted matchup effect (getMatchupEffect), so
+ *     logistic(muTilt) is the "favourability" rating shown on the site — the faction-vs-faction
+ *     advantage with opponent strength removed. DECIDED (Alex): use the favourability rating, NOT
+ *     the raw win-rate, which is contaminated by who the opponents were (e.g. a 50% raw rate
+ *     achieved against weak opponents is really a sub-50% matchup). The tilt is resolved from the
+ *     rating model by the DB loader (matchmaking-service.ts); this file stays pure.
  */
 
 import { logistic } from './rating-model.js';
@@ -98,8 +100,10 @@ export function unfairness(
 /**
  * How unfair a faction matchup is on the FACTION LEVEL ALONE, in [0, 0.5] — the players' skill is
  * deliberately ignored. This is the cost the Faction-War optimiser minimises across a round:
- * "regardless of who the players are" (see plans/matchmaking-engine-design.md, block 4). With
- * real data it equals |win-rate − 0.5|; a never-played pair falls back to the Model-Strength tilt.
+ * "regardless of who the players are" (see plans/matchmaking-engine-design.md, block 4). The tilt
+ * is the model's skill-adjusted matchup effect (getMatchupEffect), so `logistic(tilt)` equals the
+ * "favourability" rating shown on the site — NOT the raw win-rate (which is contaminated by
+ * opponent strength). The DB loader (matchmaking-service.ts) resolves the tilt from the model.
  */
 export function factionUnfairness(
   data: Pick<MatchmakingData, 'factionTilt'>,
@@ -107,47 +111,4 @@ export function factionUnfairness(
   factionY: string,
 ): number {
   return Math.abs(logistic(data.factionTilt(factionX, factionY).tilt) - 0.5);
-}
-
-// ---------------------------------------------------------------------------
-// muTilt — faction-vs-faction advantage from the matchup matrix, Model-Strength at 0 games.
-// ---------------------------------------------------------------------------
-
-/** Minimal raw-matrix cell shape (subset of MatchupCell from heatmap.ts). */
-export interface MatchupCounts {
-  faction_a_id: string; // lexicographically smaller id
-  faction_b_id: string;
-  faction_a_wins: number;
-  faction_b_wins: number;
-}
-
-/**
- * Build a `factionTilt` function from raw matchup counts + a Model-Strength map.
- * - real rate when the pair has ≥1 decisive game (raw win-rate → log-odds, NO shrinkage)
- * - Model-Strength delta (logit strengthX − logit strengthY) when the pair never played
- * - a neutral 0 only if even Model-Strength is missing for both factions
- */
-export function makeFactionTilt(
-  cells: MatchupCounts[],
-  strengthByFaction: Map<string, number>,
-): (factionX: string, factionY: string) => { tilt: number; hasData: boolean } {
-  const byPair = new Map<string, MatchupCounts>();
-  for (const c of cells) byPair.set(`${c.faction_a_id}|${c.faction_b_id}`, c);
-
-  return (factionX: string, factionY: string) => {
-    if (factionX === factionY) return { tilt: 0, hasData: false }; // mirror — a true coin-flip
-    const [a, b] = factionX < factionY ? [factionX, factionY] : [factionY, factionX];
-    const cell = byPair.get(`${a}|${b}`);
-    if (cell) {
-      const xWins = factionX === a ? cell.faction_a_wins : cell.faction_b_wins;
-      const yWins = factionX === a ? cell.faction_b_wins : cell.faction_a_wins;
-      const decisive = xWins + yWins;
-      if (decisive > 0) return { tilt: logit(xWins / decisive), hasData: true };
-    }
-    // never played (or all draws) → Model-Strength delta; neutral if we don't even have that.
-    const sX = strengthByFaction.get(factionX);
-    const sY = strengthByFaction.get(factionY);
-    if (sX === undefined && sY === undefined) return { tilt: 0, hasData: false };
-    return { tilt: logit(sX ?? 0.5) - logit(sY ?? 0.5), hasData: false };
-  };
 }
