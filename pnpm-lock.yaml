@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  edmonds-blossom:
+    hash: agqzgbipnfb6xhk4hhxg7ju2ki
+    path: patches/edmonds-blossom.patch
+
 importers:
 
   .:
@@ -76,7 +81,7 @@ importers:
         version: 16.6.1
       edmonds-blossom:
         specifier: ^1.0.0
-        version: 1.0.0
+        version: 1.0.0(patch_hash=agqzgbipnfb6xhk4hhxg7ju2ki)
       fastify:
         specifier: ^5.8.0
         version: 5.8.5
@@ -8310,7 +8315,7 @@ snapshots:
 
   edmonds-blossom-fixed@1.0.1: {}
 
-  edmonds-blossom@1.0.0: {}
+  edmonds-blossom@1.0.0(patch_hash=agqzgbipnfb6xhk4hhxg7ju2ki): {}
 
   effect@3.20.0:
     dependencies:
