@@ -10,7 +10,7 @@ import type { Redis } from 'ioredis';
 import { getRatingModel } from './rating-model-service.js';
 import { factionStrengths } from './breakdown-service.js';
 import { getMatchupMatrix } from './heatmap.js';
-import { makeFactionTilt, unfairness, type MatchmakingData } from './matchmaking.js';
+import { makeFactionTilt, factionUnfairness, type MatchmakingData } from './matchmaking.js';
 import type { FairnessCost } from './swiss.js';
 
 /**
@@ -37,7 +37,7 @@ export async function loadMatchmakingData(
 }
 
 /**
- * Scale for the Faction-War pairing surcharge. `unfairness` is in [0, 0.5]; ×100 → [0, 50],
+ * Scale for the Faction-War pairing surcharge. `factionUnfairness` is in [0, 0.5]; ×100 → [0, 50],
  * which stays strictly below the 100-cost of a single 0.5-point Swiss score step (swiss.ts
  * SCALE_SCORE). So the score gap always outranks fairness — the surcharge only breaks ties
  * within a score group toward the coin-flip matchup. In round 1 every score gap is 0, so it
@@ -46,13 +46,15 @@ export async function loadMatchmakingData(
 const FAIRNESS_SCALE = 100;
 
 /**
- * Build the Faction-War fairness surcharge for `generateSwissRound`. Players without a locked
- * faction contribute nothing (the surcharge is 0), so a mixed field degrades gracefully.
+ * Build the Faction-War fairness surcharge for `generateSwissRound`. Faction level only — the
+ * players' skill is ignored, so the round optimum depends solely on the faction win-rates
+ * (fixed until the rates move), not on who holds which faction. Players without a locked faction
+ * contribute nothing (surcharge 0), so a mixed field degrades gracefully.
  */
 export function factionWarPairingCost(data: MatchmakingData): FairnessCost {
   return (a, b) => {
     if (!a.factionId || !b.factionId) return 0;
-    return Math.round(unfairness(data, a.userId, a.factionId, b.userId, b.factionId) * FAIRNESS_SCALE);
+    return Math.round(factionUnfairness(data, a.factionId, b.factionId) * FAIRNESS_SCALE);
   };
 }
 

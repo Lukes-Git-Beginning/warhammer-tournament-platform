@@ -81,8 +81,9 @@ export function findBalancedFactions(
 }
 
 /**
- * How unfair a fixed matchup is, in [0, 0.5]: 0 = a perfect coin-flip, 0.5 = a certain result.
- * The cost the Faction-War optimiser minimises across a whole round.
+ * How unfair a fixed player-vs-player matchup is, in [0, 0.5]: 0 = a perfect coin-flip, 0.5 = a
+ * certain result. Includes each player's skill with their faction — used by the single-match
+ * challenge finder, where the two concrete players matter.
  */
 export function unfairness(
   data: MatchmakingData,
@@ -92,6 +93,20 @@ export function unfairness(
   factionY: string,
 ): number {
   return Math.abs(chanceToWin(data, playerA, factionX, playerB, factionY) - 0.5);
+}
+
+/**
+ * How unfair a faction matchup is on the FACTION LEVEL ALONE, in [0, 0.5] — the players' skill is
+ * deliberately ignored. This is the cost the Faction-War optimiser minimises across a round:
+ * "regardless of who the players are" (see plans/matchmaking-engine-design.md, block 4). With
+ * real data it equals |win-rate − 0.5|; a never-played pair falls back to the Model-Strength tilt.
+ */
+export function factionUnfairness(
+  data: Pick<MatchmakingData, 'factionTilt'>,
+  factionX: string,
+  factionY: string,
+): number {
+  return Math.abs(logistic(data.factionTilt(factionX, factionY).tilt) - 0.5);
 }
 
 // ---------------------------------------------------------------------------

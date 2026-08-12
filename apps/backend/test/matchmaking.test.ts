@@ -4,6 +4,7 @@ import {
   chanceToWin,
   findBalancedFactions,
   unfairness,
+  factionUnfairness,
   makeFactionTilt,
   type MatchmakingData,
 } from '../src/lib/matchmaking.js';
@@ -114,5 +115,21 @@ describe('unfairness', () => {
     const lopsided = stub({}, { 'x|y': { tilt: logit(0.95), hasData: true } });
     expect(unfairness(fair, 'A', 'x', 'B', 'y')).toBeCloseTo(0);
     expect(unfairness(lopsided, 'A', 'x', 'B', 'y')).toBeGreaterThan(0.4);
+  });
+});
+
+describe('factionUnfairness (Faction War — faction level only)', () => {
+  it('ignores player skill entirely — driven by the faction tilt alone', () => {
+    // A wildly lopsided skill gap must NOT change the faction-level fairness.
+    const data = stub(
+      { 'A|x': 5, 'B|y': -5 },
+      { 'x|y': { tilt: logit(0.5), hasData: true } }, // a coin-flip faction matchup
+    );
+    expect(factionUnfairness(data, 'x', 'y')).toBeCloseTo(0);
+  });
+
+  it('equals |win-rate − 0.5|', () => {
+    const data = stub({}, { 'x|y': { tilt: logit(0.8), hasData: true } });
+    expect(factionUnfairness(data, 'x', 'y')).toBeCloseTo(0.3);
   });
 });
