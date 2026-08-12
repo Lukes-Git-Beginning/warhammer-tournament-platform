@@ -39,10 +39,10 @@ describe('projectBracketPlan', () => {
   it('Balanced Liechtenstein: BaLi rounds + one division per band, shaped by pool size', () => {
     // 6 same-band → 3 rounds, one pool of 6 → TOP2 (final + 3rd).
     expect(projectBracketPlan({ format: 'BALANCED_LIECHTENSTEIN', playoffFormat: 'TOP2', roundsCount: null, activeBands: bands({ 3: 6 }) }))
-      .toEqual({ groupRounds: 3, divisions: [{ size: 6, format: 'TOP2' }] });
+      .toEqual({ groupRounds: 3, divisions: [{ size: 6, format: 'TOP2', band: 3 }] });
     // 8 same-band → 4 rounds, one pool of 8 → TOP4.
     expect(projectBracketPlan({ format: 'BALANCED_LIECHTENSTEIN', playoffFormat: 'TOP2', roundsCount: null, activeBands: bands({ 3: 8 }) }))
-      .toEqual({ groupRounds: 4, divisions: [{ size: 8, format: 'TOP4' }] });
+      .toEqual({ groupRounds: 4, divisions: [{ size: 8, format: 'TOP4', band: 3 }] });
   });
 
   it('BaLi splits into per-band divisions (TOP2 target size)', () => {
@@ -51,7 +51,7 @@ describe('projectBracketPlan', () => {
       format: 'BALANCED_LIECHTENSTEIN', playoffFormat: 'TOP2', roundsCount: null, activeBands: bands({ 5: 4, 3: 4 }),
     });
     expect(plan.groupRounds).toBe(4);
-    expect(plan.divisions).toEqual([{ size: 4, format: 'TOP2' }, { size: 4, format: 'TOP2' }]);
+    expect(plan.divisions).toEqual([{ size: 4, format: 'TOP2', band: 5 }, { size: 4, format: 'TOP2', band: 3 }]);
   });
 
   it('reprojects live as the field shrinks (BaLi 8 → 7 crosses the round tier)', () => {
