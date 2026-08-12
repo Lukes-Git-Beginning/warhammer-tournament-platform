@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.34.1] — 2026-08-13 — Bracket-preview & ladder-stats fixes
+### Fixed
+- **Balanced Liechtenstein playoff previews no longer vanish when the first division generates.** The in-bracket "TBD" preview was all-or-nothing — the first generated division hid the previews for all the others. Generated and not-yet-generated divisions now render together in one band-ordered stack (each slot is either the real bracket or a placeholder), so the remaining divisions stay previewed until each one is ready.
+- **The admin "usage over time" chart no longer undercounts ladder games.** The Ladder line counted only queue matchmaking and dropped availability-calendar matches entirely (e.g. 2026-08-11 showed 13 instead of 31 ladder games). Ladder now counts both queue and availability matchmaking; only a targeted challenge stays its own line.
+
 ## [1.34.0] — 2026-08-12 — Faction War fair pairings & in-bracket playoff preview
 ### Changed
 - **Faction War now pairs every round for the fairest faction matchups.** Each round is optimised so the faction-vs-faction duels land as close to 50/50 as the data allows — using the skill-adjusted matchup rating (opponent strength removed) rather than the raw win-rate. The opening round is driven purely by fairness; later rounds keep the Swiss standings primary and use fairness only to break ties. Faction pairings with no game history are avoided rather than treated as an even guess.
