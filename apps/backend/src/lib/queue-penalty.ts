@@ -3,8 +3,8 @@
 // A player who joins the queue and bails within SHORT_STINT_MS is "queue-ghosting".
 // Doing that ABUSE_THRESHOLD times inside the rolling ABUSE_WINDOW_MS trips one
 // escalation step. The consequence grows with the offense level:
-//   L1 → warning DM only (no sanction)   L2 → 1h cooldown   L3 → 24h   L4+ → until an
-// admin lifts it. Sanctions + staff notification start at L2.
+//   L1 → warning DM only (no sanction)   L2 → 1h cooldown   L3 → 24h   L4 → 7 days
+//   L5+ → permanent, until an admin lifts it. Sanctions + staff notification start at L2.
 //
 // The level is NOT a hard counter: it DECAYS one step per DECAY_PERIOD_MS of clean
 // behaviour, so an occasional slip fades out while a habitual offender escalates.
@@ -16,16 +16,23 @@ export const SHORT_STINT_MS = 5 * 60 * 1000; // "left almost immediately"
 export const ABUSE_THRESHOLD = 3; // short stints within the window that trip one step
 export const ABUSE_WINDOW_MS = 24 * 60 * 60 * 1000; // rolling 24h
 export const DECAY_PERIOD_MS = 7 * 24 * 60 * 60 * 1000; // one level forgiven per 7 clean days
-// L4+ has no fixed length ("until an admin lifts it"); until an admin action exists,
-// cap it at a long stand-in so it can't lock someone out forever by accident.
-export const MAX_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000;
+export const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000; // L4 cooldown
+// L5+ is "permanent — until an admin lifts it" (via resetQueuePenaltyToWarned). Stored as a long
+// finite TTL (a year) so the cooldown check, which reads the key's TTL, keeps working; an admin
+// clears it early. Effectively permanent for a habitual offender.
+export const PERMANENT_TIMEOUT_MS = 365 * 24 * 60 * 60 * 1000;
 
-/** Cooldown length per offense level. L1 is 0 (warning only); sanctions start at L2. */
+/**
+ * Cooldown length per offense level — the escalation ladder:
+ *   L1 = warning only (0)  ·  L2 = 1h  ·  L3 = 24h  ·  L4 = 7 days  ·  L5+ = permanent.
+ * Sanctions (and staff notification) start at L2.
+ */
 export function timeoutMsForLevel(level: number): number {
-  if (level <= 1) return 0;
-  if (level === 2) return 60 * 60 * 1000; // 1h
-  if (level === 3) return 24 * 60 * 60 * 1000; // 24h
-  return MAX_TIMEOUT_MS; // L4+ — until an admin lifts it
+  if (level <= 1) return 0; // L1 — warning only
+  if (level === 2) return 60 * 60 * 1000; // L2 — 1h
+  if (level === 3) return 24 * 60 * 60 * 1000; // L3 — 24h
+  if (level === 4) return SEVEN_DAYS_MS; // L4 — 7 days
+  return PERMANENT_TIMEOUT_MS; // L5+ — permanent, until an admin lifts it
 }
 
 /** A queue stint counts as abusive-short if the player bailed within SHORT_STINT_MS. */

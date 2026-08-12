@@ -11,7 +11,8 @@ import {
   decayedLevel,
   SHORT_STINT_MS,
   ABUSE_THRESHOLD,
-  MAX_TIMEOUT_MS,
+  SEVEN_DAYS_MS,
+  PERMANENT_TIMEOUT_MS,
   DECAY_PERIOD_MS,
 } from '../src/lib/queue-penalty.js';
 
@@ -52,9 +53,10 @@ describe('timeoutMsForLevel — education-first escalation', () => {
     expect(timeoutMsForLevel(3)).toBe(24 * 60 * 60 * 1000);
   });
 
-  it('level 4+ is the long stand-in until an admin lifts it', () => {
-    expect(timeoutMsForLevel(4)).toBe(MAX_TIMEOUT_MS);
-    expect(timeoutMsForLevel(9)).toBe(MAX_TIMEOUT_MS);
+  it('level 4 is 7 days, level 5+ is permanent (until an admin lifts it)', () => {
+    expect(timeoutMsForLevel(4)).toBe(SEVEN_DAYS_MS);
+    expect(timeoutMsForLevel(5)).toBe(PERMANENT_TIMEOUT_MS);
+    expect(timeoutMsForLevel(9)).toBe(PERMANENT_TIMEOUT_MS);
   });
 });
 
