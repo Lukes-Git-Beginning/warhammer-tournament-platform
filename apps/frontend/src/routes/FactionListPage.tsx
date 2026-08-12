@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { getFactions, getMatchupMatrix } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
-import { FactionBarChart } from '@/components/meta/FactionPopularityChart';
+import { FactionBarChart, FactionPopularitySegmentedChart } from '@/components/meta/FactionPopularityChart';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { FactionWithStatsDto, FactionStrengthDto } from '@rizzotto/types';
@@ -138,11 +138,7 @@ export function FactionListPage() {
               value: Math.round((e.stats?.win_rate ?? 0) * 100),
             }))}
           />
-          <FactionBarChart
-            title="Popularity — games played"
-            valueLabel="Games"
-            data={data.data.map((e) => ({ name: e.faction.name, value: e.stats?.matches_played ?? 0 }))}
-          />
+          <FactionPopularitySegmentedChart factions={data.data} />
         </div>
       )}
     </PageShell>

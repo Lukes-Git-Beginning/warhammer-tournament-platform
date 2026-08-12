@@ -23,6 +23,8 @@ export interface FactionStatsDto {
   win_rate: number | null;
   pick_count: number;
   ban_count: number;
+  /** The player with the most games on this faction this season + their count (segmented bar). */
+  top_player?: { username: string; games: number } | null;
 }
 
 export interface FactionWithStatsDto {
@@ -145,18 +147,50 @@ export async function getFactionsWithStats(
     return factions.map((f) => ({ faction: asFactionDto(f), stats: null }));
   }
 
-  const factions = await prisma.faction.findMany({
-    orderBy: { display_order: 'asc' },
-    include: {
-      stats: {
-        where: { season_id: seasonId },
-        take: 1,
+  const [factions, topPlayers] = await Promise.all([
+    prisma.faction.findMany({
+      orderBy: { display_order: 'asc' },
+      include: {
+        stats: {
+          where: { season_id: seasonId },
+          take: 1,
+        },
       },
-    },
-  });
+    }),
+    // Top player per faction: the one with the most games on it this season. Counted per
+    // faction-SIDE over the same game set as matches_played (COMPLETED, this season, not deleted;
+    // no counts_for_leaderboard filter, mirrors count on both sides) so a segment never exceeds
+    // its bar. Deterministic tie-break by player id.
+    prisma.$queryRaw<{ faction_id: string; username: string; games: number }[]>`
+      WITH sides AS (
+        SELECT mg.player1_faction_id AS faction_id, m.player1_id AS player_id
+        FROM "MatchGame" mg JOIN "Match" m ON m.id = mg.match_id
+        WHERE mg.status = 'COMPLETED' AND m.season_id = ${seasonId}::uuid AND m.deleted_at IS NULL
+          AND mg.player1_faction_id IS NOT NULL AND m.player1_id IS NOT NULL
+        UNION ALL
+        SELECT mg.player2_faction_id, m.player2_id
+        FROM "MatchGame" mg JOIN "Match" m ON m.id = mg.match_id
+        WHERE mg.status = 'COMPLETED' AND m.season_id = ${seasonId}::uuid AND m.deleted_at IS NULL
+          AND mg.player2_faction_id IS NOT NULL AND m.player2_id IS NOT NULL
+      ),
+      counts AS (
+        SELECT faction_id, player_id, COUNT(*)::int AS games,
+          ROW_NUMBER() OVER (PARTITION BY faction_id ORDER BY COUNT(*) DESC, player_id) AS rn
+        FROM sides GROUP BY faction_id, player_id
+      )
+      SELECT c.faction_id, c.games, u.username
+      FROM counts c JOIN "User" u ON u.id = c.player_id
+      WHERE c.rn = 1
+    `,
+  ]);
 
-  return factions.map((f) => ({
-    faction: asFactionDto(f),
-    stats: f.stats[0] ? asFactionStatsDto(f.stats[0]) : null,
-  }));
+  const topByFaction = new Map(topPlayers.map((t) => [t.faction_id, { username: t.username, games: t.games }]));
+
+  return factions.map((f) => {
+    const base = f.stats[0] ? asFactionStatsDto(f.stats[0]) : null;
+    return {
+      faction: asFactionDto(f),
+      stats: base ? { ...base, top_player: topByFaction.get(f.id) ?? null } : null,
+    };
+  });
 }

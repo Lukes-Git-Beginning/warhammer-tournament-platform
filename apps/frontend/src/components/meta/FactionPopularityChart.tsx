@@ -87,3 +87,73 @@ export function FactionPopularityChart({ factions }: { factions: FactionWithStat
     />
   );
 }
+
+interface PopularityDatum {
+  name: string;
+  top: number;
+  rest: number;
+  total: number;
+  topName: string | null;
+}
+
+/** Tooltip for the segmented popularity bar — shows the total plus the most prolific player. */
+function PopularityTooltip({ active, payload }: { active?: boolean; payload?: { payload: PopularityDatum }[] }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]!.payload;
+  return (
+    <div
+      style={{ background: '#1c1917', border: '1px solid #44403c', borderRadius: 6, padding: '6px 10px' }}
+    >
+      <div className="text-xs font-medium text-stone-200">{d.name}</div>
+      <div className="text-xs text-stone-400">{d.total} games</div>
+      {d.topName && d.top > 0 && (
+        <div className="text-xs text-rizzotto-gold-400">
+          most: {d.topName} ({d.top})
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Faction popularity where each bar is split into two segments: the most prolific single player's
+ * share (gold) and everyone else (dim). Hovering shows that player's name + count. Same horizontal
+ * layout as FactionBarChart; sorted by total games desc.
+ */
+export function FactionPopularitySegmentedChart({ factions }: { factions: FactionWithStatsDto[] }) {
+  const chartData: PopularityDatum[] = factions
+    .map((e) => {
+      const total = e.stats?.matches_played ?? 0;
+      const top = Math.min(e.stats?.top_player?.games ?? 0, total);
+      return {
+        name: e.faction.name.length > 20 ? `${e.faction.name.slice(0, 20)}…` : e.faction.name,
+        top,
+        rest: Math.max(0, total - top),
+        total,
+        topName: e.stats?.top_player?.username ?? null,
+      };
+    })
+    .filter((d) => d.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  if (chartData.length === 0) return null;
+
+  return (
+    <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
+      <p className="text-xs uppercase tracking-wider text-stone-500">Popularity — games played</p>
+      <p className="mb-4 text-[10px] italic text-stone-600">
+        Gold segment = the faction&apos;s single most prolific player&apos;s share
+      </p>
+      <ResponsiveContainer width="100%" height={Math.max(300, chartData.length * 24)}>
+        <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 24 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <XAxis type="number" allowDecimals={false} tick={{ fill: '#9ca3af', fontSize: 11 }} />
+          <YAxis type="category" dataKey="name" interval={0} tick={<FactionTick />} width={140} />
+          <Tooltip content={<PopularityTooltip />} cursor={{ fill: '#ffffff10' }} />
+          <Bar dataKey="top" stackId="pop" fill="#d4a853" />
+          <Bar dataKey="rest" stackId="pop" fill="#5f5233" radius={[0, 3, 3, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}

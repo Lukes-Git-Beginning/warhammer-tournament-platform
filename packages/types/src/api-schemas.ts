@@ -301,6 +301,9 @@ export const FactionStatsDtoSchema = z.object({
   win_rate: z.number().nullable(),
   pick_count: z.number().int(),
   ban_count: z.number().int(),
+  /** The single player with the most games on this faction this season, and their game count —
+   *  drives the segmented popularity bar. Null when the faction has no attributed games. */
+  top_player: z.object({ username: z.string(), games: z.number().int() }).nullable().optional(),
 });
 export type FactionStatsDto = z.infer<typeof FactionStatsDtoSchema>;
 
