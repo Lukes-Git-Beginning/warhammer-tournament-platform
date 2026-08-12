@@ -1024,9 +1024,11 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // GET /api/admin/stats/games-over-time?days=30
-  // Daily game counts split by source: tournament / ladder (queue) / challenge.
-  // Game-level (a Bo3 counts as up to 3). Returns a continuous daily series so
-  // the lines never jump over empty days.
+  // Daily game counts split by source: tournament / ladder / challenge. "Ladder" is all
+  // matchmade Open Play — both the direct QUEUE and AVAILABILITY (availability-calendar)
+  // matchmaking; only a targeted CHALLENGE is its own line. (AVAILABILITY games used to fall
+  // through both filters and vanish from the chart.) Game-level (a Bo3 counts as up to 3).
+  // Returns a continuous daily series so the lines never jump over empty days.
   // -------------------------------------------------------------------------
   fastify.get('/api/admin/stats/games-over-time', async (request) => {
     const days = Math.min(
@@ -1044,7 +1046,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         >`
           SELECT date_trunc('day', mg.played_at)::date AS day,
             COUNT(*) FILTER (WHERE m.type = 'TOURNAMENT') AS tournament,
-            COUNT(*) FILTER (WHERE m.type = 'OPEN_PLAY' AND m.source = 'QUEUE') AS ladder,
+            COUNT(*) FILTER (WHERE m.type = 'OPEN_PLAY' AND m.source IN ('QUEUE', 'AVAILABILITY')) AS ladder,
             COUNT(*) FILTER (WHERE m.type = 'OPEN_PLAY' AND m.source = 'CHALLENGE') AS challenge
           FROM "MatchGame" mg
           JOIN "Match" m ON m.id = mg.match_id
