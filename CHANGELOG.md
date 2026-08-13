@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.35.1] — 2026-08-13 — Popularity-bar colours
+### Fixed
+- **The segmented popularity bar's colours now read the right way round.** The faction's main bar (everyone else) is the standard gold, and the single most prolific player's share is the darker carved-out slice — instead of the reverse.
+
 ## [1.35.0] — 2026-08-13 — Segmented faction popularity & Open Play no-show penalty
 ### Added
 - **The Factions popularity bar is now segmented by its most prolific player.** Each faction's bar shows — as a highlighted segment — how many of its games were played by the single player who plays it most; hover to see that player's name and count (e.g. Dark Elves: most RAD|ponti, 310). It's now obvious when a faction is carried by one specialist versus spread across the field.
