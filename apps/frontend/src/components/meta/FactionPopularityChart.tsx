@@ -142,7 +142,7 @@ export function FactionPopularitySegmentedChart({ factions }: { factions: Factio
     <div className="rounded-md border border-stone-800 bg-stone-900/60 p-5">
       <p className="text-xs uppercase tracking-wider text-stone-500">Popularity — games played</p>
       <p className="mb-4 text-[10px] italic text-stone-600">
-        Gold segment = the faction&apos;s single most prolific player&apos;s share
+        The darker slice is the faction&apos;s single most prolific player&apos;s share
       </p>
       <ResponsiveContainer width="100%" height={Math.max(300, chartData.length * 24)}>
         <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 24 }}>
@@ -150,8 +150,8 @@ export function FactionPopularitySegmentedChart({ factions }: { factions: Factio
           <XAxis type="number" allowDecimals={false} tick={{ fill: '#9ca3af', fontSize: 11 }} />
           <YAxis type="category" dataKey="name" interval={0} tick={<FactionTick />} width={140} />
           <Tooltip content={<PopularityTooltip />} cursor={{ fill: '#ffffff10' }} />
-          <Bar dataKey="top" stackId="pop" fill="#d4a853" />
-          <Bar dataKey="rest" stackId="pop" fill="#5f5233" radius={[0, 3, 3, 0]} />
+          <Bar dataKey="top" stackId="pop" fill="#5f5233" />
+          <Bar dataKey="rest" stackId="pop" fill="#d4a853" radius={[0, 3, 3, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
