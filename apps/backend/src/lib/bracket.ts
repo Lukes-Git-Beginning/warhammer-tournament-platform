@@ -332,8 +332,12 @@ export function generateDoubleElim(
       //   WB Final (r=R_W-1): 2*(R_W-1)-1 = R_L-1 → last LB round, winner goes directly to GF
       let loser_next_match_id: string | null = null;
       const lbDropRoundIdx = r === 0 ? 0 : 2 * r - 1;
-      const lbMatchIdx = r === 0 ? Math.floor(i / 2) : i;
-      if (lbDropRoundIdx < R_L && lbMatchIdx < lbIds[lbDropRoundIdx]!.length) {
+      const dropCount = lbDropRoundIdx < R_L ? lbIds[lbDropRoundIdx]!.length : 0;
+      // Cross-seed (rematch avoidance): WB round-2+ losers drop into the LB in REVERSED order, so a
+      // loser lands in the opposite half from their winners-bracket path and can't meet a former WB
+      // opponent again until (at earliest) the LB final. WB round-1 losers still pair off 2:1.
+      const lbMatchIdx = r === 0 ? Math.floor(i / 2) : dropCount - 1 - i;
+      if (lbDropRoundIdx < R_L && lbMatchIdx >= 0 && lbMatchIdx < lbIds[lbDropRoundIdx]!.length) {
         loser_next_match_id = lbIds[lbDropRoundIdx]![lbMatchIdx]!;
       }
 

@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.35.2] — 2026-08-13 — Double-Elimination loser-bracket seeding
+### Fixed
+- **Double-Elimination brackets no longer force early loser-bracket rematches.** When you lost in the winners bracket you could be dropped straight back onto someone you'd just beaten (or lost to) in the very next loser-bracket round — a seeding flaw, not bad luck. Winners-bracket losers now cross-seed into the loser bracket in reversed order, so two players who met in the winners bracket can't meet again until the loser final at the earliest. (Rematches deep in the loser bracket, where the two halves converge, are unavoidable and still possible — as they are in any double-elimination format.)
+
 ## [1.35.1] — 2026-08-13 — Popularity-bar colours
 ### Fixed
 - **The segmented popularity bar's colours now read the right way round.** The faction's main bar (everyone else) is the standard gold, and the single most prolific player's share is the darker carved-out slice — instead of the reverse.
