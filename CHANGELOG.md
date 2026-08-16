@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.36.0] — 2026-08-16 — Hosts see committed factions & divisions before start
+### Added
+- **Hosts can now see which factions players have committed to before a tournament starts.** For SFT, Free Pick and Faction War, a player's chosen faction stays hidden from everyone during registration so nobody can counter-pick — but the host, co-hosts, moderators and admins now see the committed factions on the roster ahead of the start. (Regular players still see nothing until it begins.)
+- **Balanced Liechtenstein rosters now show each player's chosen division before start.** The host sees a "Div N" marker per player on the pre-start participant list, so it's clear who has signed up into which division (and whether a division is over- or under-subscribed) before the group phase is generated.
+
 ## [1.35.2] — 2026-08-13 — Double-Elimination loser-bracket seeding
 ### Fixed
 - **Double-Elimination brackets no longer force early loser-bracket rematches.** When you lost in the winners bracket you could be dropped straight back onto someone you'd just beaten (or lost to) in the very next loser-bracket round — a seeding flaw, not bad luck. Winners-bracket losers now cross-seed into the loser bracket in reversed order, so two players who met in the winners bracket can't meet again until the loser final at the earliest. (Rematches deep in the loser bracket, where the two halves converge, are unavoidable and still possible — as they are in any double-elimination format.)

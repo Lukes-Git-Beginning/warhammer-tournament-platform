@@ -877,6 +877,21 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    // Optional auth: a host/co-host/moderator/admin may review the committed factions
+    // and chosen divisions before the tournament starts. Everyone else stays masked.
+    let privileged = false;
+    try {
+      await request.jwtVerify();
+      privileged = await canManageTournament(
+        fastify.prisma,
+        tournament.id,
+        request.user.sub,
+        request.user.role,
+      );
+    } catch {
+      /* unauthenticated viewer — privileged stays false */
+    }
+
     const participants = await fastify.prisma.tournamentParticipant.findMany({
       where: { tournament_id: tournament.id, deleted_at: null },
       select: {
@@ -887,6 +902,8 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         user: { select: { id: true, username: true, avatar_url: true } },
         faction: { select: { id: true, name: true, color_hex: true } },
         faction_ids: true, // TWO_D_THREE: the player's 3-faction pool
+        requested_band: true, // BALANCED_LIECHTENSTEIN: the division the player opted into
+        skill_band: true, // BALANCED_LIECHTENSTEIN: effective division (set at start)
       },
       orderBy: { registered_at: 'asc' },
     });
@@ -895,17 +912,27 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
     // Hide committed factions until the tournament starts so nobody can counter-pick
     // during registration. FREE_PICK is included: a committed Free Pick faction is a
     // strategic choice that must stay secret while others are still choosing (like SFT).
-    const maskFactions =
+    // A manager is exempt — they may review the roster's committed factions ahead of start.
+    const hideFactions =
+      !privileged &&
+      !started &&
       (tournament.mode === 'SFT' ||
         tournament.mode === 'BPT' ||
         tournament.mode === 'TWO_D_THREE' ||
         tournament.mode === 'FREE_PICK' ||
-        tournament.mode === 'FACTION_WAR') &&
-      !started;
+        tournament.mode === 'FACTION_WAR');
 
-    const data = maskFactions
-      ? participants.map((p) => ({ ...p, faction: null, faction_ids: [] }))
-      : participants;
+    // The chosen division is roster info a host needs before start; it becomes public
+    // once the tournament starts (the standings already group players by band).
+    const showBands = privileged || started;
+
+    const data = participants.map((p) => ({
+      ...p,
+      faction: hideFactions ? null : p.faction,
+      faction_ids: hideFactions ? [] : p.faction_ids,
+      requested_band: showBands ? p.requested_band : null,
+      skill_band: showBands ? p.skill_band : null,
+    }));
 
     return { data, total: data.length };
   });

@@ -1917,6 +1917,10 @@ export interface TournamentParticipantEntry {
   user: { id: string; username: string; avatar_url: string | null };
   faction: { id: string; name: string; color_hex: string } | null;
   faction_ids: string[]; // TWO_D_THREE: the player's 3-faction pool
+  // BALANCED_LIECHTENSTEIN: division the player opted into / effective division.
+  // Sent to managers before start (and to everyone once the tournament has started).
+  requested_band?: number | null;
+  skill_band?: number | null;
 }
 
 export interface TournamentParticipantsResponse {

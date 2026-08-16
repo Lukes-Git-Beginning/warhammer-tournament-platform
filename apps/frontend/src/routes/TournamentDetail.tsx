@@ -1018,7 +1018,7 @@ export function TournamentDetail() {
             />
           );
         }
-        return <ParticipantsList slug={tournament.slug} canManage={!!canManage} tournamentStatus={tournament.status} tournamentMode={tournament.mode} />;
+        return <ParticipantsList slug={tournament.slug} canManage={!!canManage} tournamentStatus={tournament.status} tournamentMode={tournament.mode} tournamentFormat={tournament.format} />;
       })()}
 
       {/* ─── Game History link — below standings/participants ─── */}

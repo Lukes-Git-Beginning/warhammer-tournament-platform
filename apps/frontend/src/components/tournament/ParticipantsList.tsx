@@ -16,6 +16,7 @@ export interface ParticipantsListProps {
   canManage?: boolean;
   tournamentStatus?: string;
   tournamentMode?: string;
+  tournamentFormat?: string;
 }
 
 // Modes where a participant registers with a single fixed faction a host may edit.
@@ -28,9 +29,10 @@ const FACTION_EDIT_MODES = new Set(['SFT', 'FREE_PICK']);
  * force check-in, faction edit (SFT/Free Pick, incl. "pick-later"), drop/undrop, and
  * a pre-start "Remove" (full delete). (#29 / #30b / check-in visibility)
  */
-export function ParticipantsList({ slug, canManage = false, tournamentStatus, tournamentMode }: ParticipantsListProps) {
+export function ParticipantsList({ slug, canManage = false, tournamentStatus, tournamentMode, tournamentFormat }: ParticipantsListProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const isBaLi = tournamentFormat === 'BALANCED_LIECHTENSTEIN';
 
   const { data, isLoading } = useQuery({
     queryKey: ['tournament-participants', slug],
@@ -129,6 +131,15 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus, to
                     />
                     {p.faction.name}
                   </Link>
+                ) : null}
+
+                {isBaLi && (p.skill_band ?? p.requested_band) != null ? (
+                  <span
+                    className="rounded bg-rizzotto-iron-700 px-1.5 py-0.5 text-[10px] font-medium text-rizzotto-stone-300"
+                    title="Chosen Balanced Liechtenstein division"
+                  >
+                    Div {p.skill_band ?? p.requested_band}
+                  </span>
                 ) : null}
 
                 <span className="ml-auto flex items-center gap-2">
