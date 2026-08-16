@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 ### Added
 - **Hosts can now see which factions players have committed to before a tournament starts.** For SFT, Free Pick and Faction War, a player's chosen faction stays hidden from everyone during registration so nobody can counter-pick — but the host, co-hosts, moderators and admins now see the committed factions on the roster ahead of the start. (Regular players still see nothing until it begins.)
 - **Balanced Liechtenstein rosters now show each player's chosen division before start.** The host sees a "Div N" marker per player on the pre-start participant list, so it's clear who has signed up into which division (and whether a division is over- or under-subscribed) before the group phase is generated.
+### Fixed
+- **Faction War tournaments can be edited again once registration is open.** Saving any edit (even just a description tweak) on a Faction War tournament failed with `"mode" can only be changed while the tournament is in draft`, because the edit form didn't recognise the Faction War mode and silently tried to switch it to BPT. The form now knows the mode, and the backend only blocks a *genuine* change to a structural field — re-saving the unchanged mode is a no-op.
 
 ## [1.35.2] — 2026-08-13 — Double-Elimination loser-bracket seeding
 ### Fixed

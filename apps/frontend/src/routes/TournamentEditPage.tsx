@@ -82,7 +82,7 @@ type EditFormData = {
   map_pool: string[];
   map_preset_config: MapPresetConfig | null;
   format: Tournament['format'];
-  mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE';
+  mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR';
   set_faction_id: string | null;
   faction_pool: string[];
   restricted_factions: string[];
@@ -245,7 +245,7 @@ function buildInitialForm(t: Tournament): EditFormData {
     map_pool: (t.map_pool ?? []).map((m) => m.id),
     map_preset_config: (t.map_preset_config as MapPresetConfig | null) ?? null,
     format: t.format,
-    mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX' || t.mode === 'TWO_D_THREE' || t.mode === 'FREE_PICK' || t.mode === 'ONE_V_THREE') ? t.mode : 'BPT',
+    mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX' || t.mode === 'TWO_D_THREE' || t.mode === 'FREE_PICK' || t.mode === 'ONE_V_THREE' || t.mode === 'FACTION_WAR') ? t.mode : 'BPT',
     set_faction_id: (t as unknown as { set_faction_id?: string | null }).set_faction_id ?? null,
     faction_pool: t.faction_allowlist ?? [],
     restricted_factions: t.restricted_factions ?? [],
@@ -795,6 +795,7 @@ export function TournamentEditPage() {
                   <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
                   <option value="FREE_PICK">Enticity&apos;s Free Pick — SFT/Matrix Hybrid</option>
                   <option value="ONE_V_THREE">1v3 — Set Faction vs. One of Three Counterpicks</option>
+                  <option value="FACTION_WAR">Faction War — SFT with globally exclusive factions</option>
                 </Select>
               )}
             </div>

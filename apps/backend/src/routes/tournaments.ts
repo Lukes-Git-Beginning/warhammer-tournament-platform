@@ -915,8 +915,10 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       // PUBLIC/PRIVATE at any time (e.g. private during setup → public on announce, or hide a
       // finished event). The route already requires canManageTournament.
       if (tournament.status !== 'DRAFT') {
+        // Reject only a genuine CHANGE to a structural field — a client that re-submits
+        // the unchanged value (e.g. an edit form that always sends `mode`) must not 422.
         const draftOnlyAttempted = (['format', 'mode'] as const).filter(
-          (f) => rest[f] !== undefined,
+          (f) => rest[f] !== undefined && rest[f] !== tournament[f],
         );
         if (draftOnlyAttempted.length > 0) {
           return reply.code(422).send({
