@@ -5,7 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
-## [1.36.0] — 2026-08-16 — Hosts see committed factions & divisions before start
+## [1.37.0] — 2026-08-17 — Faction War fair seeding for elimination brackets
+### Added
+- **Faction War now seeds elimination brackets for fair faction matchups, not just Swiss.** The fair-matchup balancing already drove Swiss round pairing, but Single and Double Elimination were seeded faction-blind — so a bracket could open with lopsided duels. Both bracket formats are now seeded so that **each player's first game is as balanced a faction matchup as the ratings allow**. For the players who sit out round 1 on a bye, it looks one round ahead: a waiting player is placed so their round-2 game against whoever wins the feeding match is balanced against *both* possible opponents, not just one. The optimiser is deterministic (a tournament always seeds the same bracket) and only ever kicks in for Faction War — every other mode is untouched.
 ### Added
 - **Hosts can now see which factions players have committed to before a tournament starts.** For SFT, Free Pick and Faction War, a player's chosen faction stays hidden from everyone during registration so nobody can counter-pick — but the host, co-hosts, moderators and admins now see the committed factions on the roster ahead of the start. (Regular players still see nothing until it begins.)
 - **Balanced Liechtenstein rosters now show each player's chosen division before start.** The host sees a "Div N" marker per player on the pre-start participant list, so it's clear who has signed up into which division (and whether a division is over- or under-subscribed) before the group phase is generated.
