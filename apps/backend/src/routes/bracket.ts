@@ -25,7 +25,7 @@ import {
 } from '../lib/playoff-generator.js';
 import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
 import { autoSwissConfig } from '../lib/auto-swiss-service.js';
-import { resolveFactionWarFairness } from '../lib/matchmaking-service.js';
+import { resolveFactionWarFairness, resolveFactionWarSeedOrder } from '../lib/matchmaking-service.js';
 import { projectBracketPlan } from '../lib/bracket-plan.js';
 import { DEFAULT_BAND } from '../lib/balanced-liechtenstein.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
@@ -413,14 +413,34 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       switch (tournament.format) {
         case TournamentFormat.SINGLE_ELIMINATION: {
-          bracketMatches = generateSingleElim(tournament.id, participantIds, {
+          // Faction War: seed so each player's first game is the fairest faction matchup (no-op otherwise).
+          const seeded = await resolveFactionWarSeedOrder(
+            fastify.prisma,
+            fastify.redis,
+            tournament.id,
+            tournament.mode,
+            participantIds,
+            factionById,
+            'SINGLE_ELIMINATION',
+          );
+          bracketMatches = generateSingleElim(tournament.id, seeded, {
             hasThirdPlace: tournament.has_third_place_match,
           });
           break;
         }
 
         case TournamentFormat.DOUBLE_ELIMINATION: {
-          bracketMatches = generateDoubleElim(tournament.id, participantIds, {
+          // Faction War: seed so each player's first game is the fairest faction matchup (no-op otherwise).
+          const seeded = await resolveFactionWarSeedOrder(
+            fastify.prisma,
+            fastify.redis,
+            tournament.id,
+            tournament.mode,
+            participantIds,
+            factionById,
+            'DOUBLE_ELIMINATION',
+          );
+          bracketMatches = generateDoubleElim(tournament.id, seeded, {
             bracketReset: tournament.grand_final_reset,
             resetFormat: tournament.grand_final_reset_format,
           });

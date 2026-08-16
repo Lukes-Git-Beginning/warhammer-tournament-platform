@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.37.0] — 2026-08-18 — Faction War: fair, varied elimination-bracket seeding
+### Added
+- **Faction War now seeds elimination brackets for fair faction matchups — and varies them between tournaments.** Faction-War Swiss rounds were already balanced for fair faction-vs-faction duels, but Single and Double Elimination were seeded faction-blind, so a bracket could open with lopsided matchups. Both formats are now seeded so that **every player's opening game is as close to a 50/50 faction matchup as the ratings allow** — and for the players who sit out round 1 on a bye, it looks one round ahead, balancing their round-2 game against *both* possible opponents rather than just one. Instead of always producing the single mathematically-optimal bracket, it picks at random among the (up to five) equally-fairest brackets, so a recurring same-faction field doesn't always draw the identical matchups. The choice is fixed per tournament (the same tournament always seeds the same bracket), and only Faction War is affected — every other mode is untouched.
+
 ## [1.36.3] — 2026-08-17 — Open Play faction-pick timer really is 5 minutes now
 ### Fixed
 - **The Open Play (ladder) faction-pick page now actually shows 5 minutes, not 2.** The previous fix used the tournament mode to tell Open Play apart from a Blind Pick Tournament — but an Open Play match reports the same mode, so the pick page kept showing the 2-minute tournament countdown on the ladder. The decision now carries an explicit Open-Play flag, so the countdown correctly reads 5 minutes on the ladder (then the match is cancelled) and 2 minutes in a tournament (then a random faction is auto-assigned).
