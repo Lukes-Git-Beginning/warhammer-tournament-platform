@@ -40,13 +40,15 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus, to
   });
 
   const showFactionEdit = canManage && !!tournamentMode && FACTION_EDIT_MODES.has(tournamentMode);
+  const is2D3 = tournamentMode === 'TWO_D_THREE';
   const { data: factionsResp } = useQuery({
     queryKey: ['factions'],
     queryFn: () => getFactions(),
-    enabled: showFactionEdit,
+    enabled: showFactionEdit || is2D3,
     staleTime: 5 * 60_000,
   });
   const factions = (factionsResp?.data ?? []).map((d) => d.faction);
+  const factionById = new Map(factions.map((f) => [f.id, f]));
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['tournament-participants', slug] });
@@ -118,6 +120,27 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus, to
                       <option key={f.id} value={f.id}>{f.name}</option>
                     ))}
                   </select>
+                ) : is2D3 && p.faction_ids.length > 0 ? (
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {p.faction_ids.map((fid) => {
+                      const f = factionById.get(fid);
+                      return f ? (
+                        <Link
+                          key={fid}
+                          to="/factions/$id"
+                          params={{ id: f.id }}
+                          className="flex items-center gap-1 text-xs text-rizzotto-stone-400 hover:text-rizzotto-gold-400 transition-colors"
+                        >
+                          <span
+                            className="inline-block h-2 w-2 rounded-full shrink-0"
+                            style={{ backgroundColor: f.color_hex }}
+                            aria-hidden="true"
+                          />
+                          {f.name}
+                        </Link>
+                      ) : null;
+                    })}
+                  </span>
                 ) : p.faction ? (
                   <Link
                     to="/factions/$id"

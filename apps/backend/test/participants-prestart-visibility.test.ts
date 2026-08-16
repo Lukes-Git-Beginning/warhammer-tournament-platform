@@ -77,7 +77,8 @@ beforeEach(async () => {
     },
   });
 
-  // Player has committed a faction and opted into division 3.
+  // Player has committed a faction (single + a pool, to exercise both mask paths) and
+  // opted into division 3.
   await prisma.tournamentParticipant.create({
     data: {
       id: randomUUID(),
@@ -85,6 +86,7 @@ beforeEach(async () => {
       user_id: PLAYER_ID,
       status: 'REGISTERED',
       faction_id: FACTION_ID,
+      faction_ids: [FACTION_ID],
       requested_band: 3,
     },
   });
@@ -102,6 +104,7 @@ function cookieFor(id: string, role: string) {
 
 type Entry = {
   faction: { id: string } | null;
+  faction_ids: string[];
   requested_band: number | null;
   skill_band: number | null;
 };
@@ -121,13 +124,15 @@ describe('GET /api/tournaments/:slug/participants — pre-start visibility', () 
     const body = await fetchRoster(cookieFor(HOST_ID, 'HOST'));
     expect(body.total).toBe(1);
     expect(body.data[0]!.faction?.id).toBe(FACTION_ID);
+    expect(body.data[0]!.faction_ids).toEqual([FACTION_ID]);
     expect(body.data[0]!.requested_band).toBe(3);
   });
 
-  it('2. Anonymous viewer gets the faction masked and no division before start', async () => {
+  it('2. Anonymous viewer gets the faction (and pool) masked and no division before start', async () => {
     const body = await fetchRoster();
     expect(body.total).toBe(1);
     expect(body.data[0]!.faction).toBeNull();
+    expect(body.data[0]!.faction_ids).toEqual([]);
     expect(body.data[0]!.requested_band).toBeNull();
   });
 
