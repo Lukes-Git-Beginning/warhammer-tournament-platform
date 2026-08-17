@@ -4,7 +4,10 @@ import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
 import { ensureMatchGame } from '../lib/match-games.js';
 import { ensureOneVThreeDecision } from '../lib/one-v-three.js';
-import { BLIND_PICK_TIMEOUT_MS } from '../lib/blind-pick-auto-resolve.js';
+import {
+  OPEN_PLAY_BLIND_PICK_TIMEOUT_MS,
+  TOURNAMENT_BLIND_PICK_TIMEOUT_MS,
+} from '../lib/blind-pick-auto-resolve.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -374,7 +377,11 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           if (userLockedAt) return null;
           const opponentLockedAt = bp.player1_locked_at ?? bp.player2_locked_at;
           if (!opponentLockedAt) return null;
-          const deadlineMs = opponentLockedAt.getTime() + BLIND_PICK_TIMEOUT_MS;
+          // Tournament (Blind Pick) uses the stricter 2-min deadline; Open Play uses 5 min.
+          const timeoutMs = match.tournament
+            ? TOURNAMENT_BLIND_PICK_TIMEOUT_MS
+            : OPEN_PLAY_BLIND_PICK_TIMEOUT_MS;
+          const deadlineMs = opponentLockedAt.getTime() + timeoutMs;
           if (deadlineMs <= now) return null; // already past — cron will auto-resolve
           return {
             matchId: match.id,

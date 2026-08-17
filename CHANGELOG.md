@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.36.1] — 2026-08-17 — Faction-pick timer: 5 min on the ladder, 2 min in tournaments
+### Fixed
+- **The blind faction-pick timer is now consistent everywhere: 5 minutes in Open Play (the ladder), 2 minutes in a Blind Pick Tournament.** The pick page always showed a 2-minute countdown regardless of context, so Open Play looked like it still only gave 2 minutes even though the ladder actually cancels a no-show after 5 — and the tournament side had drifted to 5 minutes. Every surface now agrees: the pick-page countdown, the game-tile countdown, the deadline reminder and the server-side auto-resolve all use 5 minutes on the ladder (then the match is cancelled and the no-show penalised) and 2 minutes in a tournament (then the missing side is auto-assigned a random faction, so the bracket keeps moving).
+
 ## [1.36.0] — 2026-08-16 — Hosts see committed factions & divisions before start
 ### Added
 - **Hosts can now see which factions players have committed to before a tournament starts.** For SFT, Free Pick and Faction War, a player's chosen faction stays hidden from everyone during registration so nobody can counter-pick — but the host, co-hosts, moderators and admins now see the committed factions on the roster ahead of the start. (Regular players still see nothing until it begins.)

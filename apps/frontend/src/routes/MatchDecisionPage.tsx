@@ -671,7 +671,10 @@ function BlindPickPhase({
             <div className="flex items-center justify-between w-full px-1 shrink-0">
               <span className="text-white font-semibold">{pickedMapName}</span>
               {myLocked && bp && (
-                <BlindPickCountdown firstLockedAt={bp.firstLockedAt ?? null} timeoutMs={2 * 60 * 1000} />
+                <BlindPickCountdown
+                  firstLockedAt={bp.firstLockedAt ?? null}
+                  timeoutMs={decision.tournamentMode === 'BPT' ? 2 * 60 * 1000 : 5 * 60 * 1000}
+                />
               )}
               <button
                 type="button"
@@ -697,7 +700,10 @@ function BlindPickPhase({
           <p className="text-sm text-rizzotto-stone-400">
             Faction locked. Waiting for opponent…
           </p>
-          <BlindPickCountdown firstLockedAt={bp?.firstLockedAt ?? null} timeoutMs={2 * 60 * 1000} />
+          <BlindPickCountdown
+            firstLockedAt={bp?.firstLockedAt ?? null}
+            timeoutMs={decision.tournamentMode === 'BPT' ? 2 * 60 * 1000 : 5 * 60 * 1000}
+          />
         </div>
       ) : (
         <>

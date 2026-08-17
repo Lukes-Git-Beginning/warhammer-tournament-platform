@@ -188,12 +188,14 @@ export function GameTile({
       ((tournamentMode !== 'MATRIX' && !isFreePick) || (p1FactionId != null && p2FactionId != null)),
   );
 
-  // #2 — Faction-pick timer. Once one player locks their blind pick, the other has
-  // BLIND_PICK_TIMEOUT_MS before a random faction is auto-assigned. Surface the
+  // #2 — Faction-pick timer. Once one player locks their blind pick, the other has this long to
+  // pick (a Blind Pick Tournament gets the stricter 2 min; Open Play gets 5 min). Surface the
   // countdown on the tile so nobody is caught out.
+  const blindPickTimeoutMs =
+    tournamentMode === 'BPT' ? TOURNAMENT_BLIND_PICK_TIMEOUT_MS : OPEN_PLAY_BLIND_PICK_TIMEOUT_MS;
   const blindPickDeadline =
     game.blindPick?.firstLockedAt && !game.blindPick?.revealedAt
-      ? new Date(new Date(game.blindPick.firstLockedAt).getTime() + BLIND_PICK_TIMEOUT_MS)
+      ? new Date(new Date(game.blindPick.firstLockedAt).getTime() + blindPickTimeoutMs)
       : null;
   const blindPickTimeLeft = useCountdown(blindPickDeadline);
 
@@ -835,10 +837,12 @@ function ProvisionalPanel({
   );
 }
 
-// Mirror of BLIND_PICK_TIMEOUT_MS in apps/backend/src/lib/blind-pick-auto-resolve.ts — once one
-// player locks, the other has this long to pick. In Open Play the match is then cancelled (and the
-// no-show gets a queue cooldown); in a Blind Pick Tournament a random faction is assigned instead.
-const BLIND_PICK_TIMEOUT_MS = 5 * 60 * 1000;
+// Mirror of the timeouts in apps/backend/src/lib/blind-pick-auto-resolve.ts — once one player
+// locks, the other has this long to pick. Open Play (ladder) gets 5 minutes and the match is then
+// cancelled (the no-show gets a queue cooldown); a Blind Pick Tournament gets the stricter 2 minutes
+// and a random faction is assigned instead.
+const OPEN_PLAY_BLIND_PICK_TIMEOUT_MS = 5 * 60 * 1000;
+const TOURNAMENT_BLIND_PICK_TIMEOUT_MS = 2 * 60 * 1000;
 
 function useCountdown(target: Date | null): string | null {
   const [remaining, setRemaining] = useState<string | null>(null);

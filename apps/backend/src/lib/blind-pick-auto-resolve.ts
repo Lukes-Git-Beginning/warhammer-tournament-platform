@@ -8,12 +8,16 @@ import {
 } from './discord-notify.js';
 
 /**
- * How long a blind faction pick may sit unfinished before the timeout fires. For Open Play this
- * is the deadline for BOTH players to pick (anchored to match creation); for a Blind Pick
- * Tournament it's how long the second player has once the first locked. Mirrored on the frontend
- * countdown (GameTile.tsx). The cron checks every minute, so worst-case latency is +1 minute.
+ * How long a blind faction pick may sit unfinished before the timeout fires. The two contexts get
+ * DIFFERENT deadlines on purpose:
+ *  · Open Play (ladder): 5 minutes — then the match is CANCELLED and the no-show is penalised.
+ *  · Blind Pick Tournament: 2 minutes (the original, stricter deadline — a tournament must keep
+ *    moving) — then the missing side is auto-assigned a random allowlist faction.
+ * Both are mirrored on the frontend countdown (GameTile.tsx). The cron checks every minute, so
+ * worst-case latency is +1 minute.
  */
-export const BLIND_PICK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+export const OPEN_PLAY_BLIND_PICK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes — ladder, then cancel
+export const TOURNAMENT_BLIND_PICK_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes — tournament, then random-pick
 
 /**
  * Blind-Pick Tournament (type TOURNAMENT) fallback: a tournament match MUST produce a result, so
@@ -104,9 +108,9 @@ async function autoResolveTournamentBlindPicks(fastify: FastifyInstance, cutoff:
  * and every player who did NOT pick gets a single queue-penalty escalation step (same stages as
  * queue-ghosting: 1st = warning, then 1h / 24h). A player who DID pick walks away with no penalty.
  *
- * The deadline is BLIND_PICK_TIMEOUT_MS after the FIRST lock when one player has picked (matches
- * the frontend countdown, which anchors to firstLockedAt), and after match creation when NEITHER
- * has picked (the total no-show fallback — no lock to anchor to).
+ * The deadline is OPEN_PLAY_BLIND_PICK_TIMEOUT_MS after the FIRST lock when one player has picked
+ * (matches the frontend countdown, which anchors to firstLockedAt), and after match creation when
+ * NEITHER has picked (the total no-show fallback — no lock to anchor to).
  */
 async function cancelOpenPlayNoShows(fastify: FastifyInstance, cutoff: Date): Promise<number> {
   const stale = await fastify.prisma.matchBlindPick.findMany({
@@ -187,10 +191,10 @@ async function cancelOpenPlayNoShows(fastify: FastifyInstance, cutoff: Date): Pr
  * cancelled + the no-show(s) penalised. Returns the number of picks acted on.
  */
 export async function autoResolveStaleBlindPicks(fastify: FastifyInstance): Promise<number> {
-  const cutoff = new Date(Date.now() - BLIND_PICK_TIMEOUT_MS);
+  const now = Date.now();
   const [tournament, openPlay] = await Promise.all([
-    autoResolveTournamentBlindPicks(fastify, cutoff),
-    cancelOpenPlayNoShows(fastify, cutoff),
+    autoResolveTournamentBlindPicks(fastify, new Date(now - TOURNAMENT_BLIND_PICK_TIMEOUT_MS)),
+    cancelOpenPlayNoShows(fastify, new Date(now - OPEN_PLAY_BLIND_PICK_TIMEOUT_MS)),
   ]);
   return tournament + openPlay;
 }
