@@ -3,10 +3,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { TournamentFormat, Prisma } from '@rizzotto/db';
+import { TournamentFormat, PlayoffFormat, Prisma } from '@rizzotto/db';
 import { ImportLogListResponseSchema } from '@rizzotto/types';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
-import { advanceAutoSwissRound } from '../lib/auto-swiss-service.js';
 import { runBalancedPairingTick } from '../lib/balanced-liechtenstein-service.js';
 import { emitBracketUpdate } from '../lib/emit.js';
 import { addLateParticipant, setParticipantFactionOp, createManualMatch } from '../lib/tournament-management.js';
@@ -116,8 +115,17 @@ const ConfigValueSchema = z.object({
   ]),
 });
 
-const RepairAutoSwissSchema = z.object({
-  playoff_format: z.enum(['TOP2', 'TOP4', 'TOP8']),
+const UndoAutoSwissRepairSchema = z.object({
+  previous_format: z.enum([
+    'SINGLE_ELIMINATION',
+    'DOUBLE_ELIMINATION',
+    'SWISS',
+    'ROUND_ROBIN',
+    'DOUBLE_ROUND_ROBIN',
+    'LIECHTENSTEIN',
+    'BALANCED_LIECHTENSTEIN',
+  ]),
+  confirm: z.boolean(),
 });
 
 const adminRoutes: FastifyPluginAsync = async (fastify) => {
@@ -1697,91 +1705,100 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, userId: user.id, username: user.username };
   });
 
-  // POST /api/admin/tournaments/:id/repair-auto-swiss
-  // One-time repair endpoint: fixes a tournament that was incorrectly created as
-  // SINGLE_ELIMINATION instead of AUTO_SWISS, then generates the playoff bracket.
-  // Safe: never deletes matches — only updates phase + tournament fields, then
-  // inserts new playoff matches. Returns 409 if playoffs already exist.
-  fastify.post('/api/admin/tournaments/:id/repair-auto-swiss', async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const parsed = RepairAutoSwissSchema.safeParse(request.body);
+  // POST /api/admin/tournaments/:slug/undo-auto-swiss-repair
+  // Recovery for the (now-removed) auto-swiss "repair" that mistook a COMPLETED
+  // elimination tournament for a stuck auto-swiss one: it flipped the format to
+  // AUTO_SWISS, relabelled the bracket matches as SWISS, and generated bogus TOP-N
+  // playoff matches. This reverses all of that. It NEVER touches the original
+  // bracket's results — it only soft-deletes the generated playoff matches and
+  // restores the tournament fields + match phases. Admin only; requires confirm:true.
+  fastify.post('/api/admin/tournaments/:slug/undo-auto-swiss-repair', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const parsed = UndoAutoSwissRepairSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
-    const { playoff_format } = parsed.data;
+    const { previous_format, confirm } = parsed.data;
+    if (!confirm) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'confirm:true is required', statusCode: 400 });
+    }
 
-    const tournament = await fastify.prisma.tournament.findUnique({
-      where: { id, deleted_at: null },
-      select: { id: true, status: true, slug: true },
+    const tournament = await fastify.prisma.tournament.findFirst({
+      where: { slug, deleted_at: null },
+      select: { id: true, slug: true, format: true },
     });
     if (!tournament) {
       return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
     }
-    if (tournament.status !== 'ONGOING') {
-      return reply.code(400).send({ error: 'BadRequest', message: `Tournament must be ONGOING (current: ${tournament.status})`, statusCode: 400 });
+    if (tournament.format !== TournamentFormat.AUTO_SWISS) {
+      return reply.code(409).send({
+        error: 'Conflict',
+        message: `Nothing to undo — format is ${tournament.format}, not AUTO_SWISS`,
+        statusCode: 409,
+      });
     }
 
-    const allMatches = await fastify.prisma.match.findMany({
-      where: { tournament_id: id, deleted_at: null },
-      select: { id: true, phase: true, status: true, round: true },
-    });
+    const playoffIds = (
+      await fastify.prisma.match.findMany({
+        where: {
+          tournament_id: tournament.id,
+          deleted_at: null,
+          phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] },
+        },
+        select: { id: true },
+      })
+    ).map((m) => m.id);
+    const isElim =
+      previous_format === 'SINGLE_ELIMINATION' || previous_format === 'DOUBLE_ELIMINATION';
 
-    if (allMatches.length === 0) {
-      return reply.code(400).send({ error: 'BadRequest', message: 'No matches found for this tournament', statusCode: 400 });
-    }
-
-    const playoffMatches = allMatches.filter((m) => m.phase?.startsWith('PLAYOFF'));
-    if (playoffMatches.length > 0) {
-      return reply.code(409).send({ error: 'Conflict', message: `Playoff matches already exist (${playoffMatches.length} found)`, statusCode: 409 });
-    }
-
-    const pendingMatches = allMatches.filter((m) => m.status !== 'COMPLETED' && m.status !== 'BYE');
-    if (pendingMatches.length > 0) {
-      return reply.code(422).send({ error: 'UnprocessableEntity', message: `${pendingMatches.length} match(es) are not yet completed`, statusCode: 422 });
-    }
-
-    const swissRound = Math.max(...allMatches.map((m) => m.round));
-
-    // Fix match phases: null → SWISS (does not touch any match results/scores)
-    const { count: updatedPhases } = await fastify.prisma.match.updateMany({
-      where: { tournament_id: id, deleted_at: null, phase: null },
-      data: { phase: 'SWISS' },
-    });
-
-    // Fix tournament: set correct format, playoff config, and rounds_count
-    await fastify.prisma.tournament.update({
-      where: { id },
-      data: {
-        format: TournamentFormat.AUTO_SWISS,
-        playoff_format,
-        rounds_count: swissRound,
-      },
-    });
-
-    // Trigger playoff generation via the standard auto-swiss service
-    await advanceAutoSwissRound(fastify.prisma, id, fastify.redis);
-
-    const newPlayoffs = await fastify.prisma.match.findMany({
-      where: { tournament_id: id, deleted_at: null, phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] } },
-      select: { id: true, phase: true },
-    });
-
-    await fastify.prisma.auditLog.create({
-      data: {
-        entity_type: 'Tournament',
-        entity_id: id,
-        action: 'admin_repair_auto_swiss',
-        actor_id: request.user.sub,
-        new_value: { playoff_format, swissRounds: swissRound, updatedPhases, matchesGenerated: newPlayoffs.length },
-      },
+    const result = await fastify.prisma.$transaction(async (tx) => {
+      // 1. Soft-delete the bogus generated playoff matches (never hard-delete).
+      const { count: deletedPlayoffs } = await tx.match.updateMany({
+        where: { id: { in: playoffIds } },
+        data: { deleted_at: new Date() },
+      });
+      // 2. Clear any next_match_id that fed into a now-deleted playoff match.
+      await tx.match.updateMany({
+        where: { tournament_id: tournament.id, deleted_at: null, next_match_id: { in: playoffIds } },
+        data: { next_match_id: null },
+      });
+      // 3. Revert the phase relabel (SWISS → null) — only for an elimination bracket,
+      //    whose matches legitimately carry no phase.
+      let revertedPhases = 0;
+      if (isElim) {
+        const r = await tx.match.updateMany({
+          where: { tournament_id: tournament.id, deleted_at: null, phase: 'SWISS' },
+          data: { phase: null },
+        });
+        revertedPhases = r.count;
+      }
+      // 4. Restore the tournament fields + stop auto-advancement from re-touching it.
+      await tx.tournament.update({
+        where: { id: tournament.id },
+        data: {
+          format: previous_format as TournamentFormat,
+          playoff_format: PlayoffFormat.NONE,
+          auto_advance: false,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          entity_type: 'Tournament',
+          entity_id: tournament.id,
+          action: 'undo_auto_swiss_repair',
+          actor_id: request.user.sub,
+          new_value: { restoredFormat: previous_format, deletedPlayoffs, revertedPhases },
+        },
+      });
+      return { deletedPlayoffs, revertedPhases };
     });
 
     return reply.code(200).send({
-      fixed: true,
-      swissRounds: swissRound,
-      playoffFormat: playoff_format,
-      updatedPhases,
-      matchesGenerated: newPlayoffs.length,
+      undone: true,
+      slug: tournament.slug,
+      restoredFormat: previous_format,
+      deletedPlayoffMatches: result.deletedPlayoffs,
+      revertedPhases: result.revertedPhases,
     });
   });
   // POST /api/admin/tournaments/:slug/add-late — add a participant after tournament start

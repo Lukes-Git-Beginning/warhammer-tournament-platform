@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.36.2] — 2026-08-17 — Remove the auto-swiss "repair" that could corrupt elimination tournaments
+### Fixed
+- **A completed elimination tournament can no longer be silently converted into an Auto-Swiss with bogus playoffs.** A legacy startup "repair" — meant for old mis-saved Auto-Swiss tournaments — used too broad a rule and, on a server restart, could mistake a finished Single/Double-Elimination tournament for a stuck one, flip its format, and generate a spurious playoff bracket. That repair (and its manual admin counterpart) has been removed entirely, and an admin recovery action restores any tournament it already affected — without ever touching the original bracket's results.
+
 ## [1.36.1] — 2026-08-17 — Faction-pick timer: 5 min on the ladder, 2 min in tournaments
 ### Fixed
 - **The blind faction-pick timer is now consistent everywhere: 5 minutes in Open Play (the ladder), 2 minutes in a Blind Pick Tournament.** The pick page always showed a 2-minute countdown regardless of context, so Open Play looked like it still only gave 2 minutes even though the ladder actually cancels a no-show after 5 — and the tournament side had drifted to 5 minutes. Every surface now agrees: the pick-page countdown, the game-tile countdown, the deadline reminder and the server-side auto-resolve all use 5 minutes on the ladder (then the match is cancelled and the no-show penalised) and 2 minutes in a tournament (then the missing side is auto-assigned a random faction, so the bracket keeps moving).
