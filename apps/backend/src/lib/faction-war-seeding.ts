@@ -4,16 +4,18 @@
  *
  * A bracket's structure is fixed once generated, so the only lever is the seed order. This
  * module reorders `participantIds` so that **each player's FIRST real game is as balanced a
- * faction matchup as the data allows** (Alex, 2026-08-16). Concretely it minimises, over the
- * seed assignment:
+ * faction matchup as the data allows** (Alex, 2026-08-16). The objective is MINIMAX over the
+ * seed assignment: minimise the WORST player's first-game imbalance, then the sum of squared
+ * imbalances as a tie-break. Each player's first game counts once — a round-1 match and a bye's
+ * round-2 game are on equal footing — so round 1 is never over-weighted at round 2's expense
+ * (seeding round 1 already accounts for the round-2 matchups it leads to).
  *
- *   cost = Σ over players P of  penalty(P's first game)
- *     · a player who plays round 1  → penalty(faction P, faction opponent)
+ *   imbalance(P) = |winChance − 0.5| ∈ [0, 0.5]
+ *     · a player who plays round 1  → imbalance(faction P vs opponent)
  *     · a bye player (plays round 2 vs the winner of feeder a·b)
- *                                   → Pwin(a,b)·penalty(P,a) + Pwin(b,a)·penalty(P,b)
+ *                                   → max( imb(P,a), imb(P,b) )  (worst of the two possible)
  *
- * penalty(x,y) = factionUnfairness(x,y)²  (convex — a crass duel hurts far more than several
- * mild ones; a never-played pair is treated as maximally uncertain, never a false 50%).
+ * A never-played faction pair is treated as maximally uncertain (imbalance 0.5), never a false 50%.
  *
  * The structure (which seeds get byes, the round-1 pairings, and which round-1 match each bye
  * sits above) is read straight from the real generator's output on positional placeholders, so
@@ -22,7 +24,6 @@
  */
 
 import { factionUnfairness, type MatchmakingData } from './matchmaking.js';
-import { logistic } from './rating-model.js';
 import { generateSingleElim, generateDoubleElim } from './bracket.js';
 
 /** The structural fields we read off a generated bracket match (SE tree, or DE winners bracket). */
@@ -138,39 +139,48 @@ function buildGames(tournamentId: string, n: number, format: SeedableFormat): Fi
   return extractFirstGames(probe, n);
 }
 
-/** The convex faction-matchup penalty (unfairness²) and the advancement probability. */
+/** The faction-matchup imbalance |winChance − 0.5| ∈ [0, 0.5]. */
 function makeScorer(data: MatchmakingData) {
-  const penalty = (fx: string | null, fy: string | null): number => {
-    if (!fx || !fy) return 0;
-    const u = data.factionTilt(fx, fy).hasData ? factionUnfairness(data, fx, fy) : 0.5;
-    return u * u;
+  const unfair = (fx: string | null, fy: string | null): number => {
+    if (!fx || !fy) return 0; // a player with no locked faction contributes nothing
+    return data.factionTilt(fx, fy).hasData ? factionUnfairness(data, fx, fy) : 0.5;
   };
-  const winProb = (fx: string | null, fy: string | null): number =>
-    !fx || !fy ? 0.5 : logistic(data.factionTilt(fx, fy).tilt);
-  return { penalty, winProb };
+  return { unfair };
 }
 
-/** Total "each player's first game" penalty for a faction-at-seed-position lookup. */
+// Minimax-primary: bounding the WORST player's first game dominates, then the overall spread.
+// A round-1 match and a bye's round-2 game each contribute exactly ONE per-player imbalance to
+// the max, so round 1 is never over-weighted (it isn't optimised at round 2's expense) — the
+// bias a per-player *sum* would introduce (a round-1 match counting for both its players) is gone.
+const WORST_WEIGHT = 200;
+
+/**
+ * Objective (lower = fairer): the worst first-game imbalance across all players, then the sum of
+ * squared imbalances as a tie-break. A round-1 player's first game is their round-1 match; a bye
+ * player's is their round-2 game, scored as the imbalance against the WORSE of its two possible
+ * opponents — so no player gets a lopsided first game no matter how round 1 resolves, and seeding
+ * round 1 already accounts for the round-2 matchups it leads to.
+ */
 function costOf(
   games: FirstGame[],
   n: number,
   facAt: (pos: number) => string | null,
   scorer: ReturnType<typeof makeScorer>,
 ): number {
-  const { penalty, winProb } = scorer;
-  let c = 0;
+  const { unfair } = scorer;
+  let maxImb = 0;
+  let sumSq = 0;
   for (let pos = 0; pos < n; pos++) {
     const g = games[pos]!;
     const self = facAt(pos);
-    if (g.kind === 'vs') {
-      c += penalty(self, facAt(g.opp));
-    } else {
-      const fa = facAt(g.a);
-      const fb = facAt(g.b);
-      c += winProb(fa, fb) * penalty(self, fa) + winProb(fb, fa) * penalty(self, fb);
-    }
+    const imb =
+      g.kind === 'vs'
+        ? unfair(self, facAt(g.opp))
+        : Math.max(unfair(self, facAt(g.a)), unfair(self, facAt(g.b)));
+    if (imb > maxImb) maxImb = imb;
+    sumSq += imb * imb;
   }
-  return c;
+  return maxImb * WORST_WEIGHT + sumSq;
 }
 
 /**
