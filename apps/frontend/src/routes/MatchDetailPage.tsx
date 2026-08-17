@@ -622,6 +622,7 @@ export function MatchDetailPage() {
               isParticipant={canReport}
               maps={maps}
               factions={factions}
+              isOpenPlay={isOpenPlay}
             />
           ))}
         </div>

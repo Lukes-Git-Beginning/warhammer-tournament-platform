@@ -95,6 +95,7 @@ function serializeDecisionState(
   tournamentMode: string | null = null,
   matchPlayer1Id: string | null = null,
   factionMatrix: FactionMatrixRow = null,
+  isOpenPlay: boolean = false,
 ) {
   let serializedMatrix = null;
   if (factionMatrix) {
@@ -131,6 +132,9 @@ function serializeDecisionState(
     pickedMapId: decision.picked_map_id,
     decidedAt: decision.decided_at?.toISOString() ?? null,
     tournamentMode,
+    // Open Play uses the same blind pick as a BPT tournament, so tournamentMode defaults to 'BPT'
+    // there too — this flag is the reliable Open-Play signal (e.g. for the 5-min-vs-2-min timer).
+    isOpenPlay,
     blindPick: blindPick
       ? {
           player1Locked: Boolean(blindPick.player1_locked_at),
@@ -479,7 +483,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(200).send({
-        ...serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? 'BPT', match.player1_id, factionMatrix),
+        ...serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? 'BPT', match.player1_id, factionMatrix, match.tournament == null),
         restrictedFactions: match.tournament?.restricted_factions.map((r) => r.faction_id) ?? [],
         factionAllowlist: match.tournament?.faction_allowlist.map((r) => r.faction_id) ?? [],
         freePick,

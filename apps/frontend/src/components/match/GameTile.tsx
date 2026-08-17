@@ -37,6 +37,8 @@ interface Props {
   factions?: Record<string, FactionDto>;
   /** Tournament mode — used to require blind pick for BPT */
   tournamentMode?: string;
+  /** True for an Open Play (ladder) match — drives the 5-min (vs 2-min tournament) pick timer + copy. */
+  isOpenPlay?: boolean;
   /** Set when one player in this match has withdrawn; drives the "opponent withdrew" banner. */
   withdrawnPlayerId?: string | null;
   /** True for a playoff-bracket match — a withdrawal there is a walkover (survivor advances). */
@@ -59,6 +61,7 @@ export function GameTile({
   maps = [],
   factions = {},
   tournamentMode,
+  isOpenPlay,
   withdrawnPlayerId,
   isPlayoffMatch,
 }: Props) {
@@ -191,8 +194,9 @@ export function GameTile({
   // #2 — Faction-pick timer. Once one player locks their blind pick, the other has this long to
   // pick (a Blind Pick Tournament gets the stricter 2 min; Open Play gets 5 min). Surface the
   // countdown on the tile so nobody is caught out.
-  const blindPickTimeoutMs =
-    tournamentMode === 'BPT' ? TOURNAMENT_BLIND_PICK_TIMEOUT_MS : OPEN_PLAY_BLIND_PICK_TIMEOUT_MS;
+  const blindPickTimeoutMs = isOpenPlay
+    ? OPEN_PLAY_BLIND_PICK_TIMEOUT_MS
+    : TOURNAMENT_BLIND_PICK_TIMEOUT_MS;
   const blindPickDeadline =
     game.blindPick?.firstLockedAt && !game.blindPick?.revealedAt
       ? new Date(new Date(game.blindPick.firstLockedAt).getTime() + blindPickTimeoutMs)
@@ -420,9 +424,9 @@ export function GameTile({
                   {blindPickTimeLeft && (
                     <p className="text-xs font-semibold text-rizzotto-gold-400 text-center">
                       ⏱ {blindPickTimeLeft}{' '}
-                      {tournamentMode === 'BPT'
-                        ? 'until a faction is auto-picked'
-                        : 'to pick — or the match is cancelled'}
+                      {isOpenPlay
+                        ? 'to pick — or the match is cancelled'
+                        : 'until a faction is auto-picked'}
                     </p>
                   )}
                   <Button variant="forge" size="sm" asChild>

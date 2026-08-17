@@ -673,7 +673,7 @@ function BlindPickPhase({
               {myLocked && bp && (
                 <BlindPickCountdown
                   firstLockedAt={bp.firstLockedAt ?? null}
-                  timeoutMs={decision.tournamentMode === 'BPT' ? 2 * 60 * 1000 : 5 * 60 * 1000}
+                  timeoutMs={decision.isOpenPlay ? 5 * 60 * 1000 : 2 * 60 * 1000}
                 />
               )}
               <button
@@ -702,7 +702,7 @@ function BlindPickPhase({
           </p>
           <BlindPickCountdown
             firstLockedAt={bp?.firstLockedAt ?? null}
-            timeoutMs={decision.tournamentMode === 'BPT' ? 2 * 60 * 1000 : 5 * 60 * 1000}
+            timeoutMs={decision.isOpenPlay ? 5 * 60 * 1000 : 2 * 60 * 1000}
           />
         </div>
       ) : (

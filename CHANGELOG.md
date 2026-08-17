@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.36.3] — 2026-08-17 — Open Play faction-pick timer really is 5 minutes now
+### Fixed
+- **The Open Play (ladder) faction-pick page now actually shows 5 minutes, not 2.** The previous fix used the tournament mode to tell Open Play apart from a Blind Pick Tournament — but an Open Play match reports the same mode, so the pick page kept showing the 2-minute tournament countdown on the ladder. The decision now carries an explicit Open-Play flag, so the countdown correctly reads 5 minutes on the ladder (then the match is cancelled) and 2 minutes in a tournament (then a random faction is auto-assigned).
+
 ## [1.36.2] — 2026-08-17 — Remove the auto-swiss "repair" that could corrupt elimination tournaments
 ### Fixed
 - **A completed elimination tournament can no longer be silently converted into an Auto-Swiss with bogus playoffs.** A legacy startup "repair" — meant for old mis-saved Auto-Swiss tournaments — used too broad a rule and, on a server restart, could mistake a finished Single/Double-Elimination tournament for a stuck one, flip its format, and generate a spurious playoff bracket. That repair (and its manual admin counterpart) has been removed entirely, and an admin recovery action restores any tournament it already affected — without ever touching the original bracket's results.

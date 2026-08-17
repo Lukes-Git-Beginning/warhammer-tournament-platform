@@ -145,6 +145,8 @@ export interface MatchDecisionState {
   pickedMapId: string | null;
   decidedAt: string | null;
   tournamentMode?: string | null;
+  /** True for an Open Play (ladder) match — the reliable signal, since tournamentMode is 'BPT' there too. */
+  isOpenPlay?: boolean;
   matchPlayer1Id?: string | null;
   restrictedFactions?: string[];
   factionAllowlist?: string[];
