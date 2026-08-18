@@ -24,6 +24,7 @@
  */
 
 import { factionUnfairness, type MatchmakingData } from './matchmaking.js';
+import { logistic } from './rating-model.js';
 import { generateSingleElim, generateDoubleElim } from './bracket.js';
 
 /** The structural fields we read off a generated bracket match (SE tree, or DE winners bracket). */
@@ -139,27 +140,24 @@ function buildGames(tournamentId: string, n: number, format: SeedableFormat): Fi
   return extractFirstGames(probe, n);
 }
 
-/** The faction-matchup imbalance |winChance − 0.5| ∈ [0, 0.5]. */
+/** The faction-matchup imbalance |winChance − 0.5| ∈ [0, 0.5], and the advancement probability. */
 function makeScorer(data: MatchmakingData) {
   const unfair = (fx: string | null, fy: string | null): number => {
     if (!fx || !fy) return 0; // a player with no locked faction contributes nothing
     return data.factionTilt(fx, fy).hasData ? factionUnfairness(data, fx, fy) : 0.5;
   };
-  return { unfair };
+  const winProb = (fx: string | null, fy: string | null): number =>
+    !fx || !fy ? 0.5 : logistic(data.factionTilt(fx, fy).tilt);
+  return { unfair, winProb };
 }
 
-// Minimax-primary: bounding the WORST player's first game dominates, then the overall spread.
-// A round-1 match and a bye's round-2 game each contribute exactly ONE per-player imbalance to
-// the max, so round 1 is never over-weighted (it isn't optimised at round 2's expense) — the
-// bias a per-player *sum* would introduce (a round-1 match counting for both its players) is gone.
-const WORST_WEIGHT = 200;
-
 /**
- * Objective (lower = fairer): the worst first-game imbalance across all players, then the sum of
- * squared imbalances as a tie-break. A round-1 player's first game is their round-1 match; a bye
- * player's is their round-2 game, scored as the imbalance against the WORSE of its two possible
- * opponents — so no player gets a lopsided first game no matter how round 1 resolves, and seeding
- * round 1 already accounts for the round-2 matchups it leads to.
+ * Objective (lower = fairer): the sum, over the bracket's MATCHES (not players), of the SQUARED
+ * deviation from a 50/50 matchup — so 1pp costs 1, 3pp costs 9, 8pp costs 64. Each real round-1
+ * match is counted ONCE (deduped by opp > pos); each bye's round-2 match is counted once, as the
+ * advancement-weighted EXPECTED squared deviation over its two possible opponents. `unfair` is the
+ * [0, 0.5] fraction; squaring it minimises the same thing as squaring the percentage-point
+ * deviation (they differ only by a constant 10000×). All matches carry equal weight.
  */
 function costOf(
   games: FirstGame[],
@@ -167,25 +165,90 @@ function costOf(
   facAt: (pos: number) => string | null,
   scorer: ReturnType<typeof makeScorer>,
 ): number {
-  const { unfair } = scorer;
-  let maxImb = 0;
-  let sumSq = 0;
+  const { unfair, winProb } = scorer;
+  let cost = 0;
   for (let pos = 0; pos < n; pos++) {
     const g = games[pos]!;
     const self = facAt(pos);
-    const imb =
-      g.kind === 'vs'
-        ? unfair(self, facAt(g.opp))
-        : Math.max(unfair(self, facAt(g.a)), unfair(self, facAt(g.b)));
-    if (imb > maxImb) maxImb = imb;
-    sumSq += imb * imb;
+    if (g.kind === 'vs') {
+      if (g.opp > pos) {
+        const d = unfair(self, facAt(g.opp)); // a round-1 match — counted once
+        cost += d * d;
+      }
+    } else {
+      const fa = facAt(g.a); // a bye's round-2 match vs the winner of a·b
+      const fb = facAt(g.b);
+      const da = unfair(self, fa);
+      const db = unfair(self, fb);
+      cost += winProb(fa, fb) * da * da + winProb(fb, fa) * db * db;
+    }
   }
-  return maxImb * WORST_WEIGHT + sumSq;
+  return cost;
 }
 
 /**
- * The fairness objective (lower = fairer) of a concrete seed order: the sum over players of their
- * first game's convex faction-matchup penalty. Exposed for testing / diagnostics.
+ * Per-match metrics of an assignment: the sum-of-squares cost, the worst single match deviation
+ * (peak), and how many matches are "problematic" (deviation ≥ 5pp). Round-2 (a bye) is scored by
+ * the WORSE of its two possible opponents for peak/problematic (a match that could be lopsided),
+ * while cost stays the advancement-weighted expectation (matches costOf).
+ */
+function matchMetrics(
+  games: FirstGame[],
+  n: number,
+  facAt: (pos: number) => string | null,
+  scorer: ReturnType<typeof makeScorer>,
+): { cost: number; peak: number; problematic: number } {
+  const { unfair, winProb } = scorer;
+  let cost = 0;
+  let peak = 0;
+  let problematic = 0;
+  const tally = (worst: number) => {
+    if (worst > peak) peak = worst;
+    if (worst >= 0.05) problematic++;
+  };
+  for (let pos = 0; pos < n; pos++) {
+    const g = games[pos]!;
+    const self = facAt(pos);
+    if (g.kind === 'vs') {
+      if (g.opp > pos) {
+        const d = unfair(self, facAt(g.opp));
+        cost += d * d;
+        tally(d);
+      }
+    } else {
+      const fa = facAt(g.a);
+      const fb = facAt(g.b);
+      const da = unfair(self, fa);
+      const db = unfair(self, fb);
+      cost += winProb(fa, fb) * da * da + winProb(fb, fa) * db * db;
+      tally(da > db ? da : db);
+    }
+  }
+  return { cost, peak, problematic };
+}
+
+/**
+ * A canonical key identifying the bracket's actual matches (role-aware), for de-duplicating distinct
+ * seed partitions. Two assignments share a key iff they produce the same round-1 matches AND the
+ * same bye→feeder pods.
+ */
+function partitionKey(games: FirstGame[], n: number, facAt: (pos: number) => string | null): string {
+  const pair = (x: string, y: string) => (x < y ? `${x},${y}` : `${y},${x}`);
+  const parts: string[] = [];
+  for (let pos = 0; pos < n; pos++) {
+    const g = games[pos]!;
+    if (g.kind === 'vs') {
+      if (g.opp > pos) parts.push(pair(facAt(pos) ?? '?', facAt(g.opp) ?? '?'));
+    } else {
+      parts.push(`${facAt(pos) ?? '?'}:${pair(facAt(g.a) ?? '?', facAt(g.b) ?? '?')}`);
+    }
+  }
+  return parts.sort().join(' | ');
+}
+
+/**
+ * The fairness objective (lower = fairer) of a concrete seed order: the per-match sum of squared
+ * deviations from 50/50 (see costOf). Exposed for testing / diagnostics.
  */
 export function evaluateFirstGameCost(
   tournamentId: string,
@@ -203,9 +266,14 @@ export function evaluateFirstGameCost(
 }
 
 /**
- * Reorder `participantIds` so each player's first game is the fairest faction matchup the data
- * allows, for the given elimination format. Pure and deterministic. A player with no locked
- * faction contributes 0 (degrades gracefully). Fields below 4 players are returned unchanged.
+ * Reorder `participantIds` into a fair Faction-War elimination seeding: one of the (up to 5) best
+ * distinct bracket partitions, chosen at random per tournament so a recurring same-faction field
+ * doesn't always draw the identical matchups. "Best" keeps every round-1 match and every bye's
+ * round-2 match as close to a 50/50 faction matchup as the data allows, ranked by lowest peak
+ * deviation, then fewest problematic (≥5pp) matches, then lowest total squared deviation. The
+ * candidate pool depends only on the FIELD of factions (deterministic); only the final pick is
+ * seeded by `tournamentId`. Pure. A player with no locked faction contributes 0 (degrades
+ * gracefully). Fields below 4 players are returned unchanged.
  */
 export function seedFactionWarOrder(
   tournamentId: string,
@@ -217,18 +285,98 @@ export function seedFactionWarOrder(
   const n = participantIds.length;
   if (n < 4) return participantIds.slice();
 
-  const games = buildGames(tournamentId, n, format);
-  const scorer = makeScorer(data);
-  const facOfPlayer = participantIds.map((id) => factionById.get(id) ?? null);
-  const cost = (assign: number[]): number =>
-    costOf(games, n, (pos) => (pos < 0 || pos >= n ? null : facOfPlayer[assign[pos]!]!), scorer);
+  // Canonical player order (sorted by faction) so the candidate POOL depends only on the FIELD of
+  // factions — not on registration order or the tournament id. The same set of factions always
+  // yields the same top partitions; only the final random pick (seeded by the tournament id) varies,
+  // so a recurring same-faction field gets a different one of the best brackets each time.
+  const canon = participantIds
+    .map((id, i) => ({ i, fac: factionById.get(id) ?? '' }))
+    .sort((a, b) => (a.fac < b.fac ? -1 : a.fac > b.fac ? 1 : a.i - b.i))
+    .map((x) => x.i);
+  const facOfCanon = canon.map((ci) => factionById.get(participantIds[ci]!) ?? null);
+  const fieldKey = facOfCanon.map((f) => f ?? '∅').join(',');
 
-  const rng = makeRng(`fw-seed:${tournamentId}:${n}`);
+  const games = buildGames(fieldKey, n, format);
+  const scorer = makeScorer(data);
+  const facAtOf =
+    (assign: number[]) =>
+    (pos: number): string | null =>
+      pos < 0 || pos >= n ? null : facOfCanon[assign[pos]!]!;
+
+  // Dense slot×slot lookup tables so the hot optimisation loop is pure array math (no per-swap Map
+  // or string work): U = fraction-unfairness ∈ [0, 0.5], W = P(row faction beats col faction). Both
+  // are indexed by CANONICAL slot. This is what makes running many restarts live affordable.
+  const U: number[][] = [];
+  const W: number[][] = [];
+  for (let a = 0; a < n; a++) {
+    U[a] = new Array<number>(n);
+    W[a] = new Array<number>(n);
+    for (let b = 0; b < n; b++) {
+      U[a]![b] = scorer.unfair(facOfCanon[a] ?? null, facOfCanon[b] ?? null);
+      W[a]![b] = scorer.winProb(facOfCanon[a] ?? null, facOfCanon[b] ?? null);
+    }
+  }
+  const cost = (assign: number[]): number => {
+    let c = 0;
+    for (let pos = 0; pos < n; pos++) {
+      const g = games[pos]!;
+      const si = assign[pos]!;
+      if (g.kind === 'vs') {
+        if (g.opp > pos) {
+          const d = U[si]![assign[g.opp]!]!;
+          c += d * d;
+        }
+      } else {
+        const sa = assign[g.a]!;
+        const sb = assign[g.b]!;
+        const da = U[si]![sa]!;
+        const db = U[si]![sb]!;
+        c += W[sa]![sb]! * da * da + W[sb]![sa]! * db * db;
+      }
+    }
+    return c;
+  };
+
+  const rng = makeRng(`fw-seed:${fieldKey}:${n}`);
   const identity = Array.from({ length: n }, (_, i) => i);
-  const trials = Math.min(15000, Math.max(2000, n * n * 20));
-  const restarts = 5;
-  let bestAssign = identity.slice();
-  let bestCost = cost(identity);
+  const trials = Math.min(20000, Math.max(4000, n * n * 40));
+  const restarts = 48;
+  const T0 = Math.max(cost(identity), 1e-4) * 0.5;
+  const cooling = Math.pow(1e-6 / T0, 1 / trials);
+
+  // Greedy descent to a true local minimum (in place).
+  const polish = (assign: number[]): void => {
+    let c = cost(assign);
+    for (let improved = true; improved; ) {
+      improved = false;
+      for (let i = 0; i < n && !improved; i++) {
+        for (let j = i + 1; j < n; j++) {
+          [assign[i], assign[j]] = [assign[j]!, assign[i]!];
+          const nc = cost(assign);
+          if (nc < c - 1e-12) {
+            c = nc;
+            improved = true;
+            break;
+          }
+          [assign[i], assign[j]] = [assign[j]!, assign[i]!]; // revert
+        }
+      }
+    }
+  };
+
+  // Collect DISTINCT candidate partitions across many simulated-annealing restarts (pure hill-
+  // climbing gets trapped in local minima of this QAP-like sum), so we can offer VARIETY across
+  // tournaments below instead of always the single deterministic optimum.
+  type Cand = { assign: number[]; peak: number; problematic: number; cost: number };
+  const candidates = new Map<string, Cand>();
+  const consider = (assign: number[]): void => {
+    polish(assign);
+    const facAt = facAtOf(assign);
+    const key = partitionKey(games, n, facAt);
+    const m = matchMetrics(games, n, facAt, scorer);
+    const prev = candidates.get(key);
+    if (!prev || m.cost < prev.cost) candidates.set(key, { assign: assign.slice(), ...m });
+  };
 
   for (let r = 0; r < restarts; r++) {
     const assign = identity.slice();
@@ -239,23 +387,47 @@ export function seedFactionWarOrder(
       }
     }
     let c = cost(assign);
+    let runBest = c;
+    let runBestAssign = assign.slice();
+    let T = T0;
     for (let t = 0; t < trials; t++) {
       const i = Math.floor(rng() * n);
       let j = Math.floor(rng() * n);
       if (i === j) j = (j + 1) % n;
       [assign[i], assign[j]] = [assign[j]!, assign[i]!];
       const nc = cost(assign);
-      if (nc <= c) {
+      const dE = nc - c;
+      if (dE <= 0 || rng() < Math.exp(-dE / T)) {
         c = nc;
+        if (c < runBest) {
+          runBest = c;
+          runBestAssign = assign.slice();
+        }
       } else {
         [assign[i], assign[j]] = [assign[j]!, assign[i]!]; // revert
       }
+      T *= cooling;
     }
-    if (c < bestCost) {
-      bestCost = c;
-      bestAssign = assign.slice();
-    }
+    consider(runBestAssign);
   }
 
-  return bestAssign.map((pi) => participantIds[pi]!);
+  const ranked = [...candidates.values()].sort(
+    // Alex's rule: lowest peak first, then fewest problematic (≥5pp) matches, then lowest cost.
+    (a, b) => a.peak - b.peak || a.problematic - b.problematic || a.cost - b.cost,
+  );
+  if (ranked.length === 0) return participantIds.slice();
+
+  // Pool for the random pick: every partition tied at the MINIMUM peak (no bracket carries an
+  // unnecessarily hard match), ordered by the rule, capped at 5. If that leaves too few for real
+  // variety, relax to the best 3 overall.
+  const minPeak = ranked[0]!.peak;
+  let pool = ranked.filter((c) => c.peak <= minPeak + 1e-9);
+  if (pool.length < 3) pool = ranked.slice(0, Math.min(3, ranked.length));
+  pool = pool.slice(0, 5);
+
+  // Pick one — seeded by the tournament id, so it's reproducible for THIS tournament yet varies
+  // across tournaments (a recurring same-faction field won't always get the identical bracket).
+  const pick = Math.floor(makeRng(`fw-pick:${tournamentId}:${n}`)() * pool.length);
+  // `assign` maps a bracket position to a CANONICAL slot; resolve that back to the real participant.
+  return pool[Math.min(pick, pool.length - 1)]!.assign.map((slot) => participantIds[canon[slot]!]!);
 }
