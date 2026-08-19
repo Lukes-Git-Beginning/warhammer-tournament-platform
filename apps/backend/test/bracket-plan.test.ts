@@ -40,9 +40,21 @@ describe('projectBracketPlan', () => {
     // 6 same-band → 3 rounds, one pool of 6 → TOP2 (final + 3rd).
     expect(projectBracketPlan({ format: 'BALANCED_LIECHTENSTEIN', playoffFormat: 'TOP2', roundsCount: null, activeBands: bands({ 3: 6 }) }))
       .toEqual({ groupRounds: 3, divisions: [{ size: 6, format: 'TOP2', band: 3 }] });
-    // 8 same-band → 4 rounds, one pool of 8 → TOP4.
+    // 8 same-band with a TOP2 host choice → the pool of 8 stays TOP2 (the host size is a
+    // ceiling, never upgraded). Only the round count grows with the field.
     expect(projectBracketPlan({ format: 'BALANCED_LIECHTENSTEIN', playoffFormat: 'TOP2', roundsCount: null, activeBands: bands({ 3: 8 }) }))
-      .toEqual({ groupRounds: 4, divisions: [{ size: 8, format: 'TOP4', band: 3 }] });
+      .toEqual({ groupRounds: 4, divisions: [{ size: 8, format: 'TOP2', band: 3 }] });
+  });
+
+  it('BaLi caps each division at the host playoff size — a big division never upgrades (the reported bug)', () => {
+    // 12 same-band players, host chose TOP2 → the division stays TOP2, not the size-derived TOP4.
+    expect(projectBracketPlan({ format: 'BALANCED_LIECHTENSTEIN', playoffFormat: 'TOP2', roundsCount: null, activeBands: bands({ 5: 12 }) }).divisions)
+      .toEqual([{ size: 12, format: 'TOP2', band: 5 }]);
+    // Host TOP4 allows up to TOP4: a 12-pool → TOP4; a 20-pool is still capped at TOP4 (not TOP8).
+    expect(projectBracketPlan({ format: 'BALANCED_LIECHTENSTEIN', playoffFormat: 'TOP4', roundsCount: null, activeBands: bands({ 5: 12 }) }).divisions)
+      .toEqual([{ size: 12, format: 'TOP4', band: 5 }]);
+    expect(projectBracketPlan({ format: 'BALANCED_LIECHTENSTEIN', playoffFormat: 'TOP4', roundsCount: null, activeBands: bands({ 5: 20 }) }).divisions)
+      .toEqual([{ size: 20, format: 'TOP4', band: 5 }]);
   });
 
   it('BaLi splits into per-band divisions (TOP2 target size)', () => {

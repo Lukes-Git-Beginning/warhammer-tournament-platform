@@ -8,7 +8,7 @@
 // resolve live from the current standings per the frozen skeleton; shortfalls borrow from neighbour
 // bands. Pure module — no DB, unit-tested.
 
-import { divisionPlayoffFormat, type RankedPlayer, type DivisionPool } from './balanced-liechtenstein.js';
+import { cappedDivisionPlayoffFormat, type RankedPlayer, type DivisionPool } from './balanced-liechtenstein.js';
 import { adjustedSeedScore } from './bali-playoff-seeding.js';
 
 /** One frozen division: its band anchor, target pool size, and how many players it draws per band. */
@@ -134,9 +134,12 @@ export function bracketSeeds(pool: RankedPlayer[]): string[] {
   return [...earners, ...zeros].map((p) => p.userId);
 }
 
-/** The bracket format a resolved pool yields (mirrors the live path: size → TOP2/4/8). */
-export function planDivisionFormat(pool: RankedPlayer[]): 'TOP2' | 'TOP4' | 'TOP8' {
-  return divisionPlayoffFormat(pool.length);
+/** The bracket format a resolved pool yields (mirrors the live path: size capped by host format). */
+export function planDivisionFormat(
+  pool: RankedPlayer[],
+  hostFormat: string | null | undefined,
+): 'TOP2' | 'TOP4' | 'TOP8' {
+  return cappedDivisionPlayoffFormat(pool.length, hostFormat);
 }
 
 /** A division resolved from the frozen plan against the current field: anchor + members + seed order. */

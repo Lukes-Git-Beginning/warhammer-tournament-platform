@@ -3,6 +3,7 @@ import {
   planPairings,
   formDivisionPools,
   divisionPlayoffFormat,
+  cappedDivisionPlayoffFormat,
   type BalancedParticipant,
   type BalancedMatchRow,
   type RankedPlayer,
@@ -425,5 +426,29 @@ describe('divisionPlayoffFormat', () => {
     expect(divisionPlayoffFormat(15)).toBe('TOP4');
     expect(divisionPlayoffFormat(16)).toBe('TOP8');
     expect(divisionPlayoffFormat(20)).toBe('TOP8');
+  });
+});
+
+describe('cappedDivisionPlayoffFormat', () => {
+  it('treats the host format as a ceiling — never upgrades a big division above the host choice', () => {
+    // TOP2 host choice stays TOP2 at every size (only the top 2 seeds contest a final).
+    expect(cappedDivisionPlayoffFormat(8, 'TOP2')).toBe('TOP2');
+    expect(cappedDivisionPlayoffFormat(12, 'TOP2')).toBe('TOP2');
+    expect(cappedDivisionPlayoffFormat(20, 'TOP2')).toBe('TOP2');
+    // TOP4 host choice: up to TOP4, capped there (a 16+ pool is NOT upgraded to TOP8).
+    expect(cappedDivisionPlayoffFormat(12, 'TOP4')).toBe('TOP4');
+    expect(cappedDivisionPlayoffFormat(20, 'TOP4')).toBe('TOP4');
+  });
+
+  it('still downgrades when the division is too small for the host choice', () => {
+    expect(cappedDivisionPlayoffFormat(6, 'TOP4')).toBe('TOP2'); // <8 → TOP2
+    expect(cappedDivisionPlayoffFormat(10, 'TOP8')).toBe('TOP4'); // <16 → TOP4
+    expect(cappedDivisionPlayoffFormat(4, 'TOP8')).toBe('TOP2'); // <8 → TOP2
+  });
+
+  it('imposes no ceiling for a null/NONE host format (size alone decides)', () => {
+    expect(cappedDivisionPlayoffFormat(12, null)).toBe('TOP4');
+    expect(cappedDivisionPlayoffFormat(20, undefined)).toBe('TOP8');
+    expect(cappedDivisionPlayoffFormat(12, 'NONE')).toBe('TOP4');
   });
 });

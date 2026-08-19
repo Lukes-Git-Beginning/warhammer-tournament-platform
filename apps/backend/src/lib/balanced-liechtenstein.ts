@@ -574,6 +574,26 @@ export function divisionPlayoffFormat(poolSize: number): 'TOP2' | 'TOP4' | 'TOP8
 }
 
 /**
+ * The host's chosen playoff size is a CEILING, not a target: a division's bracket is
+ * `divisionPlayoffFormat(size)` but never LARGER than what the host picked. So a TOP2 host
+ * choice stays TOP2 however big a division grows (only the top 2 seeds contest a final), and
+ * TOP4 only downgrades to TOP2 for a small (<8) division. A null/NONE host format imposes no
+ * ceiling — size alone decides (unchanged legacy behaviour). This mirrors the downgrade-only
+ * rule the Swiss/Auto-Swiss playoff preview already applies; the host's choice drives how long
+ * the tournament runs, so it must never be silently upgraded.
+ */
+export function cappedDivisionPlayoffFormat(
+  poolSize: number,
+  hostFormat: string | null | undefined,
+): 'TOP2' | 'TOP4' | 'TOP8' {
+  const bySize = divisionPlayoffFormat(poolSize);
+  const RANK: Record<'TOP2' | 'TOP4' | 'TOP8', number> = { TOP2: 1, TOP4: 2, TOP8: 3 };
+  const ceiling = hostFormat === 'TOP2' || hostFormat === 'TOP4' || hostFormat === 'TOP8' ? RANK[hostFormat] : undefined;
+  if (ceiling === undefined) return bySize; // no valid host ceiling → size alone decides
+  return RANK[bySize] <= ceiling ? bySize : (hostFormat as 'TOP2' | 'TOP4' | 'TOP8');
+}
+
+/**
  * Target division size implied by the host's chosen playoff size — this drives how
  * aggressively short divisions borrow from below (2026-07-15). TOP8 fills to 16 (few
  * big mixed divisions), TOP4 to 8, TOP2/NONE to the MIN_POOL_SIZE floor (many pure

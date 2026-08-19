@@ -18,7 +18,7 @@ import type { PlayoffPreview, PlayoffPreviewDivision } from '@rizzotto/types';
 import {
   planPairings,
   formDivisionPools,
-  divisionPlayoffFormat,
+  cappedDivisionPlayoffFormat,
   targetPoolSizeFromFormat,
   DEFAULT_BAND,
   seededShuffle,
@@ -724,12 +724,14 @@ export function buildDivisionBracket(
   playoffRound: number,
   startMatchNumber: number,
   hasThirdPlace: boolean,
+  hostFormat: string | null | undefined,
 ): {
   rows: Prisma.MatchCreateManyInput[];
   playable: Array<{ id: string; round: number; player1_id: string; player2_id: string }>;
   nextMatchNumber: number;
 } {
-  const fmt = divisionPlayoffFormat(seeds.length);
+  // Cap at the host's chosen playoff size — a big division never upgrades above it.
+  const fmt = cappedDivisionPlayoffFormat(seeds.length, hostFormat);
   const rows: Prisma.MatchCreateManyInput[] = [];
   let n = startMatchNumber;
 
@@ -1046,7 +1048,7 @@ export async function startBalancedPlayoffs(
     const spanBands = new Set(pool.players.map((p) => p.band));
     // Host force: skip the borrowed-band completeness wait for this division only.
     if (!forceBands.has(pool.band) && ![...spanBands].every(bandComplete)) continue;
-    const built = buildDivisionBracket(pool.seeds, tournamentId, playoffRound, nextNumber, tournament.has_third_place_match);
+    const built = buildDivisionBracket(pool.seeds, tournamentId, playoffRound, nextNumber, tournament.has_third_place_match, tournament.playoff_format);
     rows.push(...built.rows);
     allPlayable.push(...built.playable);
     nextNumber = built.nextMatchNumber;
@@ -1269,7 +1271,7 @@ export async function describeBalancedPlayoffPreview(
       return {
         band: pool.band,
         size: pool.seeds.length,
-        format: divisionPlayoffFormat(pool.seeds.length),
+        format: cappedDivisionPlayoffFormat(pool.seeds.length, tournament.playoff_format),
         seeds: pool.seeds.map((uid) => ({ userId: uid, username: usernameById.get(uid) ?? 'Unknown' })),
         ready: spanBands.every(bandComplete),
         alreadyGenerated: pool.seeds.some((s) => alreadyInPlayoff.has(s)),

@@ -1,7 +1,7 @@
 import { balancedRounds } from './auto-swiss-service.js';
 import {
   formDivisionPools,
-  divisionPlayoffFormat,
+  cappedDivisionPlayoffFormat,
   targetPoolSizeFromFormat,
   DEFAULT_BAND,
   type RankedPlayer,
@@ -57,7 +57,8 @@ export function projectBracketPlan(opts: {
     const pools = formDivisionPools(ranked, groupRounds, targetPoolSizeFromFormat(opts.playoffFormat));
     const divisions: ProjectedDivision[] = pools
       .filter((p) => p.players.length >= 2)
-      .map((p) => ({ size: p.players.length, format: divisionPlayoffFormat(p.players.length), band: p.band }));
+      // The host's playoff size is a ceiling — a big division never upgrades above it (TOP2 stays TOP2).
+      .map((p) => ({ size: p.players.length, format: cappedDivisionPlayoffFormat(p.players.length, opts.playoffFormat), band: p.band }));
     return { groupRounds, divisions };
   }
 
