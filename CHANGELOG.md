@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.37.2] — 2026-08-19 — Check-in reminders now actually reach everyone
+### Fixed
+- **Check-in reminder DMs now go out for every tournament format, even while registration is still open.** The T-60min reminder only fired for tournaments already in the "registration closed" state (or, separately, for Auto-Swiss while open) — but hosts keep registration open until start to welcome last-minute entries, so in practice the reminder never fired for the manually-run formats (Swiss, Balanced Liechtenstein, Free Pick, elimination…). It now DMs every still-registered (not-yet-checked-in) player in the hour before start, whether registration is open or closed, once per player (deduplicated).
+
 ## [1.37.1] — 2026-08-19 — Balanced Liechtenstein keeps the host's playoff size
 ### Fixed
 - **A Balanced Liechtenstein tournament no longer flips the host's chosen playoff size from Top 4 to Top 8 when 16 or more players join.** Starting an auto-sized tournament reused the Auto-Swiss sizing table, which derives a Top 8 playoff at 16+ players — and for Balanced Liechtenstein that silently overwrote the host's deliberate Top 4 choice at start. The playoff size shapes the divisions (Top 4 = homogeneous, band-pure divisions; Top 8 = fewer large mixed brackets), so it must stay the host's call. Auto-sizing now only shortens the round count for Balanced Liechtenstein (3 rounds under 8 players, 4 from 8 up) and never touches the playoff size.

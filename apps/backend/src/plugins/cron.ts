@@ -27,7 +27,6 @@ const CHECKIN_REMINDER_TTL = 4 * 60 * 60; // seconds
 async function sendPerUserCheckInReminders(
   fastify: FastifyInstance,
   tournament: { id: string; name: string; slug: string; start_date: Date },
-  now: Date,
 ): Promise<void> {
   const participants = await fastify.prisma.tournamentParticipant.findMany({
     where: { tournament_id: tournament.id, status: 'REGISTERED', deleted_at: null },
@@ -85,11 +84,13 @@ export default fp(
     );
 
     // -----------------------------------------------------------------------
-    // Check-in window transitions — every 5 minutes
+    // Check-in reminders — every 5 minutes
     //
-    // For tournaments with status=ANNOUNCED (mapped to REGISTRATION_CLOSED in
-    // the current schema) and start_date within the next hour:
-    //   - Send check-in reminder DMs once per tournament.
+    // For every tournament whose start_date is within the next hour, DM each
+    // still-REGISTERED (not-yet-checked-in) participant a check-in reminder, once
+    // (Redis-deduped). Fires in BOTH OPEN_REGISTRATION and REGISTRATION_CLOSED:
+    // hosts keep registration open until start to take last-minute entries, so a
+    // "closed only" reminder would in practice never fire for the manual formats.
     //
     // #49: tournaments are NEVER auto-started — no auto REGISTRATION_CLOSED → ONGOING.
     // -----------------------------------------------------------------------
@@ -103,7 +104,9 @@ export default fp(
           // Tournaments entering check-in window (start_date between now and now+1h)
           const upcomingTournaments = await fastify.prisma.tournament.findMany({
             where: {
-              status: 'REGISTRATION_CLOSED', // announced state
+              // Remind whether registration is still open or already closed — hosts
+              // almost always leave it open until start (last-minute entries welcome).
+              status: { in: ['OPEN_REGISTRATION', 'REGISTRATION_CLOSED'] },
               start_date: {
                 gt: now,
                 lte: oneHourFromNow,
@@ -114,7 +117,7 @@ export default fp(
           });
 
           for (const tournament of upcomingTournaments) {
-            await sendPerUserCheckInReminders(fastify, tournament, now);
+            await sendPerUserCheckInReminders(fastify, tournament);
           }
 
           // #49: tournaments are NEVER auto-started. The host closes registration and
@@ -283,32 +286,16 @@ export default fp(
     );
 
     // -----------------------------------------------------------------------
-    // Auto Swiss — check-in reminders + post-start round progression.
+    // Auto Swiss — post-start round progression.
     // Runs every minute. #49: NO auto close-registration / auto-start — the host does
-    // those manually; this only reminds about check-in and advances rounds once a
-    // manually-started tournament's current round is complete.
+    // those manually; this only advances rounds once a manually-started tournament's
+    // current round is complete. (Check-in reminders live in checkinTask, all formats.)
     // -----------------------------------------------------------------------
     const autoSwissTask = cron.schedule('* * * * *', async () => {
-      const now = new Date();
-      const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-
       try {
         // #49: no auto close-registration / auto-start / auto-reopen — the host does
-        // those manually. Only check-in reminders + post-start round advancement here.
-
-        // Check-in reminder at start_date - 1h (no status change — registration stays open)
-        const reminderTournaments = await fastify.prisma.tournament.findMany({
-          where: {
-            format: 'AUTO_SWISS',
-            status: 'OPEN_REGISTRATION',
-            start_date: { gt: now, lte: oneHourFromNow },
-            deleted_at: null,
-          },
-          select: { id: true, name: true, slug: true, start_date: true },
-        });
-        for (const t of reminderTournaments) {
-          await sendPerUserCheckInReminders(fastify, t, now);
-        }
+        // those manually. Check-in reminders are handled for every format (open OR
+        // closed registration) by checkinTask above; this task only advances rounds.
 
         // Advance rounds for ongoing tournaments — AUTO_SWISS, plus any
         // format that opted into auto-advancement (#37).

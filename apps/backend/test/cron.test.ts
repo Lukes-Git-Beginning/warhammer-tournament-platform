@@ -102,7 +102,9 @@ async function runCheckinReminderPass(
 
   const upcoming = await prisma.tournament.findMany({
     where: {
-      status: 'REGISTRATION_CLOSED',
+      // Mirrors cron.ts checkinTask: remind in BOTH open and closed registration
+      // (hosts keep registration open until start), not just REGISTRATION_CLOSED.
+      status: { in: ['OPEN_REGISTRATION', 'REGISTRATION_CLOSED'] },
       start_date: { gt: now, lte: windowEnd },
       deleted_at: null,
       ...(scopeToOrganizerIds ? { host_id: { in: scopeToOrganizerIds } } : {}),
@@ -274,6 +276,35 @@ describe('Cron: check-in reminder pass', () => {
 
     expect(notified).toHaveLength(0);
     expect(notifyCheckInReminder).not.toHaveBeenCalled();
+  });
+
+  it('Still-OPEN_REGISTRATION tournament within the window IS reminded (host keeps registration open until start)', async () => {
+    const now = new Date();
+    const startDate = new Date(now.getTime() + 30 * 60 * 1000); // now + 30min
+
+    const id = randomUUID();
+    const slug = `cron-test-open-${id.slice(0, 8)}`;
+    await prisma.tournament.create({
+      data: {
+        id,
+        slug,
+        name: 'Cron Test — Open Registration',
+        host_id: organizer.id,
+        format: 'BALANCED_LIECHTENSTEIN',
+        status: 'OPEN_REGISTRATION', // still open — the normal case for manual formats
+        start_date: startDate,
+        timezone: 'UTC',
+      },
+    });
+    tournamentIds.push(id);
+    tournamentSlugs.push(slug);
+
+    const remindedSet = new Set<string>();
+    const notified = await runCheckinReminderPass(now, 60 * 60 * 1000, remindedSet, [organizer.id]);
+
+    // Before the fix this never fired (query required REGISTRATION_CLOSED).
+    expect(notified).toContain(id);
+    expect(notifyCheckInReminder).toHaveBeenCalledTimes(1);
   });
 });
 
