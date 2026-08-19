@@ -451,4 +451,58 @@ describe('Balanced Liechtenstein — auto-sizing gate', () => {
     });
     expect(t.rounds_count).toBe(3);
   });
+
+  it('start endpoint auto-sizes ONLY the rounds for BaLi — never the host playoff_format (16+)', async () => {
+    // Regression: the start endpoint's #37 auto-sizing block derived playoff_format from
+    // the head count (autoSwissConfig(16+) → TOP8) for EVERY auto-sized format, with no
+    // Balanced Liechtenstein carve-out — silently overwriting the host's chosen TOP4 with
+    // TOP8 at 16+ players. BaLi's playoff size drives division formation and must stay the
+    // host's choice; only its round count is auto-sized (balancedRounds).
+    const users: TestUser[] = [];
+    for (let i = 0; i < 16; i++) users.push(await createTestUser({ username: `BS${i}` }));
+    createdUserIds.push(...users.map((u) => u.id));
+    // The start endpoint's requireRole reads the DB role — the host needs a managing role.
+    await prisma.user.update({ where: { id: users[0]!.id }, data: { role: 'ADMIN' } });
+    const tournamentId = randomUUID();
+    createdTournamentIds.push(tournamentId);
+    await prisma.tournament.create({
+      data: {
+        id: tournamentId,
+        slug: `test-bs-${tournamentId.slice(0, 8)}`,
+        name: 'BaLi Start Sizing Test',
+        host_id: users[0]!.id,
+        format: 'BALANCED_LIECHTENSTEIN',
+        status: 'REGISTRATION_CLOSED',
+        auto_sizing: true,
+        playoff_format: 'TOP4', // the host's deliberate choice
+        rounds_count: 6, // a stale stored value; auto-sizing should correct it to 4
+        start_date: new Date('2026-06-01'), // in the past → check-in window open
+        timezone: 'Europe/Berlin',
+      },
+    });
+    await prisma.tournamentParticipant.createMany({
+      data: users.map((u) => ({
+        tournament_id: tournamentId,
+        user_id: u.id,
+        status: 'CHECKED_IN' as const,
+        skill_band: 3,
+      })),
+    });
+
+    const token = app.jwt.sign({ sub: users[0]!.id, username: 'host', role: 'ADMIN' });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/tournaments/${tournamentId}/start`,
+      cookies: { auth_token: token },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const t = await prisma.tournament.findUniqueOrThrow({
+      where: { id: tournamentId },
+      select: { playoff_format: true, rounds_count: true, status: true },
+    });
+    expect(t.playoff_format).toBe('TOP4'); // preserved — was clobbered to TOP8 before the fix
+    expect(t.rounds_count).toBe(4); // balancedRounds(16) — the round count IS still auto-sized
+    expect(t.status).toBe('ONGOING');
+  });
 });

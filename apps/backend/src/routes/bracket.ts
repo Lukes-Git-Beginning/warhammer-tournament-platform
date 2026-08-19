@@ -379,8 +379,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       // #37 auto-sizing: derive the round count + playoff format from the actual
       // check-in count at start (same thresholds AUTO_SWISS uses), then persist so
-      // round advancement + playoff generation use the sized values.
-      if (tournament.auto_sizing) {
+      // round advancement + playoff generation use the sized values. Balanced
+      // Liechtenstein is EXCLUDED here: it sizes ONLY its round count (below, via
+      // applyBalancedStartConfig → balancedRounds), and its playoff size is a deliberate
+      // host choice that drives division formation — never the head count. Running
+      // autoSwissConfig for it would clobber the host's TOP4 with TOP8 at 16+ players.
+      if (tournament.auto_sizing && tournament.format !== TournamentFormat.BALANCED_LIECHTENSTEIN) {
         const sized = autoSwissConfig(participants.length);
         if (sized) {
           await fastify.prisma.tournament.update({
@@ -571,8 +575,9 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       // division, then create round 1 (and notify) via the incremental pairing
       // tick now that the tournament is ONGOING.
       if (tournament.format === TournamentFormat.BALANCED_LIECHTENSTEIN) {
-        // Derive round count + playoff flag from the check-in count (like Auto
-        // Swiss) before pairing, then fix skill bands and pair round 1.
+        // Size ONLY the round count from the check-in count (applyBalancedStartConfig →
+        // balancedRounds); the playoff size stays the host's choice (it drives division
+        // formation). Then fix skill bands and pair round 1.
         await applyBalancedStartConfig(fastify, tournament.id);
         await assignSkillBandsForTournament(fastify, tournament.id);
         await runBalancedPairingTick(fastify, tournament.id);
