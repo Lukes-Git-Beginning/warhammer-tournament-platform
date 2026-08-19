@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.37.4] — 2026-08-19 — "No Contest" is now visible in the bracket
+### Fixed
+- **A match resolved as "No Contest" now actually shows it in the bracket.** A no-contest (a technical-abort double-bye — both players advance, no winner) was applied correctly under the hood but rendered like an unplayed match: no label, no marker, indistinguishable from a pending game. The bracket node now reads as a no-contest — a dashed border with a "No Contest" badge and both players kept (neither is marked out), matching how byes are shown.
+
 ## [1.37.3] — 2026-08-19 — Balanced Liechtenstein playoff size is a true ceiling
 ### Fixed
 - **A Balanced Liechtenstein host's chosen playoff size (e.g. Top 2) is now a hard ceiling and is never silently upgraded to a bigger bracket.** Each division's bracket was sized purely by that division's player count — so a Top 2 tournament with a large same-skill-band division (say 12 players in one band) still generated and previewed a Top 4 bracket, quietly making the tournament run longer than the host intended. The division bracket is now capped at the host's choice: Top 2 stays Top 2 however big a division grows, and Top 4 only ever *downgrades* to Top 2 for a small (<8-player) division — the same ceiling rule the Swiss/Auto-Swiss playoffs already follow. (This is separate from v1.37.1, which stopped the auto-sizer overwriting the stored size at start.)

@@ -47,6 +47,11 @@ describe('statusColors map', () => {
     expect(statusColors['FORFEIT']).toContain('bg-amber-950/40');
   });
 
+  it('contains a muted class string for NO_CONTEST', () => {
+    expect(statusColors['NO_CONTEST']).toContain('border-stone-700');
+    expect(statusColors['NO_CONTEST']).toContain('opacity-70');
+  });
+
   it('contains stone-600 border for COMPLETED', () => {
     expect(statusColors['COMPLETED']).toContain('border-stone-600');
   });
@@ -151,5 +156,18 @@ describe('MatchNode DOM rendering', () => {
     // Exactly one slot (the loser) is marked dropped.
     expect(container.querySelectorAll('.text-red-400')).toHaveLength(1);
     expect(container.querySelectorAll('.line-through')).toHaveLength(1);
+  });
+
+  it('renders a No Contest badge and drops neither player for a NO_CONTEST match', () => {
+    const match = makeMatch({ status: 'NO_CONTEST', player1Id: 'p1', player2Id: 'p2', winnerId: null });
+    act(() => {
+      root.render(createElement(MatchNode, { match, player1Name: 'Alpha', player2Name: 'Beta' }));
+    });
+    expect(container.textContent).toContain('No Contest');
+    const wrapper = container.querySelector('div');
+    expect(wrapper?.className).toContain('border-dashed'); // a double-bye reads dashed like a bye
+    // Both players advance — neither is struck through / marked OUT.
+    expect(container.querySelector('.text-red-400')).toBeNull();
+    expect(container.querySelector('.line-through')).toBeNull();
   });
 });

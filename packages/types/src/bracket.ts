@@ -22,7 +22,8 @@ export interface BracketNode {
     | 'DISPUTED'
     | 'CANCELLED'
     | 'CATCHUP_BYE'
-    | 'PENDING_BYE';
+    | 'PENDING_BYE'
+    | 'NO_CONTEST';
   nextMatchId: string | null;
   loserNextMatchId: string | null;
   bracketSide: 'WINNERS' | 'LOSERS' | 'GRAND_FINAL' | null;

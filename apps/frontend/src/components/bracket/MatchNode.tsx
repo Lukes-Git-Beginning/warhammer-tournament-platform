@@ -105,6 +105,7 @@ export const statusColors: Record<string, string> = {
   CANCELLED:   'border-stone-700 bg-stone-900/20 opacity-50',
   CATCHUP_BYE: 'border-stone-800 bg-stone-900/20 opacity-50',
   PENDING_BYE: 'border-stone-800 bg-stone-900/20 opacity-50',
+  NO_CONTEST:  'border-stone-700 bg-stone-900/30 opacity-70',
 };
 
 export function MatchNode({
@@ -133,6 +134,8 @@ export function MatchNode({
   const isForfeit = match.status === 'FORFEIT';
   const isCancelled = match.status === 'CANCELLED';
   const isOngoing = match.status === 'ONGOING';
+  // NO_CONTEST is a technical-abort double-bye: both players advance, no winner.
+  const isNoContest = match.status === 'NO_CONTEST';
   // A void-cancelled node: one player withdrew and the survivor was re-paired.
   // Distinct from double-drop CANCELLED (where withdrawnPlayerId is not set).
   const isWithdrawnVoid = isCancelled && !!match.withdrawnPlayerId;
@@ -153,8 +156,8 @@ export function MatchNode({
 
   const statusCls = statusColors[match.status] ?? 'border-stone-700 bg-stone-900/40';
 
-  // Every bye variant uses a dashed border in addition to status colors
-  const borderStyle = isAnyBye ? 'border border-dashed' : 'border';
+  // Bye variants and a no-contest (a double-bye) use a dashed border in addition to status colors
+  const borderStyle = isAnyBye || isNoContest ? 'border border-dashed' : 'border';
 
   const p1Winner = match.winnerId && match.winnerId === match.player1Id;
   const p2Winner = match.winnerId && match.winnerId === match.player2Id;
@@ -230,6 +233,11 @@ export function MatchNode({
       {isPendingBye && (
         <div className="absolute top-0 right-0 bg-stone-900/80 text-stone-500 text-[8px] font-medium tracking-wider px-1 rounded-bl border-l border-b border-stone-700/40">
           BYE · pending
+        </div>
+      )}
+      {isNoContest && (
+        <div className="absolute top-0 right-0 bg-stone-900/85 text-stone-400 text-[8px] font-semibold uppercase tracking-wider px-1 rounded-bl border-l border-b border-stone-700/40">
+          No Contest
         </div>
       )}
       {isWithdrawnVoid && (
