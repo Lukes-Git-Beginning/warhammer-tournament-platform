@@ -238,19 +238,25 @@ export function computeSwissStandings(
   // Initialize per-player record
   const recordMap = new Map<
     string,
-    { wins: number; losses: number; draws: number; byes: number; score: number; gamesLost: number; opponents: string[]; opponentsBeaten: string[] }
+    { wins: number; losses: number; draws: number; byes: number; catchupByes: number; score: number; gamesLost: number; opponents: string[]; opponentsBeaten: string[] }
   >();
 
   for (const id of participantIds) {
-    recordMap.set(id, { wins: 0, losses: 0, draws: 0, byes: 0, score: 0, gamesLost: 0, opponents: [], opponentsBeaten: [] });
+    recordMap.set(id, { wins: 0, losses: 0, draws: 0, byes: 0, catchupByes: 0, score: 0, gamesLost: 0, opponents: [], opponentsBeaten: [] });
   }
 
   for (const match of completedMatches) {
     if (match.status !== 'COMPLETED' && match.status !== 'BYE' && match.status !== 'FORFEIT' && match.status !== 'NO_CONTEST' && match.status !== 'CATCHUP_BYE') continue;
 
     // CATCHUP_BYE: late-join placeholder — counts as a played round for depth/completeness
-    // but scores 0 and pushes no opponent (0 Buchholz). No further action needed.
-    if (match.status === 'CATCHUP_BYE') continue;
+    // but scores 0 and pushes no opponent (0 Buchholz). It IS counted as a virtual 0-score
+    // opponent for Solkoff (below) so a late joiner has the same opponent count as everyone
+    // else — otherwise their Solkoff would be under-trimmed (an unfair advantage).
+    if (match.status === 'CATCHUP_BYE') {
+      const cbPlayer = match.player1_id ?? match.player2_id;
+      if (cbPlayer && recordMap.has(cbPlayer)) recordMap.get(cbPlayer)!.catchupByes += 1;
+      continue;
+    }
 
     const p1 = match.player1_id;
     const p2 = match.player2_id;
@@ -328,9 +334,16 @@ export function computeSwissStandings(
     const oppScores = rec.opponents.map((oppId) => recordMap.get(oppId)?.score ?? 0);
     const buchholz = oppScores.reduce((s, v) => s + v, 0);
 
-    let solkoff = buchholz;
-    if (oppScores.length >= 3) {
-      const sorted = [...oppScores].sort((a, b) => a - b);
+    // Solkoff (median Buchholz) = Buchholz minus the single highest and single lowest opponent
+    // score. To keep it comparable across players, every non-played round (a real bye, a
+    // NO_CONTEST double-bye, a forfeit-win, a catch-up bye) counts as a virtual 0-score
+    // opponent — so a player with byes has the same opponent count as everyone else and always
+    // drops one top + one bottom (a bye's 0 is usually the bottom). The padded zeros add nothing
+    // to Buchholz. With fewer than 2 opponents nothing survives the trim, so Solkoff is 0.
+    const solkoffScores = oppScores.concat(new Array(rec.byes + rec.catchupByes).fill(0));
+    let solkoff = 0;
+    if (solkoffScores.length >= 2) {
+      const sorted = [...solkoffScores].sort((a, b) => a - b);
       solkoff = buchholz - sorted[0]! - sorted[sorted.length - 1]!;
     }
 

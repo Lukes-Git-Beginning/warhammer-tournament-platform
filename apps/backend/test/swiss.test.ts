@@ -326,6 +326,41 @@ describe('computeSwissStandings', () => {
       expect(get(id).dropped).toBe(false); // a No Contest does not drop anyone
     }
   });
+
+  it('a bye is a virtual 0-score opponent for Solkoff — trims the top + the bye, keeps the middle', () => {
+    const ids = fakeIds(6);
+    const matches: CompletedMatchRecord[] = [
+      { round: 1, player1_id: ids[0], player2_id: ids[1], winner_id: ids[0], status: 'COMPLETED' },
+      { round: 2, player1_id: ids[0], player2_id: ids[2], winner_id: ids[0], status: 'COMPLETED' },
+      { round: 3, player1_id: ids[0], player2_id: ids[3], winner_id: null, status: 'NO_CONTEST' },
+      // ids[1] finishes on score 1, ids[2] on score 2 → ids[0]'s real opponents are {1, 2}.
+      { round: 2, player1_id: ids[1], player2_id: ids[4], winner_id: ids[1], status: 'COMPLETED' },
+      { round: 1, player1_id: ids[2], player2_id: ids[5], winner_id: ids[2], status: 'COMPLETED' },
+      { round: 3, player1_id: ids[2], player2_id: ids[4], winner_id: ids[2], status: 'COMPLETED' },
+    ];
+    const s0 = computeSwissStandings(ids, matches).find((s) => s.userId === ids[0])!;
+    expect(s0.buchholz).toBe(3); // real opponents 1 + 2 (the bye adds nothing to Buchholz)
+    // Before the fix Solkoff was left untrimmed at 3 (only 2 real opponents). Now the bye is a
+    // virtual 0, so Solkoff drops the top (2) and the bye (0), keeping the middle: 1.
+    expect(s0.solkoff).toBe(1);
+  });
+
+  it('a catch-up bye also counts as a virtual 0-score opponent for Solkoff (late-join fairness)', () => {
+    const ids = fakeIds(6);
+    const matches: CompletedMatchRecord[] = [
+      { round: 1, player1_id: ids[0], player2_id: null, winner_id: null, status: 'CATCHUP_BYE' },
+      { round: 2, player1_id: ids[0], player2_id: ids[1], winner_id: ids[0], status: 'COMPLETED' },
+      { round: 3, player1_id: ids[0], player2_id: ids[2], winner_id: ids[0], status: 'COMPLETED' },
+      { round: 2, player1_id: ids[1], player2_id: ids[4], winner_id: ids[1], status: 'COMPLETED' }, // ids[1] → 1
+      { round: 1, player1_id: ids[2], player2_id: ids[5], winner_id: ids[2], status: 'COMPLETED' }, // ids[2] → 2
+      { round: 3, player1_id: ids[2], player2_id: ids[4], winner_id: ids[2], status: 'COMPLETED' },
+    ];
+    const s0 = computeSwissStandings(ids, matches).find((s) => s.userId === ids[0])!;
+    // Real opponents {1, 2}; the catch-up bye pads a 0 → Solkoff drops 2 + 0, keeps 1 — a late
+    // joiner gets no free Solkoff advantage from having fewer real opponents.
+    expect(s0.buchholz).toBe(3);
+    expect(s0.solkoff).toBe(1);
+  });
 });
 
 // ---------- recommendNumberOfRounds ----------

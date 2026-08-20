@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.37.5] — 2026-08-20 — Fair Solkoff tiebreaker across byes and late joins
+### Fixed
+- **The Solkoff tiebreaker no longer hands a player with a bye an unfair advantage.** Solkoff (Buchholz minus the single highest and single lowest opponent score) was only trimmed for players with 3+ opponents — so anyone with a bye, a No Contest double-bye or a late-join catch-up (and therefore fewer real opponents) kept their *untrimmed* Buchholz as their Solkoff, which almost always beat a properly-trimmed opponent. Every non-played round now counts as a virtual 0-score opponent, so all players have the same opponent count and Solkoff always drops one top and one bottom score. Buchholz is unchanged — a bye still only "costs" the missing opponent's points, never more.
+
 ## [1.37.4] — 2026-08-19 — "No Contest" is now visible in the bracket
 ### Fixed
 - **A match resolved as "No Contest" now actually shows it in the bracket.** A no-contest (a technical-abort double-bye — both players advance, no winner) was applied correctly under the hood but rendered like an unplayed match: no label, no marker, indistinguishable from a pending game. The bracket node now reads as a no-contest — a dashed border with a "No Contest" badge and both players kept (neither is marked out), matching how byes are shown.
