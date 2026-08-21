@@ -763,7 +763,14 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           rank: i + 1,
           rawScore: s.score,
         }));
-        const rounds = tournament?.rounds_count ?? 1;
+        // The cross-band handicap scales with the round count and MUST never be weaker than the
+        // rounds actually played: a stale/null rounds_count would collapse the handicap (rounds=1 gives
+        // ¼ strength) and let a lower-band player displace a higher-band earner — the anderland-over-ponti
+        // incident (2026-08-20). Floor it at the highest group round on record. (Was `?? 1`, a latent bug.)
+        const playedGroupRounds = allMatches
+          .filter((m) => !m.phase?.startsWith('PLAYOFF'))
+          .reduce((mx, m) => Math.max(mx, m.round), 0);
+        const rounds = Math.max(tournament?.rounds_count ?? 0, playedGroupRounds);
         const frozenPlan = tournament?.playoff_plan as unknown as PlayoffPlan | null;
         const pools =
           frozenPlan && Array.isArray(frozenPlan.divisions) && frozenPlan.divisions.length > 0
@@ -776,6 +783,21 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           const st = ranked.find((s) => s.userId === uid);
           return st ? eligible(uid, st.dropped) && st.score > 0 : false;
         });
+        // Diagnostic: capture the exact reseed inputs so a mis-seed is provable in one line.
+        request.log.info(
+          {
+            tournamentId,
+            matchId,
+            survivorId,
+            rounds,
+            roundsConfigured: tournament?.rounds_count ?? null,
+            playedGroupRounds,
+            frozen: !!(frozenPlan && Array.isArray(frozenPlan.divisions) && frozenPlan.divisions.length > 0),
+            survivorPoolSeeds: survivorPool?.seeds,
+            chosenSeed: seedUserId ?? null,
+          },
+          'BaLi backfill reseed: picked next division seed',
+        );
       } else {
         seedUserId = ranked.find((s) => eligible(s.userId, s.dropped))?.userId;
       }

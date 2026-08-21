@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.37.6] — 2026-08-21 — Balanced Liechtenstein reseed keeps the cross-band handicap
+### Fixed
+- **When a Balanced Liechtenstein player drops out of a division semi/final, the freed seat now goes to the correct next player.** Filling a vacated playoff seat re-ran the cross-band seeding handicap (which discounts a lower-band player borrowed up into a higher division) with a round count that could silently fall to 1 when a tournament's stored round count was unset — a quarter of its proper strength. With the handicap that weak, a lower-band player with a slightly better raw record could jump ahead of a higher-band player who should have held the seat (a band-3 raw-2 player displacing a band-5 raw-1 player). The reseed now floors the handicap at the rounds actually played, so it can never collapse, and both reseed paths (automatic walkover backfill and the host's manual "backfill next seed") use the same guarded value. Added diagnostic logging of every reseed decision.
+
 ## [1.37.5] — 2026-08-20 — Fair Solkoff tiebreaker across byes and late joins
 ### Fixed
 - **The Solkoff tiebreaker no longer hands a player with a bye an unfair advantage.** Solkoff (Buchholz minus the single highest and single lowest opponent score) was only trimmed for players with 3+ opponents — so anyone with a bye, a No Contest double-bye or a late-join catch-up (and therefore fewer real opponents) kept their *untrimmed* Buchholz as their Solkoff, which almost always beat a properly-trimmed opponent. Every non-played round now counts as a virtual 0-score opponent, so all players have the same opponent count and Solkoff always drops one top and one bottom score. Buchholz is unchanged — a bye still only "costs" the missing opponent's points, never more.

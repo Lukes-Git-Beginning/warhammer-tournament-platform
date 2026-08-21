@@ -1096,12 +1096,18 @@ export async function findNextDivisionSeed(
     select: { format: true, rounds_count: true, playoff_format: true, playoff_plan: true },
   });
   if (!tournament || tournament.format !== 'BALANCED_LIECHTENSTEIN') return null;
-  const roundsCount = tournament.rounds_count ?? 5;
 
   const matches = await fastify.prisma.match.findMany({
     where: { tournament_id: tournamentId, deleted_at: null },
     select: { round: true, player1_id: true, player2_id: true, winner_id: true, status: true, phase: true },
   });
+  // The cross-band handicap must never be weaker than the rounds actually played — a stale/null
+  // rounds_count would collapse it and mis-seed a lower-band player over a higher-band earner
+  // (the anderland-over-ponti incident, 2026-08-20). Floor at the highest group round on record.
+  const playedGroupRounds = matches
+    .filter((m) => !m.phase?.startsWith('PLAYOFF'))
+    .reduce((mx, m) => Math.max(mx, m.round), 0);
+  const roundsCount = Math.max(tournament.rounds_count ?? 0, playedGroupRounds);
   const participants = await fastify.prisma.tournamentParticipant.findMany({
     where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] } },
     select: { user_id: true, status: true, skill_band: true },
@@ -1142,6 +1148,19 @@ export async function findNextDivisionSeed(
     const st = ranked.find((s) => s.userId === uid);
     return st ? !st.dropped && !withdrawnIds.has(uid) && !inPlayoffs.has(uid) && st.score > 0 : false;
   });
+  // Diagnostic: capture the exact reseed inputs so a mis-seed is provable in one line.
+  fastify.log.info(
+    {
+      tournamentId,
+      survivorId,
+      roundsCount,
+      roundsConfigured: tournament.rounds_count ?? null,
+      playedGroupRounds,
+      survivorPoolSeeds: survivorPool?.seeds,
+      chosenSeed: next ?? null,
+    },
+    'BaLi auto-reseed: picked next division seed',
+  );
   return next ?? null;
 }
 
