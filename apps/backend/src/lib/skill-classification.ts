@@ -7,8 +7,9 @@
 //
 // Two outputs, for two uses (co-designed 2026-07-01):
 //   - MATCHMAKING (Balanced Liechtenstein): the Bayes-blended posterior skill —
-//     questionnaire as prior, each game as evidence weighted by Fisher info.
-//     0 games → questionnaire leads; many games → data leads.
+//     questionnaire as an ASYMMETRIC soft-floor prior, each game as Fisher-weighted
+//     evidence. Data above the claim overtakes fast (~10 games), data below is resisted
+//     (~60). 0 games → questionnaire leads; many games → data leads.
 //   - GATING (beginner/intermediate formats): MAX(questionnaire floor,
 //     conservative data band). Conservative = skillToBand(GS − 2·SE), so thin
 //     data can never over-block a newcomer, but confident strength always does.
@@ -220,23 +221,28 @@ export function bandToLogOdds(band: number): number {
 
 export interface ClassificationConfig {
   /**
-   * How much the questionnaire "counts", in equivalent games. The prior precision
-   * τ_prior = priorEquivGames · INFO_PER_GAME. Higher → data takes longer to
-   * overtake the questionnaire. This is the "how fast does data replace the
-   * questionnaire" dial Alex asked about.
+   * Asymmetric "soft floor" — how much the questionnaire counts, in equivalent games,
+   * split by whether the data lands ABOVE or BELOW the questionnaire band. Prior precision
+   * τ_prior = priorEquivGames · INFO_PER_GAME; data weight grows as N/(priorEquivGames+N).
+   * A small ABOVE value lets a player who out-performs their claim climb fast (catches
+   * sandbaggers); a large BELOW value makes the questionnaire resist a downward drift, so a
+   * bad run only slowly pulls a player under their own claim.
    */
-  priorEquivGames: number;
+  priorEquivGamesAbove: number;
+  priorEquivGamesBelow: number;
   /** k in the conservative gating estimate GS − k·SE (higher = harder to over-block). */
   gatingSeMultiplier: number;
 }
 
 export const DEFAULT_CLASSIFICATION_CONFIG: ClassificationConfig = {
-  // 50 ≈ where data ties the questionnaire (calibrated with Alex 2026-07-01):
-  // a New player's first handful of games (often within a beginner bubble) barely
-  // move the estimate; only real volume overtakes the self-assessment. Data weight
-  // grows as N/(50+N). The real fix for "against whom" is anchoring-aware
-  // confidence (a later upgrade); until then this errs conservative.
-  priorEquivGames: 50,
+  // Asymmetric soft floor (Alex, 2026-08-21): a player performing ABOVE their questionnaire
+  // ties the claim in ~10 games and dominates by ~30 (fast up — catches sandbaggers); one
+  // performing BELOW it needs ~60 games to tie and ~180 to reach 75% data weight (slow down —
+  // the questionnaire is a floor that data only slowly falls through). This ONLY drives the
+  // matchmaking/recognized band; the gating (tournament-entry) band below is unchanged. The
+  // real fix for "against whom" is anchoring-aware confidence (a later upgrade).
+  priorEquivGamesAbove: 10,
+  priorEquivGamesBelow: 60,
   gatingSeMultiplier: 2,
 };
 
@@ -280,21 +286,25 @@ export function classify(
 ): Classification {
   const cfg = { ...DEFAULT_CLASSIFICATION_CONFIG, ...config };
   const priorMu = bandToLogOdds(qFloor);
-  const priorTau = cfg.priorEquivGames * INFO_PER_GAME;
 
   const hasData = data.generalSkill != null && data.stdError != null && data.stdError > 0;
 
-  // --- Matchmaking: Bayes precision-weighted blend --------------------------
+  // --- Matchmaking: Bayes blend with an ASYMMETRIC soft floor ---------------
+  // The questionnaire is a soft floor, not a symmetric anchor: data ABOVE the claimed band
+  // overtakes it fast (small prior weight), data BELOW is resisted (large prior weight).
+  // Only the matchmaking/recognized band uses this; the gating band below is unaffected.
   let postMu: number;
   let postTau: number;
   if (hasData) {
     const dataMu = data.generalSkill!;
     const dataTau = 1 / (data.stdError! * data.stdError!); // Fisher info = 1/SE²
+    const priorEquivGames = dataMu >= priorMu ? cfg.priorEquivGamesAbove : cfg.priorEquivGamesBelow;
+    const priorTau = priorEquivGames * INFO_PER_GAME;
     postTau = priorTau + dataTau;
     postMu = (priorTau * priorMu + dataTau * dataMu) / postTau;
   } else {
     postMu = priorMu;
-    postTau = priorTau;
+    postTau = cfg.priorEquivGamesBelow * INFO_PER_GAME; // questionnaire-only confidence
   }
   const posteriorSe = 1 / Math.sqrt(postTau);
 

@@ -117,3 +117,36 @@ describe('classify — gating', () => {
     expect(c.gatingBand).toBeGreaterThanOrEqual(3); // MAX(2, band of 1.5−0.8=0.7 → 3)
   });
 });
+
+// ---------------------------------------------------------------------------
+// Asymmetric soft floor — up fast, down slow (Alex, 2026-08-21)
+// ---------------------------------------------------------------------------
+
+describe('classify — asymmetric soft floor (matchmaking only)', () => {
+  it('data above the questionnaire pulls the estimate up faster than equal data below pulls it down', () => {
+    const qFloor = 3;
+    const prior = bandToLogOdds(qFloor);
+    const above = classify(qFloor, { generalSkill: prior + 1.0, stdError: 0.5 });
+    const below = classify(qFloor, { generalSkill: prior - 1.0, stdError: 0.5 });
+    const aboveMoved = (above.matchmakingSkill - prior) / 1.0; // fraction toward the +1 data
+    const belowMoved = (prior - below.matchmakingSkill) / 1.0; // fraction toward the -1 data
+    expect(aboveMoved).toBeGreaterThan(belowMoved); // up is faster than down
+    expect(aboveMoved).toBeGreaterThan(0.5); // above: data is the majority almost at once
+    expect(belowMoved).toBeLessThan(0.35); // below: the questionnaire floor resists
+  });
+
+  it('a sandbagger climbs faster than an over-claimer sinks (matched distance + confidence)', () => {
+    const D = 1.5;
+    const sandbagger = classify(2, { generalSkill: bandToLogOdds(2) + D, stdError: 0.5 }); // low claim, strong data
+    const overClaimer = classify(4, { generalSkill: bandToLogOdds(4) - D, stdError: 0.5 }); // high claim, weak data
+    const sandMoved = (sandbagger.matchmakingSkill - bandToLogOdds(2)) / D; // fraction climbed up
+    const overMoved = (bandToLogOdds(4) - overClaimer.matchmakingSkill) / D; // fraction sunk down
+    expect(sandMoved).toBeGreaterThan(overMoved);
+  });
+
+  it('leaves the gating (tournament-entry) band untouched — same MAX(floor, GS−2·SE) as before', () => {
+    // Below-floor data: gating still floors at the questionnaire; above-floor confident data still lifts it.
+    expect(classify(3, { generalSkill: -1.0, stdError: 0.5 }).gatingBand).toBe(3); // floor holds
+    expect(classify(1, { generalSkill: 2.0, stdError: 0.4 }).gatingBand).toBe(4); // MAX(1, band(2.0−0.8))
+  });
+});
