@@ -100,8 +100,11 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // NI-5: skill-gate — a host may restrict registration to a gating-band range. Unrated
+      // NI-5: skill-gate — a host may restrict registration to a skill-band range. Unrated
       // players must calibrate first (CalibrationRequired → the client opens the questionnaire).
+      // Uses the competition band (matchmakingBand — the value shown on the player's profile),
+      // so what a player sees IS what decides which gated tournaments they can enter. A strong
+      // player who out-performs their questionnaire is gated up quickly (soft-floor climb).
       if (tournament.min_band != null || tournament.max_band != null) {
         const season = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
         if (season) {
@@ -109,7 +112,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           if (!classification.rated) {
             return reply.code(422).send({ error: 'CalibrationRequired', message: 'Complete your skill calibration before registering for this tournament.', statusCode: 422 });
           }
-          const band = classification.gatingBand;
+          const band = classification.matchmakingBand;
           if (tournament.min_band != null && band < tournament.min_band) {
             return reply.code(422).send({ error: 'UnprocessableEntity', message: `This tournament requires at least ${BAND_NAMES[tournament.min_band]!} — your skill band is ${BAND_NAMES[band]!}.`, statusCode: 422 });
           }

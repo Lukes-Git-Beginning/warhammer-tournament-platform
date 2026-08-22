@@ -136,8 +136,9 @@ export async function getPlayerClassification(
     generalSkill: gs?.skill ?? null,
     generalSkillSe: gs?.se ?? null,
     matchmakingWinChance: skillToWinChance(result.matchmakingSkill),
-    // Headline tier name — "Unrated" when we have no real signal (not "New").
-    bandName: rated ? BAND_NAMES[result.gatingBand]! : 'Unrated',
+    // Headline tier name — the competition band (matchmakingBand), i.e. what the profile shows
+    // and what now gates tournament entry. "Unrated" when we have no real signal (not "New").
+    bandName: rated ? BAND_NAMES[result.matchmakingBand]! : 'Unrated',
     hasQuestionnaire,
     rated,
   };
