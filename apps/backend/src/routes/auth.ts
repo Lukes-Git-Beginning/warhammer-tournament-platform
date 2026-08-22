@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import fastifyOauth2 from '@fastify/oauth2';
 import type { Role, JwtPayload } from '@rizzotto/types';
 import { resolveGuildId } from '../lib/discord-notify.js';
+import { syncSupporterFromDiscordRoles } from '../lib/supporter-service.js';
 
 const DISCORD_USERINFO_URL = 'https://discord.com/api/users/@me';
 
@@ -142,6 +143,16 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
                 body: JSON.stringify({ access_token: accessToken }),
               });
               request.log.info({ userId: user.id }, 'Added user to RizzOttoverse Discord server');
+              // A freshly-added member holds no supporter roles yet — clear any stale Discord tiers.
+              await syncSupporterFromDiscordRoles(fastify.prisma, user.id, []);
+            } else if (memberCheck.ok) {
+              // Already a member — sync their supporter tiers from their current guild roles.
+              const member = (await memberCheck.json()) as { roles?: string[] };
+              await syncSupporterFromDiscordRoles(
+                fastify.prisma,
+                user.id,
+                Array.isArray(member.roles) ? member.roles : [],
+              );
             }
           } catch (e) {
             request.log.warn({ e }, 'Discord guild join fire-and-forget failed');
