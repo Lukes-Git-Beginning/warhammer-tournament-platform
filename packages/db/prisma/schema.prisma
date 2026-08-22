@@ -212,6 +212,16 @@ model User {
   // answers as a map of question id → chosen option value. The band is derived
   // on-read from these + the current rating model, not stored.
   calibration_answers Json?
+  // Ko-Fi supporter recognition: tiers from Discord roles (synced on login + cron) plus an admin
+  // manual override. Effective tier per level = *_discord OR *_manual; cumulative (a Lord/Champion
+  // is also a Supporter) — resolved in lib/supporter-status.ts. See plans/kofi-and-supporters.md.
+  supporter_discord   Boolean   @default(false)
+  lord_discord        Boolean   @default(false)
+  champion_discord    Boolean   @default(false)
+  supporter_manual    Boolean   @default(false)
+  lord_manual         Boolean   @default(false)
+  champion_manual     Boolean   @default(false)
+  supporter_synced_at DateTime?
   created_at         DateTime  @default(now())
   updated_at         DateTime  @updatedAt
   deleted_at         DateTime?
