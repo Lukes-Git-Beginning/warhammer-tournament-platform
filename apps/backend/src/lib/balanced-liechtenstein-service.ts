@@ -353,6 +353,82 @@ export async function runBalancedPairingTick(
         return [...seededShuffle(pool, `${tournamentId}:${round}:bye`)].sort((a, b) => adj(a) - adj(b));
       };
 
+      // Step A2 — RECONCILE two already-resting players at the frontier into a real match.
+      // Step B only fills a NEW bye (plan.byes) against an existing PENDING_BYE; it never merges two
+      // players who are BOTH already resting. A late joiner rests on a CATCHUP_BYE created up-front by
+      // admitBalancedLateJoiner, so once a catch-up joiner and a free player (drop survivor / rest bye)
+      // sit at the same round, nothing pairs them — the host had to build the match by hand, which then
+      // cascaded (frontier shift, phantom byes, a wrongly-frozen playoff). Merge such a pair when it
+      // involves a still-catching-up joiner and is a LEGAL pairing (same gate as Step B: band gap <=
+      // the round's worst committed gap, no immediate rematch). Keep the lower-numbered row as the
+      // match, soft-delete the redundant bye. Restricted to the frontier so a settled past-round
+      // CATCHUP_BYE (a round the joiner genuinely skipped) is never retroactively turned into a match.
+      const bandOf = (id: string): number => bandByUser.get(id) ?? DEFAULT_BAND;
+      {
+        const frontierRound = matches.reduce((mx, m) => Math.max(mx, m.round), 0);
+        const restingRows = matches.filter(
+          (m) =>
+            m.round === frontierRound &&
+            (m.status === 'PENDING_BYE' || m.status === 'CATCHUP_BYE') &&
+            m.player1_id !== null &&
+            m.player2_id === null &&
+            !movedOn(m.player1_id, m.round),
+        );
+        if (restingRows.length >= 2) {
+          const committedGaps = matches
+            .filter((m) => m.round === frontierRound && m.player1_id && m.player2_id && m.status !== 'CANCELLED')
+            .map((m) => Math.abs(bandOf(m.player1_id!) - bandOf(m.player2_id!)));
+          const roundMaxGap = committedGaps.length > 0 ? Math.max(...committedGaps) : 0;
+          const restMerges: Array<{ keepId: string; voidId: string; round: number; p1: string; p2: string }> = [];
+          const mergedRows = new Set<string>();
+          for (let i = 0; i < restingRows.length; i++) {
+            const a = restingRows[i]!;
+            if (mergedRows.has(a.id)) continue;
+            let best: { row: typeof a; gap: number } | null = null;
+            for (let j = i + 1; j < restingRows.length; j++) {
+              const c = restingRows[j]!;
+              if (mergedRows.has(c.id)) continue;
+              // Scope to the reported gap: at least one side is a still-catching-up late joiner.
+              if (!isCatchingUp(a.player1_id!) && !isCatchingUp(c.player1_id!)) continue;
+              const gap = Math.abs(bandOf(a.player1_id!) - bandOf(c.player1_id!));
+              const legal = isLegalLateJoinReclaim({
+                involvesCatchup: true,
+                holderBand: bandOf(a.player1_id!),
+                joinerBand: bandOf(c.player1_id!),
+                roundMaxGap,
+                immediateRematch: matches.some(
+                  (x) =>
+                    x.round === frontierRound - 1 &&
+                    ((x.player1_id === a.player1_id && x.player2_id === c.player1_id) ||
+                      (x.player1_id === c.player1_id && x.player2_id === a.player1_id)),
+                ),
+              });
+              if (!legal) continue;
+              if (!best || gap < best.gap) best = { row: c, gap };
+            }
+            if (best) {
+              mergedRows.add(a.id);
+              mergedRows.add(best.row.id);
+              const keep = a.match_number <= best.row.match_number ? a : best.row;
+              const drop = keep === a ? best.row : a;
+              restMerges.push({ keepId: keep.id, voidId: drop.id, round: frontierRound, p1: keep.player1_id!, p2: drop.player1_id! });
+            }
+          }
+          if (restMerges.length > 0) {
+            for (const mg of restMerges) {
+              await fastify.prisma.match.update({
+                where: { id: mg.keepId },
+                data: { player2_id: mg.p2, status: 'PENDING' as MatchStatus, winner_id: null },
+              });
+              await fastify.prisma.match.update({ where: { id: mg.voidId }, data: { deleted_at: new Date() } });
+              createdMatches.push({ id: mg.keepId, round: mg.round, player1_id: mg.p1, player2_id: mg.p2 });
+            }
+            mutated = true;
+            continue; // re-plan with the merged pairs (matches is re-fetched next iteration)
+          }
+        }
+      }
+
       const plan = planPairings(
         participants.map((p) => ({ userId: p.user_id, band: p.skill_band })),
         matches.map((m) => ({
@@ -375,7 +451,6 @@ export async function runBalancedPairingTick(
       const reclaimUsed = new Set<string>();
       const reclaimUpdates: Array<{ id: string; player1_id: string; player2_id: string; round: number }> = [];
       const freshByes: typeof plan.byes = [];
-      const bandOf = (id: string): number => bandByUser.get(id) ?? DEFAULT_BAND;
       for (const b of plan.byes) {
         // #11 (Alex 2026-07-24): a reclaim that accommodates a still-catching-up late joiner must be
         // a LEGAL pairing — its band gap may not EXCEED the round's current worst committed gap (so a

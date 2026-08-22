@@ -131,14 +131,11 @@ describe('BaLi — catch-up-bye reclaim gap (Max + Solmeer)', () => {
     expect(new Set([real!.player1_id, real!.player2_id])).toEqual(new Set([max!.id, solmeer!.id]));
   });
 
-  // BUG (REPRODUCTION): once the late joiner already holds a CATCHUP_BYE at that round (as
-  // admitBalancedLateJoiner creates), the tick sees them as "placed" → they never enter plan.byes
-  // → the reclaim cannot pair them with the same-band free player. Both stay resting.
-  //
-  // Marked `it.fails`: the assertions below express the DESIRED behaviour and currently FAIL, so
-  // this test PASSES today (documenting the gap) and a green suite proves the reproduction. The
-  // Prong-A fix removes `.fails`, turning it into a normal regression test.
-  it.fails('pairs a free player with a same-band late joiner who already holds a CATCHUP_BYE', async () => {
+  // REGRESSION (was the bug): once the late joiner already holds a CATCHUP_BYE at that round (as
+  // admitBalancedLateJoiner creates), the tick used to see them as "placed" → they never entered
+  // plan.byes → the reclaim could not pair them with the same-band free player. The Step A2
+  // reconcile now merges two resting frontier players into a real match, so this passes.
+  it('pairs a free player with a same-band late joiner who already holds a CATCHUP_BYE', async () => {
     const { tournamentId, users } = await setup([5, 5], 3);
     const [max, solmeer] = users;
     await markLateJoiner(tournamentId, solmeer!.id);
