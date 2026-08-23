@@ -314,16 +314,35 @@ function pairPool(
     return w;
   };
   const deHold = (base: { pairs: [Waiter, Waiter][]; byes: Waiter[] }): { pairs: [Waiter, Waiter][]; byes: Waiter[] } => {
-    if (inc.length === 0) return base; // closed pool: nobody is held
-    const used = new Set<string>();
-    for (const [a, b] of base.pairs) { used.add(a.userId); used.add(b.userId); }
-    for (const b of base.byes) used.add(b.userId);
-    let held = free.filter((f) => !used.has(f.userId));
-    if (held.length < 2) return base;
-    const extra: [Waiter, Waiter][] = [];
-    let field = [...held, ...inc]; // the still-uncommitted sub-field
+    if (inc.length === 0) return base; // closed pool: nobody is held; commits + byes stand
+    let field = [...free, ...inc]; // the still-uncommitted sub-field (shrinks as commits are accepted)
     let opt = pureMWM(field);
-    let progress = true;
+    // The design invariant: a pairing is committed ONLY if it lies in a max-cardinality-min-cost
+    // optimum, so the REMAINING field stays optimal. The base matching's offset only guarantees
+    // min-cost at EQUAL cardinality — so it can commit a pair that is NOT in the optimum, e.g. a cheap
+    // Δ0 free-free pair that leaves two incoming rematch players unheld and strands them into a forced
+    // rematch when they finish (the "finish-last" bug). So FIRST filter every base commit through the
+    // SAME pure-MWM optimum check (not just the extras below): keep only those whose removal preserves
+    // the optimum; hold the rest. `pureMWM` uses a cardinality-dominant offset (K_FIXED ≥ any pool
+    // cost), so "preserves the optimum" means "max matched-count first, then min cost".
+    const kept: [Waiter, Waiter][] = [];
+    for (const [u, v] of base.pairs) {
+      const s = edgeScaled(u, v);
+      const reduced = field.filter((w) => w.userId !== u.userId && w.userId !== v.userId);
+      if (s !== null && pureMWM(reduced) + (K_FIXED - s) === opt) {
+        kept.push([u, v]);
+        field = reduced;
+        opt = pureMWM(field);
+      }
+      // else: hold — committing this pair would drop the optimum (strand someone), so leave it open.
+    }
+    // #36 cost-neutral DE-HOLD extra pass: among players still held, commit any safe floor (Δ0) pair
+    // whose removal also preserves the optimum — pairing two equals now is the abundance case.
+    const usedIds = new Set<string>();
+    for (const [a, b] of kept) { usedIds.add(a.userId); usedIds.add(b.userId); }
+    let held = free.filter((f) => !usedIds.has(f.userId));
+    const extra: [Waiter, Waiter][] = [];
+    let progress = held.length >= 2;
     while (progress && held.length >= 2) {
       progress = false;
       for (let i = 0; i < held.length && !progress; i++)
@@ -332,7 +351,6 @@ function pairPool(
           const u = held[i]!, v = held[j]!;
           const reduced = field.filter((w) => w.userId !== u.userId && w.userId !== v.userId);
           if (pureMWM(reduced) + K_FIXED === opt) {
-            // u–v lies in a max-weight matching → committing it preserves the optimum.
             extra.push([u, v]);
             held = held.filter((w) => w.userId !== u.userId && w.userId !== v.userId);
             field = reduced;
@@ -342,7 +360,7 @@ function pairPool(
           }
         }
     }
-    return { pairs: [...base.pairs, ...extra], byes: base.byes };
+    return { pairs: [...kept, ...extra], byes: base.byes };
   };
 
   // Pre-assigned bye: in a CLOSED odd pool the caller supplies the ELIGIBLE bye candidates ordered
