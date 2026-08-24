@@ -62,7 +62,11 @@ export function isLegalLateJoinReclaim(opts: {
   roundMaxGap: number;
   immediateRematch: boolean;
 }): boolean {
-  if (!opts.involvesCatchup) return true;
-  if (Math.abs(opts.holderBand - opts.joinerBand) > opts.roundMaxGap) return false;
-  return !opts.immediateRematch;
+  // An immediate rematch is a HARD block on EVERY reclaim — never re-pair two players who just met,
+  // whether or not a catching-up late joiner is involved. This was previously only checked for the
+  // catch-up case, so a normal (non-catchup) reclaim — e.g. a drop→void survivor filling another
+  // player's provisional bye — could slip a forbidden immediate rematch through.
+  if (opts.immediateRematch) return false;
+  if (!opts.involvesCatchup) return true; // normal round formation: no band-gap ceiling
+  return Math.abs(opts.holderBand - opts.joinerBand) <= opts.roundMaxGap;
 }

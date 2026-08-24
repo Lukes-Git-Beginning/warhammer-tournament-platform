@@ -16,6 +16,37 @@ import type { GameDto, MapDto } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { LobbyCodeField } from './LobbyCodeField';
 
+/** Side-by-side "Site says / Replay says" for a replay mismatch — the actionable FACTIONS/MAP fields
+ *  are shown as a compare so a player (or host) can see exactly what differs and pick the truth. The
+ *  informational signals (recorded-time / player-name) fall back to their message line. */
+function ReplayComparison({ issues }: { issues: ReplayIssue[] }) {
+  const label = (t: ReplayIssue['type']) => (t === 'FACTIONS' ? 'Factions' : t === 'MAP' ? 'Map' : t);
+  const fields = issues.filter((i) => i.reported != null && i.replay != null);
+  const notes = issues.filter((i) => i.reported == null || i.replay == null);
+  return (
+    <div className="space-y-1.5">
+      {fields.map((iss, i) => (
+        <div key={i} className="rounded border border-amber-800/50 bg-amber-950/30 p-2 text-xs">
+          <p className="font-semibold text-amber-300">{label(iss.type)}</p>
+          <div className="mt-1 grid grid-cols-2 gap-2">
+            <div>
+              <span className="text-rizzotto-stone-400">Site says</span>
+              <div className="text-amber-100">{iss.reported}</div>
+            </div>
+            <div>
+              <span className="text-rizzotto-stone-400">Replay says</span>
+              <div className="text-emerald-200">{iss.replay}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+      {notes.map((iss, i) => (
+        <p key={`n${i}`} className="text-xs text-amber-200/90">• {iss.message}</p>
+      ))}
+    </div>
+  );
+}
+
 interface Props {
   matchId: string;
   game: GameDto;
@@ -332,11 +363,9 @@ export function GameTile({
           {game.verification?.issues && game.verification.issues.length > 0 && (
             <div className="mt-2 rounded border border-amber-700/50 bg-amber-950/30 p-2 text-xs text-amber-200/90">
               <p className="font-semibold text-amber-300">Replay didn&apos;t match the report:</p>
-              <ul className="ml-1 mt-1 list-disc pl-4">
-                {game.verification.issues.map((iss, i) => (
-                  <li key={i}>{iss.message}</li>
-                ))}
-              </ul>
+              <div className="mt-1">
+                <ReplayComparison issues={game.verification.issues} />
+              </div>
               {game.verification.explanation && (
                 <p className="mt-2">
                   <span className="font-semibold text-amber-300">Reporter&apos;s explanation:</span>{' '}
@@ -555,13 +584,9 @@ export function GameTile({
                       {mismatch && (
                         <div className="flex flex-col gap-2 rounded-lg border border-amber-700/60 bg-amber-950/20 p-3">
                           <p className="text-xs font-semibold text-amber-300">
-                            ⚠️ This replay doesn&apos;t look like this game:
+                            ⚠️ The replay doesn&apos;t match your report — which one is correct?
                           </p>
-                          <ul className="ml-1 list-disc pl-4 text-xs text-amber-200/90">
-                            {mismatch.map((iss, i) => (
-                              <li key={i}>{iss.message}</li>
-                            ))}
-                          </ul>
+                          <ReplayComparison issues={mismatch} />
                           {/* Path A — upload the correct replay and re-submit. */}
                           <p className="mt-1 text-xs text-rizzotto-stone-300">
                             Attached the wrong file? Choose the correct replay above, then:
@@ -590,8 +615,9 @@ export function GameTile({
                           </Button>
                           {/* Path C — a genuine deviation the replay can't settle: explain it for host review. */}
                           <p className="mt-1 text-xs text-rizzotto-stone-300">
-                            Something else off (e.g. you agreed to play a different matchup)? Explain it —
-                            the match is only scored once a host/admin has reviewed it, and your opponent is notified.
+                            Your report is correct and the replay is wrong/old (or you agreed to a different
+                            matchup)? Explain it — a host/admin reviews before it&apos;s scored, and your opponent
+                            is notified.
                           </p>
                           <textarea
                             value={explanation}

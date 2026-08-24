@@ -19,6 +19,11 @@ export interface ReplayIssue {
   type: ReplayIssueType;
   /** Human-readable "reported X — replay shows Y". */
   message: string;
+  /** Structured values for the side-by-side "Site says / Replay says" compare the reporter chooses
+   *  from. Set for FACTIONS + MAP (the actionable, applicable fields); the message stands alone for
+   *  the informational RECORDED_TIME / PLAYER signals. */
+  reported?: string;
+  replay?: string;
 }
 
 export interface ExpectedGame {
@@ -77,6 +82,8 @@ export function verifyReplayMeta(
       issues.push({
         type: 'FACTIONS',
         message: `Reported ${expected.factionSlugs.map(titleCase).join(' vs ')} — replay shows ${got.map(titleCase).join(' vs ')}`,
+        reported: expected.factionSlugs.map(titleCase).join(' vs '),
+        replay: got.map(titleCase).join(' vs '),
       });
     }
   }
@@ -87,6 +94,8 @@ export function verifyReplayMeta(
     issues.push({
       type: 'MAP',
       message: `Reported "${expected.mapName}" — replay is on "${replayMap}"`,
+      reported: expected.mapName,
+      replay: replayMap,
     });
   }
 

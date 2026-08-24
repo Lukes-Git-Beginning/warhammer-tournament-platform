@@ -611,7 +611,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           tournament_id: true,
           player1_id: true,
           player2_id: true,
-          games: { select: { id: true, game_number: true, status: true, reported_winner_id: true } },
+          games: { select: { id: true, game_number: true, status: true, reported_winner_id: true, verification: true } },
         },
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
@@ -632,11 +632,29 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'No valid winner to approve for this game', statusCode: 422 });
       }
 
-      // Clear the verification hold + set the approved winner, then finalize (→ completeMatch).
+      // Apply the replay's factions + map when resolving, exactly like the opponent-confirm path — the
+      // replay is the ground truth for WHAT was played, so a host resolving a dispute no longer has to
+      // hand-correct the map/factions the site had generated. `replayValues` is present whenever the
+      // replay was readable (it is preserved through the opponent-reject escalation); an ambiguous
+      // replay carries none, and then only the winner is set (as before).
+      const v = game.verification as { replayValues?: { player1FactionSlug: string | null; player2FactionSlug: string | null; mapId: string | null } } | null;
+      const rv = v?.replayValues;
       await fastify.prisma.matchGame.update({
         where: { id: game.id },
-        data: { reported_winner_id: approvedWinner, verification: Prisma.DbNull },
+        data: {
+          reported_winner_id: approvedWinner,
+          verification: Prisma.DbNull,
+          ...(rv?.player1FactionSlug ? { player1_faction_id: rv.player1FactionSlug } : {}),
+          ...(rv?.player2FactionSlug ? { player2_faction_id: rv.player2FactionSlug } : {}),
+        },
       });
+      if (rv?.mapId && match.player1_id && match.player2_id) {
+        await fastify.prisma.matchMapDecision.upsert({
+          where: { game_id: game.id },
+          update: { picked_map_id: rv.mapId, decided_at: new Date() },
+          create: { game_id: game.id, mode: 'HOST_PRESET', coin_flip_seed: 'replay-resolve', top_player_id: match.player1_id, bottom_player_id: match.player2_id, picked_map_id: rv.mapId, decided_at: new Date() },
+        });
+      }
       await finalizeGameResult(fastify, game.id);
 
       await fastify.prisma.auditLog
@@ -826,10 +844,15 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       if (!v?.awaitingOpponent) {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'This game is not awaiting your confirmation', statusCode: 422 });
       }
-      // Keep it DISPUTED, drop the self-service marker → a host must resolve it now.
+      // Keep it DISPUTED, drop the self-service marker → a host must resolve it now. Preserve the
+      // replay's attributed values so the host still resolves onto the replay's map + factions
+      // (resolve-dispute applies them) instead of hand-correcting the map every time.
       await fastify.prisma.matchGame.update({
         where: { id: game.id },
-        data: { status: 'DISPUTED', verification: { escalatedToHost: true, explanation: v.explanation } as unknown as Prisma.InputJsonValue },
+        data: {
+          status: 'DISPUTED',
+          verification: { escalatedToHost: true, explanation: v.explanation, replayValues: v.replayValues } as unknown as Prisma.InputJsonValue,
+        },
       });
       setImmediate(() => void notifyDisputeEscalation(fastify, { matchId, tournamentId: match.tournament_id, reporterId: game.reporter_id }));
       if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);

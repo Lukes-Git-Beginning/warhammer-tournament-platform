@@ -1763,6 +1763,9 @@ export function setLobbyPassword(
 export interface ReplayIssue {
   type: 'FACTIONS' | 'MAP' | 'PLAYER' | 'RECORDED_TIME';
   message: string;
+  /** Side-by-side values for the "Site says / Replay says" compare (FACTIONS + MAP). */
+  reported?: string;
+  replay?: string;
 }
 
 export interface ReportGameResponse {
