@@ -1,14 +1,17 @@
 /**
- * N17 — the fixed "Community Standard" ruleset.
+ * The community "Standard Ruleset".
  *
- * Single source of truth, derived from the Total Tavern ruleset research
- * (tools/tt-ruleset-research). Rendered on the tournament detail page when
- * `standard_rules_enabled` is true, and as a preview in the create/edit forms.
- * The standard set is intentionally NOT editable — host customisations go into
- * the "Custom Rules" / "Custom Restrictions" fields.
+ * Admin-editable via Admin → Settings (AdminConfig key `standard_ruleset`,
+ * served by GET /api/meta/standard-ruleset). The card fetches the live values and
+ * falls back to STANDARD_RULESET (the original Total Tavern research defaults) while
+ * loading or if nothing is configured. Pass an explicit `ruleset` to render given
+ * values without fetching (used by the admin editor's live preview).
+ * Host customisations still go into the "Custom Rules" / "Custom Restrictions" fields.
  */
+import { useQuery } from '@tanstack/react-query';
+import { getStandardRuleset, type StandardRuleset } from '@/lib/api.js';
 
-export const STANDARD_RULESET = {
+export const STANDARD_RULESET: StandardRuleset = {
   settings: ['Default Funds', 'Ultra Unit Scale', '1500 Tickets', 'Unit Caps On'],
   banned: ['Masque of Slaanesh', 'Dreadmaw'],
   conduct: [
@@ -16,7 +19,7 @@ export const STANDARD_RULESET = {
     '40 minute round limit',
     'Exploiting bugs or glitches is considered cheating and results in disqualification.',
   ],
-} as const;
+};
 
 function Row({ label, items }: { label: string; items: readonly string[] }) {
   return (
@@ -29,7 +32,22 @@ function Row({ label, items }: { label: string; items: readonly string[] }) {
   );
 }
 
-export function StandardRulesetCard({ compact = false }: { compact?: boolean }) {
+export function StandardRulesetCard({
+  compact = false,
+  ruleset,
+}: {
+  compact?: boolean;
+  ruleset?: StandardRuleset;
+}) {
+  // Skip the fetch when explicit values are supplied (editor preview).
+  const { data } = useQuery({
+    queryKey: ['standard-ruleset'],
+    queryFn: getStandardRuleset,
+    staleTime: 5 * 60 * 1000,
+    enabled: !ruleset,
+  });
+  const rs = ruleset ?? data ?? STANDARD_RULESET;
+
   return (
     <div
       className={`rounded-md border border-stone-800 bg-stone-900/50 text-sm leading-relaxed ${
@@ -41,9 +59,9 @@ export function StandardRulesetCard({ compact = false }: { compact?: boolean }) 
         <span className="font-display font-semibold text-rizzotto-gold-500">Standard Ruleset</span>
       </div>
       <div className="space-y-1.5">
-        <Row label="Settings" items={STANDARD_RULESET.settings} />
-        <Row label="Banned" items={STANDARD_RULESET.banned} />
-        <Row label="Conduct" items={STANDARD_RULESET.conduct} />
+        <Row label="Settings" items={rs.settings} />
+        <Row label="Banned" items={rs.banned} />
+        <Row label="Conduct" items={rs.conduct} />
       </div>
     </div>
   );

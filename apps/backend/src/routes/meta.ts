@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { cached, cacheKey } from '../lib/cache.js';
 import { asFactionDto, getFactionsWithStats } from '../lib/factions.js';
 import { getMatchupMatrix } from '../lib/heatmap.js';
+import { resolveStandardRuleset } from '../lib/standard-ruleset.js';
 
 // ---------------------------------------------------------------------------
 // Query Schemas
@@ -341,6 +342,14 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       limit,
       games: rows.map((r) => ({ ...r, mapName: r.mapPickedId ? (mapById.get(r.mapPickedId) ?? null) : null, mapPickedId: undefined })),
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/meta/standard-ruleset
+  // Public — the community Standard Ruleset (admin-editable, defaults otherwise).
+  // -------------------------------------------------------------------------
+  fastify.get('/api/meta/standard-ruleset', async () => {
+    return resolveStandardRuleset();
   });
 };
 

@@ -16,6 +16,7 @@ import { FactionManager } from '@/components/admin/FactionManager.js';
 import { TournamentDefaultsEditor } from '@/components/admin/TournamentDefaultsEditor.js';
 import { FeatureFlagsPanel } from '@/components/admin/FeatureFlagsPanel.js';
 import { WelcomeBannerEditor } from '@/components/admin/WelcomeBannerEditor.js';
+import { StandardRulesetEditor } from '@/components/admin/StandardRulesetEditor.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { ImportLogTable } from '@/components/admin/ImportLogTable.js';
 import { AdminMatchesTab } from '@/components/admin/AdminMatchesTab.js';
@@ -85,6 +86,11 @@ function SettingsTab() {
       {/* Section: Tournament Defaults */}
       <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-5">
         <TournamentDefaultsEditor />
+      </section>
+
+      {/* Section: Standard Ruleset */}
+      <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-5">
+        <StandardRulesetEditor />
       </section>
 
       {/* Section: Feature Flags */}

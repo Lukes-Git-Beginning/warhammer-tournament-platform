@@ -1282,6 +1282,20 @@ export function putAdminConfig(key: string, value: unknown): Promise<AdminConfig
 }
 
 // ---------------------------------------------------------------------------
+// Standard Ruleset (public — admin-editable community ruleset)
+// ---------------------------------------------------------------------------
+
+export interface StandardRuleset {
+  settings: string[];
+  banned: string[];
+  conduct: string[];
+}
+
+export function getStandardRuleset(): Promise<StandardRuleset> {
+  return apiFetch('/api/meta/standard-ruleset');
+}
+
+// ---------------------------------------------------------------------------
 // Leaderboard — Extended (mode param)
 // ---------------------------------------------------------------------------
 

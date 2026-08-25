@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.40.0] — 2026-08-25 — The Standard Ruleset is now editable in Admin → Settings
+### Added
+- **Admins can now edit the community Standard Ruleset from Admin → Settings.** The Settings, Banned Units, and Conduct lines shown on tournaments (when Standard Rules are enabled), in the Open Play queue, and on challenges were previously hard-coded. There is now a Standard Ruleset editor (one entry per line, with a live preview) that saves the ruleset centrally; the card everywhere reads the saved values and falls back to the original defaults until an admin changes them, so nothing looks different until you edit it.
+
 ## [1.39.3] — 2026-08-25 — Hosts are told when players settle a replay dispute themselves
 ### Added
 - **When two players resolve a replay dispute by agreeing on the replay's values, the host (and co-hosts) now get a short "resolved by agreement — no action needed" DM.** Previously this auto-resolution was silent: a host who had a disputed game on their radar had no signal that the players had already settled it (applying the replay's map + factions). The notification names both players and the applied map/factions and links to the match. Only player-settled replay disputes trigger it — ordinary agreed results (no dispute) still send nothing, so hosts are not spammed.
