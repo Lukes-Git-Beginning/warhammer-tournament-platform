@@ -10,7 +10,7 @@ import { resolveReplayValues } from '../lib/replay-apply.js';
 import { verifyGameReplay } from '../lib/verify-report.js';
 import type { ReplayIssue, ReplayVerification } from '../lib/replay-verify.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
-import { notifyOpenPlayDispute, notifyReplayMismatchHeld, notifyHostsOfMatchReport } from '../lib/discord-notify.js';
+import { notifyOpenPlayDispute, notifyReplayMismatchHeld, notifyHostsOfMatchReport, notifyDisputeAutoResolved } from '../lib/discord-notify.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { invalidate } from '../lib/cache.js';
 import { emitBracketUpdate } from '../lib/emit.js';
@@ -821,7 +821,21 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
       await finalizeGameResult(fastify, game.id);
-      if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
+      if (match.tournament_id) {
+        const tid = match.tournament_id;
+        emitBracketUpdate(fastify.io, tid);
+        // Players settled the replay dispute themselves — let the host(s) know it's resolved.
+        const rv = v.replayValues;
+        setImmediate(() =>
+          void notifyDisputeAutoResolved(tid, matchId, {
+            mapName: rv.mapName,
+            player1FactionSlug: rv.player1FactionSlug,
+            player2FactionSlug: rv.player2FactionSlug,
+            player1Id: match.player1_id,
+            player2Id: match.player2_id,
+          }),
+        );
+      }
       return reply.code(200).send({ confirmed: true });
     },
   );

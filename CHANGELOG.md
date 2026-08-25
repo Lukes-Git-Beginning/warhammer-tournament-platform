@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.39.3] — 2026-08-25 — Hosts are told when players settle a replay dispute themselves
+### Added
+- **When two players resolve a replay dispute by agreeing on the replay's values, the host (and co-hosts) now get a short "resolved by agreement — no action needed" DM.** Previously this auto-resolution was silent: a host who had a disputed game on their radar had no signal that the players had already settled it (applying the replay's map + factions). The notification names both players and the applied map/factions and links to the match. Only player-settled replay disputes trigger it — ordinary agreed results (no dispute) still send nothing, so hosts are not spammed.
+
 ## [1.39.2] — 2026-08-24 — Replay disputes: clear side-by-side, resolve onto the replay's map
 ### Fixed
 - **A replay mismatch now shows a clear "Site says / Replay says" side-by-side, and resolving applies the replay's map + factions automatically.** Two problems: (1) the reporter (and the opponent/host) only saw a terse "Reported X — replay shows Y" line — now the differing map and factions are shown as an explicit side-by-side compare, and the reporter picks which is correct (the replay is right → apply it and the opponent confirms; the report is right → explain for host review; wrong file → re-upload). (2) When a host resolved a dispute, only the winner was set — the site's generated map and factions stayed, so the map had to be hand-corrected through the override modal every single time. Resolution now applies the replay's attributed map + factions (the replay is the ground truth for what was played), and those values are preserved through an opponent rejection so the escalated host resolution still lands on the correct map.

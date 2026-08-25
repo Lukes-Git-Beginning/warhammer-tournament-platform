@@ -942,6 +942,66 @@ export async function notifyHostsOfMatchReport(
 }
 
 /**
+ * DM the tournament host + co-hosts when a replay dispute is auto-resolved by the two
+ * players agreeing on the replay's values (the reporter says "the replay is right" and the
+ * opponent confirms → the replay's map + factions are applied). Purely informational — no
+ * host action is needed; it just signals that a disputed game they may have been watching is
+ * settled. Fire-and-forget safe. Only player-settled replay disputes call this; ordinary
+ * agreed results do not, so hosts are never spammed.
+ */
+export async function notifyDisputeAutoResolved(
+  tournamentId: string,
+  matchId: string,
+  applied: {
+    mapName: string | null;
+    player1FactionSlug: string | null;
+    player2FactionSlug: string | null;
+    player1Id: string | null;
+    player2Id: string | null;
+  },
+): Promise<void> {
+  if (!getToken()) return;
+  try {
+    const tournament = await prisma.tournament.findFirst({
+      where: { id: tournamentId },
+      select: { name: true, host_id: true, co_hosts: { select: { user_id: true } } },
+    });
+    if (!tournament) return;
+
+    const hostIds = [...new Set([tournament.host_id, ...tournament.co_hosts.map((h) => h.user_id)])];
+    if (hostIds.length === 0) return;
+    const hosts = await prisma.user.findMany({
+      where: { id: { in: hostIds } },
+      select: { discord_id: true },
+    });
+
+    const playerIds = [applied.player1Id, applied.player2Id].filter((x): x is string => !!x);
+    const players = playerIds.length
+      ? await prisma.user.findMany({ where: { id: { in: playerIds } }, select: { id: true, username: true } })
+      : [];
+    const nameOf = (id: string | null) => players.find((p) => p.id === id)?.username ?? 'a player';
+    const titleCase = (slug: string | null) =>
+      slug ? slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : null;
+
+    const details: string[] = [];
+    if (applied.mapName) details.push(`Map **${applied.mapName}**`);
+    const f1 = titleCase(applied.player1FactionSlug);
+    const f2 = titleCase(applied.player2FactionSlug);
+    if (f1 && f2) details.push(`**${f1} vs ${f2}**`);
+
+    const base = process.env.FRONTEND_URL ?? 'https://rizzotto.gg';
+    const msg =
+      `**[RizzOtto's Arena] Replay dispute resolved — ${tournament.name}**\n` +
+      `${nameOf(applied.player1Id)} and ${nameOf(applied.player2Id)} agreed on the replay values — no action needed.\n` +
+      (details.length ? `Applied from the replay: ${details.join(' · ')}.\n` : '') +
+      `View the match at <${base}/matches/${matchId}>.`;
+    await Promise.allSettled(hosts.map((h) => sendDm(h.discord_id, msg)));
+  } catch (err) {
+    console.warn('[discord-notify] notifyDisputeAutoResolved error (non-fatal):', err);
+  }
+}
+
+/**
  * Notify host + all moderators about a match dispute via DM.
  */
 export async function notifyDispute(
