@@ -12,6 +12,7 @@ import { notifyChallengeMatchFound, notifyScheduledMatchReminder, notifyReQueueP
 import { runMatchmakingTick } from '../lib/matchmaking-tick.js';
 import { reconcileBalancedTournaments } from '../lib/balanced-liechtenstein-service.js';
 import { getSupporterRoleConfig, refreshSupporterFromDiscord } from '../lib/supporter-service.js';
+import { syncKofiGoal } from '../lib/kofi-goal-sync.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -522,7 +523,28 @@ export default fp(
       { timezone: 'UTC' },
     );
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask]);
+    // -----------------------------------------------------------------------
+    // Ko-Fi funding goal sync — every 30 min.
+    // Scrapes the public Ko-Fi page's goal (percentage + target, server-rendered
+    // with stable ids) and mirrors it into the funding_goal AdminConfig so the
+    // on-site progress bar tracks Ko-Fi automatically. Fail-safe: any fetch/parse
+    // error leaves the current value untouched. See lib/kofi-goal-sync.ts.
+    // -----------------------------------------------------------------------
+    const kofiGoalSyncTask = cron.schedule(
+      '*/30 * * * *',
+      async () => {
+        try {
+          await syncKofiGoal(fastify.prisma, fastify.log);
+        } catch (err) {
+          fastify.log.error({ err }, 'Ko-Fi goal sync cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+    // Run once on boot so the bar is accurate right after a deploy (fire-and-forget).
+    void syncKofiGoal(fastify.prisma, fastify.log).catch(() => {});
+
+    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask, kofiGoalSyncTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
@@ -538,6 +560,7 @@ export default fp(
       matchupReminderTask.stop();
       scheduledMatchupActivationTask.stop();
       supporterRefreshTask.stop();
+      kofiGoalSyncTask.stop();
       clearInterval(matrixInterval);
       clearInterval(matchmakingInterval);
     });

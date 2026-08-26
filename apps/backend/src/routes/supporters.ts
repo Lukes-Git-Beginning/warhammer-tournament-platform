@@ -19,6 +19,7 @@ import {
   getSupporterRoleConfig,
   SUPPORTER_ROLE_CONFIG_KEY,
 } from '../lib/supporter-service.js';
+import { FUNDING_GOAL_CONFIG_KEY, DEFAULT_FUNDING_GOAL } from '../lib/kofi-goal-sync.js';
 
 const SUPPORTER_FLAG_SELECT = {
   supporter_discord: true,
@@ -36,9 +37,7 @@ const roleConfigBody = z.object({
   championRoleId: z.string().nullable().optional(),
 });
 
-// Funding goal — drives the on-site progress bar. Stored in AdminConfig, admin-editable.
-const FUNDING_GOAL_CONFIG_KEY = 'funding_goal';
-const DEFAULT_FUNDING_GOAL = { goal: 500, raised: 135, currency: 'EUR' } as const;
+// Funding goal config (key + default) lives in kofi-goal-sync.ts, shared with the auto-sync cron.
 const fundingGoalBody = z.object({
   goal: z.number().nonnegative(),
   raised: z.number().nonnegative(),
