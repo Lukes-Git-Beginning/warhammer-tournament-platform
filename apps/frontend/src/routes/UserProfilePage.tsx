@@ -18,6 +18,7 @@ import { PlayerLevelScale } from '../components/meta/PlayerLevelScale.js';
 import { CalibrationWizard } from '../components/meta/CalibrationWizard.js';
 import { CalibrationAuditPanel } from '../components/admin/CalibrationAuditPanel.js';
 import { useAuthQuery } from '@/lib/auth.js';
+import { SupporterBadge } from '@/components/supporter/SupporterBadge.js';
 import { formatInUserTimezone } from '@/lib/timezone.js';
 import { Button } from '@/components/ui/button.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
@@ -396,8 +397,9 @@ export function UserProfilePage() {
       <div className="flex items-center gap-5 rounded-md border border-stone-800 bg-stone-900/40 p-6">
         <Avatar url={user.avatar_url} username={user.username} large />
         <div className="flex flex-col gap-1.5">
-          <h1 className="font-display text-2xl font-bold text-rizzotto-gold-500">
+          <h1 className="flex items-center gap-2 font-display text-2xl font-bold text-rizzotto-gold-500">
             {user.username}
+            {user.tiers && <SupporterBadge tiers={user.tiers} size={20} />}
           </h1>
           <span className={`rounded px-2 py-0.5 text-xs font-medium w-fit ${roleColor}`}>
             {roleLabel}

@@ -9,6 +9,7 @@ import {
 import { z } from 'zod';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { getPlayerSeasonStats, getPlayerAllTimeStats } from '../lib/leaderboard-service.js';
+import { effectiveTiersOf } from '../lib/supporter-service.js';
 
 const meSelect = {
   id: true,
@@ -23,6 +24,12 @@ const meSelect = {
   onboarded_at: true,
   onboarding_stage: true,
   created_at: true,
+  supporter_discord: true,
+  lord_discord: true,
+  champion_discord: true,
+  supporter_manual: true,
+  lord_manual: true,
+  champion_manual: true,
   steam_link: {
     select: {
       steam_id: true,
@@ -53,11 +60,26 @@ type MeRow = {
   onboarded_at: Date | null;
   onboarding_stage: number;
   created_at: Date;
+  supporter_discord: boolean;
+  lord_discord: boolean;
+  champion_discord: boolean;
+  supporter_manual: boolean;
+  lord_manual: boolean;
+  champion_manual: boolean;
   steam_link: SteamLinkRow | null;
 };
 
 function serializeMe(user: MeRow) {
-  const { steam_link, ...rest } = user;
+  const {
+    steam_link,
+    supporter_discord,
+    lord_discord,
+    champion_discord,
+    supporter_manual,
+    lord_manual,
+    champion_manual,
+    ...rest
+  } = user;
   return {
     ...rest,
     last_login: user.last_login?.toISOString() ?? null,
@@ -71,6 +93,14 @@ function serializeMe(user: MeRow) {
           linked_at: steam_link.verified_at.toISOString(),
         }
       : null,
+    tiers: effectiveTiersOf({
+      supporter_discord,
+      lord_discord,
+      champion_discord,
+      supporter_manual,
+      lord_manual,
+      champion_manual,
+    }),
   };
 }
 
@@ -567,7 +597,19 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
 
     const user = await fastify.prisma.user.findUnique({
       where: { id },
-      select: { id: true, username: true, avatar_url: true, role: true, created_at: true },
+      select: {
+        id: true,
+        username: true,
+        avatar_url: true,
+        role: true,
+        created_at: true,
+        supporter_discord: true,
+        lord_discord: true,
+        champion_discord: true,
+        supporter_manual: true,
+        lord_manual: true,
+        champion_manual: true,
+      },
     });
     if (!user) {
       return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
@@ -672,6 +714,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         avatar_url: user.avatar_url,
         role: user.role,
         created_at: user.created_at.toISOString(),
+        tiers: effectiveTiersOf(user),
       },
       current_season: currentSeasonEntry,
       all_time: {

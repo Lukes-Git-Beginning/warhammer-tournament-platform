@@ -1,11 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { Coffee } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
-import { Button } from '@/components/ui/button';
-import { KOFI_URL } from '@/lib/constants';
 import { apiFetch } from '@/lib/api';
 import { SupporterBadge, type SupporterEntry } from '@/components/supporter/SupporterBadge';
+import { FundingSection } from '@/components/landing/FundingSection';
 
 function SupporterGroup({ title, people }: { title: string; people: SupporterEntry[] }) {
   if (people.length === 0) return null;
@@ -42,42 +40,40 @@ export function SupportPage() {
   const supporters = all.filter((s) => s.tiers.supporter && !s.tiers.lord && !s.tiers.champion);
 
   return (
-    <PageShell variant="narrow">
-      <header className="mb-8">
-        <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
-          {t('support.title')}
-        </h1>
-      </header>
+    <>
+      {/* Prominent funding pitch — the same bold band as the landing page. */}
+      <FundingSection />
 
-      <div className="max-w-2xl space-y-8">
-        <p className="text-rizzotto-stone-300 leading-relaxed">{t('support.intro')}</p>
+      <PageShell variant="narrow">
+        <div className="max-w-2xl space-y-8">
+          <p className="text-sm text-rizzotto-stone-500">{t('support.note')}</p>
 
-        <div>
-          <Button asChild variant="forge" size="lg">
-            <a href={KOFI_URL} target="_blank" rel="noopener noreferrer">
-              <Coffee className="size-5" strokeWidth={1.5} aria-hidden="true" />
-              {t('support.cta')}
-            </a>
-          </Button>
-        </div>
-
-        <p className="text-sm text-rizzotto-stone-500">{t('support.note')}</p>
-
-        {all.length > 0 && (
-          <div className="space-y-6 border-t border-rizzotto-stone-800 pt-8">
-            <p className="text-rizzotto-stone-300">
-              Every one of these players helps keep the Arena running and funds what comes next. Thank you.
-            </p>
-            <SupporterGroup title="Champions" people={champions} />
-            <SupporterGroup title="Lords" people={lords} />
-            <SupporterGroup title="Supporters" people={supporters} />
+          <div id="hall-of-fame" className="scroll-mt-24 space-y-6 border-t border-rizzotto-stone-800 pt-8">
+            <h2 className="font-display text-2xl font-bold text-rizzotto-gold-500">
+              Supporter Hall of Fame
+            </h2>
+            {all.length > 0 ? (
+              <>
+                <p className="text-rizzotto-stone-300">
+                  Every one of these players helps keep the Arena running and funds what comes next.
+                  Thank you.
+                </p>
+                <SupporterGroup title="Champions" people={champions} />
+                <SupporterGroup title="Lords" people={lords} />
+                <SupporterGroup title="Supporters" people={supporters} />
+              </>
+            ) : (
+              <p className="text-rizzotto-stone-400">
+                No supporters yet — be the first, and you&rsquo;ll be listed here.
+              </p>
+            )}
           </div>
-        )}
 
-        <p className="font-display italic tracking-wider text-rizzotto-stone-500">
-          {t('support.motto')}
-        </p>
-      </div>
-    </PageShell>
+          <p className="font-display italic tracking-wider text-rizzotto-stone-500">
+            {t('support.motto')}
+          </p>
+        </div>
+      </PageShell>
+    </>
   );
 }

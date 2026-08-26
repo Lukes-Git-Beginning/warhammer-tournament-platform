@@ -20,6 +20,7 @@ import type {
   FactionMatchupMatrixResponse,
   PlayerFactionProficiencyResponse,
   PlayoffPreview,
+  SupporterTiers,
 } from '@rizzotto/types';
 
 export type {
@@ -352,6 +353,71 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
 export function getMe(): Promise<UserMe> {
   return apiFetch<UserMe>('/api/users/me');
+}
+
+// ---------------------------------------------------------------------------
+// Supporters (Ko-Fi recognition) — admin management
+// ---------------------------------------------------------------------------
+
+/** One user row in the admin supporter search: Discord-derived, manual-override, and effective tiers. */
+export interface AdminSupporterRow {
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+  discord: SupporterTiers;
+  manual: SupporterTiers;
+  effective: SupporterTiers;
+}
+
+export interface SupporterRoleConfig {
+  supporterRoleId: string | null;
+  lordRoleId: string | null;
+  championRoleId: string | null;
+}
+
+export function searchSupporters(q: string): Promise<{ users: AdminSupporterRow[] }> {
+  return apiFetch(`/api/admin/supporters/search?q=${encodeURIComponent(q)}`);
+}
+
+/** Set a user's manual override checkboxes; returns their new effective tiers. */
+export function updateSupporterFlags(
+  userId: string,
+  flags: SupporterTiers,
+): Promise<{ userId: string; effective: SupporterTiers | null }> {
+  return apiFetch(`/api/admin/supporters/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(flags),
+  });
+}
+
+export function getSupporterRoleConfig(): Promise<SupporterRoleConfig> {
+  return apiFetch(`/api/admin/supporters/role-config`);
+}
+
+export function putSupporterRoleConfig(cfg: SupporterRoleConfig): Promise<SupporterRoleConfig> {
+  return apiFetch(`/api/admin/supporters/role-config`, {
+    method: 'PUT',
+    body: JSON.stringify(cfg),
+  });
+}
+
+export interface FundingGoal {
+  goal: number;
+  raised: number;
+  currency: string;
+}
+
+/** Public: the funding goal + amount raised, for the on-site progress bar. */
+export function getFundingGoal(): Promise<FundingGoal> {
+  return apiFetch(`/api/funding-goal`);
+}
+
+/** Admin: update the funding goal + amount raised. */
+export function putFundingGoal(body: FundingGoal): Promise<FundingGoal> {
+  return apiFetch(`/api/admin/funding-goal`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
 }
 
 // --- Skill classification (N2) ---------------------------------------------

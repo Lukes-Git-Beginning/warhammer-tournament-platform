@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.41.0] — 2026-08-26 — Ko-Fi funding drive: goal bar, supporter badges, Hall of Fame
+### Added
+- **The Arena now runs a Ko-Fi funding drive on the site, with a goal progress bar, supporter badges and a Supporter Hall of Fame.** A prominent funding band sits at the top of the landing page (above the hero) and on the /support page, showing a live progress bar toward the goal and linking straight to Ko-Fi. Supporters are recognised with cumulative badges (Coffee for Supporter, Crown for Lord, Trophy for Champion), each with a plain-language tooltip, shown next to their name on their profile and collected in a Supporter Hall of Fame on /support. A new admin "Supporters" tab manages it all: an always-visible list of current supporters, user search, per-user tier checkboxes, the funding goal (amount raised and target), and an optional Discord role mapping. Recognition is admin-granted by default, and the optional Discord-role sync stays a safe no-op until role IDs are set.
+
 ## [1.40.0] — 2026-08-25 — The Standard Ruleset is now editable in Admin → Settings
 ### Added
 - **Admins can now edit the community Standard Ruleset from Admin → Settings.** The Settings, Banned Units, and Conduct lines shown on tournaments (when Standard Rules are enabled), in the Open Play queue, and on challenges were previously hard-coded. There is now a Standard Ruleset editor (one entry per line, with a live preview) that saves the ruleset centrally; the card everywhere reads the saved values and falls back to the original defaults until an admin changes them, so nothing looks different until you edit it.

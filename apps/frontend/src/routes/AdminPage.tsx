@@ -23,15 +23,17 @@ import { AdminMatchesTab } from '@/components/admin/AdminMatchesTab.js';
 import { AdminAllGamesTab } from '@/components/admin/AdminAllGamesTab.js';
 import { SkillCalibrationTab } from '@/components/admin/SkillCalibrationTab.js';
 import { AdminReportsTab } from '@/components/admin/AdminReportsTab.js';
+import { AdminSupportersTab } from '@/components/admin/AdminSupportersTab.js';
 
-type Tab = 'audit' | 'dashboard' | 'users' | 'presets' | 'stats' | 'settings' | 'import' | 'matches' | 'all_games' | 'queue' | 'skill_calibration' | 'reports';
+type Tab = 'audit' | 'dashboard' | 'users' | 'supporters' | 'presets' | 'stats' | 'settings' | 'import' | 'matches' | 'all_games' | 'queue' | 'skill_calibration' | 'reports';
 
-const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'skill_calibration', 'users', 'matches', 'all_games', 'queue', 'presets', 'audit', 'import'];
+const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'skill_calibration', 'users', 'supporters', 'matches', 'all_games', 'queue', 'presets', 'audit', 'import'];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard: 'admin.tabs.dashboard',
   audit: 'admin.tabs.audit',
   users: 'admin.tabs.users',
+  supporters: 'admin.tabs.supporters',
   presets: 'admin.tabs.presets',
   stats: 'admin.tabs.stats',
   settings: 'admin.tabs.settings',
@@ -47,6 +49,7 @@ const STATIC_LABELS: Record<Tab, string> = {
   dashboard: 'Dashboard',
   audit: 'Audit Log',
   users: 'Users',
+  supporters: 'Supporters',
   presets: 'Presets',
   stats: 'Statistics',
   settings: 'Settings',
@@ -174,6 +177,7 @@ export function AdminPage() {
         {tab === 'dashboard' && <StatsDashboard />}
         {tab === 'audit' && <AuditLogTable />}
         {tab === 'users' && <UserBanTab />}
+        {tab === 'supporters' && <AdminSupportersTab />}
         {tab === 'matches' && <AdminMatchesTab />}
         {tab === 'all_games' && <AdminAllGamesTab />}
         {tab === 'queue' && <QueueActivityTable />}

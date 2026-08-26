@@ -28,6 +28,14 @@ export const SteamLinkSchema = z.object({
 });
 export type SteamLink = z.infer<typeof SteamLinkSchema>;
 
+/** Ko-Fi supporter recognition tiers — cumulative (a user can hold any combination). */
+export const SupporterTiersSchema = z.object({
+  supporter: z.boolean(),
+  lord: z.boolean(),
+  champion: z.boolean(),
+});
+export type SupporterTiers = z.infer<typeof SupporterTiersSchema>;
+
 export const UserMeSchema = UserPublicSchema.extend({
   discord_id: z.string(),
   email: z.string().email().nullable(),
@@ -38,6 +46,8 @@ export const UserMeSchema = UserPublicSchema.extend({
   onboarding_stage: z.number().int().min(0).max(4),
   created_at: z.string().datetime(),
   steam_link: SteamLinkSchema.nullable().optional(),
+  /** Ko-Fi supporter tiers (cumulative). Optional for backward-compatible payloads. */
+  tiers: SupporterTiersSchema.optional(),
 });
 export type UserMe = z.infer<typeof UserMeSchema>;
 
@@ -235,6 +245,8 @@ export const UserProfileResponseSchema = z.object({
     avatar_url: z.string().url().nullable(),
     role: RoleSchema,
     created_at: z.string().datetime(),
+    /** Ko-Fi supporter tiers (cumulative) — drives the profile badge. */
+    tiers: SupporterTiersSchema.optional(),
   }),
   current_season: z
     .object({

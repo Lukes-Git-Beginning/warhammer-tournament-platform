@@ -11,6 +11,7 @@ import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 import { notifyChallengeMatchFound, notifyScheduledMatchReminder, notifyReQueuePrompt } from '../lib/discord-notify.js';
 import { runMatchmakingTick } from '../lib/matchmaking-tick.js';
 import { reconcileBalancedTournaments } from '../lib/balanced-liechtenstein-service.js';
+import { getSupporterRoleConfig, refreshSupporterFromDiscord } from '../lib/supporter-service.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -481,7 +482,47 @@ export default fp(
       }
     }, { timezone: 'UTC' });
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask]);
+    // -----------------------------------------------------------------------
+    // Daily supporter tier refresh — 03:30 UTC
+    // Re-reads each Discord-linked user's guild roles and re-derives their supporter
+    // tiers, so a role granted/removed in Discord (e.g. Ko-Fi's monthly Lord role) is
+    // reflected even without a fresh login. Fail-safe: skips entirely when no role IDs
+    // are configured, and refreshSupporterFromDiscord is a no-op when Discord is
+    // unreachable, so it can never wipe existing state.
+    // -----------------------------------------------------------------------
+    const supporterRefreshTask = cron.schedule(
+      '30 3 * * *',
+      async () => {
+        try {
+          const cfg = await getSupporterRoleConfig(fastify.prisma);
+          if (!cfg.supporterRoleId && !cfg.lordRoleId && !cfg.championRoleId) return; // nothing to sync
+          // Every active (non-deleted) user has a Discord id — deleted_at already excludes
+          // the anonymized/tombstoned accounts, so no discord_id filter is needed.
+          const users = await fastify.prisma.user.findMany({
+            where: { deleted_at: null },
+            select: { id: true, discord_id: true },
+          });
+          let synced = 0;
+          for (const u of users) {
+            if (!u.discord_id) continue;
+            try {
+              await refreshSupporterFromDiscord(fastify.prisma, u.id, u.discord_id, cfg);
+              synced++;
+            } catch (err) {
+              fastify.log.error({ err, userId: u.id }, 'Supporter refresh failed for user');
+            }
+            // Throttle to stay well under Discord's per-route rate limit.
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
+          fastify.log.info({ synced, total: users.length }, 'Daily supporter refresh completed');
+        } catch (err) {
+          fastify.log.error({ err }, 'Supporter refresh cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
@@ -496,6 +537,7 @@ export default fp(
       baliReconcileTask.stop();
       matchupReminderTask.stop();
       scheduledMatchupActivationTask.stop();
+      supporterRefreshTask.stop();
       clearInterval(matrixInterval);
       clearInterval(matchmakingInterval);
     });

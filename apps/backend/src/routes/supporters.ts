@@ -36,22 +36,58 @@ const roleConfigBody = z.object({
   championRoleId: z.string().nullable().optional(),
 });
 
+// Funding goal — drives the on-site progress bar. Stored in AdminConfig, admin-editable.
+const FUNDING_GOAL_CONFIG_KEY = 'funding_goal';
+const DEFAULT_FUNDING_GOAL = { goal: 500, raised: 135, currency: 'EUR' } as const;
+const fundingGoalBody = z.object({
+  goal: z.number().nonnegative(),
+  raised: z.number().nonnegative(),
+  currency: z.string().trim().min(1).max(8),
+});
+
 const supporterRoutes: FastifyPluginAsync = async (fastify) => {
   // Public: everyone with any effective supporter tier, for the /support page.
   fastify.get('/api/supporters', async () => ({ supporters: await listSupporters(fastify.prisma) }));
+
+  // Public: the funding goal + amount raised, for the on-site progress bar.
+  fastify.get('/api/funding-goal', async () => {
+    const row = await fastify.prisma.adminConfig.findUnique({ where: { key: FUNDING_GOAL_CONFIG_KEY } });
+    const v = (row?.value ?? null) as Partial<typeof DEFAULT_FUNDING_GOAL> | null;
+    return {
+      goal: typeof v?.goal === 'number' ? v.goal : DEFAULT_FUNDING_GOAL.goal,
+      raised: typeof v?.raised === 'number' ? v.raised : DEFAULT_FUNDING_GOAL.raised,
+      currency: v?.currency ?? DEFAULT_FUNDING_GOAL.currency,
+    };
+  });
 
   const adminGuard = { preHandler: [fastify.authenticate, fastify.requireRole('ADMIN', 'MODERATOR')] };
 
   // Admin: search users by username to manage their supporter status.
   fastify.get('/api/admin/supporters/search', adminGuard, async (request, reply) => {
-    const parsed = z.object({ q: z.string().trim().min(1).max(100) }).safeParse(request.query);
+    const parsed = z.object({ q: z.string().trim().max(100).optional() }).safeParse(request.query);
     if (!parsed.success) {
-      return reply.code(400).send({ error: 'BadRequest', message: 'q is required', statusCode: 400 });
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
+    const q = parsed.data.q;
+    // No query → the current supporters (anyone with a tier), always shown. A query →
+    // username matches, so an admin can find someone new to add.
+    const where = q
+      ? { deleted_at: null, username: { contains: q, mode: 'insensitive' as const } }
+      : {
+          deleted_at: null,
+          OR: [
+            { supporter_discord: true },
+            { lord_discord: true },
+            { champion_discord: true },
+            { supporter_manual: true },
+            { lord_manual: true },
+            { champion_manual: true },
+          ],
+        };
     const rows = await fastify.prisma.user.findMany({
-      where: { deleted_at: null, username: { contains: parsed.data.q, mode: 'insensitive' } },
+      where,
       select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT },
-      take: 25,
+      take: q ? 25 : 200,
       orderBy: { username: 'asc' },
     });
     return {
@@ -98,6 +134,20 @@ const supporterRoutes: FastifyPluginAsync = async (fastify) => {
       update: { value: parsed.data as never, updated_by: request.user.sub },
     });
     return getSupporterRoleConfig(fastify.prisma);
+  });
+
+  // Admin: set the funding goal + amount raised (drives the on-site progress bar).
+  fastify.put('/api/admin/funding-goal', adminGuard, async (request, reply) => {
+    const parsed = fundingGoalBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    await fastify.prisma.adminConfig.upsert({
+      where: { key: FUNDING_GOAL_CONFIG_KEY },
+      create: { key: FUNDING_GOAL_CONFIG_KEY, value: parsed.data as never, updated_by: request.user.sub },
+      update: { value: parsed.data as never, updated_by: request.user.sub },
+    });
+    return parsed.data;
   });
 };
 

@@ -1,4 +1,5 @@
 import { HeroSection } from '@/components/landing/HeroSection';
+import { FundingSection } from '@/components/landing/FundingSection';
 import { ActiveMustersSection } from '@/components/landing/ActiveMustersSection';
 import { OpenPlaySection } from '@/components/landing/OpenPlaySection';
 import { PersonalisedFactionBlock } from '@/components/landing/PersonalisedFactionBlock';
@@ -11,6 +12,7 @@ export function IndexPage() {
   return (
     <>
       <main id="main-content">
+        <FundingSection compact />
         <HeroSection />
         <ActiveMustersSection />
         <OpenPlaySection />
