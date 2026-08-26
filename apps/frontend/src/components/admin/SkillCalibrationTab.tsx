@@ -330,14 +330,15 @@ export function SkillCalibrationTab() {
         </p>
         <ul className="mt-1 ml-4 list-disc space-y-0.5 text-xs">
           <li><span className="text-stone-200">None (—)</span> — no signal; answer is not used for gating.</li>
-          <li><span className="text-stone-200">1 New</span> — confirms at least band 1.</li>
-          <li><span className="text-stone-200">2 Beginner</span> — band 2+.</li>
-          <li><span className="text-stone-200">3 Intermediate</span> — band 3+.</li>
-          <li><span className="text-stone-200">4 Advanced</span> — band 4+.</li>
-          <li><span className="text-stone-200">5 Top</span> — band 5 (highest).</li>
+          <li><span className="text-stone-200">1 New</span> — band 1 (under 20% CtW).</li>
+          <li><span className="text-stone-200">2 Beginner</span> — band 2+ (20-35%).</li>
+          <li><span className="text-stone-200">3 Intermediate</span> — band 3+ (35-75%).</li>
+          <li><span className="text-stone-200">4 Advanced</span> — band 4+ (75-90%).</li>
+          <li><span className="text-stone-200">5 Top</span> — band 5, highest (90%+).</li>
         </ul>
         <p className="text-xs mt-1">
-          The effective floor for a player is the <em>maximum</em> floor across all their answers.
+          The effective floor for a player is the <em>maximum</em> floor across all their answers. CtW =
+          win chance vs the average active player, and each percentage is the win-chance range for that band.
         </p>
       </div>
 
