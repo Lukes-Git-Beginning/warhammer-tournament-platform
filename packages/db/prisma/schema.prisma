@@ -377,6 +377,7 @@ model Tournament {
   map_pool              TournamentMapPool[]
   tournament_army_lists TournamentArmyList[]
   co_hosts              TournamentHost[]
+  events                TournamentEvent[]
 
   @@index([status])
   @@index([host_id])
@@ -1000,6 +1001,28 @@ model ImportLog {
   finished_at      DateTime?
 
   @@index([source, started_at])
+}
+
+// -----------------------------------------------------------------------------
+// Tournament Event Log — append-only, durable forensics of a tournament's lifecycle
+// ("what happened when": playoff generation/freeze, participant joins/drops/withdrawals,
+// reseeds). Never updated or deleted; decoupled from the entities it references so history
+// survives resets. Written via lib/tournament-events.ts recordTournamentEvent().
+// -----------------------------------------------------------------------------
+
+model TournamentEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  tournament_id String   @db.Uuid
+  type          String // e.g. 'playoff_division_generated' | 'participant_withdrew' | 'playoff_plan_frozen'
+  actor         String   @default("system") // 'system' | 'host' | 'admin' | 'player'
+  actor_id      String?  @db.Uuid // the user who triggered it, if any
+  subject_id    String?  @db.Uuid // the affected user (e.g. who dropped/was seeded), if any
+  payload       Json? // structured details (seeds, band, format, the frozen plan, reason, ...)
+  created_at    DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+
+  @@index([tournament_id, created_at])
 }
 
 // -----------------------------------------------------------------------------

@@ -37,6 +37,7 @@ import { getPlayerClassification } from './skill-classification-service.js';
 import { balancedRounds } from './auto-swiss-service.js';
 import { emitBracketUpdate } from './emit.js';
 import { notifyMatchesCreated, notifyFinalRoundBye } from './discord-notify.js';
+import { recordTournamentEvent } from './tournament-events.js';
 
 const LOCK_TTL_SECONDS = 15;
 const MAX_ITERATIONS = 30; // safety cap for bye cascades (create → crystallise → reclaim) in a single tick
@@ -1119,6 +1120,7 @@ export async function startBalancedPlayoffs(
   const rows: Prisma.MatchCreateManyInput[] = [];
   const allPlayable: Array<{ id: string; round: number; player1_id: string; player2_id: string }> = [];
   let brackets = 0;
+  const generated: Array<{ band: number; format: string; size: number; seeds: string[] }> = [];
 
   // One playoff bracket per division, generated once it is ready and not already done.
   for (const pool of pools) {
@@ -1132,6 +1134,12 @@ export async function startBalancedPlayoffs(
     allPlayable.push(...built.playable);
     nextNumber = built.nextMatchNumber;
     brackets += 1;
+    generated.push({
+      band: pool.band,
+      format: cappedDivisionPlayoffFormat(pool.seeds.length, tournament.playoff_format),
+      size: pool.seeds.length,
+      seeds: [...pool.seeds],
+    });
   }
 
   if (rows.length > 0) {
@@ -1141,10 +1149,18 @@ export async function startBalancedPlayoffs(
     // this moment), so subsequent ticks resolve from it instead of re-deriving — see the pools branch
     // above and plans/bali-playoff-plan-freeze.md. Only written once, while no plan exists yet.
     if (!frozenPlan) {
+      const plan = derivePlayoffPlan(freshPools);
       await fastify.prisma.tournament.update({
         where: { id: tournamentId },
-        data: { playoff_plan: derivePlayoffPlan(freshPools) as unknown as Prisma.InputJsonValue },
+        data: { playoff_plan: plan as unknown as Prisma.InputJsonValue },
       });
+      // Durable forensics: record the frozen skeleton so "why did the plan look like this?" is a query.
+      await recordTournamentEvent({ tournamentId, type: 'playoff_plan_frozen', payload: plan });
+    }
+    // Durable forensics: record each division bracket as it is generated (band, format, seed order) —
+    // exactly the trail a stranded-player investigation needs (who was seeded into which bracket, when).
+    for (const g of generated) {
+      await recordTournamentEvent({ tournamentId, type: 'playoff_division_generated', payload: g });
     }
     // Announce only the first playoff round's ready matches (both players present).
     const firstRound = Math.min(...allPlayable.map((m) => m.round));
