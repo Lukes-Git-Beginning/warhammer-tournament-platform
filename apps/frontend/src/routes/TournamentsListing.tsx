@@ -194,9 +194,10 @@ export function TournamentsListing() {
   const live = allActive.filter((t) => t.status === 'ONGOING');
   // Drafts appear here too, but the backend only returns a viewer's own drafts
   // (host/co-host) or — for staff — all of them, so they stay author-only.
-  const upcoming = allActive.filter(
-    (t) => t.status !== 'ONGOING' && t.status !== 'COMPLETED',
-  );
+  // Sorted soonest-first (ascending start date), matching the landing page (NI-4).
+  const upcoming = allActive
+    .filter((t) => t.status !== 'ONGOING' && t.status !== 'COMPLETED')
+    .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
   const archive = archiveData?.data ?? [];
   const archiveTotal = archiveData?.total ?? 0;
   const archiveTotalPages = Math.max(1, Math.ceil(archiveTotal / PAGE_SIZE));

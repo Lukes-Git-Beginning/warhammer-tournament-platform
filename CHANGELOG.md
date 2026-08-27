@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.43.1] — 2026-08-27 — Upcoming tournaments list soonest-first
+### Fixed
+- **The Tournaments page now lists upcoming tournaments soonest-first, matching the landing page.** The "Upcoming" section previously showed events in reverse order (the one furthest in the future at the top); it now sorts by start date ascending, so the next tournament to happen is first.
+
 ## [1.43.0] — 2026-08-27 — Supporter badges now show across the whole site
 ### Added
 - **Supporter badges now appear next to a player's name everywhere their name shows, not just on their profile.** You will now see them on every leaderboard tab (Season, All-Time, Majors and Skill), in tournament participant lists, in Swiss and elimination standings, and on the match page. To keep the ranking tables clean, dense rows show only the single highest tier a player holds (one small icon), while the match page and the Hall of Fame still show the full set. Every icon keeps its plain-language tooltip (Supporter, Lord, Champion), so the recognition follows supporters into the parts of the site people actually look at.
