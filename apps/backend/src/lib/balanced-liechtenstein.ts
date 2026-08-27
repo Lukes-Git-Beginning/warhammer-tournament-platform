@@ -662,8 +662,12 @@ export function formDivisionPools(
     pools.push({ band, players: members, seeds: [], finalists: null });
   }
 
-  // A trailing pool that never reached the absolute minimum joins the pool above it.
-  if (pools.length >= 2 && pools[pools.length - 1]!.players.length < MIN_POOL_SIZE) {
+  // A trailing pool that can't stand as a full division at the host's chosen format joins the pool
+  // above it — looping from the bottom so several short tail pools consolidate. The threshold is the
+  // host-format TARGET (16 for TOP8, 8 for TOP4), not the absolute TOP2 floor: otherwise a leftover of,
+  // say, 7 players survives beside a TOP8 as a downgraded TOP2 "phantom division" and strands its
+  // members. So everyone stays in ONE division until the field can support a second full one (2× target).
+  while (pools.length >= 2 && pools[pools.length - 1]!.players.length < targetPoolSize) {
     const last = pools.pop()!;
     pools[pools.length - 1]!.players.push(...last.players);
   }

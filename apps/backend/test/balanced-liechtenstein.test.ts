@@ -367,17 +367,47 @@ describe('formDivisionPools', () => {
     expect(pools[0]!.finalists).toEqual(['a', 'b']);
   });
 
-  it('fills to the target pool size when the host chose a larger playoff', () => {
-    // TOP4 → target 8: a short top band borrows down to 8 instead of the floor of 4.
-    // 9 band-3 players so the 4 left after borrowing still form their own viable pool.
+  it('fills the top pool to the target, then merges a sub-target remainder up (one division)', () => {
+    // TOP4 → target 8. 3 band-5 + 9 band-3 = 12. The top pool borrows down to 8; the 4-player remainder
+    // is BELOW the target, so it must NOT stand as its own downgraded division — it merges up into the
+    // one division. (Alex-spec: a division must reach the host-format target, else consolidate.)
     const players = [
       R('a', 5, 1), R('b', 5, 2), R('c', 5, 3),
       ...[4, 5, 6, 7, 8, 9, 10, 11, 12].map((r) => R(`i${r}`, 3, r)),
     ];
     const pools = formDivisionPools(players, 5, 8);
-    const top = pools.find((p) => p.band === 5)!;
-    expect(top.players).toHaveLength(8); // 3 own + 5 borrowed
-    expect(pools.find((p) => p.band === 3)!.players).toHaveLength(4); // remainder stands alone
+    expect(pools).toHaveLength(1);
+    expect(pools[0]!.players).toHaveLength(12);
+  });
+
+  it('forms a second division only once the field supports two full ones (>= 2x target)', () => {
+    // TOP4 → target 8. 8 band-5 + 8 band-3 = 16 = 2x target → two divisions, each >= 8.
+    const players = [
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((r) => R(`a${r}`, 5, r)),
+      ...[9, 10, 11, 12, 13, 14, 15, 16].map((r) => R(`b${r}`, 3, r)),
+    ];
+    const pools = formDivisionPools(players, 5, 8);
+    expect(pools).toHaveLength(2);
+    expect(pools[0]!.players).toHaveLength(8);
+    expect(pools[1]!.players).toHaveLength(8);
+  });
+
+  it('TOP8 with a 24-contender field forms ONE division, not a downgraded second one (RizzOtto case)', () => {
+    // 14 band-5 + 1 band-4 + 5 band-3 + 4 band-2 = 24, host TOP8 (target 16). The top pool borrows up to
+    // 16 (reaching into band 3); the 8-player remainder is < 16 → merges up → ONE TOP8 of 24. The band-3
+    // leader (rizz, a perfect record) earns a top-8 seat instead of being stranded in a phantom TOP2.
+    const b5 = [3, 3, 2, 2, 2, 2, 1.5, 1.5, 1, 1, 1, 1, 0, 0];
+    const players = [
+      ...b5.map((s, i) => R(`b5_${i}`, 5, i + 1, s)),
+      R('b4', 4, 15, 2),
+      R('rizz', 3, 16, 3), R('m1', 3, 17, 2), R('m2', 3, 18, 2), R('m3', 3, 19, 1), R('m4', 3, 20, 1),
+      R('b2a', 2, 21, 2), R('b2b', 2, 22, 1), R('b2c', 2, 23, 1), R('b2d', 2, 24, 0),
+    ];
+    const pools = formDivisionPools(players, 3, 16);
+    expect(pools).toHaveLength(1);
+    expect(pools[0]!.players).toHaveLength(24);
+    // rizz (band 3, 3 pts, handicap 0.2*3*2 = 1.2 → adj 1.8) beats the band-5 tail (<= 1.5) for a TOP8 seat.
+    expect(pools[0]!.seeds.slice(0, 8)).toContain('rizz');
   });
 
   it('handles a tiny field (single pool, whatever its size)', () => {

@@ -161,12 +161,20 @@ export function resolvePoolsFromPlan(
   plan: PlayoffPlan,
   field: RankedPlayer[],
   rounds: number,
+  placed: Set<string> = new Set(),
 ): ResolvedDivision[] {
   const claimed = new Set<string>();
   const out: ResolvedDivision[] = [];
   for (const div of plan.divisions) {
     const pool = resolveDivisionPool(div, field, rounds, claimed);
-    for (const p of pool) claimed.add(p.userId);
+    // A division that already holds a `placed` player is ALREADY GENERATED — its bracket is fixed. It
+    // must only claim the members it actually placed; any NEW player it would now borrow (because the
+    // field shrank, e.g. a borrowed neighbour band dropped out) is NOT claimed, so a lower, not-yet-
+    // generated division can still take them. Otherwise that player is claimed here but never seated in
+    // the already-built bracket → stranded in no division at all. `placed` empty ⇒ legacy behaviour
+    // (first generation / reseed paths, where nothing is placed yet).
+    const isGenerated = pool.some((p) => placed.has(p.userId));
+    for (const p of pool) if (!isGenerated || placed.has(p.userId)) claimed.add(p.userId);
     out.push({ band: div.anchorBand, players: pool, seeds: bracketSeeds(pool) });
   }
   return out;

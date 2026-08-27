@@ -151,6 +151,38 @@ describe('resolvePoolsFromPlan — top-first partition, shrinkage cascades, no s
   });
 });
 
+describe('resolvePoolsFromPlan — never claim a parked player into an ALREADY-GENERATED pool', () => {
+  // The RizzOtto bug: a borrowed neighbour band (band 4) dropped AFTER the top division was generated,
+  // so the frozen top division would now re-borrow down to band 3 and "claim" that band's leader — but
+  // its bracket is already fixed without them. The claim must be suppressed for a generated division so
+  // the leader stays available for their own, not-yet-generated division instead of vanishing from both.
+  const plan: PlayoffPlan = {
+    divisions: [
+      { ordinal: 0, anchorBand: 5, targetSize: 4, draws: [{ band: 5, count: 2 }, { band: 4, count: 2 }] },
+      { ordinal: 1, anchorBand: 3, targetSize: 2, draws: [{ band: 3, count: 2 }] },
+    ],
+  };
+  // A borrowed band-4 player has dropped → the top division is 1 short and would re-borrow band-3's top.
+  const field = [
+    rp('a', 5, 1, 4), rp('b', 5, 2, 3), // band 5
+    rp('c', 4, 3, 3), // only 1 band-4 left (the other dropped)
+    rp('rizz', 3, 4, 3), rp('m', 3, 5, 2), // band 3 (rizz = leader, perfect record)
+  ];
+
+  it('legacy (no `placed`) reproduces the bug — the leader is claimed up and stranded from their division', () => {
+    const [top, bottom] = resolvePoolsFromPlan(plan, field, 3);
+    expect(top.players.map((p) => p.userId)).toContain('rizz'); // borrowed up into the (fixed) top pool
+    expect(bottom.seeds).not.toContain('rizz'); // …and gone from their own division
+  });
+
+  it('with `placed` = the generated top division, the leader stays in their own division', () => {
+    const placed = new Set(['a', 'b', 'c']); // the top division's actual generated members
+    const [, bottom] = resolvePoolsFromPlan(plan, field, 3, placed);
+    expect(bottom.seeds[0]).toBe('rizz'); // #1 seed of their own division
+    expect(bottom.seeds).toContain('m');
+  });
+});
+
 describe('bracketSeeds — 0-point demoted, handicapped earner still seated', () => {
   it('puts every earner ahead of every 0-point player, regardless of adjusted score', () => {
     // A borrowed earner (band 3, 1 win → adjusted 1 - 0.2*5*2 = -1) vs an own-band-5 organic 0.

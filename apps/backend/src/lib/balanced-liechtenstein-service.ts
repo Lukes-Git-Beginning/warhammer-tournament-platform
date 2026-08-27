@@ -1055,6 +1055,17 @@ export async function startBalancedPlayoffs(
   // later drop can't re-merge / re-count divisions or strand players — only membership flexes, the
   // division count + band anchors stay put. Either way the seat order applies the 0-point gate
   // (earners ahead of organic-zero players) via bracketSeeds.
+  // Players already seated in a generated playoff bracket ⇒ their division is fixed. Pass this to
+  // resolvePoolsFromPlan so an already-generated division can't re-claim a new (now-borrowed) player
+  // away from a lower, not-yet-generated division and strand them (the "RizzOtto in no division" bug).
+  const alreadyInPlayoff = new Set<string>();
+  for (const m of matches) {
+    if (m.phase && m.phase !== 'SWISS') {
+      if (m.player1_id) alreadyInPlayoff.add(m.player1_id);
+      if (m.player2_id) alreadyInPlayoff.add(m.player2_id);
+    }
+  }
+
   const freshPools = formDivisionPools(
     ranked,
     roundsCount,
@@ -1063,7 +1074,7 @@ export async function startBalancedPlayoffs(
   const frozenPlan = tournament.playoff_plan as unknown as PlayoffPlan | null;
   const pools: Array<{ band: number; players: RankedPlayer[]; seeds: string[] }> =
     frozenPlan && Array.isArray(frozenPlan.divisions) && frozenPlan.divisions.length > 0
-      ? resolvePoolsFromPlan(frozenPlan, ranked, roundsCount)
+      ? resolvePoolsFromPlan(frozenPlan, ranked, roundsCount, alreadyInPlayoff)
       : freshPools.map((p) => ({ band: p.band, players: p.players, seeds: bracketSeeds(p.players) }));
 
   // Per-division readiness. A contender is complete once they have played all rounds
@@ -1091,14 +1102,7 @@ export async function startBalancedPlayoffs(
   }
   const bandComplete = (b: number) => (contendersByBand.get(b) ?? []).every(contenderIsComplete);
 
-  // A player already seeded into a real playoff match ⇒ their division was generated.
-  const alreadyInPlayoff = new Set<string>();
-  for (const m of matches) {
-    if (m.phase && m.phase !== 'SWISS') {
-      if (m.player1_id) alreadyInPlayoff.add(m.player1_id);
-      if (m.player2_id) alreadyInPlayoff.add(m.player2_id);
-    }
-  }
+  // (alreadyInPlayoff is computed above, before the pool resolution, and passed into it.)
 
   // Playoff round follows the last GROUP round (stable as more divisions are added);
   // match numbers must clear the highest number of ANY existing row — INCLUDING
@@ -1317,10 +1321,17 @@ export async function describeBalancedPlayoffPreview(
     .map((s, i) => ({ userId: s.userId, band: bandByUser.get(s.userId) ?? DEFAULT_BAND, rank: i + 1, rawScore: s.score }));
   // Mirror startBalancedPlayoffs: once the plan is frozen, resolve from it so the preview shows the
   // same structure a (forced or automatic) generation would build; otherwise compute it live.
+  const alreadyInPlayoff = new Set<string>();
+  for (const m of matches) {
+    if (m.phase && m.phase !== 'SWISS') {
+      if (m.player1_id) alreadyInPlayoff.add(m.player1_id);
+      if (m.player2_id) alreadyInPlayoff.add(m.player2_id);
+    }
+  }
   const frozenPlan = tournament.playoff_plan as unknown as PlayoffPlan | null;
   const pools: Array<{ band: number; players: RankedPlayer[]; seeds: string[] }> =
     frozenPlan && Array.isArray(frozenPlan.divisions) && frozenPlan.divisions.length > 0
-      ? resolvePoolsFromPlan(frozenPlan, ranked, roundsCount)
+      ? resolvePoolsFromPlan(frozenPlan, ranked, roundsCount, alreadyInPlayoff)
       : formDivisionPools(ranked, roundsCount, targetPoolSizeFromFormat(tournament.playoff_format)).map(
           (p) => ({ band: p.band, players: p.players, seeds: bracketSeeds(p.players) }),
         );
@@ -1347,13 +1358,7 @@ export async function describeBalancedPlayoffPreview(
   }
   const bandComplete = (b: number) => (contendersByBand.get(b) ?? []).every(contenderIsComplete);
 
-  const alreadyInPlayoff = new Set<string>();
-  for (const m of matches) {
-    if (m.phase && m.phase !== 'SWISS') {
-      if (m.player1_id) alreadyInPlayoff.add(m.player1_id);
-      if (m.player2_id) alreadyInPlayoff.add(m.player2_id);
-    }
-  }
+  // (alreadyInPlayoff is computed above, before the pool resolution, and passed into it.)
 
   const divisions: PlayoffPreviewDivision[] = pools
     .filter((pool) => pool.seeds.length >= 2)
