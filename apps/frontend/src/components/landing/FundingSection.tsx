@@ -124,10 +124,13 @@ export function FundingSection({ compact = false }: { compact?: boolean }) {
           ))}
         </motion.div>
 
-        <motion.p {...rise(0.2)} className="mt-6 max-w-xl text-rizzotto-stone-300">
-          RizzOtto&rsquo;s Arena is built and run by players, for players. Every contribution goes
-          straight into building 2v2, Conquest &amp; Siege and keeping the servers running.
-          Supporters are credited on the site.
+        {/* Support-page mission + cost statement (Alex's own copy). This full variant renders
+            only on /support; the landing uses the compact variant, which omits this paragraph. */}
+        <motion.p {...rise(0.2)} className="mt-6 max-w-2xl text-rizzotto-stone-300">
+          RizzOtto&rsquo;s Arena has always been free: no ads, no paywalls, built and run by
+          players. Now I want to build the next chapter: three new battle modes (2v2, Conquest and
+          Siege), and keep the servers running. To get all this accomplished in a timely manner, I
+          need some outside dev support, which costs money. Supporters are credited on the site.
         </motion.p>
 
         <motion.div {...rise(0.25)} className="mt-8 w-full max-w-md">
