@@ -11,6 +11,7 @@ import { PageShell } from '@/components/layout/PageShell.js';
 import { Button } from '@/components/ui/button.js';
 import { MatchScoreModal } from '@/components/bracket/MatchScoreModal.js';
 import { GameTile } from '@/components/match/GameTile.js';
+import { SupporterBadge } from '@/components/supporter/SupporterBadge.js';
 
 // ---------------------------------------------------------------------------
 // Status Badge
@@ -488,6 +489,7 @@ export function MatchDetailPage() {
               >
                 {match.player1.username}
               </Link>
+              {match.player1.tiers && <SupporterBadge tiers={match.player1.tiers} size={15} />}
               {match.winner_id === match.player1_id && (
                 <span className="text-[10px] font-bold uppercase tracking-widest text-rizzotto-gold-500">
                   Winner
@@ -555,6 +557,7 @@ export function MatchDetailPage() {
               >
                 {match.player2.username}
               </Link>
+              {match.player2.tiers && <SupporterBadge tiers={match.player2.tiers} size={15} />}
               {match.winner_id === match.player2_id && (
                 <span className="text-[10px] font-bold uppercase tracking-widest text-rizzotto-gold-500">
                   Winner

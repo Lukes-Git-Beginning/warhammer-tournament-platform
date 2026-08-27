@@ -109,6 +109,8 @@ export const MatchPlayerRefSchema = z.object({
   id: z.string().uuid(),
   username: z.string(),
   avatar_url: z.string().url().nullable(),
+  // Ko-Fi supporter tiers (cumulative). Present for player1/player2, omitted for winner.
+  tiers: z.object({ supporter: z.boolean(), lord: z.boolean(), champion: z.boolean() }).optional(),
 });
 export type MatchPlayerRef = z.infer<typeof MatchPlayerRefSchema>;
 

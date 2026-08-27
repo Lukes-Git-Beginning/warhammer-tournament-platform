@@ -7,6 +7,7 @@ import { canManageTournament } from '../lib/tournament-utils.js';
 import { notifyHostsOfMatchReport } from '../lib/discord-notify.js';
 import { runBalancedPairingTick, findNextDivisionSeed } from '../lib/balanced-liechtenstein-service.js';
 import { computeSwissStandings, sortSwissStandings } from '../lib/swiss.js';
+import { effectiveTiersOf, SUPPORTER_FLAG_SELECT } from '../lib/supporter-service.js';
 import {
   DEFAULT_BAND,
   formDivisionPools,
@@ -365,8 +366,8 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         player2_points: true,
         counts_for_leaderboard: true,
         tournament: { select: { id: true, slug: true } },
-        player1: { select: { id: true, username: true, avatar_url: true } },
-        player2: { select: { id: true, username: true, avatar_url: true } },
+        player1: { select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT } },
+        player2: { select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT } },
         winner: { select: { id: true, username: true, avatar_url: true } },
         player1_faction: { select: { id: true, name: true, icon_url: true } },
         player2_faction: { select: { id: true, name: true, icon_url: true } },
@@ -426,6 +427,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
             id: match.player1.id,
             username: match.player1.username,
             avatar_url: match.player1.avatar_url ?? null,
+            tiers: effectiveTiersOf(match.player1),
           }
         : null,
       player2: match.player2
@@ -433,6 +435,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
             id: match.player2.id,
             username: match.player2.username,
             avatar_url: match.player2.avatar_url ?? null,
+            tiers: effectiveTiersOf(match.player2),
           }
         : null,
       winner: match.winner

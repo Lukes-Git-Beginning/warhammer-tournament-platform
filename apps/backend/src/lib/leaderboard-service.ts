@@ -13,11 +13,14 @@ import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { confirmedMatchWhere, getRatingModel } from './rating-model-service.js';
 import { rawPoints, opponentShare, opponentModifier, finalPoints } from './scoring-service.js';
+import { effectiveTiersOf, SUPPORTER_FLAG_SELECT, NO_TIERS } from './supporter-service.js';
+import type { SupporterTiers } from './supporter-status.js';
 
 export interface DynamicLeaderboardEntry {
   playerId: string;
   displayName: string;
   avatarUrl: string | null;
+  tiers: SupporterTiers;
   totalFinalPoints: number;
   totalRawPoints: number;
   totalGames: number;
@@ -148,7 +151,7 @@ export async function computeSeasonLeaderboard(
   const playerIds = [...agg.keys()];
   const users = await prisma.user.findMany({
     where: { id: { in: playerIds } },
-    select: { id: true, username: true, avatar_url: true },
+    select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT },
   });
   const userMap = new Map(users.map((u) => [u.id, u]));
 
@@ -159,6 +162,7 @@ export async function computeSeasonLeaderboard(
       playerId: id,
       displayName: u?.username ?? 'Unknown',
       avatarUrl: u?.avatar_url ?? null,
+      tiers: u ? effectiveTiersOf(u) : NO_TIERS,
       totalFinalPoints: a.totalFinalPoints,
       totalRawPoints: a.totalRawPoints,
       totalGames: a.games,

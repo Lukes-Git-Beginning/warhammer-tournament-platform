@@ -41,13 +41,26 @@ const TIER_META = [
   },
 ] as const;
 
-/** Renders the icons for every tier a player holds (nothing if they hold none). */
-export function SupporterBadge({ tiers, size = 16 }: { tiers: SupporterTiers; size?: number }) {
+/**
+ * Renders a player's supporter tier icons (nothing if they hold none).
+ * `compact` shows only the single highest tier — for dense rows (leaderboards,
+ * standings, participant lists) where the full stack would clutter the line.
+ */
+export function SupporterBadge({
+  tiers,
+  size = 16,
+  compact = false,
+}: {
+  tiers: SupporterTiers;
+  size?: number;
+  compact?: boolean;
+}) {
   const held = TIER_META.filter((t) => tiers[t.key]);
   if (held.length === 0) return null;
+  const shown = compact ? held.slice(0, 1) : held;
   return (
     <span className="inline-flex items-center gap-1 align-middle">
-      {held.map(({ key, Icon, hint, className }) => (
+      {shown.map(({ key, Icon, hint, className }) => (
         <span key={key} title={hint} className="inline-flex">
           <Icon size={size} strokeWidth={1.75} className={className} aria-label={hint} />
         </span>

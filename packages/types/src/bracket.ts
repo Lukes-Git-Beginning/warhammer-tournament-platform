@@ -57,6 +57,8 @@ export interface SwissStandingEntry {
   dropped?: boolean;
   /** Skill division 1..5 (BALANCED_LIECHTENSTEIN only) — drives level colouring. */
   skillBand?: number | null;
+  /** Ko-Fi supporter tiers (cumulative) — drives the inline supporter badge. */
+  tiers?: { supporter: boolean; lord: boolean; champion: boolean };
 }
 
 /** One projected playoff bracket (a division for BaLi; a single bracket for other formats). */

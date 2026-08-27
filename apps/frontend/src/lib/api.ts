@@ -578,7 +578,7 @@ export interface MajorWinTournament {
 }
 export interface MajorWinsEntry {
   rank: number;
-  user: { id: string; username: string; avatar_url: string | null };
+  user: { id: string; username: string; avatar_url: string | null; tiers?: SupporterTiers };
   wins: number;
   /** Tiebreaker: total game wins across all majors (games are the statistical unit). */
   majorGameWins: number;
@@ -592,7 +592,7 @@ export function getMajorWinsLeaderboard(): Promise<{ entries: MajorWinsEntry[] }
 // from the hierarchical rating model (not the questionnaire, not the achievement points).
 export interface SkillLeaderboardEntry {
   rank: number;
-  user: { id: string; username: string; avatar_url: string | null };
+  user: { id: string; username: string; avatar_url: string | null; tiers?: SupporterTiers };
   generalSkill: number; // log-odds
   stdError: number;
   winChance: number; // logistic(generalSkill), vs the average active player
@@ -1999,7 +1999,7 @@ export interface TournamentParticipantEntry {
   status: ParticipantStatus;
   registered_at: string;
   lists_locked_at: string | null;
-  user: { id: string; username: string; avatar_url: string | null };
+  user: { id: string; username: string; avatar_url: string | null; tiers?: SupporterTiers };
   faction: { id: string; name: string; color_hex: string } | null;
   faction_ids: string[]; // TWO_D_THREE: the player's 3-faction pool
   // BALANCED_LIECHTENSTEIN: division the player opted into / effective division.

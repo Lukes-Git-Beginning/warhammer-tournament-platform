@@ -28,6 +28,7 @@ import { autoSwissConfig } from '../lib/auto-swiss-service.js';
 import { resolveFactionWarFairness, resolveFactionWarSeedOrder } from '../lib/matchmaking-service.js';
 import { projectBracketPlan } from '../lib/bracket-plan.js';
 import { DEFAULT_BAND } from '../lib/balanced-liechtenstein.js';
+import { effectiveTiersOf, SUPPORTER_FLAG_SELECT, NO_TIERS } from '../lib/supporter-service.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
 import { createManualMatch } from '../lib/tournament-management.js';
 import { notifyMatchesCreated } from '../lib/discord-notify.js';
@@ -202,7 +203,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             user_id: true,
             status: true,
             skill_band: true,
-            user: { select: { id: true, username: true, avatar_url: true } },
+            user: { select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT } },
           },
         });
 
@@ -241,6 +242,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             userId: s.userId,
             username: user?.username ?? null,
             avatarUrl: user?.avatar_url ?? null,
+            tiers: user ? effectiveTiersOf(user) : NO_TIERS,
             // #9: FREE_PICK shows "Free Pick" (null) until a host explicitly sets a faction — never
             // the first game's picked faction. Other modes keep the game-derived fallback.
             factionId:

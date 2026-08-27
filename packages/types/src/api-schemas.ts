@@ -104,7 +104,12 @@ export type SeasonSummary = z.infer<typeof SeasonSummarySchema>;
 
 export const LeaderboardEntryDtoSchema = z.object({
   rank: z.number().int(),
-  user: z.object({ id: z.string().uuid(), username: z.string(), avatar_url: z.string().url().nullable() }),
+  user: z.object({
+    id: z.string().uuid(),
+    username: z.string(),
+    avatar_url: z.string().url().nullable(),
+    tiers: SupporterTiersSchema.optional(),
+  }),
   total_points: z.number(),
   games_played: z.number().int(),
   wins: z.number().int(),
@@ -139,6 +144,7 @@ export const DynamicLeaderboardEntryDtoSchema = z.object({
   playerId: z.string().uuid(),
   displayName: z.string(),
   avatarUrl: z.string().url().nullable(),
+  tiers: SupporterTiersSchema.optional(),
   totalFinalPoints: z.number(),
   totalRawPoints: z.number(),
   totalGames: z.number().int(),

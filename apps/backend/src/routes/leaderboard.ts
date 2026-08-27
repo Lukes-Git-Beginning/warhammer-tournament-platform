@@ -4,6 +4,7 @@ import { cached, cacheKey } from '../lib/cache.js';
 import { computeSeasonLeaderboard } from '../lib/leaderboard-service.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
 import { logistic, skillToBand } from '../lib/rating-model.js';
+import { effectiveTiersOf, SUPPORTER_FLAG_SELECT, NO_TIERS } from '../lib/supporter-service.js';
 import {
   computeSwissStandings,
   sortSwissStandings,
@@ -146,6 +147,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
               playerId: e.playerId,
               displayName: e.displayName,
               avatarUrl: e.avatarUrl,
+              tiers: e.tiers,
               totalFinalPoints: e.totalFinalPoints,
               totalRawPoints: e.totalRawPoints,
               totalGames: e.totalGames,
@@ -187,7 +189,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
             },
             entries: pageSlice.map((e, idx) => ({
               rank: (page - 1) * pageSize + idx + 1,
-              user: { id: e.playerId, username: e.displayName, avatar_url: e.avatarUrl },
+              user: { id: e.playerId, username: e.displayName, avatar_url: e.avatarUrl, tiers: e.tiers },
               total_points: Math.round(e.totalFinalPoints),
               games_played: e.totalGames,
               wins: e.wins,
@@ -230,7 +232,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         const userIds = pageSlice.map((g) => g.user_id);
         const users = await fastify.prisma.user.findMany({
           where: { id: { in: userIds } },
-          select: { id: true, username: true, avatar_url: true },
+          select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT },
         });
         const userMap = new Map(users.map((u) => [u.id, u]));
 
@@ -240,8 +242,8 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
             return {
               rank: (page - 1) * pageSize + idx + 1,
               user: user
-                ? { id: user.id, username: user.username, avatar_url: user.avatar_url }
-                : { id: g.user_id, username: 'Unknown', avatar_url: null },
+                ? { id: user.id, username: user.username, avatar_url: user.avatar_url, tiers: effectiveTiersOf(user) }
+                : { id: g.user_id, username: 'Unknown', avatar_url: null, tiers: NO_TIERS },
               total_points: g._sum.total_points ?? 0,
               games_played: g._sum.games_played ?? 0,
               wins: g._sum.wins ?? 0,
@@ -350,17 +352,22 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         const users = championIds.length
           ? await fastify.prisma.user.findMany({
               where: { id: { in: championIds } },
-              select: { id: true, username: true, avatar_url: true },
+              select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT },
             })
           : [];
         const userById = new Map(users.map((u) => [u.id, u]));
 
         const rows = championIds
           .map((id) => {
-            const user = userById.get(id);
+            const u = userById.get(id);
             const v = byUser.get(id)!;
-            return user
-              ? { user, wins: v.tournaments.length, majorGameWins: gameWinsByUser.get(id) ?? 0, tournaments: v.tournaments }
+            return u
+              ? {
+                  user: { id: u.id, username: u.username, avatar_url: u.avatar_url, tiers: effectiveTiersOf(u) },
+                  wins: v.tournaments.length,
+                  majorGameWins: gameWinsByUser.get(id) ?? 0,
+                  tournaments: v.tournaments,
+                }
               : null;
           })
           .filter((r): r is NonNullable<typeof r> => r !== null)
@@ -440,7 +447,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         const users = slice.length
           ? await fastify.prisma.user.findMany({
               where: { id: { in: slice.map((e) => e.playerId) } },
-              select: { id: true, username: true, avatar_url: true },
+              select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT },
             })
           : [];
         const userById = new Map(users.map((u) => [u.id, u]));
@@ -464,7 +471,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
           return [
             {
               rank: (page - 1) * pageSize + i + 1,
-              user,
+              user: { id: user.id, username: user.username, avatar_url: user.avatar_url, tiers: effectiveTiersOf(user) },
               generalSkill: e.generalSkill,
               stdError: e.stdError,
               winChance: logistic(e.generalSkill),

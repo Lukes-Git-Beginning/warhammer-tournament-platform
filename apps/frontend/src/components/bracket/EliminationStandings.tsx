@@ -5,6 +5,7 @@ import type { BracketNode } from '@rizzotto/types';
 import type { TournamentParticipantEntry } from '@/lib/api';
 import { dropParticipant } from '@/lib/api';
 import { getEliminationPlacements } from '@/lib/bracketStandings';
+import { SupporterBadge } from '@/components/supporter/SupporterBadge';
 
 interface EliminationStandingsProps {
   matches: BracketNode[];
@@ -121,6 +122,7 @@ export function EliminationStandings({
         >
           {p.user.username}
         </Link>
+        {p.user.tiers && <SupporterBadge tiers={p.user.tiers} size={13} compact />}
 
         {badge && !dimmed && (
           <span

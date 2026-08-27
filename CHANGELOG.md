@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.43.0] — 2026-08-27 — Supporter badges now show across the whole site
+### Added
+- **Supporter badges now appear next to a player's name everywhere their name shows, not just on their profile.** You will now see them on every leaderboard tab (Season, All-Time, Majors and Skill), in tournament participant lists, in Swiss and elimination standings, and on the match page. To keep the ranking tables clean, dense rows show only the single highest tier a player holds (one small icon), while the match page and the Hall of Fame still show the full set. Every icon keeps its plain-language tooltip (Supporter, Lord, Champion), so the recognition follows supporters into the parts of the site people actually look at.
+
 ## [1.42.0] — 2026-08-26 — The funding bar now updates itself from Ko-Fi
 ### Added
 - **The on-site funding progress bar now tracks the Ko-Fi goal automatically, no manual updates needed.** A background job reads the public Ko-Fi page every 30 minutes (its goal percentage and target are server-rendered) and mirrors them into the site's bar, so it stays in sync with Ko-Fi (the seeded head start included) as donations come in. It is fail-safe: if the fetch or parse ever fails, the bar keeps its last value instead of breaking, and the admin funding-goal field still works as a manual override.

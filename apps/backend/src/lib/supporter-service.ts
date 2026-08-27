@@ -24,6 +24,23 @@ export interface SupporterFlagsRow {
   champion_manual: boolean;
 }
 
+/**
+ * Prisma select fragment for the six supporter flags — spread into any `user`
+ * sub-select so a row can be passed straight to `effectiveTiersOf`. Keeps the badge
+ * wiring on leaderboards / standings / participants / matches to one shared shape.
+ */
+export const SUPPORTER_FLAG_SELECT = {
+  supporter_discord: true,
+  lord_discord: true,
+  champion_discord: true,
+  supporter_manual: true,
+  lord_manual: true,
+  champion_manual: true,
+} as const;
+
+/** All-false tiers, for rows where the user could not be resolved. */
+export const NO_TIERS: SupporterTiers = { supporter: false, lord: false, champion: false };
+
 /** Effective (union) tiers from a user row's six flags — cumulative via the pure resolver. */
 export function effectiveTiersOf(u: SupporterFlagsRow): SupporterTiers {
   return resolveSupporterTiers(

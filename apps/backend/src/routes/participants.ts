@@ -8,6 +8,7 @@ import { reapplyDynamicSizing } from '../lib/auto-swiss-service.js';
 import { admitBalancedLateJoiner } from '../lib/balanced-liechtenstein-service.js';
 import { getPlayerClassification } from '../lib/skill-classification-service.js';
 import { BAND_NAMES } from '../lib/skill-classification.js';
+import { effectiveTiersOf, SUPPORTER_FLAG_SELECT } from '../lib/supporter-service.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -902,7 +903,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         status: true,
         registered_at: true,
         lists_locked_at: true,
-        user: { select: { id: true, username: true, avatar_url: true } },
+        user: { select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT } },
         faction: { select: { id: true, name: true, color_hex: true } },
         faction_ids: true, // TWO_D_THREE: the player's 3-faction pool
         requested_band: true, // BALANCED_LIECHTENSTEIN: the division the player opted into
@@ -931,6 +932,12 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
     const data = participants.map((p) => ({
       ...p,
+      user: {
+        id: p.user.id,
+        username: p.user.username,
+        avatar_url: p.user.avatar_url,
+        tiers: effectiveTiersOf(p.user),
+      },
       faction: hideFactions ? null : p.faction,
       faction_ids: hideFactions ? [] : p.faction_ids,
       requested_band: showBands ? p.requested_band : null,

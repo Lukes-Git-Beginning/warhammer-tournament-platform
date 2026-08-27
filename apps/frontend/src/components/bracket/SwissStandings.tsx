@@ -6,6 +6,7 @@ import { FactionBadge } from '@/components/meta/FactionBadge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { dropParticipant, undropParticipant, adminCheckIn, setParticipantFaction, type ParticipantStatus } from '@/lib/api';
 import { SKILL_BAND_META } from './skillBandMeta.js';
+import { SupporterBadge } from '@/components/supporter/SupporterBadge';
 
 const PLACEMENT_BADGE: Record<1 | 2 | 3, { label: string; className: string }> = {
   1: { label: '1ST', className: 'text-rizzotto-gold-400 border-rizzotto-gold-500/50 bg-rizzotto-gold-500/10' },
@@ -256,6 +257,7 @@ export function SwissStandings({
                 <span className={`${isDropped ? 'line-through text-stone-500' : 'text-stone-200'}`}>
                   {displayName}
                 </span>
+                {entry.tiers && <SupporterBadge tiers={entry.tiers} size={13} compact />}
                 {badge && (
                   <span className={`ml-0.5 rounded border px-1.5 py-px text-[10px] font-bold uppercase tracking-wider ${badge.className}`}>
                     {badge.label}

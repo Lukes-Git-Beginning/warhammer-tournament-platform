@@ -13,6 +13,7 @@ import {
 import type { LeaderboardEntryDto, DynamicLeaderboardEntryDto } from '@rizzotto/types';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
+import { SupporterBadge } from '@/components/supporter/SupporterBadge.js';
 
 type Tab = 'season' | 'all-time' | 'majors' | 'skill';
 
@@ -242,6 +243,7 @@ function DynamicLeaderboardTable({
                       >
                         {entry.displayName}
                       </span>
+                      {entry.tiers && <SupporterBadge tiers={entry.tiers} size={14} compact />}
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400">
@@ -424,6 +426,7 @@ function LeaderboardTable({
                       >
                         {entry.user.username}
                       </span>
+                      {entry.user.tiers && <SupporterBadge tiers={entry.user.tiers} size={14} compact />}
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-right text-stone-200">{entry.total_points}</td>
@@ -549,6 +552,7 @@ function MajorsTab() {
                         >
                           {entry.user.username}
                         </span>
+                        {entry.user.tiers && <SupporterBadge tiers={entry.user.tiers} size={14} compact />}
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400 whitespace-nowrap">
@@ -652,6 +656,7 @@ function SkillTab() {
                         <span className={isFirst ? 'font-semibold text-rizzotto-gold-500' : 'text-stone-200'}>
                           {entry.user.username}
                         </span>
+                        {entry.user.tiers && <SupporterBadge tiers={entry.user.tiers} size={14} compact />}
                       </Link>
                     </td>
                     <td

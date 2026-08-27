@@ -10,6 +10,7 @@ import {
   removeParticipant,
   adminCheckIn,
 } from '@/lib/api';
+import { SupporterBadge } from '@/components/supporter/SupporterBadge';
 
 export interface ParticipantsListProps {
   slug: string;
@@ -106,6 +107,7 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus, to
                 >
                   {p.user.username}
                 </Link>
+                {p.user.tiers && <SupporterBadge tiers={p.user.tiers} size={13} compact />}
 
                 {showFactionEdit && !inactive ? (
                   <select
