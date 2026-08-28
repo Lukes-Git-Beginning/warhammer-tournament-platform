@@ -7,6 +7,7 @@ import {
   type ParticipantStatus,
   type MatchStatus,
 } from '@rizzotto/db';
+import { recordTournamentEvent } from './tournament-events.js';
 
 // Re-export enums so routes can import from one place
 export {
@@ -233,6 +234,8 @@ export async function createLateJoinerBye(
       new_value: { tournamentId, userId, round },
     },
   });
+
+  void recordTournamentEvent({ tournamentId, type: 'match_created', actor: 'system', subjectId: userId, payload: { phase: 'catchup_bye' } });
 
   return match;
 }

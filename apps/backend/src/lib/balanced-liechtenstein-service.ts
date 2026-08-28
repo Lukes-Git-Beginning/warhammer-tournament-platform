@@ -777,7 +777,10 @@ export async function admitBalancedLateJoiner(
         phase: null,
       });
     }
-    if (rows.length > 0) await fastify.prisma.match.createMany({ data: rows });
+    if (rows.length > 0) {
+      await fastify.prisma.match.createMany({ data: rows });
+      void recordTournamentEvent({ tournamentId, type: 'match_created', actor: 'system', subjectId: userId, payload: { phase: 'catchup_bye', count: rows.length } });
+    }
   }
 
   // Step 4 — trigger pairing tick (pairs the late joiner from round A onward).

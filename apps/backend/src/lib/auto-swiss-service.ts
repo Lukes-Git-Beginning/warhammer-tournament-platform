@@ -608,6 +608,13 @@ async function startPlayoffs(
     },
   });
 
+  void recordTournamentEvent({
+    tournamentId: tournament.id,
+    type: 'matches_created',
+    actor: 'system',
+    payload: { phase: 'swiss_playoff', count: matches.length },
+  });
+
   // B22: notify the first playoff round's participants.
   const playablePO = matches.filter((m) => m.player1_id && m.player2_id);
   if (playablePO.length > 0) {

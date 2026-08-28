@@ -562,6 +562,9 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       void recordTournamentEvent({ tournamentId: tournament.id, type: 'tournament_started', actor: 'host', actorId: request.user.sub });
+      if (bracketMatches.length > 0) {
+        void recordTournamentEvent({ tournamentId: tournament.id, type: 'matches_created', actor: 'system', payload: { phase: 'bracket_init', count: bracketMatches.length } });
+      }
 
       emitStatusChange(fastify.io, {
         tournamentId: tournament.id,
@@ -1091,6 +1094,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           });
         });
 
+        void recordTournamentEvent({ tournamentId: id, type: 'matches_created', actor: 'system', payload: { phase: 'swiss_playoff', count: playoffMatches.length } });
+
         emitBracketUpdate(fastify.io, id);
 
         // B22: notify the first playoff round's participants (QF/SF).
@@ -1289,6 +1294,11 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         });
       });
 
+      void recordTournamentEvent({ tournamentId: id, type: 'matches_created', actor: 'system', payload: { phase: 'bracket_advance', count: nextMatches.length } });
+      if (thirdPlaceMatch) {
+        void recordTournamentEvent({ tournamentId: id, type: 'matches_created', actor: 'system', payload: { phase: 'third_place', count: 1 } });
+      }
+
       emitBracketUpdate(fastify.io, id);
 
       // B22: notify newly created playoff-round participants (SF/GF/small final).
@@ -1447,6 +1457,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       });
+
+      void recordTournamentEvent({ tournamentId: id, type: 'matches_created', actor: 'system', payload: { phase: 'third_place', count: 1 } });
 
       emitBracketUpdate(fastify.io, id);
 

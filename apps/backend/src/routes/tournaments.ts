@@ -1040,6 +1040,11 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         void recordTournamentEvent({ tournamentId: tournament.id, type: 'tournament_status_changed', actor: 'host', actorId: request.user.sub, payload: { to: newStatus } });
       }
 
+      const editedNonStatusFields = Object.keys(changedNew).filter((k) => k !== 'status');
+      if (editedNonStatusFields.length > 0) {
+        void recordTournamentEvent({ tournamentId: tournament.id, type: 'tournament_edited', actor: 'host', actorId: request.user.sub, payload: { fields: editedNonStatusFields } });
+      }
+
       request.log.info({ slug, changed: Object.keys(changedNew) }, 'Tournament updated');
 
       // Update map pool snapshot (replace all rows)
@@ -1363,6 +1368,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         data: { host_id: new_host_id },
       });
 
+      void recordTournamentEvent({ tournamentId: tournament.id, type: 'host_transferred', actor: 'host', actorId: userId, subjectId: new_host_id });
+
       await invalidate(fastify.redis, `tournament:${slug}`);
 
       return reply.send({ ok: true });
@@ -1482,6 +1489,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         create: { tournament_id: tournament.id, user_id },
         update: {},
       });
+      void recordTournamentEvent({ tournamentId: tournament.id, type: 'cohost_added', actor: 'host', actorId: userId, subjectId: user_id });
       return reply.send({ id: target.id, username: target.username, avatar_url: target.avatar_url });
     },
   );
@@ -1497,6 +1505,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       await fastify.prisma.tournamentHost.deleteMany({
         where: { tournament_id: tournament.id, user_id: request.params.userId },
       });
+      void recordTournamentEvent({ tournamentId: tournament.id, type: 'cohost_removed', actor: 'host', actorId: userId, subjectId: request.params.userId });
       return reply.send({ ok: true });
     },
   );
