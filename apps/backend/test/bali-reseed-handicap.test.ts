@@ -5,16 +5,17 @@ import {
   type RankedPlayer,
 } from '../src/lib/balanced-liechtenstein.js';
 
-// Regression for the anderland-over-ponti mis-seed (enticitys-thursday-…-free-pick-3, 2026-08-20).
+// Reseed cross-band handicap in a MERGED single division (small field).
 //
-// RizzOtto (band 3, raw 3 → adjusted 1.4) was correctly seeded #4 in the Top-Division semis (vs Pasha).
-// He dropped from the semi; the backfill/reseed should have handed the vacated slot to the next
-// eligible earner in the survivor's division by HANDICAP-adjusted order — ponti (band 5, raw 1 →
-// adjusted 1.0) — NOT anderland (band 3, raw 2 → adjusted 0.4 at the real 4 rounds). anderland only
-// wins the slot if the cross-band handicap is run at a collapsed round count (rounds ≤ 2), which the
-// backfill's old `rounds_count ?? 1` fallback produced whenever rounds_count was null.
+// Since Fix A (v1.44.0), a field too small for two full divisions forms ONE division: here 12 players,
+// TOP4 → target 8, so the band-2 tail (4 players) merges up into the band-5-anchored division instead of
+// standing as a downgraded second bracket. The backfill/reseed then walks that one division's seed order
+// (handicap-adjusted) and takes the first live, unplaced earner. Because the cross-band handicap SCALES
+// with the round count (0.2 × rounds per band below the anchor), which player wins the vacated slot
+// depends on the round count — and the rounds floor (Math.max(rounds_count, playedGroupRounds) in
+// findNextDivisionSeed) keeps it from collapsing to rounds=1. This locks that ordering down.
 //
-// The field below excludes the withdrawn RizzOtto (findNextDivisionSeed filters WITHDREW before pooling).
+// The field excludes the withdrawn survivor (findNextDivisionSeed filters WITHDREW before pooling).
 const field: RankedPlayer[] = [
   { userId: 'Pasha', band: 5, rank: 1, rawScore: 4 },
   { userId: 'YaS', band: 3, rank: 2, rawScore: 3 },
@@ -43,16 +44,17 @@ function reseedPick(rounds: number): string | undefined {
   });
 }
 
-describe('BaLi Top-Division reseed cross-band handicap', () => {
-  it('at the real round count (4) the SF backfill picks ponti (band 5), not anderland (band 3)', () => {
+describe('BaLi reseed cross-band handicap in a merged single division', () => {
+  it('at 4 rounds the large band-gap handicap lets ponti (band 5, 1 win) hold the slot over Dniper (band 2, 3-0)', () => {
+    // Dniper adjusted = 3 − 0.2×4×3 = 0.6 < ponti 1.0.
     expect(reseedPick(4)).toBe('ponti');
   });
 
-  it('the robust floor keeps ponti even for 3 rounds', () => {
-    expect(reseedPick(3)).toBe('ponti');
+  it('at 3 rounds the smaller handicap lets Dniper (band 2, 3-0 → adjusted 1.2) edge ponti (1.0)', () => {
+    expect(reseedPick(3)).toBe('Dniper');
   });
 
-  it('documents the collapsed-handicap bug the fix prevents: rounds=1 mis-picks anderland', () => {
-    expect(reseedPick(1)).toBe('anderland');
+  it('at a collapsed round count (1) the low band wins clearly — Dniper (adjusted 2.4)', () => {
+    expect(reseedPick(1)).toBe('Dniper');
   });
 });
