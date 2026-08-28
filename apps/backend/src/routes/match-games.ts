@@ -580,6 +580,8 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           },
         },
       });
+      if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_game_overridden', actor: 'host', actorId: userId, payload: { matchId, gameNumber } }); }
+
       if (fastify.io) {
         if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
         fastify.io.to(`match_decision_${matchId}`).emit('match.game.updated', {
@@ -681,6 +683,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           /* non-critical */
         });
 
+      if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'dispute_resolved', actor: 'host', actorId: userId, payload: { matchId, gameNumber } }); }
       if (match.tournament_id) emitBracketUpdate(fastify.io, match.tournament_id);
       return reply.code(200).send({ resolved: true, winnerId: approvedWinner });
     },

@@ -13,6 +13,7 @@ import {
   TournamentStatusSchema,
 } from '@rizzotto/types';
 import { notifyTournamentAnnounce } from '../lib/discord-notify.js';
+import { recordTournamentEvent } from '../lib/tournament-events.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -1035,6 +1036,10 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
+      if (newStatus !== undefined) {
+        void recordTournamentEvent({ tournamentId: tournament.id, type: 'tournament_status_changed', actor: 'host', actorId: request.user.sub, payload: { to: newStatus } });
+      }
+
       request.log.info({ slug, changed: Object.keys(changedNew) }, 'Tournament updated');
 
       // Update map pool snapshot (replace all rows)
@@ -1222,6 +1227,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const result = await unfinalizeTournament(fastify.prisma, tournament.id);
+
+      void recordTournamentEvent({ tournamentId: tournament.id, type: 'tournament_unfinalized', actor: 'host', actorId: user.sub });
 
       await fastify.prisma.auditLog.create({
         data: { entity_type: 'Tournament', entity_id: tournament.id, action: 'unfinalize', actor_id: user.sub },

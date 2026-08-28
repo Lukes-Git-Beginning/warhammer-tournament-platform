@@ -17,6 +17,7 @@ import {
 import { resolvePoolsFromPlan, bracketSeeds, type PlayoffPlan } from '../lib/bali-playoff-plan.js';
 import { invalidate } from '../lib/cache.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
+import { recordTournamentEvent } from '../lib/tournament-events.js';
 
 /**
  * Cascade a match's leaderboard eligibility onto its games and refresh global stats.
@@ -532,6 +533,8 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       // Cascade onto the games (the authoritative flag for all statistics) + refresh stats.
       await cascadeGameEligibility(fastify, matchId, !parsed.data.void);
 
+      if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_voided', actor: 'host', actorId: userId, payload: { matchId } }); }
+
       return reply.code(200).send({ matchId, void: parsed.data.void });
     },
   );
@@ -562,6 +565,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         // — e.g. after a withdrawn player was swapped out for a replacement).
         data: { status: 'PENDING', winner_id: null, result: null, score: null, player1_points: null, player2_points: null, played_at: null, withdrawn_player_id: null },
       });
+      if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_restored', actor: 'host', actorId: userId, payload: { matchId } }); }
       return reply.code(200).send({ matchId, status: 'PENDING' });
     },
   );
@@ -588,6 +592,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       });
       // A cancelled match's games count for nothing statistically.
       await cascadeGameEligibility(fastify, matchId, false);
+      if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_cancelled', actor: 'host', actorId: userId, payload: { matchId } }); }
       return reply.code(200).send({ matchId, status: 'CANCELLED' });
     },
   );
@@ -660,6 +665,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
       // The deleted games no longer count anywhere → recompute derived stats + bust caches.
       await cascadeGameEligibility(fastify, matchId, false);
+      if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_full_reset', actor: 'host', actorId: userId, payload: { matchId } }); }
       emitBracketUpdate(fastify.io, match.tournament_id ?? '');
       return reply.code(200).send({ matchId, status: match.player2_id ? 'PENDING' : 'BYE' });
     },
@@ -813,6 +819,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       // withdrawal, so the "opponent withdrew" marker must not linger (it would keep blocking
       // the picker on the re-seeded match).
       await fastify.prisma.match.update({ where: { id: matchId }, data: { [openSlot]: seed.userId, withdrawn_player_id: null } });
+      if (match.tournament_id) { void recordTournamentEvent({ tournamentId: tournamentId, type: 'match_backfilled', actor: 'host', actorId: userId, subjectId: seed.userId, payload: { matchId } }); }
       emitBracketUpdate(fastify.io, tournamentId);
       return reply.code(200).send({ matchId, filledSlot: openSlot, seedUserId: seed.userId });
     },
@@ -939,6 +946,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         await tx.matchFactionMatrix.updateMany({ where: { game: { match_id: matchId }, top_player_id: oldPlayerId }, data: { top_player_id: newPlayerId } });
         await tx.matchFactionMatrix.updateMany({ where: { game: { match_id: matchId }, bottom_player_id: oldPlayerId }, data: { bottom_player_id: newPlayerId } });
       });
+      if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_player_swapped', actor: 'host', actorId: userId, payload: { matchId } }); }
       return reply.code(200).send({ ok: true });
     },
   );
@@ -992,6 +1000,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.match.update({ where: { id: matchId }, data: { status: 'FORFEIT', winner_id: winnerId } }),
         fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } }),
       ]);
+      if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_forfeited', actor: 'host', actorId: userId, payload: { matchId } }); }
       // A forfeit completes this match — for Balanced Liechtenstein that may be the final piece
       // that lets the next round / division playoffs generate. The tick no-ops for other formats.
       void runBalancedPairingTick(fastify, match.tournament_id);
@@ -1131,6 +1140,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         ]);
       }
 
+      if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_void_dropped', actor: 'host', actorId: callerId, payload: { matchId } }); }
       emitBracketUpdate(fastify.io, match.tournament_id);
       return reply.code(200).send({ ok: true });
     },
@@ -1157,6 +1167,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.match.update({ where: { id: matchId }, data: { status: 'NO_CONTEST', winner_id: null } }),
         fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } }),
       ]);
+      if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_no_contest', actor: 'host', actorId: userId, payload: { matchId } }); }
       // NO_CONTEST completes the round for both players (ADVANCING) — re-pair them for the next round.
       // Same trigger the forfeit / void-dropped / manual-edit paths use; a no-op for non-BaLi formats.
       if (match.tournament_id) void runBalancedPairingTick(fastify, match.tournament_id);

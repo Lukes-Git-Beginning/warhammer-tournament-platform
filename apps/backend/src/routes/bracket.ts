@@ -32,6 +32,7 @@ import { effectiveTiersOf, SUPPORTER_FLAG_SELECT, NO_TIERS } from '../lib/suppor
 import { canManageTournament } from '../lib/tournament-utils.js';
 import { createManualMatch } from '../lib/tournament-management.js';
 import { notifyMatchesCreated } from '../lib/discord-notify.js';
+import { recordTournamentEvent } from '../lib/tournament-events.js';
 
 const bracketRoutes: FastifyPluginAsync = async (fastify) => {
   /**
@@ -560,6 +561,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         });
       });
 
+      void recordTournamentEvent({ tournamentId: tournament.id, type: 'tournament_started', actor: 'host', actorId: request.user.sub });
+
       emitStatusChange(fastify.io, {
         tournamentId: tournament.id,
         status: 'ONGOING',
@@ -917,6 +920,9 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         const result = await startBalancedPlayoffs(fastify, id, { forceBands });
         if ('error' in result) {
           return reply.code(400).send({ error: 'BadRequest', message: result.error, statusCode: 400 });
+        }
+        if (forceBands && forceBands.length > 0) {
+          void recordTournamentEvent({ tournamentId: id, type: 'playoff_generation_forced', actor: 'host', actorId: request.user.sub, payload: { forceBands } });
         }
         return reply.code(200).send({ tournamentId: id, ...result });
       }
@@ -1605,6 +1611,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           data: { status: TournamentStatus.REGISTRATION_CLOSED },
         });
       });
+
+      void recordTournamentEvent({ tournamentId: id, type: 'bracket_reset', actor: 'host', actorId: request.user.sub });
 
       emitBracketUpdate(fastify.io, id);
       emitStatusChange(fastify.io, {
