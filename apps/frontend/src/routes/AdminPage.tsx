@@ -24,10 +24,11 @@ import { AdminAllGamesTab } from '@/components/admin/AdminAllGamesTab.js';
 import { SkillCalibrationTab } from '@/components/admin/SkillCalibrationTab.js';
 import { AdminReportsTab } from '@/components/admin/AdminReportsTab.js';
 import { AdminSupportersTab } from '@/components/admin/AdminSupportersTab.js';
+import { TournamentLogTab } from '@/components/admin/TournamentLogTab.js';
 
-type Tab = 'audit' | 'dashboard' | 'users' | 'supporters' | 'presets' | 'stats' | 'settings' | 'import' | 'matches' | 'all_games' | 'queue' | 'skill_calibration' | 'reports';
+type Tab = 'audit' | 'dashboard' | 'users' | 'supporters' | 'presets' | 'stats' | 'settings' | 'import' | 'matches' | 'all_games' | 'tournament_log' | 'queue' | 'skill_calibration' | 'reports';
 
-const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'skill_calibration', 'users', 'supporters', 'matches', 'all_games', 'queue', 'presets', 'audit', 'import'];
+const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'skill_calibration', 'users', 'supporters', 'matches', 'all_games', 'tournament_log', 'queue', 'presets', 'audit', 'import'];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard: 'admin.tabs.dashboard',
@@ -40,6 +41,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
   import: 'admin.tabs.import',
   matches: 'admin.tabs.matches',
   all_games: 'admin.tabs.all_games',
+  tournament_log: 'admin.tabs.tournament_log',
   queue: 'admin.tabs.queue',
   skill_calibration: 'admin.tabs.skill_calibration',
   reports: 'admin.tabs.reports',
@@ -56,6 +58,7 @@ const STATIC_LABELS: Record<Tab, string> = {
   import: 'Import-Log',
   matches: 'Matches',
   all_games: 'All Games',
+  tournament_log: 'Tournament Log',
   queue: 'Queue Activity',
   skill_calibration: 'Skill Calibration',
   reports: 'Reports',
@@ -180,6 +183,7 @@ export function AdminPage() {
         {tab === 'supporters' && <AdminSupportersTab />}
         {tab === 'matches' && <AdminMatchesTab />}
         {tab === 'all_games' && <AdminAllGamesTab />}
+        {tab === 'tournament_log' && <TournamentLogTab />}
         {tab === 'queue' && <QueueActivityTable />}
         {tab === 'presets' && <PresetLibraryAdmin />}
         {tab === 'stats' && <StatsTab />}

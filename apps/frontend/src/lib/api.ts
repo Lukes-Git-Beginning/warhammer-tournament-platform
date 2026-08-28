@@ -500,6 +500,26 @@ export function getTournament(slug: string): Promise<Tournament> {
   return apiFetch<Tournament>(`/api/tournaments/${slug}`);
 }
 
+// ---------------------------------------------------------------------------
+// Tournament event log (host/admin forensics timeline)
+// ---------------------------------------------------------------------------
+
+export interface TournamentEventDto {
+  id: string;
+  type: string;
+  actor: string;
+  actorId: string | null;
+  actorName: string | null;
+  subjectId: string | null;
+  subjectName: string | null;
+  payload: unknown;
+  createdAt: string;
+}
+
+export function getTournamentEvents(slug: string): Promise<{ events: TournamentEventDto[] }> {
+  return apiFetch<{ events: TournamentEventDto[] }>(`/api/tournaments/${slug}/events`);
+}
+
 export function createTournament(body: TournamentCreate): Promise<Tournament> {
   return apiFetch<Tournament>('/api/tournaments', {
     method: 'POST',
