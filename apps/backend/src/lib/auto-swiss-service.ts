@@ -10,6 +10,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
+import { recordTournamentEvent } from './tournament-events.js';
 import {
   generateSwissRound,
   computeSwissStandings,
@@ -226,6 +227,13 @@ export async function startAutoSwiss(
     });
   });
 
+  void recordTournamentEvent({
+    tournamentId,
+    type: 'matches_created',
+    actor: 'system',
+    payload: { phase: 'swiss', round: 1, count: round1Matches.length },
+  });
+
   // B22: notify round-1 pairings for Auto Swiss too.
   await notifyMatchesCreated(tournamentId, 1, round1Matches);
 }
@@ -390,6 +398,13 @@ async function generateNextSwissRound(
         new_value: { round: targetRound, matches: newMatches.length },
       },
     });
+  });
+
+  void recordTournamentEvent({
+    tournamentId: tournament.id,
+    type: 'matches_created',
+    actor: 'system',
+    payload: { phase: 'swiss', round: targetRound, count: newMatches.length },
   });
 
   // Notify pairings — non-fatal

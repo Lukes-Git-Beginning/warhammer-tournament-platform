@@ -14,6 +14,7 @@ import { notifyOpenPlayDispute, notifyReplayMismatchHeld, notifyHostsOfMatchRepo
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { invalidate } from '../lib/cache.js';
 import { emitBracketUpdate } from '../lib/emit.js';
+import { recordTournamentEvent } from '../lib/tournament-events.js';
 
 const LobbyCodeBodySchema = z.object({
   lobby_code: z.string().max(64).nullable(),
@@ -248,6 +249,15 @@ async function settleVerifiedReport(
       });
       fastify.log.warn({ matchId, gameId }, 'Replay mismatch — ambiguous replay, escalated to host/admin');
       setImmediate(() => void notifyDisputeEscalation(fastify, { matchId, tournamentId, reporterId }));
+    }
+    if (tournamentId) {
+      void recordTournamentEvent({
+        tournamentId,
+        type: 'replay_mismatch',
+        actor: 'player',
+        actorId: reporterId ?? null,
+        payload: { matchId, gameNumber, ambiguous: values.ambiguous, issues: verification.issues },
+      });
     }
     if (fastify.io) {
       fastify.io.to(`match_decision_${matchId}`).emit('match.game.updated', {

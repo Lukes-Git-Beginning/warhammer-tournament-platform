@@ -14,6 +14,7 @@
 import type { PrismaClient } from '@rizzotto/db';
 import type { MatchResultType } from '@rizzotto/types';
 import type { Server } from 'socket.io';
+import { recordTournamentEvent } from './tournament-events.js';
 import type { Redis } from 'ioredis';
 import type {
   ClientToServerEvents,
@@ -414,6 +415,16 @@ export async function resolveMatchResult(
     await Promise.all([invalidate(redis, 'factions:*'), invalidate(redis, 'meta:*')]);
   }
 
+  if (match.tournament_id) {
+    void recordTournamentEvent({
+      tournamentId: match.tournament_id,
+      type: 'match_completed',
+      actor: opts.actorId ? 'player' : 'system',
+      actorId: opts.actorId ?? null,
+      payload: { matchId, winnerId, player1Id: match.player1_id, player2Id: match.player2_id, result },
+    });
+  }
+
   // 5. Socket events (after transaction committed)
   if (io && match.tournament_id) {
     io.to(tournamentRoom(match.tournament_id)).emit('match_completed', {
@@ -455,6 +466,16 @@ export async function disputeMatch(
       },
     });
   });
+
+  if (tournamentId) {
+    void recordTournamentEvent({
+      tournamentId,
+      type: 'match_disputed',
+      actor: actorId ? 'player' : 'system',
+      actorId: actorId ?? null,
+      payload: { matchId, reason: 'report_disagreement' },
+    });
+  }
 
   if (io) {
     io.to(tournamentRoom(tournamentId)).emit('match_disputed', {

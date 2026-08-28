@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { createLateJoinerBye } from './tournament-utils.js';
 import { emitBracketUpdate } from './emit.js';
 import { admitBalancedLateJoiner } from './balanced-liechtenstein-service.js';
+import { recordTournamentEvent } from './tournament-events.js';
 
 type Io = Parameters<typeof emitBracketUpdate>[0];
 
@@ -215,6 +216,12 @@ export async function createManualMatch(
       phase: tournament.format === 'SWISS' ? 'SWISS' : null,
     },
     select: { id: true, round: true, match_number: true },
+  });
+  void recordTournamentEvent({
+    tournamentId: tournament.id,
+    type: 'match_created',
+    actor: 'host',
+    payload: { phase: 'manual', player1Id, player2Id: player2Id ?? null },
   });
   emitBracketUpdate(io, tournament.id);
   // Return the tournament id so the caller can run a pairing tick (Balanced Liechtenstein:

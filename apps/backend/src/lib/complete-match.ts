@@ -10,6 +10,7 @@ import type { FastifyInstance } from 'fastify';
 import { Prisma, type BracketSide } from '@rizzotto/db';
 import { slotForFeeder, type FeederEvent } from './bracket.js';
 import { invalidate } from './cache.js';
+import { recordTournamentEvent } from './tournament-events.js';
 import { emitMatchResult, emitBracketUpdate } from './emit.js';
 import { logQueueActivity } from './queue-activity.js';
 import { recomputeFactionStats } from './recompute-faction-stats.js';
@@ -330,6 +331,11 @@ export async function completeMatch(
   }
 
   if (match.tournament_id) {
+    void recordTournamentEvent({
+      tournamentId: match.tournament_id,
+      type: 'match_completed',
+      payload: { matchId, winnerId, player1Id: match.player1_id, player2Id: match.player2_id },
+    });
     emitMatchResult(fastify.io, {
       tournamentId: match.tournament_id,
       matchId,

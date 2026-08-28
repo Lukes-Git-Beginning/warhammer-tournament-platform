@@ -564,6 +564,12 @@ export async function runBalancedPairingTick(
       }
       if (rows.length === 0) break;
       await fastify.prisma.match.createMany({ data: rows });
+      void recordTournamentEvent({
+        tournamentId,
+        type: 'matches_created',
+        actor: 'system',
+        payload: { phase: 'bali_group', count: rows.length },
+      });
       mutated = true;
     }
 

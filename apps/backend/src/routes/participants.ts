@@ -9,6 +9,7 @@ import { admitBalancedLateJoiner } from '../lib/balanced-liechtenstein-service.j
 import { getPlayerClassification } from '../lib/skill-classification-service.js';
 import { BAND_NAMES } from '../lib/skill-classification.js';
 import { effectiveTiersOf, SUPPORTER_FLAG_SELECT } from '../lib/supporter-service.js';
+import { recordTournamentEvent } from '../lib/tournament-events.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -244,6 +245,15 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
 
+        void recordTournamentEvent({
+          tournamentId: tournament.id,
+          type: 'participant_registered',
+          actor: 'player',
+          actorId: request.user.sub,
+          subjectId: request.user.sub,
+          payload: { status: initialStatus },
+        });
+
         emitParticipantChange(fastify.io, {
           tournamentId: tournament.id,
           userId: request.user.sub,
@@ -430,6 +440,14 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         data: { entity_type: 'TournamentParticipant', entity_id: pending.id, action: 'late_join_approved', actor_id: request.user.sub, new_value: { tournament_id: tournament.id, user_id: userId } },
       });
 
+      void recordTournamentEvent({
+        tournamentId: tournament.id,
+        type: 'participant_late_joined',
+        actor: 'host',
+        actorId: request.user.sub,
+        subjectId: userId,
+      });
+
       // Fold them into the running tournament using the format-correct late-join path.
       if (tournament.status === 'ONGOING') {
         if (tournament.format === 'BALANCED_LIECHTENSTEIN') {
@@ -575,6 +593,14 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
+      void recordTournamentEvent({
+        tournamentId: tournament.id,
+        type: 'participant_withdrew',
+        actor: 'player',
+        actorId: request.user.sub,
+        subjectId: request.user.sub,
+      });
+
       emitParticipantChange(fastify.io, {
         tournamentId: tournament.id,
         userId: request.user.sub,
@@ -672,6 +698,14 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           old_value: { status: participant.status },
           new_value: { status: 'CHECKED_IN' },
         },
+      });
+
+      void recordTournamentEvent({
+        tournamentId: tournament.id,
+        type: 'participant_checked_in',
+        actor: 'host',
+        actorId: user.sub,
+        subjectId: parsed.data.user_id,
       });
 
       emitParticipantChange(fastify.io, {
@@ -800,6 +834,14 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           old_value: { status: participant.status },
           new_value: { status: 'CHECKED_IN' },
         },
+      });
+
+      void recordTournamentEvent({
+        tournamentId: tournament.id,
+        type: 'participant_checked_in',
+        actor: 'player',
+        actorId: request.user.sub,
+        subjectId: request.user.sub,
       });
 
       emitParticipantChange(fastify.io, {
@@ -1121,6 +1163,14 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         });
       });
 
+      void recordTournamentEvent({
+        tournamentId: tournament.id,
+        type: 'participant_dropped',
+        actor: isSelf ? 'player' : 'host',
+        actorId: callerId,
+        subjectId: userId,
+      });
+
       emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'withdrew' });
 
       // B20: let the host(s) know a player dropped — excluding the actor.
@@ -1279,6 +1329,15 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
             new_value: { userId, matchesRestored: droppedPlayoffMatches.length },
           },
         });
+      });
+
+      void recordTournamentEvent({
+        tournamentId: tournament.id,
+        type: 'participant_undropped',
+        actor: 'host',
+        actorId: currentUserId,
+        subjectId: userId,
+        payload: { restoredMatches: droppedPlayoffMatches.length },
       });
 
       emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'registered' });
