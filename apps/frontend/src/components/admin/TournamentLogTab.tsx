@@ -43,12 +43,28 @@ function EventRow({ e }: { e: TournamentEventDto }) {
   );
 }
 
+/**
+ * The tournaments list endpoint caps pageSize at 100, so page through it to fetch ALL tournaments.
+ * (We are already at ~99 since launch — a fixed 100 cap would silently drop the rest.)
+ */
+async function fetchAllTournaments(): Promise<Tournament[]> {
+  const pageSize = 100;
+  const first = await listTournaments(1, pageSize);
+  const all = [...first.data];
+  const totalPages = Math.ceil(first.total / pageSize);
+  for (let p = 2; p <= totalPages; p++) {
+    const next = await listTournaments(p, pageSize);
+    all.push(...next.data);
+  }
+  return all;
+}
+
 export function TournamentLogTab() {
   const [selected, setSelected] = useState<Tournament | null>(null);
 
-  const { data: list, isLoading: listLoading } = useQuery({
+  const { data: tournaments = [], isLoading: listLoading } = useQuery({
     queryKey: ['admin-tournament-log-list'],
-    queryFn: () => listTournaments(1, 100),
+    queryFn: fetchAllTournaments,
   });
 
   const {
@@ -60,8 +76,6 @@ export function TournamentLogTab() {
     queryFn: () => getTournamentEvents(selected!.slug),
     enabled: !!selected,
   });
-
-  const tournaments = list?.data ?? [];
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
