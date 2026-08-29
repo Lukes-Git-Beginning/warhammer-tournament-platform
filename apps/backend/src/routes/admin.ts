@@ -30,6 +30,13 @@ import { skillToBand } from '../lib/rating-model.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
 import { getQueuePenaltyState, resetQueuePenaltyToWarned } from '../lib/queue-penalty.js';
 import { publishChangelog } from '../lib/changelog-publish.js';
+import {
+  parseAnnouncementDestinations,
+  buildTournamentFacts,
+  generateAnnouncement,
+  isAnnouncementAiConfigured,
+  ANNOUNCEMENT_DESTINATIONS_CONFIG_KEY,
+} from '../lib/announcements.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -1593,6 +1600,123 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (fastify.redis) await invalidate(fastify.redis, 'admin:config:*');
     return config;
+  });
+
+  // -------------------------------------------------------------------------
+  // Announcements — generate per-Discord tailored tournament copy.
+  // Destinations live in AdminConfig (`announcement_destinations`), managed via
+  // the generic config CRUD above; this endpoint does the AI generation.
+  // 503 until ANTHROPIC_API_KEY is set on prod (destination management still works).
+  // -------------------------------------------------------------------------
+  const GenerateAnnouncementsBodySchema = z.object({
+    slug: z.string().min(1),
+    destinationIds: z.array(z.string().min(1)).min(1).max(10),
+  });
+
+  fastify.post('/api/admin/announcements/generate', async (request, reply) => {
+    if (!isAnnouncementAiConfigured()) {
+      return reply.code(503).send({
+        error: 'NotConfigured',
+        message: 'Announcement generation is not configured yet (ANTHROPIC_API_KEY missing).',
+        statusCode: 503,
+      });
+    }
+
+    const parsed = GenerateAnnouncementsBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { slug, destinationIds } = parsed.data;
+
+    // Light per-admin cooldown so a stuck button can't fan out a burst of calls.
+    if (fastify.redis) {
+      const acquired = await fastify.redis
+        .set(`rizzotto:announce:cooldown:${request.user.sub}`, '1', 'EX', 15, 'NX')
+        .catch(() => 'OK');
+      if (acquired === null) {
+        return reply.code(429).send({
+          error: 'TooManyRequests',
+          message: 'Please wait a few seconds before generating again.',
+          statusCode: 429,
+        });
+      }
+    }
+
+    const tournament = await fastify.prisma.tournament.findFirst({
+      where: { slug, deleted_at: null },
+      select: {
+        name: true,
+        slug: true,
+        format: true,
+        mode: true,
+        start_date: true,
+        registration_deadline: true,
+        max_participants: true,
+        entry_fee: true,
+        rules: true,
+        standard_rules_enabled: true,
+        restrictions: true,
+        discord_link: true,
+        stream_url: true,
+        is_major: true,
+        _count: { select: { participants: { where: { deleted_at: null } } } },
+        faction_allowlist: { select: { faction: { select: { name: true } } } },
+        map_pool: { select: { map: { select: { name: true } } } },
+      },
+    });
+    if (!tournament) {
+      return reply.code(404).send({ error: 'NotFound', message: `Tournament "${slug}" not found`, statusCode: 404 });
+    }
+
+    const destinationsRow = await fastify.prisma.adminConfig.findUnique({
+      where: { key: ANNOUNCEMENT_DESTINATIONS_CONFIG_KEY },
+    });
+    const allDestinations = parseAnnouncementDestinations(destinationsRow?.value);
+    const destinations = destinationIds
+      .map((id) => allDestinations.find((d) => d.id === id))
+      .filter((d): d is NonNullable<typeof d> => Boolean(d));
+    if (destinations.length === 0) {
+      return reply.code(400).send({
+        error: 'BadRequest',
+        message: 'None of the requested destinations exist. Save your destinations first.',
+        statusCode: 400,
+      });
+    }
+
+    const facts = buildTournamentFacts({
+      name: tournament.name,
+      slug: tournament.slug,
+      format: tournament.format,
+      mode: tournament.mode,
+      startDate: tournament.start_date,
+      registrationDeadline: tournament.registration_deadline,
+      maxParticipants: tournament.max_participants,
+      participantCount: tournament._count.participants,
+      entryFee: tournament.entry_fee,
+      rules: tournament.rules,
+      standardRulesEnabled: tournament.standard_rules_enabled,
+      restrictions: tournament.restrictions,
+      factionNames: tournament.faction_allowlist.map((f) => f.faction.name),
+      mapNames: tournament.map_pool.map((m) => m.map.name),
+      discordLink: tournament.discord_link,
+      streamUrl: tournament.stream_url,
+      isMajor: tournament.is_major,
+      frontendUrl: process.env.FRONTEND_URL ?? 'https://rizzotto.gg',
+    });
+
+    const results = await Promise.all(
+      destinations.map(async (destination) => {
+        try {
+          const text = await generateAnnouncement({ facts, destination });
+          return { id: destination.id, name: destination.name, text };
+        } catch (err) {
+          request.log.error({ err, destination: destination.id }, 'announcement generation failed');
+          return { id: destination.id, name: destination.name, text: '', error: 'Generation failed' };
+        }
+      }),
+    );
+
+    return { results };
   });
 
   // -------------------------------------------------------------------------

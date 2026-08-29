@@ -1382,6 +1382,58 @@ export function getStandardRuleset(): Promise<StandardRuleset> {
 }
 
 // ---------------------------------------------------------------------------
+// Announcements (admin — AI-generated, per-Discord tournament copy)
+// ---------------------------------------------------------------------------
+
+export const ANNOUNCEMENT_DESTINATIONS_KEY = 'announcement_destinations';
+
+export type AnnouncementLength = 'SHORT' | 'MEDIUM' | 'LONG';
+
+export interface AnnouncementDestination {
+  id: string;
+  name: string;
+  brief: string;
+  tone: string;
+  length: AnnouncementLength;
+  role_mention: string;
+  intro: string;
+  outro: string;
+}
+
+export interface GeneratedAnnouncement {
+  id: string;
+  name: string;
+  text: string;
+  error?: string;
+}
+
+/** The operator's destination list (empty array if never configured / 404). */
+export async function getAnnouncementDestinations(): Promise<AnnouncementDestination[]> {
+  try {
+    const cfg = await getAdminConfig(ANNOUNCEMENT_DESTINATIONS_KEY);
+    return Array.isArray(cfg.value) ? (cfg.value as AnnouncementDestination[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function putAnnouncementDestinations(
+  destinations: AnnouncementDestination[],
+): Promise<AdminConfigEntry> {
+  return putAdminConfig(ANNOUNCEMENT_DESTINATIONS_KEY, destinations);
+}
+
+export function generateAnnouncements(
+  slug: string,
+  destinationIds: string[],
+): Promise<{ results: GeneratedAnnouncement[] }> {
+  return apiFetch('/api/admin/announcements/generate', {
+    method: 'POST',
+    body: JSON.stringify({ slug, destinationIds }),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Leaderboard — Extended (mode param)
 // ---------------------------------------------------------------------------
 
