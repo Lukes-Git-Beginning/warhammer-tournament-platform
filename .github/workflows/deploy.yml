@@ -56,19 +56,28 @@ jobs:
       - name: Smoke-test production
         run: |
           fail=0
+          # A status code alone is not enough: the SPA fallback answers 200 with index.html for
+          # anything the reverse proxy does not route to the backend, so a misrouted API path
+          # looks healthy. Every backend check must also see the content it expects.
           check() {
-            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$1" || echo 000)
+            url="$1"; expect="${2:-}"
+            body=$(curl -sS --max-time 15 -w '\n%{http_code}' "$url" || echo $'\n000')
+            status=${body##*$'\n'}
+            body=${body%$'\n'*}
             if [ "$status" != "200" ]; then
-              echo "::error::Post-deploy smoke failed: $1 returned $status"
+              echo "::error::Post-deploy smoke failed: $url returned $status"
+              fail=1
+            elif [ -n "$expect" ] && ! printf '%s' "$body" | grep -q "$expect"; then
+              echo "::error::Post-deploy smoke failed: $url returned 200 but no '$expect' — served by the SPA fallback?"
               fail=1
             else
-              echo "$1 → $status"
+              echo "$url → $status"
             fi
           }
           check https://rizzotto.gg
-          check https://rizzotto.gg/health
-          check https://rizzotto.gg/health/deep
-          check 'https://rizzotto.gg/api/tournaments?page=1&pageSize=1'
+          check https://rizzotto.gg/health '"status":"ok"'
+          check https://rizzotto.gg/health/deep '"checks"'
+          check 'https://rizzotto.gg/api/tournaments?page=1&pageSize=1' '"data"'
           exit $fail
 
       # Fires if any prior step failed (SSH OR smoke-test). Silent skip when

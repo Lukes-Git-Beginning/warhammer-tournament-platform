@@ -64,7 +64,8 @@ lief voll und der Kernel verwarf die SYNs. Genau so sieht ein blockierter Event-
 | **Regressionstest** | `test/replay-parser.test.ts` — synthetischer ESF-Buffer mit absurdem `groupCount`, mit Zeitschranke. |
 | **Erkennung** | `rizzotto-health.timer` probt minütlich `/health` und startet nach 2 Fehlschlägen neu (~2 min statt 35). Neuer `/health/deep` prüft zusätzlich Postgres + Redis. |
 | **Alarmierung** | `rizzotto-alert@.service` als `OnFailure=`-Ziel; Watchdog meldet Restart **und** Erholung nach Discord. Externer Uptime-Monitor auf `/health/deep`. |
-| **Deploy-Gate** | Der Smoke-Test prüfte nur `https://rizzotto.gg` — statische Cloudflare-Assets, 200 auch bei totem Backend. Jetzt zusätzlich `/health`, `/health/deep` und ein echter API-Read. |
+| **Deploy-Gate** | Der Smoke-Test prüfte nur `https://rizzotto.gg` — statische Cloudflare-Assets, 200 auch bei totem Backend. Jetzt zusätzlich `/health`, `/health/deep` und ein echter API-Read, **jeweils mit Inhaltsprüfung**. |
+| **Reverse-Proxy** | Caddys `path`-Matcher listete `/health` und matcht damit *exakt* — `/health/deep` fiel in den SPA-Fallback und antwortete 200 mit `index.html`. Beim ersten Rollout war der neue Smoke-Test dadurch grün, ohne irgendetwas zu prüfen. Matcher auf `/health /health/*` erweitert; seitdem prüfen alle Backend-Checks zusätzlich den Response-Inhalt, damit ein Fallback nie wieder als „gesund" durchgeht. |
 | **systemd** | `StartLimitIntervalSec`/`StartLimitBurst` standen in `[Service]` statt `[Unit]` und wurden ignoriert (systemd loggte das bei jedem `daemon-reload`). Dazu `MemoryMax` + `OOMPolicy=stop`, damit ein Speicherleck nicht den Kernel-OOM-Killer auf Postgres ansetzt. |
 | **Crash-Guard** | `unhandledRejection`/`uncaughtException` loggen jetzt `fatal` mit Stack und beenden bewusst — vorher wäre ein solcher Tod spurlos gewesen. |
 | **Shutdown** | `app.close()` bekommt 10 s, danach hartes Exit. Vorher wartete systemd bei drei von vier Restarts die vollen 90 s bis SIGKILL ab — **jeder Deploy hatte ein 90-Sekunden-502-Fenster**. |
@@ -81,7 +82,10 @@ Gegen 60 echte Production-Replays (die 12 größten plus eine Zufallsstichprobe)
 ## Lehren
 
 - **Frontend-200 heißt nicht, dass die Seite lebt.** Ein Smoke-Test, der nur statische Assets von
-  einem CDN abfragt, misst das CDN.
+  einem CDN abfragt, misst das CDN. Und ein Statuscode allein reicht nicht: ein SPA-Fallback
+  antwortet auf *jeden* nicht geroutenen Pfad mit 200. Ein Check muss den Inhalt sehen, den er
+  erwartet — sonst prüft er, dass die Fehlerseite erreichbar ist. Genau das ist uns beim ersten
+  Rollout dieses Fixes passiert.
 - **`Restart=` ist kein Health-Check.** Es deckt „Prozess tot" ab, nicht „Prozess antwortet nicht".
   Das sind verschiedene Ausfälle und sie brauchen verschiedene Mechanismen.
 - **Jede Schleife über eine aus Nutzerdaten gelesene Zahl braucht eine Obergrenze aus der Struktur

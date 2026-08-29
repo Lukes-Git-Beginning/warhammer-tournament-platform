@@ -27,8 +27,11 @@ rizzotto.gg {
 	# Backend: API, Auth, GraphQL, Health, WebSocket, Uploads.
 	# `handle` blocks are used (not bare matchers + try_files) so that backend
 	# routes don't get rewritten to /index.html by the SPA fallback below.
+	# `path` matches exactly (with explicit wildcards), so /health alone does NOT cover
+	# /health/deep — that fell through to the SPA fallback and answered 200 with index.html,
+	# which made both the deploy smoke test and any uptime monitor green against a dead backend.
 	@backend {
-		path /api/* /auth/* /graphql /health
+		path /api/* /auth/* /graphql /health /health/*
 		path /socket.io/*
 		path /uploads/*
 	}
