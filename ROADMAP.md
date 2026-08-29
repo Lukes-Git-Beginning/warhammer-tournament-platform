@@ -61,6 +61,17 @@ Bundled in `f4e3705` und deployed 2026-05-20: Delete-Button, Status-Transition (
 | 3   | **Hetzner-VM-Backup aktivieren**                                              | Hetzner Cloud-Console        | ~1.68 €/mo, User-Task                                                 |
 | 4   | ~~`.env.example` ergänzen um `STEAM_OPENID_RETURN_URL`, `STEAM_WEB_API_KEY`~~ | root `.env.example`          | ✅ war faktisch schon geschlossen (Zeile 45, 48); §2.2 #4 war Phantom |
 
+### 2.2b Ops-Nachlauf zum Incident 2026-08-28 — offene User-Tasks
+
+Code + Server-Units sind live (Details: `docs/postmortem-2026-08-28.md`). Diese drei brauchen
+Zugänge, die nur Luke hat:
+
+| #   | Item                                                                                 | Wo                        | Notiz                                                                                     |
+| --- | ------------------------------------------------------------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------- |
+| 1   | **`ALERT_DISCORD_WEBHOOK`** in `/etc/rizzotto/env/alert.env` eintragen                | Server                    | Der Deploy-Webhook liegt nur als GitHub-Secret vor, ist also nicht auslesbar. Ohne ihn restartet der Watchdog trotzdem, meldet aber nur ins Journal. Ein Befehl, steht in `deploy/README.md`. |
+| 2   | **Externer Uptime-Monitor** auf `https://rizzotto.gg/health/deep`                     | UptimeRobot / Better Stack | Free-Tier reicht, Alert in den Deploy-Discord-Channel. Deckt „ganze Kiste weg" ab — das kann der lokale Watchdog prinzipbedingt nicht. Dazu Cloudflare-Cache-Bypass für `/health*`. |
+| 3   | **Cloudflare-R2-Bucket + API-Token** für das Off-Site-Backup                          | Cloudflare + Server       | `scripts/backup-db.sh` lädt hoch, sobald `BACKUP_REMOTE` gesetzt ist; `rclone` muss noch installiert werden. Schritte in `deploy/README.md`. Aktuell liegt der `pg_dump` weiterhin nur lokal. |
+
 ### 2.3 Tech-Debt aus Eigentest 2026-05-19 + Welle-1-Follow-ups
 
 | #   | Item                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Pfad                                                                                                          | Severity                                                                         |

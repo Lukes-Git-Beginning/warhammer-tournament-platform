@@ -100,3 +100,8 @@ Gegen 60 echte Production-Replays (die 12 größten plus eine Zufallsstichprobe)
   eigene, separat zu testende Änderung.
 - Log-Level: 600–1200 Zeilen/Minute auf `info` (jeder Request zweimal). Hat hier die Analyse
   gerettet, ist auf Dauer aber Journal-Ballast.
+- **`app.close()` kommt weiterhin nicht durch.** Der 10-s-Guard begrenzt den Schaden (Deploy-Fenster
+  90 s → 10 s, und die Unit stoppt jetzt sauber statt per SIGKILL), aber im Journal steht bei jedem
+  Restart `graceful shutdown timed out — exiting anyway`. Irgendein Handle hält die Instanz offen —
+  Verdacht: die beiden `setInterval`s aus `plugins/cron.ts` oder Socket.IO. Das ist ein Pflaster,
+  keine Heilung: offene Requests werden beim Deploy weiterhin hart abgeschnitten.
