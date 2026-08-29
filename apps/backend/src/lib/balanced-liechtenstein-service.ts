@@ -176,38 +176,47 @@ export async function runBalancedPairingTick(
   fastify: FastifyInstance,
   tournamentId: string,
 ): Promise<void> {
-  // Cheap format/status guard first — the completion hook calls this for every
-  // tournament match, so bail before touching Redis for non-balanced tournaments.
-  const tournament = await fastify.prisma.tournament.findFirst({
-    where: { id: tournamentId, deleted_at: null },
-    select: { format: true, status: true, rounds_count: true },
-  });
-  if (
-    !tournament ||
-    tournament.format !== 'BALANCED_LIECHTENSTEIN' ||
-    tournament.status !== 'ONGOING'
-  ) {
-    return;
-  }
-  const roundsCount = tournament.rounds_count ?? 5;
-
   const redis = fastify.redis;
   const lockKey = `rizzotto:bl:tick:${tournamentId}:lock`;
   const pendingKey = `rizzotto:bl:tick:${tournamentId}:pending`;
   const token = randomUUID();
+  let roundsCount: number;
 
-  if (redis) {
-    const acquired = await redis.set(lockKey, token, 'EX', LOCK_TTL_SECONDS, 'NX');
-    if (acquired !== 'OK') {
-      // Another tick is running. Don't drop this trigger — flag a re-run so the holder
-      // re-processes the latest state after it finishes. Without this, a burst of triggers
-      // (e.g. several near-simultaneous withdrawals) can leave the final, now-complete field
-      // un-processed → the per-division playoffs never auto-generate (the case that needed a
-      // manual start-playoffs on an already-finished field).
-      await redis.set(pendingKey, '1', 'EX', LOCK_TTL_SECONDS);
+  // Guard + lock acquisition are wrapped: nearly every caller invokes this fire-and-forget, so a
+  // rejecting Prisma or Redis call here would take the whole process down instead of skipping a
+  // tick (the cron reconciler re-runs it a minute later anyway).
+  try {
+    // Cheap format/status guard first — the completion hook calls this for every
+    // tournament match, so bail before touching Redis for non-balanced tournaments.
+    const tournament = await fastify.prisma.tournament.findFirst({
+      where: { id: tournamentId, deleted_at: null },
+      select: { format: true, status: true, rounds_count: true },
+    });
+    if (
+      !tournament ||
+      tournament.format !== 'BALANCED_LIECHTENSTEIN' ||
+      tournament.status !== 'ONGOING'
+    ) {
       return;
     }
-    await redis.del(pendingKey); // we hold the lock → we'll read the freshest state; clear the flag
+    roundsCount = tournament.rounds_count ?? 5;
+
+    if (redis) {
+      const acquired = await redis.set(lockKey, token, 'EX', LOCK_TTL_SECONDS, 'NX');
+      if (acquired !== 'OK') {
+        // Another tick is running. Don't drop this trigger — flag a re-run so the holder
+        // re-processes the latest state after it finishes. Without this, a burst of triggers
+        // (e.g. several near-simultaneous withdrawals) can leave the final, now-complete field
+        // un-processed → the per-division playoffs never auto-generate (the case that needed a
+        // manual start-playoffs on an already-finished field).
+        await redis.set(pendingKey, '1', 'EX', LOCK_TTL_SECONDS);
+        return;
+      }
+      await redis.del(pendingKey); // we hold the lock → we'll read the freshest state; clear the flag
+    }
+  } catch (err) {
+    fastify.log.error({ err, tournamentId }, 'BaLi tick: guard/lock failed');
+    return;
   }
 
   try {

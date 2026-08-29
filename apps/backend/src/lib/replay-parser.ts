@@ -167,6 +167,12 @@ type EsfVisitField = (type: number, pos: number, parentName: string | undefined)
  *  record (with its byte range), `visitField` per primitive field (pos = the data byte). */
 function walkEsf(b: Buffer, RN: string[], visit: EsfVisit, visitField: EsfVisitField): void {
   const HAS_NESTED = 0x40, HAS_NON_OPT = 0x20;
+  // Work budget. A well-formed walk touches each byte a handful of times, so a step count tied to
+  // the buffer length is generous for real replays and still bounds a malformed one. `cauleb128`
+  // is unbounded by construction, so a garbage byte run can hand us an astronomical count for a
+  // block that is a few bytes wide — see the group-loop guard below. Exceeding the budget throws;
+  // the only caller (extractReplayPlayers) is fail-open and degrades to "no players read".
+  let budget = 8 * b.length + 10_000;
   function fieldEnd(t: number, pos: number): number {
     const sz = ESF_FIELD_SIZE[t];
     if (sz !== undefined) return pos + sz;
@@ -193,11 +199,18 @@ function walkEsf(b: Buffer, RN: string[], visit: EsfVisit, visitField: EsfVisitF
     let groupCount = 1;
     if (hasNested) { [groupCount, p] = cauleb128(b, p); }
     for (let g = 0; g < groupCount; g++) {
+      // Every group consumes at least one byte, so none can start at or past the block end. Without
+      // this, a groupCount decoded from garbage (one prod replay claimed 7.45e18 groups for a 29-byte
+      // block) spins here forever: the inner while-loop is already exhausted, so the body does no
+      // work and only the counter advances — a ~157000-year loop that wedged the whole event loop.
+      if (p >= finalBlockOffset) break;
+      if (--budget < 0) throw new Error('ESF walk budget exceeded');
       let finalEntryOffset: number;
       if (hasNested) { const [es, afterEs] = cauleb128(b, p); p = afterEs; finalEntryOffset = p + es; }
       else finalEntryOffset = finalBlockOffset;
       if (finalEntryOffset > finalBlockOffset) finalEntryOffset = finalBlockOffset;
       while (p < finalEntryOffset) {
+        if (--budget < 0) throw new Error('ESF walk budget exceeded');
         const e = readNode(p, false, nm);
         if (e <= p || e > finalEntryOffset) { p = finalEntryOffset; break; }
         p = e;

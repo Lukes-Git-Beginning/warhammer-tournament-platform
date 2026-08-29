@@ -82,4 +82,36 @@ describe('replay-parser', () => {
   });
   // Full player↔faction pairing is validated against real replays (8/8 labelled, 229/233 prod),
   // not synthesised here: the ESF tree/string-pool layout is impractical to hand-craft in a unit test.
+
+  // Regression: rizzotto.gg incident 2026-08-28. A real, player-uploaded replay carried a record
+  // whose CAULEB128 group count decoded to 7.45e18 for a 29-byte block. The group loop did no work
+  // per iteration (the inner cursor was already past the block) but still counted to that value —
+  // an effectively infinite synchronous loop. It ran inside the result-report request handler, so
+  // it blocked the event loop: the process stayed up while every request 502'd for 35 minutes.
+  it('bounds a record whose group count is absurd (does not hang) — incident 2026-08-28', () => {
+    // Big-endian 7-bit groups, high bit = continuation (mirrors the parser's cauleb128).
+    const hugeVarint = Buffer.from([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]); // ≈2^63
+
+    const buf = Buffer.alloc(128);
+    buf[0] = 0xcb; buf[1] = 0xab;
+    buf.writeUInt32LE(1785014439, 8);
+    buf.writeUInt32LE(64, 12);          // string-pool table offset
+
+    // Root record at 0x10: nested, unknown name index → RN[…] undefined, exactly as in the incident.
+    buf[16] = 0xc0;                     // 0x80 record | 0x40 HAS_NESTED
+    buf.writeUInt16LE(0xffff, 17);      // name index outside the record-name table
+    buf[19] = 0;                        // version
+    buf[20] = 20;                       // block size → block ends at 41
+    hugeVarint.copy(buf, 21);           // group count, read at p=21 → p=30
+    // 30..40 stay zero: each group reads a 0-length entry, advancing the cursor one byte at a time.
+
+    buf.writeUInt16LE(1, 64);           // record-name table: 1 entry
+    buf.writeUInt16LE(1, 66); buf.write('X', 68, 'ascii');
+    buf.writeUInt32LE(0, 69);           // empty UTF-16 pool
+    buf.writeUInt32LE(0, 73);           // empty UTF-8 pool
+
+    const started = Date.now();
+    expect(extractReplayPlayers(buf)).toEqual([]); // fail-open, as for any unreadable tree
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
 });

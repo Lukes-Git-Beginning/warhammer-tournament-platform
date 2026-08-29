@@ -1,0 +1,12 @@
+[Unit]
+Description=Probe the Rizzotto backend every minute
+
+[Timer]
+# 2 minutes after boot, then every minute. With FAIL_THRESHOLD=2 a wedge is caught within
+# ~2 minutes instead of "whenever a user complains" (35 minutes on 2026-08-28).
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

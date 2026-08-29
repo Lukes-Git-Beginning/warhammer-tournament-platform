@@ -128,9 +128,17 @@ export async function runMatchmakingTick(fastify: FastifyInstance): Promise<void
   const redis = fastify.redis;
   if (!redis) return;
 
+  // The lock acquisition sits inside the try as well: ioredis rejects a command once its retry
+  // budget is spent, and most callers invoke this fire-and-forget, where a rejection would take
+  // the process down rather than skipping one tick.
   const token = randomUUID();
-  const acquired = await redis.set(TICK_LOCK_KEY, token, 'EX', TICK_LOCK_TTL, 'NX');
-  if (acquired !== 'OK') return; // another tick is running
+  try {
+    const acquired = await redis.set(TICK_LOCK_KEY, token, 'EX', TICK_LOCK_TTL, 'NX');
+    if (acquired !== 'OK') return; // another tick is running
+  } catch (err) {
+    fastify.log.error({ err }, '[matchmaking-tick] could not acquire tick lock');
+    return;
+  }
 
   try {
     const queueLen = await redis.llen(QUEUE_KEY);

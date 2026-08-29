@@ -159,10 +159,39 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(tournamentEventRoutes);
   if (withGraphql) await app.register(graphqlPlugin);
 
+  // Liveness. Touches nothing on purpose: it answers iff the event loop is turning, which is
+  // exactly what the health watchdog needs to distinguish "wedged" from "merely busy". Do NOT add
+  // dependency checks here — restarting Node because Postgres blinked would make an outage worse.
   app.get('/health', async () => ({
     status: 'ok' as const,
     timestamp: new Date().toISOString(),
   }));
+
+  // Readiness, for the external uptime monitor: liveness plus the two backing stores. 503 when a
+  // dependency is down, so the monitor pages a human rather than the watchdog bouncing the process.
+  app.get('/health/deep', async (_request, reply) => {
+    const withTimeout = async (p: Promise<unknown>, ms = 2000): Promise<boolean> => {
+      try {
+        await Promise.race([
+          p,
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
+        ]);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    const db = await withTimeout(app.prisma.$queryRaw`SELECT 1`);
+    const redis = app.hasDecorator('redis') ? await withTimeout(app.redis.ping()) : null;
+    const ok = db && redis !== false;
+
+    return reply.code(ok ? 200 : 503).send({
+      status: ok ? ('ok' as const) : ('degraded' as const),
+      checks: { db, redis },
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   return app;
 }
