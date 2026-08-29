@@ -148,7 +148,7 @@ export function selectSectionsToPost(
 export interface PublishResult {
   channelId: string;
   dryRun: boolean;
-  posted: Array<{ version: string; parts: number; chars: number }>;
+  posted: Array<{ version: string; parts: number; chars: number; preview: string }>;
   skipped: string[]; // versions filtered out
   /** Set when a live post failed partway: the versions in `posted` went through, the rest did not. */
   error?: string;
@@ -202,7 +202,7 @@ export async function publishChangelog(opts: {
         };
       }
     }
-    posted.push({ version: section.version, parts: parts.length, chars: rendered.length });
+    posted.push({ version: section.version, parts: parts.length, chars: rendered.length, preview: rendered });
   }
 
   return { channelId, dryRun: !opts.confirm, posted, skipped };
