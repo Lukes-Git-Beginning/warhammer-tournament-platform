@@ -5,9 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.48.0] — 2026-08-30 — Admin tooling
+### Added
+- More behind-the-scenes tooling for tournament operators. No player-facing changes.
+
 ## [1.47.0] — 2026-08-30 — Balanced Liechtenstein: manual pairing is locked to protect the bracket
 ### Changed
 - **In Balanced Liechtenstein, hosts can no longer hand-edit pairings — the format pairs players automatically, and manual edits were silently breaking brackets.** BaLi decides each player's next round from how many rounds they've completed; filling a bye, swapping a player, or creating/deleting a match by hand desynced that count and cascaded into phantom byes that wrecked the whole bracket (for example, forcing two resting players across a large skill-band gap into a match — which the engine deliberately avoids, both to keep rounds fair and to stop a playoff contender from picking up a cheap win). Those structure-editing actions (fill-bye, swap-player, create/delete match, full-reset, backfill) are now disabled for hosts in BaLi, with a clear message; admins keep them for emergency repair but must explicitly confirm each one. Correcting a result, forfeits/no-contest, and the normal drop/withdraw flow are unchanged — they never touched the auto-pairing.
+
+## [1.46.0] — 2026-08-29 — Admin tooling
+### Added
+- Behind-the-scenes tooling for tournament operators. No player-facing changes.
 
 ## [1.45.0] — 2026-08-29 — Tournament event log: a durable, timestamped record of everything that happens
 ### Added

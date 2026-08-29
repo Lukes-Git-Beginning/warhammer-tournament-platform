@@ -3,16 +3,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getAnnouncementDestinations,
   putAnnouncementDestinations,
-  generateAnnouncements,
+  getAnnouncementPrompt,
+  getAnnouncementDrafts,
+  getAnnouncementPushTokenStatus,
+  rotateAnnouncementPushToken,
   listTournaments,
   type AnnouncementDestination,
   type AnnouncementLength,
-  type GeneratedAnnouncement,
+  type AnnouncementDraftResult,
   type Tournament,
-  type ApiError,
 } from '@/lib/api.js';
 
 const LENGTHS: AnnouncementLength[] = ['SHORT', 'MEDIUM', 'LONG'];
+const UPCOMING_STATUSES = ['DRAFT', 'OPEN_REGISTRATION', 'REGISTRATION_CLOSED'];
 
 function newDestination(): AnnouncementDestination {
   return {
@@ -43,6 +46,8 @@ async function fetchAllTournaments(): Promise<Tournament[]> {
 const inputClass =
   'w-full rounded border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none';
 const labelClass = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80';
+const primaryBtn =
+  'rounded border border-rizzotto-gold-700 bg-rizzotto-gold-500/10 px-4 py-1.5 text-sm text-rizzotto-gold-400 transition-colors hover:bg-rizzotto-gold-500/20 disabled:cursor-not-allowed disabled:opacity-40';
 
 function DestinationRow({
   dest,
@@ -155,62 +160,28 @@ function DestinationRow({
   );
 }
 
-function ResultCard({
-  result,
-  onRegenerate,
-  regenerating,
-}: {
-  result: GeneratedAnnouncement;
-  onRegenerate: () => void;
-  regenerating: boolean;
-}) {
-  const [text, setText] = useState(result.text);
+function DraftCard({ result }: { result: AnnouncementDraftResult }) {
   const [copied, setCopied] = useState(false);
-  useEffect(() => setText(result.text), [result.text]);
-
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(result.text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       /* clipboard unavailable */
     }
   };
-
   return (
     <div className="rounded-md border border-stone-800 bg-stone-900/40 p-3">
       <div className="mb-2 flex items-center justify-between">
         <h4 className="text-sm font-semibold text-rizzotto-gold-400">{result.name}</h4>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onRegenerate}
-            disabled={regenerating}
-            className="rounded border border-stone-700 px-2 py-1 text-xs text-stone-300 transition-colors hover:bg-stone-800 disabled:opacity-40"
-          >
-            {regenerating ? 'Regenerating…' : 'Regenerate'}
-          </button>
-          <button
-            type="button"
-            onClick={copy}
-            disabled={!text}
-            className="rounded border border-rizzotto-gold-700 bg-rizzotto-gold-500/10 px-2 py-1 text-xs text-rizzotto-gold-400 transition-colors hover:bg-rizzotto-gold-500/20 disabled:opacity-40"
-          >
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-        </div>
+        <button type="button" onClick={copy} disabled={!result.text} className={primaryBtn}>
+          {copied ? 'Copied!' : 'Copy Announcement'}
+        </button>
       </div>
-      {result.error ? (
-        <p className="text-xs text-red-400">{result.error}</p>
-      ) : (
-        <textarea
-          rows={Math.min(16, Math.max(5, text.split('\n').length + 1))}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="w-full resize-y rounded border border-stone-700 bg-stone-950 px-3 py-2 font-mono text-xs text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
-        />
-      )}
+      <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded border border-stone-800 bg-stone-950 px-3 py-2 font-mono text-xs text-stone-200">
+        {result.text}
+      </pre>
     </div>
   );
 }
@@ -218,12 +189,12 @@ function ResultCard({
 export function AnnouncementsTab() {
   const queryClient = useQueryClient();
 
+  // --- Destinations ---
   const { data: savedDestinations = [], isLoading: destLoading } = useQuery({
     queryKey: ['announcement-destinations'],
     queryFn: getAnnouncementDestinations,
     retry: false,
   });
-
   const [destinations, setDestinations] = useState<AnnouncementDestination[]>([]);
   const [dirty, setDirty] = useState(false);
   useEffect(() => {
@@ -238,52 +209,72 @@ export function AnnouncementsTab() {
       void queryClient.invalidateQueries({ queryKey: ['announcement-destinations'] });
     },
   });
-
   const editList = (fn: (list: AnnouncementDestination[]) => AnnouncementDestination[]) => {
     setDestinations((prev) => fn(prev));
     setDirty(true);
   };
 
-  // --- Generate section state ---
+  // --- Push token ---
+  const { data: tokenStatus } = useQuery({
+    queryKey: ['announcement-push-token'],
+    queryFn: getAnnouncementPushTokenStatus,
+    retry: false,
+  });
+  const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const { mutate: rotate, isPending: rotating } = useMutation({
+    mutationFn: rotateAnnouncementPushToken,
+    onSuccess: (r) => {
+      setRevealedToken(r.token);
+      void queryClient.invalidateQueries({ queryKey: ['announcement-push-token'] });
+    },
+  });
+
+  // --- Upcoming tournaments ---
   const { data: tournaments = [], isLoading: tournamentsLoading } = useQuery({
     queryKey: ['announcement-tournaments'],
     queryFn: fetchAllTournaments,
   });
+  const upcoming = tournaments
+    .filter((t) => UPCOMING_STATUSES.includes(t.status))
+    .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
 
-  const [slug, setSlug] = useState('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [results, setResults] = useState<GeneratedAnnouncement[]>([]);
-  const [notConfigured, setNotConfigured] = useState(false);
-  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Tournament | null>(null);
 
-  const toggleSelected = (id: string) =>
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-
-  const { mutate: generate, isPending: generating, error: generateError } = useMutation({
-    mutationFn: (ids: string[]) => generateAnnouncements(slug, ids),
-    onMutate: () => setNotConfigured(false),
-    onSuccess: (res, ids) => {
-      // Merge: replace results for the requested ids, keep the rest.
-      setResults((prev) => {
-        const byId = new Map(prev.map((r) => [r.id, r]));
-        for (const r of res.results) byId.set(r.id, r);
-        // Preserve the saved-destination order for stable display.
-        return savedDestinations
-          .filter((d) => byId.has(d.id) && (ids.includes(d.id) || prev.some((p) => p.id === d.id)))
-          .map((d) => byId.get(d.id)!);
-      });
-    },
-    onError: (err) => {
-      if ((err as ApiError).status === 503) setNotConfigured(true);
-    },
-    onSettled: () => setRegeneratingId(null),
+  // --- Drafts for the selected tournament ---
+  const {
+    data: draftsData,
+    isFetching: draftsFetching,
+    refetch: refetchDrafts,
+  } = useQuery({
+    queryKey: ['announcement-drafts', selected?.slug],
+    queryFn: () => getAnnouncementDrafts(selected!.slug),
+    enabled: !!selected,
   });
+  const draft = draftsData?.draft ?? null;
 
-  const canGenerate = !!slug && selectedIds.length > 0 && !generating;
+  // --- Copy prompt ---
+  const [promptBusy, setPromptBusy] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [promptError, setPromptError] = useState<string | null>(null);
+  const copyPrompt = async () => {
+    if (!selected) return;
+    setPromptBusy(true);
+    setPromptError(null);
+    try {
+      const { prompt } = await getAnnouncementPrompt(selected.slug);
+      await navigator.clipboard.writeText(prompt);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2500);
+    } catch (e) {
+      setPromptError((e as Error).message);
+    } finally {
+      setPromptBusy(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-8">
-      {/* ---- Destinations manager ---- */}
+      {/* ---- Destinations ---- */}
       <section>
         <div className="mb-1 flex items-center justify-between">
           <h3 className="font-display text-base font-semibold text-rizzotto-gold-400">Announcement destinations</h3>
@@ -323,108 +314,133 @@ export function AnnouncementsTab() {
         {saveError && <p className="mt-2 text-xs text-red-400">{(saveError as Error).message}</p>}
 
         <div className="mt-3 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => save()}
-            disabled={saving || !dirty}
-            className="rounded border border-rizzotto-gold-700 bg-rizzotto-gold-500/10 px-4 py-1.5 text-sm text-rizzotto-gold-400 transition-colors hover:bg-rizzotto-gold-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-          >
+          <button type="button" onClick={() => save()} disabled={saving || !dirty} className={primaryBtn}>
             {saving ? 'Saving…' : 'Save destinations'}
           </button>
           {dirty && <span className="text-xs text-amber-400">Unsaved changes</span>}
         </div>
       </section>
 
-      {/* ---- Generate ---- */}
+      {/* ---- Announce a tournament ---- */}
       <section className="border-t border-stone-800 pt-6">
-        <h3 className="mb-1 font-display text-base font-semibold text-rizzotto-gold-400">Generate announcements</h3>
+        <h3 className="mb-1 font-display text-base font-semibold text-rizzotto-gold-400">Announce a tournament</h3>
         <p className="mb-4 text-xs text-stone-500">
-          Pick a tournament and the destinations to write for. The site drafts a ready-to-paste Discord post per
-          destination — edit it, then copy.
+          Pick an upcoming tournament, copy its prompt, and paste it into a Claude Code session. Claude writes a
+          polished post per destination and pushes them back here — each with a Copy button.
         </p>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label className={labelClass}>Tournament</label>
-            <select value={slug} onChange={(e) => setSlug(e.target.value)} className={inputClass}>
-              <option value="">{tournamentsLoading ? 'Loading…' : 'Select a tournament…'}</option>
-              {tournaments.map((t) => (
-                <option key={t.id} value={t.slug}>
-                  {t.name} — {t.status}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Destinations</label>
-            {savedDestinations.length === 0 ? (
-              <p className="text-xs text-stone-500">Save at least one destination above first.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {savedDestinations.map((d) => (
-                  <label
-                    key={d.id}
-                    className={`cursor-pointer rounded border px-2 py-1 text-xs transition-colors ${
-                      selectedIds.includes(d.id)
-                        ? 'border-rizzotto-gold-600 bg-rizzotto-gold-500/15 text-rizzotto-gold-300'
-                        : 'border-stone-700 text-stone-400 hover:bg-stone-800'
+        <div className="flex flex-col gap-6 lg:flex-row">
+          {/* Upcoming list */}
+          <div className="lg:w-72 lg:shrink-0">
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80">Upcoming</h4>
+            {tournamentsLoading && <div className="py-4 text-sm text-stone-400">Loading…</div>}
+            <ul className="max-h-[60vh] divide-y divide-stone-800/60 overflow-y-auto rounded-md border border-stone-800">
+              {upcoming.map((t) => (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelected(t)}
+                    className={`flex w-full flex-col items-start px-3 py-2 text-left transition-colors hover:bg-stone-800/40 ${
+                      selected?.id === t.id ? 'bg-stone-800/60' : ''
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      className="sr-only"
-                      checked={selectedIds.includes(d.id)}
-                      onChange={() => toggleSelected(d.id)}
-                    />
-                    {d.name}
-                  </label>
-                ))}
-              </div>
+                    <span className="text-sm text-stone-200">{t.name}</span>
+                    <span className="text-xs text-stone-500">
+                      {new Date(t.start_date).toLocaleDateString()} · {t.status.replace(/_/g, ' ').toLowerCase()}
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {!tournamentsLoading && upcoming.length === 0 && (
+                <li className="px-3 py-4 text-sm text-stone-500">No upcoming tournaments.</li>
+              )}
+            </ul>
+          </div>
+
+          {/* Selected tournament — prompt + drafts */}
+          <div className="min-w-0 flex-1">
+            {!selected && (
+              <div className="py-8 text-center text-sm text-stone-500">Select an upcoming tournament.</div>
+            )}
+            {selected && (
+              <>
+                <div className="mb-3 flex flex-wrap items-center gap-3">
+                  <h4 className="font-display text-base font-semibold text-rizzotto-gold-400">{selected.name}</h4>
+                  <button type="button" onClick={copyPrompt} disabled={promptBusy} className={primaryBtn}>
+                    {promptBusy ? 'Copying…' : promptCopied ? 'Prompt copied!' : 'Copy prompt for Claude'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => refetchDrafts()}
+                    disabled={draftsFetching}
+                    className="rounded border border-stone-700 px-3 py-1.5 text-sm text-stone-300 transition-colors hover:bg-stone-800 disabled:opacity-40"
+                  >
+                    {draftsFetching ? 'Refreshing…' : 'Refresh drafts'}
+                  </button>
+                </div>
+                {promptCopied && (
+                  <p className="mb-3 text-xs text-stone-400">
+                    Prompt is on your clipboard — paste it into your Claude Code session. The finished posts appear
+                    below once Claude pushes them (hit “Refresh drafts”).
+                  </p>
+                )}
+                {promptError && <p className="mb-3 text-xs text-red-400">{promptError}</p>}
+
+                {draft ? (
+                  <div className="flex flex-col gap-4">
+                    <p className="text-xs text-stone-500">
+                      Pushed {new Date(draft.generatedAt).toLocaleString()} · {draft.results.length} destination
+                      {draft.results.length === 1 ? '' : 's'}
+                    </p>
+                    {draft.results.map((r) => (
+                      <DraftCard key={r.destinationId} result={r} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded border border-dashed border-stone-800 px-3 py-8 text-center text-sm text-stone-500">
+                    No drafts yet. Copy the prompt, run it in Claude Code, then refresh.
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
+      </section>
 
-        {dirty && (
-          <p className="mt-2 text-xs text-amber-400">
-            You have unsaved destination edits — generation uses the last saved version. Save first to use your latest
-            changes.
-          </p>
-        )}
+      {/* ---- Push token ---- */}
+      <section className="border-t border-stone-800 pt-6">
+        <h3 className="mb-1 font-display text-base font-semibold text-rizzotto-gold-400">Push token</h3>
+        <p className="mb-3 text-xs text-stone-500">
+          A scoped, non-expiring token that lets your Claude Code session push finished drafts back into this tab. It
+          can do nothing else. Generate it once, hand it to Claude once. Rotating invalidates the old one immediately.
+        </p>
 
-        <div className="mt-4 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => generate(selectedIds)}
-            disabled={!canGenerate}
-            className="rounded border border-rizzotto-gold-700 bg-rizzotto-gold-500/10 px-4 py-1.5 text-sm text-rizzotto-gold-400 transition-colors hover:bg-rizzotto-gold-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {generating ? 'Generating…' : `Generate (${selectedIds.length})`}
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={() => rotate()} disabled={rotating} className={primaryBtn}>
+            {rotating ? 'Generating…' : tokenStatus?.configured ? 'Rotate token' : 'Generate token'}
           </button>
+          <span className="text-xs text-stone-500">
+            {tokenStatus?.configured ? 'A token is currently set.' : 'No token set yet.'}
+          </span>
         </div>
 
-        {notConfigured && (
-          <p className="mt-3 rounded border border-amber-800/60 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
-            AI generation is not configured yet (the server has no <code>ANTHROPIC_API_KEY</code>). Destination
-            management works; text generation will light up once the key is set.
-          </p>
-        )}
-        {generateError && !notConfigured && (
-          <p className="mt-2 text-xs text-red-400">{(generateError as Error).message}</p>
-        )}
-
-        {results.length > 0 && (
-          <div className="mt-5 flex flex-col gap-4">
-            {results.map((r) => (
-              <ResultCard
-                key={r.id}
-                result={r}
-                regenerating={regeneratingId === r.id}
-                onRegenerate={() => {
-                  setRegeneratingId(r.id);
-                  generate([r.id]);
-                }}
-              />
-            ))}
+        {revealedToken && (
+          <div className="mt-3 rounded border border-rizzotto-gold-800/60 bg-rizzotto-gold-500/5 p-3">
+            <p className="mb-1 text-xs text-amber-300">
+              Copy this now — it is shown only once. Hand it to your Claude Code session.
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 break-all rounded bg-stone-950 px-2 py-1 font-mono text-xs text-stone-200">
+                {revealedToken}
+              </code>
+              <button
+                type="button"
+                onClick={() => void navigator.clipboard.writeText(revealedToken)}
+                className="rounded border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-800"
+              >
+                Copy
+              </button>
+            </div>
           </div>
         )}
       </section>

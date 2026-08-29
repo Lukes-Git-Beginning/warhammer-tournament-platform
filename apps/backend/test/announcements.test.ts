@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { buildTournamentFacts, type TournamentFactsInput } from '../src/lib/announcements.js';
+import {
+  buildTournamentFacts,
+  buildAnnouncementPrompt,
+  generatePushToken,
+  hashPushToken,
+  pushTokenMatches,
+  parseAnnouncementDrafts,
+  type TournamentFactsInput,
+  type AnnouncementDestination,
+} from '../src/lib/announcements.js';
 
 const BASE: TournamentFactsInput = {
   name: 'DLC Launch Prize Fight',
@@ -80,5 +89,75 @@ describe('buildTournamentFacts', () => {
   it('strips a trailing slash from the frontend URL', () => {
     const facts = buildTournamentFacts({ ...BASE, frontendUrl: 'https://rizzotto.gg/' });
     expect(facts.signupUrl).toBe('https://rizzotto.gg/tournaments/dlc-launch-prize-fight');
+  });
+});
+
+const DEST: AnnouncementDestination = {
+  id: 'dest-1',
+  name: 'Official TW Discord',
+  brief: 'Explain that this is a Domination tournament; be welcoming to newcomers.',
+  tone: 'warm and inviting',
+  length: 'MEDIUM',
+  role_mention: '@everyone',
+  intro: 'Hey all!',
+  outro: 'See you on the field.',
+};
+
+describe('buildAnnouncementPrompt', () => {
+  it('embeds facts, poster, slug, the push instruction and each destination brief', () => {
+    const facts = buildTournamentFacts(BASE);
+    const prompt = buildAnnouncementPrompt(
+      facts,
+      'https://rizzotto.gg/uploads/posters/x/y.jpg',
+      BASE.slug,
+      [DEST],
+    );
+    expect(prompt).toContain("Alex's own plain, direct voice");
+    expect(prompt).toContain('POST /api/admin/announcements/drafts');
+    expect(prompt).toContain(`"slug": "${BASE.slug}"`);
+    expect(prompt).toContain('Tournament name: DLC Launch Prize Fight');
+    expect(prompt).toContain('Poster link: https://rizzotto.gg/uploads/posters/x/y.jpg');
+    expect(prompt).toContain('destinationId=dest-1');
+    expect(prompt).toContain('Official TW Discord');
+    expect(prompt).toContain('Domination tournament');
+  });
+
+  it('notes when there are no destinations and no poster', () => {
+    const facts = buildTournamentFacts(BASE);
+    const prompt = buildAnnouncementPrompt(facts, null, BASE.slug, []);
+    expect(prompt).toContain('Poster link: none');
+    expect(prompt).toContain('(none configured');
+  });
+});
+
+describe('push token', () => {
+  it('generates a 64-char hex token and hashes deterministically', () => {
+    const token = generatePushToken();
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    expect(hashPushToken(token)).toBe(hashPushToken(token));
+    expect(hashPushToken(token)).not.toBe(token);
+  });
+
+  it('matches only the correct token (constant-time), rejects wrong/empty', () => {
+    const token = generatePushToken();
+    const hash = hashPushToken(token);
+    expect(pushTokenMatches(token, hash)).toBe(true);
+    expect(pushTokenMatches('wrong', hash)).toBe(false);
+    expect(pushTokenMatches('', hash)).toBe(false);
+    expect(pushTokenMatches(token, null)).toBe(false);
+  });
+});
+
+describe('parseAnnouncementDrafts', () => {
+  it('parses a valid drafts map and rejects junk', () => {
+    const valid = {
+      'some-slug': {
+        generatedAt: '2026-08-29T00:00:00.000Z',
+        results: [{ destinationId: 'd1', name: 'Server', text: 'Post body' }],
+      },
+    };
+    expect(parseAnnouncementDrafts(valid)).toEqual(valid);
+    expect(parseAnnouncementDrafts(null)).toEqual({});
+    expect(parseAnnouncementDrafts({ x: { bad: true } })).toEqual({});
   });
 });

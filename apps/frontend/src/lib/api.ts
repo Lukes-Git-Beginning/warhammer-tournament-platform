@@ -1433,6 +1433,41 @@ export function generateAnnouncements(
   });
 }
 
+// --- No-AI "copy prompt" flow: prompt text + drafts pushed back from Claude ---
+
+export interface AnnouncementDraftResult {
+  destinationId: string;
+  name: string;
+  text: string;
+}
+
+export interface AnnouncementDraftEntry {
+  generatedAt: string;
+  results: AnnouncementDraftResult[];
+}
+
+/** Assembled prompt (facts + briefs) to paste into a Claude Code session. */
+export function getAnnouncementPrompt(slug: string): Promise<{ prompt: string }> {
+  return apiFetch(`/api/admin/announcements/prompt?slug=${encodeURIComponent(slug)}`);
+}
+
+/** The drafts Claude pushed back for a tournament (null if none yet). */
+export function getAnnouncementDrafts(slug: string): Promise<{ draft: AnnouncementDraftEntry | null }> {
+  return apiFetch(`/api/admin/announcements/drafts?slug=${encodeURIComponent(slug)}`);
+}
+
+export function getAnnouncementPushTokenStatus(): Promise<{ configured: boolean }> {
+  return apiFetch('/api/admin/announcements/push-token');
+}
+
+/** Generate (or rotate) the scoped push token — returned exactly once. */
+export function rotateAnnouncementPushToken(): Promise<{ token: string }> {
+  return apiFetch('/api/admin/announcements/push-token/rotate', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Leaderboard — Extended (mode param)
 // ---------------------------------------------------------------------------

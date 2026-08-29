@@ -13,9 +13,12 @@
  * route returns a clean 503 and the destination management + copy UI still work.
  */
 import Anthropic from '@anthropic-ai/sdk';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
 export const ANNOUNCEMENT_DESTINATIONS_CONFIG_KEY = 'announcement_destinations';
+export const ANNOUNCEMENT_DRAFTS_CONFIG_KEY = 'announcement_drafts';
+export const ANNOUNCEMENT_PUSH_TOKEN_HASH_KEY = 'announcement_push_token_hash';
 
 // Model for announcement copy — a Sonnet-tier model is plenty for short marketing
 // text and far cheaper than Opus for the N-destinations fan-out (each call reuses the
@@ -64,6 +67,60 @@ export function parseAnnouncementDestinations(value: unknown): AnnouncementDesti
 
 export function isAnnouncementAiConfigured(): boolean {
   return !!process.env.ANTHROPIC_API_KEY;
+}
+
+// ---------------------------------------------------------------------------
+// Drafts (pushed back from a Claude Code session) + the scoped push token.
+// Drafts are stored as an AdminConfig map keyed by slug so several upcoming
+// tournaments can hold drafts at once.
+// ---------------------------------------------------------------------------
+
+export const AnnouncementDraftResultSchema = z.object({
+  destinationId: z.string().min(1),
+  name: z.string().min(1).max(200),
+  text: z.string().max(8000),
+});
+export type AnnouncementDraftResult = z.infer<typeof AnnouncementDraftResultSchema>;
+
+export const AnnouncementDraftPushSchema = z.object({
+  slug: z.string().min(1),
+  results: z.array(AnnouncementDraftResultSchema).min(1).max(20),
+});
+
+/** One tournament's stored drafts. */
+export const AnnouncementDraftEntrySchema = z.object({
+  generatedAt: z.string(),
+  results: z.array(AnnouncementDraftResultSchema),
+});
+export type AnnouncementDraftEntry = z.infer<typeof AnnouncementDraftEntrySchema>;
+
+/** The whole drafts store: slug → entry. */
+export const AnnouncementDraftsSchema = z.record(z.string(), AnnouncementDraftEntrySchema);
+export type AnnouncementDrafts = z.infer<typeof AnnouncementDraftsSchema>;
+
+export function parseAnnouncementDrafts(value: unknown): AnnouncementDrafts {
+  const parsed = AnnouncementDraftsSchema.safeParse(value);
+  return parsed.success ? parsed.data : {};
+}
+
+// --- Push token (a scoped, non-expiring credential — writes drafts, nothing else) ---
+
+/** Generate a fresh push token (returned once to the admin, never stored in clear). */
+export function generatePushToken(): string {
+  return randomBytes(32).toString('hex');
+}
+
+/** SHA-256 of a token — only the hash is persisted. */
+export function hashPushToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+/** Constant-time check of a presented token against the stored hash. */
+export function pushTokenMatches(presented: string, storedHash: string | null | undefined): boolean {
+  if (!storedHash || !presented) return false;
+  const a = Buffer.from(hashPushToken(presented), 'hex');
+  const b = Buffer.from(storedHash, 'hex');
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 // ---------------------------------------------------------------------------
@@ -202,6 +259,58 @@ export function buildTournamentFacts(t: TournamentFactsInput): TournamentFacts {
 
 function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 1).trimEnd()}…`;
+}
+
+// ---------------------------------------------------------------------------
+// Prompt assembly (PURE) — for the "Copy prompt for Claude" button. Produces a
+// self-contained instruction that, pasted into a Claude Code session, tells the
+// assistant to write one polished Discord post per destination and push the
+// results back to the site. No LLM call, no API key — just text assembly.
+// ---------------------------------------------------------------------------
+
+export function buildAnnouncementPrompt(
+  facts: TournamentFacts,
+  posterUrl: string | null,
+  slug: string,
+  destinations: AnnouncementDestination[],
+): string {
+  const out: string[] = [];
+  out.push(
+    'Write Discord tournament announcements for Rizzotto (rizzotto.gg). Produce ONE ready-to-paste ' +
+      "Discord post per destination listed below, in Alex's own plain, direct voice — no invented lore, " +
+      'no grimdark, no AI-speak, no "as an AI". Use light Discord markdown (**bold**, bullets). Always ' +
+      'include the sign-up link and, if present, the poster link (paste the poster URL bare so Discord ' +
+      'shows it). Preserve any <t:…> timestamp tokens exactly. If a destination has a role mention, put ' +
+      'it on the first line; use its intro/outro if given; respect its tone, length and focus.',
+  );
+  out.push('');
+  out.push(
+    `When the posts are ready, push them to the site: POST /api/admin/announcements/drafts with ` +
+      `{ "slug": "${slug}", "results": [{ "destinationId", "name", "text" }, …] } using the stored ` +
+      `announcement push token (X-Push-Token header). Then they appear in the Announcements tab with a ` +
+      `Copy button per destination.`,
+  );
+  out.push('');
+  out.push('=== TOURNAMENT FACTS (source of truth — do not invent beyond these) ===');
+  out.push(facts.block);
+  out.push(`Poster link: ${posterUrl ?? 'none'}`);
+  out.push('');
+  out.push('=== DESTINATIONS ===');
+  if (destinations.length === 0) {
+    out.push('(none configured — write one general-purpose announcement)');
+  } else {
+    destinations.forEach((d, i) => {
+      out.push(`[${i + 1}] destinationId=${d.id}`);
+      out.push(`    name: ${d.name}`);
+      out.push(`    length: ${d.length}`);
+      out.push(`    tone: ${d.tone.trim() || 'plain and direct'}`);
+      out.push(`    role mention: ${d.role_mention.trim() || 'none'}`);
+      out.push(`    intro: ${d.intro.trim() || 'none'}`);
+      out.push(`    outro: ${d.outro.trim() || 'none'}`);
+      out.push(`    focus/brief: ${d.brief.trim() || 'none'}`);
+    });
+  }
+  return out.join('\n');
 }
 
 // ---------------------------------------------------------------------------

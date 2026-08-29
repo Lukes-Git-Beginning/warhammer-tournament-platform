@@ -34,9 +34,15 @@ import { publishChangelog, changelogChannelId } from '../lib/changelog-publish.j
 import {
   parseAnnouncementDestinations,
   buildTournamentFacts,
+  buildAnnouncementPrompt,
   generateAnnouncement,
   isAnnouncementAiConfigured,
+  parseAnnouncementDrafts,
+  generatePushToken,
+  hashPushToken,
   ANNOUNCEMENT_DESTINATIONS_CONFIG_KEY,
+  ANNOUNCEMENT_DRAFTS_CONFIG_KEY,
+  ANNOUNCEMENT_PUSH_TOKEN_HASH_KEY,
 } from '../lib/announcements.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1739,6 +1745,118 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     );
 
     return { results };
+  });
+
+  // -------------------------------------------------------------------------
+  // Announcements — no-AI "copy prompt" flow.
+  // GET prompt: assemble a self-contained prompt (facts + briefs) for a Claude
+  // Code session to write the posts and push them back. No LLM call, no key.
+  // -------------------------------------------------------------------------
+  const AnnouncementSlugQuerySchema = z.object({ slug: z.string().min(1) });
+
+  fastify.get('/api/admin/announcements/prompt', async (request, reply) => {
+    const parsed = AnnouncementSlugQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { slug } = parsed.data;
+    const tournament = await fastify.prisma.tournament.findFirst({
+      where: { slug, deleted_at: null },
+      select: {
+        name: true,
+        slug: true,
+        format: true,
+        mode: true,
+        start_date: true,
+        registration_deadline: true,
+        max_participants: true,
+        entry_fee: true,
+        rules: true,
+        standard_rules_enabled: true,
+        restrictions: true,
+        discord_link: true,
+        stream_url: true,
+        is_major: true,
+        poster_url: true,
+        _count: { select: { participants: { where: { deleted_at: null } } } },
+        faction_allowlist: { select: { faction: { select: { name: true } } } },
+        map_pool: { select: { map: { select: { name: true } } } },
+      },
+    });
+    if (!tournament) {
+      return reply.code(404).send({ error: 'NotFound', message: `Tournament "${slug}" not found`, statusCode: 404 });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://rizzotto.gg';
+    const facts = buildTournamentFacts({
+      name: tournament.name,
+      slug: tournament.slug,
+      format: tournament.format,
+      mode: tournament.mode,
+      startDate: tournament.start_date,
+      registrationDeadline: tournament.registration_deadline,
+      maxParticipants: tournament.max_participants,
+      participantCount: tournament._count.participants,
+      entryFee: tournament.entry_fee,
+      rules: tournament.rules,
+      standardRulesEnabled: tournament.standard_rules_enabled,
+      restrictions: tournament.restrictions,
+      factionNames: tournament.faction_allowlist.map((f) => f.faction.name),
+      mapNames: tournament.map_pool.map((m) => m.map.name),
+      discordLink: tournament.discord_link,
+      streamUrl: tournament.stream_url,
+      isMajor: tournament.is_major,
+      frontendUrl,
+    });
+
+    const destinationsRow = await fastify.prisma.adminConfig.findUnique({
+      where: { key: ANNOUNCEMENT_DESTINATIONS_CONFIG_KEY },
+    });
+    const destinations = parseAnnouncementDestinations(destinationsRow?.value);
+    const posterUrl = tournament.poster_url ? `${frontendUrl.replace(/\/+$/, '')}${tournament.poster_url}` : null;
+    const prompt = buildAnnouncementPrompt(facts, posterUrl, slug, destinations);
+    return { prompt };
+  });
+
+  // GET drafts for one tournament (what the tab shows, with a Copy button each).
+  fastify.get('/api/admin/announcements/drafts', async (request, reply) => {
+    const parsed = AnnouncementSlugQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const row = await fastify.prisma.adminConfig.findUnique({
+      where: { key: ANNOUNCEMENT_DRAFTS_CONFIG_KEY },
+    });
+    const drafts = parseAnnouncementDrafts(row?.value);
+    return { draft: drafts[parsed.data.slug] ?? null };
+  });
+
+  // Push-token status (does one exist?) + rotate (generate a new one, returned once).
+  fastify.get('/api/admin/announcements/push-token', async () => {
+    const row = await fastify.prisma.adminConfig.findUnique({
+      where: { key: ANNOUNCEMENT_PUSH_TOKEN_HASH_KEY },
+    });
+    return { configured: typeof row?.value === 'string' && row.value.length > 0 };
+  });
+
+  fastify.post('/api/admin/announcements/push-token/rotate', async (request) => {
+    const token = generatePushToken();
+    const hash = hashPushToken(token);
+    await fastify.prisma.adminConfig.upsert({
+      where: { key: ANNOUNCEMENT_PUSH_TOKEN_HASH_KEY },
+      create: { key: ANNOUNCEMENT_PUSH_TOKEN_HASH_KEY, value: hash, updated_by: request.user.sub },
+      update: { value: hash, updated_by: request.user.sub },
+    });
+    await fastify.prisma.auditLog.create({
+      data: {
+        entity_type: 'AdminConfig',
+        entity_id: ANNOUNCEMENT_PUSH_TOKEN_HASH_KEY,
+        action: 'announcement_push_token_rotate',
+        actor_id: request.user.sub,
+      },
+    });
+    // Returned exactly once — only the hash is stored.
+    return { token };
   });
 
   // -------------------------------------------------------------------------
