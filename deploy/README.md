@@ -66,14 +66,25 @@ human redeployed. See `docs/postmortem-2026-08-28.md`.
 
 ```bash
 sudo cp deploy/systemd/rizzotto-health.{service,timer} deploy/systemd/rizzotto-alert@.service /etc/systemd/system/
-printf 'ALERT_DISCORD_WEBHOOK=%s\n' "<webhook-url>" | sudo tee /etc/rizzotto/env/alert.env >/dev/null
-sudo chmod 600 /etc/rizzotto/env/alert.env
 sudo systemctl daemon-reload
 sudo systemctl enable --now rizzotto-health.timer
 
-# Verify: it should restart a wedged backend within ~2 minutes.
+# Probe once by hand — should log "0 consecutive failures" style output and exit 0.
 sudo systemctl start rizzotto-health.service && journalctl -u rizzotto-health -n 20 --no-pager
 ```
+
+Discord alerting is **optional** — `EnvironmentFile=-…` means a missing file is fine, and the
+watchdog still restarts a wedged backend without it (recovery must never depend on alerting).
+To turn alerts on:
+
+```bash
+printf 'ALERT_DISCORD_WEBHOOK=%s\n' '<webhook-url>' | sudo tee /etc/rizzotto/env/alert.env >/dev/null
+sudo chmod 640 /etc/rizzotto/env/alert.env && sudo chown root:deploy /etc/rizzotto/env/alert.env
+sudo /home/deploy/rizzotto/scripts/notify-unit-failure.sh rizzotto-backend   # should post to Discord
+```
+
+The alert helpers (`scripts/notify-discord.sh`, `scripts/notify-unit-failure.sh`) build their JSON
+with `python3`, which the host already has — deliberately not `jq`, which it does not.
 
 Tunables (env or `/etc/rizzotto/env/alert.env`): `HEALTH_FAIL_THRESHOLD` (default 2 probes),
 `HEALTH_TIMEOUT` (5s), `HEALTH_RESTART_COOLDOWN` (600s — keeps the watchdog from fighting
@@ -155,5 +166,8 @@ For a clean restore: drop+recreate the DB inside the container first, then pipe.
 | Restart backend                     | `sudo systemctl restart rizzotto-backend`                |
 | Apply Caddy config (admin off → restart, not reload) | `sudo systemctl restart caddy`          |
 | Run backup manually                 | `sudo systemctl start rizzotto-backup.service`           |
-| List backup timer status            | `sudo systemctl list-timers rizzotto-backup`             |
+| List timer status                   | `sudo systemctl list-timers 'rizzotto-*'`                |
+| Probe health once                   | `sudo systemctl start rizzotto-health.service`           |
+| Watchdog history                    | `sudo journalctl -u rizzotto-health --since today`       |
+| Is the backend answering?           | `curl -s localhost:3000/health/deep \| python3 -m json.tool` |
 | Preflight checks                    | `bash scripts/preflight.sh`                              |
