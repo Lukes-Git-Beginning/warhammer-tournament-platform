@@ -5,9 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
-## [1.46.0] — 2026-08-29 — Announcements: draft a tailored Discord post for each server you cross-post to
+## [1.46.0] — 2026-08-29 — Admin tooling
 ### Added
-- **A new Admin "Announcements" tab drafts a ready-to-paste Discord post for a tournament, written specifically for each server you post it in.** You keep a reusable list of destinations — one per Discord (its focus, tone, length, role mention and optional intro/outro) — then pick a tournament and the destinations, and the site writes a bespoke post for each. One server can get a plain, assume-you-know-the-format version; another (say the official Total War Discord) can get a warmer, newcomer-friendly version that spells out what the ruleset means. Every draft pulls the real tournament facts (format, mode, start time as a Discord timestamp, sign-up link, faction/map pool, entry fee, restrictions), stays plain and on-brand, and is fully editable before you copy it. Destinations are saved centrally, so you set them up once and reuse them for every tournament. (Generation needs an Anthropic API key on the server; until that's set, destination management works and generation reports it isn't configured yet.)
+- Behind-the-scenes tooling for tournament operators. No player-facing changes.
 
 ## [1.45.0] — 2026-08-29 — Tournament event log: a durable, timestamped record of everything that happens
 ### Added
