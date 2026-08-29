@@ -1,0 +1,10 @@
+[Unit]
+Description=Rizzotto backend health probe (restarts a wedged but "running" process)
+After=rizzotto-backend.service
+
+[Service]
+Type=oneshot
+# Needs root for `systemctl restart`; the probe itself is a plain local HTTP GET.
+User=root
+EnvironmentFile=/etc/rizzotto/env/alert.env
+ExecStart=/home/deploy/rizzotto/scripts/health-watchdog.sh

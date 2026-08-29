@@ -3,6 +3,16 @@ Description=Rizzotto Backend (Fastify, tsx runtime)
 After=network.target docker.service
 Requires=docker.service
 
+# These are [Unit]-scope options. They used to sit in [Service], where systemd ignores them —
+# it logged "Unknown key name 'StartLimitIntervalSec' in section 'Service', ignoring" on every
+# daemon-reload, so the intended 3-restarts-per-60s limit was never in effect.
+# For a public site the right policy is "keep trying": give up only on a genuine hard crash-loop.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+# Ping Discord whenever the unit fails (see rizzotto-alert@.service).
+OnFailure=rizzotto-alert@%n.service
+
 [Service]
 Type=simple
 User=deploy
@@ -14,8 +24,18 @@ Environment=NODE_ENV=production
 
 Restart=always
 RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=3
+
+# The graceful shutdown in src/server.ts self-terminates after 10s, so a stop that still needs
+# 90s is a hung process, not a slow one. Default TimeoutStopSec=90 meant every deploy held a
+# 90-second 502 window while systemd waited before SIGKILL.
+TimeoutStopSec=20
+
+# Contain a runaway instead of letting the kernel OOM-killer pick a victim — on this 4 GB box
+# that victim could just as easily be the Postgres container. OOMPolicy=stop hands it back to
+# Restart=always, so a memory leak becomes a restart rather than a collateral database kill.
+MemoryAccounting=true
+MemoryMax=1500M
+OOMPolicy=stop
 
 StandardOutput=journal
 StandardError=journal

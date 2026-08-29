@@ -78,7 +78,7 @@ pnpm --filter @rizzotto/db exec prisma migrate deploy
 pnpm db:seed
 
 # 5. Backend starten (via systemd — siehe unten)
-node apps/backend/dist/server.js
+sudo systemctl start rizzotto-backend
 ```
 
 ## Reverse-Proxy: Caddy + systemd
@@ -90,7 +90,7 @@ Der reale Prod-Stack nutzt **Caddy** (kein Nginx, kein Docker):
 | Komponente | Beschreibung |
 |---|---|
 | **Caddy** | TLS-Termination (Cloudflare Origin Cert), API-Reverse-Proxy, SPA-Static-Server |
-| **systemd** | Backend-Prozess-Supervisor (`node apps/backend/dist/server.js`) |
+| **systemd** | Backend-Prozess-Supervisor (`tsx apps/backend/src/server.ts`) + Health-Watchdog + Backup-Timer |
 | **Cloudflare** | DNS + vorgelagerte WAF/DDoS-Mitigation, Full-Strict-TLS-Modus |
 
 Das Backend (Fastify + Socket.IO) läuft auf `127.0.0.1:3000`; Caddy leitet `/api/*`, `/auth/*`, `/graphql`, `/health` und `/socket.io/*` dorthin weiter.  
@@ -119,33 +119,57 @@ sudo systemctl restart caddy
 
 ### Backend als systemd-Unit
 
-Das Backend läuft als systemd-Service. Generische Unit-Vorlage (Unit-Name ggf. anpassen):
+Die **SSOT sind die Unit-Dateien unter `deploy/systemd/`** — nicht dieses Dokument. Nach jeder
+Änderung dort:
 
-```ini
-[Unit]
-Description=Rizzotto Backend
-After=network.target
-
-[Service]
-WorkingDirectory=/home/deploy/rizzotto
-EnvironmentFile=/home/deploy/rizzotto/.env.production
-ExecStart=/usr/bin/node apps/backend/dist/server.js
-Restart=on-failure
-RestartSec=5s
-User=deploy
-
-[Install]
-WantedBy=multi-user.target
+```bash
+sudo cp deploy/systemd/*.service deploy/systemd/*.timer /etc/systemd/system/
+sudo systemd-analyze verify /etc/systemd/system/rizzotto-backend.service   # fängt falsche Sektionen ab
+sudo systemctl daemon-reload
 ```
+
+| Unit | Zweck |
+|---|---|
+| `rizzotto-backend.service` | Backend, `tsx src/server.ts`, `Restart=always`, `MemoryMax=1500M` |
+| `rizzotto-health.{service,timer}` | Minütlicher `/health`-Probe; startet einen hängenden Prozess neu |
+| `rizzotto-backup.{service,timer}` | Täglicher `pg_dump` + Off-Site-Kopie |
+| `rizzotto-alert@.service` | `OnFailure=`-Template, meldet fehlgeschlagene Units nach Discord |
+
+> **Warum der Health-Watchdog:** `Restart=` reagiert nur auf einen Prozess, der **stirbt**. Am
+> 2026-08-28 hing der Event-Loop 35 Minuten lang, ohne dass der Prozess endete — systemd sah
+> `active (running)`, Caddy lieferte 502. Ein Prozess, der nicht mehr *antwortet*, braucht einen
+> externen Prober. Genau das ist `rizzotto-health.timer`.
+
+Env-Dateien auf dem Server (jeweils `0600`, nie im Repo):
+
+| Datei | Inhalt |
+|---|---|
+| `/etc/rizzotto/env/backend.env` | Runtime-Secrets des Backends |
+| `/etc/rizzotto/env/alert.env` | `ALERT_DISCORD_WEBHOOK=…` (Watchdog + `rizzotto-alert@`) |
+| `/etc/rizzotto/env/backup.env` | `BACKUP_REMOTE=…` + `RCLONE_CONFIG_*` (siehe `deploy/README.md`) |
 
 Typische Verwaltungsbefehle:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl restart rizzotto-backend   # ggf. Unit-Namen anpassen
+sudo systemctl restart rizzotto-backend
 sudo systemctl status rizzotto-backend
 journalctl -u rizzotto-backend -f
+
+# Watchdog + Backup-Timer scharf schalten (einmalig)
+sudo systemctl enable --now rizzotto-health.timer rizzotto-backup.timer
+sudo systemctl list-timers 'rizzotto-*'
 ```
+
+### Health-Endpunkte
+
+| Endpunkt | Prüft | Verwendung |
+|---|---|---|
+| `/health` | nur den Event-Loop (berührt bewusst nichts) | Watchdog — antwortet ein hängender Prozess nicht |
+| `/health/deep` | zusätzlich Postgres + Redis, 503 wenn eins fehlt | externer Uptime-Monitor, Deploy-Smoke-Test |
+
+`/health` darf **keine** Dependency-Checks bekommen: das Backend neu zu starten, weil Postgres
+kurz weg war, macht einen Ausfall größer, nicht kleiner.
 
 ## SEO-Vorbereitungen vor Deploy
 
