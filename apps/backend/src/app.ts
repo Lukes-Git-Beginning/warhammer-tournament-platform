@@ -73,6 +73,24 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL ?? 'info',
+      // Defence-in-depth: never let a secret (auth cookie, API key, bearer token) reach
+      // the logs, even when an error path serialises a whole { err, req, … } object.
+      redact: {
+        paths: [
+          'req.headers.authorization',
+          'req.headers.cookie',
+          'headers.authorization',
+          'headers.cookie',
+          'err.headers.authorization',
+          '*.authorization',
+          '*.apiKey',
+          '*.api_key',
+          'apiKey',
+          'api_key',
+          'ANTHROPIC_API_KEY',
+        ],
+        censor: '[redacted]',
+      },
       transport: isProd
         ? undefined
         : {

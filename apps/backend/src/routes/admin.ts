@@ -1629,18 +1629,39 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const { slug, destinationIds } = parsed.data;
 
-    // Light per-admin cooldown so a stuck button can't fan out a burst of calls.
-    if (fastify.redis) {
-      const acquired = await fastify.redis
-        .set(`rizzotto:announce:cooldown:${request.user.sub}`, '1', 'EX', 15, 'NX')
-        .catch(() => 'OK');
-      if (acquired === null) {
-        return reply.code(429).send({
-          error: 'TooManyRequests',
-          message: 'Please wait a few seconds before generating again.',
-          statusCode: 429,
-        });
-      }
+    // Per-admin cooldown — the primary cost brake against a burst of paid generations.
+    // FAIL CLOSED: if Redis is unavailable or the check errors, block rather than let
+    // uncapped calls through (the global rate limit is not a cost guard).
+    if (!fastify.redis) {
+      return reply.code(503).send({
+        error: 'ServiceUnavailable',
+        message: 'Rate limiter unavailable — please try again shortly.',
+        statusCode: 503,
+      });
+    }
+    let cooldownAcquired: string | null;
+    try {
+      cooldownAcquired = await fastify.redis.set(
+        `rizzotto:announce:cooldown:${request.user.sub}`,
+        '1',
+        'EX',
+        15,
+        'NX',
+      );
+    } catch (err) {
+      request.log.warn({ err }, 'announcement cooldown check failed — blocking (fail-closed)');
+      return reply.code(503).send({
+        error: 'ServiceUnavailable',
+        message: 'Rate limiter unavailable — please try again shortly.',
+        statusCode: 503,
+      });
+    }
+    if (cooldownAcquired === null) {
+      return reply.code(429).send({
+        error: 'TooManyRequests',
+        message: 'Please wait a few seconds before generating again.',
+        statusCode: 429,
+      });
     }
 
     const tournament = await fastify.prisma.tournament.findFirst({

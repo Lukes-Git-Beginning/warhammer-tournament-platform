@@ -17,9 +17,17 @@ import { z } from 'zod';
 
 export const ANNOUNCEMENT_DESTINATIONS_CONFIG_KEY = 'announcement_destinations';
 
-// Sonnet 4.6 — plenty for short marketing copy, and cheaper than Opus for the
-// N-destinations-per-tournament fan-out (each call reuses the cached facts).
-const ANNOUNCEMENT_MODEL = 'claude-sonnet-4-6';
+// Model for announcement copy — a Sonnet-tier model is plenty for short marketing
+// text and far cheaper than Opus for the N-destinations fan-out (each call reuses the
+// cached facts). Env-overridable so the model can be swapped (e.g. to a newer, cheaper
+// Sonnet) without a code change/deploy — just set ANNOUNCEMENT_MODEL and restart.
+const ANNOUNCEMENT_MODEL = process.env.ANNOUNCEMENT_MODEL?.trim() || 'claude-sonnet-4-6';
+
+// Bound every Anthropic call: the SDK default is a 10-minute timeout with 2 retries,
+// which — across up to 10 parallel generations and our 10s shutdown guard — could hang
+// deploys and rack up retries. A tight timeout + single retry keeps it snappy and cheap.
+const ANTHROPIC_TIMEOUT_MS = 30_000;
+const ANTHROPIC_MAX_RETRIES = 1;
 
 // ---------------------------------------------------------------------------
 // Destinations (persisted as AdminConfig JSON)
@@ -253,7 +261,11 @@ export async function generateAnnouncement(args: {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured');
 
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({
+    apiKey,
+    timeout: ANTHROPIC_TIMEOUT_MS,
+    maxRetries: ANTHROPIC_MAX_RETRIES,
+  });
   const message = await client.messages.create({
     model: ANNOUNCEMENT_MODEL,
     max_tokens: maxTokensForLength(args.destination.length),
