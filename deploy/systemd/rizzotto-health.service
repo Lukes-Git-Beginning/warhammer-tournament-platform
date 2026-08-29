@@ -6,5 +6,7 @@ After=rizzotto-backend.service
 Type=oneshot
 # Needs root for `systemctl restart`; the probe itself is a plain local HTTP GET.
 User=root
-EnvironmentFile=/etc/rizzotto/env/alert.env
+# Optional (leading "-"): without a webhook the watchdog still restarts a wedged backend and
+# reports to the journal. A missing file must never stop the recovery path from running.
+EnvironmentFile=-/etc/rizzotto/env/alert.env
 ExecStart=/home/deploy/rizzotto/scripts/health-watchdog.sh
