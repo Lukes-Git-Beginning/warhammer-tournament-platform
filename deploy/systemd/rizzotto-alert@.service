@@ -10,10 +10,4 @@ User=deploy
 # ALERT_DISCORD_WEBHOOK lives here (0600, root:deploy). Same file the watchdog reads.
 # Optional: with no webhook configured ExecStart exits 0 rather than failing the unit.
 EnvironmentFile=-/etc/rizzotto/env/alert.env
-ExecStart=/usr/bin/env bash -c '\
-  test -n "${ALERT_DISCORD_WEBHOOK:-}" || exit 0; \
-  status=$(systemctl is-active %i 2>&1); \
-  tail=$(journalctl -u %i -n 15 --no-pager -o cat 2>/dev/null | tail -c 1200); \
-  jq -nc --arg unit "%i" --arg status "$status" --arg tail "$tail" \
-    "{embeds:[{title:(\\"Unit failed — \\" + \$unit), color:15158332, fields:[{name:\\"State\\",value:\$status,inline:true}], description:(\\"\`\`\`\\" + \$tail + \\"\`\`\`\\")}]}" \
-  | curl -sS -X POST "$ALERT_DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-'
+ExecStart=/home/deploy/rizzotto/scripts/notify-unit-failure.sh %i

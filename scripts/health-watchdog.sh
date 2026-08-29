@@ -11,6 +11,9 @@
 # answer either, but restarting Node because Postgres is down would only make things worse.
 set -uo pipefail
 
+# shellcheck source=scripts/notify-discord.sh
+. "$(dirname "$(readlink -f "$0")")/notify-discord.sh"
+
 URL="${HEALTH_URL:-http://127.0.0.1:3000/health}"
 UNIT="${HEALTH_UNIT:-rizzotto-backend}"
 TIMEOUT="${HEALTH_TIMEOUT:-5}"
@@ -24,17 +27,10 @@ FAIL_FILE="$STATE_DIR/consecutive-failures"
 LAST_RESTART_FILE="$STATE_DIR/last-restart"
 mkdir -p "$STATE_DIR"
 
-notify() {
-  [ -n "${ALERT_DISCORD_WEBHOOK:-}" ] || return 0
-  jq -nc --arg t "$1" --arg d "$2" \
-    '{embeds:[{title:$t, description:$d, color:15158332}]}' \
-    | curl -sS -m 10 -X POST "$ALERT_DISCORD_WEBHOOK" -H 'Content-Type: application/json' -d @- >/dev/null || true
-}
-
 if curl -fsS -o /dev/null -m "$TIMEOUT" "$URL"; then
   # Recovered after at least one miss → say so, so the Discord channel does not just show alarms.
   if [ "$(cat "$FAIL_FILE" 2>/dev/null || echo 0)" -ge "$FAIL_THRESHOLD" ]; then
-    notify "Backend healthy again — rizzotto.gg" "\`$URL\` is answering."
+    discord_alert "Backend healthy again — rizzotto.gg" "\`$URL\` is answering." "$GREEN"
   fi
   echo 0 > "$FAIL_FILE"
   exit 0
@@ -49,15 +45,15 @@ now=$(date +%s)
 last=$(cat "$LAST_RESTART_FILE" 2>/dev/null || echo 0)
 if [ $(( now - last )) -lt "$RESTART_COOLDOWN" ]; then
   echo "in restart cooldown ($(( now - last ))s < ${RESTART_COOLDOWN}s) — alerting only"
-  notify "Backend still unhealthy — rizzotto.gg" \
+  discord_alert "Backend still unhealthy — rizzotto.gg" \
     "\`$URL\` failed $fails consecutive probes. Watchdog is in cooldown and did NOT restart; needs a look."
   exit 1
 fi
 
 echo "$now" > "$LAST_RESTART_FILE"
 tail_log=$(journalctl -u "$UNIT" -n 15 --no-pager -o cat 2>/dev/null | tail -c 1200)
-notify "Backend unresponsive — restarting $UNIT" \
-  "\`$URL\` failed $fails consecutive probes while the unit was still running.
+discord_alert "Backend unresponsive — restarting $UNIT" \
+"\`$URL\` failed $fails consecutive probes while the unit was still running.
 \`\`\`
 ${tail_log}
 \`\`\`"
