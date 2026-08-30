@@ -235,7 +235,99 @@ async function openDmChannel(discordUserId: string): Promise<string | null> {
   }
 }
 
-export async function sendDm(discordUserId: string, content: string): Promise<void> {
+// ---------------------------------------------------------------------------
+// Outbound DM safety caps — a circuit breaker so a bug can never spam a person.
+// Layered per-recipient windows + a global backstop, all in-process (they reset on
+// restart; the short windows still catch any burst instantly). AUTOMATIC notifications
+// go through here. An intentional, human-authorised broadcast (a future admin/host
+// feature) passes { broadcast: true } to bypass — it has its own confirmation + audit +
+// throttle, so it is never an accident.
+// ---------------------------------------------------------------------------
+
+interface RateLayer {
+  windowMs: number;
+  max: number;
+  label: string;
+}
+
+const DM_RECIPIENT_LAYERS: RateLayer[] = [
+  { windowMs: 60_000, max: 3, label: '3/min' },
+  { windowMs: 600_000, max: 5, label: '5/10min' },
+  { windowMs: 1_800_000, max: 10, label: '10/30min' },
+  { windowMs: 86_400_000, max: 100, label: '100/day' },
+];
+const DM_GLOBAL_WINDOW_MS = 60_000;
+const DM_GLOBAL_MAX = 300; // per minute across ALL recipients (the automatic path)
+const LONGEST_DM_WINDOW = Math.max(...DM_RECIPIENT_LAYERS.map((l) => l.windowMs));
+const CAP_ALERT_THROTTLE_MS = 3_600_000;
+
+const dmHistoryByUser = new Map<string, number[]>();
+let dmGlobalTimestamps: number[] = [];
+let lastCapAlertAt = 0;
+
+/**
+ * The first layer already at its max for these send timestamps, or null. PURE — exported
+ * for tests. `timestamps` are epoch-ms sends (only those within the longest window matter).
+ */
+export function firstExceededLayer(
+  timestamps: number[],
+  now: number,
+  layers: RateLayer[],
+): RateLayer | null {
+  for (const layer of layers) {
+    let count = 0;
+    for (const t of timestamps) if (now - t < layer.windowMs) count += 1;
+    if (count >= layer.max) return layer;
+  }
+  return null;
+}
+
+/** Check + record one DM. Returns a block reason, or null if allowed (and records it). */
+function reserveDmSlot(userId: string, now: number): string | null {
+  const recent = (dmHistoryByUser.get(userId) ?? []).filter((t) => now - t < LONGEST_DM_WINDOW);
+  const layer = firstExceededLayer(recent, now, DM_RECIPIENT_LAYERS);
+  if (layer) return `per-recipient ${layer.label}`;
+
+  dmGlobalTimestamps = dmGlobalTimestamps.filter((t) => now - t < DM_GLOBAL_WINDOW_MS);
+  if (dmGlobalTimestamps.length >= DM_GLOBAL_MAX) return `global ${DM_GLOBAL_MAX}/min`;
+
+  recent.push(now);
+  dmHistoryByUser.set(userId, recent);
+  dmGlobalTimestamps.push(now);
+  return null;
+}
+
+/** Loud log on every drop + a throttled Discord alert (only if DISCORD_ALERT_CHANNEL_ID is set). */
+function reportDmCapDrop(userId: string, reason: string, now: number): void {
+  console.error(`[dm-cap] dropped DM to ${userId} — cap hit: ${reason}`);
+  const alertChannel = process.env.DISCORD_ALERT_CHANNEL_ID?.trim();
+  if (alertChannel && now - lastCapAlertAt > CAP_ALERT_THROTTLE_MS) {
+    lastCapAlertAt = now;
+    void postChannelMessage(
+      alertChannel,
+      `⚠️ DM rate cap tripped (${reason}) — a bot DM was dropped. Likely a runaway loop; check the logs.`,
+    ).catch(() => {});
+  }
+}
+
+/** True if a DM to this user may go out now (and records it); false if a cap blocks it. */
+function passesDmCaps(userId: string): boolean {
+  const now = Date.now();
+  const reason = reserveDmSlot(userId, now);
+  if (reason) {
+    reportDmCapDrop(userId, reason, now);
+    return false;
+  }
+  return true;
+}
+
+export async function sendDm(
+  discordUserId: string,
+  content: string,
+  opts?: { broadcast?: boolean },
+): Promise<void> {
+  // Automatic notifications are rate-capped per recipient; an intentional broadcast bypasses.
+  if (!opts?.broadcast && !passesDmCaps(discordUserId)) return;
   const channelId = await openDmChannel(discordUserId);
   if (!channelId) return;
 
@@ -243,6 +335,7 @@ export async function sendDm(discordUserId: string, content: string): Promise<vo
 }
 
 async function sendDmWithComponents(discordUserId: string, content: string, components: object[]): Promise<void> {
+  if (!passesDmCaps(discordUserId)) return; // always automatic → always capped
   const channelId = await openDmChannel(discordUserId);
   if (!channelId) return;
 

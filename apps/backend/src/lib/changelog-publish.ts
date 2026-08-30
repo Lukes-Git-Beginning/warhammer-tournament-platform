@@ -247,6 +247,25 @@ export async function publishNewChangelogOnBoot(
     return;
   }
 
+  // Circuit breaker: a normal deploy adds one version (a bundle maybe a few). Posting many
+  // at once means the cursor is broken (e.g. it was empty → a full-history backfill, which
+  // spammed the channel on 2026-08-30). Refuse to backfill: self-heal the cursor to the
+  // newest version and log — no post. Legit multi-version deploys (≤ MAX) still post.
+  const MAX_BOOT_POSTS = 5;
+  if (toPost.length > MAX_BOOT_POSTS) {
+    const newest = sections[0]!.version;
+    log.warn(
+      { count: toPost.length, lastPublished, newest },
+      '[changelog] refusing to auto-post — too many versions at once (likely a broken cursor); self-healing to newest without posting',
+    );
+    await prisma.adminConfig.upsert({
+      where: { key: CHANGELOG_LAST_PUBLISHED_KEY },
+      create: { key: CHANGELOG_LAST_PUBLISHED_KEY, value: newest, updated_by: 'system' },
+      update: { value: newest, updated_by: 'system' },
+    });
+    return;
+  }
+
   const channelId = changelogChannelId();
   log.info({ count: toPost.length, lastPublished, channelId }, '[changelog] auto-publishing new versions');
 
