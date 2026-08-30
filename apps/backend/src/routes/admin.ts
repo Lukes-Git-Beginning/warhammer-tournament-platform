@@ -13,7 +13,7 @@ import { guardBalancedManualPairing } from '../lib/tournament-utils.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { auditReplays } from '../lib/audit-replays.js';
 import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM, OPPONENT_SHARE_WARN } from '../lib/scoring-service.js';
-import { getNonGuildMemberIds, isGuildLookupConfigured } from '../lib/discord-notify.js';
+import { getNonGuildMemberIds, isGuildLookupConfigured, isBotConfigured, purgeRecentBotMessages } from '../lib/discord-notify.js';
 import {
   loadCalibrationQuestions,
   CalibrationQuestionsSchema,
@@ -30,7 +30,7 @@ import {
 import { skillToBand } from '../lib/rating-model.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
 import { getQueuePenaltyState, resetQueuePenaltyToWarned } from '../lib/queue-penalty.js';
-import { publishChangelog } from '../lib/changelog-publish.js';
+import { publishChangelog, changelogChannelId } from '../lib/changelog-publish.js';
 import {
   parseAnnouncementDestinations,
   buildTournamentFacts,
@@ -2327,6 +2327,37 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(502).send({
         error: 'BadGateway',
         message: err instanceof Error ? err.message : 'Failed to publish changelog',
+        statusCode: 502,
+      });
+    }
+  });
+
+  // POST /api/admin/changelog/purge-bot-posts — clean up a changelog-spam incident by
+  // deleting THIS bot's own recent messages in the changelog channel. Dry-run by default
+  // ({ confirm: true } actually deletes); bounded to messages newer than maxAgeMinutes.
+  const PurgeBotPostsSchema = z.object({
+    maxAgeMinutes: z.number().int().min(1).max(1440).default(180),
+    confirm: z.boolean().default(false),
+  });
+  fastify.post('/api/admin/changelog/purge-bot-posts', async (request, reply) => {
+    if (!isBotConfigured()) {
+      return reply.code(503).send({ error: 'NotConfigured', message: 'DISCORD_BOT_TOKEN not set', statusCode: 503 });
+    }
+    const parsed = PurgeBotPostsSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    try {
+      const result = await purgeRecentBotMessages(
+        changelogChannelId(),
+        parsed.data.maxAgeMinutes * 60_000,
+        !parsed.data.confirm,
+      );
+      return reply.code(200).send({ dryRun: !parsed.data.confirm, ...result });
+    } catch (err) {
+      return reply.code(502).send({
+        error: 'BadGateway',
+        message: err instanceof Error ? err.message : 'Failed to purge bot posts',
         statusCode: 502,
       });
     }

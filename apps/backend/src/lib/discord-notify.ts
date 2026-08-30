@@ -93,6 +93,65 @@ export async function postChannelMessage(channelId: string, content: string): Pr
   return json.id;
 }
 
+/**
+ * Clean up a channel-spam incident: find (and optionally delete) THIS bot's own recent
+ * messages in a channel. Safety-bounded to messages newer than `maxAgeMs` and authored by
+ * the bot itself. `dryRun` (default) only counts them; `dryRun: false` actually deletes via
+ * Discord's bulk-delete (2–100 msgs, < 14 days old), falling back to single-delete.
+ * Returns { matched, deleted }.
+ */
+export async function purgeRecentBotMessages(
+  channelId: string,
+  maxAgeMs: number,
+  dryRun = true,
+): Promise<{ matched: number; deleted: number }> {
+  if (!isBotConfigured()) throw new Error('DISCORD_BOT_TOKEN not set');
+
+  const meRes = await discordRequest('GET', '/users/@me');
+  if (!meRes.ok) throw new Error(`Discord /users/@me ${meRes.status}: ${await meRes.text()}`);
+  const botId = ((await meRes.json()) as { id: string }).id;
+
+  const cutoff = Date.now() - maxAgeMs;
+  const ids: string[] = [];
+  let before: string | undefined;
+  // Messages come newest-first; page back until we cross the cutoff (bounded for safety).
+  for (let page = 0; page < 12; page++) {
+    const q = new URLSearchParams({ limit: '100' });
+    if (before) q.set('before', before);
+    const res = await discordRequest('GET', `/channels/${channelId}/messages?${q.toString()}`);
+    if (!res.ok) throw new Error(`Discord list messages ${res.status}: ${await res.text()}`);
+    const msgs = (await res.json()) as Array<{ id: string; author: { id: string }; timestamp: string }>;
+    if (msgs.length === 0) break;
+    let crossedCutoff = false;
+    for (const m of msgs) {
+      if (new Date(m.timestamp).getTime() < cutoff) {
+        crossedCutoff = true;
+        continue;
+      }
+      if (m.author.id === botId) ids.push(m.id);
+    }
+    before = msgs[msgs.length - 1]!.id;
+    if (crossedCutoff) break;
+  }
+
+  if (dryRun || ids.length === 0) return { matched: ids.length, deleted: 0 };
+
+  let deleted = 0;
+  for (let i = 0; i < ids.length; i += 100) {
+    const batch = ids.slice(i, i + 100);
+    if (batch.length === 1) {
+      const r = await discordRequest('DELETE', `/channels/${channelId}/messages/${batch[0]}`);
+      if (r.ok) deleted += 1;
+    } else {
+      const r = await discordRequest('POST', `/channels/${channelId}/messages/bulk-delete`, { messages: batch });
+      if (r.ok) deleted += batch.length;
+    }
+    // Stay under Discord's per-route rate limit between batches.
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+  }
+  return { matched: ids.length, deleted };
+}
+
 // RizzOttoverse Discord server — the fallback guild used when DISCORD_GUILD_ID is unset
 // and the bot's guild list is ambiguous. Overridable at any time via the env var.
 const DEFAULT_GUILD_ID = '1445915589418946572';
