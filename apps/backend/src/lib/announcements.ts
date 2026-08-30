@@ -162,25 +162,32 @@ const MODE_LABELS: Record<string, string> = {
   FACTION_WAR: 'Faction War',
 };
 
+// These MUST match the site's canonical descriptions VERBATIM (frontend
+// `lib/tournamentDescriptions.ts` MODE_DESCRIPTIONS / FORMAT_DESCRIPTIONS) — announcements
+// use the site's default wording, never a paraphrase. Keep them byte-identical if either
+// side changes.
 const MODE_EXPLAIN: Record<string, string> = {
   BPT: 'Every match includes a blind faction pick phase.',
   SFT: 'Players pre-select a faction at registration; revealed at tournament start.',
-  SLT: 'Players upload their army list at registration; revealed after each completed match.',
-  MATRIX: 'Each match: both players pick 3 factions blindly, then ban from the 3×3 grid.',
-  TWO_D_THREE: 'Players pick 3 factions at registration; one is drawn at random for each game.',
-  FREE_PICK: 'Each player chooses at registration: a fixed faction or to pick match-by-match.',
-  ONE_V_THREE: "A coin flip sets roles: one player runs the host's set faction, the other brings three.",
-  FACTION_WAR: 'Like SFT, but factions are exclusive — first come, first served, no mirror matches.',
+  SLT: 'Players upload their army list at registration. Reveal after each completed match.',
+  MATRIX: 'Each match: both players pick 3 factions blindly, then ban from the 3×3 matchup grid.',
+  TWO_D_THREE: 'Players pick 3 factions at registration; one is drawn at random for each player before every game.',
+  FREE_PICK:
+    'Each player chooses at registration: a fixed faction (like SFT) or to pick match-by-match. Two fixed players just play their factions; two pick-later players do a 3×3 matrix; a fixed vs pick-later match has the pick-later player offer 3 factions for the fixed player to choose from.',
+  ONE_V_THREE:
+    "A coin flip sets roles each match: one player runs the host's set faction, the other brings three, and the set-faction player picks which of the three their opponent plays.",
+  FACTION_WAR:
+    'Like SFT, but every faction is exclusive: once a player claims a faction at registration, no one else can pick it — first come, first served, and no mirror matches.',
 };
 
 const FORMAT_EXPLAIN: Record<string, string> = {
-  SINGLE_ELIMINATION: "Single-elimination bracket — lose once and you're out.",
-  DOUBLE_ELIMINATION: "Double-elimination bracket — two losses and you're out.",
-  SWISS: 'Swiss rounds — everyone plays a fixed number of rounds, paired by record; no early elimination.',
-  AUTO_SWISS: 'Self-running Swiss — rounds and playoffs are set automatically from the check-in count.',
+  SINGLE_ELIMINATION: "Single-elimination bracket — lose once and you're out. Optional third-place match.",
+  DOUBLE_ELIMINATION: "Double-elimination bracket — a loss drops you to the lower bracket; two losses and you're out.",
+  SWISS: 'Swiss rounds — everyone plays a fixed number of rounds, paired by record, with no early elimination. Optional top-cut playoffs.',
+  AUTO_SWISS: 'Self-running Swiss — rounds, playoff size and match format are set automatically from the check-in count, and rounds advance on their own.',
   ROUND_ROBIN: 'Round robin — everyone plays everyone once.',
-  LIECHTENSTEIN: 'Liechtenstein — a pre-drawn schedule with unique pairings every round.',
-  BALANCED_LIECHTENSTEIN: 'Balanced Liechtenstein — skill-banded Swiss; each division plays its own playoff.',
+  LIECHTENSTEIN: 'Liechtenstein — a pre-drawn schedule with unique pairings every round (no repeat opponents).',
+  BALANCED_LIECHTENSTEIN: 'Balanced Liechtenstein — skill-banded asynchronous Swiss: players are paired within their division, and each division plays its own playoff.',
 };
 
 function label(map: Record<string, string>, key: string): string {
@@ -290,16 +297,17 @@ export function buildAnnouncementPrompt(
       'a masked link — e.g. turn `…Bo3 BPT.` into `…Bo3 BPT[.](POSTER_URL)`. Discord then shows the poster ' +
       'image below with NO extra character, line, or visible URL, and the message reads completely ' +
       'naturally. If the post has no closing period, append `[.](POSTER_URL)` on its own final line instead. ' +
-      'Preserve any <t:…> ' +
-      'timestamp tokens exactly. If a destination has a role mention, put it on the first line; use its ' +
-      'intro/outro if given; respect its tone, length and focus.',
+      'Preserve any <t:…> timestamp tokens exactly. If a destination has a role mention, put it on the first ' +
+      'line; use its intro/outro if given; respect its tone, length and focus. When you mention or explain ' +
+      "the FORMAT or MODE, use the exact description from the facts VERBATIM (the site's default wording) — " +
+      'do NOT paraphrase it, expand it, or add inferred details like round counts or whether it is Swiss.',
   );
   out.push('');
   out.push(
-    `When the posts are ready, push them to the site: POST /api/admin/announcements/drafts with ` +
-      `{ "slug": "${slug}", "results": [{ "destinationId", "name", "text" }, …] } using the stored ` +
-      `announcement push token (X-Push-Token header). Then they appear in the Announcements tab with a ` +
-      `Copy button per destination.`,
+    `When the posts are ready, push them to the site: POST https://rizzotto.gg/api/announcements/push with ` +
+      `{ "slug": "${slug}", "results": [{ "destinationId", "name", "text" }, …] } and the stored announcement ` +
+      `push token in the X-Push-Token header. Then they appear in the Announcements tab with a Copy button per ` +
+      `destination.`,
   );
   out.push('');
   out.push('=== TOURNAMENT FACTS (source of truth — do not invent beyond these) ===');

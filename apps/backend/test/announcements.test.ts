@@ -116,7 +116,7 @@ describe('buildAnnouncementPrompt', () => {
       [DEST],
     );
     expect(prompt).toContain("Alex's own plain, direct voice");
-    expect(prompt).toContain('POST /api/admin/announcements/drafts');
+    expect(prompt).toContain('POST https://rizzotto.gg/api/announcements/push');
     expect(prompt).toContain(`"slug": "${BASE.slug}"`);
     expect(prompt).toContain('Tournament name: DLC Launch Prize Fight');
     expect(prompt).toContain('Poster link: https://rizzotto.gg/uploads/posters/x/y.jpg');
