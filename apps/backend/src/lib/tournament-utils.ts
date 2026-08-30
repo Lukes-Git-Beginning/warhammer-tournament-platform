@@ -156,6 +156,79 @@ export async function canManageTournament(
 }
 
 // ---------------------------------------------------------------------------
+// Balanced Liechtenstein — manual-pairing guard
+// ---------------------------------------------------------------------------
+
+/**
+ * Balanced Liechtenstein owns its own pairing: the auto-engine derives each player's
+ * next round from a completed-match count (byes included). Hand-editing the bracket —
+ * filling byes, swapping players, creating/deleting matches, full-reset, backfill —
+ * desyncs that count and cascades into phantom byes and a broken bracket (e.g. merging
+ * two resting players across a large skill-band gap, which the engine deliberately
+ * refuses for fairness). So for BaLi these structure-editing ops are locked: HOST /
+ * MODERATOR are refused outright; ADMIN keeps the emergency-repair path but must pass an
+ * explicit confirm flag, so it can never be an accidental desync. Every other format is
+ * host-driven and unaffected.
+ */
+export const BALANCED_MANUAL_PAIRING_MESSAGE =
+  'Balanced Liechtenstein manages pairings automatically. Manual pairing is disabled here to keep rounds fair and the bracket intact.';
+
+export interface ManualPairingBlock {
+  status: number;
+  body: { error: string; message: string; statusCode: number };
+}
+
+/**
+ * Returns `null` if a manual pairing op may proceed, or an error `{status, body}` to
+ * send back otherwise. Only gates `BALANCED_LIECHTENSTEIN`; other formats always pass.
+ * PURE — unit-testable.
+ */
+export function blockBalancedManualPairing(
+  format: string | null | undefined,
+  role: string,
+  confirmed: boolean,
+): ManualPairingBlock | null {
+  if (format !== 'BALANCED_LIECHTENSTEIN') return null;
+  if (role !== 'ADMIN') {
+    return {
+      status: 403,
+      body: { error: 'Forbidden', message: BALANCED_MANUAL_PAIRING_MESSAGE, statusCode: 403 },
+    };
+  }
+  if (!confirmed) {
+    return {
+      status: 409,
+      body: {
+        error: 'ConfirmationRequired',
+        message:
+          'Balanced Liechtenstein safety: this manual pairing change can desync the bracket. Re-send with confirmBalancedOverride:true to proceed as admin.',
+        statusCode: 409,
+      },
+    };
+  }
+  return null;
+}
+
+/**
+ * Look up the tournament format and apply {@link blockBalancedManualPairing}. Returns
+ * `null` to proceed, or an error `{status, body}`. Call right after the manage check in
+ * every structure-editing manual pairing endpoint. One tiny lookup per (rare) host action.
+ */
+export async function guardBalancedManualPairing(
+  prisma: PrismaClient,
+  tournamentId: string,
+  role: string,
+  confirmed: boolean,
+): Promise<ManualPairingBlock | null> {
+  if (!tournamentId) return null;
+  const t = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: { format: true },
+  });
+  return blockBalancedManualPairing(t?.format, role, confirmed);
+}
+
+// ---------------------------------------------------------------------------
 // Late joiner: BYE for a player checked in mid-tournament
 // ---------------------------------------------------------------------------
 

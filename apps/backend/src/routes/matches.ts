@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
 import { InvalidActionError } from '../lib/draft-service.js';
 import { completeMatch } from '../lib/complete-match.js';
-import { canManageTournament } from '../lib/tournament-utils.js';
+import { canManageTournament, guardBalancedManualPairing } from '../lib/tournament-utils.js';
 import { notifyHostsOfMatchReport } from '../lib/discord-notify.js';
 import { runBalancedPairingTick, findNextDivisionSeed } from '../lib/balanced-liechtenstein-service.js';
 import { computeSwissStandings, sortSwissStandings } from '../lib/swiss.js';
@@ -626,6 +626,14 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
       }
 
+      const resetGuard = await guardBalancedManualPairing(
+        fastify.prisma,
+        match.tournament_id ?? '',
+        role,
+        (request.body as { confirmBalancedOverride?: boolean } | undefined)?.confirmBalancedOverride === true,
+      );
+      if (resetGuard) return reply.code(resetGuard.status).send(resetGuard.body);
+
       await fastify.prisma.$transaction(async (tx) => {
         // 1. Drop every per-game row (cascades map decisions + faction matrices) and the
         //    draft (cascades its picks) — no map/faction/lobby/pick choice survives.
@@ -695,6 +703,13 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await canManageTournament(fastify.prisma, tournamentId, userId, role))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
       }
+      const backfillGuard = await guardBalancedManualPairing(
+        fastify.prisma,
+        tournamentId,
+        role,
+        (request.body as { confirmBalancedOverride?: boolean } | undefined)?.confirmBalancedOverride === true,
+      );
+      if (backfillGuard) return reply.code(backfillGuard.status).send(backfillGuard.body);
       if (!match.phase?.startsWith('PLAYOFF')) {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Not a playoff match', statusCode: 422 });
       }
@@ -890,6 +905,13 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', callerId, role))) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
       }
+      const byeGuard = await guardBalancedManualPairing(
+        fastify.prisma,
+        match.tournament_id ?? '',
+        role,
+        (request.body as { confirmBalancedOverride?: boolean } | undefined)?.confirmBalancedOverride === true,
+      );
+      if (byeGuard) return reply.code(byeGuard.status).send(byeGuard.body);
       if (match.status !== 'BYE') {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Only BYE matches can be filled', statusCode: 422 });
       }
@@ -932,6 +954,13 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
       const { role, sub: userId } = request.user;
       if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
+      const swapGuard = await guardBalancedManualPairing(
+        fastify.prisma,
+        match.tournament_id ?? '',
+        role,
+        (request.body as { confirmBalancedOverride?: boolean } | undefined)?.confirmBalancedOverride === true,
+      );
+      if (swapGuard) return reply.code(swapGuard.status).send(swapGuard.body);
 
       const { oldPlayerId, newPlayerId } = parsed.data;
       let updateData: { player1_id?: string; player2_id?: string };

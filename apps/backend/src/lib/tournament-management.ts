@@ -11,7 +11,7 @@
 import type { PrismaClient } from '@rizzotto/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { createLateJoinerBye } from './tournament-utils.js';
+import { createLateJoinerBye, blockBalancedManualPairing } from './tournament-utils.js';
 import { emitBracketUpdate } from './emit.js';
 import { admitBalancedLateJoiner } from './balanced-liechtenstein-service.js';
 import { recordTournamentEvent } from './tournament-events.js';
@@ -189,6 +189,15 @@ export async function createManualMatch(
     select: { id: true, status: true, format: true },
   });
   if (!tournament) return { status: 404, body: { error: 'NotFound', message: 'Tournament not found', statusCode: 404 } };
+
+  // BaLi owns its own pairing — a manual node desyncs the count model. Admin-only route,
+  // so block unless an explicit confirm flag is set (host reach is impossible here anyway).
+  const balancedBlock = blockBalancedManualPairing(
+    tournament.format,
+    'ADMIN',
+    (body as { confirmBalancedOverride?: boolean } | null)?.confirmBalancedOverride === true,
+  );
+  if (balancedBlock) return { status: balancedBlock.status, body: balancedBlock.body };
 
   const { round, player1Id, player2Id } = parsed.data;
   const agg = await prisma.match.aggregate({

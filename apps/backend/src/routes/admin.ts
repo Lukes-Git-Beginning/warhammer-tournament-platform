@@ -9,6 +9,7 @@ import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { runBalancedPairingTick } from '../lib/balanced-liechtenstein-service.js';
 import { emitBracketUpdate } from '../lib/emit.js';
 import { addLateParticipant, setParticipantFactionOp, createManualMatch } from '../lib/tournament-management.js';
+import { guardBalancedManualPairing } from '../lib/tournament-utils.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { auditReplays } from '../lib/audit-replays.js';
 import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM, OPPONENT_SHARE_WARN } from '../lib/scoring-service.js';
@@ -2059,10 +2060,17 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     const match = await fastify.prisma.match.findUnique({
       where: { id: matchId },
-      select: { id: true, status: true, player1_id: true, player2_id: true, withdrawn_player_id: true },
+      select: { id: true, status: true, player1_id: true, player2_id: true, withdrawn_player_id: true, tournament_id: true },
     });
     if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
     if (match.status !== 'PENDING') return reply.code(409).send({ error: 'Conflict', message: 'Can only swap players in PENDING matches', statusCode: 409 });
+    const swapGuard = await guardBalancedManualPairing(
+      fastify.prisma,
+      match.tournament_id ?? '',
+      request.user.role,
+      (request.body as { confirmBalancedOverride?: boolean } | undefined)?.confirmBalancedOverride === true,
+    );
+    if (swapGuard) return reply.code(swapGuard.status).send(swapGuard.body);
 
     const { oldPlayerId, newPlayerId } = parsed.data;
     let updateData: { player1_id?: string; player2_id?: string; withdrawn_player_id?: null };
@@ -2103,6 +2111,13 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { matchId } = request.params as { matchId: string };
     const match = await fastify.prisma.match.findUnique({ where: { id: matchId }, select: { id: true, tournament_id: true } });
     if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+    const delGuard = await guardBalancedManualPairing(
+      fastify.prisma,
+      match.tournament_id ?? '',
+      request.user.role,
+      (request.query as { confirmBalancedOverride?: string } | undefined)?.confirmBalancedOverride === 'true',
+    );
+    if (delGuard) return reply.code(delGuard.status).send(delGuard.body);
     await fastify.prisma.match.update({ where: { id: matchId }, data: { deleted_at: new Date() } });
     // Deleting a node changes the field — for Balanced Liechtenstein re-pair / let playoffs
     // generate off the new state. No-ops for other formats.
