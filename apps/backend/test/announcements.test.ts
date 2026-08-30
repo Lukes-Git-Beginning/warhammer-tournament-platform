@@ -95,8 +95,11 @@ describe('buildTournamentFacts', () => {
 const DEST: AnnouncementDestination = {
   id: 'dest-1',
   name: 'Official TW Discord',
-  brief: 'Explain that this is a Domination tournament; be welcoming to newcomers.',
-  tone: 'warm and inviting',
+  explain: 'Explain that this is a Domination tournament.',
+  assume_known: '',
+  always_mention: 'The cash prize.',
+  avoid: '',
+  tone: 'warm and inviting, welcoming to newcomers',
   length: 'MEDIUM',
   role_mention: '@everyone',
   intro: 'Hey all!',

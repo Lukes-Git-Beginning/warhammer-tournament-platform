@@ -42,9 +42,16 @@ export type AnnouncementLength = z.infer<typeof AnnouncementLengthSchema>;
 export const AnnouncementDestinationSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(120),
-  /** Free-text focus/brief: what this server needs emphasised or assumed. */
-  brief: z.string().max(4000).default(''),
-  /** Free-text tone note, e.g. "warm and inviting to newcomers" or "plain". */
+  // The brief, split into a checklist of focused optional fields so nothing is forgotten.
+  /** What this server needs spelled out (e.g. "that it's a Domination tournament"). */
+  explain: z.string().max(2000).default(''),
+  /** What to NOT explain — the server already knows it (e.g. "the game modes"). */
+  assume_known: z.string().max(2000).default(''),
+  /** Must-include points (e.g. "the cash prize; DLC for semi-finalists"). */
+  always_mention: z.string().max(2000).default(''),
+  /** What to leave out / never say. */
+  avoid: z.string().max(2000).default(''),
+  /** Voice + how inviting, e.g. "warm, extra welcoming to newcomers" or "plain". */
   tone: z.string().max(400).default(''),
   length: AnnouncementLengthSchema.default('MEDIUM'),
   /** Verbatim Discord mention(s) to lead with, e.g. "@everyone" or "<@&123>". */
@@ -307,11 +314,14 @@ export function buildAnnouncementPrompt(
       out.push(`[${i + 1}] destinationId=${d.id}`);
       out.push(`    name: ${d.name}`);
       out.push(`    length: ${d.length}`);
-      out.push(`    tone: ${d.tone.trim() || 'plain and direct'}`);
+      out.push(`    tone / angle: ${d.tone.trim() || 'plain and direct'}`);
+      out.push(`    explain (spell out here): ${d.explain.trim() || 'none'}`);
+      out.push(`    assume as known (do NOT explain): ${d.assume_known.trim() || 'none'}`);
+      out.push(`    always mention: ${d.always_mention.trim() || 'none'}`);
+      out.push(`    avoid / never say: ${d.avoid.trim() || 'none'}`);
       out.push(`    role mention: ${d.role_mention.trim() || 'none'}`);
       out.push(`    intro: ${d.intro.trim() || 'none'}`);
       out.push(`    outro: ${d.outro.trim() || 'none'}`);
-      out.push(`    focus/brief: ${d.brief.trim() || 'none'}`);
     });
   }
   return out.join('\n');
@@ -340,8 +350,11 @@ function buildDestinationInstruction(d: AnnouncementDestination): string {
   parts.push(`Write the announcement for this destination server.`);
   parts.push(`Destination: ${d.name}`);
   parts.push(`Length: ${d.length}`);
-  parts.push(`Tone: ${d.tone.trim() || 'plain and direct'}`);
-  parts.push(`Focus / brief: ${d.brief.trim() || 'none — use the standard facts'}`);
+  parts.push(`Tone / angle: ${d.tone.trim() || 'plain and direct'}`);
+  parts.push(`Explain (spell out here): ${d.explain.trim() || 'none'}`);
+  parts.push(`Assume as known (do NOT explain): ${d.assume_known.trim() || 'none'}`);
+  parts.push(`Always mention: ${d.always_mention.trim() || 'none'}`);
+  parts.push(`Avoid / never say: ${d.avoid.trim() || 'none'}`);
   parts.push(`Role mention to lead with: ${d.role_mention.trim() || 'none'}`);
   parts.push(`Intro to use: ${d.intro.trim() || 'none'}`);
   parts.push(`Outro to use: ${d.outro.trim() || 'none'}`);

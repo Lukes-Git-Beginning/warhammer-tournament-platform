@@ -21,7 +21,10 @@ function newDestination(): AnnouncementDestination {
   return {
     id: crypto.randomUUID(),
     name: 'New destination',
-    brief: '',
+    explain: '',
+    assume_known: '',
+    always_mention: '',
+    avoid: '',
     tone: '',
     length: 'MEDIUM',
     role_mention: '',
@@ -94,11 +97,11 @@ function DestinationRow({
       {open && (
         <div className="grid gap-3 border-t border-stone-800 px-3 py-3 md:grid-cols-2">
           <div>
-            <label className={labelClass}>Tone</label>
+            <label className={labelClass}>Tone / angle</label>
             <input
               value={dest.tone}
               onChange={(e) => set('tone', e.target.value)}
-              placeholder="e.g. warm and inviting to newcomers"
+              placeholder="e.g. warm, extra welcoming to newcomers — or plain and direct"
               className={inputClass}
             />
           </div>
@@ -117,12 +120,42 @@ function DestinationRow({
             </select>
           </div>
           <div className="md:col-span-2">
-            <label className={labelClass}>Focus / brief</label>
+            <label className={labelClass}>Explain here</label>
             <textarea
-              rows={3}
-              value={dest.brief}
-              onChange={(e) => set('brief', e.target.value)}
-              placeholder="What this server needs emphasised or assumed. e.g. Explain that this is a Domination ruleset; be especially welcoming to new players."
+              rows={2}
+              value={dest.explain}
+              onChange={(e) => set('explain', e.target.value)}
+              placeholder="What this server needs spelled out. e.g. Explain that this is a Domination tournament."
+              className={`${inputClass} resize-y`}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className={labelClass}>Assume as known (don’t explain)</label>
+            <textarea
+              rows={2}
+              value={dest.assume_known}
+              onChange={(e) => set('assume_known', e.target.value)}
+              placeholder="What to skip — the server already knows it. e.g. the game modes."
+              className={`${inputClass} resize-y`}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className={labelClass}>Always mention</label>
+            <textarea
+              rows={2}
+              value={dest.always_mention}
+              onChange={(e) => set('always_mention', e.target.value)}
+              placeholder="Must-include points. e.g. the cash prize; DLC for semi-finalists."
+              className={`${inputClass} resize-y`}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className={labelClass}>Avoid / never say</label>
+            <textarea
+              rows={2}
+              value={dest.avoid}
+              onChange={(e) => set('avoid', e.target.value)}
+              placeholder="Anything to leave out."
               className={`${inputClass} resize-y`}
             />
           </div>

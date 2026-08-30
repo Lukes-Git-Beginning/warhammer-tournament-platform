@@ -1392,7 +1392,10 @@ export type AnnouncementLength = 'SHORT' | 'MEDIUM' | 'LONG';
 export interface AnnouncementDestination {
   id: string;
   name: string;
-  brief: string;
+  explain: string;
+  assume_known: string;
+  always_mention: string;
+  avoid: string;
   tone: string;
   length: AnnouncementLength;
   role_mention: string;
