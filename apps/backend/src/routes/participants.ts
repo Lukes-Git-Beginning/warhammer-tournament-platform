@@ -22,6 +22,8 @@ const RegisterSchema = z.object({
   // takes effect below their computed band — the effective band is max(computed,
   // requested) at Start — so a too-low value here is simply ignored.
   requested_band: z.number().int().min(1).max(5).optional(),
+  // Attribution: the ?ref= code that brought this player here (set once, on first register).
+  source: z.string().max(64).optional(),
 });
 
 const CheckinSchema = z.object({
@@ -231,7 +233,12 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
               select: participantSelect,
             })
           : await fastify.prisma.tournamentParticipant.create({
-              data: { tournament_id: tournament.id, user_id: request.user.sub, ...participantData },
+              data: {
+                tournament_id: tournament.id,
+                user_id: request.user.sub,
+                ...participantData,
+                source: parsed.data.source ?? null,
+              },
               select: participantSelect,
             });
 
@@ -369,7 +376,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const participant = existing
         ? await fastify.prisma.tournamentParticipant.update({ where: { id: existing.id }, data: { ...requestData, registered_at: new Date() }, select: { id: true, status: true } })
-        : await fastify.prisma.tournamentParticipant.create({ data: { tournament_id: tournament.id, user_id: request.user.sub, ...requestData }, select: { id: true, status: true } });
+        : await fastify.prisma.tournamentParticipant.create({ data: { tournament_id: tournament.id, user_id: request.user.sub, ...requestData, source: parsed.data.source ?? null }, select: { id: true, status: true } });
 
       await fastify.prisma.auditLog.create({
         data: { entity_type: 'TournamentParticipant', entity_id: participant.id, action: 'late_join_request', actor_id: request.user.sub, new_value: { tournament_id: tournament.id, user_id: request.user.sub } },

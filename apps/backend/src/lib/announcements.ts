@@ -15,6 +15,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
+import { slugifyRef } from './referrals.js';
 
 export const ANNOUNCEMENT_DESTINATIONS_CONFIG_KEY = 'announcement_destinations';
 export const ANNOUNCEMENT_DRAFTS_CONFIG_KEY = 'announcement_drafts';
@@ -42,6 +43,8 @@ export type AnnouncementLength = z.infer<typeof AnnouncementLengthSchema>;
 export const AnnouncementDestinationSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(120),
+  /** Attribution ref code appended to the sign-up link as ?ref= (empty → derived from name). */
+  ref: z.string().max(64).default(''),
   // The brief, split into a checklist of focused optional fields so nothing is forgotten.
   /** What this server needs spelled out (e.g. "that it's a Domination tournament"). */
   explain: z.string().max(2000).default(''),
@@ -321,6 +324,7 @@ export function buildAnnouncementPrompt(
     destinations.forEach((d, i) => {
       out.push(`[${i + 1}] destinationId=${d.id}`);
       out.push(`    name: ${d.name}`);
+      out.push(`    sign-up ref (append ?ref=<this> to the sign-up link): ${d.ref.trim() || slugifyRef(d.name)}`);
       out.push(`    length: ${d.length}`);
       out.push(`    tone / angle: ${d.tone.trim() || 'plain and direct'}`);
       out.push(`    explain (spell out here): ${d.explain.trim() || 'none'}`);

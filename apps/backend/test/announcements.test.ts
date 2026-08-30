@@ -95,6 +95,7 @@ describe('buildTournamentFacts', () => {
 const DEST: AnnouncementDestination = {
   id: 'dest-1',
   name: 'Official TW Discord',
+  ref: 'tw-main',
   explain: 'Explain that this is a Domination tournament.',
   assume_known: '',
   always_mention: 'The cash prize.',
@@ -123,6 +124,13 @@ describe('buildAnnouncementPrompt', () => {
     expect(prompt).toContain('destinationId=dest-1');
     expect(prompt).toContain('Official TW Discord');
     expect(prompt).toContain('Domination tournament');
+    expect(prompt).toContain('sign-up ref (append ?ref=<this> to the sign-up link): tw-main');
+  });
+
+  it('derives the sign-up ref from the destination name when none is given', () => {
+    const facts = buildTournamentFacts(BASE);
+    const prompt = buildAnnouncementPrompt(facts, null, BASE.slug, [{ ...DEST, ref: '' }]);
+    expect(prompt).toContain('sign-up ref (append ?ref=<this> to the sign-up link): official-tw-discord');
   });
 
   it('notes when there are no destinations and no poster', () => {

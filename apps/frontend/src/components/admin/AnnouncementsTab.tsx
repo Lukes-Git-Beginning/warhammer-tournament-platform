@@ -21,6 +21,7 @@ function newDestination(): AnnouncementDestination {
   return {
     id: crypto.randomUUID(),
     name: 'New destination',
+    ref: '',
     explain: '',
     assume_known: '',
     always_mention: '',
@@ -96,6 +97,15 @@ function DestinationRow({
 
       {open && (
         <div className="grid gap-3 border-t border-stone-800 px-3 py-3 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className={labelClass}>Ref (link tag — appended as ?ref= to the sign-up link)</label>
+            <input
+              value={dest.ref}
+              onChange={(e) => set('ref', e.target.value)}
+              placeholder="blank = derived from the name (e.g. tw-official)"
+              className={inputClass}
+            />
+          </div>
           <div>
             <label className={labelClass}>Tone / angle</label>
             <input

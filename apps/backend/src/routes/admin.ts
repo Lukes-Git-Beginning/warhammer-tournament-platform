@@ -2502,6 +2502,66 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Referral attribution reports — where signups came from.
+  // -------------------------------------------------------------------------
+
+  // Per-tournament: clicks + signups + conversion by ref source.
+  fastify.get('/api/admin/referrals/tournament/:slug', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const t = await fastify.prisma.tournament.findFirst({
+      where: { slug, deleted_at: null },
+      select: { id: true, name: true },
+    });
+    if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+
+    const [hits, signups] = await Promise.all([
+      fastify.prisma.referralHit.groupBy({ by: ['ref'], where: { tournament_id: t.id }, _count: { _all: true } }),
+      fastify.prisma.tournamentParticipant.groupBy({
+        by: ['source'],
+        where: { tournament_id: t.id, deleted_at: null },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const rows = new Map<string, { ref: string; clicks: number; signups: number }>();
+    for (const h of hits) rows.set(h.ref, { ref: h.ref, clicks: h._count._all, signups: 0 });
+    let directSignups = 0;
+    for (const s of signups) {
+      if (s.source === null) {
+        directSignups = s._count._all;
+        continue;
+      }
+      const row = rows.get(s.source) ?? { ref: s.source, clicks: 0, signups: 0 };
+      row.signups = s._count._all;
+      rows.set(s.source, row);
+    }
+    const sources = [...rows.values()]
+      .map((r) => ({ ...r, conversion: r.clicks > 0 ? r.signups / r.clicks : null }))
+      .sort((a, b) => b.signups - a.signups || b.clicks - a.clicks);
+
+    return { tournament: { slug, name: t.name }, sources, directSignups };
+  });
+
+  // Site-wide: total clicks by ref + new users by first-touch source.
+  fastify.get('/api/admin/referrals/overview', async () => {
+    const [clicks, newUsers] = await Promise.all([
+      fastify.prisma.referralHit.groupBy({ by: ['ref'], _count: { _all: true } }),
+      fastify.prisma.user.groupBy({
+        by: ['referral_source'],
+        where: { deleted_at: null, referral_source: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
+    const clicksByRef = clicks
+      .map((c) => ({ ref: c.ref, clicks: c._count._all }))
+      .sort((a, b) => b.clicks - a.clicks);
+    const usersBySource = newUsers
+      .map((u) => ({ ref: u.referral_source ?? 'unknown', users: u._count._all }))
+      .sort((a, b) => b.users - a.users);
+    return { clicksByRef, usersBySource };
+  });
+
 };
 
 export default adminRoutes;

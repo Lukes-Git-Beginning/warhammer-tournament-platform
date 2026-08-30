@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { router } from './router';
+import { ReferralCapture } from './components/ReferralCapture';
 import './i18n';
 
 import '@fontsource-variable/cinzel';
@@ -21,6 +22,7 @@ if (!root) throw new Error('Root element missing');
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
+      <ReferralCapture />
       <RouterProvider router={router} />
     </QueryClientProvider>
   </StrictMode>,

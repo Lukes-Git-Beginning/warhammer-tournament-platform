@@ -46,6 +46,7 @@ import skillRoutes from './routes/skill.js';
 import supporterRoutes from './routes/supporters.js';
 import tournamentEventRoutes from './routes/tournament-events.js';
 import announcementPushRoutes from './routes/announcement-push.js';
+import referralRoutes from './routes/referrals.js';
 
 export interface BuildAppOptions {
   /** Skip socket plugin during unit tests (avoids redis adapter init). */
@@ -177,6 +178,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(supporterRoutes);
   await app.register(tournamentEventRoutes);
   await app.register(announcementPushRoutes);
+  await app.register(referralRoutes);
   if (withGraphql) await app.register(graphqlPlugin);
 
   // Liveness. Touches nothing on purpose: it answers iff the event loop is turning, which is

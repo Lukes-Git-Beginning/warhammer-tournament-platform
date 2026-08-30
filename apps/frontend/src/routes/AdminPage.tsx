@@ -26,10 +26,11 @@ import { AdminReportsTab } from '@/components/admin/AdminReportsTab.js';
 import { AdminSupportersTab } from '@/components/admin/AdminSupportersTab.js';
 import { TournamentLogTab } from '@/components/admin/TournamentLogTab.js';
 import { AnnouncementsTab } from '@/components/admin/AnnouncementsTab.js';
+import { ReferralsTab } from '@/components/admin/ReferralsTab.js';
 
-type Tab = 'audit' | 'dashboard' | 'users' | 'supporters' | 'presets' | 'stats' | 'settings' | 'announcements' | 'import' | 'matches' | 'all_games' | 'tournament_log' | 'queue' | 'skill_calibration' | 'reports';
+type Tab = 'audit' | 'dashboard' | 'users' | 'supporters' | 'presets' | 'stats' | 'settings' | 'announcements' | 'referrals' | 'import' | 'matches' | 'all_games' | 'tournament_log' | 'queue' | 'skill_calibration' | 'reports';
 
-const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'announcements', 'skill_calibration', 'users', 'supporters', 'matches', 'all_games', 'tournament_log', 'queue', 'presets', 'audit', 'import'];
+const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'announcements', 'referrals', 'skill_calibration', 'users', 'supporters', 'matches', 'all_games', 'tournament_log', 'queue', 'presets', 'audit', 'import'];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard: 'admin.tabs.dashboard',
@@ -40,6 +41,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
   stats: 'admin.tabs.stats',
   settings: 'admin.tabs.settings',
   announcements: 'admin.tabs.announcements',
+  referrals: 'admin.tabs.referrals',
   import: 'admin.tabs.import',
   matches: 'admin.tabs.matches',
   all_games: 'admin.tabs.all_games',
@@ -58,6 +60,7 @@ const STATIC_LABELS: Record<Tab, string> = {
   stats: 'Statistics',
   settings: 'Settings',
   announcements: 'Announcements',
+  referrals: 'Referrals',
   import: 'Import-Log',
   matches: 'Matches',
   all_games: 'All Games',
@@ -188,6 +191,7 @@ export function AdminPage() {
         {tab === 'all_games' && <AdminAllGamesTab />}
         {tab === 'tournament_log' && <TournamentLogTab />}
         {tab === 'announcements' && <AnnouncementsTab />}
+        {tab === 'referrals' && <ReferralsTab />}
         {tab === 'queue' && <QueueActivityTable />}
         {tab === 'presets' && <PresetLibraryAdmin />}
         {tab === 'stats' && <StatsTab />}

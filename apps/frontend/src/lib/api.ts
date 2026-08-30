@@ -1,3 +1,4 @@
+import { storedRefLast } from './referrals';
 import type {
   UserMe,
   BracketResponse,
@@ -1392,6 +1393,7 @@ export type AnnouncementLength = 'SHORT' | 'MEDIUM' | 'LONG';
 export interface AnnouncementDestination {
   id: string;
   name: string;
+  ref: string;
   explain: string;
   assume_known: string;
   always_mention: string;
@@ -1408,6 +1410,27 @@ export interface GeneratedAnnouncement {
   name: string;
   text: string;
   error?: string;
+}
+
+// --- Referral attribution reports (admin) ----------------------------------
+
+export interface TournamentReferralReport {
+  tournament: { slug: string; name: string };
+  sources: { ref: string; clicks: number; signups: number; conversion: number | null }[];
+  directSignups: number;
+}
+
+export interface ReferralsOverview {
+  clicksByRef: { ref: string; clicks: number }[];
+  usersBySource: { ref: string; users: number }[];
+}
+
+export function getTournamentReferrals(slug: string): Promise<TournamentReferralReport> {
+  return apiFetch(`/api/admin/referrals/tournament/${encodeURIComponent(slug)}`);
+}
+
+export function getReferralsOverview(): Promise<ReferralsOverview> {
+  return apiFetch('/api/admin/referrals/overview');
 }
 
 /** The operator's destination list (empty array if never configured / 404). */
@@ -2135,6 +2158,8 @@ export function registerForTournament(
   if (opts?.factionId) body.faction_id = opts.factionId;
   if (opts?.factionIds) body.faction_ids = opts.factionIds;
   if (opts?.requested_band != null) body.requested_band = opts.requested_band;
+  const src = storedRefLast();
+  if (src) body.source = src;
   return apiFetch<{ id: string; status: ParticipantStatus }>(
     `/api/tournaments/${slug}/register`,
     { method: 'POST', body: JSON.stringify(body) },
@@ -2155,6 +2180,8 @@ export function requestJoinTournament(
   if (opts?.factionId) body.faction_id = opts.factionId;
   if (opts?.factionIds) body.faction_ids = opts.factionIds;
   if (opts?.requested_band != null) body.requested_band = opts.requested_band;
+  const src = storedRefLast();
+  if (src) body.source = src;
   return apiFetch(`/api/tournaments/${slug}/request-join`, { method: 'POST', body: JSON.stringify(body) });
 }
 

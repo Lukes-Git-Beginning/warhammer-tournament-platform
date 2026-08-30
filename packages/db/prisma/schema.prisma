@@ -222,6 +222,9 @@ model User {
   lord_manual         Boolean   @default(false)
   champion_manual     Boolean   @default(false)
   supporter_synced_at DateTime?
+  // First-touch acquisition: the ?ref= code a visitor first arrived with (how they
+  // found the site), set once at account creation. See lib/referrals.ts.
+  referral_source     String?
   created_at         DateTime  @default(now())
   updated_at         DateTime  @updatedAt
   deleted_at         DateTime?
@@ -244,6 +247,7 @@ model User {
   team_memberships      TeamMember[]
   audit_logs            AuditLog[]              @relation("AuditActor")
   match_reports         MatchReport[]           @relation("MatchReportReporter")
+  referral_hits         ReferralHit[]
   // Welle 2
   steam_link            SteamLink?
   // External (TT archive)
@@ -378,6 +382,7 @@ model Tournament {
   tournament_army_lists TournamentArmyList[]
   co_hosts              TournamentHost[]
   events                TournamentEvent[]
+  referral_hits         ReferralHit[]
 
   @@index([status])
   @@index([host_id])
@@ -445,6 +450,8 @@ model TournamentParticipant {
   // force-checkin) and never reset. Drives the 0-point catch-up-bye rule (marker AND
   // no real game yet), independent of registered_at.
   late_joined     Boolean           @default(false)
+  // Attribution: the ?ref= code that drove THIS registration (which announcement/link).
+  source          String?
   deleted_at      DateTime?
 
   tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
@@ -1114,4 +1121,27 @@ model ScheduledMatchup {
   @@index([status, expires_at])
   @@index([proposer_id])
   @@index([proposed_at])
+}
+
+// -----------------------------------------------------------------------------
+// ReferralHit — append-only click log. One row per ?ref= landing, recorded from the
+// browser (so bots without JS don't inflate it). Powers "clicks by source" and, joined
+// to registrations, the conversion funnel. First-party, minimal — no PII beyond an
+// optional logged-in user_id. See lib/referrals.ts.
+// -----------------------------------------------------------------------------
+
+model ReferralHit {
+  id            String   @id @default(uuid()) @db.Uuid
+  ref           String // the ?ref= code (e.g. a destination's ref slug)
+  tournament_id String?  @db.Uuid // set when the landing was on a tournament page
+  user_id       String?  @db.Uuid // set when the visitor was logged in at landing
+  path          String? // the landing path, for context
+  created_at    DateTime @default(now())
+
+  tournament Tournament? @relation(fields: [tournament_id], references: [id], onDelete: SetNull)
+  user       User?       @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([ref])
+  @@index([tournament_id])
+  @@index([created_at])
 }
