@@ -264,6 +264,10 @@ const CAP_ALERT_THROTTLE_MS = 3_600_000;
 const dmHistoryByUser = new Map<string, number[]>();
 let dmGlobalTimestamps: number[] = [];
 let lastCapAlertAt = 0;
+// Aggregated since the last alert, so a throttled alert can report scale (count + users).
+let capDropCount = 0;
+const capDropUsers = new Set<string>();
+const capDropReasons = new Set<string>();
 
 /**
  * The first layer already at its max for these send timestamps, or null. PURE — exported
@@ -297,17 +301,46 @@ function reserveDmSlot(userId: string, now: number): string | null {
   return null;
 }
 
-/** Loud log on every drop + a throttled Discord alert (only if DISCORD_ALERT_CHANNEL_ID is set). */
+/** DM every admin (bypassing the caps, so the alert always gets through). Fire-and-forget. */
+async function dmAdmins(message: string): Promise<void> {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN', deleted_at: null },
+      select: { discord_id: true },
+    });
+    for (const a of admins) {
+      if (a.discord_id) void sendDm(a.discord_id, message, { broadcast: true }).catch(() => {});
+    }
+  } catch {
+    /* non-fatal — an alert must never break the caller */
+  }
+}
+
+/**
+ * Every dropped DM is logged loudly and aggregated. Whenever a cap is hit, the admins get a
+ * DM (throttled to one per hour so a runaway bug can't spam the alert either) summarising how
+ * many DMs were dropped, across how many recipients, and which cap(s) tripped — enough to tell
+ * "a legit heavy user hit the limit" from "a notification loop is running". Also posts to
+ * DISCORD_ALERT_CHANNEL_ID if that env is set.
+ */
 function reportDmCapDrop(userId: string, reason: string, now: number): void {
   console.error(`[dm-cap] dropped DM to ${userId} — cap hit: ${reason}`);
+  capDropCount += 1;
+  capDropUsers.add(userId);
+  capDropReasons.add(reason);
+  if (now - lastCapAlertAt <= CAP_ALERT_THROTTLE_MS) return;
+  lastCapAlertAt = now;
+  const summary =
+    `⚠️ **DM rate cap tripped.** ${capDropCount} bot DM(s) dropped across ${capDropUsers.size} ` +
+    `recipient(s) in the last hour — cap(s): ${[...capDropReasons].join(', ')}. If this is ` +
+    `unexpected, a notification loop may be running; otherwise a very active user is legitimately ` +
+    `hitting the limits. (Further alerts suppressed for 1h — check the logs for the full picture.)`;
+  capDropCount = 0;
+  capDropUsers.clear();
+  capDropReasons.clear();
+  void dmAdmins(summary);
   const alertChannel = process.env.DISCORD_ALERT_CHANNEL_ID?.trim();
-  if (alertChannel && now - lastCapAlertAt > CAP_ALERT_THROTTLE_MS) {
-    lastCapAlertAt = now;
-    void postChannelMessage(
-      alertChannel,
-      `⚠️ DM rate cap tripped (${reason}) — a bot DM was dropped. Likely a runaway loop; check the logs.`,
-    ).catch(() => {});
-  }
+  if (alertChannel) void postChannelMessage(alertChannel, summary).catch(() => {});
 }
 
 /** True if a DM to this user may go out now (and records it); false if a cap blocks it. */
