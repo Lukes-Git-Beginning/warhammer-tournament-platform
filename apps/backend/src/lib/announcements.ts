@@ -279,9 +279,13 @@ export function buildAnnouncementPrompt(
     'Write Discord tournament announcements for Rizzotto (rizzotto.gg). Produce ONE ready-to-paste ' +
       "Discord post per destination listed below, in Alex's own plain, direct voice — no invented lore, " +
       'no grimdark, no AI-speak, no "as an AI". Use light Discord markdown (**bold**, bullets). Always ' +
-      'include the sign-up link and, if present, the poster link (paste the poster URL bare so Discord ' +
-      'shows it). Preserve any <t:…> timestamp tokens exactly. If a destination has a role mention, put ' +
-      'it on the first line; use its intro/outro if given; respect its tone, length and focus.',
+      "include the sign-up link. If there is a poster, attach it by turning the post's FINAL period into " +
+      'a masked link — e.g. turn `…Bo3 BPT.` into `…Bo3 BPT[.](POSTER_URL)`. Discord then shows the poster ' +
+      'image below with NO extra character, line, or visible URL, and the message reads completely ' +
+      'naturally. If the post has no closing period, append `[.](POSTER_URL)` on its own final line instead. ' +
+      'Preserve any <t:…> ' +
+      'timestamp tokens exactly. If a destination has a role mention, put it on the first line; use its ' +
+      'intro/outro if given; respect its tone, length and focus.',
   );
   out.push('');
   out.push(

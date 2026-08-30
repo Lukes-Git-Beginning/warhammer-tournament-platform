@@ -272,37 +272,6 @@ export function AnnouncementsTab() {
     }
   };
 
-  // Copy the poster as an IMAGE (not the URL) so it pastes straight into Discord as an
-  // attachment — image shows, no visible link. Chromium over HTTPS supports clipboard images.
-  const [posterBusy, setPosterBusy] = useState(false);
-  const [posterCopied, setPosterCopied] = useState(false);
-  const [posterError, setPosterError] = useState<string | null>(null);
-  const copyPosterImage = async () => {
-    if (!selected?.poster_url) return;
-    setPosterBusy(true);
-    setPosterError(null);
-    try {
-      const res = await fetch(selected.poster_url);
-      if (!res.ok) throw new Error(`Could not load the poster (${res.status})`);
-      const bitmap = await createImageBitmap(await res.blob());
-      const canvas = document.createElement('canvas');
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Canvas not available in this browser');
-      ctx.drawImage(bitmap, 0, 0);
-      const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-      if (!png) throw new Error('Could not convert the poster to an image');
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
-      setPosterCopied(true);
-      setTimeout(() => setPosterCopied(false), 2500);
-    } catch (e) {
-      setPosterError((e as Error).message);
-    } finally {
-      setPosterBusy(false);
-    }
-  };
-
   return (
     <div className="flex flex-col gap-8">
       {/* ---- Destinations ---- */}
@@ -408,16 +377,6 @@ export function AnnouncementsTab() {
                   >
                     {draftsFetching ? 'Refreshing…' : 'Refresh drafts'}
                   </button>
-                  {selected.poster_url && (
-                    <button
-                      type="button"
-                      onClick={copyPosterImage}
-                      disabled={posterBusy}
-                      className="rounded border border-stone-700 px-3 py-1.5 text-sm text-stone-300 transition-colors hover:bg-stone-800 disabled:opacity-40"
-                    >
-                      {posterBusy ? 'Copying…' : posterCopied ? 'Poster copied!' : 'Copy poster image'}
-                    </button>
-                  )}
                 </div>
                 {promptCopied && (
                   <p className="mb-3 text-xs text-stone-400">
@@ -425,14 +384,7 @@ export function AnnouncementsTab() {
                     below once Claude pushes them (hit “Refresh drafts”).
                   </p>
                 )}
-                {posterCopied && (
-                  <p className="mb-3 text-xs text-stone-400">
-                    Poster image is on your clipboard — paste it into Discord (Ctrl+V) as an attachment. Image shows,
-                    no visible link.
-                  </p>
-                )}
                 {promptError && <p className="mb-3 text-xs text-red-400">{promptError}</p>}
-                {posterError && <p className="mb-3 text-xs text-red-400">{posterError}</p>}
 
                 {draft ? (
                   <div className="flex flex-col gap-4">
