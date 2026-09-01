@@ -24,8 +24,6 @@ function newDestination(): AnnouncementDestination {
     ref: '',
     brief: '',
     explain_level: 'NONE',
-    always_mention: '',
-    avoid: '',
     length: 'MEDIUM',
     role_mention: '',
     intro: '',
@@ -138,26 +136,6 @@ function DestinationRow({
               value={dest.brief}
               onChange={(e) => set('brief', e.target.value)}
               placeholder="What this server is, its vibe, the angle. e.g. Official Total War Discord, warm and welcoming to newcomers."
-              className={`${inputClass} resize-y`}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className={labelClass}>Always mention</label>
-            <textarea
-              rows={2}
-              value={dest.always_mention}
-              onChange={(e) => set('always_mention', e.target.value)}
-              placeholder="Must-include points. e.g. the cash prize; DLC for semi-finalists."
-              className={`${inputClass} resize-y`}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className={labelClass}>Avoid / never say</label>
-            <textarea
-              rows={2}
-              value={dest.avoid}
-              onChange={(e) => set('avoid', e.target.value)}
-              placeholder="Anything to leave out."
               className={`${inputClass} resize-y`}
             />
           </div>

@@ -56,10 +56,6 @@ export const AnnouncementDestinationSchema = z.object({
    * reminder; FULL = real explanation (still scaled by how novel the format is — see writing rules).
    */
   explain_level: ExplanationLevelSchema.default('NONE'),
-  /** Must-include points (e.g. "the cash prize; DLC for semi-finalists"). */
-  always_mention: z.string().max(2000).default(''),
-  /** What to leave out / never say. */
-  avoid: z.string().max(2000).default(''),
   length: AnnouncementLengthSchema.default('MEDIUM'),
   /** Verbatim Discord mention(s) to lead with, e.g. "@everyone" or "<@&123>". */
   role_mention: z.string().max(400).default(''),
@@ -394,8 +390,6 @@ export function buildAnnouncementPrompt(
       out.push(`    length: ${d.length}`);
       out.push(`    explanation level: ${d.explain_level} (${EXPLAIN_LEVEL_HINT[d.explain_level]})`);
       out.push(`    general brief (what this server is / the angle): ${d.brief.trim() || 'plain and direct, insider audience'}`);
-      out.push(`    always mention: ${d.always_mention.trim() || 'none'}`);
-      out.push(`    avoid / never say: ${d.avoid.trim() || 'none'}`);
       out.push(`    role mention: ${d.role_mention.trim() || 'none'}`);
       out.push(`    intro: ${d.intro.trim() || 'none'}`);
       out.push(`    outro: ${d.outro.trim() || 'none'}`);
@@ -429,8 +423,6 @@ function buildDestinationInstruction(d: AnnouncementDestination): string {
   parts.push(`Length: ${d.length}`);
   parts.push(`Explanation level: ${d.explain_level} (${EXPLAIN_LEVEL_HINT[d.explain_level]})`);
   parts.push(`General brief (what this server is / the angle): ${d.brief.trim() || 'plain and direct, insider audience'}`);
-  parts.push(`Always mention: ${d.always_mention.trim() || 'none'}`);
-  parts.push(`Avoid / never say: ${d.avoid.trim() || 'none'}`);
   parts.push(`Role mention to lead with: ${d.role_mention.trim() || 'none'}`);
   parts.push(`Intro to use: ${d.intro.trim() || 'none'}`);
   parts.push(`Outro to use: ${d.outro.trim() || 'none'}`);

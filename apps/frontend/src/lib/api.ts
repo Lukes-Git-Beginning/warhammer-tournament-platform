@@ -1400,8 +1400,6 @@ export interface AnnouncementDestination {
   brief: string;
   /** How much to explain the format/mode for this audience. */
   explain_level: ExplanationLevel;
-  always_mention: string;
-  avoid: string;
   length: AnnouncementLength;
   role_mention: string;
   intro: string;

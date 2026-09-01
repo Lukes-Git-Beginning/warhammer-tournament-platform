@@ -121,8 +121,6 @@ const DEST: AnnouncementDestination = {
   ref: 'tw-main',
   brief: 'Official Total War Discord — a Domination tournament, warm and welcoming to newcomers.',
   explain_level: 'FULL',
-  always_mention: 'The cash prize.',
-  avoid: '',
   length: 'MEDIUM',
   role_mention: '@everyone',
   intro: 'Hey all!',
