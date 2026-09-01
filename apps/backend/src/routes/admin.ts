@@ -1785,6 +1785,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         poster_url: true,
         rounds_count: true,
         playoff_format: true,
+        has_third_place_match: true,
         _count: { select: { participants: { where: { deleted_at: null } } } },
         faction_allowlist: { select: { faction: { select: { name: true } } } },
         map_pool: { select: { map: { select: { name: true } } } },
@@ -1816,6 +1817,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       isMajor: tournament.is_major,
       playoffFormat: tournament.playoff_format,
       roundsCount: tournament.rounds_count,
+      hasThirdPlaceMatch: tournament.has_third_place_match,
       frontendUrl,
     });
 

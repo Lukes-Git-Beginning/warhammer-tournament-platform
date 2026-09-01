@@ -106,6 +106,13 @@ describe('buildTournamentFacts', () => {
     const facts = buildTournamentFacts({ ...BASE, format: 'SWISS', roundsCount: 5, playoffFormat: 'TOP4' });
     expect(facts.block).toContain('Planned structure: 5 rounds, then TOP 4 playoffs.');
   });
+
+  it('surfaces a third-place match only when it exists, never its absence', () => {
+    const withThird = buildTournamentFacts({ ...BASE, hasThirdPlaceMatch: true });
+    expect(withThird.block).toContain('third-place match');
+    const withoutThird = buildTournamentFacts({ ...BASE, hasThirdPlaceMatch: false });
+    expect(withoutThird.block).not.toContain('third-place match');
+  });
 });
 
 const DEST: AnnouncementDestination = {

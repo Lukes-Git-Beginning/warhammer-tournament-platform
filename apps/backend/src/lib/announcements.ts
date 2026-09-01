@@ -241,6 +241,8 @@ export interface TournamentFactsInput {
   playoffFormat?: string | null;
   /** Configured Swiss/BaLi round count if already set; null → derive the plan from the format. */
   roundsCount?: number | null;
+  /** Whether a third-place match is set for this tournament (concrete, not the abstract "optional"). */
+  hasThirdPlaceMatch?: boolean | null;
   frontendUrl: string;
 }
 
@@ -290,6 +292,11 @@ export function buildTournamentFacts(t: TournamentFactsInput): TournamentFacts {
   lines.push(`Mode: ${label(MODE_LABELS, t.mode)}.${modeExplain ? ` Reference explanation (same caveat): ${modeExplain}` : ''}`);
   const plan = planLine(t.format, t.roundsCount, t.playoffFormat);
   if (plan) lines.push(plan);
+  // Only surface a third-place match when it EXISTS (a positive detail, e.g. if a prize is on it).
+  // Never announce its absence, and don't force it into every post — see writing rules.
+  if (t.hasThirdPlaceMatch) {
+    lines.push('There is a third-place match (semifinal losers play for 3rd). Only mention it if a prize is on it or it is worth highlighting — not by default.');
+  }
   lines.push(`Sign-up link: ${signupUrl}`);
   if (t.startDate) lines.push(`Starts: ${discordTime(t.startDate)}`);
   if (t.registrationDeadline) lines.push(`Registration deadline: ${discordTime(t.registrationDeadline)}`);
