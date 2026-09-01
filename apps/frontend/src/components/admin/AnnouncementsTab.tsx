@@ -22,11 +22,10 @@ function newDestination(): AnnouncementDestination {
     id: crypto.randomUUID(),
     name: 'New destination',
     ref: '',
-    explain: '',
-    assume_known: '',
+    brief: '',
+    explain_level: 'NONE',
     always_mention: '',
     avoid: '',
-    tone: '',
     length: 'MEDIUM',
     role_mention: '',
     intro: '',
@@ -107,13 +106,16 @@ function DestinationRow({
             />
           </div>
           <div>
-            <label className={labelClass}>Tone / angle</label>
-            <input
-              value={dest.tone}
-              onChange={(e) => set('tone', e.target.value)}
-              placeholder="e.g. warm, extra welcoming to newcomers — or plain and direct"
+            <label className={labelClass}>Explanation level</label>
+            <select
+              value={dest.explain_level}
+              onChange={(e) => set('explain_level', e.target.value as AnnouncementDestination['explain_level'])}
               className={inputClass}
-            />
+            >
+              <option value="NONE">No explanation (insiders)</option>
+              <option value="BASIC">Short / basic reminder</option>
+              <option value="FULL">Full explanation (newcomers)</option>
+            </select>
           </div>
           <div>
             <label className={labelClass}>Length</label>
@@ -130,22 +132,12 @@ function DestinationRow({
             </select>
           </div>
           <div className="md:col-span-2">
-            <label className={labelClass}>Explain here</label>
+            <label className={labelClass}>General brief</label>
             <textarea
               rows={2}
-              value={dest.explain}
-              onChange={(e) => set('explain', e.target.value)}
-              placeholder="What this server needs spelled out. e.g. Explain that this is a Domination tournament."
-              className={`${inputClass} resize-y`}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className={labelClass}>Assume as known (don’t explain)</label>
-            <textarea
-              rows={2}
-              value={dest.assume_known}
-              onChange={(e) => set('assume_known', e.target.value)}
-              placeholder="What to skip — the server already knows it. e.g. the game modes."
+              value={dest.brief}
+              onChange={(e) => set('brief', e.target.value)}
+              placeholder="What this server is, its vibe, the angle. e.g. Official Total War Discord, warm and welcoming to newcomers."
               className={`${inputClass} resize-y`}
             />
           </div>
@@ -299,12 +291,13 @@ export function AnnouncementsTab() {
   const [promptBusy, setPromptBusy] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
   const copyPrompt = async () => {
     if (!selected) return;
     setPromptBusy(true);
     setPromptError(null);
     try {
-      const { prompt } = await getAnnouncementPrompt(selected.slug);
+      const { prompt } = await getAnnouncementPrompt(selected.slug, notes);
       await navigator.clipboard.writeText(prompt);
       setPromptCopied(true);
       setTimeout(() => setPromptCopied(false), 2500);
@@ -330,8 +323,8 @@ export function AnnouncementsTab() {
           </button>
         </div>
         <p className="mb-4 text-xs text-stone-500">
-          Each destination is a reusable brief for one Discord server — its focus, tone, length, role mention and
-          intro/outro. Define once, reuse for every tournament.
+          Each destination is a reusable brief for one Discord server: its general brief, explanation level, length,
+          role mention and intro/outro. Define once, reuse for every tournament.
         </p>
 
         {destLoading && <div className="py-4 text-center text-sm text-stone-400">Loading…</div>}
@@ -420,6 +413,16 @@ export function AnnouncementsTab() {
                   >
                     {draftsFetching ? 'Refreshing…' : 'Refresh drafts'}
                   </button>
+                </div>
+                <div className="mb-3">
+                  <label className={labelClass}>Anything specific this time? (optional)</label>
+                  <textarea
+                    rows={2}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Prize, special rule, schedule note — whatever's specific to this announcement and not already in the tournament. Left blank = just the tournament facts."
+                    className={`${inputClass} resize-y`}
+                  />
                 </div>
                 {promptCopied && (
                   <p className="mb-3 text-xs text-stone-400">

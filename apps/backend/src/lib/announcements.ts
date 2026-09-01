@@ -40,22 +40,26 @@ const ANTHROPIC_MAX_RETRIES = 1;
 export const AnnouncementLengthSchema = z.enum(['SHORT', 'MEDIUM', 'LONG']);
 export type AnnouncementLength = z.infer<typeof AnnouncementLengthSchema>;
 
+/** How much to explain the format/mode for this destination's audience. */
+export const ExplanationLevelSchema = z.enum(['NONE', 'BASIC', 'FULL']);
+export type ExplanationLevel = z.infer<typeof ExplanationLevelSchema>;
+
 export const AnnouncementDestinationSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(120),
   /** Attribution ref code appended to the sign-up link as ?ref= (empty → derived from name). */
   ref: z.string().max(64).default(''),
-  // The brief, split into a checklist of focused optional fields so nothing is forgotten.
-  /** What this server needs spelled out (e.g. "that it's a Domination tournament"). */
-  explain: z.string().max(2000).default(''),
-  /** What to NOT explain — the server already knows it (e.g. "the game modes"). */
-  assume_known: z.string().max(2000).default(''),
+  /** Free-text context: what this server is, its vibe, the general angle (was "tone / angle"). */
+  brief: z.string().max(2000).default(''),
+  /**
+   * How much to explain the format/mode here. NONE = insiders, just name it; BASIC = one-line
+   * reminder; FULL = real explanation (still scaled by how novel the format is — see writing rules).
+   */
+  explain_level: ExplanationLevelSchema.default('NONE'),
   /** Must-include points (e.g. "the cash prize; DLC for semi-finalists"). */
   always_mention: z.string().max(2000).default(''),
   /** What to leave out / never say. */
   avoid: z.string().max(2000).default(''),
-  /** Voice + how inviting, e.g. "warm, extra welcoming to newcomers" or "plain". */
-  tone: z.string().max(400).default(''),
   length: AnnouncementLengthSchema.default('MEDIUM'),
   /** Verbatim Discord mention(s) to lead with, e.g. "@everyone" or "<@&123>". */
   role_mention: z.string().max(400).default(''),
@@ -71,7 +75,18 @@ export const AnnouncementDestinationsSchema = z.array(AnnouncementDestinationSch
  * PURE — the caller reads the AdminConfig row (keeps this module DB-free/testable).
  */
 export function parseAnnouncementDestinations(value: unknown): AnnouncementDestination[] {
-  const parsed = AnnouncementDestinationsSchema.safeParse(value);
+  // Migrate legacy fields in place: the old "tone" field is now "brief" (zod would strip it
+  // otherwise, losing an existing destination's context). Old explain/assume_known are dropped.
+  const migrated = Array.isArray(value)
+    ? value.map((item) => {
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+          const o = item as Record<string, unknown>;
+          if (o.brief === undefined && typeof o.tone === 'string') return { ...o, brief: o.tone };
+        }
+        return item;
+      })
+    : value;
+  const parsed = AnnouncementDestinationsSchema.safeParse(migrated);
   return parsed.success ? parsed.data : [];
 }
 
@@ -207,6 +222,8 @@ export interface TournamentFactsInput {
   slug: string;
   format: string;
   mode: string;
+  /** The host's own description text — lean on this heavily when writing. */
+  description?: string | null;
   startDate: Date | null;
   registrationDeadline: Date | null;
   maxParticipants: number | null;
@@ -220,7 +237,31 @@ export interface TournamentFactsInput {
   discordLink: string | null;
   streamUrl: string | null;
   isMajor: boolean;
+  /** Configured playoff shape (TOP2/TOP4/TOP8/NONE), fixed at creation — state it, don't hedge. */
+  playoffFormat?: string | null;
+  /** Configured Swiss/BaLi round count if already set; null → derive the plan from the format. */
+  roundsCount?: number | null;
   frontendUrl: string;
+}
+
+/**
+ * Human "planned structure" line: the fixed round + playoff plan for this tournament, so the
+ * announcement can state it concretely instead of hedging. BaLi's round count is capped at 4
+ * (4 at 8+ players, 3 under 8) per `balancedRounds`; other formats state the stored count if any.
+ */
+function planLine(format: string, roundsCount: number | null | undefined, playoffFormat: string | null | undefined): string | null {
+  const parts: string[] = [];
+  if (roundsCount && roundsCount > 0) {
+    parts.push(`${roundsCount} rounds`);
+  } else if (format === 'BALANCED_LIECHTENSTEIN') {
+    parts.push('4 rounds (drops to 3 if fewer than 8 players sign up)');
+  }
+  const pf = (playoffFormat ?? '').toUpperCase();
+  if (pf && pf !== 'NONE') {
+    const label = pf === 'TOP2' ? 'a TOP 2 final' : pf === 'TOP4' ? 'TOP 4 playoffs' : pf === 'TOP8' ? 'TOP 8 playoffs' : `${pf} playoffs`;
+    parts.push(label);
+  }
+  return parts.length > 0 ? `Planned structure: ${parts.join(', then ')}.` : null;
 }
 
 export interface TournamentFacts {
@@ -242,8 +283,13 @@ export function buildTournamentFacts(t: TournamentFactsInput): TournamentFacts {
   const lines: string[] = [];
   lines.push(`Tournament name: ${t.name}`);
   if (t.isMajor) lines.push('This is a MAJOR tournament (counts extra on the leaderboard).');
-  lines.push(`Format: ${label(FORMAT_LABELS, t.format)} — ${label(FORMAT_EXPLAIN, t.format)}`);
-  lines.push(`Mode: ${label(MODE_LABELS, t.mode)} — ${MODE_EXPLAIN[t.mode] ?? ''}`.trimEnd());
+  const description = (t.description ?? '').trim();
+  if (description) lines.push(`Host's description (lean on this — lift wording where it's good): ${truncate(description, 1500)}`);
+  lines.push(`Format: ${label(FORMAT_LABELS, t.format)}. Reference explanation (use only per the destination's explanation level — do NOT recite verbatim to insiders): ${label(FORMAT_EXPLAIN, t.format)}`);
+  const modeExplain = MODE_EXPLAIN[t.mode] ?? '';
+  lines.push(`Mode: ${label(MODE_LABELS, t.mode)}.${modeExplain ? ` Reference explanation (same caveat): ${modeExplain}` : ''}`);
+  const plan = planLine(t.format, t.roundsCount, t.playoffFormat);
+  if (plan) lines.push(plan);
   lines.push(`Sign-up link: ${signupUrl}`);
   if (t.startDate) lines.push(`Starts: ${discordTime(t.startDate)}`);
   if (t.registrationDeadline) lines.push(`Registration deadline: ${discordTime(t.registrationDeadline)}`);
@@ -285,25 +331,32 @@ function truncate(s: string, max: number): string {
 // results back to the site. No LLM call, no API key — just text assembly.
 // ---------------------------------------------------------------------------
 
+const EXPLAIN_LEVEL_HINT: Record<ExplanationLevel, string> = {
+  NONE: 'insiders — name the format/mode, no explanation at all',
+  BASIC: 'a one-line reminder, not a tutorial',
+  FULL: 'real explanation — but standard formats (Swiss, elimination) still get at most a line; only novel ones (Balanced Liechtenstein, our custom modes) get a genuine explanation',
+};
+
 export function buildAnnouncementPrompt(
   facts: TournamentFacts,
   posterUrl: string | null,
   slug: string,
   destinations: AnnouncementDestination[],
+  notes?: string | null,
 ): string {
   const out: string[] = [];
   out.push(
-    'Write Discord tournament announcements for Rizzotto (rizzotto.gg). Produce ONE ready-to-paste ' +
-      "Discord post per destination listed below, in Alex's own plain, direct voice — no invented lore, " +
-      'no grimdark, no AI-speak, no "as an AI". Use light Discord markdown (**bold**, bullets). Always ' +
-      "include the sign-up link. If there is a poster, attach it by turning the post's FINAL period into " +
-      'a masked link — e.g. turn `…Bo3 BPT.` into `…Bo3 BPT[.](POSTER_URL)`. Discord then shows the poster ' +
-      'image below with NO extra character, line, or visible URL, and the message reads completely ' +
-      'naturally. If the post has no closing period, append `[.](POSTER_URL)` on its own final line instead. ' +
-      'Preserve any <t:…> timestamp tokens exactly. If a destination has a role mention, put it on the first ' +
-      'line; use its intro/outro if given; respect its tone, length and focus. When you mention or explain ' +
-      "the FORMAT or MODE, use the exact description from the facts VERBATIM (the site's default wording) — " +
-      'do NOT paraphrase it, expand it, or add inferred details like round counts or whether it is Swiss.',
+    "Write Discord tournament announcements for RizzOtto's Arena (rizzotto.gg). Produce ONE ready-to-paste " +
+      "Discord post per destination below, in Alex's own plain, direct voice. Follow the announcement-writing-rules " +
+      'in project memory (recalled automatically). Key points: the audience are Total War tournament REGULARS by ' +
+      'default, so do NOT explain the scene or formats as if new — honour each destination\'s explanation level. ' +
+      "Lean hard on the host's description (lift wording where it's good). State the concrete plan (rounds, playoff), " +
+      'do not hedge. No filler openers or sign-offs, no fluff, no em dashes. Light Discord markdown only. Always ' +
+      'include the sign-up link, with ?ref=<the destination ref> appended, wrapped in <> to suppress its preview. ' +
+      "If there is a poster, attach it by turning the post's FINAL period into a masked link — e.g. `…Bo3.` becomes " +
+      '`…Bo3[.](POSTER_URL)` (Discord shows the image, no visible URL). If no closing period, append `[.](POSTER_URL)` ' +
+      'on its own final line. Preserve any <t:…> timestamp tokens exactly. Role mention (if any) on the first line; ' +
+      'use intro/outro if given.',
   );
   out.push('');
   out.push(
@@ -316,6 +369,12 @@ export function buildAnnouncementPrompt(
   out.push('=== TOURNAMENT FACTS (source of truth — do not invent beyond these) ===');
   out.push(facts.block);
   out.push(`Poster link: ${posterUrl ?? 'none'}`);
+  const trimmedNotes = (notes ?? '').trim();
+  if (trimmedNotes) {
+    out.push('');
+    out.push('=== SPECIFIC TO THIS ANNOUNCEMENT (host notes — weave in, this is what matters most this time) ===');
+    out.push(trimmedNotes);
+  }
   out.push('');
   out.push('=== DESTINATIONS ===');
   if (destinations.length === 0) {
@@ -326,9 +385,8 @@ export function buildAnnouncementPrompt(
       out.push(`    name: ${d.name}`);
       out.push(`    sign-up ref (append ?ref=<this> to the sign-up link): ${d.ref.trim() || slugifyRef(d.name)}`);
       out.push(`    length: ${d.length}`);
-      out.push(`    tone / angle: ${d.tone.trim() || 'plain and direct'}`);
-      out.push(`    explain (spell out here): ${d.explain.trim() || 'none'}`);
-      out.push(`    assume as known (do NOT explain): ${d.assume_known.trim() || 'none'}`);
+      out.push(`    explanation level: ${d.explain_level} (${EXPLAIN_LEVEL_HINT[d.explain_level]})`);
+      out.push(`    general brief (what this server is / the angle): ${d.brief.trim() || 'plain and direct, insider audience'}`);
       out.push(`    always mention: ${d.always_mention.trim() || 'none'}`);
       out.push(`    avoid / never say: ${d.avoid.trim() || 'none'}`);
       out.push(`    role mention: ${d.role_mention.trim() || 'none'}`);
@@ -362,9 +420,8 @@ function buildDestinationInstruction(d: AnnouncementDestination): string {
   parts.push(`Write the announcement for this destination server.`);
   parts.push(`Destination: ${d.name}`);
   parts.push(`Length: ${d.length}`);
-  parts.push(`Tone / angle: ${d.tone.trim() || 'plain and direct'}`);
-  parts.push(`Explain (spell out here): ${d.explain.trim() || 'none'}`);
-  parts.push(`Assume as known (do NOT explain): ${d.assume_known.trim() || 'none'}`);
+  parts.push(`Explanation level: ${d.explain_level} (${EXPLAIN_LEVEL_HINT[d.explain_level]})`);
+  parts.push(`General brief (what this server is / the angle): ${d.brief.trim() || 'plain and direct, insider audience'}`);
   parts.push(`Always mention: ${d.always_mention.trim() || 'none'}`);
   parts.push(`Avoid / never say: ${d.avoid.trim() || 'none'}`);
   parts.push(`Role mention to lead with: ${d.role_mention.trim() || 'none'}`);

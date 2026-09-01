@@ -1390,15 +1390,18 @@ export const ANNOUNCEMENT_DESTINATIONS_KEY = 'announcement_destinations';
 
 export type AnnouncementLength = 'SHORT' | 'MEDIUM' | 'LONG';
 
+export type ExplanationLevel = 'NONE' | 'BASIC' | 'FULL';
+
 export interface AnnouncementDestination {
   id: string;
   name: string;
   ref: string;
-  explain: string;
-  assume_known: string;
+  /** Free-text context: what this server is, its vibe, the general angle (was "tone / angle"). */
+  brief: string;
+  /** How much to explain the format/mode for this audience. */
+  explain_level: ExplanationLevel;
   always_mention: string;
   avoid: string;
-  tone: string;
   length: AnnouncementLength;
   role_mention: string;
   intro: string;
@@ -1473,8 +1476,10 @@ export interface AnnouncementDraftEntry {
 }
 
 /** Assembled prompt (facts + briefs) to paste into a Claude Code session. */
-export function getAnnouncementPrompt(slug: string): Promise<{ prompt: string }> {
-  return apiFetch(`/api/admin/announcements/prompt?slug=${encodeURIComponent(slug)}`);
+export function getAnnouncementPrompt(slug: string, notes?: string): Promise<{ prompt: string }> {
+  const params = new URLSearchParams({ slug });
+  if (notes && notes.trim()) params.set('notes', notes.trim());
+  return apiFetch(`/api/admin/announcements/prompt?${params.toString()}`);
 }
 
 /** The drafts Claude pushed back for a tournament (null if none yet). */

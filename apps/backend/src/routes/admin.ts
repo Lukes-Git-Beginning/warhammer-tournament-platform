@@ -1752,14 +1752,18 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // GET prompt: assemble a self-contained prompt (facts + briefs) for a Claude
   // Code session to write the posts and push them back. No LLM call, no key.
   // -------------------------------------------------------------------------
-  const AnnouncementSlugQuerySchema = z.object({ slug: z.string().min(1) });
+  const AnnouncementSlugQuerySchema = z.object({
+    slug: z.string().min(1),
+    /** Optional per-announcement free text: what's specific/new this time (prize, special rule, schedule). */
+    notes: z.string().max(2000).optional(),
+  });
 
   fastify.get('/api/admin/announcements/prompt', async (request, reply) => {
     const parsed = AnnouncementSlugQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
-    const { slug } = parsed.data;
+    const { slug, notes } = parsed.data;
     const tournament = await fastify.prisma.tournament.findFirst({
       where: { slug, deleted_at: null },
       select: {
@@ -1767,6 +1771,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         slug: true,
         format: true,
         mode: true,
+        description: true,
         start_date: true,
         registration_deadline: true,
         max_participants: true,
@@ -1778,6 +1783,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         stream_url: true,
         is_major: true,
         poster_url: true,
+        rounds_count: true,
+        playoff_format: true,
         _count: { select: { participants: { where: { deleted_at: null } } } },
         faction_allowlist: { select: { faction: { select: { name: true } } } },
         map_pool: { select: { map: { select: { name: true } } } },
@@ -1793,6 +1800,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       slug: tournament.slug,
       format: tournament.format,
       mode: tournament.mode,
+      description: tournament.description,
       startDate: tournament.start_date,
       registrationDeadline: tournament.registration_deadline,
       maxParticipants: tournament.max_participants,
@@ -1806,6 +1814,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       discordLink: tournament.discord_link,
       streamUrl: tournament.stream_url,
       isMajor: tournament.is_major,
+      playoffFormat: tournament.playoff_format,
+      roundsCount: tournament.rounds_count,
       frontendUrl,
     });
 
@@ -1814,7 +1824,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     });
     const destinations = parseAnnouncementDestinations(destinationsRow?.value);
     const posterUrl = tournament.poster_url ? `${frontendUrl.replace(/\/+$/, '')}${tournament.poster_url}` : null;
-    const prompt = buildAnnouncementPrompt(facts, posterUrl, slug, destinations);
+    const prompt = buildAnnouncementPrompt(facts, posterUrl, slug, destinations, notes);
     return { prompt };
   });
 

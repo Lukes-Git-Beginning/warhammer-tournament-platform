@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.50.0] — 2026-09-02 — Admin tooling
+### Changed
+- Refinements to the behind-the-scenes announcement tooling for tournament operators. No player-facing changes.
+
 ## [1.49.0] — 2026-08-31 — Admin tooling
 ### Added
 - Behind-the-scenes attribution reporting for tournament operators, so we can see which communities our announcements actually reach. No player-facing changes.

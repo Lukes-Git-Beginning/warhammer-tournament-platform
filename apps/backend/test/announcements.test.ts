@@ -90,17 +90,32 @@ describe('buildTournamentFacts', () => {
     const facts = buildTournamentFacts({ ...BASE, frontendUrl: 'https://rizzotto.gg/' });
     expect(facts.signupUrl).toBe('https://rizzotto.gg/tournaments/dlc-launch-prize-fight');
   });
+
+  it("includes the host's description and leans-on hint", () => {
+    const facts = buildTournamentFacts({ ...BASE, description: 'Monthly ranked showdown, bring your best.' });
+    expect(facts.block).toContain("Host's description");
+    expect(facts.block).toContain('Monthly ranked showdown, bring your best.');
+  });
+
+  it('states the BaLi round plan (4 rounds, 3 under 8) when no round count is set', () => {
+    const facts = buildTournamentFacts({ ...BASE, format: 'BALANCED_LIECHTENSTEIN', playoffFormat: 'TOP8' });
+    expect(facts.block).toContain('Planned structure: 4 rounds (drops to 3 if fewer than 8 players sign up), then TOP 8 playoffs.');
+  });
+
+  it('states an explicit round count and playoff when set', () => {
+    const facts = buildTournamentFacts({ ...BASE, format: 'SWISS', roundsCount: 5, playoffFormat: 'TOP4' });
+    expect(facts.block).toContain('Planned structure: 5 rounds, then TOP 4 playoffs.');
+  });
 });
 
 const DEST: AnnouncementDestination = {
   id: 'dest-1',
   name: 'Official TW Discord',
   ref: 'tw-main',
-  explain: 'Explain that this is a Domination tournament.',
-  assume_known: '',
+  brief: 'Official Total War Discord — a Domination tournament, warm and welcoming to newcomers.',
+  explain_level: 'FULL',
   always_mention: 'The cash prize.',
   avoid: '',
-  tone: 'warm and inviting, welcoming to newcomers',
   length: 'MEDIUM',
   role_mention: '@everyone',
   intro: 'Hey all!',
@@ -124,13 +139,23 @@ describe('buildAnnouncementPrompt', () => {
     expect(prompt).toContain('destinationId=dest-1');
     expect(prompt).toContain('Official TW Discord');
     expect(prompt).toContain('Domination tournament');
+    expect(prompt).toContain('explanation level: FULL');
     expect(prompt).toContain('sign-up ref (append ?ref=<this> to the sign-up link): tw-main');
+    // No em dash and no rigid "VERBATIM" instruction in the new prompt.
+    expect(prompt).not.toContain('VERBATIM');
   });
 
   it('derives the sign-up ref from the destination name when none is given', () => {
     const facts = buildTournamentFacts(BASE);
     const prompt = buildAnnouncementPrompt(facts, null, BASE.slug, [{ ...DEST, ref: '' }]);
     expect(prompt).toContain('sign-up ref (append ?ref=<this> to the sign-up link): official-tw-discord');
+  });
+
+  it('includes host notes as a dedicated section when provided', () => {
+    const facts = buildTournamentFacts(BASE);
+    const prompt = buildAnnouncementPrompt(facts, null, BASE.slug, [DEST], '50 EUR prize pool, top 4 get DLC keys.');
+    expect(prompt).toContain('SPECIFIC TO THIS ANNOUNCEMENT');
+    expect(prompt).toContain('50 EUR prize pool, top 4 get DLC keys.');
   });
 
   it('notes when there are no destinations and no poster', () => {
