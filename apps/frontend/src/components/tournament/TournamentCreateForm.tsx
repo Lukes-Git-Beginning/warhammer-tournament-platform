@@ -157,9 +157,10 @@ function buildRoundKeys(form: Partial<FormData>): { key: string; label: string; 
 }
 
 function nextRoundHour(): string {
+  // Default to TODAY, the next full hour. Hosts usually run same-day; defaulting to
+  // tomorrow caused accidental next-day tournaments.
   const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(20, 0, 0, 0);
+  d.setHours(d.getHours() + 1, 0, 0, 0);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
 }
@@ -578,7 +579,7 @@ export function TournamentCreateForm() {
               <span className="block text-xs text-rizzotto-stone-500">
                 {form.format === 'SWISS'
                   ? 'Set the round count and playoff size automatically from how many players check in (4–7: 3R + Final · 8–15: 5R + Top 4 · 16+: 4R + Top 8), instead of the fixed values above.'
-                  : 'Set the round count automatically from how many players check in (4–7: 3R · 8–15: 5R · 16+: 4R). Turn off to fix the round count yourself.'}
+                  : 'Set the round count automatically from how many players check in (4–7: 3R · 8+: 4R). Turn off to fix the round count yourself.'}
               </span>
             </span>
           </label>
@@ -622,7 +623,7 @@ export function TournamentCreateForm() {
           <p>
             Each round, players are paired against others in their own skill division.{' '}
             {(form.auto_sizing ?? true)
-              ? 'The round count is set automatically from how many players check in (4–7: 3R, 8–15: 5R, 16+: 4R).'
+              ? 'The round count is set automatically from how many players check in (4–7: 3R, 8+: 4R).'
               : 'You set a fixed round count below.'}{' '}
             When the group stage ends, every division runs its own playoff bracket sized to that division (TOP 2 / 4 / 8, each with an optional third-place match).
           </p>

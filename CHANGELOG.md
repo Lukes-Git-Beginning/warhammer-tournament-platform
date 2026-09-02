@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.50.1] — 2026-09-03 — Tournament setup and browsing fixes
+### Fixed
+- The tournament browse tab now lists upcoming tournaments soonest-first, matching the landing page (it was showing the furthest-out ones first).
+- Corrected the Balanced Liechtenstein auto-size hint: it now reads 4–7 players → 3 rounds, 8+ → 4 rounds (it previously showed a wrong 5-round tier).
+### Changed
+- When creating a tournament, the default start time is now **today at the next full hour** instead of tomorrow evening, so same-day events are no longer scheduled for the next day by accident.
+
 ## [1.50.0] — 2026-09-02 — Admin tooling
 ### Changed
 - Refinements to the behind-the-scenes announcement tooling for tournament operators. No player-facing changes.
