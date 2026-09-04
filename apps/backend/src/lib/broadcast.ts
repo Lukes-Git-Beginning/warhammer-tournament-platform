@@ -16,7 +16,9 @@ import type { Redis } from 'ioredis';
 import { z } from 'zod';
 import { sendDm } from './discord-notify.js';
 import { SUPPORTER_FLAG_SELECT, effectiveTiersOf } from './supporter-service.js';
-import { getPlayerClassification } from './skill-classification-service.js';
+import { loadCalibrationQuestions } from './skill-classification-service.js';
+import { getRatingModel } from './rating-model-service.js';
+import { classify, questionnaireFloor } from './skill-classification.js';
 
 /** Admin audience filters. All empty/false = every user. Filters AND together. */
 export const BroadcastAudienceSchema = z.object({
@@ -75,16 +77,32 @@ export async function resolveAdminAudience(
     });
   }
 
-  // Skill-band filter: computed per survivor via the skill engine (no indexed column).
+  // Skill-band filter: the band is computed (no indexed column), so we mirror the
+  // Statistics distribution endpoint's efficient batch pass — load the rating model
+  // ONCE, fetch all survivors' calibration answers in ONE query, then classify in
+  // memory. Uses the headline (gating) band, what a player sees as "their band".
   if (audience.bands.length > 0) {
     const season = await prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
     if (!season) return []; // no active season → no band signal → target nobody
-    const survivors: typeof candidates = [];
-    for (const c of candidates) {
-      const cls = await getPlayerClassification(prisma, redis, season.id, c.id);
-      if (audience.bands.includes(cls.gatingBand)) survivors.push(c);
-    }
-    candidates = survivors;
+    const [model, questions, answerRows] = await Promise.all([
+      getRatingModel(prisma, redis, { seasonId: season.id, config: { hierarchical: true } }),
+      loadCalibrationQuestions(prisma),
+      prisma.user.findMany({
+        where: { id: { in: candidates.map((c) => c.id) } },
+        select: { id: true, calibration_answers: true },
+      }),
+    ]);
+    const answersById = new Map(
+      answerRows.map((r) => [r.id, (r.calibration_answers as Record<string, string> | null) ?? {}]),
+    );
+    candidates = candidates.filter((c) => {
+      const gs = model.getGeneralSkill(c.id);
+      const { gatingBand } = classify(questionnaireFloor(answersById.get(c.id) ?? {}, questions), {
+        generalSkill: gs?.skill ?? null,
+        stdError: gs?.se ?? null,
+      });
+      return audience.bands.includes(gatingBand);
+    });
   }
 
   return candidates.map((c) => ({ id: c.id, discord_id: c.discord_id }));
