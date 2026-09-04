@@ -74,3 +74,15 @@ export function intervalsOverlap(aStart: Date, aHours: number, bStart: Date, bHo
   const bEnd = bStart.getTime() + bHours * 3_600_000;
   return aStart.getTime() < bEnd && bStart.getTime() < aEnd;
 }
+
+/** "Name (Sat 13 Sep, 18:00)" — for clash warnings, since a clash can fall outside the visible week. */
+export function describeClash(t: { name: string; start: Date }): string {
+  const when = t.start.toLocaleString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `${t.name} (${when})`;
+}

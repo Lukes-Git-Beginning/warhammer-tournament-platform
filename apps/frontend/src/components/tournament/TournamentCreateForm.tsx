@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { createTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster } from '@/lib/api';
 import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
-import { estimateDurationHours, intervalsOverlap } from '@/lib/tournamentSchedule';
+import { estimateDurationHours, intervalsOverlap, describeClash } from '@/lib/tournamentSchedule';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
 import { PosterPickField } from '@/components/tournament/PosterPickField';
 import { Button } from '@/components/ui/button';
@@ -669,7 +669,7 @@ export function TournamentCreateForm() {
           <FieldError message={errors.start_date} />
           {ownStart && startClashes.length > 0 && (
             <p className="mt-1 text-xs text-red-400">
-              Overlaps {startClashes.map((c) => c.name).join(', ')} at this time. Players may be double-booked.
+              Overlaps {startClashes.map(describeClash).join(', ')}. Players may be double-booked.
             </p>
           )}
         </div>

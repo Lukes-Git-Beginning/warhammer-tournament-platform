@@ -30,7 +30,7 @@ import { PageShell } from '@/components/layout/PageShell';
 import { PosterUploadField } from '@/components/tournament/PosterUploadField';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
 import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
-import { estimateDurationHours, intervalsOverlap } from '@/lib/tournamentSchedule';
+import { estimateDurationHours, intervalsOverlap, describeClash } from '@/lib/tournamentSchedule';
 
 // ---------------------------------------------------------------------------
 // Lock helpers
@@ -935,7 +935,7 @@ export function TournamentEditPage() {
             {ongoingLocked && <LockNote>Locked — tournament is underway</LockNote>}
             {!ongoingLocked && ownStart && startClashes.length > 0 && (
               <p className="mt-1 text-xs text-red-400">
-                Overlaps {startClashes.map((c) => c.name).join(', ')} at this time. Players may be double-booked.
+                Overlaps {startClashes.map(describeClash).join(', ')}. Players may be double-booked.
               </p>
             )}
           </div>

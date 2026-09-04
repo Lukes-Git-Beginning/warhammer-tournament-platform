@@ -49,9 +49,11 @@ const STATUS_BLOCK: Record<string, { bg: string; border: string; label: string }
 };
 
 /**
- * Existing scheduled tournaments for the calendar: OPEN + REGISTRATION_CLOSED +
- * ONGOING + your own DRAFTs, whose start falls inside the visible 7-day window.
- * `excludeId` drops the tournament currently being edited so it never clashes with itself.
+ * All upcoming / active tournaments: OPEN + REGISTRATION_CLOSED + ONGOING + your own
+ * DRAFTs. Returned unfiltered by date — the calendar only renders blocks for dates
+ * inside the visible 7-day window, but the form's clash check must catch overlaps
+ * further out too. `excludeId` drops the tournament being edited so it never clashes
+ * with itself.
  */
 export function useCalendarTournaments(excludeId?: string): CalendarTournament[] {
   const { data } = useQuery({
@@ -69,10 +71,6 @@ export function useCalendarTournaments(excludeId?: string): CalendarTournament[]
   });
 
   return useMemo(() => {
-    const windowStart = new Date();
-    windowStart.setHours(0, 0, 0, 0);
-    const windowEnd = new Date(windowStart);
-    windowEnd.setDate(windowEnd.getDate() + 7);
     return (data ?? [])
       .filter((t) => t.id !== excludeId)
       .map((t) => ({
@@ -83,7 +81,7 @@ export function useCalendarTournaments(excludeId?: string): CalendarTournament[]
         durationHours: tournamentDurationHours(t),
         status: t.status,
       }))
-      .filter((t) => !Number.isNaN(t.start.getTime()) && t.start >= windowStart && t.start < windowEnd);
+      .filter((t) => !Number.isNaN(t.start.getTime()));
   }, [data, excludeId]);
 }
 
