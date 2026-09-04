@@ -89,7 +89,7 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
         <img
           src={tournament.poster_url}
           alt=""
-          className="mb-3 h-28 w-full rounded object-cover"
+          className="mb-3 aspect-[10/3] w-full rounded object-cover"
           loading="lazy"
         />
       )}

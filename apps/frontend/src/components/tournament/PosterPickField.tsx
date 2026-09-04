@@ -35,7 +35,7 @@ export function PosterPickField({
         <img
           src={preview}
           alt="Tournament poster preview"
-          className="max-h-48 w-full rounded border border-stone-800 object-cover"
+          className="aspect-[10/3] w-full rounded border border-stone-800 object-cover"
         />
       ) : (
         <p className="text-sm text-rizzotto-stone-500">

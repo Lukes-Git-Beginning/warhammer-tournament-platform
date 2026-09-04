@@ -358,7 +358,7 @@ export function TournamentDetail() {
         <img
           src={tournament.poster_url}
           alt={`${tournament.name} poster`}
-          className="mb-6 max-h-72 w-full rounded-lg border border-stone-800 object-cover"
+          className="mb-6 aspect-[10/3] w-full rounded-lg border border-stone-800 object-cover"
           loading="lazy"
         />
       )}
