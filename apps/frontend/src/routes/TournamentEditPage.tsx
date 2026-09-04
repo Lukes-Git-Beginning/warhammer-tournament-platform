@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import {
   getTournament,
+  getAvailabilityHeatmap,
   patchTournament,
   getMaps,
   getFactions,
@@ -28,6 +29,8 @@ import { Label, FieldError, FieldHint } from '@/components/ui/label';
 import { PageShell } from '@/components/layout/PageShell';
 import { PosterUploadField } from '@/components/tournament/PosterUploadField';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
+import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
+import { estimateDurationHours, intervalsOverlap } from '@/lib/tournamentSchedule';
 
 // ---------------------------------------------------------------------------
 // Lock helpers
@@ -538,6 +541,15 @@ export function TournamentEditPage() {
   const { data: factionsData } = useQuery({ queryKey: ['factions'], queryFn: () => getFactions() });
   const allFactions = (factionsData?.data ?? []).map((f) => f.faction).sort((a, b) => a.name.localeCompare(b.name));
 
+  // Schedule calendar: community availability heat + existing tournaments (next 7 days).
+  // Hooks must run before the early returns below, so they live here.
+  const { data: heatmapData } = useQuery({
+    queryKey: ['availability-heatmap', 'TOURNAMENT'],
+    queryFn: () => getAvailabilityHeatmap('TOURNAMENT'),
+    staleTime: 5 * 60 * 1000,
+  });
+  const scheduledTournaments = useCalendarTournaments(tournament?.id);
+
   const [form, setForm] = useState<EditFormData | null>(null);
   const [initialMapIds, setInitialMapIds] = useState<string[]>([]);
   const [initialFactionIds, setInitialFactionIds] = useState<string[]>([]);
@@ -615,6 +627,28 @@ export function TournamentEditPage() {
 
   const draftLocked = isDraftLocked(tournament.status);
   const ongoingLocked = isOngoingLocked(tournament.status);
+
+  const startDate = new Date(form.start_date);
+  const ownStart = Number.isNaN(startDate.getTime()) ? null : startDate;
+  const ownDurationHours = estimateDurationHours({
+    format: form.format,
+    rounds_count: form.rounds_count,
+    playoff_format: form.playoff_format,
+    swiss_match_format: form.swiss_match_format,
+    playoff_match_format: form.playoff_match_format,
+    finale_match_format: form.finale_match_format,
+    participants: form.max_participants === '' ? undefined : Number(form.max_participants),
+  });
+  const startClashes = ownStart
+    ? scheduledTournaments.filter((tt) => intervalsOverlap(ownStart, ownDurationHours, tt.start, tt.durationHours))
+    : [];
+
+  function handleCalendarSelect(d: Date) {
+    if (ongoingLocked) return;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const local = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    setForm((prev) => (prev ? { ...prev, start_date: local, registration_deadline: local } : prev));
+  }
 
   function set<K extends keyof EditFormData>(key: K, value: EditFormData[K]) {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -899,6 +933,11 @@ export function TournamentEditPage() {
               disabled={ongoingLocked}
             />
             {ongoingLocked && <LockNote>Locked — tournament is underway</LockNote>}
+            {!ongoingLocked && ownStart && startClashes.length > 0 && (
+              <p className="mt-1 text-xs text-red-400">
+                Overlaps {startClashes.map((c) => c.name).join(', ')} at this time. Players may be double-booked.
+              </p>
+            )}
           </div>
           <div className="min-w-0">
             <Label htmlFor="tef-deadline">{t('tournament.form.registration_deadline')}</Label>
@@ -912,6 +951,22 @@ export function TournamentEditPage() {
             />
             {ongoingLocked && <LockNote>Locked — tournament is underway</LockNote>}
           </div>
+        </div>
+
+        {/* Scheduling calendar: availability heat + existing tournaments (next 7 days) */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-stone-300">Pick a start time</p>
+          <p className="text-xs text-stone-500">
+            Brighter cells mean more players are usually free. Coloured blocks are tournaments already scheduled in the
+            next 7 days. Click a slot to set your start time.
+          </p>
+          <TournamentScheduleCalendar
+            slots={heatmapData?.slots ?? []}
+            tournaments={scheduledTournaments}
+            selectedStart={ownStart}
+            selectedDurationHours={ownDurationHours}
+            onSelect={handleCalendarSelect}
+          />
         </div>
 
         {/* ── Capacity — min beneath start, max beneath deadline ─────────── */}

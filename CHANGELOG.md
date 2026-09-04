@@ -5,9 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.53.0] — 2026-09-05 — Scheduling calendar
+### Added
+- **When creating or editing a tournament, the start-time picker now shows a 7-day calendar** with the tournaments already scheduled in that window drawn in as blocks (sized to how long each is expected to run), on top of the usual "when are players free" availability shading. Click a slot to set your start time.
+- **A live warning now appears under the start-date field if your chosen time overlaps another tournament**, so you can spot a clash and move your slot before players end up double-booked. The edit page gained this calendar too (it previously had none).
+
 ## [1.52.0] — 2026-09-04 — Admin tooling
 ### Added
-- The announcement generator can now treat a bot DM broadcast (to a chosen audience) as a destination, alongside Discord servers, so a generated post can be sent straight out as a DM with one confirm. Behind-the-scenes operator tooling.
+- More behind-the-scenes tooling for tournament operators. No player-facing changes.
 
 ## [1.51.0] — 2026-09-04 — Message your participants
 ### Added
