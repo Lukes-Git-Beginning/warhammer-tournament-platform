@@ -13,21 +13,15 @@
 
 import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
-import { z } from 'zod';
 import { sendDm } from './discord-notify.js';
 import { SUPPORTER_FLAG_SELECT, effectiveTiersOf } from './supporter-service.js';
 import { loadCalibrationQuestions } from './skill-classification-service.js';
 import { getRatingModel } from './rating-model-service.js';
 import { classify, questionnaireFloor } from './skill-classification.js';
+import { BroadcastAudienceSchema, type BroadcastAudience } from './broadcast-audience.js';
 
-/** Admin audience filters. All empty/false = every user. Filters AND together. */
-export const BroadcastAudienceSchema = z.object({
-  activeOnly: z.boolean().optional().default(false),
-  activeDays: z.number().int().min(1).max(365).optional().default(30),
-  bands: z.array(z.number().int().min(1).max(5)).optional().default([]),
-  tiers: z.array(z.enum(['supporter', 'lord', 'champion'])).optional().default([]),
-});
-export type BroadcastAudience = z.infer<typeof BroadcastAudienceSchema>;
+// Re-export so existing importers (admin.ts) keep working from './broadcast.js'.
+export { BroadcastAudienceSchema, type BroadcastAudience };
 
 export interface BroadcastRecipient {
   id: string;

@@ -7,6 +7,7 @@ import {
   getAnnouncementDrafts,
   getAnnouncementPushTokenStatus,
   rotateAnnouncementPushToken,
+  broadcastAdmin,
   listTournaments,
   type AnnouncementDestination,
   type AnnouncementLength,
@@ -21,6 +22,7 @@ function newDestination(): AnnouncementDestination {
   return {
     id: crypto.randomUUID(),
     name: 'New destination',
+    kind: 'discord',
     ref: '',
     brief: '',
     explain_level: 'NONE',
@@ -62,6 +64,10 @@ function DestinationRow({
   const [open, setOpen] = useState(false);
   const set = <K extends keyof AnnouncementDestination>(k: K, v: AnnouncementDestination[K]) =>
     onChange({ ...dest, [k]: v });
+  const setAud = (patch: Partial<NonNullable<AnnouncementDestination['audience']>>) =>
+    onChange({ ...dest, audience: { ...(dest.audience ?? {}), ...patch } });
+  const bands = dest.audience?.bands ?? [];
+  const tiers = dest.audience?.tiers ?? [];
 
   return (
     <div className="rounded-md border border-stone-800 bg-stone-900/40">
@@ -94,6 +100,66 @@ function DestinationRow({
 
       {open && (
         <div className="grid gap-3 border-t border-stone-800 px-3 py-3 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className={labelClass}>Type</label>
+            <select
+              value={dest.kind}
+              onChange={(e) => set('kind', e.target.value as AnnouncementDestination['kind'])}
+              className={inputClass}
+            >
+              <option value="discord">Discord server (copy-paste)</option>
+              <option value="broadcast">Broadcast DM (bot sends to an audience)</option>
+            </select>
+          </div>
+          {dest.kind === 'broadcast' && (
+            <div className="md:col-span-2 rounded border border-stone-800 bg-stone-950/40 p-3">
+              <label className={labelClass}>DM audience (filters combine; none = everyone)</label>
+              <label className="mb-2 flex items-center gap-2 text-sm text-stone-300">
+                <input
+                  type="checkbox"
+                  checked={dest.audience?.activeOnly ?? false}
+                  onChange={(e) => setAud({ activeOnly: e.target.checked })}
+                />
+                Only active in the last
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={dest.audience?.activeDays ?? 30}
+                  onChange={(e) => setAud({ activeDays: Math.max(1, Math.min(365, Number(e.target.value) || 30)) })}
+                  disabled={!(dest.audience?.activeOnly ?? false)}
+                  className="w-16 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-sm text-stone-200 disabled:opacity-40"
+                />
+                days
+              </label>
+              <div className="mb-2 flex flex-wrap items-center gap-1">
+                <span className="mr-1 text-xs text-stone-500">Skill band:</span>
+                {[1, 2, 3, 4, 5].map((b) => (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => setAud({ bands: bands.includes(b) ? bands.filter((x) => x !== b) : [...bands, b] })}
+                    className={`rounded border px-2 py-0.5 text-xs ${bands.includes(b) ? 'border-rizzotto-gold-500 text-rizzotto-gold-300' : 'border-stone-700 text-stone-400'}`}
+                  >
+                    {b}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="mr-1 text-xs text-stone-500">Supporter tier:</span>
+                {(['supporter', 'lord', 'champion'] as const).map((tTier) => (
+                  <button
+                    key={tTier}
+                    type="button"
+                    onClick={() => setAud({ tiers: tiers.includes(tTier) ? tiers.filter((x) => x !== tTier) : [...tiers, tTier] })}
+                    className={`rounded border px-2 py-0.5 text-xs ${tiers.includes(tTier) ? 'border-rizzotto-gold-500 text-rizzotto-gold-300' : 'border-stone-700 text-stone-400'}`}
+                  >
+                    {tTier}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="md:col-span-2">
             <label className={labelClass}>Ref (link tag — appended as ?ref= to the sign-up link)</label>
             <input
@@ -139,16 +205,20 @@ function DestinationRow({
               className={`${inputClass} resize-y`}
             />
           </div>
-          <div>
-            <label className={labelClass}>Role mention (verbatim)</label>
-            <input
-              value={dest.role_mention}
-              onChange={(e) => set('role_mention', e.target.value)}
-              placeholder="@everyone or <@&123456789>"
-              className={inputClass}
-            />
-          </div>
-          <div />
+          {dest.kind !== 'broadcast' && (
+            <>
+              <div>
+                <label className={labelClass}>Role mention (verbatim)</label>
+                <input
+                  value={dest.role_mention}
+                  onChange={(e) => set('role_mention', e.target.value)}
+                  placeholder="@everyone or <@&123456789>"
+                  className={inputClass}
+                />
+              </div>
+              <div />
+            </>
+          )}
           <div>
             <label className={labelClass}>Intro (optional)</label>
             <textarea
@@ -173,8 +243,12 @@ function DestinationRow({
   );
 }
 
-function DraftCard({ result }: { result: AnnouncementDraftResult }) {
+function DraftCard({ result, destination }: { result: AnnouncementDraftResult; destination?: AnnouncementDestination }) {
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [sendStatus, setSendStatus] = useState<string | null>(null);
+  const isBroadcast = destination?.kind === 'broadcast';
+
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(result.text);
@@ -184,17 +258,53 @@ function DraftCard({ result }: { result: AnnouncementDraftResult }) {
       /* clipboard unavailable */
     }
   };
+
+  const sendDmBroadcast = async () => {
+    if (!result.text) return;
+    setBusy(true);
+    setSendStatus(null);
+    try {
+      const preview = await broadcastAdmin(result.text, destination?.audience ?? {}, true);
+      if (!window.confirm(`DM this to ${preview.count} recipient(s)? This cannot be undone.`)) {
+        setBusy(false);
+        return;
+      }
+      const r = await broadcastAdmin(result.text, destination?.audience ?? {}, false);
+      setSendStatus(`Sending to ${r.count} recipient(s). They will receive it over the next minute or two.`);
+    } catch (e) {
+      setSendStatus((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="rounded-md border border-stone-800 bg-stone-900/40 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-rizzotto-gold-400">{result.name}</h4>
-        <button type="button" onClick={copy} disabled={!result.text} className={primaryBtn}>
-          {copied ? 'Copied!' : 'Copy Announcement'}
-        </button>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold text-rizzotto-gold-400">
+          {result.name}
+          {isBroadcast && <span className="ml-2 text-[10px] uppercase tracking-wide text-stone-500">DM broadcast</span>}
+        </h4>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={copy}
+            disabled={!result.text}
+            className="rounded border border-stone-700 px-3 py-1.5 text-sm text-stone-300 transition-colors hover:bg-stone-800 disabled:opacity-40"
+          >
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+          {isBroadcast && (
+            <button type="button" onClick={sendDmBroadcast} disabled={busy || !result.text} className={primaryBtn}>
+              {busy ? 'Working…' : 'Send DM broadcast'}
+            </button>
+          )}
+        </div>
       </div>
       <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded border border-stone-800 bg-stone-950 px-3 py-2 font-mono text-xs text-stone-200">
         {result.text}
       </pre>
+      {sendStatus && <p className="mt-2 text-xs text-stone-400">{sendStatus}</p>}
     </div>
   );
 }
@@ -417,7 +527,11 @@ export function AnnouncementsTab() {
                       {draft.results.length === 1 ? '' : 's'}
                     </p>
                     {draft.results.map((r) => (
-                      <DraftCard key={r.destinationId} result={r} />
+                      <DraftCard
+                        key={r.destinationId}
+                        result={r}
+                        destination={destinations.find((d) => d.id === r.destinationId)}
+                      />
                     ))}
                   </div>
                 ) : (

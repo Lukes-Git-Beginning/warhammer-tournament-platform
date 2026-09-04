@@ -16,6 +16,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { slugifyRef } from './referrals.js';
+import { BroadcastAudienceSchema, type BroadcastAudience } from './broadcast-audience.js';
 
 export const ANNOUNCEMENT_DESTINATIONS_CONFIG_KEY = 'announcement_destinations';
 export const ANNOUNCEMENT_DRAFTS_CONFIG_KEY = 'announcement_drafts';
@@ -47,6 +48,13 @@ export type ExplanationLevel = z.infer<typeof ExplanationLevelSchema>;
 export const AnnouncementDestinationSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(120),
+  /**
+   * 'discord' = a server post Alex copies in by hand (default). 'broadcast' = a DM
+   * sent by the bot to `audience`, triggered by a confirm button on the draft.
+   */
+  kind: z.enum(['discord', 'broadcast']).default('discord'),
+  /** For kind='broadcast': who receives the DM. Ignored for kind='discord'. */
+  audience: BroadcastAudienceSchema.optional(),
   /** Attribution ref code appended to the sign-up link as ?ref= (empty → derived from name). */
   ref: z.string().max(64).default(''),
   /** Free-text context: what this server is, its vibe, the general angle (was "tone / angle"). */
@@ -340,6 +348,16 @@ const EXPLAIN_LEVEL_HINT: Record<ExplanationLevel, string> = {
   FULL: 'real explanation — but standard formats (Swiss, elimination) still get at most a line; only novel ones (Balanced Liechtenstein, our custom modes) get a genuine explanation',
 };
 
+/** Human description of a broadcast destination's DM audience, for the prompt. */
+function describeAudience(a?: BroadcastAudience): string {
+  if (!a) return 'all players';
+  const parts: string[] = [];
+  if (a.activeOnly) parts.push(`players active in the last ${a.activeDays} days`);
+  if (a.bands && a.bands.length > 0) parts.push(`skill band(s) ${a.bands.join(', ')}`);
+  if (a.tiers && a.tiers.length > 0) parts.push(`supporter tier(s) ${a.tiers.join(', ')}`);
+  return parts.length > 0 ? parts.join(' AND ') : 'all players';
+}
+
 export function buildAnnouncementPrompt(
   facts: TournamentFacts,
   posterUrl: string | null,
@@ -386,11 +404,19 @@ export function buildAnnouncementPrompt(
     destinations.forEach((d, i) => {
       out.push(`[${i + 1}] destinationId=${d.id}`);
       out.push(`    name: ${d.name}`);
+      if (d.kind === 'broadcast') {
+        out.push(
+          `    TYPE: DIRECT-MESSAGE BROADCAST — the bot DMs this to ${describeAudience(d.audience)}. Write it as a ` +
+            `personal DM, NOT a server post: no @everyone or role mention, a warm direct opener is fine. Everything ` +
+            `else (voice, the sign-up link with ?ref, poster, timestamps) still applies.`,
+        );
+      }
       out.push(`    sign-up ref (append ?ref=<this> to the sign-up link): ${d.ref.trim() || slugifyRef(d.name)}`);
       out.push(`    length: ${d.length}`);
       out.push(`    explanation level: ${d.explain_level} (${EXPLAIN_LEVEL_HINT[d.explain_level]})`);
-      out.push(`    general brief (what this server is / the angle): ${d.brief.trim() || 'plain and direct, insider audience'}`);
-      out.push(`    role mention: ${d.role_mention.trim() || 'none'}`);
+      const briefLabel = d.kind === 'broadcast' ? 'who these DM recipients are / the angle' : 'what this server is / the angle';
+      out.push(`    general brief (${briefLabel}): ${d.brief.trim() || 'plain and direct, insider audience'}`);
+      if (d.kind !== 'broadcast') out.push(`    role mention: ${d.role_mention.trim() || 'none'}`);
       out.push(`    intro: ${d.intro.trim() || 'none'}`);
       out.push(`    outro: ${d.outro.trim() || 'none'}`);
     });

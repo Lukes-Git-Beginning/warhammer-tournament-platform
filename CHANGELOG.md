@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.52.0] — 2026-09-04 — Admin tooling
+### Added
+- The announcement generator can now treat a bot DM broadcast (to a chosen audience) as a destination, alongside Discord servers, so a generated post can be sent straight out as a DM with one confirm. Behind-the-scenes operator tooling.
+
 ## [1.51.0] — 2026-09-04 — Message your participants
 ### Added
 - **Hosts can now send a direct message to everyone in their tournament, straight from the tournament page** (great for a quick "we start in 15 minutes, please check in"). The bot delivers it, with a short header saying it is from the host of that tournament. Admins have a matching tool for wider community announcements. To avoid noise, a broadcast is limited to one per hour.

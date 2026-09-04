@@ -1395,6 +1395,10 @@ export type ExplanationLevel = 'NONE' | 'BASIC' | 'FULL';
 export interface AnnouncementDestination {
   id: string;
   name: string;
+  /** 'discord' = a server post to copy in by hand; 'broadcast' = a bot DM to `audience`. */
+  kind: 'discord' | 'broadcast';
+  /** For kind='broadcast': who receives the DM. */
+  audience?: BroadcastAudience;
   ref: string;
   /** Free-text context: what this server is, its vibe, the general angle (was "tone / angle"). */
   brief: string;
