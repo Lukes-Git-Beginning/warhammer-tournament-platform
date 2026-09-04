@@ -33,6 +33,7 @@ import { CheckInButton } from '@/components/tournament/CheckInButton';
 import { RegisterButton } from '@/components/tournament/RegisterButton';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton';
 import { ParticipantsList } from '@/components/tournament/ParticipantsList';
+import { HostBroadcastBox } from '@/components/tournament/HostBroadcastBox';
 import { LateJoinRequestsPanel } from '@/components/tournament/LateJoinRequestsPanel';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
 import { ArmyListUploader } from '@/components/tournament/ArmyListUploader';
@@ -562,6 +563,12 @@ export function TournamentDetail() {
               {(resetBracketMutation.error as Error).message}
             </span>
           )}
+        </div>
+      )}
+
+      {canManage && (
+        <div className="mb-6">
+          <HostBroadcastBox slug={slug} />
         </div>
       )}
 

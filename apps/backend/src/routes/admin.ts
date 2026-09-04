@@ -31,6 +31,7 @@ import { skillToBand } from '../lib/rating-model.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
 import { getQueuePenaltyState, resetQueuePenaltyToWarned } from '../lib/queue-penalty.js';
 import { publishChangelog, changelogChannelId } from '../lib/changelog-publish.js';
+import { BroadcastAudienceSchema, resolveAdminAudience, sendBroadcast } from '../lib/broadcast.js';
 import {
   parseAnnouncementDestinations,
   buildTournamentFacts,
@@ -2572,6 +2573,52 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       .map((u) => ({ ref: u.referral_source ?? 'unknown', users: u._count._all }))
       .sort((a, b) => b.users - a.users);
     return { clicksByRef, usersBySource };
+  });
+
+  // POST /api/admin/broadcast — DM a filtered global audience via the bot.
+  // dryRun returns just the recipient count (for the live preview). A real send is
+  // cooldown-gated, responds with the count immediately, and dispatches in the
+  // background (paced) so the request never blocks on hundreds of DMs.
+  fastify.post('/api/admin/broadcast', async (request, reply) => {
+    const parsed = z
+      .object({
+        message: z.string().max(2000).optional().default(''),
+        audience: BroadcastAudienceSchema,
+        dryRun: z.boolean().optional().default(false),
+      })
+      .safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { message, audience, dryRun } = parsed.data;
+
+    if (dryRun) {
+      const recipients = await resolveAdminAudience(fastify.prisma, fastify.redis, audience);
+      return { count: recipients.length };
+    }
+    if (!message.trim()) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'Message is empty.', statusCode: 400 });
+    }
+
+    // Light per-sender cooldown (mirrors the announcement generate route).
+    let acquired: string | null;
+    try {
+      acquired = await fastify.redis.set(`rizzotto:broadcast:cooldown:admin:${request.user.sub}`, '1', 'EX', 3600, 'NX');
+    } catch {
+      return reply.code(503).send({ error: 'ServiceUnavailable', message: 'Rate limiter unavailable — try again shortly.', statusCode: 503 });
+    }
+    if (acquired === null) {
+      return reply.code(429).send({ error: 'TooManyRequests', message: 'You can send one broadcast per hour. Please wait.', statusCode: 429 });
+    }
+
+    const recipients = await resolveAdminAudience(fastify.prisma, fastify.redis, audience);
+    request.log.info({ sender: request.user.sub, audience, count: recipients.length }, 'admin broadcast dispatched');
+
+    void sendBroadcast(recipients, "📢 A broadcast from RizzOtto's Arena", message)
+      .then((r) => request.log.info({ ...r, sender: request.user.sub }, 'admin broadcast finished'))
+      .catch((err) => request.log.error({ err }, 'admin broadcast send failed'));
+
+    return { ok: true, count: recipients.length };
   });
 
 };

@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.51.0] — 2026-09-04 — Message your participants
+### Added
+- **Hosts can now send a direct message to everyone in their tournament, straight from the tournament page** (great for a quick "we start in 15 minutes, please check in"). The bot delivers it, with a short header saying it is from the host of that tournament. Admins have a matching tool for wider community announcements. To avoid noise, a broadcast is limited to one per hour.
+
 ## [1.50.2] — 2026-09-04 — Consistent poster aspect ratio
 ### Fixed
 - Tournament posters now display at a single, consistent 10:3 aspect ratio everywhere (the create and edit previews, the tournament page, and the browse cards), so a poster is cropped the same way in every place. Previously each surface used a different height, so the upload preview did not match how the poster actually appeared.

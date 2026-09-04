@@ -1434,6 +1434,39 @@ export function getReferralsOverview(): Promise<ReferralsOverview> {
   return apiFetch('/api/admin/referrals/overview');
 }
 
+// --- Broadcast DM (admin: filtered global audience; host: tournament participants) ---
+
+export interface BroadcastAudience {
+  activeOnly?: boolean;
+  activeDays?: number;
+  bands?: number[];
+  tiers?: ('supporter' | 'lord' | 'champion')[];
+}
+
+/** Admin broadcast. dryRun=true returns just the recipient count (live preview). */
+export function broadcastAdmin(
+  message: string,
+  audience: BroadcastAudience,
+  dryRun: boolean,
+): Promise<{ count: number; ok?: boolean }> {
+  return apiFetch('/api/admin/broadcast', {
+    method: 'POST',
+    body: JSON.stringify({ message, audience, dryRun }),
+  });
+}
+
+/** Host broadcast to a tournament's participants. dryRun=true returns the count. */
+export function broadcastToParticipants(
+  slug: string,
+  message: string,
+  dryRun: boolean,
+): Promise<{ count: number; ok?: boolean }> {
+  return apiFetch(`/api/tournaments/${encodeURIComponent(slug)}/broadcast`, {
+    method: 'POST',
+    body: JSON.stringify({ message, dryRun }),
+  });
+}
+
 /** The operator's destination list (empty array if never configured / 404). */
 export async function getAnnouncementDestinations(): Promise<AnnouncementDestination[]> {
   try {

@@ -14,6 +14,7 @@ import {
 } from '@rizzotto/types';
 import { notifyTournamentAnnounce } from '../lib/discord-notify.js';
 import { recordTournamentEvent } from '../lib/tournament-events.js';
+import { resolveParticipants, sendBroadcast } from '../lib/broadcast.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -1509,6 +1510,59 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ ok: true });
     },
   );
+
+  // POST /api/tournaments/:slug/broadcast — host/co-host DMs their participants
+  // via the bot. dryRun returns the recipient count; a real send is cooldown-gated,
+  // responds immediately, and dispatches in the background (paced).
+  fastify.post('/api/tournaments/:slug/broadcast', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const parsed = z
+      .object({ message: z.string().max(2000).optional().default(''), dryRun: z.boolean().optional().default(false) })
+      .safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    const tournament = await fastify.prisma.tournament.findFirst({
+      where: { slug, deleted_at: null },
+      select: { id: true, name: true },
+    });
+    if (!tournament) {
+      return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+    }
+    const user = request.user;
+    if (!(await canManageTournament(fastify.prisma, tournament.id, user.sub, user.role))) {
+      return reply.code(403).send({ error: 'Forbidden', message: 'You do not manage this tournament', statusCode: 403 });
+    }
+
+    const { message, dryRun } = parsed.data;
+    if (dryRun) {
+      const recipients = await resolveParticipants(fastify.prisma, tournament.id);
+      return { count: recipients.length };
+    }
+    if (!message.trim()) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'Message is empty.', statusCode: 400 });
+    }
+
+    let acquired: string | null;
+    try {
+      acquired = await fastify.redis.set(`rizzotto:broadcast:cooldown:host:${user.sub}`, '1', 'EX', 3600, 'NX');
+    } catch {
+      return reply.code(503).send({ error: 'ServiceUnavailable', message: 'Rate limiter unavailable — try again shortly.', statusCode: 503 });
+    }
+    if (acquired === null) {
+      return reply.code(429).send({ error: 'TooManyRequests', message: 'You can send one broadcast per hour. Please wait.', statusCode: 429 });
+    }
+
+    const recipients = await resolveParticipants(fastify.prisma, tournament.id);
+    request.log.info({ sender: user.sub, tournament: tournament.id, count: recipients.length }, 'host broadcast dispatched');
+
+    void sendBroadcast(recipients, `📢 A message from the host of ${tournament.name}`, message)
+      .then((r) => request.log.info({ ...r, tournament: tournament.id }, 'host broadcast finished'))
+      .catch((err) => request.log.error({ err }, 'host broadcast send failed'));
+
+    return { ok: true, count: recipients.length };
+  });
 };
 
 export default tournamentRoutes;
