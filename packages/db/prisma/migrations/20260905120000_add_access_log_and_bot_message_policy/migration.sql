@@ -34,4 +34,4 @@ CREATE INDEX "AccessEvent_type_idx" ON "AccessEvent"("type");
 CREATE INDEX "AccessEvent_created_at_idx" ON "AccessEvent"("created_at");
 
 -- AddForeignKey
-ALTER TABLE "AccessEvent" ADD CONSTRAINT "AccessEvent_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "AccessEvent" ADD CONSTRAINT "AccessEvent_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
