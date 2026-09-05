@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.54.0] — 2026-09-05 — Admin tooling
+### Added
+- More behind-the-scenes tooling for tournament operators. No player-facing changes.
+
 ## [1.53.0] — 2026-09-05 — Scheduling calendar
 ### Added
 - **When creating or editing a tournament, the start-time picker now shows a 7-day calendar** with the tournaments already scheduled in that window drawn in as blocks (sized to how long each is expected to run), on top of the usual "when are players free" availability shading. Click a slot to set your start time.

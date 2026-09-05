@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { updateUser, type AdminUser } from '@/lib/api';
+import { updateUser, setBotMessagePolicy, type AdminUser, type BotMessagePolicy } from '@/lib/api';
 
 /**
  * Admin edit of a user's basic profile fields (username / email / timezone).
@@ -11,14 +11,19 @@ export function UserEditModal({ user, onClose }: { user: AdminUser; onClose: () 
   const [username, setUsername] = useState(user.username);
   const [email, setEmail] = useState(user.email ?? '');
   const [timezone, setTimezone] = useState(user.timezone ?? '');
+  const [policy, setPolicy] = useState<BotMessagePolicy>(user.bot_message_policy ?? 'NORMAL');
 
   const mutation = useMutation({
-    mutationFn: () =>
-      updateUser(user.id, {
+    mutationFn: async () => {
+      await updateUser(user.id, {
         username: username.trim(),
         email: email.trim() === '' ? null : email.trim(),
         timezone: timezone.trim() === '' ? null : timezone.trim(),
-      }),
+      });
+      if (policy !== (user.bot_message_policy ?? 'NORMAL')) {
+        await setBotMessagePolicy(user.id, policy);
+      }
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-users'] });
       onClose();
@@ -63,6 +68,18 @@ export function UserEditModal({ user, onClose }: { user: AdminUser; onClose: () 
               placeholder="e.g. Europe/Berlin"
               className="w-full rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 placeholder:text-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
             />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-stone-400">Bot messages</span>
+            <select
+              value={policy}
+              onChange={(e) => setPolicy(e.target.value as BotMessagePolicy)}
+              className="w-full rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
+            >
+              <option value="NORMAL">Normal (all bot messages)</option>
+              <option value="NO_BROADCASTS">No broadcasts (still gets notifications)</option>
+              <option value="NO_BOT_MESSAGES">No bot messages at all</option>
+            </select>
           </label>
         </div>
 

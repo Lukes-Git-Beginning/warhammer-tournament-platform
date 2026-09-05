@@ -359,6 +359,16 @@ export async function sendDm(
   content: string,
   opts?: { broadcast?: boolean },
 ): Promise<void> {
+  // Full DM opt-out: users set to NO_BOT_MESSAGES never receive any bot DM (even broadcasts).
+  try {
+    const u = await prisma.user.findUnique({
+      where: { discord_id: discordUserId },
+      select: { bot_message_policy: true },
+    });
+    if (u?.bot_message_policy === 'NO_BOT_MESSAGES') return;
+  } catch {
+    // fail-open: a lookup error must not silently drop legitimate notifications
+  }
   // Automatic notifications are rate-capped per recipient; an intentional broadcast bypasses.
   if (!opts?.broadcast && !passesDmCaps(discordUserId)) return;
   const channelId = await openDmChannel(discordUserId);

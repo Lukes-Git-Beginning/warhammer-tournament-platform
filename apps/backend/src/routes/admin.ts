@@ -565,6 +565,99 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // GET /api/admin/access-log — paginated login / visit / page-view access log (audit).
+  fastify.get('/api/admin/access-log', async (request, reply) => {
+    const AccessLogQuery = PaginationSchema.extend({
+      user_id: z.string().uuid().optional(),
+      type: z.enum(['LOGIN', 'VISIT', 'PAGE_VIEW']).optional(),
+      since: z.coerce.date().optional(),
+      until: z.coerce.date().optional(),
+    });
+    const parsed = AccessLogQuery.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { page, pageSize, user_id, type, since, until } = parsed.data;
+    const where: Record<string, unknown> = {};
+    if (user_id) where.user_id = user_id;
+    if (type) where.type = type;
+    if (since || until) {
+      where.created_at = { ...(since ? { gte: since } : {}), ...(until ? { lte: until } : {}) };
+    }
+    const [total, entries] = await Promise.all([
+      fastify.prisma.accessEvent.count({ where }),
+      fastify.prisma.accessEvent.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { user: { select: { id: true, username: true, avatar_url: true } } },
+      }),
+    ]);
+    return {
+      entries: entries.map((e) => ({
+        id: e.id,
+        type: e.type,
+        page: e.page,
+        path: e.path,
+        ip: e.ip,
+        user_agent: e.user_agent,
+        created_at: e.created_at,
+        user: e.user,
+      })),
+      total,
+      page,
+      pageSize,
+    };
+  });
+
+  // PATCH /api/admin/users/:id/bot-message-policy — set how much the bot may DM a user.
+  fastify.patch<{ Params: { id: string }; Body: { policy: string } }>(
+    '/api/admin/users/:id/bot-message-policy',
+    {
+      preHandler: [fastify.authenticate, fastify.requireRole('ADMIN')],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['policy'],
+          properties: { policy: { type: 'string', enum: ['NORMAL', 'NO_BROADCASTS', 'NO_BOT_MESSAGES'] } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = request.params.id;
+      const policy = request.body.policy as 'NORMAL' | 'NO_BROADCASTS' | 'NO_BOT_MESSAGES';
+      const user = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, bot_message_policy: true },
+      });
+      if (!user) return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
+      if (user.bot_message_policy === policy) {
+        return reply.send({ id: user.id, bot_message_policy: user.bot_message_policy });
+      }
+
+      const updated = await fastify.prisma.$transaction(async (tx) => {
+        const u = await tx.user.update({
+          where: { id: userId },
+          data: { bot_message_policy: policy },
+          select: { id: true, bot_message_policy: true },
+        });
+        await tx.auditLog.create({
+          data: {
+            entity_type: 'User',
+            entity_id: u.id,
+            action: 'BOT_MESSAGE_POLICY_CHANGE',
+            actor_id: request.user.sub,
+            old_value: { bot_message_policy: user.bot_message_policy },
+            new_value: { bot_message_policy: policy },
+          },
+        });
+        return u;
+      });
+      return { id: updated.id, bot_message_policy: updated.bot_message_policy };
+    },
+  );
+
   // DELETE /api/admin/users/:id/steam — reset Steam verification. Removes the
   // SteamLink so the user must re-link Steam on their next visit (keeps the account
   // and all history). Fixes "signed up with the wrong Steam account".

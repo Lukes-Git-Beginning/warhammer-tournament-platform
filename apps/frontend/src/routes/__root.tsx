@@ -1,16 +1,43 @@
-import { Outlet, createRootRoute } from '@tanstack/react-router';
+import { useEffect, useRef } from 'react';
+import { Outlet, createRootRoute, useRouterState } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Header } from '@/components/layout/Header';
-import { useRequireSteamLink } from '@/lib/auth';
+import { useRequireSteamLink, useAuthQuery } from '@/lib/auth';
+import { recordActivity } from '@/lib/api';
 import { DevLoginPanel } from '@/components/dev/DevLoginPanel';
 import { ActiveMatchVisibilityProvider } from '@/contexts/ActiveMatchVisibility';
 import { FactionPickTimerBanner } from '@/components/match/FactionPickTimerBanner';
+
+// Map a pathname to a compact page label for the access log (e.g. "tournament:<slug>").
+function pageLabel(path: string): string {
+  const seg = path.split('/').filter(Boolean);
+  const a = seg[0] ?? 'home';
+  const b = seg[1];
+  if (a === 'tournaments' && b) return `tournament:${b}`;
+  if (a === 'users' && b) return `profile:${b}`;
+  if (a === 'matches' && b) return `match:${b}`;
+  return a;
+}
+
+// Fire a page-view beacon on each navigation, for authenticated users only.
+function useAccessBeacon() {
+  const { data: user } = useAuthQuery();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const last = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    if (last.current === pathname) return;
+    last.current = pathname;
+    recordActivity(pathname, pageLabel(pathname));
+  }, [user, pathname]);
+}
 
 function RootLayout() {
   const { t } = useTranslation();
   // Global Steam-Link hard-gate — redirects to /connect-steam for unauthenticated routes
   // unless the current path is whitelisted in useRequireSteamLink.
   useRequireSteamLink();
+  useAccessBeacon();
   return (
     <ActiveMatchVisibilityProvider>
     <div className="relative min-h-screen bg-rizzotto-iron-950 text-rizzotto-stone-200 antialiased">

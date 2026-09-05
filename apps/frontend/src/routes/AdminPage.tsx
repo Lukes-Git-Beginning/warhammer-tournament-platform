@@ -28,10 +28,11 @@ import { TournamentLogTab } from '@/components/admin/TournamentLogTab.js';
 import { AnnouncementsTab } from '@/components/admin/AnnouncementsTab.js';
 import { ReferralsTab } from '@/components/admin/ReferralsTab.js';
 import { BroadcastDmTab } from '@/components/admin/BroadcastDmTab.js';
+import { AccessLogTab } from '@/components/admin/AccessLogTab.js';
 
-type Tab = 'audit' | 'dashboard' | 'users' | 'supporters' | 'presets' | 'stats' | 'settings' | 'announcements' | 'referrals' | 'broadcast' | 'import' | 'matches' | 'all_games' | 'tournament_log' | 'queue' | 'skill_calibration' | 'reports';
+type Tab = 'audit' | 'dashboard' | 'users' | 'supporters' | 'presets' | 'stats' | 'settings' | 'announcements' | 'referrals' | 'broadcast' | 'import' | 'matches' | 'all_games' | 'tournament_log' | 'queue' | 'skill_calibration' | 'reports' | 'access_log';
 
-const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'announcements', 'referrals', 'broadcast', 'skill_calibration', 'users', 'supporters', 'matches', 'all_games', 'tournament_log', 'queue', 'presets', 'audit', 'import'];
+const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'announcements', 'referrals', 'broadcast', 'access_log', 'skill_calibration', 'users', 'supporters', 'matches', 'all_games', 'tournament_log', 'queue', 'presets', 'audit', 'import'];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard: 'admin.tabs.dashboard',
@@ -51,6 +52,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
   queue: 'admin.tabs.queue',
   skill_calibration: 'admin.tabs.skill_calibration',
   reports: 'admin.tabs.reports',
+  access_log: 'admin.tabs.access_log',
 };
 
 const STATIC_LABELS: Record<Tab, string> = {
@@ -71,6 +73,7 @@ const STATIC_LABELS: Record<Tab, string> = {
   queue: 'Queue Activity',
   skill_calibration: 'Skill Calibration',
   reports: 'Reports',
+  access_log: 'Access Log',
 };
 
 function StatsTab() {
@@ -203,6 +206,7 @@ export function AdminPage() {
         {tab === 'import' && <ImportLogTable />}
         {tab === 'skill_calibration' && <SkillCalibrationTab />}
         {tab === 'reports' && <AdminReportsTab />}
+        {tab === 'access_log' && <AccessLogTab />}
       </div>
     </PageShell>
   );

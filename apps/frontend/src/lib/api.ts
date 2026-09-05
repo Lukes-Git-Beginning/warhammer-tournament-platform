@@ -853,6 +853,8 @@ export interface AdminStats {
   openPlay: { queueDepth: number; activeMatches: number; scheduledAccepted: number };
 }
 
+export type BotMessagePolicy = 'NORMAL' | 'NO_BROADCASTS' | 'NO_BOT_MESSAGES';
+
 export interface AdminUser {
   id: string;
   username: string;
@@ -860,6 +862,7 @@ export interface AdminUser {
   steam_id: string | null;
   avatar_url: string | null;
   role: string;
+  bot_message_policy: BotMessagePolicy;
   is_banned: boolean;
   created_at: string;
   email: string | null;
@@ -877,6 +880,63 @@ export function getAdminAuditLog(opts?: {
   if (opts?.entity_type) params.set('entity_type', opts.entity_type);
   const qs = params.toString();
   return apiFetch(`/api/admin/audit-log${qs ? `?${qs}` : ''}`);
+}
+
+// --- Access log + bot message policy (admin) ---
+
+export type AccessEventType = 'LOGIN' | 'VISIT' | 'PAGE_VIEW';
+
+export interface AccessLogEntry {
+  id: string;
+  type: AccessEventType;
+  page: string | null;
+  path: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  created_at: string;
+  user: { id: string; username: string; avatar_url: string | null } | null;
+}
+
+export function getAccessLog(opts?: {
+  page?: number;
+  pageSize?: number;
+  user_id?: string;
+  type?: AccessEventType;
+}): Promise<{ entries: AccessLogEntry[]; total: number; page: number; pageSize: number }> {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
+  if (opts?.user_id) params.set('user_id', opts.user_id);
+  if (opts?.type) params.set('type', opts.type);
+  const qs = params.toString();
+  return apiFetch(`/api/admin/access-log${qs ? `?${qs}` : ''}`);
+}
+
+export function setBotMessagePolicy(
+  userId: string,
+  policy: BotMessagePolicy,
+): Promise<{ id: string; bot_message_policy: BotMessagePolicy }> {
+  return apiFetch(`/api/admin/users/${userId}/bot-message-policy`, {
+    method: 'PATCH',
+    body: JSON.stringify({ policy }),
+  });
+}
+
+export function adminSearchUsers(
+  search: string,
+  limit = 20,
+): Promise<{ users: AdminUser[]; total: number; page: number; limit: number }> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (search) params.set('search', search);
+  return apiFetch(`/api/users?${params.toString()}`);
+}
+
+/** Fire-and-forget: record a page view for the access log. Silently ignores failures. */
+export function recordActivity(path: string, page?: string): void {
+  void apiFetch('/api/activity', {
+    method: 'POST',
+    body: JSON.stringify({ path, ...(page ? { page } : {}) }),
+  }).catch(() => {});
 }
 
 export type QueueActivityEvent =

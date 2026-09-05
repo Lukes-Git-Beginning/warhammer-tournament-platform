@@ -225,6 +225,11 @@ model User {
   // First-touch acquisition: the ?ref= code a visitor first arrived with (how they
   // found the site), set once at account creation. See lib/referrals.ts.
   referral_source     String?
+  // Admin moderation: how much the bot may DM this user.
+  // NORMAL = everything; NO_BROADCASTS = excluded from broadcast DMs but still gets
+  // functional notifications; NO_BOT_MESSAGES = the bot never DMs this user at all.
+  // Set on the admin user view.
+  bot_message_policy  BotMessagePolicy @default(NORMAL)
   created_at         DateTime  @default(now())
   updated_at         DateTime  @updatedAt
   deleted_at         DateTime?
@@ -260,6 +265,7 @@ model User {
   accepted_matchups     ScheduledMatchup[]      @relation("MatchupAcceptor")
   queue_activity          QueueActivityLog[]    @relation("QueueActivityUser")
   queue_activity_opponent QueueActivityLog[]    @relation("QueueActivityOpponent")
+  access_events           AccessEvent[]
 
   @@index([role])
   @@index([deleted_at])
@@ -991,6 +997,42 @@ model QueueActivityLog {
 
   @@index([user_id])
   @@index([event])
+  @@index([created_at])
+}
+
+// -----------------------------------------------------------------------------
+// Access Log (global login / visit / page-view audit, admin view, 90-day retention)
+// -----------------------------------------------------------------------------
+
+enum AccessEventType {
+  LOGIN
+  VISIT
+  PAGE_VIEW
+}
+
+// How much the bot may DM a user (admin-set). See User.bot_message_policy.
+enum BotMessagePolicy {
+  NORMAL
+  NO_BROADCASTS
+  NO_BOT_MESSAGES
+}
+
+model AccessEvent {
+  id         String          @id @default(uuid()) @db.Uuid
+  user_id    String          @db.Uuid
+  type       AccessEventType
+  // Normalized page label for PAGE_VIEW (e.g. "leaderboard", "tournament:<slug>",
+  // "profile:<userId>"); null for LOGIN / VISIT.
+  page       String?
+  path       String? // raw client path, for reference
+  ip         String?
+  user_agent String?
+  created_at DateTime        @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([user_id, created_at])
+  @@index([type])
   @@index([created_at])
 }
 

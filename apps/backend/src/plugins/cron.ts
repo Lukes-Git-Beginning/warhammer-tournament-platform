@@ -544,7 +544,24 @@ export default fp(
     // Run once on boot so the bar is accurate right after a deploy (fire-and-forget).
     void syncKofiGoal(fastify.prisma, fastify.log).catch(() => {});
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask, kofiGoalSyncTask]);
+    // Access log retention: purge AccessEvent rows older than 90 days, daily at 01:10 UTC.
+    const accessLogPurgeTask = cron.schedule(
+      '10 1 * * *',
+      async () => {
+        try {
+          const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+          const { count } = await fastify.prisma.accessEvent.deleteMany({
+            where: { created_at: { lt: cutoff } },
+          });
+          if (count > 0) fastify.log.info({ count }, 'Purged old AccessEvent rows');
+        } catch (err) {
+          fastify.log.error({ err }, 'AccessEvent purge cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask, kofiGoalSyncTask, accessLogPurgeTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
@@ -561,6 +578,7 @@ export default fp(
       scheduledMatchupActivationTask.stop();
       supporterRefreshTask.stop();
       kofiGoalSyncTask.stop();
+      accessLogPurgeTask.stop();
       clearInterval(matrixInterval);
       clearInterval(matchmakingInterval);
     });

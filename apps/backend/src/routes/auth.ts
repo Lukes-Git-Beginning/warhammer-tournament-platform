@@ -101,6 +101,19 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
+      // Access log: record the login (admin audit / access tracking). Fire-and-forget;
+      // a failure here must never block auth. IP is trusted via Fastify's trustProxy.
+      void fastify.prisma.accessEvent
+        .create({
+          data: {
+            user_id: user.id,
+            type: 'LOGIN',
+            ip: request.ip,
+            user_agent: request.headers['user-agent'] ?? null,
+          },
+        })
+        .catch(() => {});
+
       // Link historical TT game records where player name matches this user's
       // display name. Only updates rows where the FK is still null, so re-logins
       // are no-ops. Fire-and-forget failures are acceptable — records stay

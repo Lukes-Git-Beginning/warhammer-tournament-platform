@@ -41,6 +41,8 @@ export async function resolveAdminAudience(
   const rows = await prisma.user.findMany({
     where: {
       deleted_at: null,
+      // Respect the bot message policy: NO_BROADCASTS and NO_BOT_MESSAGES are both excluded.
+      bot_message_policy: 'NORMAL',
       ...(audience.activeOnly
         ? { last_login: { gte: new Date(Date.now() - audience.activeDays * 86_400_000) } }
         : {}),
@@ -112,6 +114,8 @@ export async function resolveParticipants(
       tournament_id: tournamentId,
       deleted_at: null,
       status: { in: ['REGISTERED', 'CHECKED_IN'] },
+      // Respect the bot message policy (a host broadcast is still a broadcast DM).
+      user: { bot_message_policy: 'NORMAL' },
     },
     select: { user: { select: { id: true, discord_id: true } } },
   });
