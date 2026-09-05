@@ -41,12 +41,28 @@ export function projectBracketPlan(opts: {
   playoffFormat: string | null;
   roundsCount: number | null;
   activeBands: number[];
+  /** BaLi only: the frozen playoff skeleton, once the first division has generated. When present it is
+   *  authoritative for the preview — the live band mix must NOT resurrect a division the plan merged away. */
+  frozenPlan?: { divisions: Array<{ anchorBand: number; targetSize: number }> } | null;
 }): BracketPlan {
   const active = opts.activeBands.length;
 
   if (opts.format === 'BALANCED_LIECHTENSTEIN') {
     // The stored rounds_count is the live, floored truth once running; fall back to the size rule.
     const groupRounds = opts.roundsCount ?? balancedRounds(active);
+    // Once the structure is FROZEN, project from the plan, not the live field. Otherwise the preview
+    // re-derives divisions live (formDivisionPools) and can show a division the frozen plan already
+    // merged away — the phantom "Intermediate" that generation never builds (2026-09-05 Bonanza bug).
+    if (opts.frozenPlan && Array.isArray(opts.frozenPlan.divisions) && opts.frozenPlan.divisions.length > 0) {
+      const divisions: ProjectedDivision[] = opts.frozenPlan.divisions
+        .filter((d) => d.targetSize >= 2)
+        .map((d) => ({
+          size: d.targetSize,
+          format: cappedDivisionPlayoffFormat(d.targetSize, opts.playoffFormat),
+          band: d.anchorBand,
+        }));
+      return { groupRounds, divisions };
+    }
     // Divisions form by band (formDivisionPools) — the SHAPE needs only the bands, not final ranks.
     const ranked: RankedPlayer[] = opts.activeBands.map((band, i) => ({
       userId: String(i),

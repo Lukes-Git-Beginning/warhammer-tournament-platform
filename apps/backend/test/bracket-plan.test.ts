@@ -70,4 +70,21 @@ describe('projectBracketPlan', () => {
     expect(projectBracketPlan({ format: 'BALANCED_LIECHTENSTEIN', playoffFormat: 'TOP2', roundsCount: null, activeBands: bands({ 3: 8 }) }).groupRounds).toBe(4);
     expect(projectBracketPlan({ format: 'BALANCED_LIECHTENSTEIN', playoffFormat: 'TOP2', roundsCount: null, activeBands: bands({ 3: 7 }) }).groupRounds).toBe(3);
   });
+
+  it('BaLi: once a plan is FROZEN it drives the preview — no phantom "Intermediate" the live field would form', () => {
+    // The full live band mix forms THREE pools (band 5/4/3) — the 2026-09-05 Bonanza situation.
+    const opts = {
+      format: 'BALANCED_LIECHTENSTEIN', playoffFormat: 'TOP4', roundsCount: 5,
+      activeBands: bands({ 5: 6, 4: 6, 3: 11, 2: 5 }),
+    };
+    expect(projectBracketPlan(opts).divisions.map((d) => d.band)).toEqual([5, 4, 3]); // live: phantom band-3 division
+    // But the frozen plan had only TWO divisions (band 3 merged into the band-4 division at freeze).
+    const frozenPlan = { divisions: [{ anchorBand: 5, targetSize: 8 }, { anchorBand: 4, targetSize: 13 }] };
+    const withPlan = projectBracketPlan({ ...opts, frozenPlan });
+    expect(withPlan.divisions).toEqual([
+      { size: 8, format: 'TOP4', band: 5 },
+      { size: 13, format: 'TOP4', band: 4 },
+    ]);
+    expect(withPlan.divisions.some((d) => d.band === 3)).toBe(false); // the phantom "Intermediate" is gone
+  });
 });

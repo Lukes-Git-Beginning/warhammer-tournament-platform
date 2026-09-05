@@ -160,6 +160,7 @@ export function MatchScoreModal({
   const [swapOldId, setSwapOldId] = useState('');
   const [swapNewId, setSwapNewId] = useState('');
   const [swapError, setSwapError] = useState<string | null>(null);
+  const [swapNeedsOverride, setSwapNeedsOverride] = useState(false);
   const { data: participantsData } = useQuery({
     queryKey: ['tournament-participants', tournamentSlug],
     queryFn: () => getParticipants(tournamentSlug!),
@@ -168,12 +169,22 @@ export function MatchScoreModal({
   });
   const participants = participantsData?.data ?? [];
   const swapMutation = useMutation({
-    mutationFn: () => swapPlayer(matchId, swapOldId, swapNewId),
+    mutationFn: (confirm: boolean) => swapPlayer(matchId, swapOldId, swapNewId, confirm),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['bracket'] });
       onClose();
     },
-    onError: (err: Error) => setSwapError(err.message),
+    onError: (err: Error) => {
+      // Balanced Liechtenstein group-phase safety: hosts are blocked, an admin can override with a
+      // second confirm. (Playoff swaps are exempt from this guard entirely.)
+      if (/confirmBalancedOverride|ConfirmationRequired/i.test(err.message)) {
+        setSwapNeedsOverride(true);
+        setSwapError('Balanced Liechtenstein group-phase pairing — this can desync the bracket. Override only if you know what you are doing.');
+      } else {
+        setSwapNeedsOverride(false);
+        setSwapError(err.message);
+      }
+    },
   });
 
   // Delete Match
@@ -469,7 +480,7 @@ export function MatchScoreModal({
             <div className="flex gap-2 items-center">
               <select
                 value={swapOldId}
-                onChange={(e) => { setSwapOldId(e.target.value); setSwapNewId(''); setSwapError(null); }}
+                onChange={(e) => { setSwapOldId(e.target.value); setSwapNewId(''); setSwapError(null); setSwapNeedsOverride(false); }}
                 className="flex-1 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
               >
                 <option value="">Replace…</option>
@@ -479,7 +490,7 @@ export function MatchScoreModal({
               <span className="text-stone-600 text-xs">→</span>
               <select
                 value={swapNewId}
-                onChange={(e) => { setSwapNewId(e.target.value); setSwapError(null); }}
+                onChange={(e) => { setSwapNewId(e.target.value); setSwapError(null); setSwapNeedsOverride(false); }}
                 disabled={!swapOldId}
                 className="flex-1 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:outline-none focus:border-rizzotto-gold-500 disabled:opacity-40"
               >
@@ -494,13 +505,23 @@ export function MatchScoreModal({
               <button
                 type="button"
                 disabled={!swapOldId || !swapNewId || swapMutation.isPending}
-                onClick={() => swapMutation.mutate()}
+                onClick={() => swapMutation.mutate(false)}
                 className="rounded border border-amber-700 px-2 py-1 text-xs text-amber-400 hover:bg-amber-900/20 transition-colors disabled:opacity-40 shrink-0"
               >
                 {swapMutation.isPending ? '…' : 'Swap'}
               </button>
             </div>
             {swapError && <p className="text-xs text-red-400">{swapError}</p>}
+            {swapNeedsOverride && (
+              <button
+                type="button"
+                disabled={swapMutation.isPending}
+                onClick={() => swapMutation.mutate(true)}
+                className="rounded border border-red-700 px-2 py-1 text-xs text-red-300 hover:bg-red-900/30 transition-colors disabled:opacity-40"
+              >
+                {swapMutation.isPending ? '…' : 'Override and swap anyway'}
+              </button>
+            )}
           </div>
         )}
 

@@ -47,7 +47,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, format: true, mode: true, status: true, swiss_match_format: true, playoff_match_format: true, finale_match_format: true, rounds_count: true, playoff_format: true },
+        select: { id: true, format: true, mode: true, status: true, swiss_match_format: true, playoff_match_format: true, finale_match_format: true, rounds_count: true, playoff_format: true, playoff_plan: true },
       });
 
       if (!tournament) {
@@ -282,6 +282,9 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           playoffFormat: tournament.playoff_format,
           roundsCount: tournament.rounds_count,
           activeBands,
+          frozenPlan: tournament.playoff_plan as unknown as {
+            divisions: Array<{ anchorBand: number; targetSize: number }>;
+          } | null,
         });
 
         response.swiss = {

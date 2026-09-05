@@ -947,20 +947,26 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, status: true, player1_id: true, player2_id: true, tournament_id: true, tournament: { select: { host_id: true } } },
+        select: { id: true, status: true, phase: true, player1_id: true, player2_id: true, tournament_id: true, tournament: { select: { host_id: true } } },
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       if (match.status !== 'PENDING') return reply.code(409).send({ error: 'Conflict', message: 'Can only swap players in PENDING matches', statusCode: 409 });
 
       const { role, sub: userId } = request.user;
       if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
-      const swapGuard = await guardBalancedManualPairing(
-        fastify.prisma,
-        match.tournament_id ?? '',
-        role,
-        (request.body as { confirmBalancedOverride?: boolean } | undefined)?.confirmBalancedOverride === true,
-      );
-      if (swapGuard) return reply.code(swapGuard.status).send(swapGuard.body);
+      // The BaLi manual-pairing lock guards the GROUP phase, where a cross-band merge can desync rounds
+      // and cascade into phantom byes. A PLAYOFF bracket is a fixed tree — swapping a seed there cannot
+      // cascade — so the host may freely fix a playoff seeding. Only gate group-phase swaps.
+      const isPlayoffMatch = match.phase != null && match.phase.startsWith('PLAYOFF');
+      if (!isPlayoffMatch) {
+        const swapGuard = await guardBalancedManualPairing(
+          fastify.prisma,
+          match.tournament_id ?? '',
+          role,
+          (request.body as { confirmBalancedOverride?: boolean } | undefined)?.confirmBalancedOverride === true,
+        );
+        if (swapGuard) return reply.code(swapGuard.status).send(swapGuard.body);
+      }
 
       const { oldPlayerId, newPlayerId } = parsed.data;
       let updateData: { player1_id?: string; player2_id?: string };

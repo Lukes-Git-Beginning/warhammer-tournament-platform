@@ -5,9 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
-## [1.54.2] — 2026-09-06 — Balanced Liechtenstein fix
+## [1.54.2] — 2026-09-06 — Balanced Liechtenstein fixes
 ### Fixed
 - Fixed a Balanced Liechtenstein playoff-generation bug where, after a mid-tournament drop, a higher division's just-missed players (the seeds below the top cut) could be pulled down into a lower division's bracket, so a lower playoff ended up seeded with players who belonged to the division above it. Each generated division's full membership is now locked, so its non-qualifying seeds stay in their own division.
+- Fixed the bracket preview showing a phantom extra division: once the playoff structure is frozen, the preview now follows the frozen plan instead of re-deriving divisions from the live field, so a division the plan already merged away no longer appears as an empty placeholder.
+### Changed
+- Hosts can now swap players in a Balanced Liechtenstein tournament's playoff-bracket matches (a playoff bracket is a fixed tree, so a swap can't cascade). The manual-pairing safety lock now applies only to the group phase, where a bad pairing can desync rounds; admins keep a confirm-override there.
 
 ## [1.54.1] — 2026-09-05 — Admin tooling
 ### Fixed

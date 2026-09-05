@@ -1709,10 +1709,11 @@ export function swapPlayer(
   matchId: string,
   oldPlayerId: string,
   newPlayerId: string,
+  confirmBalancedOverride = false,
 ): Promise<{ ok: true }> {
   return apiFetch(`/api/matches/${matchId}/swap-player`, {
     method: 'PATCH',
-    body: JSON.stringify({ oldPlayerId, newPlayerId }),
+    body: JSON.stringify({ oldPlayerId, newPlayerId, ...(confirmBalancedOverride ? { confirmBalancedOverride: true } : {}) }),
   });
 }
 
