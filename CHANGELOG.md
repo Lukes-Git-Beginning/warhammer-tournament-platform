@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.54.2] — 2026-09-06 — Balanced Liechtenstein fix
+### Fixed
+- Fixed a Balanced Liechtenstein playoff-generation bug where, after a mid-tournament drop, a higher division's just-missed players (the seeds below the top cut) could be pulled down into a lower division's bracket, so a lower playoff ended up seeded with players who belonged to the division above it. Each generated division's full membership is now locked, so its non-qualifying seeds stay in their own division.
+
 ## [1.54.1] — 2026-09-05 — Admin tooling
 ### Fixed
 - Correctness fix in the behind-the-scenes tooling for tournament operators. No player-facing changes.

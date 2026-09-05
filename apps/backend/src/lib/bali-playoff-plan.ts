@@ -134,6 +134,24 @@ export function bracketSeeds(pool: RankedPlayer[]): string[] {
   return [...earners, ...zeros].map((p) => p.userId);
 }
 
+/**
+ * The FULL membership of every already-generated division, drawn from the durable
+ * `playoff_division_generated` events (each records its division's complete pool as `seeds`). This is
+ * the correct `placed` set for resolvePoolsFromPlan: a TOP-N division of MORE than N players seats only
+ * its top N in matches, so its unseated "just-missed" seeds (e.g. 5-8 of a TOP4-of-8) never appear as
+ * match players. Locking only the SEATED players would let those seeds leak into a lower division on a
+ * later re-resolve — the 2026-09-05 Bonanza bug, where the Top division's seeds 6-8 were pulled into the
+ * Advanced division after a drop. Pure.
+ */
+export function placedFromGeneratedEvents(events: ReadonlyArray<{ payload: unknown }>): Set<string> {
+  const set = new Set<string>();
+  for (const e of events) {
+    const seeds = (e.payload as { seeds?: unknown } | null)?.seeds;
+    if (Array.isArray(seeds)) for (const s of seeds) if (typeof s === 'string') set.add(s);
+  }
+  return set;
+}
+
 /** The bracket format a resolved pool yields (mirrors the live path: size capped by host format). */
 export function planDivisionFormat(
   pool: RankedPlayer[],

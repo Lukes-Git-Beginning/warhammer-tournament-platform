@@ -9,6 +9,7 @@ import {
   resolveDivisionPool,
   resolvePoolsFromPlan,
   bracketSeeds,
+  placedFromGeneratedEvents,
   type PlanDivision,
   type PlayoffPlan,
 } from '../src/lib/bali-playoff-plan.js';
@@ -199,5 +200,57 @@ describe('bracketSeeds — 0-point demoted, handicapped earner still seated', ()
     expect(bracketSeeds(pool)).toEqual(['w', 'x', 'y', 'z']);
     // Pool size (4) is preserved for format even though y,z can't take a top seat in a stronger pool.
     expect(pool).toHaveLength(4);
+  });
+});
+
+describe('resolvePoolsFromPlan — a TOP-N division must not leak its unseated seeds (2026-09-05 Bonanza bug)', () => {
+  // Reproduces the real Enticity Bonanza failure: Top = TOP4-of-8, so only its top 4 seeds are seated in
+  // matches; its band-4 borrows (b*) are the unseated seeds 5-8. Advanced (band 4) has its OWN band-4 (a*)
+  // and band-3 (c*). The service used to pass only the SEATED players as `placed`, so the unseated Top
+  // seeds were not claimed and got pulled DOWN into Advanced (Gotrek/ponti/Tobiaz in prod).
+  const plan: PlayoffPlan = {
+    divisions: [
+      { ordinal: 0, anchorBand: 5, targetSize: 8, draws: [{ band: 5, count: 4 }, { band: 4, count: 4 }] },
+      { ordinal: 1, anchorBand: 4, targetSize: 6, draws: [{ band: 4, count: 2 }, { band: 3, count: 4 }] },
+    ],
+  };
+  const field = [
+    rp('t1', 5, 1, 5), rp('t2', 5, 2, 4), rp('t3', 5, 5, 3), rp('t4', 5, 8, 2), // Top's own band-5 (seats 1-4)
+    rp('b1', 4, 3, 5), rp('b2', 4, 4, 4), rp('b3', 4, 6, 3), rp('b4', 4, 9, 2), // Top's borrowed band-4 (unseated 5-8)
+    rp('a1', 4, 10, 2), rp('a2', 4, 11, 1), // Advanced's OWN band-4
+    rp('c1', 3, 7, 3), rp('c2', 3, 12, 2), rp('c3', 3, 13, 1), rp('c4', 3, 14, 1), // Advanced band-3
+  ];
+
+  it('reproduces the bug: placing only the SEATED top-4 leaks the unseated band-4 seeds into Advanced', () => {
+    const seatedOnly = new Set(['t1', 't2', 't3', 't4']); // exactly what the buggy service passed
+    const [, adv] = resolvePoolsFromPlan(plan, field, 5, seatedOnly);
+    const advIds = new Set(adv.players.map((p) => p.userId));
+    // A Top-division member (b*) ends up in the Advanced pool — the leak.
+    expect(['b1', 'b2', 'b3', 'b4'].some((id) => advIds.has(id))).toBe(true);
+  });
+
+  it('the fix: placing the FULL Top pool keeps its just-missed seeds in Top; Advanced draws its own band-4', () => {
+    const fullPool = new Set(['t1', 't2', 't3', 't4', 'b1', 'b2', 'b3', 'b4']); // what the events now provide
+    const [top, adv] = resolvePoolsFromPlan(plan, field, 5, fullPool);
+    const advIds = new Set(adv.players.map((p) => p.userId));
+    expect(['b1', 'b2', 'b3', 'b4'].some((id) => advIds.has(id))).toBe(false); // no Top member leaks
+    expect(advIds.has('a1')).toBe(true); // Advanced draws its OWN band-4 instead
+    expect(advIds.has('a2')).toBe(true);
+    expect(new Set(top.players.map((p) => p.userId))).toEqual(fullPool); // Top still holds all 8
+  });
+});
+
+describe('placedFromGeneratedEvents — full generated-division membership from the durable events', () => {
+  it('unions the seeds of every playoff_division_generated event, ignoring malformed payloads', () => {
+    const events = [
+      { payload: { band: 5, seeds: ['t1', 't2', 't3', 't4', 'b1', 'b2', 'b3', 'b4'] } },
+      { payload: { band: 4, seeds: ['x', 'y'] } },
+      { payload: null },
+      { payload: { seeds: 'not-an-array' } },
+    ];
+    const placed = placedFromGeneratedEvents(events);
+    expect(placed.has('b3')).toBe(true); // an unseated Top seed IS captured (the whole point of the fix)
+    expect(placed.has('x')).toBe(true);
+    expect(placed.size).toBe(10);
   });
 });

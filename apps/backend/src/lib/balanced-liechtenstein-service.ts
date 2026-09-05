@@ -28,6 +28,7 @@ import {
 import {
   derivePlayoffPlan,
   resolvePoolsFromPlan,
+  placedFromGeneratedEvents,
   bracketSeeds,
   type PlayoffPlan,
 } from './bali-playoff-plan.js';
@@ -1084,6 +1085,19 @@ export async function startBalancedPlayoffs(
       if (m.player2_id) alreadyInPlayoff.add(m.player2_id);
     }
   }
+  // `placed` for resolvePoolsFromPlan must be the FULL pool of every already-generated division, not
+  // just the players SEATED in a match. A TOP-N division of >N players seats only its top N, so its
+  // just-missed seeds (5-8 of a TOP4-of-8) never appear as match players; locking only seated players
+  // lets them leak into a lower division on a later re-resolve (the 2026-09-05 Bonanza bug). The durable
+  // playoff_division_generated events hold each generated division's complete pool. `alreadyInPlayoff`
+  // (seated) is still what the "already generated → skip" guard below needs.
+  const generatedMembers = placedFromGeneratedEvents(
+    await fastify.prisma.tournamentEvent.findMany({
+      where: { tournament_id: tournamentId, type: 'playoff_division_generated' },
+      select: { payload: true },
+    }),
+  );
+  const placed = new Set<string>([...alreadyInPlayoff, ...generatedMembers]);
 
   const freshPools = formDivisionPools(
     ranked,
@@ -1093,7 +1107,7 @@ export async function startBalancedPlayoffs(
   const frozenPlan = tournament.playoff_plan as unknown as PlayoffPlan | null;
   const pools: Array<{ band: number; players: RankedPlayer[]; seeds: string[] }> =
     frozenPlan && Array.isArray(frozenPlan.divisions) && frozenPlan.divisions.length > 0
-      ? resolvePoolsFromPlan(frozenPlan, ranked, roundsCount, alreadyInPlayoff)
+      ? resolvePoolsFromPlan(frozenPlan, ranked, roundsCount, placed)
       : freshPools.map((p) => ({ band: p.band, players: p.players, seeds: bracketSeeds(p.players) }));
 
   // Per-division readiness. A contender is complete once they have played all rounds
@@ -1362,10 +1376,20 @@ export async function describeBalancedPlayoffPreview(
       if (m.player2_id) alreadyInPlayoff.add(m.player2_id);
     }
   }
+  // Full pools of already-generated divisions (not just seated players), so the preview shows exactly
+  // what a generation would build — see startBalancedPlayoffs. `alreadyInPlayoff` (seated) still drives
+  // the per-division `alreadyGenerated` flag below.
+  const generatedMembers = placedFromGeneratedEvents(
+    await fastify.prisma.tournamentEvent.findMany({
+      where: { tournament_id: tournamentId, type: 'playoff_division_generated' },
+      select: { payload: true },
+    }),
+  );
+  const placed = new Set<string>([...alreadyInPlayoff, ...generatedMembers]);
   const frozenPlan = tournament.playoff_plan as unknown as PlayoffPlan | null;
   const pools: Array<{ band: number; players: RankedPlayer[]; seeds: string[] }> =
     frozenPlan && Array.isArray(frozenPlan.divisions) && frozenPlan.divisions.length > 0
-      ? resolvePoolsFromPlan(frozenPlan, ranked, roundsCount, alreadyInPlayoff)
+      ? resolvePoolsFromPlan(frozenPlan, ranked, roundsCount, placed)
       : formDivisionPools(ranked, roundsCount, targetPoolSizeFromFormat(tournament.playoff_format)).map(
           (p) => ({ band: p.band, players: p.players, seeds: bracketSeeds(p.players) }),
         );
