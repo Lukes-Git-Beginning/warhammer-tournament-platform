@@ -92,8 +92,13 @@ export async function resolveAdminAudience(
       answerRows.map((r) => [r.id, (r.calibration_answers as Record<string, string> | null) ?? {}]),
     );
     candidates = candidates.filter((c) => {
+      const answers = answersById.get(c.id) ?? {};
       const gs = model.getGeneralSkill(c.id);
-      const { gatingBand } = classify(questionnaireFloor(answersById.get(c.id) ?? {}, questions), {
+      // Unclassified users (NO questionnaire AND NO fitted game data) are not in any band —
+      // exclude them, exactly as the skill-distribution stats endpoint does. Otherwise they all
+      // default to gatingBand 1, and a "band 1" broadcast would blast every dormant/unrated account.
+      if (Object.keys(answers).length === 0 && !gs) return false;
+      const { gatingBand } = classify(questionnaireFloor(answers, questions), {
         generalSkill: gs?.skill ?? null,
         stdError: gs?.se ?? null,
       });
