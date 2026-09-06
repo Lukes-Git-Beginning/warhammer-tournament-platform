@@ -809,14 +809,17 @@ interface FactionMatrixPhaseProps {
   colPlayer?: PlayerRef;
   restrictedFactions?: string[];
   factionAllowlist?: string[];
+  pickedMapName?: string | null;
+  pickedMapImageUrl?: string | null;
 }
 
-function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer, restrictedFactions = [], factionAllowlist = [] }: FactionMatrixPhaseProps) {
+function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer, restrictedFactions = [], factionAllowlist = [], pickedMapName = null, pickedMapImageUrl = null }: FactionMatrixPhaseProps) {
   const queryClient = useQueryClient();
   const [selectedFactions, setSelectedFactions] = useState<string[]>([]);
   const [locking, setLocking] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
   const [hoveredCell, setHoveredCell] = useState<string | null>(null);
+  const [mapLightbox, setMapLightbox] = useState(false);
 
   const mx = decision.factionMatrix;
   const isPlayer1 = decision.matchPlayer1Id
@@ -894,6 +897,49 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
   const p1Factions = mx?.p1Factions ?? [];
   const p2Factions = mx?.p2Factions ?? [];
 
+  // The battlefield is chosen BEFORE the matrix in MATRIX mode, so the picked map is
+  // always known here — surface it in every sub-phase header (players kept losing track
+  // of which map they were drafting factions for). Shared block: line + optional lightbox.
+  const mapBlock = pickedMapName ? (
+    <>
+      <p className="text-sm text-rizzotto-stone-400">
+        Map:{' '}
+        {pickedMapImageUrl ? (
+          <button
+            type="button"
+            onClick={() => setMapLightbox(true)}
+            className="font-semibold text-stone-200 hover:text-rizzotto-gold-400 underline-offset-2 hover:underline transition-colors"
+          >
+            {pickedMapName}
+          </button>
+        ) : (
+          <span className="font-semibold text-stone-200">{pickedMapName}</span>
+        )}
+      </p>
+      {mapLightbox && pickedMapImageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setMapLightbox(false)}
+        >
+          <div className="relative flex flex-col items-center gap-2 w-full h-full">
+            <div className="flex items-center justify-between w-full px-1 shrink-0">
+              <span className="text-white font-semibold">{pickedMapName}</span>
+              <button
+                type="button"
+                onClick={() => setMapLightbox(false)}
+                className="text-white/60 hover:text-white text-xl leading-none transition-colors"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <img src={pickedMapImageUrl} alt={pickedMapName ?? ''} className="w-full h-full object-contain" />
+          </div>
+        </div>
+      )}
+    </>
+  ) : null;
+
   // Complete: show final matchup
   if (subPhase === 'complete' && mx) {
     const pickedRow = mx.pickedCell ? Number(mx.pickedCell.split(',')[0]) : null;
@@ -905,6 +951,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
     return (
       <div className="flex flex-col items-center gap-6">
         <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">Matchup Decided</h2>
+        {mapBlock}
         <div className="flex gap-8">
           <div className="flex flex-col items-center gap-3">
             <span className="text-xs text-rizzotto-stone-500 uppercase tracking-widest">You</span>
@@ -929,6 +976,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
         <span className="h-8 w-8 rounded-full border-2 border-rizzotto-gold-400 border-t-transparent animate-spin" />
         <p className="text-sm text-rizzotto-stone-400">Factions locked. Waiting for opponent…</p>
         <BlindPickCountdown firstLockedAt={mx?.firstLockedAt ?? null} timeoutMs={2 * 60 * 1000} />
+        {mapBlock}
       </div>
     );
   }
@@ -956,6 +1004,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
       <div className="flex flex-col items-center gap-6">
         <div className="text-center">
           <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">3×3 Faction Matrix</h2>
+          {mapBlock}
           <p className="mt-1 text-sm text-rizzotto-stone-400">{whoseTurnLabel} · {turnLabel}</p>
           {isMyTurn && mx.lastActionAt && <MatrixCountdown lastActionAt={mx.lastActionAt} bansCount={mx.bans.length} />}
         </div>
@@ -1082,6 +1131,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
         Choose 3 factions secretly — the matchup grid is revealed only after both players lock in.
         ({selectedFactions.length}/3 selected)
       </p>
+      {mapBlock}
       {/* Show countdown if opponent already locked — this player is being timed */}
       {mx?.firstLockedAt && (
         <BlindPickCountdown firstLockedAt={mx.firstLockedAt} timeoutMs={2 * 60 * 1000} />
@@ -2079,6 +2129,8 @@ export function MatchDecisionPage() {
                 factions={factions}
                 rowPlayer={matrixRowPlayer}
                 colPlayer={matrixColPlayer}
+                pickedMapName={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.name ?? null}
+                pickedMapImageUrl={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.image_url ?? null}
                 restrictedFactions={decision.restrictedFactions ?? []}
                 factionAllowlist={decision.factionAllowlist ?? []}
               />

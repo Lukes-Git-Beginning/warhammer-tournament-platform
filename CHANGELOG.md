@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.54.3] — 2026-09-06 — Map shown on the faction matrix
+### Fixed
+- The 3×3 Faction Matrix now shows the battlefield you are drafting for — a "Map: <name>" line in the header (clickable to enlarge), across the blind-pick, waiting, ban/pick, and result steps. The map is chosen before the matrix in this mode, so it was already known; it just was not surfaced on this screen, and players kept losing track of which map they were picking factions for.
+
 ## [1.54.2] — 2026-09-06 — Balanced Liechtenstein fixes
 ### Fixed
 - Fixed a Balanced Liechtenstein playoff-generation bug where, after a mid-tournament drop, a higher division's just-missed players (the seeds below the top cut) could be pulled down into a lower division's bracket, so a lower playoff ended up seeded with players who belonged to the division above it. Each generated division's full membership is now locked, so its non-qualifying seeds stay in their own division.
