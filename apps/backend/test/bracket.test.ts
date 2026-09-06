@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { generateSingleElim } from '../src/lib/bracket.js';
+import type { MatchStatus } from '@rizzotto/db';
+import { generateSingleElim, generateDoubleElim, selectStartNotifications } from '../src/lib/bracket.js';
 
 // Helper: build N fake participant UUIDs
 function fakeIds(n: number): string[] {
@@ -204,5 +205,82 @@ describe('generateSingleElim', () => {
       const currKey = curr.round * 10000 + curr.match_number;
       expect(prevKey).toBeLessThanOrEqual(currKey);
     }
+  });
+});
+
+describe('selectStartNotifications — double-bye follow-ups', () => {
+  it('10-player DE: a round-2 match is pre-filled by two byes (the Skulltaker situation)', () => {
+    // 10 players in a 16-slot bracket → 6 round-1 byes, and the standard seed order
+    // makes two of them feed the SAME round-2 match: it is full + PENDING before any game.
+    const matches = generateDoubleElim(TOURNAMENT_ID, fakeIds(10));
+    const doubleByeR2 = matches.filter(
+      (m) =>
+        m.bracket_side === 'WINNERS' &&
+        m.round === 2 &&
+        m.status === 'PENDING' &&
+        m.player1_id !== null &&
+        m.player2_id !== null,
+    );
+    expect(doubleByeR2.length).toBeGreaterThan(0);
+  });
+
+  it('announces the pre-filled follow-up and swaps its byes to a pairing (not a bye) DM', () => {
+    const matches = generateDoubleElim(TOURNAMENT_ID, fakeIds(10));
+    const doubleByeR2 = matches.filter(
+      (m) =>
+        m.bracket_side === 'WINNERS' &&
+        m.round === 2 &&
+        m.status === 'PENDING' &&
+        m.player1_id !== null &&
+        m.player2_id !== null,
+    );
+    const batches = selectStartNotifications(matches, { isElimination: true });
+
+    // The pre-filled round-2 matches are announced under round 2 (previously never sent).
+    const r2batch = batches.find((b) => b.round === 2);
+    expect(r2batch).toBeDefined();
+    expect(new Set(r2batch!.matches.map((m) => m.id))).toEqual(new Set(doubleByeR2.map((m) => m.id)));
+
+    const r1ids = new Set(batches.find((b) => b.round === 1)!.matches.map((m) => m.id));
+
+    // A round-1 bye that feeds a pre-filled match is dropped from round 1 → its player
+    // gets the round-2 pairing DM, not the misleading "enjoy your bye" DM.
+    const feederByes = matches.filter(
+      (m) =>
+        m.round === 1 &&
+        m.player1_id !== null &&
+        m.player2_id === null &&
+        doubleByeR2.some((x) => x.id === m.next_match_id),
+    );
+    expect(feederByes.length).toBeGreaterThan(0);
+    for (const b of feederByes) expect(r1ids.has(b.id)).toBe(false);
+
+    // A normal round-1 bye (opponent still TBD) stays in round 1 and keeps its bye DM.
+    const normalByes = matches.filter(
+      (m) =>
+        m.round === 1 &&
+        m.player1_id !== null &&
+        m.player2_id === null &&
+        !doubleByeR2.some((x) => x.id === m.next_match_id),
+    );
+    expect(normalByes.length).toBeGreaterThan(0);
+    for (const b of normalByes) expect(r1ids.has(b.id)).toBe(true);
+  });
+
+  it('non-elimination (round robin): only round 1 is announced, later rounds left alone', () => {
+    const mk = (round: number, n: number, p1: string, p2: string) => ({
+      id: `m-${round}-${n}`,
+      round,
+      status: 'PENDING' as MatchStatus,
+      player1_id: p1,
+      player2_id: p2,
+      next_match_id: null,
+    });
+    // Round robin creates every round up-front (all PENDING, both players) — must NOT announce 2+.
+    const rr = [mk(1, 1, 'a', 'b'), mk(1, 2, 'c', 'd'), mk(2, 1, 'a', 'c'), mk(2, 2, 'b', 'd')];
+    const batches = selectStartNotifications(rr, { isElimination: false });
+    expect(batches).toHaveLength(1);
+    expect(batches[0]!.round).toBe(1);
+    expect(batches[0]!.matches.map((m) => m.id).sort()).toEqual(['m-1-1', 'm-1-2']);
   });
 });

@@ -554,3 +554,63 @@ export function generateDoubleElim(
   all.sort((a, b) => a.round - b.round || a.match_number - b.match_number);
   return all;
 }
+
+type StartNotifyMatch = Pick<
+  BracketMatchInput,
+  'id' | 'round' | 'status' | 'player1_id' | 'player2_id' | 'next_match_id'
+>;
+
+/**
+ * Which match-creation notifications to fire the moment a bracket is first built.
+ *
+ * Round 1 as usual, PLUS — for elimination brackets only — any higher-round match
+ * that a "double bye" already filled at generation time. A tiny field leaves so many
+ * round-1 byes that two of them can feed the SAME round-2 match: the bye winners are
+ * propagated forward immediately, so that round-2 match is already full (both players
+ * set) and PENDING before a single game is played. Round-1-only notification never
+ * announced it, so its two players only ever received the misleading "enjoy your bye
+ * ☕" DM for a match they in fact had to play right away. We announce those pre-filled
+ * follow-ups too, and drop a round-1 bye from the round-1 batch when its next match is
+ * one of them — so that player gets the real pairing DM instead of the bye DM.
+ *
+ * Non-elimination formats are round-1 only: round robin also creates every round
+ * up-front (all PENDING, both players set), and those future rounds must NOT be
+ * announced at start — so the higher-round scan is gated on `isElimination`.
+ */
+export function selectStartNotifications<T extends StartNotifyMatch>(
+  matches: T[],
+  opts: { isElimination: boolean },
+): Array<{ round: number; matches: T[] }> {
+  const preFilled = opts.isElimination
+    ? matches.filter(
+        (m) => m.round > 1 && m.status === 'PENDING' && m.player1_id !== null && m.player2_id !== null,
+      )
+    : [];
+  const preFilledIds = new Set(preFilled.map((m) => m.id));
+
+  // Round 1, minus any bye whose winner walks straight into a pre-filled (double-bye)
+  // match — that player is told via the follow-up's pairing DM, not a bye DM.
+  const round1 = matches.filter(
+    (m) =>
+      m.round === 1 &&
+      !(
+        m.player1_id !== null &&
+        m.player2_id === null &&
+        m.next_match_id !== null &&
+        preFilledIds.has(m.next_match_id)
+      ),
+  );
+
+  const batches: Array<{ round: number; matches: T[] }> = [{ round: 1, matches: round1 }];
+
+  const byRound = new Map<number, T[]>();
+  for (const m of preFilled) {
+    const list = byRound.get(m.round) ?? [];
+    list.push(m);
+    byRound.set(m.round, list);
+  }
+  for (const [round, ms] of [...byRound.entries()].sort((a, b) => a[0] - b[0])) {
+    batches.push({ round, matches: ms });
+  }
+  return batches;
+}

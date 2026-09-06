@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import { MatchStatus, TournamentFormat, TournamentMode, TournamentStatus } from '@rizzotto/db';
 import type { BracketResponse, SwissStandingEntry } from '@rizzotto/types';
-import { generateSingleElim, generateDoubleElim } from '../lib/bracket.js';
+import { generateSingleElim, generateDoubleElim, selectStartNotifications } from '../lib/bracket.js';
 import { generateRoundRobin } from '../lib/round-robin.js';
 import { generateLiechtensteinSchedule } from '../lib/liechtenstein.js';
 import {
@@ -576,11 +576,15 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       emitBracketUpdate(fastify.io, tournament.id);
 
       // B22: notify round-1 pairings (previously only rounds 2+ were announced).
-      await notifyMatchesCreated(
-        tournament.id,
-        1,
-        bracketMatches.filter((m) => m.round === 1),
-      );
+      // Elimination brackets can also pre-fill a round-2 match via a double bye — that
+      // match is playable at start and must be announced too, or its players only get a
+      // misleading "enjoy your bye" DM (selectStartNotifications handles the split).
+      const isElimination =
+        tournament.format === TournamentFormat.SINGLE_ELIMINATION ||
+        tournament.format === TournamentFormat.DOUBLE_ELIMINATION;
+      for (const batch of selectStartNotifications(bracketMatches, { isElimination })) {
+        await notifyMatchesCreated(tournament.id, batch.round, batch.matches);
+      }
 
       // Balanced Liechtenstein has no batch schedule — fix each player's skill
       // division, then create round 1 (and notify) via the incremental pairing
