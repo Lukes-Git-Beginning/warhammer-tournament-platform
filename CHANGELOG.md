@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.55.0] — 2026-09-07 — Admin tooling
+### Changed
+- Improvement to the behind-the-scenes attribution tooling for tournament operators. No player-facing changes.
+
 ## [1.54.4] — 2026-09-06 — Elimination double-bye notifications
 ### Fixed
 - In an elimination tournament with a small field, so many first-round byes can occur that two of them feed the **same** second-round match — which is then ready to play the instant the bracket starts. Previously only the first round was announced, so those two players received only a "you drew a bye ☕" DM and were never told about the real match they had to play immediately. The bracket now also announces such pre-filled follow-up matches, and a bye whose winner walks straight into one gets the actual pairing DM instead of the misleading bye message.

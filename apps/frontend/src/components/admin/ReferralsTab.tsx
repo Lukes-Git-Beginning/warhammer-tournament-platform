@@ -20,6 +20,17 @@ async function fetchAllTournaments(): Promise<Tournament[]> {
 }
 
 const pct = (v: number | null): string => (v == null ? '—' : `${Math.round(v * 100)}%`);
+
+/** Show the destination name with its ref as muted secondary text; ref alone for orphaned sources. */
+const sourceLabel = (name: string | null, ref: string) =>
+  name ? (
+    <>
+      {name}
+      <span className="ml-2 text-xs text-stone-500">{ref}</span>
+    </>
+  ) : (
+    ref
+  );
 const th = 'px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80';
 const td = 'px-3 py-1.5 text-sm text-stone-200';
 const inputClass =
@@ -60,14 +71,14 @@ export function ReferralsTab() {
               <tbody className="divide-y divide-stone-800/60">
                 {(overview?.clicksByRef ?? []).map((r) => (
                   <tr key={r.ref}>
-                    <td className={td}>{r.ref}</td>
+                    <td className={td}>{sourceLabel(r.name, r.ref)}</td>
                     <td className={`${td} text-right`}>{r.clicks}</td>
                   </tr>
                 ))}
                 {overview && overview.clicksByRef.length === 0 && (
                   <tr>
                     <td className={`${td} text-stone-500`} colSpan={2}>
-                      No clicks recorded yet.
+                      No destinations or clicks yet.
                     </td>
                   </tr>
                 )}
@@ -88,14 +99,14 @@ export function ReferralsTab() {
               <tbody className="divide-y divide-stone-800/60">
                 {(overview?.usersBySource ?? []).map((r) => (
                   <tr key={r.ref}>
-                    <td className={td}>{r.ref}</td>
+                    <td className={td}>{sourceLabel(r.name, r.ref)}</td>
                     <td className={`${td} text-right`}>{r.users}</td>
                   </tr>
                 ))}
                 {overview && overview.usersBySource.length === 0 && (
                   <tr>
                     <td className={`${td} text-stone-500`} colSpan={2}>
-                      No attributed sign-ups yet.
+                      No destinations or attributed sign-ups yet.
                     </td>
                   </tr>
                 )}
@@ -133,7 +144,7 @@ export function ReferralsTab() {
             <tbody className="divide-y divide-stone-800/60">
               {report.sources.map((s) => (
                 <tr key={s.ref}>
-                  <td className={td}>{s.ref}</td>
+                  <td className={td}>{sourceLabel(s.name, s.ref)}</td>
                   <td className={`${td} text-right`}>{s.clicks}</td>
                   <td className={`${td} text-right`}>{s.signups}</td>
                   <td className={`${td} text-right`}>{pct(s.conversion)}</td>

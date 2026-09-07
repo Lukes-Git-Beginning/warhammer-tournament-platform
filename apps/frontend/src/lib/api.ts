@@ -1481,13 +1481,13 @@ export interface GeneratedAnnouncement {
 
 export interface TournamentReferralReport {
   tournament: { slug: string; name: string };
-  sources: { ref: string; clicks: number; signups: number; conversion: number | null }[];
+  sources: { ref: string; name: string | null; clicks: number; signups: number; conversion: number | null }[];
   directSignups: number;
 }
 
 export interface ReferralsOverview {
-  clicksByRef: { ref: string; clicks: number }[];
-  usersBySource: { ref: string; users: number }[];
+  clicksByRef: { ref: string; name: string | null; clicks: number }[];
+  usersBySource: { ref: string; name: string | null; users: number }[];
 }
 
 export function getTournamentReferrals(slug: string): Promise<TournamentReferralReport> {

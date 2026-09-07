@@ -45,6 +45,7 @@ import {
   ANNOUNCEMENT_DRAFTS_CONFIG_KEY,
   ANNOUNCEMENT_PUSH_TOKEN_HASH_KEY,
 } from '../lib/announcements.js';
+import { mergeRefCounts, mergeTournamentSources, type CountedRef } from '../lib/referrals.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -2621,50 +2622,59 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     });
     if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
 
-    const [hits, signups] = await Promise.all([
+    const [hits, signups, destinationsRow] = await Promise.all([
       fastify.prisma.referralHit.groupBy({ by: ['ref'], where: { tournament_id: t.id }, _count: { _all: true } }),
       fastify.prisma.tournamentParticipant.groupBy({
         by: ['source'],
         where: { tournament_id: t.id, deleted_at: null },
         _count: { _all: true },
       }),
+      fastify.prisma.adminConfig.findUnique({ where: { key: ANNOUNCEMENT_DESTINATIONS_CONFIG_KEY } }),
     ]);
 
-    const rows = new Map<string, { ref: string; clicks: number; signups: number }>();
-    for (const h of hits) rows.set(h.ref, { ref: h.ref, clicks: h._count._all, signups: 0 });
+    const destinations = parseAnnouncementDestinations(destinationsRow?.value).map((d) => ({ ref: d.ref, name: d.name }));
     let directSignups = 0;
+    const signupCounts: CountedRef[] = [];
     for (const s of signups) {
       if (s.source === null) {
         directSignups = s._count._all;
         continue;
       }
-      const row = rows.get(s.source) ?? { ref: s.source, clicks: 0, signups: 0 };
-      row.signups = s._count._all;
-      rows.set(s.source, row);
+      signupCounts.push({ ref: s.source, count: s._count._all });
     }
-    const sources = [...rows.values()]
-      .map((r) => ({ ...r, conversion: r.clicks > 0 ? r.signups / r.clicks : null }))
-      .sort((a, b) => b.signups - a.signups || b.clicks - a.clicks);
+    // Base the table on the destinations so a freshly-added one shows up (with zeroes)
+    // even before it has any clicks; orphaned event refs are still kept.
+    const sources = mergeTournamentSources(
+      destinations,
+      hits.map((h) => ({ ref: h.ref, count: h._count._all })),
+      signupCounts,
+    );
 
     return { tournament: { slug, name: t.name }, sources, directSignups };
   });
 
   // Site-wide: total clicks by ref + new users by first-touch source.
   fastify.get('/api/admin/referrals/overview', async () => {
-    const [clicks, newUsers] = await Promise.all([
+    const [clicks, newUsers, destinationsRow] = await Promise.all([
       fastify.prisma.referralHit.groupBy({ by: ['ref'], _count: { _all: true } }),
       fastify.prisma.user.groupBy({
         by: ['referral_source'],
         where: { deleted_at: null, referral_source: { not: null } },
         _count: { _all: true },
       }),
+      fastify.prisma.adminConfig.findUnique({ where: { key: ANNOUNCEMENT_DESTINATIONS_CONFIG_KEY } }),
     ]);
-    const clicksByRef = clicks
-      .map((c) => ({ ref: c.ref, clicks: c._count._all }))
-      .sort((a, b) => b.clicks - a.clicks);
-    const usersBySource = newUsers
-      .map((u) => ({ ref: u.referral_source ?? 'unknown', users: u._count._all }))
-      .sort((a, b) => b.users - a.users);
+    // Destinations are the base of both tables, so a newly-saved destination appears
+    // immediately (with zero clicks/players) instead of only after it earns traffic.
+    const destinations = parseAnnouncementDestinations(destinationsRow?.value).map((d) => ({ ref: d.ref, name: d.name }));
+    const clicksByRef = mergeRefCounts(
+      destinations,
+      clicks.map((c) => ({ ref: c.ref, count: c._count._all })),
+    ).map((r) => ({ ref: r.ref, name: r.name, clicks: r.count }));
+    const usersBySource = mergeRefCounts(
+      destinations,
+      newUsers.map((u) => ({ ref: u.referral_source as string, count: u._count._all })),
+    ).map((r) => ({ ref: r.ref, name: r.name, users: r.count }));
     return { clicksByRef, usersBySource };
   });
 

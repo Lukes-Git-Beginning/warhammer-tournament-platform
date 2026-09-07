@@ -330,6 +330,10 @@ export function AnnouncementsTab() {
     onSuccess: () => {
       setDirty(false);
       void queryClient.invalidateQueries({ queryKey: ['announcement-destinations'] });
+      // The referral reports are keyed off the destinations, so refresh them too —
+      // a newly-saved destination should appear in the Referrals tab without a reload.
+      void queryClient.invalidateQueries({ queryKey: ['referrals-overview'] });
+      void queryClient.invalidateQueries({ queryKey: ['referrals-tournament'] });
     },
   });
   const editList = (fn: (list: AnnouncementDestination[]) => AnnouncementDestination[]) => {
