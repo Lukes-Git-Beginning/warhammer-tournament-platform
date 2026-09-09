@@ -118,3 +118,47 @@ export function mergeTournamentSources(
     (a, b) => b.signups - a.signups || b.clicks - a.clicks || (a.name ?? a.ref).localeCompare(b.name ?? b.ref),
   );
 }
+
+export interface OverviewRow {
+  ref: string;
+  name: string | null;
+  clicks: number;
+  signups: number;
+  /** First-touch: brand-new accounts whose very first source was this ref (once per user). */
+  newPlayers: number;
+  conversion: number | null;
+}
+
+/**
+ * Site-wide overview merge: destinations joined with clicks, tournament sign-ups
+ * (summed across ALL tournaments — a user counts once per tournament joined) and
+ * first-touch new-player counts (once per account), all keyed by ref. PURE.
+ * Conversion is signups/clicks (null when no clicks). Sorted by sign-ups desc,
+ * then clicks desc, then label asc.
+ */
+export function mergeOverviewSources(
+  destinations: RefLabel[],
+  clicks: CountedRef[],
+  signups: CountedRef[],
+  newPlayers: CountedRef[],
+): OverviewRow[] {
+  const rows = new Map<string, OverviewRow>();
+  const ensure = (ref: string, name: string | null): OverviewRow => {
+    let row = rows.get(ref);
+    if (!row) {
+      row = { ref, name, clicks: 0, signups: 0, newPlayers: 0, conversion: null };
+      rows.set(ref, row);
+    } else if (row.name === null && name !== null) {
+      row.name = name;
+    }
+    return row;
+  };
+  for (const d of destinations) ensure(destinationRef(d), d.name);
+  for (const c of clicks) ensure(c.ref, null).clicks = c.count;
+  for (const s of signups) ensure(s.ref, null).signups = s.count;
+  for (const n of newPlayers) ensure(n.ref, null).newPlayers = n.count;
+  for (const row of rows.values()) row.conversion = row.clicks > 0 ? row.signups / row.clicks : null;
+  return [...rows.values()].sort(
+    (a, b) => b.signups - a.signups || b.clicks - a.clicks || (a.name ?? a.ref).localeCompare(b.name ?? b.ref),
+  );
+}

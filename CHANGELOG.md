@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.56.0] — 2026-09-09 — Consistent edit form + referral overview
+### Fixed
+- The tournament **edit** form now lists its fields in the same order as the **create** form (name, description, links, then format & mode, then schedule, then match mechanics), so moving between creating and editing a tournament no longer feels jumbled.
+### Changed
+- The referral-attribution overview for tournament operators is now one combined per-source table instead of two separate ones. No player-facing changes.
+
 ## [1.55.0] — 2026-09-07 — Admin tooling
 ### Changed
 - Improvement to the behind-the-scenes attribution tooling for tournament operators. No player-facing changes.

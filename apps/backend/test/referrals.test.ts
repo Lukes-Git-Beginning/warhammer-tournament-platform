@@ -5,6 +5,7 @@ import {
   destinationRef,
   mergeRefCounts,
   mergeTournamentSources,
+  mergeOverviewSources,
 } from '../src/lib/referrals.js';
 
 describe('slugifyRef', () => {
@@ -129,5 +130,42 @@ describe('mergeTournamentSources', () => {
     expect(rows).toEqual([
       { ref: 'word-of-mouth', name: null, clicks: 0, signups: 2, conversion: null },
     ]);
+  });
+});
+
+describe('mergeOverviewSources', () => {
+  it('combines clicks, sign-ups and new players per source with conversion', () => {
+    const rows = mergeOverviewSources(
+      [{ ref: 'tw-official', name: 'Official TW Discord' }],
+      [{ ref: 'tw-official', count: 20 }],
+      [{ ref: 'tw-official', count: 8 }],
+      [{ ref: 'tw-official', count: 5 }],
+    );
+    expect(rows).toEqual([
+      { ref: 'tw-official', name: 'Official TW Discord', clicks: 20, signups: 8, newPlayers: 5, conversion: 0.4 },
+    ]);
+  });
+
+  it('lists a destination with no activity as all zeroes (null conversion)', () => {
+    const rows = mergeOverviewSources([{ ref: 'fresh', name: 'Fresh' }], [], [], []);
+    expect(rows).toEqual([{ ref: 'fresh', name: 'Fresh', clicks: 0, signups: 0, newPlayers: 0, conversion: null }]);
+  });
+
+  it('sign-ups (per tournament) are independent of new players (once per account)', () => {
+    const rows = mergeOverviewSources(
+      [{ ref: 'rtk', name: 'RTK' }],
+      [{ ref: 'rtk', count: 10 }],
+      [{ ref: 'rtk', count: 12 }], // 12 tournament sign-ups
+      [{ ref: 'rtk', count: 3 }], // but only 3 brand-new accounts
+    );
+    expect(rows[0].signups).toBe(12);
+    expect(rows[0].newPlayers).toBe(3);
+    expect(rows[0].conversion).toBeCloseTo(1.2);
+  });
+
+  it('keeps orphaned event refs (no destination) with name null', () => {
+    const rows = mergeOverviewSources([], [{ ref: 'legacy', count: 4 }], [], []);
+    // 4 clicks, 0 sign-ups → 0 % conversion (null is reserved for zero clicks).
+    expect(rows).toEqual([{ ref: 'legacy', name: null, clicks: 4, signups: 0, newPlayers: 0, conversion: 0 }]);
   });
 });

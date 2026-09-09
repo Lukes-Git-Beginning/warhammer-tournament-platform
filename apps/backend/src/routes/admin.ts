@@ -45,7 +45,7 @@ import {
   ANNOUNCEMENT_DRAFTS_CONFIG_KEY,
   ANNOUNCEMENT_PUSH_TOKEN_HASH_KEY,
 } from '../lib/announcements.js';
-import { mergeRefCounts, mergeTournamentSources, type CountedRef } from '../lib/referrals.js';
+import { mergeTournamentSources, mergeOverviewSources, type CountedRef } from '../lib/referrals.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -2655,27 +2655,35 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Site-wide: total clicks by ref + new users by first-touch source.
   fastify.get('/api/admin/referrals/overview', async () => {
-    const [clicks, newUsers, destinationsRow] = await Promise.all([
+    const [clicks, newUsers, signups, directSignups, destinationsRow] = await Promise.all([
       fastify.prisma.referralHit.groupBy({ by: ['ref'], _count: { _all: true } }),
       fastify.prisma.user.groupBy({
         by: ['referral_source'],
         where: { deleted_at: null, referral_source: { not: null } },
         _count: { _all: true },
       }),
+      // Tournament sign-ups by source, summed across ALL tournaments (a user counts
+      // once per tournament joined) — the "Sign-ups" column of the overview.
+      fastify.prisma.tournamentParticipant.groupBy({
+        by: ['source'],
+        where: { deleted_at: null, source: { not: null } },
+        _count: { _all: true },
+      }),
+      // Sign-ups with no ref (direct / untagged), summed across all tournaments.
+      fastify.prisma.tournamentParticipant.count({ where: { deleted_at: null, source: null } }),
       fastify.prisma.adminConfig.findUnique({ where: { key: ANNOUNCEMENT_DESTINATIONS_CONFIG_KEY } }),
     ]);
-    // Destinations are the base of both tables, so a newly-saved destination appears
-    // immediately (with zero clicks/players) instead of only after it earns traffic.
+    // Destinations are the base of the table, so a newly-saved destination appears
+    // immediately (all zeroes) instead of only after it earns traffic. One combined
+    // table: clicks + sign-ups + new-player first-touch + conversion, site-wide.
     const destinations = parseAnnouncementDestinations(destinationsRow?.value).map((d) => ({ ref: d.ref, name: d.name }));
-    const clicksByRef = mergeRefCounts(
+    const sources = mergeOverviewSources(
       destinations,
       clicks.map((c) => ({ ref: c.ref, count: c._count._all })),
-    ).map((r) => ({ ref: r.ref, name: r.name, clicks: r.count }));
-    const usersBySource = mergeRefCounts(
-      destinations,
+      signups.map((s) => ({ ref: s.source as string, count: s._count._all })),
       newUsers.map((u) => ({ ref: u.referral_source as string, count: u._count._all })),
-    ).map((r) => ({ ref: r.ref, name: r.name, users: r.count }));
-    return { clicksByRef, usersBySource };
+    );
+    return { sources, directSignups };
   });
 
   // POST /api/admin/broadcast — DM a filtered global audience via the bot.

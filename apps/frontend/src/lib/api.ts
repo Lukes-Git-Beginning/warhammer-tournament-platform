@@ -1486,8 +1486,8 @@ export interface TournamentReferralReport {
 }
 
 export interface ReferralsOverview {
-  clicksByRef: { ref: string; name: string | null; clicks: number }[];
-  usersBySource: { ref: string; name: string | null; users: number }[];
+  sources: { ref: string; name: string | null; clicks: number; signups: number; newPlayers: number; conversion: number | null }[];
+  directSignups: number;
 }
 
 export function getTournamentReferrals(slug: string): Promise<TournamentReferralReport> {

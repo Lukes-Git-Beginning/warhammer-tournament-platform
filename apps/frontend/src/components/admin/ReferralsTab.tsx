@@ -55,65 +55,47 @@ export function ReferralsTab() {
       <section>
         <h3 className="mb-1 font-display text-base font-semibold text-rizzotto-gold-400">Where people came from</h3>
         <p className="mb-4 text-xs text-stone-500">
-          Ref-tagged links (e.g. from announcements) — clicks across the whole site, and where new players first
-          arrived from.
+          Across all tournaments, per ref-tagged source: link clicks, tournament sign-ups (a player counts once per
+          tournament joined), brand-new players by first-touch (once per account), and sign-up conversion.
         </p>
-        <div className="grid gap-6 md:grid-cols-2">
-          <div>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">Clicks by source</h4>
-            <table className="w-full overflow-hidden rounded-md border border-stone-800">
-              <thead className="bg-stone-900/60">
-                <tr>
-                  <th className={th}>Source</th>
-                  <th className={`${th} text-right`}>Clicks</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-800/60">
-                {(overview?.clicksByRef ?? []).map((r) => (
-                  <tr key={r.ref}>
-                    <td className={td}>{sourceLabel(r.name, r.ref)}</td>
-                    <td className={`${td} text-right`}>{r.clicks}</td>
-                  </tr>
-                ))}
-                {overview && overview.clicksByRef.length === 0 && (
-                  <tr>
-                    <td className={`${td} text-stone-500`} colSpan={2}>
-                      No destinations or clicks yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
-              New players by first-touch source
-            </h4>
-            <table className="w-full overflow-hidden rounded-md border border-stone-800">
-              <thead className="bg-stone-900/60">
-                <tr>
-                  <th className={th}>Source</th>
-                  <th className={`${th} text-right`}>Players</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-800/60">
-                {(overview?.usersBySource ?? []).map((r) => (
-                  <tr key={r.ref}>
-                    <td className={td}>{sourceLabel(r.name, r.ref)}</td>
-                    <td className={`${td} text-right`}>{r.users}</td>
-                  </tr>
-                ))}
-                {overview && overview.usersBySource.length === 0 && (
-                  <tr>
-                    <td className={`${td} text-stone-500`} colSpan={2}>
-                      No destinations or attributed sign-ups yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <table className="w-full max-w-3xl overflow-hidden rounded-md border border-stone-800">
+          <thead className="bg-stone-900/60">
+            <tr>
+              <th className={th}>Source</th>
+              <th className={`${th} text-right`}>Clicks</th>
+              <th className={`${th} text-right`}>Sign-ups</th>
+              <th className={`${th} text-right`}>New players</th>
+              <th className={`${th} text-right`}>Conversion</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-800/60">
+            {(overview?.sources ?? []).map((s) => (
+              <tr key={s.ref}>
+                <td className={td}>{sourceLabel(s.name, s.ref)}</td>
+                <td className={`${td} text-right`}>{s.clicks}</td>
+                <td className={`${td} text-right`}>{s.signups}</td>
+                <td className={`${td} text-right`}>{s.newPlayers}</td>
+                <td className={`${td} text-right`}>{pct(s.conversion)}</td>
+              </tr>
+            ))}
+            {overview && (
+              <tr className="bg-stone-900/30">
+                <td className={`${td} text-stone-400`}>Direct / untagged</td>
+                <td className={`${td} text-right text-stone-500`}>—</td>
+                <td className={`${td} text-right`}>{overview.directSignups}</td>
+                <td className={`${td} text-right text-stone-500`}>—</td>
+                <td className={`${td} text-right text-stone-500`}>—</td>
+              </tr>
+            )}
+            {overview && overview.sources.length === 0 && overview.directSignups === 0 && (
+              <tr>
+                <td className={`${td} text-stone-500`} colSpan={5}>
+                  No destinations or referral activity yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </section>
 
       {/* ---- Per tournament ---- */}

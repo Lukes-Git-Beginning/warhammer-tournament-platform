@@ -784,6 +784,57 @@ export function TournamentEditPage() {
 
         <PosterUploadField slug={slug} posterUrl={tournament.poster_url} />
 
+        {/* ── Basic Info ────────────────────────────────────────────────── */}
+        <div>
+          <Label htmlFor="tef-name" required>{t('tournament.form.name')}</Label>
+          <Input
+            id="tef-name"
+            name="name"
+            value={form.name}
+            onChange={handleChange}
+            placeholder={t('tournament.form.name_placeholder')}
+          />
+          <FieldError message={errors.name} />
+        </div>
+
+        <div>
+          <Label htmlFor="tef-description">{t('tournament.form.description')}</Label>
+          <MarkdownEditor
+            id="tef-description"
+            name="description"
+            value={form.description}
+            onChange={handleChange}
+            rows={4}
+            maxLength={5000}
+            placeholder={t('tournament.form.description_placeholder')}
+            disabled={ongoingLocked}
+          />
+          {ongoingLocked && <LockNote>Locked — tournament is underway</LockNote>}
+        </div>
+
+        {/* ── Communications ────────────────────────────────────────────── */}
+        <div>
+          <Label htmlFor="tef-discord">{t('tournament.form.discord_link')}</Label>
+          <Input
+            id="tef-discord"
+            name="discord_link"
+            value={form.discord_link}
+            onChange={handleChange}
+            placeholder="https://discord.gg/…"
+          />
+          <FieldError message={errors.discord_link} />
+        </div>
+        <div>
+          <Label htmlFor="tef-stream">Stream link</Label>
+          <Input
+            id="tef-stream"
+            name="stream_url"
+            value={form.stream_url}
+            onChange={handleChange}
+            placeholder="https://twitch.tv/…"
+          />
+        </div>
+
         {/* ── Format & Mode ─────────────────────────────────────────────── */}
         <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
           <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
@@ -891,34 +942,6 @@ export function TournamentEditPage() {
             </div>
           )}
         </fieldset>
-
-        {/* ── Basic Info ────────────────────────────────────────────────── */}
-        <div>
-          <Label htmlFor="tef-name" required>{t('tournament.form.name')}</Label>
-          <Input
-            id="tef-name"
-            name="name"
-            value={form.name}
-            onChange={handleChange}
-            placeholder={t('tournament.form.name_placeholder')}
-          />
-          <FieldError message={errors.name} />
-        </div>
-
-        <div>
-          <Label htmlFor="tef-description">{t('tournament.form.description')}</Label>
-          <MarkdownEditor
-            id="tef-description"
-            name="description"
-            value={form.description}
-            onChange={handleChange}
-            rows={4}
-            maxLength={5000}
-            placeholder={t('tournament.form.description_placeholder')}
-            disabled={ongoingLocked}
-          />
-          {ongoingLocked && <LockNote>Locked — tournament is underway</LockNote>}
-        </div>
 
         {/* ── Schedule ──────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1774,29 +1797,6 @@ export function TournamentEditPage() {
           </div>
           {ongoingLocked && <LockNote>Locked — tournament is underway</LockNote>}
         </fieldset>
-
-        {/* ── Communications ────────────────────────────────────────────── */}
-        <div>
-          <Label htmlFor="tef-discord">{t('tournament.form.discord_link')}</Label>
-          <Input
-            id="tef-discord"
-            name="discord_link"
-            value={form.discord_link}
-            onChange={handleChange}
-            placeholder="https://discord.gg/…"
-          />
-          <FieldError message={errors.discord_link} />
-        </div>
-        <div>
-          <Label htmlFor="tef-stream">Stream link</Label>
-          <Input
-            id="tef-stream"
-            name="stream_url"
-            value={form.stream_url}
-            onChange={handleChange}
-            placeholder="https://twitch.tv/…"
-          />
-        </div>
 
         {/* ── Settings ──────────────────────────────────────────────────── */}
         <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
