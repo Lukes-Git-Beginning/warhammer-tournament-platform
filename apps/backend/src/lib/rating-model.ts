@@ -47,6 +47,11 @@ export interface MatchObservation {
   // Omitted (undefined) on legacy/aggregate calls → no battle-type level is fitted
   // and the model degenerates to exactly the prior GS + faction-offset behaviour.
   battleType?: string;
+  // Version dimension (the meta split). When set, the MatchupEffect (faction
+  // balance) is fitted per (versionId, battleType) — a patch's balance is isolated —
+  // while player params (GS, BTO, FO) stay SHARED across versions (timeless).
+  // Omitted → one global matchup bucket, exactly the prior behaviour.
+  versionId?: string;
 }
 
 export interface RatingModelConfig {
@@ -124,6 +129,10 @@ export interface MatchupEffectEntry {
   effect: number;
   sampleSize: number;
   lowSampleWarning: boolean;
+  // Scope of this matchup cell; present when the fit was version/battle-type-aware
+  // (both set together), else undefined = the single global bucket.
+  versionId?: string;
+  battleType?: string;
 }
 
 /**
@@ -165,12 +174,18 @@ export interface GeneralSkillLookup {
 /** Serialisable data + derived lookup/prediction helpers. */
 export interface RatingModel extends RatingModelData {
   getPlayerFactionSkill(playerId: string, factionId: string): number;
-  getMatchupEffect(factionXId: string, factionYId: string): number;
+  getMatchupEffect(
+    factionXId: string,
+    factionYId: string,
+    versionId?: string,
+    battleType?: string,
+  ): number;
   expectedChanceToWin(
     playerAId: string,
     factionXId: string,
     playerBId: string,
     factionYId: string,
+    opts?: { battleType?: string; versionId?: string },
   ): number;
   /** General skill + confidence for a player; null if the player has no fitted GS. */
   getGeneralSkill(playerId: string): GeneralSkillLookup | null;
@@ -222,6 +237,42 @@ function matchupKey(factionXId: string, factionYId: string): { key: string; sign
     : { key: `${factionYId}:${factionXId}`, sign: -1 };
 }
 
+/**
+ * Matchup-effect map key: a (versionId, battleType) scope prefix + the canonical
+ * faction pair. versionId is a UUID and battleType an enum — neither contains '|',
+ * and a faction pair contains only ':', so the parts are unambiguous. Empty scope
+ * ('' | '') = the single global bucket (legacy / version-agnostic fit).
+ */
+function meKey(
+  versionId: string | undefined,
+  battleType: string | undefined,
+  factionXId: string,
+  factionYId: string,
+): { key: string; sign: number } {
+  const { key: pair, sign } = matchupKey(factionXId, factionYId);
+  return { key: `${versionId ?? ''}|${battleType ?? ''}|${pair}`, sign };
+}
+
+/** Inverse of `meKey` — splits a stored key back into its scope + faction pair. */
+function splitMeKey(key: string): {
+  versionId: string | undefined;
+  battleType: string | undefined;
+  factionXId: string;
+  factionYId: string;
+} {
+  const bar1 = key.indexOf('|');
+  const bar2 = key.indexOf('|', bar1 + 1);
+  const versionId = key.slice(0, bar1);
+  const battleType = key.slice(bar1 + 1, bar2);
+  const [factionXId, factionYId] = splitPfsKey(key.slice(bar2 + 1));
+  return {
+    versionId: versionId || undefined,
+    battleType: battleType || undefined,
+    factionXId,
+    factionYId,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Model factory — rebuilds lookup maps + helpers from serialisable data.
 // Used both by fitRatingModel() and when re-hydrating a cached fit.
@@ -234,7 +285,7 @@ export function createRatingModel(data: RatingModelData): RatingModel {
   }
   const me = new Map<string, number>();
   for (const e of data.matchupEffects) {
-    me.set(`${e.factionXId}:${e.factionYId}`, e.effect);
+    me.set(meKey(e.versionId, e.battleType, e.factionXId, e.factionYId).key, e.effect);
   }
   const gs = new Map<string, GeneralSkillEntry>();
   for (const e of data.generalSkills) {
@@ -248,22 +299,34 @@ export function createRatingModel(data: RatingModelData): RatingModel {
   const getPlayerFactionSkill = (playerId: string, factionId: string): number =>
     pfs.get(pfsKey(playerId, factionId)) ?? 0;
 
-  const getMatchupEffect = (factionXId: string, factionYId: string): number => {
+  const getMatchupEffect = (
+    factionXId: string,
+    factionYId: string,
+    versionId?: string,
+    battleType?: string,
+  ): number => {
     if (factionXId === factionYId) return 0; // mirror
-    const { key, sign } = matchupKey(factionXId, factionYId);
+    const { key, sign } = meKey(versionId, battleType, factionXId, factionYId);
     return sign * (me.get(key) ?? 0);
   };
+
+  const getBattleTypeOffset = (playerId: string, battleType: string): number =>
+    bto.get(`${playerId}:${battleType}`) ?? 0;
 
   const expectedChanceToWin = (
     playerAId: string,
     factionXId: string,
     playerBId: string,
     factionYId: string,
+    opts?: { battleType?: string; versionId?: string },
   ): number => {
+    const bt = opts?.battleType;
     const adv =
-      getPlayerFactionSkill(playerAId, factionXId) -
-      getPlayerFactionSkill(playerBId, factionYId) +
-      getMatchupEffect(factionXId, factionYId);
+      getPlayerFactionSkill(playerAId, factionXId) +
+      (bt ? getBattleTypeOffset(playerAId, bt) : 0) -
+      getPlayerFactionSkill(playerBId, factionYId) -
+      (bt ? getBattleTypeOffset(playerBId, bt) : 0) +
+      getMatchupEffect(factionXId, factionYId, opts?.versionId, bt);
     return logistic(adv);
   };
 
@@ -299,9 +362,6 @@ export function createRatingModel(data: RatingModelData): RatingModel {
     }
     return best === Number.NEGATIVE_INFINITY ? e.generalSkill : best;
   };
-
-  const getBattleTypeOffset = (playerId: string, battleType: string): number =>
-    bto.get(`${playerId}:${battleType}`) ?? 0;
 
   const getBattleTypeSkill = (playerId: string, battleType: string): number | null => {
     const e = gs.get(playerId);
@@ -366,7 +426,7 @@ export function fitRatingModel(
     let meIdx = -1;
     let meSign = 0;
     if (o.factionXId !== o.factionYId) {
-      const { key, sign } = matchupKey(o.factionXId, o.factionYId);
+      const { key, sign } = meKey(o.versionId, o.battleType, o.factionXId, o.factionYId);
       let idx = meKeyToIdx.get(key);
       if (idx === undefined) {
         idx = meKeyToIdx.size;
@@ -458,13 +518,15 @@ export function fitRatingModel(
 
   const matchupEffects: MatchupEffectEntry[] = [];
   for (const [key, idx] of meKeyToIdx) {
-    const [factionXId, factionYId] = splitPfsKey(key);
+    const { versionId, battleType, factionXId, factionYId } = splitMeKey(key);
     matchupEffects.push({
       factionXId,
       factionYId,
       effect: theta[nPfs + idx]!,
       sampleSize: meSamples[idx]!,
       lowSampleWarning: meSamples[idx]! < cfg.lowSampleThreshold,
+      versionId,
+      battleType,
     });
   }
 
@@ -544,7 +606,7 @@ function fitHierarchicalRatingModel(
     let meIdx = -1;
     let meSign = 0;
     if (o.factionXId !== o.factionYId) {
-      const { key, sign } = matchupKey(o.factionXId, o.factionYId);
+      const { key, sign } = meKey(o.versionId, o.battleType, o.factionXId, o.factionYId);
       let idx = meKeyToIdx.get(key);
       if (idx === undefined) {
         idx = meKeyToIdx.size;
@@ -719,13 +781,15 @@ function fitHierarchicalRatingModel(
 
   const matchupEffects: MatchupEffectEntry[] = [];
   for (const [key, idx] of meKeyToIdx) {
-    const [factionXId, factionYId] = splitPfsKey(key);
+    const { versionId, battleType, factionXId, factionYId } = splitMeKey(key);
     matchupEffects.push({
       factionXId,
       factionYId,
       effect: theta[meBase + idx]!,
       sampleSize: meSamples[idx]!,
       lowSampleWarning: meSamples[idx]! < cfg.lowSampleThreshold,
+      versionId,
+      battleType,
     });
   }
 

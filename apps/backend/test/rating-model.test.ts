@@ -339,6 +339,51 @@ describe('hierarchical model — battle-type offset', () => {
   });
 });
 
+describe('hierarchical model — version-scoped matchup (meta split)', () => {
+  const scoped = (o: MatchObservation, versionId: string, battleType = 'DOMINATION'): MatchObservation => ({
+    ...o,
+    battleType,
+    versionId,
+  });
+
+  it('keeps one global matchup bucket when observations carry no version (prior behaviour)', () => {
+    const obs = [...dominate('A', 'x', 'y', 6), ...dominate('B', 'y', 'x', 4)];
+    const model = fitRatingModel(obs, HIER);
+    expect(
+      model.matchupEffects.every((e) => e.versionId === undefined && e.battleType === undefined),
+    ).toBe(true);
+    expect(model.getMatchupEffect('x', 'y')).not.toBe(0); // global lookup still resolves
+  });
+
+  it('fits an independent matchup effect per version (same players, flipped result)', () => {
+    // The SAME pairs play x-vs-y in both versions but the winner flips. Their shared
+    // GS is symmetric (1 win, 1 loss each) so it can't explain the flip — it must
+    // land in the per-version matchup effect.
+    const obs: MatchObservation[] = [];
+    for (let i = 0; i < 12; i++) {
+      obs.push(scoped(win(`a-${i}`, 'x', `b-${i}`, 'y'), 'v1')); // v1: x beats y
+      obs.push(scoped(win(`b-${i}`, 'y', `a-${i}`, 'x'), 'v2')); // v2: y beats x
+    }
+    const model = fitRatingModel(obs, HIER);
+    expect(model.getMatchupEffect('x', 'y', 'v1', 'DOMINATION')).toBeGreaterThan(0);
+    expect(model.getMatchupEffect('x', 'y', 'v2', 'DOMINATION')).toBeLessThan(0);
+    // Cells are tagged with their scope.
+    const v1cell = model.matchupEffects.find((e) => e.versionId === 'v1')!;
+    expect(v1cell.battleType).toBe('DOMINATION');
+  });
+
+  it('shares player skill across versions — params accumulate, only the meta cuts', () => {
+    const obs: MatchObservation[] = [
+      ...Array.from({ length: 10 }, (_, i) => scoped(win('A', 'x', `o1-${i}`, 'y'), 'v1')),
+      ...Array.from({ length: 10 }, (_, i) => scoped(win('A', 'x', `o2-${i}`, 'y'), 'v2')),
+    ];
+    const model = fitRatingModel(obs, HIER);
+    const gsA = model.getGeneralSkill('A')!;
+    expect(gsA.gamesCount).toBe(20); // fitted on all 20 games across both versions
+    expect(model.generalSkills.filter((e) => e.playerId === 'A')).toHaveLength(1); // one GS, not per-version
+  });
+});
+
 describe('skillToBand', () => {
   it('maps a log-odds skill to a 1..5 band at the calibrated cut-points (20/35/75/90%)', () => {
     expect(skillToBand(-2)).toBe(1); // ~12% → below 20%
