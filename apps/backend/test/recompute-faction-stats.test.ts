@@ -87,17 +87,18 @@ async function createMatchWithGames(winners: (string | null)[]): Promise<string>
 
 const factionStats = (factionId: string) =>
   prisma.factionStats.findUnique({
-    where: { faction_id_version_id: { faction_id: factionId, version_id: version!.id } },
+    where: { faction_id_version_id_battle_type: { faction_id: factionId, version_id: version!.id, battle_type: 'DOMINATION' } },
   });
 
 const matchupStats = () =>
   prisma.matchupStats.findUnique({
     // sort(['empire','bretonnia']) → ['bretonnia','empire'] → a=bretonnia, b=empire
     where: {
-      faction_a_id_faction_b_id_version_id: {
+      faction_a_id_faction_b_id_version_id_battle_type: {
         faction_a_id: BRETONNIA,
         faction_b_id: EMPIRE,
         version_id: version!.id,
+        battle_type: 'DOMINATION',
       },
     },
   });

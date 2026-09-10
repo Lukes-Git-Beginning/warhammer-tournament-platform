@@ -68,7 +68,14 @@ export const resolvers = {
       if (!version) return null;
 
       const stats = await ctx.prisma.factionStats.findUnique({
-        where: { faction_id_version_id: { faction_id: args.id, version_id: version.id } },
+        // TODO(meta): battle-type filter — Domination for now (see routes/factions.ts).
+        where: {
+          faction_id_version_id_battle_type: {
+            faction_id: args.id,
+            version_id: version.id,
+            battle_type: 'DOMINATION',
+          },
+        },
       });
 
       const thirtyDaysAgo = new Date();

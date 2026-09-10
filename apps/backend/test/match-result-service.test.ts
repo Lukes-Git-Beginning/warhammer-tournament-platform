@@ -129,10 +129,11 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_version_id: {
+        faction_a_id_faction_b_id_version_id_battle_type: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
           version_id: TestVersion!.id,
+          battle_type: 'DOMINATION',
         },
       },
     });
@@ -160,10 +161,11 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_version_id: {
+        faction_a_id_faction_b_id_version_id_battle_type: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
           version_id: TestVersion!.id,
+          battle_type: 'DOMINATION',
         },
       },
     });
@@ -186,10 +188,11 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_version_id: {
+        faction_a_id_faction_b_id_version_id_battle_type: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
           version_id: TestVersion!.id,
+          battle_type: 'DOMINATION',
         },
       },
     });
@@ -258,10 +261,10 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
     await resolveMatchResult(prisma, matchId, 'PLAYER1_WIN', { actorId: testUser1!.id });
 
     const empireStats = await prisma.factionStats.findUnique({
-      where: { faction_id_version_id: { faction_id: EMPIRE, version_id: TestVersion!.id } },
+      where: { faction_id_version_id_battle_type: { faction_id: EMPIRE, version_id: TestVersion!.id, battle_type: 'DOMINATION' } },
     });
     const bretonniaStats = await prisma.factionStats.findUnique({
-      where: { faction_id_version_id: { faction_id: BRETONNIA, version_id: TestVersion!.id } },
+      where: { faction_id_version_id_battle_type: { faction_id: BRETONNIA, version_id: TestVersion!.id, battle_type: 'DOMINATION' } },
     });
 
     expect(empireStats).not.toBeNull();
@@ -298,10 +301,11 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_version_id: {
+        faction_a_id_faction_b_id_version_id_battle_type: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
           version_id: TestVersion!.id,
+          battle_type: 'DOMINATION',
         },
       },
     });

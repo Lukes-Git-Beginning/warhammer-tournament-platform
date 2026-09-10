@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@rizzotto/db';
+import type { PrismaClient, $Enums } from '@rizzotto/db';
 import type { MatchupCell } from '@rizzotto/types';
 import { eligibleStatGameWhere } from './stat-eligibility.js';
 
@@ -26,11 +26,15 @@ import { eligibleStatGameWhere } from './stat-eligibility.js';
 export async function getMatchupMatrix(
   prisma: PrismaClient,
   versionId: string,
+  battleType?: $Enums.BattleType, // omitted = all battle types (aggregate overview)
 ): Promise<MatchupCell[]> {
   // Same canonical game set as the rating model (loadVersionObservations) so the two
   // heatmaps' sample sizes agree — see stat-eligibility.ts.
   const games = await prisma.matchGame.findMany({
-    where: eligibleStatGameWhere(versionId),
+    where: {
+      ...eligibleStatGameWhere(versionId),
+      ...(battleType ? { battle_type: battleType } : {}),
+    },
     select: {
       winner_id: true,
       player1_faction_id: true,

@@ -136,10 +136,11 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_version_id: {
+        faction_a_id_faction_b_id_version_id_battle_type: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
           version_id: TestVersion!.id,
+          battle_type: 'DOMINATION',
         },
       },
     });
@@ -163,10 +164,11 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_version_id: {
+        faction_a_id_faction_b_id_version_id_battle_type: {
           faction_a_id: EMPIRE,
           faction_b_id: EMPIRE,
           version_id: TestVersion!.id,
+          battle_type: 'DOMINATION',
         },
       },
     });
@@ -192,10 +194,11 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_version_id: {
+        faction_a_id_faction_b_id_version_id_battle_type: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
           version_id: TestVersion!.id,
+          battle_type: 'DOMINATION',
         },
       },
     });
@@ -239,10 +242,11 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_version_id: {
+        faction_a_id_faction_b_id_version_id_battle_type: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
           version_id: TestVersion!.id,
+          battle_type: 'DOMINATION',
         },
       },
     });
@@ -267,10 +271,10 @@ describe('FactionStats pick_count — POST /api/matches/:id/result', () => {
     expect(res.statusCode).toBe(200);
 
     const empireStats = await prisma.factionStats.findUnique({
-      where: { faction_id_version_id: { faction_id: EMPIRE, version_id: TestVersion!.id } },
+      where: { faction_id_version_id_battle_type: { faction_id: EMPIRE, version_id: TestVersion!.id, battle_type: 'DOMINATION' } },
     });
     const bretonniaStats = await prisma.factionStats.findUnique({
-      where: { faction_id_version_id: { faction_id: BRETONNIA, version_id: TestVersion!.id } },
+      where: { faction_id_version_id_battle_type: { faction_id: BRETONNIA, version_id: TestVersion!.id, battle_type: 'DOMINATION' } },
     });
 
     expect(empireStats).not.toBeNull();
@@ -292,10 +296,10 @@ describe('FactionStats pick_count — POST /api/matches/:id/result', () => {
     expect(r2.statusCode).toBe(200);
 
     const empireStats = await prisma.factionStats.findUnique({
-      where: { faction_id_version_id: { faction_id: EMPIRE, version_id: TestVersion!.id } },
+      where: { faction_id_version_id_battle_type: { faction_id: EMPIRE, version_id: TestVersion!.id, battle_type: 'DOMINATION' } },
     });
     const bretonniaStats = await prisma.factionStats.findUnique({
-      where: { faction_id_version_id: { faction_id: BRETONNIA, version_id: TestVersion!.id } },
+      where: { faction_id_version_id_battle_type: { faction_id: BRETONNIA, version_id: TestVersion!.id, battle_type: 'DOMINATION' } },
     });
 
     // Beide Fraktionen wurden je 2× gespielt

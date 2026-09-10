@@ -861,42 +861,44 @@ model ArmyList {
 // -----------------------------------------------------------------------------
 
 model FactionStats {
-  id             String   @id @default(uuid()) @db.Uuid
+  id             String     @id @default(uuid()) @db.Uuid
   faction_id     String
-  version_id     String   @map("season_id") @db.Uuid
-  matches_played Int      @default(0)
-  wins           Int      @default(0)
-  losses         Int      @default(0)
-  draws          Int      @default(0)
-  pick_count     Int      @default(0)
-  ban_count      Int      @default(0)
-  updated_at     DateTime @updatedAt
+  version_id     String     @map("season_id") @db.Uuid
+  battle_type    BattleType @default(DOMINATION)
+  matches_played Int        @default(0)
+  wins           Int        @default(0)
+  losses         Int        @default(0)
+  draws          Int        @default(0)
+  pick_count     Int        @default(0)
+  ban_count      Int        @default(0)
+  updated_at     DateTime   @updatedAt
 
   faction Faction     @relation(fields: [faction_id], references: [id])
   version GameVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
 
-  @@unique([faction_id, version_id])
+  @@unique([faction_id, version_id, battle_type])
   @@index([version_id])
 }
 
 // Daily snapshot table to support winrate_trend rolling-30d (M3).
 model FactionStatsSnapshot {
-  id             String   @id @default(uuid()) @db.Uuid
+  id             String     @id @default(uuid()) @db.Uuid
   faction_id     String
-  version_id     String   @map("season_id") @db.Uuid
-  snapshot_date  DateTime @db.Date
+  version_id     String     @map("season_id") @db.Uuid
+  battle_type    BattleType @default(DOMINATION)
+  snapshot_date  DateTime   @db.Date
   matches_played Int
   wins           Int
   losses         Int
   draws          Int
   pick_count     Int
   ban_count      Int
-  created_at     DateTime @default(now())
+  created_at     DateTime   @default(now())
 
   faction Faction     @relation(fields: [faction_id], references: [id])
   version GameVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
 
-  @@unique([faction_id, version_id, snapshot_date])
+  @@unique([faction_id, version_id, battle_type, snapshot_date])
   @@index([faction_id, version_id])
   @@index([snapshot_date])
 }
@@ -924,20 +926,21 @@ model PlayerSkillSnapshot {
 
 // 24x24 matchup heatmap source (M3).
 model MatchupStats {
-  id             String   @id @default(uuid()) @db.Uuid
+  id             String     @id @default(uuid()) @db.Uuid
   faction_a_id   String
   faction_b_id   String
-  version_id     String   @map("season_id") @db.Uuid
-  faction_a_wins Int      @default(0)
-  faction_b_wins Int      @default(0)
-  draws          Int      @default(0)
-  updated_at     DateTime @updatedAt
+  version_id     String     @map("season_id") @db.Uuid
+  battle_type    BattleType @default(DOMINATION)
+  faction_a_wins Int        @default(0)
+  faction_b_wins Int        @default(0)
+  draws          Int        @default(0)
+  updated_at     DateTime   @updatedAt
 
   faction_a Faction     @relation("MatchupFactionA", fields: [faction_a_id], references: [id])
   faction_b Faction     @relation("MatchupFactionB", fields: [faction_b_id], references: [id])
   version   GameVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
 
-  @@unique([faction_a_id, faction_b_id, version_id])
+  @@unique([faction_a_id, faction_b_id, version_id, battle_type])
   @@index([version_id])
 }
 

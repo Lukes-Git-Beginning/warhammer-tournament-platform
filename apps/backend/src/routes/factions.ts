@@ -129,9 +129,18 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('factions:detail', { id, versionId: resolvedVersionId ?? 'none' }),
       async () => {
+        // TODO(meta): battle-type filter. The detail view shows Domination stats for
+        // now (primary mode + the only populated type initially); an "all types"
+        // aggregate + a battle-type dropdown follow with the meta API filter.
         const stats = resolvedVersionId
           ? await fastify.prisma.factionStats.findUnique({
-              where: { faction_id_version_id: { faction_id: id, version_id: resolvedVersionId } },
+              where: {
+                faction_id_version_id_battle_type: {
+                  faction_id: id,
+                  version_id: resolvedVersionId,
+                  battle_type: 'DOMINATION',
+                },
+              },
             })
           : null;
 
