@@ -263,6 +263,7 @@ model User {
   army_lists              ArmyList[]
   tournament_army_lists   TournamentArmyList[]
   leaderboard_entries     LeaderboardEntry[]
+  skill_snapshots         PlayerSkillSnapshot[]
   tournament_results      TournamentResult[]
   captained_teams         Team[]                  @relation("TeamCaptain")
   team_memberships        TeamMember[]
@@ -897,6 +898,27 @@ model FactionStatsSnapshot {
 
   @@unique([faction_id, version_id, snapshot_date])
   @@index([faction_id, version_id])
+  @@index([snapshot_date])
+}
+
+/// Daily snapshot of a player's timeless General Skill. GS is derive-on-read and not
+/// historically reconstructable, so snapshot it (design doc §3). Build the cron EARLY
+/// — every un-snapshotted day is history lost forever. version_id is a context tag
+/// (which version was active at snapshot time), no FK.
+model PlayerSkillSnapshot {
+  id            String   @id @default(uuid()) @db.Uuid
+  user_id       String   @db.Uuid
+  snapshot_date DateTime @db.Date
+  general_skill Float // timeless GS (log-odds) at snapshot time
+  std_error     Float
+  band          Int // derived 1..5 band
+  games_count   Int
+  version_id    String?  @db.Uuid // active version at snapshot time — context tag, no FK
+  created_at    DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+
+  @@unique([user_id, snapshot_date])
   @@index([snapshot_date])
 }
 

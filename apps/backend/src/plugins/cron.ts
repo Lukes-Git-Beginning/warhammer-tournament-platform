@@ -2,6 +2,7 @@ import fp from 'fastify-plugin';
 import cron from 'node-cron';
 import type { FastifyInstance } from 'fastify';
 import { takeFactionsSnapshot } from '../lib/faction-snapshot.js';
+import { snapshotPlayerSkills } from '../lib/player-skill-snapshot.js';
 import { sendDm } from '../lib/discord-notify.js';
 import { autoConfirmExpiredGameResults } from '../lib/match-games.js';
 import { autoResolveStaleBlindPicks } from '../lib/blind-pick-auto-resolve.js';
@@ -80,6 +81,25 @@ export default fp(
           fastify.log.info({ count }, 'Faction snapshot completed');
         } catch (err) {
           fastify.log.error({ err }, 'Faction snapshot failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    // -----------------------------------------------------------------------
+    // Daily player skill snapshot (timeless GS) — 00:10 UTC
+    // GS is derive-on-read + not historically reconstructable, so snapshot it daily
+    // (design doc §3). Runs after the faction snapshot; a cheap single createMany.
+    // -----------------------------------------------------------------------
+    const playerSkillSnapshotTask = cron.schedule(
+      '10 0 * * *',
+      async () => {
+        fastify.log.info('Running daily player skill snapshot');
+        try {
+          const count = await snapshotPlayerSkills(fastify.prisma, fastify.redis);
+          fastify.log.info({ count }, 'Player skill snapshot completed');
+        } catch (err) {
+          fastify.log.error({ err }, 'Player skill snapshot failed');
         }
       },
       { timezone: 'UTC' },
@@ -561,10 +581,11 @@ export default fp(
       { timezone: 'UTC' },
     );
 
-    fastify.decorate('cronTasks', [snapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask, kofiGoalSyncTask, accessLogPurgeTask]);
+    fastify.decorate('cronTasks', [snapshotTask, playerSkillSnapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask, kofiGoalSyncTask, accessLogPurgeTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
+      playerSkillSnapshotTask.stop();
       checkinTask.stop();
       gameConfirmTask.stop();
       blindPickTask.stop();
