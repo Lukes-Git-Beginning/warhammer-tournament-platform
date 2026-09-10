@@ -8,7 +8,7 @@ import { ensureMatchupPlayers, seedMatchupGames, cleanupMatchupGames } from './h
 // Deterministic IDs
 // ---------------------------------------------------------------------------
 
-const S1 = 'f1000000-0000-0000-0000-000000000001'; // season
+const S1 = 'f1000000-0000-0000-0000-000000000001'; // version
 const U1 = 'f1000000-0000-0000-0000-0000000000a1';
 const U2 = 'f1000000-0000-0000-0000-0000000000a2';
 
@@ -51,7 +51,7 @@ async function seedVersion() {
   await prisma.gameVersion.create({
     data: {
       id: S1,
-      name: 'FactionTest Season',
+      name: 'FactionTest Version',
       start_date: new Date('2026-01-01'),
       end_date: new Date('2026-12-31'),
       is_active: true,
@@ -161,7 +161,7 @@ describe('GET /api/factions', () => {
     expect(skaven!.stats).toBeNull();
   });
 
-  it('returns 404 for non-existent seasonId', async () => {
+  it('returns 404 for non-existent versionId', async () => {
     const fakeId = '99999999-0000-0000-0000-000000000099';
     const res = await app.inject({ method: 'GET', url: `/api/factions?versionId=${fakeId}` });
     expect(res.statusCode).toBe(404);

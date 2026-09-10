@@ -1,5 +1,5 @@
 // Seed script — idempotent. Runs the canonical TWW3 24-faction reference list
-// plus a default "Open Season" so M2 leaderboard work has a parent row.
+// plus a default game version so M2 leaderboard work has a parent row.
 //
 // Invoke via `pnpm db:seed` (which runs `tsx prisma/seed.ts`).
 
@@ -96,30 +96,31 @@ async function seedFactions(): Promise<void> {
   console.log(`  ✓ Factions: ${result.count} created, ${updated} synced`);
 }
 
-async function seedDefaultSeason(): Promise<void> {
-  const active = await prisma.season.findFirst({ where: { is_active: true } });
+async function seedDefaultVersion(): Promise<void> {
+  const active = await prisma.gameVersion.findFirst({ where: { is_active: true } });
   if (active) {
-    console.log(`  ✓ Active season already exists: "${active.name}" (${active.id})`);
+    console.log(`  ✓ Active version already exists: "${active.name}" (${active.id})`);
     return;
   }
-  // Activate the most recent existing season instead of creating a duplicate
-  const latest = await prisma.season.findFirst({ orderBy: { start_date: 'desc' } });
+  // Activate the most recent existing version instead of creating a duplicate
+  const latest = await prisma.gameVersion.findFirst({ orderBy: { start_date: 'desc' } });
   if (latest) {
-    await prisma.season.update({ where: { id: latest.id }, data: { is_active: true } });
-    console.log(`  ✓ Activated existing season: "${latest.name}" (${latest.id})`);
+    await prisma.gameVersion.update({ where: { id: latest.id }, data: { is_active: true } });
+    console.log(`  ✓ Activated existing version: "${latest.name}" (${latest.id})`);
     return;
   }
   const now = new Date();
   const endOfYear = new Date(now.getFullYear(), 11, 31);
-  const season = await prisma.season.create({
+  const version = await prisma.gameVersion.create({
     data: {
-      name: `Season ${now.getFullYear()}`,
+      name: '8.1',
+      dlc_tag: '8.1',
       start_date: now,
       end_date: endOfYear,
       is_active: true,
     },
   });
-  console.log(`  ✓ Default season created: "${season.name}" (${season.id})`);
+  console.log(`  ✓ Default version created: "${version.name}" (${version.id})`);
 }
 
 const SYSTEM_DISCORD_ID = 'system-tww3';
@@ -337,7 +338,7 @@ async function seedAdminConfig(): Promise<void> {
 async function main(): Promise<void> {
   console.log('Seeding database…');
   await seedFactions();
-  await seedDefaultSeason();
+  await seedDefaultVersion();
   const systemUserId = await seedSystemUser();
   await seedDraftPresets(systemUserId);
   await seedMaps();

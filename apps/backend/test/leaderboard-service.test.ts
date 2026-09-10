@@ -25,9 +25,9 @@ import {
 const userIds: string[] = [];
 const factionIds: string[] = [];
 let tournamentId: string;
-let seasonRR: string; // round-robin scenario
-let seasonAF: string; // anti-farm scenario
-let seasonTG: string; // wins-based targeting scenario
+let versionRR: string; // round-robin scenario
+let versionAF: string; // anti-farm scenario
+let versionTG: string; // wins-based targeting scenario
 
 // Round-robin players
 let A: string, B: string, C: string;
@@ -67,7 +67,7 @@ async function newUser(): Promise<string> {
 }
 
 async function completedMatch(
-  seasonId: string,
+  versionId: string,
   p1: string,
   p2: string,
   pf1: string,
@@ -86,7 +86,7 @@ async function completedMatch(
       player2_faction_id: pf2,
       status: 'COMPLETED',
       result: winner === p1 ? 'PLAYER1_WIN' : 'PLAYER2_WIN',
-      version_id: seasonId,
+      version_id: versionId,
       played_at: new Date('2026-06-01'),
     },
   });
@@ -107,10 +107,10 @@ async function completedMatch(
 }
 
 beforeAll(async () => {
-  const season1 = await createTestVersion({ is_active: true });
-  const season2 = await createTestVersion({ is_active: false });
-  seasonRR = season1.id;
-  seasonAF = season2.id;
+  const version1 = await createTestVersion({ is_active: true });
+  const version2 = await createTestVersion({ is_active: false });
+  versionRR = version1.id;
+  versionAF = version2.id;
 
   const organizer = await newUser();
   const tournament = await createTestTournament({ organizerId: organizer });
@@ -125,19 +125,19 @@ beforeAll(async () => {
   A = await newUser();
   B = await newUser();
   C = await newUser();
-  aWinMatchIds.push(await completedMatch(seasonRR, A, B, f1, f2, A)); // A beats B
-  aWinMatchIds.push(await completedMatch(seasonRR, A, C, f1, f3, A)); // A beats C
-  await completedMatch(seasonRR, B, C, f2, f3, B); // B beats C
-  await completedMatch(seasonRR, C, A, f3, f1, C); // C beats A
+  aWinMatchIds.push(await completedMatch(versionRR, A, B, f1, f2, A)); // A beats B
+  aWinMatchIds.push(await completedMatch(versionRR, A, C, f1, f3, A)); // A beats C
+  await completedMatch(versionRR, B, C, f2, f3, B); // B beats C
+  await completedMatch(versionRR, C, A, f3, f1, C); // C beats A
 
   // --- Anti-farm scenario: D wins 20, 8 vs E (share 40% → 0), 12 vs distinct ---
   D = await newUser();
   E = await newUser();
-  for (let i = 0; i < 8; i++) await completedMatch(seasonAF, D, E, f1, f2, D);
+  for (let i = 0; i < 8; i++) await completedMatch(versionAF, D, E, f1, f2, D);
   for (let i = 0; i < 12; i++) {
     const o = await newUser();
     oppIds.push(o);
-    await completedMatch(seasonAF, D, o, f1, f2, D);
+    await completedMatch(versionAF, D, o, f1, f2, D);
   }
 
   // --- Targeting scenario (wins-based): P has 20 total WINS. ---
@@ -146,35 +146,35 @@ beforeAll(async () => {
   //   even though 10 of P's 30 GAMES (33%) were vs Bg. The old games-based share
   //   would have zeroed Bg; the wins-based share spares it. 15 further wins vs
   //   distinct opponents make up the remaining 75% of P's wins.
-  const season3 = await createTestVersion({ is_active: false });
-  seasonTG = season3.id;
+  const version3 = await createTestVersion({ is_active: false });
+  versionTG = version3.id;
   P = await newUser();
   V = await newUser();
   Bg = await newUser();
-  for (let i = 0; i < 4; i++) await completedMatch(seasonTG, P, V, f1, f2, P); // P beats V ×4
-  await completedMatch(seasonTG, P, V, f1, f2, V); // V beats P ×1
-  await completedMatch(seasonTG, P, Bg, f1, f2, P); // P beats Bg ×1
-  for (let i = 0; i < 9; i++) await completedMatch(seasonTG, P, Bg, f1, f2, Bg); // Bg beats P ×9
+  for (let i = 0; i < 4; i++) await completedMatch(versionTG, P, V, f1, f2, P); // P beats V ×4
+  await completedMatch(versionTG, P, V, f1, f2, V); // V beats P ×1
+  await completedMatch(versionTG, P, Bg, f1, f2, P); // P beats Bg ×1
+  for (let i = 0; i < 9; i++) await completedMatch(versionTG, P, Bg, f1, f2, Bg); // Bg beats P ×9
   for (let i = 0; i < 15; i++) {
     const o = await newUser();
     tgOppIds.push(o);
-    await completedMatch(seasonTG, P, o, f1, f2, P); // P beats distinct ×15
+    await completedMatch(versionTG, P, o, f1, f2, P); // P beats distinct ×15
   }
 }, 30_000);
 
 afterAll(async () => {
   await cleanupTournament(tournamentId); // deletes all matches first
   await prisma.faction.deleteMany({ where: { id: { in: factionIds } } });
-  await cleanupVersion(seasonRR);
-  await cleanupVersion(seasonAF);
-  await cleanupVersion(seasonTG);
+  await cleanupVersion(versionRR);
+  await cleanupVersion(versionAF);
+  await cleanupVersion(versionTG);
   await cleanupUsers(userIds);
   await prisma.$disconnect();
 });
 
 describe('computeVersionLeaderboard — round robin', () => {
   it('reports correct wins/losses/matches per player', async () => {
-    const board = await computeVersionLeaderboard(prisma, undefined, seasonRR);
+    const board = await computeVersionLeaderboard(prisma, undefined, versionRR);
     const byId = new Map(board.map((e) => [e.playerId, e]));
 
     expect(byId.get(A)).toMatchObject({ wins: 2, losses: 1, totalGames: 3 });
@@ -183,14 +183,14 @@ describe('computeVersionLeaderboard — round robin', () => {
   });
 
   it('all modifiers are 1 (totals < 20), so final == raw points', async () => {
-    const board = await computeVersionLeaderboard(prisma, undefined, seasonRR);
+    const board = await computeVersionLeaderboard(prisma, undefined, versionRR);
     for (const e of board) {
       expect(e.totalFinalPoints).toBeCloseTo(e.totalRawPoints, 6);
     }
   });
 
   it("a player's leaderboard total equals the sum of its match breakdowns (explainability)", async () => {
-    const board = await computeVersionLeaderboard(prisma, undefined, seasonRR);
+    const board = await computeVersionLeaderboard(prisma, undefined, versionRR);
     const aEntry = board.find((e) => e.playerId === A)!;
 
     let sum = 0;
@@ -209,14 +209,14 @@ describe('computeVersionLeaderboard — round robin', () => {
 
 describe('computeVersionLeaderboard — anti-farm', () => {
   it('zeroes the over-played opponent while crediting the rest', async () => {
-    const board = await computeVersionLeaderboard(prisma, undefined, seasonAF);
+    const board = await computeVersionLeaderboard(prisma, undefined, versionAF);
     const dEntry = board.find((e) => e.playerId === D)!;
 
     expect(dEntry).toMatchObject({ wins: 20, losses: 0, totalGames: 20 });
     // 8 of 20 wins are zeroed → final strictly below raw.
     expect(dEntry.totalFinalPoints).toBeLessThan(dEntry.totalRawPoints);
 
-    const vsE = await playerOpponentBreakdown(prisma, undefined, seasonAF, D, E);
+    const vsE = await playerOpponentBreakdown(prisma, undefined, versionAF, D, E);
     expect(vsE.winsVsOpponent).toBe(8);
     expect(vsE.playerTotalWins).toBe(20);
     expect(vsE.opponentShare).toBeCloseTo(0.4, 6);
@@ -229,7 +229,7 @@ describe('computeVersionLeaderboard — anti-farm', () => {
 describe('computeVersionLeaderboard — wins-based targeting', () => {
   it('penalises a favourite victim but spares a bogey opponent', async () => {
     // Favourite victim: 4 of P's 20 wins (20% share) → zeroed.
-    const vsVictim = await playerOpponentBreakdown(prisma, undefined, seasonTG, P, V);
+    const vsVictim = await playerOpponentBreakdown(prisma, undefined, versionTG, P, V);
     expect(vsVictim.winsVsOpponent).toBe(4);
     expect(vsVictim.playerTotalWins).toBe(20);
     expect(vsVictim.opponentShare).toBeCloseTo(0.2, 6);
@@ -237,7 +237,7 @@ describe('computeVersionLeaderboard — wins-based targeting', () => {
 
     // Bogey opponent: only 1 of P's 20 wins (5% share) → full credit, NOT penalised —
     // despite 10 of P's 30 games being vs Bg (the old games-based share would zero it).
-    const vsBogey = await playerOpponentBreakdown(prisma, undefined, seasonTG, P, Bg);
+    const vsBogey = await playerOpponentBreakdown(prisma, undefined, versionTG, P, Bg);
     expect(vsBogey.winsVsOpponent).toBe(1);
     expect(vsBogey.playerTotalWins).toBe(20);
     expect(vsBogey.opponentShare).toBeCloseTo(0.05, 6);

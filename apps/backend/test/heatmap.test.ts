@@ -9,7 +9,7 @@ import { ensureMatchupPlayers, seedMatchupGames, cleanupMatchupGames } from './h
 // Deterministic IDs
 // ---------------------------------------------------------------------------
 
-const S1 = 'd1000000-0000-0000-0000-000000000001'; // season for heatmap tests
+const S1 = 'd1000000-0000-0000-0000-000000000001'; // version for heatmap tests
 const U1 = 'd1000000-0000-0000-0000-0000000000a1';
 const U2 = 'd1000000-0000-0000-0000-0000000000a2';
 
@@ -49,7 +49,7 @@ async function seedVersion() {
   await prisma.gameVersion.create({
     data: {
       id: S1,
-      name: 'Heatmap Test Season',
+      name: 'Heatmap Test Version',
       start_date: new Date('2026-01-01'),
       end_date: new Date('2026-12-31'),
       is_active: false,
@@ -67,7 +67,7 @@ const seedMatchup = (p1f: string, p2f: string, results: Array<'P1' | 'P2' | 'D'>
 // ---------------------------------------------------------------------------
 
 describe('getMatchupMatrix', () => {
-  it('1. returns empty array for a season with no completed games', async () => {
+  it('1. returns empty array for a version with no completed games', async () => {
     await seedVersion();
     const cells = await getMatchupMatrix(prisma, S1);
     expect(cells).toEqual([]);
@@ -142,7 +142,7 @@ describe('getMatchupMatrix', () => {
 // ---------------------------------------------------------------------------
 
 describe('GET /api/meta/matchups — live aggregation', () => {
-  it('4. returns empty cells for season with no completed games', async () => {
+  it('4. returns empty cells for version with no completed games', async () => {
     await seedVersion();
 
     const res = await app.inject({ method: 'GET', url: `/api/meta/matchups?versionId=${S1}` });

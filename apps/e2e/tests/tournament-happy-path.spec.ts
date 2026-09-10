@@ -19,7 +19,7 @@ import {
   generateBracket,
   reportMatchResult,
   cleanupTestData,
-  ensureActiveSeason,
+  ensureActiveVersion,
 } from './helpers/tournament-fixture.js';
 
 const BACKEND = 'http://localhost:3000';
@@ -28,7 +28,7 @@ test.describe('Tournament Happy Path — 16-Player Single Elimination', () => {
   const userIds: string[] = [];
 
   test.beforeAll(async () => {
-    await ensureActiveSeason();
+    await ensureActiveVersion();
   });
 
   test.afterAll(async () => {
@@ -158,10 +158,10 @@ test.describe('Tournament Happy Path — 16-Player Single Elimination', () => {
       // -----------------------------------------------------------------------
       const lbRes = await orgCtx.get(`${BACKEND}/api/leaderboard`);
 
-      // Leaderboard requires an active season — acceptable 404 if no active season
-      // is configured in the test database. In CI, seed creates an active season.
+      // Leaderboard requires an active version — acceptable 404 if no active version
+      // is configured in the test database. In CI, seed creates an active version.
       if (lbRes.status() === 404) {
-        // No active season — leaderboard not applicable; test the bracket state instead
+        // No active version — leaderboard not applicable; test the bracket state instead
         const bracketRes = await orgCtx.get(
           `${BACKEND}/api/tournaments/${tournament.slug}/bracket`,
         );

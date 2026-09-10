@@ -35,7 +35,7 @@ import {
   generateBracket,
   reportMatchResult,
   cleanupTestData,
-  ensureActiveSeason,
+  ensureActiveVersion,
   type TestUser,
 } from './helpers/tournament-fixture.js';
 
@@ -123,9 +123,9 @@ test.describe('Leaderboard Correctness — 3 tournaments, dynamic FinalPoints ra
   const userIds: string[] = [];
 
   test.beforeAll(async () => {
-    // Other test files in this suite (or backend tests) may leave all seasons
+    // Other test files in this suite (or backend tests) may leave all versions
     // inactive. Restore one so /api/leaderboard does not return 404.
-    await ensureActiveSeason();
+    await ensureActiveVersion();
   });
 
   test.afterAll(async () => {

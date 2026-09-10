@@ -3,7 +3,7 @@
  * path writes MatchupStats and FactionStats identically to the legacy
  * POST /:id/result route in routes/matches.ts.
  *
- * Test isolation: each test creates its own Season/Faction/User/Match seeds
+ * Test isolation: each test creates its own Version/Faction/User/Match seeds
  * and cleans up after itself. No HTTP layer — calls the service function directly.
  */
 
@@ -216,10 +216,10 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
     expect(rows).toHaveLength(0);
   });
 
-  it('No active season → no MatchupStats row created', async () => {
-    // Override: create an INACTIVE season specifically for this test
-    const inactiveSeason = await createTestVersion({ is_active: false });
-    // Mark our normally-active season as inactive so the service sees no active season
+  it('No active version → no MatchupStats row created', async () => {
+    // Override: create an INACTIVE version specifically for this test
+    const inactiveVersion = await createTestVersion({ is_active: false });
+    // Mark our normally-active version as inactive so the service sees no active version
     await prisma.gameVersion.update({
       where: { id: TestVersion!.id },
       data: { is_active: false },
@@ -235,7 +235,7 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
     await resolveMatchResult(prisma, matchId, 'PLAYER1_WIN', { actorId: testUser1!.id });
 
     const rows = await prisma.matchupStats.findMany({
-      where: { version_id: inactiveSeason.id },
+      where: { version_id: inactiveVersion.id },
     });
     expect(rows).toHaveLength(0);
 
@@ -244,7 +244,7 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
       where: { id: TestVersion!.id },
       data: { is_active: true },
     });
-    await cleanupVersion(inactiveSeason.id);
+    await cleanupVersion(inactiveVersion.id);
   });
 
   it('FactionStats: empire wins → wins=1 for empire, losses=1 for bretonnia', async () => {

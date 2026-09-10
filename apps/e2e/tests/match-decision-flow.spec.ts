@@ -21,7 +21,7 @@ import {
   generateBracket,
   reportMatchResult,
   cleanupTestData,
-  ensureActiveSeason,
+  ensureActiveVersion,
   type TestUser,
 } from './helpers/tournament-fixture.js';
 
@@ -36,7 +36,7 @@ test.describe('Welle-D: Tournament Create — BPT with Map Pool', () => {
   const userIds: string[] = [];
 
   test.beforeAll(async () => {
-    await ensureActiveSeason();
+    await ensureActiveVersion();
   });
 
   test.afterAll(async () => {
@@ -129,7 +129,7 @@ test.describe('Welle-D: Self-Check-in flow', () => {
   const userIds: string[] = [];
 
   test.beforeAll(async () => {
-    await ensureActiveSeason();
+    await ensureActiveVersion();
   });
 
   test.afterAll(async () => {
@@ -236,7 +236,7 @@ test.describe('Welle-D: Match-Decision-Flow', () => {
   const userIds: string[] = [];
 
   test.beforeAll(async () => {
-    await ensureActiveSeason();
+    await ensureActiveVersion();
   });
 
   test.afterAll(async () => {
@@ -340,7 +340,7 @@ test.describe('Welle-D: Deferred Playoff Generation after Swiss', () => {
   const userIds: string[] = [];
 
   test.beforeAll(async () => {
-    await ensureActiveSeason();
+    await ensureActiveVersion();
   });
 
   test.afterAll(async () => {

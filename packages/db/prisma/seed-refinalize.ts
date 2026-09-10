@@ -35,6 +35,6 @@ if (tournament.status !== 'COMPLETED') {
 
 console.log(`Re-finalizing "${values.tournament}" (${tournament.id})…`);
 const result = await finalizeTournament(prisma, tournament.id, 'system');
-console.log(`Done. ${result.resultCount} placements written, seasonId=${result.seasonId}`);
+console.log(`Done. ${result.resultCount} placements written, versionId=${result.versionId}`);
 
 await prisma.$disconnect();

@@ -31,7 +31,7 @@ import {
   generateBracket,
   reportMatchResult,
   cleanupTestData,
-  ensureActiveSeason,
+  ensureActiveVersion,
 } from './helpers/tournament-fixture.js';
 
 const BACKEND = 'http://localhost:3000';
@@ -48,7 +48,7 @@ let tournamentSlug = '';
 
 test.describe('Double Elimination — 8-player lifecycle + browser render', () => {
   test.beforeAll(async () => {
-    await ensureActiveSeason();
+    await ensureActiveVersion();
   });
 
   test.afterAll(async () => {

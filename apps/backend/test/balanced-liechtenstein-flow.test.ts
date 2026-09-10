@@ -2,7 +2,7 @@
  * Integration test for the Balanced Liechtenstein pairing tick against a real DB.
  *
  * Drives the incremental flow directly (runBalancedPairingTick) by flipping match
- * statuses, so it needs no map/season/rating data — it verifies that finishing a
+ * statuses, so it needs no map/version/rating data — it verifies that finishing a
  * match creates the next round match by match, and that the tournament runs dry.
  *
  * Requires PostgreSQL with the balanced schema (skill_band + BALANCED_LIECHTENSTEIN).
@@ -40,7 +40,7 @@ const createdUserIds: string[] = [];
 afterEach(async () => {
   for (const id of createdTournamentIds) await cleanupTournament(id);
   if (createdUserIds.length) {
-    // finalizeTournament writes LeaderboardEntry rows on the active season; clear
+    // finalizeTournament writes LeaderboardEntry rows on the active version; clear
     // them (FK to User) before deleting the test users.
     await prisma.leaderboardEntry.deleteMany({ where: { user_id: { in: createdUserIds } } });
     await cleanupUsers(createdUserIds);

@@ -137,28 +137,28 @@ export async function signInBrowser(
 }
 
 // ---------------------------------------------------------------------------
-// Season helpers
+// Version helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Ensures at least one Season is is_active=true.
- * Picks the first existing season (by created_at) and activates it. Idempotent.
+ * Ensures at least one GameVersion is is_active=true.
+ * Picks the first existing version (by created_at) and activates it. Idempotent.
  * Tests that depend on leaderboard / faction-stats endpoints must call this
- * in beforeAll to recover from other test files that leave seasons inactive.
+ * in beforeAll to recover from other test files that leave versions inactive.
  */
-export async function ensureActiveSeason(): Promise<string> {
-  const active = await prisma.season.findFirst({ where: { is_active: true } });
+export async function ensureActiveVersion(): Promise<string> {
+  const active = await prisma.gameVersion.findFirst({ where: { is_active: true } });
   if (active) return active.id;
 
-  const firstSeason = await prisma.season.findFirst({ orderBy: { created_at: 'asc' } });
-  if (!firstSeason) {
-    throw new Error('ensureActiveSeason: no seasons exist — run pnpm db:seed first');
+  const firstVersion = await prisma.gameVersion.findFirst({ orderBy: { created_at: 'asc' } });
+  if (!firstVersion) {
+    throw new Error('ensureActiveVersion: no versions exist — run pnpm db:seed first');
   }
-  await prisma.season.update({
-    where: { id: firstSeason.id },
+  await prisma.gameVersion.update({
+    where: { id: firstVersion.id },
     data: { is_active: true },
   });
-  return firstSeason.id;
+  return firstVersion.id;
 }
 
 // ---------------------------------------------------------------------------

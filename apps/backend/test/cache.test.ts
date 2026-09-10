@@ -3,8 +3,8 @@ import { cacheKey } from '../src/lib/cache.js';
 
 describe('cacheKey', () => {
   it('produces stable key from sorted params', () => {
-    expect(cacheKey('leaderboard', { seasonId: 'x', page: 1 })).toBe(
-      'leaderboard:page=1&seasonId=x',
+    expect(cacheKey('leaderboard', { versionId: 'x', page: 1 })).toBe(
+      'leaderboard:page=1&versionId=x',
     );
   });
 
@@ -15,9 +15,9 @@ describe('cacheKey', () => {
   });
 
   it('omits undefined values', () => {
-    const key = cacheKey('tournaments:list', { page: 1, pageSize: 20, seasonId: undefined });
+    const key = cacheKey('tournaments:list', { page: 1, pageSize: 20, versionId: undefined });
     expect(key).toBe('tournaments:list:page=1&pageSize=20');
-    expect(key).not.toContain('seasonId');
+    expect(key).not.toContain('versionId');
   });
 
   it('includes null values as "null"', () => {

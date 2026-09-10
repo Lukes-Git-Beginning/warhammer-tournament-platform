@@ -33,23 +33,23 @@ afterAll(async () => {
 
 let user1: TestUser | undefined;
 let user2: TestUser | undefined;
-let season: TestVersion | undefined;
+let version: TestVersion | undefined;
 let tournament: TestTournament | undefined;
 
 beforeEach(async () => {
   user1 = await createTestUser({ username: 'EmpirePlayer' });
   user2 = await createTestUser({ username: 'BretonniaPlayer' });
-  season = await createTestVersion({ is_active: true });
+  version = await createTestVersion({ is_active: true });
   tournament = await createTestTournament({ organizerId: user1!.id });
 });
 
 afterEach(async () => {
   if (tournament) await cleanupTournament(tournament.id);
-  if (season) await cleanupVersion(season.id);
+  if (version) await cleanupVersion(version.id);
   const ids = [user1?.id, user2?.id].filter(Boolean) as string[];
   if (ids.length > 0) await cleanupUsers(ids);
   user1 = user2 = undefined;
-  season = tournament = undefined;
+  version = tournament = undefined;
 });
 
 /**
@@ -62,7 +62,7 @@ async function createMatchWithGames(winners: (string | null)[]): Promise<string>
     data: {
       id: matchId,
       tournament_id: tournament!.id,
-      version_id: season!.id,
+      version_id: version!.id,
       round: 1,
       match_number: 1,
       player1_id: user1!.id,
@@ -87,7 +87,7 @@ async function createMatchWithGames(winners: (string | null)[]): Promise<string>
 
 const factionStats = (factionId: string) =>
   prisma.factionStats.findUnique({
-    where: { faction_id_version_id: { faction_id: factionId, version_id: season!.id } },
+    where: { faction_id_version_id: { faction_id: factionId, version_id: version!.id } },
   });
 
 const matchupStats = () =>
@@ -97,7 +97,7 @@ const matchupStats = () =>
       faction_a_id_faction_b_id_version_id: {
         faction_a_id: BRETONNIA,
         faction_b_id: EMPIRE,
-        version_id: season!.id,
+        version_id: version!.id,
       },
     },
   });
@@ -107,7 +107,7 @@ describe('recomputeFactionStats', () => {
     // empire wins games 1 & 2, bretonnia wins game 3 → 2-1 at game level
     await createMatchWithGames([user1!.id, user1!.id, user2!.id]);
 
-    const result = await recomputeFactionStats(prisma, season!.id);
+    const result = await recomputeFactionStats(prisma, version!.id);
     expect(result.gamesProcessed).toBe(3);
 
     const empire = await factionStats(EMPIRE);
@@ -133,8 +133,8 @@ describe('recomputeFactionStats', () => {
   it('is idempotent — running twice does not double-count', async () => {
     await createMatchWithGames([user1!.id, user2!.id]);
 
-    await recomputeFactionStats(prisma, season!.id);
-    await recomputeFactionStats(prisma, season!.id);
+    await recomputeFactionStats(prisma, version!.id);
+    await recomputeFactionStats(prisma, version!.id);
 
     const empire = await factionStats(EMPIRE);
     expect(empire!.matches_played).toBe(2);
@@ -149,7 +149,7 @@ describe('recomputeFactionStats', () => {
   it('treats a COMPLETED game with no winner as a draw', async () => {
     await createMatchWithGames([null]);
 
-    await recomputeFactionStats(prisma, season!.id);
+    await recomputeFactionStats(prisma, version!.id);
 
     const empire = await factionStats(EMPIRE);
     expect(empire!.matches_played).toBe(1);

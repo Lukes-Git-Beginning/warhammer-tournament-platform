@@ -5,7 +5,7 @@
  * (Iter 4 of UI overhaul). Each variant exposes a stable data-testid:
  *   - empty-state-banner  (Landing: ActiveMusters, RollOfHonour)
  *   - empty-state-sigil   (LeaderboardPage, PresetListPage)
- *   - empty-state-compact (UserProfilePage: season, tournaments, matches)
+ *   - empty-state-compact (UserProfilePage: version, tournaments, matches)
  *
  * Tests skip gracefully when the underlying list is not actually empty
  * (e.g. dev DB has tournaments / leaderboard entries) — the assertion is

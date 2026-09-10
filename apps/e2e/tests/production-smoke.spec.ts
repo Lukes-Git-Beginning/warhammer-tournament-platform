@@ -9,7 +9,7 @@ test.describe('Production Smoke — public pages only, no auth', () => {
     await expect(page.getByText(/where lists are forged/i)).toBeVisible();
   });
 
-  test('GET /api/leaderboard returns 200 (or 404 if no active season)', async ({ request }) => {
+  test('GET /api/leaderboard returns 200 (or 404 if no active version)', async ({ request }) => {
     const res = await request.get(`${API_URL}/api/leaderboard`);
     expect([200, 404]).toContain(res.status());
   });

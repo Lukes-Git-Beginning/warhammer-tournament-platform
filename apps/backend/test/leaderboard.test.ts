@@ -80,7 +80,7 @@ async function createTestFaction(displayOrder: number): Promise<string> {
 }
 
 async function completedMatch(
-  seasonId: string,
+  versionId: string,
   tournamentId: string,
   p1: string,
   p2: string,
@@ -100,7 +100,7 @@ async function completedMatch(
       player2_faction_id: pf2,
       status: 'COMPLETED',
       result: winner === p1 ? 'PLAYER1_WIN' : 'PLAYER2_WIN',
-      version_id: seasonId,
+      version_id: versionId,
       played_at: new Date('2026-06-01'),
     },
   });
@@ -120,7 +120,7 @@ async function completedMatch(
 }
 
 // ---------------------------------------------------------------------------
-// Seed helper — creates season + leaderboard entries for this test run
+// Seed helper — creates version + leaderboard entries for this test run
 // ---------------------------------------------------------------------------
 
 async function seedBase() {
@@ -164,15 +164,15 @@ describe('GET /api/leaderboard', () => {
     expect(body.entries).toHaveLength(0);
   });
 
-  it('returns 404 when seasonId does not exist', async () => {
+  it('returns 404 when versionId does not exist', async () => {
     const fakeId = randomUUID();
     const res = await app.inject({ method: 'GET', url: `/api/leaderboard?versionId=${fakeId}` });
     expect(res.statusCode).toBe(404);
     const body = res.json<{ message: string }>();
-    expect(body.message).toBe('Season not found');
+    expect(body.message).toBe('Version not found');
   });
 
-  it('returns 404 for non-existent UUID season', async () => {
+  it('returns 404 for non-existent UUID version', async () => {
     const fakeId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
     const res = await app.inject({ method: 'GET', url: `/api/leaderboard?versionId=${fakeId}` });
     expect(res.statusCode).toBe(404);
@@ -192,7 +192,7 @@ describe('GET /api/leaderboard', () => {
 });
 
 describe('GET /api/leaderboard/all-time', () => {
-  it('aggregates entries across seasons and returns correct totals', async () => {
+  it('aggregates entries across versions and returns correct totals', async () => {
     await seedBase();
 
     const res = await app.inject({ method: 'GET', url: '/api/leaderboard/all-time' });
@@ -208,7 +208,7 @@ describe('GET /api/leaderboard/all-time', () => {
       total: number;
     }>();
 
-    // At least 3 entries from our test season (may include entries from other seasons in test DB)
+    // At least 3 entries from our test version (may include entries from other versions in test DB)
     expect(body.total).toBeGreaterThanOrEqual(3);
 
     // Alpha has most points in our seeded data — find her in the response
@@ -269,7 +269,7 @@ describe('GET /api/users/:id', () => {
     expect(body.current_version!.losses).toBe(0);
     expect(body.current_version!.total_points).toBeCloseTo(expected!.totalFinalPoints, 6);
 
-    // Single season → all_time mirrors current_version (summed across seasons).
+    // Single version → all_time mirrors current_version (summed across versions).
     expect(body.all_time.games_played).toBe(2);
     expect(body.all_time.wins).toBe(2);
     expect(body.all_time.losses).toBe(0);

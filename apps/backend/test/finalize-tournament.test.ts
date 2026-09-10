@@ -283,7 +283,7 @@ describe('computeDoubleElimPlacements — Szenario B: LB-Champ wins Reset (statu
 // ---------------------------------------------------------------------------
 
 // Deterministic IDs for ELO integration tests
-const ES = 'e0000000-0000-0000-0000-000000000001'; // season
+const ES = 'e0000000-0000-0000-0000-000000000001'; // version
 const ET = 'e0000000-0000-0000-0000-000000000002'; // tournament
 const EU1 = 'e0000000-0000-0000-0000-000000000011'; // user 1
 const EU2 = 'e0000000-0000-0000-0000-000000000012'; // user 2
@@ -324,13 +324,13 @@ async function seedEloBase({ withExistingLeaderboard = false }: { withExistingLe
     skipDuplicates: true,
   });
 
-  // Deactivate any pre-existing active seasons to avoid interference
+  // Deactivate any pre-existing active versions to avoid interference
   await prisma.gameVersion.updateMany({ where: { is_active: true }, data: { is_active: false } });
 
   await prisma.gameVersion.create({
     data: {
       id: ES,
-      name: 'ELO Test Season',
+      name: 'ELO Test Version',
       start_date: new Date('2026-01-01'),
       end_date: new Date('2026-12-31'),
       is_active: true,

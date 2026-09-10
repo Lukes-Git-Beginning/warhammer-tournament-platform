@@ -8,7 +8,7 @@ import { ensureMatchupPlayers, seedMatchupGames, cleanupMatchupGames } from './h
 // Deterministic IDs
 // ---------------------------------------------------------------------------
 
-const S1 = 'a9000000-0000-0000-0000-000000000001'; // season for graphql tests
+const S1 = 'a9000000-0000-0000-0000-000000000001'; // version for graphql tests
 const U1 = 'a9000000-0000-0000-0000-0000000000a1';
 const U2 = 'a9000000-0000-0000-0000-0000000000a2';
 
@@ -56,7 +56,7 @@ async function seedVersion() {
   await prisma.gameVersion.create({
     data: {
       id: S1,
-      name: 'GraphQL Test Season',
+      name: 'GraphQL Test Version',
       start_date: new Date('2026-01-01'),
       end_date: new Date('2026-12-31'),
       is_active: true,
@@ -431,7 +431,7 @@ describe('GraphQL — metaOverview query', () => {
     expect(overview.version.id).toBe(S1);
     expect(overview.version.isActive).toBe(true);
 
-    // totalMatches now counts real COMPLETED matches (season + counts_for_leaderboard),
+    // totalMatches now counts real COMPLETED matches (version + counts_for_leaderboard),
     // not FactionStats aggregates, so its value depends on other match data in the DB.
     // Assert presence/typing rather than a value tied to the seeded faction stats.
     expect(typeof overview.totalMatches).toBe('number');
@@ -450,8 +450,8 @@ describe('GraphQL — metaOverview query', () => {
     expect(overview.topFactionsByPickrate[0]!.stats!.matchesPlayed).toBe(20);
   });
 
-  it('3b. returns null when no active season exists', async () => {
-    // no season seeded, no is_active=true
+  it('3b. returns null when no active version exists', async () => {
+    // no version seeded, no is_active=true
     const res = await gql(`
       query {
         metaOverview {
@@ -463,7 +463,7 @@ describe('GraphQL — metaOverview query', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json<{ data: { metaOverview: null }; errors?: unknown[] }>();
-    // No active season → resolver returns null → nullable field in schema
+    // No active version → resolver returns null → nullable field in schema
     expect(body.data.metaOverview).toBeNull();
   });
 });

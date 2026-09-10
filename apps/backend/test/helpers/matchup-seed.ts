@@ -29,7 +29,7 @@ export async function ensureMatchupPlayers(
 let seq = 0;
 
 /**
- * Seeds one OPEN_PLAY match (u1 vs u2) in `seasonId` with one COMPLETED MatchGame
+ * Seeds one OPEN_PLAY match (u1 vs u2) in `versionId` with one COMPLETED MatchGame
  * per entry in `results`. player1 plays `p1f`, player2 plays `p2f`; each result
  * picks the winner — 'P1' | 'P2' | 'D' (draw → winner_id null).
  */
@@ -65,7 +65,7 @@ export async function seedMatchupGames(
   return match.id;
 }
 
-/** Removes all matches + games seeded for a season, plus the given player users. */
+/** Removes all matches + games seeded for a version, plus the given player users. */
 export async function cleanupMatchupGames(
   prisma: PrismaClient,
   versionId: string,

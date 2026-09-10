@@ -54,10 +54,10 @@ program
         return;
       }
 
-      // Real write path: upsert FactionStats rows into the active season.
-      const activeSeason = await prisma.season.findFirst({ where: { is_active: true } });
-      if (!activeSeason) {
-        throw new Error('No active season — cannot import faction stats');
+      // Real write path: upsert FactionStats rows into the active version.
+      const activeVersion = await prisma.gameVersion.findFirst({ where: { is_active: true } });
+      if (!activeVersion) {
+        throw new Error('No active version — cannot import faction stats');
       }
 
       // Match by faction name (lookup id from Faction table)
@@ -72,10 +72,10 @@ program
           continue;
         }
         await prisma.factionStats.upsert({
-          where: { faction_id_season_id: { faction_id: faction.id, season_id: activeSeason.id } },
+          where: { faction_id_version_id: { faction_id: faction.id, version_id: activeVersion.id } },
           create: {
             faction_id: faction.id,
-            season_id: activeSeason.id,
+            version_id: activeVersion.id,
             matches_played: row.matches_played ?? 0,
             wins: Math.round((row.matches_played ?? 0) * row.winrate),
             losses: (row.matches_played ?? 0) - Math.round((row.matches_played ?? 0) * row.winrate),
