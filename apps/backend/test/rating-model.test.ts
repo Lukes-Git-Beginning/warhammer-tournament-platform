@@ -290,6 +290,55 @@ describe('hierarchical model — determinism', () => {
   });
 });
 
+describe('hierarchical model — battle-type offset', () => {
+  const bt = (o: MatchObservation, battleType: string): MatchObservation => ({ ...o, battleType });
+
+  it('adds no battle-type offsets when observations carry no battleType (degenerates to prior fit)', () => {
+    const model = fitRatingModel(dominate('A', 'x', 'y', 15), HIER);
+    expect(model.battleTypeOffsets).toEqual([]);
+    expect(model.getBattleTypeOffset('A', 'DOMINATION')).toBe(0);
+    // With no offset, "skill in a battle type" is exactly the plain GS.
+    expect(model.getBattleTypeSkill('A', 'DOMINATION')).toBeCloseTo(
+      model.getGeneralSkill('A')!.skill,
+      10,
+    );
+  });
+
+  it('getBattleTypeSkill === GS + offset, and an offset entry is produced', () => {
+    const obs = dominate('A', 'x', 'y', 10).map((o) => bt(o, 'DOMINATION'));
+    const model = fitRatingModel(obs, HIER);
+    const gs = model.getGeneralSkill('A')!.skill;
+    const off = model.getBattleTypeOffset('A', 'DOMINATION');
+    expect(model.getBattleTypeSkill('A', 'DOMINATION')).toBeCloseTo(gs + off, 10);
+    expect(
+      model.battleTypeOffsets.some((e) => e.playerId === 'A' && e.battleType === 'DOMINATION'),
+    ).toBe(true);
+  });
+
+  it('splits a player who is strong in one battle type and weak in another', () => {
+    // A wins in DOMINATION but loses in SIEGE, against fresh opponents each.
+    const obs: MatchObservation[] = [
+      ...dominate('A', 'x', 'y', 20).map((o) => bt(o, 'DOMINATION')),
+      ...Array.from({ length: 20 }, (_, i) => bt(win(`s-${i}`, 'y', 'A', 'x'), 'SIEGE')),
+    ];
+    const model = fitRatingModel(obs, HIER);
+    // Per-type skill: Domination clearly above Siege.
+    expect(model.getBattleTypeSkill('A', 'DOMINATION')!).toBeGreaterThan(
+      model.getBattleTypeSkill('A', 'SIEGE')!,
+    );
+    expect(model.getBattleTypeOffset('A', 'DOMINATION')).toBeGreaterThan(
+      model.getBattleTypeOffset('A', 'SIEGE'),
+    );
+    // The Domination offset has its games + a finite standard error.
+    const dom = model.battleTypeOffsets.find(
+      (e) => e.playerId === 'A' && e.battleType === 'DOMINATION',
+    )!;
+    expect(dom.gamesCount).toBe(20);
+    expect(dom.stdError).toBeGreaterThan(0);
+    expect(Number.isFinite(dom.stdError)).toBe(true);
+  });
+});
+
 describe('skillToBand', () => {
   it('maps a log-odds skill to a 1..5 band at the calibrated cut-points (20/35/75/90%)', () => {
     expect(skillToBand(-2)).toBe(1); // ~12% → below 20%

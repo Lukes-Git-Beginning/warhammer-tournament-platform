@@ -42,6 +42,11 @@ export interface MatchObservation {
   factionXId: string; // A's faction
   factionYId: string; // B's faction
   aWon: boolean; // y = 1 when A won, 0 otherwise
+  // Battle-type dimension (hierarchical model). When set, the fit adds a
+  // per-(player, battleType) skill offset, so "GS in Siege" = GS + Siege-offset.
+  // Omitted (undefined) on legacy/aggregate calls → no battle-type level is fitted
+  // and the model degenerates to exactly the prior GS + faction-offset behaviour.
+  battleType?: string;
 }
 
 export interface RatingModelConfig {
@@ -62,6 +67,11 @@ export interface RatingModelConfig {
   hierarchical: boolean;
   lambdaGeneralSkill: number; // L2 on GS — small (let the common level float)
   lambdaFactionOffset: number; // L2 on FO — large (offsets move off 0 only with evidence)
+  // L2 on the battle-type offset (BTO). Medium — a player's per-type skill is
+  // pulled toward their OWN global GS (partial pooling / James–Stein), so a new
+  // mode with few games starts at "≈ this player's global skill" and only diverges
+  // with real evidence. ~5-game prior weight at 0.3 (see design doc §3).
+  lambdaBattleTypeOffset: number;
 }
 
 export const DEFAULT_RATING_MODEL_CONFIG: RatingModelConfig = {
@@ -78,6 +88,9 @@ export const DEFAULT_RATING_MODEL_CONFIG: RatingModelConfig = {
   hierarchical: false,
   lambdaGeneralSkill: 0.05,
   lambdaFactionOffset: 0.5,
+  // Medium shrinkage → ~5-game prior weight (10 games ≈ 2/3 of the true offset
+  // shown). Calibrate on real 9.0 data once Siege/Conquest have volume.
+  lambdaBattleTypeOffset: 0.3,
 };
 
 export interface PlayerFactionSkillEntry {
@@ -113,12 +126,26 @@ export interface MatchupEffectEntry {
   lowSampleWarning: boolean;
 }
 
+/**
+ * Per-(player, battle-type) skill offset from the player's global GS
+ * (hierarchical fit only). "GS in this battle type" = generalSkill + offset.
+ */
+export interface BattleTypeOffsetEntry {
+  playerId: string;
+  battleType: string;
+  offset: number; // log-odds, added to GS for this battle type
+  gamesCount: number;
+  stdError: number;
+}
+
 /** Plain serialisable fit result (JSON-safe, cacheable). */
 export interface RatingModelData {
   playerFactionSkills: PlayerFactionSkillEntry[];
   matchupEffects: MatchupEffectEntry[];
   /** General-skill decomposition; empty array in the flat (non-hierarchical) model. */
   generalSkills: GeneralSkillEntry[];
+  /** Battle-type offsets; empty when the flat model runs or no battleType was fitted. */
+  battleTypeOffsets: BattleTypeOffsetEntry[];
   fitIterations: number;
   finalLoss: number;
   totalMatches: number;
@@ -153,6 +180,10 @@ export interface RatingModel extends RatingModelData {
    * subset of factions (e.g. the ones eligible in a gated format).
    */
   getPeakFactionSkill(playerId: string, factions?: readonly string[]): number | null;
+  /** Battle-type offset for a player (0 if none fitted). "GS in this type" = GS + this. */
+  getBattleTypeOffset(playerId: string, battleType: string): number;
+  /** GS + battle-type offset ("GS in this battle type"); null if the player has no fitted GS. */
+  getBattleTypeSkill(playerId: string, battleType: string): number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -208,6 +239,10 @@ export function createRatingModel(data: RatingModelData): RatingModel {
   const gs = new Map<string, GeneralSkillEntry>();
   for (const e of data.generalSkills) {
     gs.set(e.playerId, e);
+  }
+  const bto = new Map<string, number>();
+  for (const e of data.battleTypeOffsets ?? []) {
+    bto.set(`${e.playerId}:${e.battleType}`, e.offset);
   }
 
   const getPlayerFactionSkill = (playerId: string, factionId: string): number =>
@@ -265,6 +300,15 @@ export function createRatingModel(data: RatingModelData): RatingModel {
     return best === Number.NEGATIVE_INFINITY ? e.generalSkill : best;
   };
 
+  const getBattleTypeOffset = (playerId: string, battleType: string): number =>
+    bto.get(`${playerId}:${battleType}`) ?? 0;
+
+  const getBattleTypeSkill = (playerId: string, battleType: string): number | null => {
+    const e = gs.get(playerId);
+    if (!e) return null;
+    return e.generalSkill + getBattleTypeOffset(playerId, battleType);
+  };
+
   return {
     ...data,
     getPlayerFactionSkill,
@@ -272,6 +316,8 @@ export function createRatingModel(data: RatingModelData): RatingModel {
     expectedChanceToWin,
     getGeneralSkill,
     getPeakFactionSkill,
+    getBattleTypeOffset,
+    getBattleTypeSkill,
   };
 }
 
@@ -426,6 +472,7 @@ export function fitRatingModel(
     playerFactionSkills,
     matchupEffects,
     generalSkills: [], // flat model has no general-skill decomposition
+    battleTypeOffsets: [], // flat model has no battle-type level
     fitIterations: iter,
     finalLoss: loss,
     totalMatches: observations.length,
@@ -448,6 +495,8 @@ function fitHierarchicalRatingModel(
   // --- 1. Sparse indices: GS per player, FO per (player, faction), ME per pair -
   const gsKeyToIdx = new Map<string, number>(); // key = playerId
   const gsGames: number[] = [];
+  const btoKeyToIdx = new Map<string, number>(); // key = playerId:battleType
+  const btoGames: number[] = [];
   const foKeyToIdx = new Map<string, number>(); // key = playerId:factionId
   const foGames: number[] = [];
   const meKeyToIdx = new Map<string, number>();
@@ -461,6 +510,16 @@ function fitHierarchicalRatingModel(
       gsGames.push(0);
     }
     gsGames[idx]! += 1;
+    return idx;
+  };
+  const registerBto = (key: string): number => {
+    let idx = btoKeyToIdx.get(key);
+    if (idx === undefined) {
+      idx = btoKeyToIdx.size;
+      btoKeyToIdx.set(key, idx);
+      btoGames.push(0);
+    }
+    btoGames[idx]! += 1;
     return idx;
   };
   const registerFo = (key: string): number => {
@@ -477,6 +536,8 @@ function fitHierarchicalRatingModel(
   const compiled = observations.map((o) => {
     const gsA = registerGs(o.playerAId);
     const gsB = registerGs(o.playerBId);
+    const btoA = o.battleType !== undefined ? registerBto(`${o.playerAId}:${o.battleType}`) : -1;
+    const btoB = o.battleType !== undefined ? registerBto(`${o.playerBId}:${o.battleType}`) : -1;
     const foA = registerFo(pfsKey(o.playerAId, o.factionXId));
     const foB = registerFo(pfsKey(o.playerBId, o.factionYId));
 
@@ -494,15 +555,17 @@ function fitHierarchicalRatingModel(
       meIdx = idx;
       meSign = sign;
     }
-    return { gsA, gsB, foA, foB, meIdx, meSign, y: o.aWon ? 1 : 0 };
+    return { gsA, gsB, btoA, btoB, foA, foB, meIdx, meSign, y: o.aWon ? 1 : 0 };
   });
 
   const nGs = gsKeyToIdx.size;
+  const nBto = btoKeyToIdx.size;
   const nFo = foKeyToIdx.size;
   const nMe = meKeyToIdx.size;
-  const len = nGs + nFo + nMe;
-  const foBase = nGs;
-  const meBase = nGs + nFo;
+  const len = nGs + nBto + nFo + nMe;
+  const btoBase = nGs;
+  const foBase = nGs + nBto;
+  const meBase = nGs + nBto + nFo;
 
   const theta = new Float64Array(len);
   const grad = new Float64Array(len);
@@ -511,6 +574,7 @@ function fitHierarchicalRatingModel(
 
   const {
     lambdaGeneralSkill: lGs,
+    lambdaBattleTypeOffset: lBto,
     lambdaFactionOffset: lFo,
     lambdaMatchup: lMe,
     learningRate: lr,
@@ -528,6 +592,8 @@ function fitHierarchicalRatingModel(
 
     for (const c of compiled) {
       let adv = theta[c.gsA]! + theta[foBase + c.foA]! - theta[c.gsB]! - theta[foBase + c.foB]!;
+      if (c.btoA >= 0) adv += theta[btoBase + c.btoA]!;
+      if (c.btoB >= 0) adv -= theta[btoBase + c.btoB]!;
       if (c.meIdx >= 0) adv += c.meSign * theta[meBase + c.meIdx]!;
 
       const p = clampProb(logistic(adv));
@@ -535,16 +601,22 @@ function fitHierarchicalRatingModel(
 
       const r = p - c.y; // ∂loss/∂adv
       grad[c.gsA]! += r; // ∂adv/∂GS_A = +1
+      if (c.btoA >= 0) grad[btoBase + c.btoA]! += r; // ∂adv/∂BTO_A = +1
       grad[foBase + c.foA]! += r; // ∂adv/∂FO_A = +1
       grad[c.gsB]! -= r; // ∂adv/∂GS_B = -1
+      if (c.btoB >= 0) grad[btoBase + c.btoB]! -= r; // ∂adv/∂BTO_B = -1
       grad[foBase + c.foB]! -= r; // ∂adv/∂FO_B = -1
       if (c.meIdx >= 0) grad[meBase + c.meIdx]! += c.meSign * r;
     }
 
-    // L2 blocks: GS (light) · FO (heavy) · ME
+    // L2 blocks: GS (light) · BTO (medium) · FO (heavy) · ME
     for (let i = 0; i < nGs; i++) {
       loss += lGs * theta[i]! * theta[i]!;
       grad[i]! += 2 * lGs * theta[i]!;
+    }
+    for (let i = btoBase; i < foBase; i++) {
+      loss += lBto * theta[i]! * theta[i]!;
+      grad[i]! += 2 * lBto * theta[i]!;
     }
     for (let i = foBase; i < meBase; i++) {
       loss += lFo * theta[i]! * theta[i]!;
@@ -579,16 +651,21 @@ function fitHierarchicalRatingModel(
   const fisher = new Float64Array(len);
   for (const c of compiled) {
     let adv = theta[c.gsA]! + theta[foBase + c.foA]! - theta[c.gsB]! - theta[foBase + c.foB]!;
+    if (c.btoA >= 0) adv += theta[btoBase + c.btoA]!;
+    if (c.btoB >= 0) adv -= theta[btoBase + c.btoB]!;
     if (c.meIdx >= 0) adv += c.meSign * theta[meBase + c.meIdx]!;
     const p = clampProb(logistic(adv));
     const w = p * (1 - p);
     fisher[c.gsA]! += w;
+    if (c.btoA >= 0) fisher[btoBase + c.btoA]! += w;
     fisher[foBase + c.foA]! += w;
     fisher[c.gsB]! += w;
+    if (c.btoB >= 0) fisher[btoBase + c.btoB]! += w;
     fisher[foBase + c.foB]! += w;
     if (c.meIdx >= 0) fisher[meBase + c.meIdx]! += w;
   }
   for (let i = 0; i < nGs; i++) fisher[i]! += 2 * lGs;
+  for (let i = btoBase; i < foBase; i++) fisher[i]! += 2 * lBto;
   for (let i = foBase; i < meBase; i++) fisher[i]! += 2 * lFo;
   for (let i = meBase; i < len; i++) fisher[i]! += 2 * lMe;
   const seOf = (idx: number): number => {
@@ -652,10 +729,23 @@ function fitHierarchicalRatingModel(
     });
   }
 
+  const battleTypeOffsets: BattleTypeOffsetEntry[] = [];
+  for (const [key, idx] of btoKeyToIdx) {
+    const [playerId, battleType] = splitPfsKey(key); // key = playerId:battleType
+    battleTypeOffsets.push({
+      playerId,
+      battleType,
+      offset: theta[btoBase + idx]!,
+      gamesCount: btoGames[idx]!,
+      stdError: seOf(btoBase + idx),
+    });
+  }
+
   return createRatingModel({
     playerFactionSkills,
     matchupEffects,
     generalSkills,
+    battleTypeOffsets,
     fitIterations: iter,
     finalLoss: loss,
     totalMatches: observations.length,

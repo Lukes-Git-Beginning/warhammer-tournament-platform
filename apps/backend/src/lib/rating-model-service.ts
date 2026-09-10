@@ -164,6 +164,7 @@ function toData(m: RatingModel): RatingModelData {
     playerFactionSkills: m.playerFactionSkills,
     matchupEffects: m.matchupEffects,
     generalSkills: m.generalSkills,
+    battleTypeOffsets: m.battleTypeOffsets ?? [],
     fitIterations: m.fitIterations,
     finalLoss: m.finalLoss,
     totalMatches: m.totalMatches,
