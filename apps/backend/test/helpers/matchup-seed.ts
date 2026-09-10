@@ -35,7 +35,7 @@ let seq = 0;
  */
 export async function seedMatchupGames(
   prisma: PrismaClient,
-  opts: { seasonId: string; u1: string; u2: string; p1f: string; p2f: string; results: GameResult[] },
+  opts: { versionId: string; u1: string; u2: string; p1f: string; p2f: string; results: GameResult[] },
 ): Promise<string> {
   const match = await prisma.match.create({
     data: {
@@ -45,7 +45,7 @@ export async function seedMatchupGames(
       player1_id: opts.u1,
       player2_id: opts.u2,
       status: 'COMPLETED',
-      season_id: opts.seasonId,
+      version_id: opts.versionId,
     },
   });
   for (let i = 0; i < opts.results.length; i++) {
@@ -68,12 +68,13 @@ export async function seedMatchupGames(
 /** Removes all matches + games seeded for a season, plus the given player users. */
 export async function cleanupMatchupGames(
   prisma: PrismaClient,
-  seasonId: string,
+  versionId: string,
   userIds: string[],
 ): Promise<void> {
-  const matches = await prisma.match.findMany({ where: { season_id: seasonId }, select: { id: true } });
+  const matches = await prisma.match.findMany({ where: { version_id: versionId }, select: { id: true } });
   const ids = matches.map((m) => m.id);
   if (ids.length) await prisma.matchGame.deleteMany({ where: { match_id: { in: ids } } });
-  await prisma.match.deleteMany({ where: { season_id: seasonId } });
+  await prisma.match.deleteMany({ where: { version_id: versionId } });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
 }
+

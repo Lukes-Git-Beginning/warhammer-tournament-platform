@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
-const CreateSeasonSchema = z.object({
+const CreateVersionSchema = z.object({
   name: z.string().min(1).max(120),
   start_date: z.string().datetime(),
   end_date: z.string().datetime(),
@@ -9,7 +9,7 @@ const CreateSeasonSchema = z.object({
   dlc_tag: z.string().optional(),
 });
 
-const PatchSeasonSchema = z
+const PatchVersionSchema = z
   .object({
     name: z.string().min(1).max(120).optional(),
     start_date: z.string().datetime().optional(),
@@ -21,50 +21,50 @@ const PatchSeasonSchema = z
     message: 'Body must contain at least one field',
   });
 
-const seasonRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/seasons — public
-  fastify.get('/api/seasons', async (_request, _reply) => {
-    const seasons = await fastify.prisma.season.findMany({
+const versionRoutes: FastifyPluginAsync = async (fastify) => {
+  // GET /api/versions — public
+  fastify.get('/api/versions', async (_request, _reply) => {
+    const versions = await fastify.prisma.gameVersion.findMany({
       orderBy: { start_date: 'desc' },
     });
-    return { data: seasons };
+    return { data: versions };
   });
 
-  // GET /api/seasons/active — MUST be before /api/seasons/:id
-  fastify.get('/api/seasons/active', async (_request, reply) => {
-    const season = await fastify.prisma.season.findFirst({
+  // GET /api/versions/active — MUST be before /api/versions/:id
+  fastify.get('/api/versions/active', async (_request, reply) => {
+    const version = await fastify.prisma.gameVersion.findFirst({
       where: { is_active: true },
     });
-    if (!season) {
+    if (!version) {
       return reply.code(404).send({
         error: 'NotFound',
-        message: 'No active season found',
+        message: 'No active version found',
         statusCode: 404,
       });
     }
-    return season;
+    return version;
   });
 
-  // GET /api/seasons/:id — public
-  fastify.get('/api/seasons/:id', async (request, reply) => {
+  // GET /api/versions/:id — public
+  fastify.get('/api/versions/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const season = await fastify.prisma.season.findUnique({ where: { id } });
-    if (!season) {
+    const version = await fastify.prisma.gameVersion.findUnique({ where: { id } });
+    if (!version) {
       return reply.code(404).send({
         error: 'NotFound',
-        message: `Season "${id}" not found`,
+        message: `Version "${id}" not found`,
         statusCode: 404,
       });
     }
-    return season;
+    return version;
   });
 
-  // POST /api/seasons — MODERATOR or ADMIN
+  // POST /api/versions — MODERATOR or ADMIN
   fastify.post(
-    '/api/seasons',
+    '/api/versions',
     { preHandler: [fastify.authenticate, fastify.requireRole('MODERATOR', 'ADMIN')] },
     async (request, reply) => {
-      const parsed = CreateSeasonSchema.safeParse(request.body);
+      const parsed = CreateVersionSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.code(400).send({
           error: 'BadRequest',
@@ -75,11 +75,11 @@ const seasonRoutes: FastifyPluginAsync = async (fastify) => {
 
       const data = parsed.data;
 
-      let season;
+      let version;
       if (data.is_active) {
-        season = await fastify.prisma.$transaction(async (tx) => {
-          await tx.season.updateMany({ where: { is_active: true }, data: { is_active: false } });
-          return tx.season.create({
+        version = await fastify.prisma.$transaction(async (tx) => {
+          await tx.gameVersion.updateMany({ where: { is_active: true }, data: { is_active: false } });
+          return tx.gameVersion.create({
             data: {
               name: data.name,
               start_date: new Date(data.start_date),
@@ -90,7 +90,7 @@ const seasonRoutes: FastifyPluginAsync = async (fastify) => {
           });
         });
       } else {
-        season = await fastify.prisma.season.create({
+        version = await fastify.prisma.gameVersion.create({
           data: {
             name: data.name,
             start_date: new Date(data.start_date),
@@ -103,35 +103,35 @@ const seasonRoutes: FastifyPluginAsync = async (fastify) => {
 
       await fastify.prisma.auditLog.create({
         data: {
-          entity_type: 'Season',
-          entity_id: season.id,
+          entity_type: 'GameVersion',
+          entity_id: version.id,
           action: 'create',
           actor_id: request.user.sub,
-          new_value: { id: season.id, name: season.name } as Record<string, string | number | boolean | null>,
+          new_value: { id: version.id, name: version.name } as Record<string, string | number | boolean | null>,
         },
       });
 
-      return reply.code(201).send(season);
+      return reply.code(201).send(version);
     },
   );
 
-  // PATCH /api/seasons/:id — MODERATOR or ADMIN
+  // PATCH /api/versions/:id — MODERATOR or ADMIN
   fastify.patch(
-    '/api/seasons/:id',
+    '/api/versions/:id',
     { preHandler: [fastify.authenticate, fastify.requireRole('MODERATOR', 'ADMIN')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
-      const existing = await fastify.prisma.season.findUnique({ where: { id } });
+      const existing = await fastify.prisma.gameVersion.findUnique({ where: { id } });
       if (!existing) {
         return reply.code(404).send({
           error: 'NotFound',
-          message: `Season "${id}" not found`,
+          message: `Version "${id}" not found`,
           statusCode: 404,
         });
       }
 
-      const parsed = PatchSeasonSchema.safeParse(request.body);
+      const parsed = PatchVersionSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.code(400).send({
           error: 'BadRequest',
@@ -151,16 +151,16 @@ const seasonRoutes: FastifyPluginAsync = async (fastify) => {
       let updated;
       if (data.is_active === true && !existing.is_active) {
         updated = await fastify.prisma.$transaction(async (tx) => {
-          await tx.season.updateMany({ where: { is_active: true }, data: { is_active: false } });
-          return tx.season.update({ where: { id }, data: updatePayload });
+          await tx.gameVersion.updateMany({ where: { is_active: true }, data: { is_active: false } });
+          return tx.gameVersion.update({ where: { id }, data: updatePayload });
         });
       } else {
-        updated = await fastify.prisma.season.update({ where: { id }, data: updatePayload });
+        updated = await fastify.prisma.gameVersion.update({ where: { id }, data: updatePayload });
       }
 
       await fastify.prisma.auditLog.create({
         data: {
-          entity_type: 'Season',
+          entity_type: 'GameVersion',
           entity_id: id,
           action: 'update',
           actor_id: request.user.sub,
@@ -172,27 +172,27 @@ const seasonRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // DELETE /api/seasons/:id — ADMIN only
+  // DELETE /api/versions/:id — ADMIN only
   fastify.delete(
-    '/api/seasons/:id',
+    '/api/versions/:id',
     { preHandler: [fastify.authenticate, fastify.requireRole('ADMIN')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
-      const existing = await fastify.prisma.season.findUnique({ where: { id } });
+      const existing = await fastify.prisma.gameVersion.findUnique({ where: { id } });
       if (!existing) {
         return reply.code(404).send({
           error: 'NotFound',
-          message: `Season "${id}" not found`,
+          message: `Version "${id}" not found`,
           statusCode: 404,
         });
       }
 
-      await fastify.prisma.season.delete({ where: { id } });
+      await fastify.prisma.gameVersion.delete({ where: { id } });
 
       await fastify.prisma.auditLog.create({
         data: {
-          entity_type: 'Season',
+          entity_type: 'GameVersion',
           entity_id: id,
           action: 'delete',
           actor_id: request.user.sub,
@@ -204,4 +204,4 @@ const seasonRoutes: FastifyPluginAsync = async (fastify) => {
   );
 };
 
-export default seasonRoutes;
+export default versionRoutes;

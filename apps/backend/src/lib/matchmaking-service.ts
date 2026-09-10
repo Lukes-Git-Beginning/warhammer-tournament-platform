@@ -13,7 +13,7 @@ import type { FairnessCost } from './swiss.js';
 import { seedFactionWarOrder, type SeedableFormat } from './faction-war-seeding.js';
 
 /**
- * Resolve everything the fairness scorer needs for one season, once — all from the cached rating
+ * Resolve everything the fairness scorer needs for one version, once — all from the cached rating
  * model. `skillOf` is the per-(player, faction) skill; the faction tilt is the model's
  * skill-adjusted matchup effect (so logistic(tilt) is the site's "favourability" rating, not the
  * opponent-contaminated raw win-rate). `hasData` reports whether the pair has any games, for the
@@ -22,9 +22,9 @@ import { seedFactionWarOrder, type SeedableFormat } from './faction-war-seeding.
 export async function loadMatchmakingData(
   prisma: PrismaClient,
   redis: Redis | undefined,
-  seasonId: string,
+  versionId: string,
 ): Promise<MatchmakingData> {
-  const model = await getRatingModel(prisma, redis, { seasonId });
+  const model = await getRatingModel(prisma, redis, { versionId });
   // Canonical (X<Y) pairs that actually have decisive games.
   const sampled = new Set<string>();
   for (const e of model.matchupEffects) {
@@ -79,19 +79,19 @@ export async function resolveFactionWarFairness(
   mode: string | null | undefined,
 ): Promise<FairnessCost | undefined> {
   if (mode !== 'FACTION_WAR') return undefined;
-  const season = await prisma.season.findFirst({
+  const version = await prisma.gameVersion.findFirst({
     where: { is_active: true },
     select: { id: true },
   });
-  if (!season) return undefined;
-  const data = await loadMatchmakingData(prisma, redis, season.id);
+  if (!version) return undefined;
+  const data = await loadMatchmakingData(prisma, redis, version.id);
   return factionWarPairingCost(data);
 }
 
 /**
  * Reorder participants into a fair Faction War seed order for an elimination bracket, so each
  * player's first game is as balanced a faction matchup as the data allows. Returns
- * `participantIds` unchanged for any non-Faction-War mode, or when no active season / rating data
+ * `participantIds` unchanged for any non-Faction-War mode, or when no active version / rating data
  * exists — so the caller can always pass the result straight to the bracket generator. See
  * plans/faction-war-bracket-seeding.md.
  */
@@ -105,11 +105,11 @@ export async function resolveFactionWarSeedOrder(
   format: SeedableFormat,
 ): Promise<string[]> {
   if (mode !== 'FACTION_WAR') return participantIds;
-  const season = await prisma.season.findFirst({
+  const version = await prisma.gameVersion.findFirst({
     where: { is_active: true },
     select: { id: true },
   });
-  if (!season) return participantIds;
-  const data = await loadMatchmakingData(prisma, redis, season.id);
+  if (!version) return participantIds;
+  const data = await loadMatchmakingData(prisma, redis, version.id);
   return seedFactionWarOrder(tournamentId, participantIds, factionById, data, format);
 }

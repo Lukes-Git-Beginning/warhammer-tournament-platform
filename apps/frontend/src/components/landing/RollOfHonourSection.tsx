@@ -15,7 +15,7 @@ const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
 /**
  * Section 4 — Roll of Honour.
- * Top-10 marshals by dynamic weighted season standing (final points, Alex-Spec).
+ * Top-10 marshals by dynamic weighted version standing (final points, Alex-Spec).
  * Uses getLeaderboard() and degrades to empty / loading states gracefully.
  */
 export function RollOfHonourSection() {

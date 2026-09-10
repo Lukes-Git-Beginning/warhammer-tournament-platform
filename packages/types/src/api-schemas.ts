@@ -92,7 +92,7 @@ export type JwtPayload = z.infer<typeof JwtPayloadSchema>;
 // Leaderboard
 // ---------------------------------------------------------------------------
 
-export const SeasonSummarySchema = z.object({
+export const VersionSummarySchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   start_date: z.string().datetime(),
@@ -100,7 +100,7 @@ export const SeasonSummarySchema = z.object({
   is_active: z.boolean(),
   dlc_tag: z.string().nullable().optional(),
 });
-export type SeasonSummary = z.infer<typeof SeasonSummarySchema>;
+export type VersionSummary = z.infer<typeof VersionSummarySchema>;
 
 export const LeaderboardEntryDtoSchema = z.object({
   rank: z.number().int(),
@@ -118,7 +118,7 @@ export const LeaderboardEntryDtoSchema = z.object({
 export type LeaderboardEntryDto = z.infer<typeof LeaderboardEntryDtoSchema>;
 
 export const LeaderboardResponseSchema = z.object({
-  season: SeasonSummarySchema.optional(),
+  version: VersionSummarySchema.optional(),
   entries: z.array(LeaderboardEntryDtoSchema),
   total: z.number().int(),
   page: z.number().int(),
@@ -127,7 +127,7 @@ export const LeaderboardResponseSchema = z.object({
 export type LeaderboardResponse = z.infer<typeof LeaderboardResponseSchema>;
 
 export const AllTimeLeaderboardEntryDtoSchema = LeaderboardEntryDtoSchema.extend({
-  seasons_participated: z.number().int(),
+  versions_participated: z.number().int(),
 });
 export type AllTimeLeaderboardEntryDto = z.infer<typeof AllTimeLeaderboardEntryDtoSchema>;
 
@@ -154,7 +154,7 @@ export const DynamicLeaderboardEntryDtoSchema = z.object({
 export type DynamicLeaderboardEntryDto = z.infer<typeof DynamicLeaderboardEntryDtoSchema>;
 
 export const DynamicLeaderboardResponseSchema = z.object({
-  season: SeasonSummarySchema.optional(),
+  version: VersionSummarySchema.optional(),
   entries: z.array(DynamicLeaderboardEntryDtoSchema),
   total: z.number().int(),
   page: z.number().int(),
@@ -214,7 +214,7 @@ export const FactionStrengthDtoSchema = z.object({
 export type FactionStrengthDto = z.infer<typeof FactionStrengthDtoSchema>;
 
 export const FactionMatchupMatrixResponseSchema = z.object({
-  seasonId: z.string().uuid(),
+  versionId: z.string().uuid(),
   entries: z.array(FactionMatchupMatrixEntryDtoSchema),
   factionStrengths: z.array(FactionStrengthDtoSchema),
 });
@@ -235,7 +235,7 @@ export type PlayerFactionProficiencyDto = z.infer<typeof PlayerFactionProficienc
 
 export const PlayerFactionProficiencyResponseSchema = z.object({
   playerId: z.string().uuid(),
-  seasonId: z.string().uuid(),
+  versionId: z.string().uuid(),
   entries: z.array(PlayerFactionProficiencyDtoSchema),
 });
 export type PlayerFactionProficiencyResponse = z.infer<typeof PlayerFactionProficiencyResponseSchema>;
@@ -254,9 +254,9 @@ export const UserProfileResponseSchema = z.object({
     /** Ko-Fi supporter tiers (cumulative) — drives the profile badge. */
     tiers: SupporterTiersSchema.optional(),
   }),
-  current_season: z
+  current_version: z
     .object({
-      season: SeasonSummarySchema,
+      version: VersionSummarySchema,
       total_points: z.number(),
       games_played: z.number().int(),
       wins: z.number().int(),
@@ -273,7 +273,7 @@ export const UserProfileResponseSchema = z.object({
   recent_results: z.array(
     z.object({
       tournament: z.object({ slug: z.string(), name: z.string(), start_date: z.string().datetime() }),
-      season_name: z.string().nullable(),
+      version_name: z.string().nullable(),
       placement: z.number().int(),
       points_earned: z.number(),
       created_at: z.string().datetime(),
@@ -319,7 +319,7 @@ export const FactionStatsDtoSchema = z.object({
   win_rate: z.number().nullable(),
   pick_count: z.number().int(),
   ban_count: z.number().int(),
-  /** The single player with the most games on this faction this season, and their game count —
+  /** The single player with the most games on this faction this version, and their game count —
    *  drives the segmented popularity bar. Null when the faction has no attributed games. */
   top_player: z.object({ username: z.string(), games: z.number().int() }).nullable().optional(),
 });
@@ -333,7 +333,7 @@ export type FactionWithStatsDto = z.infer<typeof FactionWithStatsDtoSchema>;
 
 export const FactionListResponseSchema = z.object({
   data: z.array(FactionWithStatsDtoSchema),
-  season: SeasonSummarySchema.nullable(),
+  version: VersionSummarySchema.nullable(),
 });
 export type FactionListResponse = z.infer<typeof FactionListResponseSchema>;
 
@@ -352,7 +352,7 @@ export const FactionDetailResponseSchema = z.object({
 export type FactionDetailResponse = z.infer<typeof FactionDetailResponseSchema>;
 
 export const MetaOverviewResponseSchema = z.object({
-  season: SeasonSummarySchema.nullable(),
+  version: VersionSummarySchema.nullable(),
   top_factions_by_winrate: z.array(FactionWithStatsDtoSchema),
   top_factions_by_pickrate: z.array(FactionWithStatsDtoSchema),
   total_games: z.number().int(),
@@ -372,7 +372,7 @@ export const MatchupCellSchema = z.object({
 export type MatchupCell = z.infer<typeof MatchupCellSchema>;
 
 export const MatchupHeatmapResponseSchema = z.object({
-  season_id: z.string().uuid().nullable(),
+  version_id: z.string().uuid().nullable(),
   cells: z.array(MatchupCellSchema),
   factions: z.array(FactionDtoSchema),
 });

@@ -17,17 +17,17 @@ import {
   loadCalibrationQuestions,
 } from '../lib/skill-classification-service.js';
 
-async function resolveSeasonId(
+async function resolveVersionId(
   fastify: FastifyInstance,
-  seasonId: string | undefined,
+  versionId: string | undefined,
 ): Promise<{ id: string } | { error: { code: number; message: string } }> {
-  if (seasonId) {
-    const season = await fastify.prisma.season.findUnique({ where: { id: seasonId } });
-    if (!season) return { error: { code: 404, message: 'Season not found' } };
-    return { id: season.id };
+  if (versionId) {
+    const version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+    if (!version) return { error: { code: 404, message: 'Version not found' } };
+    return { id: version.id };
   }
-  const active = await fastify.prisma.season.findFirst({ where: { is_active: true } });
-  if (!active) return { error: { code: 404, message: 'No active season' } };
+  const active = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
+  if (!active) return { error: { code: 404, message: 'No active version' } };
   return { id: active.id };
 }
 
@@ -46,10 +46,10 @@ const skillRoutes: FastifyPluginAsync = async (fastify) => {
   // A player's classification (public — the band is shown on profiles).
   fastify.get('/api/players/:id/classification', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const query = z.object({ seasonId: z.string().uuid().optional() }).safeParse(request.query);
+    const query = z.object({ versionId: z.string().uuid().optional() }).safeParse(request.query);
     if (!query.success) return reply.code(400).send(err(400, query.error.message));
 
-    const resolved = await resolveSeasonId(fastify, query.data.seasonId);
+    const resolved = await resolveVersionId(fastify, query.data.versionId);
     if ('error' in resolved) return reply.code(resolved.error.code).send(err(resolved.error.code, resolved.error.message));
 
     const classification = await getPlayerClassification(
@@ -74,7 +74,7 @@ const skillRoutes: FastifyPluginAsync = async (fastify) => {
       const playerId = request.user.sub;
       const answers = await saveCalibrationAnswers(fastify.prisma, playerId, body.data.answers);
 
-      const resolved = await resolveSeasonId(fastify, undefined);
+      const resolved = await resolveVersionId(fastify, undefined);
       if ('error' in resolved) return { answers };
       const classification = await getPlayerClassification(
         fastify.prisma,

@@ -50,7 +50,7 @@ export function DropOffFunnelChart() {
           value={tournamentId ?? ''}
           onChange={(e) => setTournamentId(e.target.value || undefined)}
         >
-          <option value="">All Tournaments (Season Aggregate)</option>
+          <option value="">All Tournaments (Version Aggregate)</option>
           {tournaments.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name}

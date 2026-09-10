@@ -23,7 +23,7 @@ import { loadConfirmedGames, type ConfirmedGame } from './leaderboard-service.js
 // exactly: game-level, incl. the synthetic-game fallback for pre-GL-fix data.
 // ---------------------------------------------------------------------------
 
-/** How many confirmed games the player WON in the season. */
+/** How many confirmed games the player WON in the version. */
 function playerTotalWins(games: ConfirmedGame[], playerId: string): number {
   return games.filter((g) => g.winner_id === playerId).length;
 }
@@ -67,7 +67,7 @@ export async function matchBreakdown(
     where: { id: matchId, deleted_at: null },
     select: {
       id: true,
-      season_id: true,
+      version_id: true,
       player1_id: true,
       player2_id: true,
       winner_id: true,
@@ -79,7 +79,7 @@ export async function matchBreakdown(
   // Only confirmed, decisive, fully-tagged matches are scoreable.
   if (
     !match ||
-    !match.season_id ||
+    !match.version_id ||
     !match.winner_id ||
     !match.player1_id ||
     !match.player2_id ||
@@ -95,7 +95,7 @@ export async function matchBreakdown(
   const winnerFaction = winnerIsP1 ? match.player1_faction_id : match.player2_faction_id;
   const loserFaction = winnerIsP1 ? match.player2_faction_id : match.player1_faction_id;
 
-  const model = await getRatingModel(prisma, redis, { seasonId: match.season_id });
+  const model = await getRatingModel(prisma, redis, { versionId: match.version_id });
 
   const winnerPFS = model.getPlayerFactionSkill(winnerId, winnerFaction);
   const loserPFS = model.getPlayerFactionSkill(loserId, loserFaction);
@@ -104,7 +104,7 @@ export async function matchBreakdown(
   const raw = rawPoints(p);
 
   // Game-level win counts from the same source as the leaderboard → identical share.
-  const games = await loadConfirmedGames(prisma, match.season_id);
+  const games = await loadConfirmedGames(prisma, match.version_id);
   const total = playerTotalWins(games, winnerId);
   const vs = winsBetween(games, winnerId, loserId);
   const share = opponentShare(vs, total);
@@ -151,18 +151,18 @@ export interface PlayerOpponentBreakdown {
 export async function playerOpponentBreakdown(
   prisma: PrismaClient,
   redis: Redis | undefined,
-  seasonId: string,
+  versionId: string,
   playerId: string,
   opponentId: string,
 ): Promise<PlayerOpponentBreakdown> {
   // Single game source — identical to the leaderboard, incl. synthetic-game fallback.
-  const games = await loadConfirmedGames(prisma, seasonId);
+  const games = await loadConfirmedGames(prisma, versionId);
   const total = playerTotalWins(games, playerId);
   const vs = winsBetween(games, playerId, opponentId);
   const share = opponentShare(vs, total);
   const mod = opponentModifier(share, total);
 
-  const model = await getRatingModel(prisma, redis, { seasonId });
+  const model = await getRatingModel(prisma, redis, { versionId });
 
   // Raw points the player earned from each won game against this opponent.
   let rawSum = 0;
@@ -208,9 +208,9 @@ export interface FactionMatchupMatrixEntry {
 export async function factionMatchupMatrix(
   prisma: PrismaClient,
   redis: Redis | undefined,
-  seasonId: string,
+  versionId: string,
 ): Promise<FactionMatchupMatrixEntry[]> {
-  const model = await getRatingModel(prisma, redis, { seasonId });
+  const model = await getRatingModel(prisma, redis, { versionId });
   return model.matchupEffects.map((e) => ({
     factionA: e.factionXId,
     factionB: e.factionYId,
@@ -236,9 +236,9 @@ export interface FactionStrengthEntry {
 export async function factionStrengths(
   prisma: PrismaClient,
   redis: Redis | undefined,
-  seasonId: string,
+  versionId: string,
 ): Promise<FactionStrengthEntry[]> {
-  const model = await getRatingModel(prisma, redis, { seasonId });
+  const model = await getRatingModel(prisma, redis, { versionId });
   const byFaction = new Map<string, { sum: number; count: number }>();
   for (const e of model.playerFactionSkills) {
     const cur = byFaction.get(e.factionId) ?? { sum: 0, count: 0 };
@@ -272,10 +272,10 @@ export interface PlayerFactionProficiencyEntry {
 export async function playerFactionProficiency(
   prisma: PrismaClient,
   redis: Redis | undefined,
-  seasonId: string,
+  versionId: string,
   playerId: string,
 ): Promise<PlayerFactionProficiencyEntry[]> {
-  const model = await getRatingModel(prisma, redis, { seasonId });
+  const model = await getRatingModel(prisma, redis, { versionId });
 
   // Game-level data: each individual battle (MatchGame) the player participated in.
   // BYEs are automatically excluded — they have no MatchGame records.
@@ -285,7 +285,7 @@ export async function playerFactionProficiency(
       winner_id: { not: null },
       counts_for_leaderboard: true,
       match: {
-        season_id: seasonId,
+        version_id: versionId,
         deleted_at: null,
         OR: [{ player1_id: playerId }, { player2_id: playerId }],
       },

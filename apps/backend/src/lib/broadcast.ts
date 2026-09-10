@@ -78,10 +78,10 @@ export async function resolveAdminAudience(
   // ONCE, fetch all survivors' calibration answers in ONE query, then classify in
   // memory. Uses the headline (gating) band, what a player sees as "their band".
   if (audience.bands.length > 0) {
-    const season = await prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
-    if (!season) return []; // no active season → no band signal → target nobody
+    const version = await prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
+    if (!version) return []; // no active version → no band signal → target nobody
     const [model, questions, answerRows] = await Promise.all([
-      getRatingModel(prisma, redis, { seasonId: season.id, config: { hierarchical: true } }),
+      getRatingModel(prisma, redis, { versionId: version.id, config: { hierarchical: true } }),
       loadCalibrationQuestions(prisma),
       prisma.user.findMany({
         where: { id: { in: candidates.map((c) => c.id) } },

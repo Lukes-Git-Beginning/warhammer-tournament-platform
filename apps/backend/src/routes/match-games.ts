@@ -554,8 +554,8 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Rebuild stats from the game rows (idempotent) + bust caches.
-      const activeSeason = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
-      if (activeSeason) await recomputeFactionStats(fastify.prisma, activeSeason.id);
+      const activeVersion = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
+      if (activeVersion) await recomputeFactionStats(fastify.prisma, activeVersion.id);
       if (fastify.redis) {
         await Promise.all([
           invalidate(fastify.redis, 'factions:*'),
@@ -954,8 +954,8 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
 
       await fastify.prisma.matchGame.delete({ where: { id: game.id } });
 
-      const activeSeason = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
-      if (activeSeason) await recomputeFactionStats(fastify.prisma, activeSeason.id);
+      const activeVersion = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
+      if (activeVersion) await recomputeFactionStats(fastify.prisma, activeVersion.id);
       if (fastify.redis) {
         await Promise.all([
           invalidate(fastify.redis, 'factions:*'),

@@ -308,10 +308,10 @@ afterEach(async () => {
   await prisma.match.deleteMany({ where: { tournament_id: ET } });
   await prisma.tournamentParticipant.deleteMany({ where: { tournament_id: ET } });
   await prisma.tournament.deleteMany({ where: { id: ET } });
-  await prisma.leaderboardEntry.deleteMany({ where: { season_id: ES } });
-  await prisma.season.deleteMany({ where: { id: ES } });
+  await prisma.leaderboardEntry.deleteMany({ where: { version_id: ES } });
+  await prisma.gameVersion.deleteMany({ where: { id: ES } });
   await prisma.user.deleteMany({ where: { id: { in: [EU1, EU2, EACTOR] } } });
-  await prisma.season.updateMany({ where: { is_active: true }, data: { is_active: false } });
+  await prisma.gameVersion.updateMany({ where: { is_active: true }, data: { is_active: false } });
 });
 
 async function seedEloBase({ withExistingLeaderboard = false }: { withExistingLeaderboard?: boolean } = {}) {
@@ -325,9 +325,9 @@ async function seedEloBase({ withExistingLeaderboard = false }: { withExistingLe
   });
 
   // Deactivate any pre-existing active seasons to avoid interference
-  await prisma.season.updateMany({ where: { is_active: true }, data: { is_active: false } });
+  await prisma.gameVersion.updateMany({ where: { is_active: true }, data: { is_active: false } });
 
-  await prisma.season.create({
+  await prisma.gameVersion.create({
     data: {
       id: ES,
       name: 'ELO Test Season',
@@ -373,3 +373,4 @@ async function seedEloBase({ withExistingLeaderboard = false }: { withExistingLe
   });
 
 }
+

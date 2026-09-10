@@ -183,7 +183,7 @@ export async function completeMatch(
 
   const loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
 
-  const activeSeason = await fastify.prisma.season.findFirst({
+  const activeVersion = await fastify.prisma.gameVersion.findFirst({
     where: { is_active: true },
     select: { id: true },
   });
@@ -195,7 +195,7 @@ export async function completeMatch(
         winner_id: winnerId,
         score: opts.walkover ? 'W/O' : (score ?? null),
         status: opts.walkover ? 'FORFEIT' : 'COMPLETED',
-        season_id: activeSeason?.id ?? null,
+        version_id: activeVersion?.id ?? null,
         played_at: new Date(),
         ...(player1FactionId ? { player1_faction_id: player1FactionId } : {}),
         ...(player2FactionId ? { player2_faction_id: player2FactionId } : {}),
@@ -267,8 +267,8 @@ export async function completeMatch(
 
     // LeaderboardEntry — mirrors resolveMatchResult so GameTile matches count on the leaderboard.
     // A walkover played no game, so it never touches the leaderboard.
-    if (activeSeason && !opts.walkover && (match.tournament?.counts_for_leaderboard ?? true)) {
-      const seasonId = activeSeason.id;
+    if (activeVersion && !opts.walkover && (match.tournament?.counts_for_leaderboard ?? true)) {
+      const versionId = activeVersion.id;
       const WIN_PTS = 3, LOSS_PTS = 0;
       const entries = [
         match.player1_id ? { userId: match.player1_id, isWinner: winnerId === match.player1_id, points: winnerId === match.player1_id ? WIN_PTS : LOSS_PTS } : null,
@@ -276,8 +276,8 @@ export async function completeMatch(
       ].filter((e): e is NonNullable<typeof e> => e !== null);
       for (const e of entries) {
         await tx.leaderboardEntry.upsert({
-          where: { user_id_season_id: { user_id: e.userId, season_id: seasonId } },
-          create: { user_id: e.userId, season_id: seasonId, games_played: 1, wins: e.isWinner ? 1 : 0, losses: e.isWinner ? 0 : 1, total_points: e.points },
+          where: { user_id_version_id: { user_id: e.userId, version_id: versionId } },
+          create: { user_id: e.userId, version_id: versionId, games_played: 1, wins: e.isWinner ? 1 : 0, losses: e.isWinner ? 0 : 1, total_points: e.points },
           update: { games_played: { increment: 1 }, wins: e.isWinner ? { increment: 1 } : undefined, losses: !e.isWinner ? { increment: 1 } : undefined, total_points: { increment: e.points } },
         });
       }
@@ -302,8 +302,8 @@ export async function completeMatch(
 
   // Rebuild faction/matchup stats from the COMPLETED game rows (idempotent). Skipped
   // for BoN (skipStats) — finalizeGameResult runs its own recompute after the series.
-  if (activeSeason && !opts.skipStats && !opts.walkover) {
-    await recomputeFactionStats(fastify.prisma, activeSeason.id);
+  if (activeVersion && !opts.skipStats && !opts.walkover) {
+    await recomputeFactionStats(fastify.prisma, activeVersion.id);
   }
 
   // Open Play: record the result in the queue activity log (best-effort, post-commit

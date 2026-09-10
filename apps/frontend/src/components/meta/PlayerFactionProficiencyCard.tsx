@@ -10,7 +10,7 @@ import { FactionBadge } from './FactionBadge.js';
 
 interface PlayerFactionProficiencyCardProps {
   userId: string;
-  seasonId?: string;
+  versionId?: string;
 }
 
 function SkillBar({ value }: { value: number }) {
@@ -84,11 +84,11 @@ function ProficiencyRow({
 
 export function PlayerFactionProficiencyCard({
   userId,
-  seasonId,
+  versionId,
 }: PlayerFactionProficiencyCardProps) {
   const { data: proficiency, isLoading: loadingProf } = useQuery({
-    queryKey: ['player-faction-proficiency', userId, seasonId],
-    queryFn: () => getPlayerFactionProficiency(userId, seasonId),
+    queryKey: ['player-faction-proficiency', userId, versionId],
+    queryFn: () => getPlayerFactionProficiency(userId, versionId),
     retry: false,
   });
 
@@ -147,3 +147,4 @@ export function PlayerFactionProficiencyCard({
     </div>
   );
 }
+

@@ -22,7 +22,7 @@ const MOCK_STATS: AdminStats = {
   activeUsers: 42,
   tournaments: { total: 10, active: 3, completed: 7 },
   gamesPlayed: 128,
-  currentSeason: 'Season 4',
+  currentVersion: 'Version 4',
   topFactions: [
     { faction_id: 'f1', faction_name: 'Greenskinz', pick_count: 25 },
     { faction_id: 'f2', faction_name: 'Chaos Warriors', pick_count: 18 },
@@ -92,7 +92,7 @@ describe('StatsDashboard Rendering (pre-hydrated QueryClient)', () => {
     // Zahlenwerte vorhanden
     expect(html).toContain('42');      // activeUsers
     expect(html).toContain('128');     // gamesPlayed
-    expect(html).toContain('Season 4'); // currentSeason
+    expect(html).toContain('Version 4'); // currentVersion
     expect(html).toContain('10');      // tournaments.total
   });
 
@@ -136,3 +136,4 @@ describe('StatsDashboard Rendering (pre-hydrated QueryClient)', () => {
     expect(html).toContain('No data.');
   });
 });
+

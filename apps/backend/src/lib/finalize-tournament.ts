@@ -282,7 +282,7 @@ export async function finalizeTournament(
   prisma: PrismaClient,
   tournamentId: string,
   actorId: string,
-): Promise<{ resultCount: number; seasonId: string | null }> {
+): Promise<{ resultCount: number; versionId: string | null }> {
   // Load tournament
   const tournament = await prisma.tournament.findUniqueOrThrow({
     where: { id: tournamentId },
@@ -339,29 +339,29 @@ export async function finalizeTournament(
     placements = computeSingleElimPlacements(matches as MatchLike[]);
   }
 
-  // Active season
-  const activeSeason = await prisma.season.findFirst({
+  // Active version
+  const activeVersion = await prisma.gameVersion.findFirst({
     where: { is_active: true },
     select: { id: true },
   });
-  const seasonId = activeSeason?.id ?? null;
+  const versionId = activeVersion?.id ?? null;
 
   // Build list of userIds from finalized placements
   const finalizedUserIds = [...placements.keys()];
 
   // -------------------------------------------------------------------------
-  // Season-level pre-computation (outside transaction for performance).
+  // Version-level pre-computation (outside transaction for performance).
   // All values are SET on LeaderboardEntry — never incremented — so
   // finalizeTournament is fully idempotent regardless of how many times it runs.
   // -------------------------------------------------------------------------
 
-  // 1. Season-total points: sum of ALL TournamentResults in the season for each
+  // 1. Version-total points: sum of ALL TournamentResults in the version for each
   //    player, replacing this tournament's old value with the newly computed one.
-  const priorSeasonResults =
-    seasonId && finalizedUserIds.length > 0
+  const priorVersionResults =
+    versionId && finalizedUserIds.length > 0
       ? await prisma.tournamentResult.findMany({
           where: {
-            season_id: seasonId,
+            version_id: versionId,
             user_id: { in: finalizedUserIds },
             tournament_id: { not: tournamentId }, // exclude current — will be added fresh
           },
@@ -369,20 +369,20 @@ export async function finalizeTournament(
         })
       : [];
   const priorPointsMap = new Map<string, number>();
-  for (const r of priorSeasonResults) {
+  for (const r of priorVersionResults) {
     priorPointsMap.set(r.user_id, (priorPointsMap.get(r.user_id) ?? 0) + r.points_earned);
   }
 
-  // 3. Season-total W/L at game level across ALL season tournaments.
+  // 3. Version-total W/L at game level across ALL version tournaments.
   //    BYEs have no MatchGame records → automatically excluded.
-  const allSeasonGames =
-    seasonId && finalizedUserIds.length > 0
+  const allVersionGames =
+    versionId && finalizedUserIds.length > 0
       ? await prisma.matchGame.findMany({
           where: {
             status: 'COMPLETED',
             winner_id: { not: null },
             match: {
-              season_id: seasonId,
+              version_id: versionId,
               deleted_at: null,
               tournament: { counts_for_leaderboard: true },
               OR: [
@@ -398,13 +398,13 @@ export async function finalizeTournament(
         })
       : [];
 
-  const seasonWins = new Map<string, number>();
-  const seasonLosses = new Map<string, number>();
-  for (const g of allSeasonGames) {
+  const versionWins = new Map<string, number>();
+  const versionLosses = new Map<string, number>();
+  for (const g of allVersionGames) {
     if (!g.winner_id) continue;
     const loser = g.winner_id === g.match.player1_id ? g.match.player2_id : g.match.player1_id;
-    seasonWins.set(g.winner_id, (seasonWins.get(g.winner_id) ?? 0) + 1);
-    if (loser) seasonLosses.set(loser, (seasonLosses.get(loser) ?? 0) + 1);
+    versionWins.set(g.winner_id, (versionWins.get(g.winner_id) ?? 0) + 1);
+    if (loser) versionLosses.set(loser, (versionLosses.get(loser) ?? 0) + 1);
   }
 
   // ---------------------------------------------------------------------------
@@ -422,27 +422,27 @@ export async function finalizeTournament(
         create: {
           tournament_id: tournamentId,
           user_id: userId,
-          season_id: seasonId,
+          version_id: versionId,
           placement,
           points_earned: points,
         },
         update: {
-          season_id: seasonId,
+          version_id: versionId,
           placement,
           points_earned: points,
         },
       });
 
-      if (seasonId && tournament.counts_for_leaderboard) {
+      if (versionId && tournament.counts_for_leaderboard) {
         const totalPoints = (priorPointsMap.get(userId) ?? 0) + points;
-        const totalWins = seasonWins.get(userId) ?? 0;
-        const totalLosses = seasonLosses.get(userId) ?? 0;
+        const totalWins = versionWins.get(userId) ?? 0;
+        const totalLosses = versionLosses.get(userId) ?? 0;
 
         await tx.leaderboardEntry.upsert({
-          where: { user_id_season_id: { user_id: userId, season_id: seasonId } },
+          where: { user_id_version_id: { user_id: userId, version_id: versionId } },
           create: {
             user_id: userId,
-            season_id: seasonId,
+            version_id: versionId,
             total_points: totalPoints,
             games_played: totalWins + totalLosses,
             wins: totalWins,
@@ -464,19 +464,19 @@ export async function finalizeTournament(
         entity_id: tournamentId,
         action: 'finalize',
         actor_id: actorId,
-        new_value: { resultCount: placements.size, seasonId } as Record<string, string | number | boolean | null>,
+        new_value: { resultCount: placements.size, versionId } as Record<string, string | number | boolean | null>,
       },
     });
   });
 
-  return { resultCount: placements.size, seasonId };
+  return { resultCount: placements.size, versionId };
 }
 
 /**
  * Reverse a finalisation: reopen a COMPLETED tournament to ONGOING and undo the stats
- * finalizeTournament wrote. finalize is idempotent (it recomputes each player's season
- * aggregate from ALL their season results), so the exact reversal is: drop THIS tournament's
- * placement results, then recompute every affected player's season-leaderboard points from
+ * finalizeTournament wrote. finalize is idempotent (it recomputes each player's version
+ * aggregate from ALL their version results), so the exact reversal is: drop THIS tournament's
+ * placement results, then recompute every affected player's version-leaderboard points from
  * their REMAINING results. Games / W-L are left untouched — the matches still happened and the
  * tournament still exists — so re-finalising after fixing the bracket is clean. No-op unless the
  * tournament is currently COMPLETED. Returns whether it was reopened.
@@ -493,29 +493,29 @@ export async function unfinalizeTournament(
 
   const results = await prisma.tournamentResult.findMany({
     where: { tournament_id: tournamentId },
-    select: { user_id: true, season_id: true },
+    select: { user_id: true, version_id: true },
   });
-  const seasonId = results.find((r) => r.season_id)?.season_id ?? null;
+  const versionId = results.find((r) => r.version_id)?.version_id ?? null;
   const affectedUserIds = [...new Set(results.map((r) => r.user_id))];
 
   await prisma.$transaction(async (tx) => {
     // Drop this tournament's placement results.
     await tx.tournamentResult.deleteMany({ where: { tournament_id: tournamentId } });
 
-    // Recompute each affected player's season leaderboard points from their REMAINING results.
-    if (seasonId) {
+    // Recompute each affected player's version leaderboard points from their REMAINING results.
+    if (versionId) {
       for (const userId of affectedUserIds) {
         const remaining = await tx.tournamentResult.findMany({
-          where: { season_id: seasonId, user_id: userId },
+          where: { version_id: versionId, user_id: userId },
           select: { points_earned: true },
         });
         if (remaining.length === 0) {
-          // No season results left → the player drops off the season points board entirely.
-          await tx.leaderboardEntry.deleteMany({ where: { user_id: userId, season_id: seasonId } });
+          // No version results left → the player drops off the version points board entirely.
+          await tx.leaderboardEntry.deleteMany({ where: { user_id: userId, version_id: versionId} });
         } else {
           const totalPoints = remaining.reduce((sum, r) => sum + r.points_earned, 0);
           await tx.leaderboardEntry.updateMany({
-            where: { user_id: userId, season_id: seasonId },
+            where: { user_id: userId, version_id: versionId},
             data: { total_points: totalPoints },
           });
         }

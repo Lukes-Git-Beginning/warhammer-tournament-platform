@@ -39,11 +39,11 @@ afterAll(async () => {
 
 async function cleanup() {
   await cleanupMatchupGames(prisma, S1, [U1, U2]);
-  await prisma.factionStatsSnapshot.deleteMany({ where: { season_id: S1 } });
-  await prisma.matchupStats.deleteMany({ where: { season_id: S1 } });
-  await prisma.factionStats.deleteMany({ where: { season_id: S1 } });
-  await prisma.season.deleteMany({ where: { id: S1 } });
-  await prisma.season.updateMany({ where: { is_active: true }, data: { is_active: false } });
+  await prisma.factionStatsSnapshot.deleteMany({ where: { version_id: S1 } });
+  await prisma.matchupStats.deleteMany({ where: { version_id: S1 } });
+  await prisma.factionStats.deleteMany({ where: { version_id: S1 } });
+  await prisma.gameVersion.deleteMany({ where: { id: S1 } });
+  await prisma.gameVersion.updateMany({ where: { is_active: true }, data: { is_active: false } });
 }
 
 beforeEach(cleanup);
@@ -52,8 +52,8 @@ beforeEach(cleanup);
 // Seed helpers
 // ---------------------------------------------------------------------------
 
-async function seedSeason() {
-  await prisma.season.create({
+async function seedVersion() {
+  await prisma.gameVersion.create({
     data: {
       id: S1,
       name: 'GraphQL Test Season',
@@ -70,7 +70,7 @@ async function seedFactionStats() {
     data: [
       {
         faction_id: 'empire',
-        season_id: S1,
+        version_id: S1,
         matches_played: 20,
         wins: 15,
         losses: 4,
@@ -80,7 +80,7 @@ async function seedFactionStats() {
       },
       {
         faction_id: 'high_elves',
-        season_id: S1,
+        version_id: S1,
         matches_played: 12,
         wins: 6,
         losses: 6,
@@ -90,7 +90,7 @@ async function seedFactionStats() {
       },
       {
         faction_id: 'dwarfs',
-        season_id: S1,
+        version_id: S1,
         matches_played: 10,
         wins: 8,
         losses: 2,
@@ -122,12 +122,12 @@ function gql(query: string, variables?: Record<string, unknown>) {
 
 describe('GraphQL — factions query', () => {
   it('1. returns 24 factions with valid colorHex and initials', async () => {
-    await seedSeason();
+    await seedVersion();
 
     const res = await gql(`
       query {
-        factions(seasonId: "${S1}") {
-          season {
+        factions(versionId: "${S1}") {
+          version {
             id
             name
             isActive
@@ -155,7 +155,7 @@ describe('GraphQL — factions query', () => {
     const body = res.json<{
       data: {
         factions: {
-          season: { id: string; name: string; isActive: boolean };
+          version: { id: string; name: string; isActive: boolean };
           data: Array<{
             faction: {
               id: string;
@@ -174,8 +174,8 @@ describe('GraphQL — factions query', () => {
     expect(body.errors).toBeUndefined();
 
     const { factions } = body.data;
-    expect(factions.season.id).toBe(S1);
-    expect(factions.season.isActive).toBe(true);
+    expect(factions.version.id).toBe(S1);
+    expect(factions.version.isActive).toBe(true);
     expect(factions.data).toHaveLength(24);
 
     // All factions must have a non-empty colorHex (#RRGGBB) and 2- or 3-char initials
@@ -206,12 +206,12 @@ describe('GraphQL — factions query', () => {
   });
 
   it('1b. stats fields are populated when FactionStats are seeded', async () => {
-    await seedSeason();
+    await seedVersion();
     await seedFactionStats();
 
     const res = await gql(`
       query {
-        factions(seasonId: "${S1}") {
+        factions(versionId: "${S1}") {
           data {
             faction { id }
             stats { matchesPlayed wins losses draws winRate pickCount banCount }
@@ -266,12 +266,12 @@ describe('GraphQL — factions query', () => {
 
 describe('GraphQL — matchupHeatmap query', () => {
   it('2. returns empty cells and 24 factions when no MatchupStats exist', async () => {
-    await seedSeason();
+    await seedVersion();
 
     const res = await gql(`
       query {
-        matchupHeatmap(seasonId: "${S1}") {
-          seasonId
+        matchupHeatmap(versionId: "${S1}") {
+          versionId
           factions { id name }
           cells {
             factionAId
@@ -290,7 +290,7 @@ describe('GraphQL — matchupHeatmap query', () => {
     const body = res.json<{
       data: {
         matchupHeatmap: {
-          seasonId: string;
+          versionId: string;
           factions: Array<{ id: string; name: string }>;
           cells: Array<{
             factionAId: string;
@@ -308,23 +308,23 @@ describe('GraphQL — matchupHeatmap query', () => {
 
     expect(body.errors).toBeUndefined();
     const heatmap = body.data.matchupHeatmap;
-    expect(heatmap.seasonId).toBe(S1);
+    expect(heatmap.versionId).toBe(S1);
     expect(heatmap.factions).toHaveLength(24);
     expect(heatmap.cells).toHaveLength(0);
   });
 
   it('2b. returns correct cells when MatchupStats are seeded', async () => {
-    await seedSeason();
+    await seedVersion();
 
     // bretonnia (a) vs empire (b): 4 a_wins, 6 b_wins, 0 draws
     await seedMatchupGames(prisma, {
-      seasonId: S1, u1: U1, u2: U2, p1f: 'bretonnia', p2f: 'empire',
+      versionId: S1, u1: U1, u2: U2, p1f: 'bretonnia', p2f: 'empire',
       results: ['P1', 'P1', 'P1', 'P1', 'P2', 'P2', 'P2', 'P2', 'P2', 'P2'],
     });
 
     const res = await gql(`
       query {
-        matchupHeatmap(seasonId: "${S1}") {
+        matchupHeatmap(versionId: "${S1}") {
           cells {
             factionAId
             factionBId
@@ -380,13 +380,13 @@ describe('GraphQL — matchupHeatmap query', () => {
 
 describe('GraphQL — metaOverview query', () => {
   it('3. returns valid totalMatches and factionDiversity', async () => {
-    await seedSeason();
+    await seedVersion();
     await seedFactionStats();
 
     const res = await gql(`
       query {
-        metaOverview(seasonId: "${S1}") {
-          season {
+        metaOverview(versionId: "${S1}") {
+          version {
             id
             name
             isActive
@@ -409,7 +409,7 @@ describe('GraphQL — metaOverview query', () => {
     const body = res.json<{
       data: {
         metaOverview: {
-          season: { id: string; name: string; isActive: boolean };
+          version: { id: string; name: string; isActive: boolean };
           totalMatches: number;
           factionDiversity: number;
           topFactionsByWinrate: Array<{
@@ -428,8 +428,8 @@ describe('GraphQL — metaOverview query', () => {
     expect(body.errors).toBeUndefined();
 
     const overview = body.data.metaOverview;
-    expect(overview.season.id).toBe(S1);
-    expect(overview.season.isActive).toBe(true);
+    expect(overview.version.id).toBe(S1);
+    expect(overview.version.isActive).toBe(true);
 
     // totalMatches now counts real COMPLETED matches (season + counts_for_leaderboard),
     // not FactionStats aggregates, so its value depends on other match data in the DB.
@@ -467,3 +467,5 @@ describe('GraphQL — metaOverview query', () => {
     expect(body.data.metaOverview).toBeNull();
   });
 });
+
+

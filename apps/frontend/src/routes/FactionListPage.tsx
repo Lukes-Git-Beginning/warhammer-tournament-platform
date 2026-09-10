@@ -67,8 +67,8 @@ export function FactionListPage() {
     staleTime: 2 * 60 * 1000,
   });
 
-  const hasNoSeason = !!data && !data.season;
-  const hasData = !!data?.season && data.data.length > 0;
+  const hasNoVersion = !!data && !data.version;
+  const hasData = !!data?.version && data.data.length > 0;
 
   const strengthById = new Map((modelMatrix?.factionStrengths ?? []).map((s) => [s.factionId, s]));
   const nameById = new Map((data?.data ?? []).map((e) => [e.faction.id, e.faction.name]));
@@ -79,9 +79,9 @@ export function FactionListPage() {
         <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
           {t('factions_page.title')}
         </h1>
-        {data?.season && (
+        {data?.version && (
           <p className="mt-1 text-sm text-rizzotto-stone-500">
-            {t('factions_page.season_label', { name: data.season.name })}
+            {t('factions_page.version_label', { name: data.version.name })}
           </p>
         )}
       </header>
@@ -98,13 +98,13 @@ export function FactionListPage() {
         </div>
       )}
 
-      {hasNoSeason && (
+      {hasNoVersion && (
         <EmptyState
           variant="sigil"
-          title={t('factions_page.no_season_title')}
-          body={t('factions_page.no_season_body')}
-          motto={t('factions_page.no_season_motto')}
-          mottoTitle={t('factions_page.no_season_motto_title')}
+          title={t('factions_page.no_version_title')}
+          body={t('factions_page.no_version_body')}
+          motto={t('factions_page.no_version_motto')}
+          mottoTitle={t('factions_page.no_version_motto_title')}
         />
       )}
 
@@ -144,3 +144,4 @@ export function FactionListPage() {
     </PageShell>
   );
 }
+

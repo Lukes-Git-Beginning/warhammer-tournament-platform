@@ -45,7 +45,7 @@ interface PlayerAgg {
 }
 
 /**
- * Load the decisive confirmed games of a season. Games are the statistical unit:
+ * Load the decisive confirmed games of a version. Games are the statistical unit:
  * read the MatchGame rows directly (a Bo3 contributes up to three games), keyed by
  * the leaderboard-eligible match filter. No synthetic fallback — every confirmed
  * match now carries its game rows (see the games-only backfill migration). Draws
@@ -53,14 +53,14 @@ interface PlayerAgg {
  */
 export async function loadConfirmedGames(
   prisma: PrismaClient,
-  seasonId: string,
+  versionId: string,
 ): Promise<ConfirmedGame[]> {
   const games = await prisma.matchGame.findMany({
     where: {
       status: 'COMPLETED',
       winner_id: { not: null },
       counts_for_leaderboard: true,
-      match: confirmedMatchWhere(seasonId),
+      match: confirmedMatchWhere(versionId),
     },
     select: {
       winner_id: true,
@@ -80,16 +80,16 @@ export async function loadConfirmedGames(
 }
 
 /**
- * Compute the full season leaderboard (sorted by FinalPoints desc, wins as
+ * Compute the full version leaderboard (sorted by FinalPoints desc, wins as
  * tiebreak). The caller paginates + assigns ranks.
  */
-export async function computeSeasonLeaderboard(
+export async function computeVersionLeaderboard(
   prisma: PrismaClient,
   redis: Redis | undefined,
-  seasonId: string,
+  versionId: string,
 ): Promise<DynamicLeaderboardEntry[]> {
-  const games = await loadConfirmedGames(prisma, seasonId);
-  const model = await getRatingModel(prisma, redis, { seasonId });
+  const games = await loadConfirmedGames(prisma, versionId);
+  const model = await getRatingModel(prisma, redis, { versionId });
 
   // --- Pass 1: per-player totals + per-(player, opponent) WIN counts ----------
   const agg = new Map<string, PlayerAgg>();
@@ -185,18 +185,18 @@ export interface PlayerStats {
 const ZERO_STATS: PlayerStats = { total_points: 0, games_played: 0, wins: 0, losses: 0 };
 
 /**
- * Single-player view of the dynamic season leaderboard. Reuses
- * computeSeasonLeaderboard (cache-hit likely via the rating model) and picks the
+ * Single-player view of the dynamic version leaderboard. Reuses
+ * computeVersionLeaderboard (cache-hit likely via the rating model) and picks the
  * player's entry. Returns zero-valued stats — never undefined — when the player
- * has no confirmed games in the season.
+ * has no confirmed games in the version.
  */
-export async function getPlayerSeasonStats(
+export async function getPlayerVersionStats(
   prisma: PrismaClient,
   redis: Redis | undefined,
-  seasonId: string,
+  versionId: string,
   playerId: string,
 ): Promise<PlayerStats> {
-  const board = await computeSeasonLeaderboard(prisma, redis, seasonId);
+  const board = await computeVersionLeaderboard(prisma, redis, versionId);
   const entry = board.find((e) => e.playerId === playerId);
   if (!entry) return { ...ZERO_STATS };
   return {
@@ -208,7 +208,7 @@ export async function getPlayerSeasonStats(
 }
 
 /**
- * All-time dynamic stats: sum of getPlayerSeasonStats across every season the
+ * All-time dynamic stats: sum of getPlayerVersionStats across every version the
  * player has at least one confirmed game in. Kept consistent with the leaderboard
  * so the profile never shows numbers that disagree with the ranking.
  */
@@ -224,7 +224,7 @@ export async function getPlayerAllTimeStats(
       winner_id: { not: null },
       player1_id: { not: null },
       player2_id: { not: null },
-      season_id: { not: null },
+      version_id: { not: null },
       counts_for_leaderboard: true,
       AND: [
         {
@@ -236,14 +236,14 @@ export async function getPlayerAllTimeStats(
         { OR: [{ player1_id: playerId }, { player2_id: playerId }] },
       ],
     },
-    select: { season_id: true },
-    distinct: ['season_id'],
+    select: { version_id: true },
+    distinct: ['version_id'],
   });
 
   const totals: PlayerStats = { ...ZERO_STATS };
-  for (const { season_id } of rows) {
-    if (!season_id) continue;
-    const s = await getPlayerSeasonStats(prisma, redis, season_id, playerId);
+  for (const { version_id } of rows) {
+    if (!version_id) continue;
+    const s = await getPlayerVersionStats(prisma, redis, version_id, playerId);
     totals.total_points += s.total_points;
     totals.games_played += s.games_played;
     totals.wins += s.wins;

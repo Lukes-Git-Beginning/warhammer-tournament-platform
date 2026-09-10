@@ -9,29 +9,29 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { getAdminFactionWinRates, listSeasons, type FactionWinRateEntry } from '@/lib/api.js';
+import { getAdminFactionWinRates, listVersions, type FactionWinRateEntry } from '@/lib/api.js';
 
-type Period = 'last_30d' | 'last_90d' | 'season';
+type Period = 'last_30d' | 'last_90d' | 'version';
 
 function SortIcon({ asc }: { asc: boolean }) {
   return <span className="ml-1 text-stone-500 text-xs">{asc ? '▲' : '▼'}</span>;
 }
 
 export function FactionWinRatesChart() {
-  const [selectedSeason, setSelectedSeason] = useState<string | undefined>(undefined);
-  const [period, setPeriod] = useState<Period>('season');
+  const [selectedVersion, setSelectedVersion] = useState<string | undefined>(undefined);
+  const [period, setPeriod] = useState<Period>('version');
   const [sortKey, setSortKey] = useState<keyof FactionWinRateEntry>('win_rate');
   const [sortAsc, setSortAsc] = useState(false);
 
-  const { data: seasonsData } = useQuery({
-    queryKey: ['seasons'],
-    queryFn: listSeasons,
+  const { data: versionsData } = useQuery({
+    queryKey: ['versions'],
+    queryFn: listVersions,
   });
-  const seasons = seasonsData?.data ?? [];
+  const versions = versionsData?.data ?? [];
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['admin-faction-winrates', selectedSeason, period],
-    queryFn: () => getAdminFactionWinRates({ season: selectedSeason, period }),
+    queryKey: ['admin-faction-winrates', selectedVersion, period],
+    queryFn: () => getAdminFactionWinRates({ version: selectedVersion, period }),
   });
 
   const entries = [...(data?.data ?? [])].sort((a, b) => {
@@ -63,14 +63,14 @@ export function FactionWinRatesChart() {
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <label className="text-xs text-stone-400">Season</label>
+          <label className="text-xs text-stone-400">Version</label>
           <select
             className="rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
-            value={selectedSeason ?? ''}
-            onChange={(e) => setSelectedSeason(e.target.value || undefined)}
+            value={selectedVersion ?? ''}
+            onChange={(e) => setSelectedVersion(e.target.value || undefined)}
           >
             <option value="">All</option>
-            {seasons.map((s) => (
+            {versions.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
@@ -86,7 +86,7 @@ export function FactionWinRatesChart() {
           >
             <option value="last_30d">Last 30 days</option>
             <option value="last_90d">Last 90 days</option>
-            <option value="season">Season</option>
+            <option value="version">Version</option>
           </select>
         </div>
       </div>
@@ -208,3 +208,4 @@ export function FactionWinRatesChart() {
     </div>
   );
 }
+

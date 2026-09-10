@@ -34,11 +34,11 @@ async function cascadeGameEligibility(
     where: { match_id: matchId },
     data: { counts_for_leaderboard: countsForLeaderboard },
   });
-  const activeSeason = await fastify.prisma.season.findFirst({
+  const activeVersion = await fastify.prisma.gameVersion.findFirst({
     where: { is_active: true },
     select: { id: true },
   });
-  if (activeSeason) await recomputeFactionStats(fastify.prisma, activeSeason.id);
+  if (activeVersion) await recomputeFactionStats(fastify.prisma, activeVersion.id);
   if (fastify.redis) {
     await Promise.all([
       invalidate(fastify.redis, 'factions:*'),

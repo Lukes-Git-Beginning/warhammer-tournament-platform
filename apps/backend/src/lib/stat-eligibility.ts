@@ -3,7 +3,7 @@ import type { Prisma } from '@rizzotto/db';
 /**
  * The single source of truth for which MatchGames feed GLOBAL statistics —
  * the matchup heatmap (`getMatchupMatrix`) and the rating model that backs the
- * model matchup matrix / faction proficiency (`loadSeasonObservations`). Both
+ * model matchup matrix / faction proficiency (`loadVersionObservations`). Both
  * MUST read the same set so their sample sizes agree.
  *
  * Games are the statistical unit; the parent Match's status is irrelevant (a
@@ -13,7 +13,7 @@ import type { Prisma } from '@rizzotto/db';
  *     the GAME level: it is false for a modded/restricted faction and is cascaded
  *     to games when a match is voided or cancelled (see routes/matches.ts), so no
  *     match-level flag needs to be re-checked here, and
- *   - it belongs to a non-deleted match of this season with both players set
+ *   - it belongs to a non-deleted match of this version with both players set
  *     (needed to attribute the winning faction).
  *
  * Draws (null winner) are left IN the set — they are counted by the raw heatmap
@@ -25,12 +25,12 @@ import type { Prisma } from '@rizzotto/db';
  * dropped by each consumer in application code — a field-to-field comparison
  * Prisma cannot express in a where-clause.
  */
-export function eligibleStatGameWhere(seasonId: string): Prisma.MatchGameWhereInput {
+export function eligibleStatGameWhere(versionId: string): Prisma.MatchGameWhereInput {
   return {
     status: 'COMPLETED',
     counts_for_leaderboard: true,
     match: {
-      season_id: seasonId,
+      version_id: versionId,
       deleted_at: null,
       player1_id: { not: null },
       player2_id: { not: null },

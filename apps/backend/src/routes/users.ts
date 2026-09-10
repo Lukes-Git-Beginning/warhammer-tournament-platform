@@ -8,7 +8,7 @@ import {
 } from '@rizzotto/types';
 import { z } from 'zod';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
-import { getPlayerSeasonStats, getPlayerAllTimeStats } from '../lib/leaderboard-service.js';
+import { getPlayerVersionStats, getPlayerAllTimeStats } from '../lib/leaderboard-service.js';
 import { effectiveTiersOf } from '../lib/supporter-service.js';
 
 const meSelect = {
@@ -326,7 +326,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // GET /api/users/:id/stats — Personal Stats. The former ?season= query param
+  // GET /api/users/:id/stats — Personal Stats. The former ?version= query param
   // never filtered anything (the resolved id was unused); it is now ignored.
   fastify.get(
     '/api/users/:id/stats',
@@ -436,7 +436,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       const { a, b } = paramParsed.data;
 
       const querySchema = z.object({
-        season_id: z.string().uuid().optional(),
+        version_id: z.string().uuid().optional(),
       });
       const queryParsed = querySchema.safeParse(request.query);
       if (!queryParsed.success) {
@@ -446,7 +446,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           statusCode: 400,
         });
       }
-      const { season_id } = queryParsed.data;
+      const { version_id } = queryParsed.data;
 
       // --- Cache wrapper ---
       const compute = async (): Promise<H2HResponse> => {
@@ -480,7 +480,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           player1_id: { not: null },
           player2_id: { not: null },
           tournament: { counts_for_leaderboard: true },
-          ...(season_id ? { season_id } : {}),
+          ...(version_id ? { version_id } : {}),
         };
 
         const matches = await fastify.prisma.match.findMany({
@@ -573,7 +573,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         result = await cached(
           fastify.redis,
-          cacheKey('h2h', { a, b, season: season_id ?? 'all' }),
+          cacheKey('h2h', { a, b, version: version_id ?? 'all' }),
           compute,
           { ttlSeconds: 60 },
         );
@@ -617,37 +617,37 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
     }
 
-    // current_season + all_time stats come from the dynamic leaderboard system
+    // current_version + all_time stats come from the dynamic leaderboard system
     // (lib/leaderboard-service.ts) — the single source of truth that also powers
     // the leaderboard page. LeaderboardEntry is NOT read here: it uses 3-point
     // scoring and drifts on void/cancel/edit, which is exactly the mismatch we fix.
-    const activeSeason = await fastify.prisma.season.findFirst({ where: { is_active: true } });
-    let currentSeasonEntry = null;
-    if (activeSeason) {
-      const seasonStats = await getPlayerSeasonStats(
+    const activeVersion = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
+    let currentVersionEntry = null;
+    if (activeVersion) {
+      const versionStats = await getPlayerVersionStats(
         fastify.prisma,
         fastify.redis,
-        activeSeason.id,
+        activeVersion.id,
         id,
       );
-      if (seasonStats.games_played > 0) {
-        currentSeasonEntry = {
-          season: {
-            id: activeSeason.id,
-            name: activeSeason.name,
-            start_date: activeSeason.start_date.toISOString(),
-            end_date: activeSeason.end_date.toISOString(),
-            is_active: activeSeason.is_active,
+      if (versionStats.games_played > 0) {
+        currentVersionEntry = {
+          version: {
+            id: activeVersion.id,
+            name: activeVersion.name,
+            start_date: activeVersion.start_date.toISOString(),
+            end_date: activeVersion.end_date.toISOString(),
+            is_active: activeVersion.is_active,
           },
-          total_points: seasonStats.total_points,
-          games_played: seasonStats.games_played,
-          wins: seasonStats.wins,
-          losses: seasonStats.losses,
+          total_points: versionStats.total_points,
+          games_played: versionStats.games_played,
+          wins: versionStats.wins,
+          losses: versionStats.losses,
         };
       }
     }
 
-    // All-time stats — summed across every season the player has confirmed games in.
+    // All-time stats — summed across every version the player has confirmed games in.
     const allTime = await getPlayerAllTimeStats(fastify.prisma, fastify.redis, id);
     // "Tournaments played" = distinct tournaments the user actually took part in,
     // defined as having played at least one game. A game counts once it is COMPLETED
@@ -685,7 +685,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
                 placement: true,
                 points_earned: true,
                 created_at: true,
-                season: { select: { name: true } },
+                version: { select: { name: true } },
               },
               take: 1,
             },
@@ -718,7 +718,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         created_at: user.created_at.toISOString(),
         tiers: effectiveTiersOf(user),
       },
-      current_season: currentSeasonEntry,
+      current_version: currentVersionEntry,
       all_time: {
         games_played: allTime.games_played,
         wins: allTime.wins,
@@ -734,7 +734,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
             name: p.tournament.name,
             start_date: p.tournament.start_date.toISOString(),
           },
-          season_name: result?.season?.name ?? null,
+          version_name: result?.version?.name ?? null,
           placement: result?.placement ?? null,
           points_earned: result?.points_earned ?? null,
           created_at: result?.created_at.toISOString() ?? p.registered_at.toISOString(),

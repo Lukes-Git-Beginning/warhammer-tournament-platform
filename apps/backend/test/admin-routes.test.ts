@@ -170,7 +170,7 @@ describe('GET /api/admin/stats', () => {
       activeUsers: number;
       tournaments: { total: number; active: number; completed: number };
       gamesPlayed: number;
-      currentSeason: string | null;
+      currentVersion: string | null;
       topFactions: unknown[];
     }>();
     expect(typeof body.activeUsers).toBe('number');

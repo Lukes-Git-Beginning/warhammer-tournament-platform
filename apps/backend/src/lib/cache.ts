@@ -69,7 +69,7 @@ export async function invalidate(redis: Redis | undefined, pattern: string): Pro
 /**
  * Build a deterministic cache key from a prefix + sorted params.
  * Undefined values are omitted. Example:
- *   cacheKey('leaderboard', { seasonId: 'x', page: 1 }) → 'leaderboard:page=1&seasonId=x'
+ *   cacheKey('leaderboard', { versionId: 'x', page: 1 }) → 'leaderboard:page=1&versionId=x'
  */
 export function cacheKey(
   prefix: string,

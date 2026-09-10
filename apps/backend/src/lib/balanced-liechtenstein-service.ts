@@ -80,14 +80,14 @@ export function computeRestByePlayers(
  * Fix every participant's skill division (matchmakingBand 1..5) on the tournament
  * for skill-based pairing + division playoffs. Called at start (authoritative,
  * before round 1 is paired) so it captures any calibration done up to that point.
- * The hierarchical rating model is fitted once per season and cached, so the
+ * The hierarchical rating model is fitted once per version and cached, so the
  * per-player classification calls are cheap after the first.
  */
 export async function assignSkillBandsForTournament(
   fastify: FastifyInstance,
   tournamentId: string,
 ): Promise<void> {
-  const season = await fastify.prisma.season.findFirst({
+  const version = await fastify.prisma.gameVersion.findFirst({
     where: { is_active: true },
     select: { id: true },
   });
@@ -103,11 +103,11 @@ export async function assignSkillBandsForTournament(
 
   for (const p of participants) {
     try {
-      // Computed band from the classification (needs an active season); when there
+      // Computed band from the classification (needs an active version); when there
       // is none, fall back to the player's own choice.
       let computed = 0;
-      if (season) {
-        const cls = await getPlayerClassification(fastify.prisma, fastify.redis, season.id, p.user_id);
+      if (version) {
+        const cls = await getPlayerClassification(fastify.prisma, fastify.redis, version.id, p.user_id);
         computed = cls.matchmakingBand;
       }
       // Effective band = the higher of the computed band and the requested one —
@@ -714,12 +714,12 @@ export async function admitBalancedLateJoiner(
   if (participant) {
     let effective = participant.requested_band ?? 0;
     try {
-      const season = await fastify.prisma.season.findFirst({
+      const version = await fastify.prisma.gameVersion.findFirst({
         where: { is_active: true },
         select: { id: true },
       });
-      if (season) {
-        const cls = await getPlayerClassification(fastify.prisma, fastify.redis, season.id, userId);
+      if (version) {
+        const cls = await getPlayerClassification(fastify.prisma, fastify.redis, version.id, userId);
         effective = Math.max(effective, cls.matchmakingBand);
       }
     } catch (err) {

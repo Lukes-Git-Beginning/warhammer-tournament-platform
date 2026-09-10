@@ -138,9 +138,9 @@ export async function resolveMatchResult(
   const p1Points = opts.player1_points ?? defaultPts.player1;
   const p2Points = opts.player2_points ?? defaultPts.player2;
 
-  // Active season — tags the match (for the dynamic leaderboard), gates the
+  // Active version — tags the match (for the dynamic leaderboard), gates the
   // LeaderboardEntry update, and drives the post-transaction stats recompute.
-  const activeSeason = await prisma.season.findFirst({
+  const activeVersion = await prisma.gameVersion.findFirst({
     where: { is_active: true },
     select: { id: true },
   });
@@ -158,7 +158,7 @@ export async function resolveMatchResult(
         winner_id: winnerId,
         player1_points: p1Points,
         player2_points: p2Points,
-        season_id: activeSeason?.id ?? null,
+        version_id: activeVersion?.id ?? null,
         played_at: new Date(),
         ...(p1FactionId ? { player1_faction_id: p1FactionId } : {}),
         ...(p2FactionId ? { player2_faction_id: p2FactionId } : {}),
@@ -267,8 +267,8 @@ export async function resolveMatchResult(
 
     // 3. LeaderboardEntry updates (only when tournament counts for leaderboard)
     if (match.tournament?.counts_for_leaderboard ?? true) {
-      if (activeSeason) {
-        const seasonId = activeSeason.id;
+      if (activeVersion) {
+        const versionId = activeVersion.id;
         const players: Array<{
           userId: string;
           isWinner: boolean;
@@ -296,14 +296,14 @@ export async function resolveMatchResult(
         for (const p of players) {
           await tx.leaderboardEntry.upsert({
             where: {
-              user_id_season_id: {
+              user_id_version_id: {
                 user_id: p.userId,
-                season_id: seasonId,
+                version_id: versionId,
               },
             },
             create: {
               user_id: p.userId,
-              season_id: seasonId,
+              version_id: versionId,
               games_played: 1,
               wins: p.isWinner ? 1 : 0,
               losses: !p.isWinner && !p.isDraw ? 1 : 0,
@@ -403,8 +403,8 @@ export async function resolveMatchResult(
 
   // Rebuild faction/matchup stats from the COMPLETED game rows (idempotent) so a
   // re-edit/override can never double-count.
-  if (activeSeason) {
-    await recomputeFactionStats(prisma, activeSeason.id);
+  if (activeVersion) {
+    await recomputeFactionStats(prisma, activeVersion.id);
   }
 
   // Cache invalidation for FactionStats/MatchupStats keys — only when a redis

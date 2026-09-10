@@ -8,15 +8,15 @@
  */
 export const schema = /* GraphQL */ `
   type Query {
-    factions(seasonId: ID): FactionListResult!
-    faction(id: ID!, seasonId: ID): FactionDetail
-    metaOverview(seasonId: ID): MetaOverview
-    matchupHeatmap(seasonId: ID): MatchupHeatmapResult!
+    factions(versionId: ID): FactionListResult!
+    faction(id: ID!, versionId: ID): FactionDetail
+    metaOverview(versionId: ID): MetaOverview
+    matchupHeatmap(versionId: ID): MatchupHeatmapResult!
   }
 
   type FactionListResult {
     data: [FactionWithStats!]!
-    season: SeasonSummary
+    version: VersionSummary
   }
 
   type FactionDetail {
@@ -51,7 +51,7 @@ export const schema = /* GraphQL */ `
     banCount: Int!
   }
 
-  type SeasonSummary {
+  type VersionSummary {
     id: ID!
     name: String!
     startDate: String!
@@ -67,7 +67,7 @@ export const schema = /* GraphQL */ `
   }
 
   type MetaOverview {
-    season: SeasonSummary!
+    version: VersionSummary!
     topFactionsByWinrate: [FactionWithStats!]!
     topFactionsByPickrate: [FactionWithStats!]!
     totalMatches: Int!
@@ -75,7 +75,7 @@ export const schema = /* GraphQL */ `
   }
 
   type MatchupHeatmapResult {
-    seasonId: ID
+    versionId: ID
     cells: [MatchupCell!]!
     factions: [Faction!]!
   }

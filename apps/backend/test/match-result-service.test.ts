@@ -15,13 +15,13 @@ import { prisma } from '@rizzotto/db';
 import { resolveMatchResult } from '../src/lib/match-result-service.js';
 import {
   createTestUser,
-  createTestSeason,
+  createTestVersion,
   createTestTournament,
-  cleanupSeason,
+  cleanupVersion,
   cleanupTournament,
   cleanupUsers,
   type TestUser,
-  type TestSeason,
+  type TestVersion,
   type TestTournament,
 } from './helpers/db-fixtures.js';
 
@@ -52,24 +52,24 @@ afterAll(async () => {
 
 let testUser1: TestUser | undefined;
 let testUser2: TestUser | undefined;
-let testSeason: TestSeason | undefined;
+let TestVersion: TestVersion | undefined;
 let testTournament: TestTournament | undefined;
 
 beforeEach(async () => {
   testUser1 = undefined;
   testUser2 = undefined;
-  testSeason = undefined;
+  TestVersion = undefined;
   testTournament = undefined;
 
   testUser1 = await createTestUser({ username: 'ServiceTestP1' });
   testUser2 = await createTestUser({ username: 'ServiceTestP2' });
-  testSeason = await createTestSeason({ is_active: true });
+  TestVersion = await createTestVersion({ is_active: true });
   testTournament = await createTestTournament({ organizerId: testUser1!.id });
 });
 
 afterEach(async () => {
   if (testTournament) await cleanupTournament(testTournament.id);
-  if (testSeason) await cleanupSeason(testSeason!.id);
+  if (TestVersion) await cleanupVersion(TestVersion!.id);
   const ids = [testUser1?.id, testUser2?.id].filter(Boolean) as string[];
   if (ids.length > 0) await cleanupUsers(ids);
 });
@@ -129,10 +129,10 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_season_id: {
+        faction_a_id_faction_b_id_version_id: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
-          season_id: testSeason!.id,
+          version_id: TestVersion!.id,
         },
       },
     });
@@ -160,10 +160,10 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_season_id: {
+        faction_a_id_faction_b_id_version_id: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
-          season_id: testSeason!.id,
+          version_id: TestVersion!.id,
         },
       },
     });
@@ -186,10 +186,10 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_season_id: {
+        faction_a_id_faction_b_id_version_id: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
-          season_id: testSeason!.id,
+          version_id: TestVersion!.id,
         },
       },
     });
@@ -210,7 +210,7 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
     await resolveMatchResult(prisma, matchId, 'PLAYER1_WIN', { actorId: testUser1!.id });
 
     const rows = await prisma.matchupStats.findMany({
-      where: { season_id: testSeason!.id },
+      where: { version_id: TestVersion!.id },
     });
 
     expect(rows).toHaveLength(0);
@@ -218,10 +218,10 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
 
   it('No active season → no MatchupStats row created', async () => {
     // Override: create an INACTIVE season specifically for this test
-    const inactiveSeason = await createTestSeason({ is_active: false });
+    const inactiveSeason = await createTestVersion({ is_active: false });
     // Mark our normally-active season as inactive so the service sees no active season
-    await prisma.season.update({
-      where: { id: testSeason!.id },
+    await prisma.gameVersion.update({
+      where: { id: TestVersion!.id },
       data: { is_active: false },
     });
 
@@ -235,16 +235,16 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
     await resolveMatchResult(prisma, matchId, 'PLAYER1_WIN', { actorId: testUser1!.id });
 
     const rows = await prisma.matchupStats.findMany({
-      where: { season_id: inactiveSeason.id },
+      where: { version_id: inactiveSeason.id },
     });
     expect(rows).toHaveLength(0);
 
-    // Restore active state to avoid cross-test pollution (beforeEach cleans testSeason)
-    await prisma.season.update({
-      where: { id: testSeason!.id },
+    // Restore active state to avoid cross-test pollution (beforeEach cleans TestVersion)
+    await prisma.gameVersion.update({
+      where: { id: TestVersion!.id },
       data: { is_active: true },
     });
-    await cleanupSeason(inactiveSeason.id);
+    await cleanupVersion(inactiveSeason.id);
   });
 
   it('FactionStats: empire wins → wins=1 for empire, losses=1 for bretonnia', async () => {
@@ -258,10 +258,10 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
     await resolveMatchResult(prisma, matchId, 'PLAYER1_WIN', { actorId: testUser1!.id });
 
     const empireStats = await prisma.factionStats.findUnique({
-      where: { faction_id_season_id: { faction_id: EMPIRE, season_id: testSeason!.id } },
+      where: { faction_id_version_id: { faction_id: EMPIRE, version_id: TestVersion!.id } },
     });
     const bretonniaStats = await prisma.factionStats.findUnique({
-      where: { faction_id_season_id: { faction_id: BRETONNIA, season_id: testSeason!.id } },
+      where: { faction_id_version_id: { faction_id: BRETONNIA, version_id: TestVersion!.id } },
     });
 
     expect(empireStats).not.toBeNull();
@@ -298,10 +298,10 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_season_id: {
+        faction_a_id_faction_b_id_version_id: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
-          season_id: testSeason!.id,
+          version_id: TestVersion!.id,
         },
       },
     });
@@ -313,7 +313,8 @@ describe('resolveMatchResult() — MatchupStats + FactionStats (Welle-D path)', 
     expect(row!.draws).toBe(0);
 
     // Only one row (symmetric key)
-    const allRows = await prisma.matchupStats.findMany({ where: { season_id: testSeason!.id } });
+    const allRows = await prisma.matchupStats.findMany({ where: { version_id: TestVersion!.id } });
     expect(allRows).toHaveLength(1);
   });
 });
+

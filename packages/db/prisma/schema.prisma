@@ -53,6 +53,22 @@ enum TournamentMode {
   FACTION_WAR // like SFT (faction pre-pick at registration) but each faction is globally exclusive — once claimed, no other player in the tournament can pick it
 }
 
+/// Battle type — the KIND of game. Orthogonal to TournamentMode (the faction-pick
+/// mechanic) and to CompetitorFormat (team size). Faction balance differs per
+/// battle type, so this is a real stats/rating dimension (version × battle_type).
+enum BattleType {
+  DOMINATION // current standard
+  CONQUEST
+  SIEGE
+}
+
+/// Competitor format — team size. Orthogonal to game mode and battle type.
+/// A 2v2 match is still "1 vs 1" between two teams (team-as-actor).
+enum CompetitorFormat {
+  ONE_V_ONE
+  TWO_V_TWO
+}
+
 enum PlayoffFormat {
   NONE
   TOP2 // GF + 3rd place only (no SF), used by Auto Swiss with 4-7 players
@@ -68,12 +84,12 @@ enum MatchFormat {
 }
 
 enum MapDecisionMode {
-  RANDOM               // legacy
-  PICK_BAN             // legacy
-  RANDOM_NO_REPEAT     // a: zufällig, kein Repeat im Match + turnierweit
-  HOST_PRESET          // b: Organizer legt Maps pro Runde in Reihenfolge fest
+  RANDOM // legacy
+  PICK_BAN // legacy
+  RANDOM_NO_REPEAT // a: zufällig, kein Repeat im Match + turnierweit
+  HOST_PRESET // b: Organizer legt Maps pro Runde in Reihenfolge fest
   HOST_PRESET_PICK_BAN // c: Organizer legt 3 Maps pro Runde/Game fest, dann Ban→Pick
-  RANDOM_PICK_BAN      // d: Server zieht 3 Maps pro Game (No-Repeat), dann Ban→Pick
+  RANDOM_PICK_BAN // d: Server zieht 3 Maps pro Game (No-Repeat), dann Ban→Pick
 }
 
 enum TournamentStatus {
@@ -197,17 +213,17 @@ enum ScheduledMatchupStatus {
 // -----------------------------------------------------------------------------
 
 model User {
-  id                 String    @id @default(uuid()) @db.Uuid
-  discord_id         String    @unique
-  username           String
-  email              String?
-  avatar_url         String?
-  timezone           String? // IANA, e.g. "Europe/Berlin"
-  role               Role      @default(USER)
-  preferred_factions String[]  @default([])
-  last_login         DateTime?
-  onboarded_at       DateTime?
-  onboarding_stage   Int       @default(0)
+  id                  String           @id @default(uuid()) @db.Uuid
+  discord_id          String           @unique
+  username            String
+  email               String?
+  avatar_url          String?
+  timezone            String? // IANA, e.g. "Europe/Berlin"
+  role                Role             @default(USER)
+  preferred_factions  String[]         @default([])
+  last_login          DateTime?
+  onboarded_at        DateTime?
+  onboarding_stage    Int              @default(0)
   // Skill classification (N2): incrementally-built calibration questionnaire
   // answers as a map of question id → chosen option value. The band is derived
   // on-read from these + the current rating model, not stored.
@@ -215,12 +231,12 @@ model User {
   // Ko-Fi supporter recognition: tiers from Discord roles (synced on login + cron) plus an admin
   // manual override. Effective tier per level = *_discord OR *_manual; cumulative (a Lord/Champion
   // is also a Supporter) — resolved in lib/supporter-status.ts. See plans/kofi-and-supporters.md.
-  supporter_discord   Boolean   @default(false)
-  lord_discord        Boolean   @default(false)
-  champion_discord    Boolean   @default(false)
-  supporter_manual    Boolean   @default(false)
-  lord_manual         Boolean   @default(false)
-  champion_manual     Boolean   @default(false)
+  supporter_discord   Boolean          @default(false)
+  lord_discord        Boolean          @default(false)
+  champion_discord    Boolean          @default(false)
+  supporter_manual    Boolean          @default(false)
+  lord_manual         Boolean          @default(false)
+  champion_manual     Boolean          @default(false)
   supporter_synced_at DateTime?
   // First-touch acquisition: the ?ref= code a visitor first arrived with (how they
   // found the site), set once at account creation. See lib/referrals.ts.
@@ -230,41 +246,41 @@ model User {
   // functional notifications; NO_BOT_MESSAGES = the bot never DMs this user at all.
   // Set on the admin user view.
   bot_message_policy  BotMessagePolicy @default(NORMAL)
-  created_at         DateTime  @default(now())
-  updated_at         DateTime  @updatedAt
-  deleted_at         DateTime?
+  created_at          DateTime         @default(now())
+  updated_at          DateTime         @updatedAt
+  deleted_at          DateTime?
 
   // Host relations
-  hosted_tournaments    Tournament[]  @relation("HostedTournaments")
+  hosted_tournaments    Tournament[]     @relation("HostedTournaments")
   co_hosted_tournaments TournamentHost[]
-  created_draft_presets DraftPreset[] @relation("CreatedDraftPresets")
+  created_draft_presets DraftPreset[]    @relation("CreatedDraftPresets")
 
   // Player relations
-  participations        TournamentParticipant[]
-  matches_as_player1    Match[]                 @relation("MatchPlayer1")
-  matches_as_player2    Match[]                 @relation("MatchPlayer2")
-  matches_won           Match[]                 @relation("MatchWinner")
-  army_lists            ArmyList[]
-  tournament_army_lists TournamentArmyList[]
-  leaderboard_entries   LeaderboardEntry[]
-  tournament_results    TournamentResult[]
-  captained_teams       Team[]                  @relation("TeamCaptain")
-  team_memberships      TeamMember[]
-  audit_logs            AuditLog[]              @relation("AuditActor")
-  match_reports         MatchReport[]           @relation("MatchReportReporter")
-  referral_hits         ReferralHit[]
+  participations          TournamentParticipant[]
+  matches_as_player1      Match[]                 @relation("MatchPlayer1")
+  matches_as_player2      Match[]                 @relation("MatchPlayer2")
+  matches_won             Match[]                 @relation("MatchWinner")
+  army_lists              ArmyList[]
+  tournament_army_lists   TournamentArmyList[]
+  leaderboard_entries     LeaderboardEntry[]
+  tournament_results      TournamentResult[]
+  captained_teams         Team[]                  @relation("TeamCaptain")
+  team_memberships        TeamMember[]
+  audit_logs              AuditLog[]              @relation("AuditActor")
+  match_reports           MatchReport[]           @relation("MatchReportReporter")
+  referral_hits           ReferralHit[]
   // Welle 2
-  steam_link            SteamLink?
+  steam_link              SteamLink?
   // External (TT archive)
-  external_games_as_p1  ExternalGame[]          @relation("ExternalGamePlayer1")
-  external_games_as_p2  ExternalGame[]          @relation("ExternalGamePlayer2")
-  external_games_won    ExternalGame[]          @relation("ExternalGameWinner")
+  external_games_as_p1    ExternalGame[]          @relation("ExternalGamePlayer1")
+  external_games_as_p2    ExternalGame[]          @relation("ExternalGamePlayer2")
+  external_games_won      ExternalGame[]          @relation("ExternalGameWinner")
   // M8 Open Play
-  availability_slots    AvailabilitySlot[]
-  proposed_matchups     ScheduledMatchup[]      @relation("MatchupProposer")
-  accepted_matchups     ScheduledMatchup[]      @relation("MatchupAcceptor")
-  queue_activity          QueueActivityLog[]    @relation("QueueActivityUser")
-  queue_activity_opponent QueueActivityLog[]    @relation("QueueActivityOpponent")
+  availability_slots      AvailabilitySlot[]
+  proposed_matchups       ScheduledMatchup[]      @relation("MatchupProposer")
+  accepted_matchups       ScheduledMatchup[]      @relation("MatchupAcceptor")
+  queue_activity          QueueActivityLog[]      @relation("QueueActivityUser")
+  queue_activity_opponent QueueActivityLog[]      @relation("QueueActivityOpponent")
   access_events           AccessEvent[]
 
   @@index([role])
@@ -290,16 +306,16 @@ model Faction {
   tournament_allowlists      TournamentFactionAllowlist[]
   tournament_restrictions    TournamentRestrictedFaction[]
   participants               TournamentParticipant[]
-  matches_as_player1_faction Match[]                      @relation("MatchPlayer1Faction")
-  matches_as_player2_faction Match[]                      @relation("MatchPlayer2Faction")
+  matches_as_player1_faction Match[]                       @relation("MatchPlayer1Faction")
+  matches_as_player2_faction Match[]                       @relation("MatchPlayer2Faction")
   army_lists                 ArmyList[]
   stats                      FactionStats[]
   stats_snapshots            FactionStatsSnapshot[]
-  matchups_as_a              MatchupStats[]               @relation("MatchupFactionA")
-  matchups_as_b              MatchupStats[]               @relation("MatchupFactionB")
+  matchups_as_a              MatchupStats[]                @relation("MatchupFactionA")
+  matchups_as_b              MatchupStats[]                @relation("MatchupFactionB")
   // External (TT archive)
-  external_games_as_f1       ExternalGame[]               @relation("ExternalGameFaction1")
-  external_games_as_f2       ExternalGame[]               @relation("ExternalGameFaction2")
+  external_games_as_f1       ExternalGame[]                @relation("ExternalGameFaction1")
+  external_games_as_f2       ExternalGame[]                @relation("ExternalGameFaction2")
 
   @@index([category])
 }
@@ -317,6 +333,11 @@ model Tournament {
   host_id                String               @db.Uuid
   format                 TournamentFormat
   mode                   TournamentMode       @default(BPT)
+  // Orthogonal axes (see plans/game-versions-and-competitive-structure.md):
+  // battle_type = the kind of game; competitor_format = team size. Both default
+  // to the current world so every existing tournament back-tags automatically.
+  battle_type            BattleType           @default(DOMINATION)
+  competitor_format      CompetitorFormat     @default(ONE_V_ONE)
   status                 TournamentStatus     @default(DRAFT)
   visibility             TournamentVisibility @default(PUBLIC)
   max_participants       Int?
@@ -338,52 +359,52 @@ model Tournament {
   set_faction_id         String?
 
   // Welle 2 — Tournament-Mechanik
-  rounds_count           Int                  @default(5) // 3–6 via constraint
-  has_third_place_match  Boolean              @default(false)
-  playoff_format         PlayoffFormat        @default(NONE)
+  rounds_count             Int             @default(5) // 3–6 via constraint
+  has_third_place_match    Boolean         @default(false)
+  playoff_format           PlayoffFormat   @default(NONE)
   // NI-5: skill-gate — a host restricts registration to a gating-band range (1..5). null = open.
-  min_band               Int?
-  max_band               Int?
+  min_band                 Int?
+  max_band                 Int?
   // #37: the two behaviours that used to be baked into AUTO_SWISS, now opt-in for
   // any format. auto_sizing = derive rounds + playoff from the check-in count at
   // start; auto_advance = the cron advances rounds + generates playoffs.
-  auto_sizing            Boolean              @default(false)
-  auto_advance           Boolean              @default(false)
+  auto_sizing              Boolean         @default(false)
+  auto_advance             Boolean         @default(false)
   // Late-join: when on, users may request to join AFTER the tournament has started;
   // the host approves each request (Discord DM button + in-app panel) before entry.
-  allow_late_join_requests Boolean            @default(false)
+  allow_late_join_requests Boolean         @default(false)
   // #40: set when dynamic re-sizing changed the bracket during a round; the round-
   // advance flow sends the size-change DM once and clears it.
-  pending_resize_notice  Boolean              @default(false)
+  pending_resize_notice    Boolean         @default(false)
   // BaLi playoff plan freeze (plans/bali-playoff-plan-freeze.md): the structural skeleton
   // (division count, band anchors, target sizes, per-band draw counts) frozen when the FIRST
   // division playoff is generated, so a later drop can't re-merge / re-count divisions. Null until then.
-  playoff_plan           Json?
-  swiss_match_format     MatchFormat          @default(BO1)
-  playoff_match_format   MatchFormat          @default(BO1) // Bo3/Bo5 re-enable with series support
-  finale_match_format    MatchFormat          @default(BO1)
+  playoff_plan             Json?
+  swiss_match_format       MatchFormat     @default(BO1)
+  playoff_match_format     MatchFormat     @default(BO1) // Bo3/Bo5 re-enable with series support
+  finale_match_format      MatchFormat     @default(BO1)
   // Double Elimination "bracket reset": when on, a Losers-bracket champion who wins the Grand
   // Final forces a second, decisive final (true double elim). grand_final_reset_format is the
   // reset match's format; null = inherit finale_match_format.
-  grand_final_reset      Boolean              @default(true)
+  grand_final_reset        Boolean         @default(true)
   grand_final_reset_format MatchFormat?
-  map_decision_mode      MapDecisionMode      @default(PICK_BAN)
-  map_preset_config      Json?                // HOST_PRESET / HOST_PRESET_PICK_BAN: runden-spez. Map-Konfiguration
-  random_map_pool_played String[]             @default([]) // RANDOM_NO_REPEAT / RANDOM_PICK_BAN: turnierweit gespielte Maps
-  created_at             DateTime             @default(now())
-  updated_at             DateTime             @updatedAt
-  deleted_at             DateTime?
+  map_decision_mode        MapDecisionMode @default(PICK_BAN)
+  map_preset_config        Json? // HOST_PRESET / HOST_PRESET_PICK_BAN: runden-spez. Map-Konfiguration
+  random_map_pool_played   String[]        @default([]) // RANDOM_NO_REPEAT / RANDOM_PICK_BAN: turnierweit gespielte Maps
+  created_at               DateTime        @default(now())
+  updated_at               DateTime        @updatedAt
+  deleted_at               DateTime?
 
   // Relations
-  host                  User                         @relation("HostedTournaments", fields: [host_id], references: [id])
-  draft_preset          DraftPreset?                 @relation(fields: [draft_preset_id], references: [id])
+  host                  User                          @relation("HostedTournaments", fields: [host_id], references: [id])
+  draft_preset          DraftPreset?                  @relation(fields: [draft_preset_id], references: [id])
   faction_allowlist     TournamentFactionAllowlist[]
   restricted_factions   TournamentRestrictedFaction[]
   participants          TournamentParticipant[]
   matches               Match[]
   teams                 Team[]
   results               TournamentResult[]
-  major_for_seasons     Season[]                     @relation("SeasonMajor")
+  major_for_versions    GameVersion[]                 @relation("VersionMajor")
   map_pool              TournamentMapPool[]
   tournament_army_lists TournamentArmyList[]
   co_hosts              TournamentHost[]
@@ -476,60 +497,60 @@ model TournamentParticipant {
 // -----------------------------------------------------------------------------
 
 model Match {
-  id                  String           @id @default(uuid()) @db.Uuid
-  tournament_id       String?          @db.Uuid
-  type                MatchType        @default(TOURNAMENT)
-  source              MatchSource? // QUEUE | CHALLENGE for OPEN_PLAY; null for TOURNAMENT
-  round               Int
-  match_number        Int
-  player1_id          String?          @db.Uuid
-  player2_id          String?          @db.Uuid
-  winner_id           String?          @db.Uuid
-  score               String? // DEPRECATED in favour of `result` + points; kept for backwards-read of historical rows
-  result              MatchResultType? // Q12: structured outcome
-  player1_points      Float? // Q12: 1.0 / 0.5 / 0.0 for Swiss, 3 / 1 / 0 for round-based scoring
-  player2_points      Float?
-  status              MatchStatus      @default(PENDING)
-  scheduled_time      DateTime?
-  next_match_id       String?          @db.Uuid
-  loser_next_match_id String?          @db.Uuid // DE: where the losing player drops to in lower bracket (NULL for SE/Swiss)
-  bracket_side        BracketSide? // DE: WINNERS / LOSERS / GRAND_FINAL (NULL for SE/Swiss/RR)
-  phase               MatchPhase? // Welle 2: discriminator between Swiss/Playoff phases (NULL = legacy/SE/RR)
-  match_format        MatchFormat? // per-match format override (NULL = derive from phase); used by the DE bracket-reset final
-  player1_faction_id  String?
-  player2_faction_id  String?
+  id                     String           @id @default(uuid()) @db.Uuid
+  tournament_id          String?          @db.Uuid
+  type                   MatchType        @default(TOURNAMENT)
+  source                 MatchSource? // QUEUE | CHALLENGE for OPEN_PLAY; null for TOURNAMENT
+  round                  Int
+  match_number           Int
+  player1_id             String?          @db.Uuid
+  player2_id             String?          @db.Uuid
+  winner_id              String?          @db.Uuid
+  score                  String? // DEPRECATED in favour of `result` + points; kept for backwards-read of historical rows
+  result                 MatchResultType? // Q12: structured outcome
+  player1_points         Float? // Q12: 1.0 / 0.5 / 0.0 for Swiss, 3 / 1 / 0 for round-based scoring
+  player2_points         Float?
+  status                 MatchStatus      @default(PENDING)
+  scheduled_time         DateTime?
+  next_match_id          String?          @db.Uuid
+  loser_next_match_id    String?          @db.Uuid // DE: where the losing player drops to in lower bracket (NULL for SE/Swiss)
+  bracket_side           BracketSide? // DE: WINNERS / LOSERS / GRAND_FINAL (NULL for SE/Swiss/RR)
+  phase                  MatchPhase? // Welle 2: discriminator between Swiss/Playoff phases (NULL = legacy/SE/RR)
+  match_format           MatchFormat? // per-match format override (NULL = derive from phase); used by the DE bracket-reset final
+  player1_faction_id     String?
+  player2_faction_id     String?
   // Withdraw→Void: the player who dropped, flagging the survivor's still-open match
   // as "opponent withdrew — decide played vs void". Null in the normal case.
-  withdrawn_player_id String?          @db.Uuid
-  // Dynamic weighted leaderboard (derive-on-read): authoritative season tag +
-  // play time, stamped when the match is completed. season_id is nullable so it
+  withdrawn_player_id    String?          @db.Uuid
+  // Dynamic weighted leaderboard (derive-on-read): authoritative version tag +
+  // play time, stamped when the match is completed. version_id is nullable so it
   // is only set for finished matches (backfilled for historical rows).
-  season_id           String?          @db.Uuid
-  played_at           DateTime? // set when status flips to COMPLETED
-  ruleset             String? // optional patch / ruleset identifier
+  version_id             String?          @map("season_id") @db.Uuid
+  played_at              DateTime? // set when status flips to COMPLETED
+  ruleset                String? // optional patch / ruleset identifier
   counts_for_leaderboard Boolean          @default(true)
-  created_at          DateTime         @default(now())
-  updated_at          DateTime         @updatedAt
-  deleted_at          DateTime?
+  created_at             DateTime         @default(now())
+  updated_at             DateTime         @updatedAt
+  deleted_at             DateTime?
 
-  tournament       Tournament?       @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
-  season           Season?           @relation(fields: [season_id], references: [id])
-  player1          User?             @relation("MatchPlayer1", fields: [player1_id], references: [id])
-  player2          User?             @relation("MatchPlayer2", fields: [player2_id], references: [id])
-  winner           User?             @relation("MatchWinner", fields: [winner_id], references: [id])
-  next_match       Match?            @relation("BracketProgression", fields: [next_match_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  feeder_matches   Match[]           @relation("BracketProgression")
-  loser_next_match Match?            @relation("LoserBracketProgression", fields: [loser_next_match_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  losers_feeder    Match[]           @relation("LoserBracketProgression")
-  player1_faction  Faction?          @relation("MatchPlayer1Faction", fields: [player1_faction_id], references: [id])
-  player2_faction  Faction?          @relation("MatchPlayer2Faction", fields: [player2_faction_id], references: [id])
+  tournament       Tournament?   @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  version          GameVersion?  @relation(fields: [version_id], references: [id])
+  player1          User?         @relation("MatchPlayer1", fields: [player1_id], references: [id])
+  player2          User?         @relation("MatchPlayer2", fields: [player2_id], references: [id])
+  winner           User?         @relation("MatchWinner", fields: [winner_id], references: [id])
+  next_match       Match?        @relation("BracketProgression", fields: [next_match_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  feeder_matches   Match[]       @relation("BracketProgression")
+  loser_next_match Match?        @relation("LoserBracketProgression", fields: [loser_next_match_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  losers_feeder    Match[]       @relation("LoserBracketProgression")
+  player1_faction  Faction?      @relation("MatchPlayer1Faction", fields: [player1_faction_id], references: [id])
+  player2_faction  Faction?      @relation("MatchPlayer2Faction", fields: [player2_faction_id], references: [id])
   draft            Draft?
   reports          MatchReport[]
   games            MatchGame[]
 
   @@unique([tournament_id, round, match_number])
   @@index([tournament_id, status])
-  @@index([season_id, status])
+  @@index([version_id, status])
   @@index([player1_id])
   @@index([player2_id])
   @@index([deleted_at])
@@ -538,21 +559,22 @@ model Match {
 // M7: MatchGame — one row per Battle in a Match (Bo1=1 game, Bo3=up to 3, Bo5=up to 5).
 // v1: always game_number=1 (Bo1 only). Schema is series-ready for Bo3/Bo5.
 model MatchGame {
-  id                 String      @id @default(uuid()) @db.Uuid
-  match_id           String      @db.Uuid
-  game_number        Int         @default(1)
-  status             MatchStatus @default(PENDING)
-  winner_id          String?     @db.Uuid
-  player1_faction_id String?     // auto-resolved from BlindPick/SFT on finalization
-  player2_faction_id String?
-  lobby_code         String?     // optional ingame lobby code
-  lobby_password     String?     // optional ingame lobby password (paired with the code)
+  id                     String      @id @default(uuid()) @db.Uuid
+  match_id               String      @db.Uuid
+  game_number            Int         @default(1)
+  battle_type            BattleType  @default(DOMINATION)
+  status                 MatchStatus @default(PENDING)
+  winner_id              String?     @db.Uuid
+  player1_faction_id     String? // auto-resolved from BlindPick/SFT on finalization
+  player2_faction_id     String?
+  lobby_code             String? // optional ingame lobby code
+  lobby_password         String? // optional ingame lobby password (paired with the code)
   // Provisional-result flow (30-min auto-confirm)
-  reported_winner_id String?     @db.Uuid
-  reporter_id        String?     @db.Uuid
-  reported_at        DateTime?
-  confirmed_at       DateTime?   // set on opponent-confirm OR cron auto-confirm
-  replay_url             String?     // required on first report (anti-farming)
+  reported_winner_id     String?     @db.Uuid
+  reporter_id            String?     @db.Uuid
+  reported_at            DateTime?
+  confirmed_at           DateTime? // set on opponent-confirm OR cron auto-confirm
+  replay_url             String? // required on first report (anti-farming)
   // Replay verification (report time): when the replay contradicts the reported game, this holds
   // { issues: [{type,message}], explanation? }. The reporter must upload the right replay or
   // explain the deviation; a held game sits DISPUTED (result pending host/admin) but frees the
@@ -563,10 +585,10 @@ model MatchGame {
   created_at             DateTime    @default(now())
   updated_at             DateTime    @updatedAt
 
-  match           Match                @relation(fields: [match_id], references: [id], onDelete: Cascade)
-  map_decision    MatchMapDecision?
-  blind_pick      MatchBlindPick?
-  faction_matrix  MatchFactionMatrix?
+  match          Match               @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  map_decision   MatchMapDecision?
+  blind_pick     MatchBlindPick?
+  faction_matrix MatchFactionMatrix?
 
   @@unique([match_id, game_number])
   @@index([match_id])
@@ -593,8 +615,8 @@ model MatchMapDecision {
 model MatchFactionMatrix {
   game_id          String    @id @db.Uuid
   coin_flip_seed   String    @default("")
-  top_player_id    String    @db.Uuid @default(dbgenerated("'00000000-0000-0000-0000-000000000000'::uuid"))
-  bottom_player_id String    @db.Uuid @default(dbgenerated("'00000000-0000-0000-0000-000000000000'::uuid"))
+  top_player_id    String    @default(dbgenerated("'00000000-0000-0000-0000-000000000000'::uuid")) @db.Uuid
+  bottom_player_id String    @default(dbgenerated("'00000000-0000-0000-0000-000000000000'::uuid")) @db.Uuid
   p1_factions      String[]  @default([]) // match.player1_id's 3 faction picks
   p2_factions      String[]  @default([]) // match.player2_id's 3 faction picks
   p1_locked_at     DateTime?
@@ -602,7 +624,7 @@ model MatchFactionMatrix {
   first_locked_at  DateTime? // timestamp of first lock — for blind-pick countdown
   revealed_at      DateTime?
   bans             String[]  @default([]) // "row,col" strings e.g. ["0,1","2,2"]
-  picked_cell      String?               // "row,col" of the final matchup
+  picked_cell      String? // "row,col" of the final matchup
   last_action_at   DateTime? // timestamp of last ban/pick — for 15s timeout
   decided_at       DateTime?
 
@@ -673,10 +695,14 @@ model TeamMember {
 }
 
 // -----------------------------------------------------------------------------
-// Season + Leaderboard
+// Game Version + Leaderboard
 // -----------------------------------------------------------------------------
 
-model Season {
+/// A Game Version (formerly "Season") — the DLC/meta boundary. `dlc_tag` is the
+/// meaningful identifier (e.g. "8.1", "9.0"); a new version is created manually
+/// (admin action) when the meta shifts. The table stays "Season" via @@map to
+/// avoid a structural DB rename — only the code/UI concept becomes Version.
+model GameVersion {
   id                  String   @id @default(uuid()) @db.Uuid
   name                String
   start_date          DateTime
@@ -686,7 +712,7 @@ model Season {
   major_tournament_id String?  @db.Uuid
   created_at          DateTime @default(now())
 
-  major_tournament Tournament?            @relation("SeasonMajor", fields: [major_tournament_id], references: [id])
+  major_tournament Tournament?            @relation("VersionMajor", fields: [major_tournament_id], references: [id])
   matches          Match[]
   leaderboard      LeaderboardEntry[]
   results          TournamentResult[]
@@ -696,42 +722,43 @@ model Season {
 
   @@index([is_active])
   @@index([start_date])
+  @@map("Season")
 }
 
 model LeaderboardEntry {
   id           String   @id @default(uuid()) @db.Uuid
   user_id      String   @db.Uuid
-  season_id    String   @db.Uuid
+  version_id   String   @map("season_id") @db.Uuid
   total_points Float    @default(0)
   games_played Int      @default(0)
   wins         Int      @default(0)
   losses       Int      @default(0)
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
 
-  user   User   @relation(fields: [user_id], references: [id])
-  season Season @relation(fields: [season_id], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [user_id], references: [id])
+  version GameVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
 
-  @@unique([user_id, season_id])
-  @@index([season_id, total_points(sort: Desc)])
+  @@unique([user_id, version_id])
+  @@index([version_id, total_points(sort: Desc)])
 }
 
 model TournamentResult {
   id            String   @id @default(uuid()) @db.Uuid
   tournament_id String   @db.Uuid
   user_id       String   @db.Uuid
-  season_id     String?  @db.Uuid // null if tournament not counted for leaderboard
+  version_id    String?  @map("season_id") @db.Uuid // null if tournament not counted for leaderboard
   placement     Int
   points_earned Float    @default(0)
   created_at    DateTime @default(now())
 
-  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
-  user       User       @relation(fields: [user_id], references: [id])
-  season     Season?    @relation(fields: [season_id], references: [id])
+  tournament Tournament   @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [user_id], references: [id])
+  version    GameVersion? @relation(fields: [version_id], references: [id])
 
   @@unique([tournament_id, user_id])
   @@index([user_id])
-  @@index([season_id])
+  @@index([version_id])
 }
 
 // -----------------------------------------------------------------------------
@@ -739,14 +766,15 @@ model TournamentResult {
 // -----------------------------------------------------------------------------
 
 model Map {
-  id          String    @id @default(cuid())
-  slug        String    @unique
-  name        String
-  description String?
-  image_url   String?
-  deleted_at  DateTime?
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
+  id           String       @id @default(cuid())
+  slug         String       @unique
+  name         String
+  description  String?
+  image_url    String?
+  battle_types BattleType[] @default([DOMINATION]) // which battle types this map is valid for
+  deleted_at   DateTime?
+  created_at   DateTime     @default(now())
+  updated_at   DateTime     @updatedAt
 
   tournament_pools TournamentMapPool[]
 
@@ -834,7 +862,7 @@ model ArmyList {
 model FactionStats {
   id             String   @id @default(uuid()) @db.Uuid
   faction_id     String
-  season_id      String   @db.Uuid
+  version_id     String   @map("season_id") @db.Uuid
   matches_played Int      @default(0)
   wins           Int      @default(0)
   losses         Int      @default(0)
@@ -843,18 +871,18 @@ model FactionStats {
   ban_count      Int      @default(0)
   updated_at     DateTime @updatedAt
 
-  faction Faction @relation(fields: [faction_id], references: [id])
-  season  Season  @relation(fields: [season_id], references: [id], onDelete: Cascade)
+  faction Faction     @relation(fields: [faction_id], references: [id])
+  version GameVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
 
-  @@unique([faction_id, season_id])
-  @@index([season_id])
+  @@unique([faction_id, version_id])
+  @@index([version_id])
 }
 
 // Daily snapshot table to support winrate_trend rolling-30d (M3).
 model FactionStatsSnapshot {
   id             String   @id @default(uuid()) @db.Uuid
   faction_id     String
-  season_id      String   @db.Uuid
+  version_id     String   @map("season_id") @db.Uuid
   snapshot_date  DateTime @db.Date
   matches_played Int
   wins           Int
@@ -864,11 +892,11 @@ model FactionStatsSnapshot {
   ban_count      Int
   created_at     DateTime @default(now())
 
-  faction Faction @relation(fields: [faction_id], references: [id])
-  season  Season  @relation(fields: [season_id], references: [id], onDelete: Cascade)
+  faction Faction     @relation(fields: [faction_id], references: [id])
+  version GameVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
 
-  @@unique([faction_id, season_id, snapshot_date])
-  @@index([faction_id, season_id])
+  @@unique([faction_id, version_id, snapshot_date])
+  @@index([faction_id, version_id])
   @@index([snapshot_date])
 }
 
@@ -877,18 +905,18 @@ model MatchupStats {
   id             String   @id @default(uuid()) @db.Uuid
   faction_a_id   String
   faction_b_id   String
-  season_id      String   @db.Uuid
+  version_id     String   @map("season_id") @db.Uuid
   faction_a_wins Int      @default(0)
   faction_b_wins Int      @default(0)
   draws          Int      @default(0)
   updated_at     DateTime @updatedAt
 
-  faction_a Faction @relation("MatchupFactionA", fields: [faction_a_id], references: [id])
-  faction_b Faction @relation("MatchupFactionB", fields: [faction_b_id], references: [id])
-  season    Season  @relation(fields: [season_id], references: [id], onDelete: Cascade)
+  faction_a Faction     @relation("MatchupFactionA", fields: [faction_a_id], references: [id])
+  faction_b Faction     @relation("MatchupFactionB", fields: [faction_b_id], references: [id])
+  version   GameVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
 
-  @@unique([faction_a_id, faction_b_id, season_id])
-  @@index([season_id])
+  @@unique([faction_a_id, faction_b_id, version_id])
+  @@index([version_id])
 }
 
 // -----------------------------------------------------------------------------
@@ -989,7 +1017,7 @@ model QueueActivityLog {
   event       QueueEventType
   match_id    String?        @db.Uuid // set for MATCH/CANCEL/WIN/LOSE/DRAW
   opponent_id String?        @db.Uuid // the other player, when known
-  level       Int?           // #14 escalation level for WARNING/TIMEOUT events
+  level       Int? // #14 escalation level for WARNING/TIMEOUT events
   created_at  DateTime       @default(now())
 
   user     User  @relation("QueueActivityUser", fields: [user_id], references: [id])
@@ -1081,31 +1109,31 @@ model TournamentEvent {
 // -----------------------------------------------------------------------------
 
 model ExternalGame {
-  id                     String   @id @default(uuid()) @db.Uuid
-  source                 String   @default("totaltavern")
+  id                     String  @id @default(uuid()) @db.Uuid
+  source                 String  @default("totaltavern")
   external_tournament_id Int
-  round                  Int      @default(0)
+  round                  Int     @default(0)
   score                  String?
 
   // Raw strings — always populated
-  player1_name           String
-  player2_name           String
-  player1_faction_name   String?
-  player2_faction_name   String?
-  winner_name            String?  // null = Draw / no result
+  player1_name         String
+  player2_name         String
+  player1_faction_name String?
+  player2_faction_name String?
+  winner_name          String? // null = Draw / no result
 
   // Resolved FKs — nullable, populated on user registration
-  player1_id             String?  @db.Uuid
-  player2_id             String?  @db.Uuid
-  winner_id              String?  @db.Uuid
-  player1_faction_id     String?
-  player2_faction_id     String?
+  player1_id         String? @db.Uuid
+  player2_id         String? @db.Uuid
+  winner_id          String? @db.Uuid
+  player1_faction_id String?
+  player2_faction_id String?
 
-  scraped_at             DateTime @default(now())
+  scraped_at DateTime @default(now())
 
-  player1         User?    @relation("ExternalGamePlayer1",   fields: [player1_id],        references: [id])
-  player2         User?    @relation("ExternalGamePlayer2",   fields: [player2_id],        references: [id])
-  winner          User?    @relation("ExternalGameWinner",    fields: [winner_id],          references: [id])
+  player1         User?    @relation("ExternalGamePlayer1", fields: [player1_id], references: [id])
+  player2         User?    @relation("ExternalGamePlayer2", fields: [player2_id], references: [id])
+  winner          User?    @relation("ExternalGameWinner", fields: [winner_id], references: [id])
   player1_faction Faction? @relation("ExternalGameFaction1", fields: [player1_faction_id], references: [id])
   player2_faction Faction? @relation("ExternalGameFaction2", fields: [player2_faction_id], references: [id])
 
@@ -1134,8 +1162,8 @@ model AdminConfig {
 model AvailabilitySlot {
   id          String              @id @default(uuid()) @db.Uuid
   user_id     String              @db.Uuid
-  day_of_week Int                 // 0=Mon..6=Sun
-  hour_utc    Int                 // 0..23
+  day_of_week Int // 0=Mon..6=Sun
+  hour_utc    Int // 0..23
   context     AvailabilityContext
   created_at  DateTime            @default(now())
 
@@ -1149,11 +1177,11 @@ model ScheduledMatchup {
   id             String                 @id @default(uuid()) @db.Uuid
   proposer_id    String                 @db.Uuid
   format         MatchFormat
-  proposed_at    DateTime               // desired match time (stored as UTC)
+  proposed_at    DateTime // desired match time (stored as UTC)
   notes          String?
   status         ScheduledMatchupStatus @default(OPEN)
   accepted_by_id String?                @db.Uuid
-  match_id       String?                @db.Uuid @unique
+  match_id       String?                @unique @db.Uuid
   created_at     DateTime               @default(now())
   expires_at     DateTime
 

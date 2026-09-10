@@ -18,7 +18,7 @@ export async function createOpenPlayMatch(
   });
   const randomMap = maps.length > 0 ? maps[Math.floor(Math.random() * maps.length)] : null;
 
-  const activeSeason = await prisma.season.findFirst({
+  const activeVersion = await prisma.gameVersion.findFirst({
     where: { is_active: true },
     select: { id: true },
   });
@@ -33,7 +33,7 @@ export async function createOpenPlayMatch(
         player1_id: player1Id,
         player2_id: player2Id,
         status: 'ONGOING',
-        season_id: activeSeason?.id ?? null,
+        version_id: activeVersion?.id ?? null,
       },
     });
 

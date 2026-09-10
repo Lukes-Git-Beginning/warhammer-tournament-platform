@@ -11,23 +11,23 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { listSeasons, getAdminPickBanStats } from '@/lib/api.js';
+import { listVersions, getAdminPickBanStats } from '@/lib/api.js';
 
 type EntityType = 'maps' | 'factions';
 
 export function PickBanStatsChart() {
-  const [selectedSeason, setSelectedSeason] = useState<string | undefined>(undefined);
+  const [selectedVersion, setselectedVersion] = useState<string | undefined>(undefined);
   const [entity, setEntity] = useState<EntityType>('factions');
 
-  const { data: seasonsData } = useQuery({
-    queryKey: ['seasons'],
-    queryFn: listSeasons,
+  const { data: versionsData } = useQuery({
+    queryKey: ['versions'],
+    queryFn: listVersions,
   });
-  const seasons = seasonsData?.data ?? [];
+  const versions = versionsData?.data ?? [];
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['admin-pickban-stats', selectedSeason, entity],
-    queryFn: () => getAdminPickBanStats({ season: selectedSeason, entity }),
+    queryKey: ['admin-pickban-stats', selectedVersion, entity],
+    queryFn: () => getAdminPickBanStats({ version: selectedVersion, entity }),
   });
 
   const sorted = [...(data?.data ?? [])].sort(
@@ -68,14 +68,14 @@ export function PickBanStatsChart() {
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-xs text-stone-400">Season</label>
+          <label className="text-xs text-stone-400">Version</label>
           <select
             className="rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
-            value={selectedSeason ?? ''}
-            onChange={(e) => setSelectedSeason(e.target.value || undefined)}
+            value={selectedVersion ?? ''}
+            onChange={(e) => setselectedVersion(e.target.value || undefined)}
           >
             <option value="">All</option>
-            {seasons.map((s) => (
+            {versions.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
@@ -155,3 +155,4 @@ export function PickBanStatsChart() {
     </div>
   );
 }
+

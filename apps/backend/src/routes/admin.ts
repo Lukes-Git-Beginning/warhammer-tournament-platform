@@ -71,20 +71,20 @@ const QueueActivityQuerySchema = PaginationSchema.extend({
 // ---------------------------------------------------------------------------
 
 const FactionWinRatesQuerySchema = z.object({
-  season: z.string().uuid().optional(),
+  version: z.string().uuid().optional(),
   format: z.enum(['SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']).optional(),
   mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE']).optional(),
-  period: z.enum(['last_30d', 'last_90d', 'season']).optional(),
+  period: z.enum(['last_30d', 'last_90d', 'version']).optional(),
 });
 
 
 const DropoffFunnelQuerySchema = z.object({
   tournament_id: z.string().uuid().optional(),
-  season: z.string().uuid().optional(),
+  version: z.string().uuid().optional(),
 });
 
 const PickBanStatsQuerySchema = z.object({
-  season: z.string().uuid().optional(),
+  version: z.string().uuid().optional(),
   entity: z.enum(['maps', 'factions']).default('factions'),
 });
 
@@ -383,7 +383,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           activeTournaments,
           completedTournaments,
           totalGames,
-          activeSeason,
+          activeVersion,
           queueDepth,
           activeOpenPlayMatches,
           scheduledAccepted,
@@ -395,16 +395,16 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           // Games — not Matches — are the statistical unit: a Match is just a
           // container (Bo3, challenge series). Count actually-played games.
           fastify.prisma.matchGame.count({ where: { status: 'COMPLETED', match: { deleted_at: null } } }),
-          fastify.prisma.season.findFirst({ where: { is_active: true } }),
+          fastify.prisma.gameVersion.findFirst({ where: { is_active: true } }),
           fastify.redis ? fastify.redis.llen('rizzotto:queue:open_play') : Promise.resolve(0),
           fastify.prisma.match.count({ where: { type: 'OPEN_PLAY', status: 'ONGOING', deleted_at: null } }),
           fastify.prisma.scheduledMatchup.count({ where: { status: 'ACCEPTED', match_id: null } }),
         ]);
 
         let topFactions: Array<{ faction_id: string; name: string; matches_played: number; wins: number }> = [];
-        if (activeSeason) {
+        if (activeVersion) {
           const top = await fastify.prisma.factionStats.findMany({
-            where: { season_id: activeSeason.id },
+            where: { version_id: activeVersion.id },
             orderBy: { matches_played: 'desc' },
             take: 5,
             include: { faction: { select: { id: true, name: true } } },
@@ -421,7 +421,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           activeUsers,
           tournaments: { total: totalTournaments, active: activeTournaments, completed: completedTournaments },
           gamesPlayed: totalGames,
-          currentSeason: activeSeason?.name ?? null,
+          currentVersion: activeVersion?.name ?? null,
           topFactions: topFactions.map((f) => ({
             faction_id: f.faction_id,
             faction_name: f.name,
@@ -801,32 +801,32 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /api/admin/stats/skill-distribution — how many players sit in each skill
   // band (1 New … 5 Top). Derive-on-read: the hierarchical rating model is fitted +
-  // cached once per season, then each player's gating band is a pure in-memory blend
+  // cached once per version, then each player's gating band is a pure in-memory blend
   // of their questionnaire floor and (if any) their fitted general skill. Players with
   // neither a questionnaire nor fitted data are counted as "unclassified".
   fastify.get('/api/admin/stats/skill-distribution', async (request, reply) => {
-    const parsed = z.object({ season: z.string().uuid().optional() }).safeParse(request.query);
+    const parsed = z.object({ version: z.string().uuid().optional() }).safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
 
-    let resolvedSeasonId: string | null = null;
-    if (parsed.data.season) {
-      const s = await fastify.prisma.season.findUnique({ where: { id: parsed.data.season }, select: { id: true } });
-      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
-      resolvedSeasonId = s.id;
+    let resolvedVersionId: string | null = null;
+    if (parsed.data.version) {
+      const s = await fastify.prisma.gameVersion.findUnique({ where: { id: parsed.data.version }, select: { id: true } });
+      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
+      resolvedVersionId = s.id;
     } else {
-      const s = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
-      resolvedSeasonId = s?.id ?? null;
+      const s = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
+      resolvedVersionId = s?.id ?? null;
     }
 
     return cached(
       fastify.redis,
-      cacheKey('admin:skill-distribution', { seasonId: resolvedSeasonId }),
+      cacheKey('admin:skill-distribution', { versionId: resolvedVersionId }),
       async () => {
         const [model, users, questions] = await Promise.all([
-          resolvedSeasonId
-            ? getRatingModel(fastify.prisma, fastify.redis, { seasonId: resolvedSeasonId, config: { hierarchical: true } })
+          resolvedVersionId
+            ? getRatingModel(fastify.prisma, fastify.redis, { versionId: resolvedVersionId, config: { hierarchical: true } })
             : Promise.resolve(null),
           fastify.prisma.user.findMany({ where: { deleted_at: null }, select: { id: true, calibration_answers: true } }),
           loadCalibrationQuestions(fastify.prisma),
@@ -853,7 +853,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         return {
-          seasonId: resolvedSeasonId,
+          versionId: resolvedVersionId,
           total: users.length,
           unclassified,
           distribution: [1, 2, 3, 4, 5].map((band) => ({
@@ -976,24 +976,24 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // by the gap, descending; NO threshold — the admin judges. Needs BOTH signals to
   // compare, so players lacking a questionnaire or lacking fitted data are omitted.
   fastify.get('/api/admin/reports/underrated', async (request, reply) => {
-    const parsed = z.object({ season: z.string().uuid().optional() }).safeParse(request.query);
+    const parsed = z.object({ version: z.string().uuid().optional() }).safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
 
-    let seasonId: string | null;
-    if (parsed.data.season) {
-      const s = await fastify.prisma.season.findUnique({ where: { id: parsed.data.season }, select: { id: true } });
-      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
-      seasonId = s.id;
+    let resolvedVersionId: string | null;
+    if (parsed.data.version) {
+      const s = await fastify.prisma.gameVersion.findUnique({ where: { id: parsed.data.version }, select: { id: true } });
+      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
+      resolvedVersionId = s.id;
     } else {
-      const s = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
-      seasonId = s?.id ?? null;
+      const s = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
+      resolvedVersionId = s?.id ?? null;
     }
 
     const [model, users, questions] = await Promise.all([
-      seasonId
-        ? getRatingModel(fastify.prisma, fastify.redis, { seasonId, config: { hierarchical: true } })
+      resolvedVersionId
+        ? getRatingModel(fastify.prisma, fastify.redis, { versionId: resolvedVersionId, config: { hierarchical: true } })
         : Promise.resolve(null),
       fastify.prisma.user.findMany({
         where: { deleted_at: null },
@@ -1030,7 +1030,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
     players.sort((a, b) => b.delta - a.delta);
-    return { seasonId, players };
+    return { versionId: resolvedVersionId, players };
   });
 
   fastify.get('/api/admin/stats/faction-winrates', async (request, reply) => {
@@ -1038,22 +1038,22 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
-    const { season: seasonId, format, mode, period } = parsed.data;
+    const { version: versionParam, format, mode, period } = parsed.data;
 
-    // Resolve season
-    let resolvedSeasonId: string | null = null;
-    if (seasonId) {
-      const s = await fastify.prisma.season.findUnique({ where: { id: seasonId }, select: { id: true } });
-      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
-      resolvedSeasonId = s.id;
+    // Resolve version
+    let resolvedVersionId: string | null = null;
+    if (versionParam) {
+      const s = await fastify.prisma.gameVersion.findUnique({ where: { id: versionParam }, select: { id: true } });
+      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
+      resolvedVersionId = s.id;
     } else {
-      const s = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
-      resolvedSeasonId = s?.id ?? null;
+      const s = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
+      resolvedVersionId = s?.id ?? null;
     }
 
     return cached(
       fastify.redis,
-      cacheKey('admin:faction-winrates', { seasonId: resolvedSeasonId, format: format ?? null, mode: mode ?? null, period: period ?? null }),
+      cacheKey('admin:faction-winrates', { versionId: resolvedVersionId, format: format ?? null, mode: mode ?? null, period: period ?? null }),
       async () => {
         // Date filter for period
         let dateFilter: Date | undefined;
@@ -1063,12 +1063,12 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           dateFilter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
         }
 
-        // If season filter: restrict to tournaments in that season
-        if (resolvedSeasonId) {
-          // Tournaments count_for_leaderboard with active_season — join via TournamentResult
-          // Simpler approach: use FactionStats which is already per-season
+        // If version filter: restrict to tournaments in that version
+        if (resolvedVersionId) {
+          // Tournaments count_for_leaderboard with active version — join via TournamentResult
+          // Simpler approach: use FactionStats which is already per-version
           const stats = await fastify.prisma.factionStats.findMany({
-            where: { season_id: resolvedSeasonId },
+            where: { version_id: resolvedVersionId },
             include: { faction: { select: { id: true, name: true } } },
           });
           return stats.map((s) => ({
@@ -1082,7 +1082,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           }));
         }
 
-        // No season: aggregate game-level win rates directly from MatchGame rows
+        // No version: aggregate game-level win rates directly from MatchGame rows
         // (games are the statistical unit — mirrors recomputeFactionStats' source set:
         // COMPLETED games on non-deleted matches, regardless of match container status).
         const tournamentFilter =
@@ -1191,19 +1191,19 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // POST /api/admin/recompute-faction-stats
-  // Rebuilds FactionStats + MatchupStats for the active season from the COMPLETED
+  // Rebuilds FactionStats + MatchupStats for the active version from the COMPLETED
   // MatchGame rows. Run once after the games-only backfill migration, or any time to
   // clear historical incremental drift. Idempotent.
   // -------------------------------------------------------------------------
   fastify.post('/api/admin/recompute-faction-stats', async (_request, reply) => {
-    const activeSeason = await fastify.prisma.season.findFirst({
+    const activeVersion = await fastify.prisma.gameVersion.findFirst({
       where: { is_active: true },
       select: { id: true },
     });
-    if (!activeSeason) {
-      return reply.code(422).send({ error: 'UnprocessableEntity', message: 'No active season', statusCode: 422 });
+    if (!activeVersion) {
+      return reply.code(422).send({ error: 'UnprocessableEntity', message: 'No active version', statusCode: 422 });
     }
-    const result = await recomputeFactionStats(fastify.prisma, activeSeason.id);
+    const result = await recomputeFactionStats(fastify.prisma, activeVersion.id);
     if (fastify.redis) {
       await Promise.all([
         invalidate(fastify.redis, 'factions:*'),
@@ -1223,20 +1223,20 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
-    const { tournament_id, season: seasonId } = parsed.data;
+    const { tournament_id, version: versionParam } = parsed.data;
 
     return cached(
       fastify.redis,
-      cacheKey('admin:dropoff-funnel', { tournamentId: tournament_id ?? null, seasonId: seasonId ?? null }),
+      cacheKey('admin:dropoff-funnel', { tournamentId: tournament_id ?? null, versionId: versionParam ?? null }),
       async () => {
         // Build base filter
         const tournamentFilter: Record<string, unknown> = { deleted_at: null };
         if (tournament_id) {
           tournamentFilter.id = tournament_id;
-        } else if (seasonId) {
-          // Tournaments whose results link to this season
+        } else if (versionParam) {
+          // Tournaments whose results link to this version
           const results = await fastify.prisma.tournamentResult.findMany({
-            where: { season_id: seasonId },
+            where: { version_id: versionParam },
             select: { tournament_id: true },
             distinct: ['tournament_id'],
           });
@@ -1313,26 +1313,26 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
-    const { season: seasonId, entity } = parsed.data;
+    const { version: versionParam, entity } = parsed.data;
 
-    let resolvedSeasonId: string | null = null;
-    if (seasonId) {
-      const s = await fastify.prisma.season.findUnique({ where: { id: seasonId }, select: { id: true } });
-      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
-      resolvedSeasonId = s.id;
+    let resolvedVersionId: string | null = null;
+    if (versionParam) {
+      const s = await fastify.prisma.gameVersion.findUnique({ where: { id: versionParam }, select: { id: true } });
+      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
+      resolvedVersionId = s.id;
     } else {
-      const s = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
-      resolvedSeasonId = s?.id ?? null;
+      const s = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
+      resolvedVersionId = s?.id ?? null;
     }
 
     return cached(
       fastify.redis,
-      cacheKey('admin:pickban-stats', { seasonId: resolvedSeasonId, entity }),
+      cacheKey('admin:pickban-stats', { versionId: resolvedVersionId, entity }),
       async () => {
         if (entity === 'factions') {
           // From FactionStats
           const stats = await fastify.prisma.factionStats.findMany({
-            where: resolvedSeasonId ? { season_id: resolvedSeasonId } : {},
+            where: resolvedVersionId ? { version_id: resolvedVersionId } : {},
             include: { faction: { select: { id: true, name: true } } },
           });
 
@@ -2421,23 +2421,23 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(r.status).send(r.body);
   });
 
-  // GET /api/admin/users/:id/anti-farming?seasonId= — opponents with diminished win value
+  // GET /api/admin/users/:id/anti-farming?versionId= — opponents with diminished win value
   fastify.get('/api/admin/users/:id/anti-farming', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { seasonId } = z.object({ seasonId: z.string().uuid().optional() }).parse(request.query);
+    const { versionId } = z.object({ versionId: z.string().uuid().optional() }).parse(request.query);
 
-    const season = seasonId
-      ? await fastify.prisma.season.findUnique({ where: { id: seasonId }, select: { id: true } })
-      : await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
+    const version = versionId
+      ? await fastify.prisma.gameVersion.findUnique({ where: { id: versionId }, select: { id: true } })
+      : await fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
 
-    if (!season) return reply.code(200).send({ opponents: [], playerTotalWins: 0, penaltyActive: false });
+    if (!version) return reply.code(200).send({ opponents: [], playerTotalWins: 0, penaltyActive: false });
 
-    // All game-level wins for this player in the season
+    // All game-level wins for this player in the version
     const wonGames = await fastify.prisma.matchGame.findMany({
       where: {
         winner_id: id,
         counts_for_leaderboard: true,
-        match: { season_id: season.id, status: 'COMPLETED', deleted_at: null },
+        match: { version_id: version.id, status: 'COMPLETED', deleted_at: null },
       },
       select: { match: { select: { player1_id: true, player2_id: true } } },
     });

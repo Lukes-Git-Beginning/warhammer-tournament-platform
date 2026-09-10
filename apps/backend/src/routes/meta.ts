@@ -9,8 +9,8 @@ import { resolveStandardRuleset } from '../lib/standard-ruleset.js';
 // Query Schemas
 // ---------------------------------------------------------------------------
 
-const SeasonQuerySchema = z.object({
-  seasonId: z.string().uuid().optional(),
+const VersionQuerySchema = z.object({
+  versionId: z.string().uuid().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -19,10 +19,10 @@ const SeasonQuerySchema = z.object({
 
 const metaRoutes: FastifyPluginAsync = async (fastify) => {
   // -------------------------------------------------------------------------
-  // GET /api/meta/overview?seasonId=<uuid>
+  // GET /api/meta/overview?versionId=<uuid>
   // -------------------------------------------------------------------------
   fastify.get('/api/meta/overview', async (request, reply) => {
-    const parsed = SeasonQuerySchema.safeParse(request.query);
+    const parsed = VersionQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({
         error: 'BadRequest',
@@ -30,20 +30,20 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         statusCode: 400,
       });
     }
-    const { seasonId } = parsed.data;
+    const { versionId } = parsed.data;
 
-    // Resolve season
-    let season;
-    if (seasonId) {
-      season = await fastify.prisma.season.findUnique({ where: { id: seasonId } });
-      if (!season) {
-        return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
+    // Resolve version
+    let version;
+    if (versionId) {
+      version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+      if (!version) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
       }
     } else {
-      season = await fastify.prisma.season.findFirst({ where: { is_active: true } });
-      if (!season) {
+      version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
+      if (!version) {
         return {
-          season: null,
+          version: null,
           top_factions_by_winrate: [],
           top_factions_by_pickrate: [],
           total_games: 0,
@@ -52,11 +52,11 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    const resolvedSeasonId = season.id;
+    const resolvedVersionId = version.id;
 
     return cached(
       fastify.redis,
-      cacheKey('meta:overview', { seasonId: resolvedSeasonId }),
+      cacheKey('meta:overview', { versionId: resolvedVersionId }),
       async () => {
         // Identical filter to /api/meta/games so the counter matches the list. Games are
         // the statistical unit: count COMPLETED MatchGame rows directly (every real match
@@ -72,7 +72,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         };
 
         const [allFactions, total_games] = await Promise.all([
-          getFactionsWithStats(fastify.prisma, resolvedSeasonId),
+          getFactionsWithStats(fastify.prisma, resolvedVersionId),
           fastify.prisma.matchGame.count({ where: { status: 'COMPLETED', match: globalMatchWhere } }),
         ]);
 
@@ -114,13 +114,13 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         const top_factions_by_pickrate = byPickrate.slice(0, 5);
 
         return {
-          season: {
-            id: season!.id,
-            name: season!.name,
-            start_date: season!.start_date.toISOString(),
-            end_date: season!.end_date.toISOString(),
-            is_active: season!.is_active,
-            dlc_tag: season!.dlc_tag ?? null,
+          version: {
+            id: version!.id,
+            name: version!.name,
+            start_date: version!.start_date.toISOString(),
+            end_date: version!.end_date.toISOString(),
+            is_active: version!.is_active,
+            dlc_tag: version!.dlc_tag ?? null,
           },
           top_factions_by_winrate,
           top_factions_by_pickrate,
@@ -133,12 +133,12 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // -------------------------------------------------------------------------
-  // GET /api/meta/matchups?seasonId=<uuid>
+  // GET /api/meta/matchups?versionId=<uuid>
   // Returns 24x24 matchup matrix (faction-A vs faction-B) for the requested
-  // season — aggregated from `MatchupStats` via `getMatchupMatrix()`.
+  // version — aggregated from `MatchupStats` via `getMatchupMatrix()`.
   // -------------------------------------------------------------------------
   fastify.get('/api/meta/matchups', async (request, reply) => {
-    const parsed = SeasonQuerySchema.safeParse(request.query);
+    const parsed = VersionQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({
         error: 'BadRequest',
@@ -146,39 +146,39 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         statusCode: 400,
       });
     }
-    const { seasonId } = parsed.data;
+    const { versionId } = parsed.data;
 
-    // Resolve season
-    let season;
-    if (seasonId) {
-      season = await fastify.prisma.season.findUnique({ where: { id: seasonId } });
-      if (!season) {
-        return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
+    // Resolve version
+    let version;
+    if (versionId) {
+      version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+      if (!version) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
       }
     } else {
-      season = await fastify.prisma.season.findFirst({ where: { is_active: true } });
-      if (!season) {
+      version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
+      if (!version) {
         return {
-          season_id: null,
+          version_id: null,
           cells: [],
           factions: [],
         };
       }
     }
 
-    const resolvedSeasonId = season.id;
+    const resolvedVersionId = version.id;
 
     return cached(
       fastify.redis,
-      cacheKey('meta:matchups', { seasonId: resolvedSeasonId }),
+      cacheKey('meta:matchups', { versionId: resolvedVersionId }),
       async () => {
         const [cells, factions] = await Promise.all([
-          getMatchupMatrix(fastify.prisma, resolvedSeasonId),
+          getMatchupMatrix(fastify.prisma, resolvedVersionId),
           fastify.prisma.faction.findMany({ orderBy: { display_order: 'asc' } }),
         ]);
 
         return {
-          season_id: resolvedSeasonId,
+          version_id: resolvedVersionId,
           cells,
           factions: factions.map(asFactionDto),
         };

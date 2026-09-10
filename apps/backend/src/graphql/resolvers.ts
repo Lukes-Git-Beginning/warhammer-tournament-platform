@@ -12,14 +12,14 @@ interface GqlContext {
 }
 
 // ---------------------------------------------------------------------------
-// Season helpers (shared across resolvers)
+// Version helpers (shared across resolvers)
 // ---------------------------------------------------------------------------
 
-async function resolveActiveSeason(prisma: PrismaClient, seasonId?: string | null) {
-  if (seasonId) {
-    return prisma.season.findUnique({ where: { id: seasonId } });
+async function resolveActiveVersion(prisma: PrismaClient, versionId?: string | null) {
+  if (versionId) {
+    return prisma.gameVersion.findUnique({ where: { id: versionId } });
   }
-  return prisma.season.findFirst({ where: { is_active: true } });
+  return prisma.gameVersion.findFirst({ where: { is_active: true } });
 }
 
 // ---------------------------------------------------------------------------
@@ -29,46 +29,46 @@ async function resolveActiveSeason(prisma: PrismaClient, seasonId?: string | nul
 export const resolvers = {
   Query: {
     // -----------------------------------------------------------------------
-    // factions(seasonId: ID): FactionListResult!
+    // factions(versionId: ID): FactionListResult!
     // -----------------------------------------------------------------------
     factions: async (
       _parent: unknown,
-      args: { seasonId?: string | null },
+      args: { versionId?: string | null },
       ctx: GqlContext,
     ) => {
-      const season = await resolveActiveSeason(ctx.prisma, args.seasonId);
-      if (!season) return { data: [], season: null };
+      const version = await resolveActiveVersion(ctx.prisma, args.versionId);
+      if (!version) return { data: [], version: null };
 
-      const data = await getFactionsWithStats(ctx.prisma, season.id);
+      const data = await getFactionsWithStats(ctx.prisma, version.id);
       return {
         data,
-        season: {
-          id: season.id,
-          name: season.name,
-          start_date: season.start_date.toISOString(),
-          end_date: season.end_date?.toISOString() ?? null,
-          is_active: season.is_active,
-          dlc_tag: season.dlc_tag ?? null,
+        version: {
+          id: version.id,
+          name: version.name,
+          start_date: version.start_date.toISOString(),
+          end_date: version.end_date?.toISOString() ?? null,
+          is_active: version.is_active,
+          dlc_tag: version.dlc_tag ?? null,
         },
       };
     },
 
     // -----------------------------------------------------------------------
-    // faction(id: ID!, seasonId: ID): FactionDetail
+    // faction(id: ID!, versionId: ID): FactionDetail
     // -----------------------------------------------------------------------
     faction: async (
       _parent: unknown,
-      args: { id: string; seasonId?: string | null },
+      args: { id: string; versionId?: string | null },
       ctx: GqlContext,
     ) => {
       const faction = await ctx.prisma.faction.findUnique({ where: { id: args.id } });
       if (!faction) return null;
 
-      const season = await resolveActiveSeason(ctx.prisma, args.seasonId);
-      if (!season) return null;
+      const version = await resolveActiveVersion(ctx.prisma, args.versionId);
+      if (!version) return null;
 
       const stats = await ctx.prisma.factionStats.findUnique({
-        where: { faction_id_season_id: { faction_id: args.id, season_id: season.id } },
+        where: { faction_id_version_id: { faction_id: args.id, version_id: version.id } },
       });
 
       const thirtyDaysAgo = new Date();
@@ -77,7 +77,7 @@ export const resolvers = {
       const snapshots = await ctx.prisma.factionStatsSnapshot.findMany({
         where: {
           faction_id: args.id,
-          season_id: season.id,
+          version_id: version.id,
           snapshot_date: { gte: thirtyDaysAgo },
         },
         orderBy: { snapshot_date: 'asc' },
@@ -95,27 +95,27 @@ export const resolvers = {
     },
 
     // -----------------------------------------------------------------------
-    // metaOverview(seasonId: ID): MetaOverview
+    // metaOverview(versionId: ID): MetaOverview
     // -----------------------------------------------------------------------
     metaOverview: async (
       _parent: unknown,
-      args: { seasonId?: string | null },
+      args: { versionId?: string | null },
       ctx: GqlContext,
     ) => {
-      const season = await resolveActiveSeason(ctx.prisma, args.seasonId);
-      if (!season) return null;
+      const version = await resolveActiveVersion(ctx.prisma, args.versionId);
+      if (!version) return null;
 
       // total_matches now counts GAMES (the statistical unit) — kept the field name for
       // GraphQL schema compatibility. Game-keyed: a real game counts regardless of its
       // match container's lifecycle status.
       const [allFactions, total_matches] = await Promise.all([
-        getFactionsWithStats(ctx.prisma, season.id),
+        getFactionsWithStats(ctx.prisma, version.id),
         ctx.prisma.matchGame.count({
           where: {
             status: 'COMPLETED',
             match: {
               deleted_at: null,
-              season_id: season.id,
+              version_id: version.id,
               tournament: { counts_for_leaderboard: true },
             },
           },
@@ -149,13 +149,13 @@ export const resolvers = {
       const top_factions_by_pickrate = byPickrate.slice(0, 5);
 
       return {
-        season: {
-          id: season.id,
-          name: season.name,
-          start_date: season.start_date.toISOString(),
-          end_date: season.end_date?.toISOString() ?? null,
-          is_active: season.is_active,
-          dlc_tag: season.dlc_tag ?? null,
+        version: {
+          id: version.id,
+          name: version.name,
+          start_date: version.start_date.toISOString(),
+          end_date: version.end_date?.toISOString() ?? null,
+          is_active: version.is_active,
+          dlc_tag: version.dlc_tag ?? null,
         },
         top_factions_by_winrate,
         top_factions_by_pickrate,
@@ -165,23 +165,23 @@ export const resolvers = {
     },
 
     // -----------------------------------------------------------------------
-    // matchupHeatmap(seasonId: ID): MatchupHeatmapResult!
+    // matchupHeatmap(versionId: ID): MatchupHeatmapResult!
     // -----------------------------------------------------------------------
     matchupHeatmap: async (
       _parent: unknown,
-      args: { seasonId?: string | null },
+      args: { versionId?: string | null },
       ctx: GqlContext,
     ) => {
-      const season = await resolveActiveSeason(ctx.prisma, args.seasonId);
-      if (!season) return { seasonId: null, cells: [], factions: [] };
+      const version = await resolveActiveVersion(ctx.prisma, args.versionId);
+      if (!version) return { versionId: null, cells: [], factions: [] };
 
       const [cells, prismaFactions] = await Promise.all([
-        getMatchupMatrix(ctx.prisma, season.id),
+        getMatchupMatrix(ctx.prisma, version.id),
         ctx.prisma.faction.findMany({ orderBy: { display_order: 'asc' } }),
       ]);
 
       return {
-        seasonId: season.id,
+        versionId: version.id,
         cells,
         factions: prismaFactions.map(asFactionDto),
       };
@@ -207,7 +207,7 @@ export const resolvers = {
     // wins, losses, draws already match
   },
 
-  SeasonSummary: {
+  VersionSummary: {
     startDate: (parent: { start_date: string }) => parent.start_date,
     endDate: (parent: { end_date: string | null }) => parent.end_date ?? null,
     isActive: (parent: { is_active: boolean }) => parent.is_active,
@@ -228,7 +228,7 @@ export const resolvers = {
       parent.top_factions_by_pickrate,
     totalMatches: (parent: { total_matches: number }) => parent.total_matches,
     factionDiversity: (parent: { faction_diversity: number }) => parent.faction_diversity,
-    // season already matches (it's the whole object; SeasonSummary resolvers handle sub-fields)
+    // version already matches (it's the whole object; VersionSummary resolvers handle sub-fields)
   },
 
   MatchupCell: {

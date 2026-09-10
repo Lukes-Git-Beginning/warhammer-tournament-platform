@@ -34,11 +34,11 @@ afterAll(async () => {
 
 async function cleanup() {
   await cleanupMatchupGames(prisma, S1, [U1, U2]);
-  await prisma.factionStatsSnapshot.deleteMany({ where: { season_id: S1 } });
-  await prisma.matchupStats.deleteMany({ where: { season_id: S1 } });
-  await prisma.factionStats.deleteMany({ where: { season_id: S1 } });
-  await prisma.season.deleteMany({ where: { id: S1 } });
-  await prisma.season.updateMany({ where: { is_active: true }, data: { is_active: false } });
+  await prisma.factionStatsSnapshot.deleteMany({ where: { version_id: S1 } });
+  await prisma.matchupStats.deleteMany({ where: { version_id: S1 } });
+  await prisma.factionStats.deleteMany({ where: { version_id: S1 } });
+  await prisma.gameVersion.deleteMany({ where: { id: S1 } });
+  await prisma.gameVersion.updateMany({ where: { is_active: true }, data: { is_active: false } });
 }
 
 beforeEach(cleanup);
@@ -47,8 +47,8 @@ beforeEach(cleanup);
 // Seed helpers
 // ---------------------------------------------------------------------------
 
-async function seedSeason() {
-  await prisma.season.create({
+async function seedVersion() {
+  await prisma.gameVersion.create({
     data: {
       id: S1,
       name: 'FactionTest Season',
@@ -66,7 +66,7 @@ async function seedFactionStats() {
     data: [
       {
         faction_id: 'empire',
-        season_id: S1,
+        version_id: S1,
         matches_played: 20,
         wins: 15,
         losses: 4,
@@ -76,7 +76,7 @@ async function seedFactionStats() {
       },
       {
         faction_id: 'high_elves',
-        season_id: S1,
+        version_id: S1,
         matches_played: 10,
         wins: 5,
         losses: 5,
@@ -95,17 +95,17 @@ async function seedFactionStats() {
 
 describe('GET /api/factions', () => {
   it('1. returns 24 factions with stats: null when no FactionStats exist', async () => {
-    await seedSeason();
+    await seedVersion();
 
-    const res = await app.inject({ method: 'GET', url: `/api/factions?seasonId=${S1}` });
+    const res = await app.inject({ method: 'GET', url: `/api/factions?versionId=${S1}` });
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{
       data: Array<{ faction: { id: string; initials: string }; stats: unknown | null }>;
-      season: { id: string };
+      version: { id: string };
     }>();
 
-    expect(body.season.id).toBe(S1);
+    expect(body.version.id).toBe(S1);
     expect(body.data).toHaveLength(24);
 
     // All stats should be null since no FactionStats were seeded
@@ -132,10 +132,10 @@ describe('GET /api/factions', () => {
   });
 
   it('2. returns correct stats and win_rate when FactionStats are present', async () => {
-    await seedSeason();
+    await seedVersion();
     await seedFactionStats();
 
-    const res = await app.inject({ method: 'GET', url: `/api/factions?seasonId=${S1}` });
+    const res = await app.inject({ method: 'GET', url: `/api/factions?versionId=${S1}` });
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{
@@ -163,7 +163,7 @@ describe('GET /api/factions', () => {
 
   it('returns 404 for non-existent seasonId', async () => {
     const fakeId = '99999999-0000-0000-0000-000000000099';
-    const res = await app.inject({ method: 'GET', url: `/api/factions?seasonId=${fakeId}` });
+    const res = await app.inject({ method: 'GET', url: `/api/factions?versionId=${fakeId}` });
     expect(res.statusCode).toBe(404);
   });
 });
@@ -174,12 +174,12 @@ describe('GET /api/factions', () => {
 
 describe('GET /api/factions/:id', () => {
   it('3. returns faction detail with stats and empty trend for valid faction', async () => {
-    await seedSeason();
+    await seedVersion();
     await seedFactionStats();
 
     const res = await app.inject({
       method: 'GET',
-      url: `/api/factions/empire?seasonId=${S1}`,
+      url: `/api/factions/empire?versionId=${S1}`,
     });
     expect(res.statusCode).toBe(200);
 
@@ -201,11 +201,11 @@ describe('GET /api/factions/:id', () => {
   });
 
   it('4. returns 404 for non-existing faction id', async () => {
-    await seedSeason();
+    await seedVersion();
 
     const res = await app.inject({
       method: 'GET',
-      url: `/api/factions/nonexistent_faction?seasonId=${S1}`,
+      url: `/api/factions/nonexistent_faction?versionId=${S1}`,
     });
     expect(res.statusCode).toBe(404);
     const body = res.json<{ error: string }>();
@@ -213,7 +213,7 @@ describe('GET /api/factions/:id', () => {
   });
 
   it('returns trend entries when snapshots exist', async () => {
-    await seedSeason();
+    await seedVersion();
     await seedFactionStats();
 
     // Seed two snapshot entries within last 30 days
@@ -227,7 +227,7 @@ describe('GET /api/factions/:id', () => {
       data: [
         {
           faction_id: 'empire',
-          season_id: S1,
+          version_id: S1,
           snapshot_date: d1,
           matches_played: 10,
           wins: 7,
@@ -238,7 +238,7 @@ describe('GET /api/factions/:id', () => {
         },
         {
           faction_id: 'empire',
-          season_id: S1,
+          version_id: S1,
           snapshot_date: d2,
           matches_played: 20,
           wins: 15,
@@ -252,7 +252,7 @@ describe('GET /api/factions/:id', () => {
 
     const res = await app.inject({
       method: 'GET',
-      url: `/api/factions/empire?seasonId=${S1}`,
+      url: `/api/factions/empire?versionId=${S1}`,
     });
     expect(res.statusCode).toBe(200);
 
@@ -272,32 +272,32 @@ describe('GET /api/factions/:id', () => {
 
 describe('GET /api/meta/overview', () => {
   it('5. returns correct top_by_winrate and top_by_pickrate with seeded stats', async () => {
-    await seedSeason();
+    await seedVersion();
     await seedFactionStats();
 
     // Seed additional factions to ensure top-5 logic is tested
     await prisma.factionStats.createMany({
       data: [
-        { faction_id: 'dwarfs', season_id: S1, matches_played: 12, wins: 10, losses: 2, draws: 0, pick_count: 12, ban_count: 0 },
-        { faction_id: 'kislev', season_id: S1, matches_played: 15, wins: 11, losses: 4, draws: 0, pick_count: 15, ban_count: 0 },
-        { faction_id: 'lizardmen', season_id: S1, matches_played: 18, wins: 12, losses: 6, draws: 0, pick_count: 18, ban_count: 0 },
+        { faction_id: 'dwarfs', version_id: S1, matches_played: 12, wins: 10, losses: 2, draws: 0, pick_count: 12, ban_count: 0 },
+        { faction_id: 'kislev', version_id: S1, matches_played: 15, wins: 11, losses: 4, draws: 0, pick_count: 15, ban_count: 0 },
+        { faction_id: 'lizardmen', version_id: S1, matches_played: 18, wins: 12, losses: 6, draws: 0, pick_count: 18, ban_count: 0 },
       ],
       skipDuplicates: true,
     });
 
-    const res = await app.inject({ method: 'GET', url: `/api/meta/overview?seasonId=${S1}` });
+    const res = await app.inject({ method: 'GET', url: `/api/meta/overview?versionId=${S1}` });
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{
-      season: { id: string; is_active: boolean };
+      version: { id: string; is_active: boolean };
       top_factions_by_winrate: Array<{ faction: { id: string }; stats: { win_rate: number } }>;
       top_factions_by_pickrate: Array<{ faction: { id: string }; stats: { matches_played: number } }>;
       total_games: number;
       faction_diversity: number;
     }>();
 
-    expect(body.season.id).toBe(S1);
-    expect(body.season.is_active).toBe(true);
+    expect(body.version.id).toBe(S1);
+    expect(body.version.is_active).toBe(true);
 
     // top by winrate: dwarfs 10/12≈0.833, empire 15/20=0.75, kislev 11/15≈0.733, ...
     // high_elves has 10 matches (exactly min) so included
@@ -324,18 +324,18 @@ describe('GET /api/meta/overview', () => {
   });
 
   it('6. filters top_by_winrate to min 10 matches', async () => {
-    await seedSeason();
+    await seedVersion();
 
     // Seed one faction with < 10 matches (high win_rate) and one with >= 10
     await prisma.factionStats.createMany({
       data: [
-        { faction_id: 'empire', season_id: S1, matches_played: 5, wins: 5, losses: 0, draws: 0, pick_count: 5, ban_count: 0 },
-        { faction_id: 'bretonnia', season_id: S1, matches_played: 10, wins: 6, losses: 4, draws: 0, pick_count: 10, ban_count: 0 },
+        { faction_id: 'empire', version_id: S1, matches_played: 5, wins: 5, losses: 0, draws: 0, pick_count: 5, ban_count: 0 },
+        { faction_id: 'bretonnia', version_id: S1, matches_played: 10, wins: 6, losses: 4, draws: 0, pick_count: 10, ban_count: 0 },
       ],
       skipDuplicates: true,
     });
 
-    const res = await app.inject({ method: 'GET', url: `/api/meta/overview?seasonId=${S1}` });
+    const res = await app.inject({ method: 'GET', url: `/api/meta/overview?versionId=${S1}` });
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{
@@ -357,38 +357,38 @@ describe('GET /api/meta/overview', () => {
 // ---------------------------------------------------------------------------
 
 describe('GET /api/meta/matchups', () => {
-  it('returns stub response with season_id, empty cells, and all 24 factions', async () => {
-    await seedSeason();
+  it('returns stub response with version_id, empty cells, and all 24 factions', async () => {
+    await seedVersion();
 
-    const res = await app.inject({ method: 'GET', url: `/api/meta/matchups?seasonId=${S1}` });
+    const res = await app.inject({ method: 'GET', url: `/api/meta/matchups?versionId=${S1}` });
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{
-      season_id: string;
+      version_id: string;
       cells: unknown[];
       factions: Array<{ id: string }>;
     }>();
 
-    expect(body.season_id).toBe(S1);
+    expect(body.version_id).toBe(S1);
     expect(Array.isArray(body.cells)).toBe(true);
     expect(body.cells).toHaveLength(0); // no MatchupStats seeded
     expect(body.factions).toHaveLength(24);
   });
 
   it('returns cells when MatchupStats exist', async () => {
-    await seedSeason();
+    await seedVersion();
 
     // bretonnia (a) vs empire (b): 3 a_wins, 7 b_wins, 0 draws
     await seedMatchupGames(prisma, {
-      seasonId: S1, u1: U1, u2: U2, p1f: 'bretonnia', p2f: 'empire',
+      versionId: S1, u1: U1, u2: U2, p1f: 'bretonnia', p2f: 'empire',
       results: ['P1', 'P1', 'P1', 'P2', 'P2', 'P2', 'P2', 'P2', 'P2', 'P2'],
     });
 
-    const res = await app.inject({ method: 'GET', url: `/api/meta/matchups?seasonId=${S1}` });
+    const res = await app.inject({ method: 'GET', url: `/api/meta/matchups?versionId=${S1}` });
     expect(res.statusCode).toBe(200);
 
     const body = res.json<{
-      season_id: string;
+      version_id: string;
       cells: Array<{
         faction_a_id: string;
         faction_b_id: string;
@@ -410,3 +410,5 @@ describe('GET /api/meta/matchups', () => {
     expect(cell.winrate_a).toBeCloseTo(0.3);
   });
 });
+
+

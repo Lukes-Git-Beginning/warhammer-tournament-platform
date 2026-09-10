@@ -7,7 +7,7 @@ import { eligibleStatGameWhere } from './stat-eligibility.js';
 // ---------------------------------------------------------------------------
 
 /**
- * Builds the faction-vs-faction matchup matrix for a season by aggregating the
+ * Builds the faction-vs-faction matchup matrix for a version by aggregating the
  * source of truth live: every COMPLETED MatchGame (game-level, so a Bo3
  * contributes up to three observations, and per-game factions for 2FT/3FT/MATRIX
  * are honoured).
@@ -25,12 +25,12 @@ import { eligibleStatGameWhere } from './stat-eligibility.js';
  */
 export async function getMatchupMatrix(
   prisma: PrismaClient,
-  seasonId: string,
+  versionId: string,
 ): Promise<MatchupCell[]> {
-  // Same canonical game set as the rating model (loadSeasonObservations) so the two
+  // Same canonical game set as the rating model (loadVersionObservations) so the two
   // heatmaps' sample sizes agree — see stat-eligibility.ts.
   const games = await prisma.matchGame.findMany({
-    where: eligibleStatGameWhere(seasonId),
+    where: eligibleStatGameWhere(versionId),
     select: {
       winner_id: true,
       player1_faction_id: true,

@@ -96,13 +96,13 @@ async function loadAnswers(
 }
 
 /**
- * Full skill classification for a player in a season: questionnaire floor +
+ * Full skill classification for a player in a version: questionnaire floor +
  * hierarchical general skill → matchmaking (Bayes blend) and gating (MAX) bands.
  */
 export async function getPlayerClassification(
   prisma: PrismaClient,
   redis: Redis | undefined,
-  seasonId: string,
+  versionId: string,
   playerId: string,
 ): Promise<PlayerClassification> {
   const answers = await loadAnswers(prisma, playerId);
@@ -111,7 +111,7 @@ export async function getPlayerClassification(
 
   // Always use the hierarchical model for the general skill (see file header).
   const model = await getRatingModel(prisma, redis, {
-    seasonId,
+    versionId,
     config: { hierarchical: true },
   });
   const gs = model.getGeneralSkill(playerId);

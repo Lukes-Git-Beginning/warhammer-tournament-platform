@@ -71,7 +71,7 @@ export function StatsDashboard() {
         <KpiCard label="Active Users" value={data.activeUsers} />
         <TournamentCard data={data.tournaments} />
         <KpiCard label="Games Played" value={data.gamesPlayed} />
-        <KpiCard label="Current Season" value={data.currentSeason ?? '—'} />
+        <KpiCard label="Current Version" value={data.currentVersion ?? '—'} />
       </div>
 
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
@@ -165,7 +165,7 @@ export function StatsDashboard() {
 
       <div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-          Top 5 Factions (this season)
+          Top 5 Factions (this version)
         </h2>
         <div className="overflow-x-auto rounded-md border border-stone-800">
           <table className="min-w-full text-sm">
@@ -199,3 +199,4 @@ export function StatsDashboard() {
     </div>
   );
 }
+

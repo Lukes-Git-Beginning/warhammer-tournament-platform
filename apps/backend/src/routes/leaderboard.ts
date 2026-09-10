@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { cached, cacheKey } from '../lib/cache.js';
-import { computeSeasonLeaderboard } from '../lib/leaderboard-service.js';
+import { computeVersionLeaderboard } from '../lib/leaderboard-service.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
 import { logistic, skillToBand } from '../lib/rating-model.js';
 import { effectiveTiersOf, SUPPORTER_FLAG_SELECT, NO_TIERS } from '../lib/supporter-service.js';
@@ -87,60 +87,60 @@ const PaginationSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(1000).default(50),
 });
 
-const SeasonLeaderboardQuerySchema = PaginationSchema.extend({
-  seasonId: z.string().uuid().optional(),
+const VersionLeaderboardQuerySchema = PaginationSchema.extend({
+  versionId: z.string().uuid().optional(),
   mode: z
     .enum(['rating_model', 'winrate'])
     .default('rating_model'),
 });
 
 const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/leaderboard?seasonId=...&page=1&pageSize=50
+  // GET /api/leaderboard?versionId=...&page=1&pageSize=50
   fastify.get('/api/leaderboard', async (request, reply) => {
-    const parsed = SeasonLeaderboardQuerySchema.safeParse(request.query);
+    const parsed = VersionLeaderboardQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
-    const { seasonId, page, pageSize, mode } = parsed.data;
+    const { versionId, page, pageSize, mode } = parsed.data;
 
-    // Season lookup cannot be cached because 404 detection must happen before caching
-    let season;
-    if (seasonId) {
-      season = await fastify.prisma.season.findUnique({ where: { id: seasonId } });
-      if (!season) {
-        return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
+    // Version lookup cannot be cached because 404 detection must happen before caching
+    let version;
+    if (versionId) {
+      version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+      if (!version) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
       }
     } else {
-      season = await fastify.prisma.season.findFirst({ where: { is_active: true } });
-      if (!season) {
-        return reply.code(404).send({ error: 'NotFound', message: 'No active season', statusCode: 404 });
+      version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
+      if (!version) {
+        return reply.code(404).send({ error: 'NotFound', message: 'No active version', statusCode: 404 });
       }
     }
 
-    const resolvedSeasonId = season.id;
+    const resolvedVersionId = version.id;
 
     const MIN_MATCHES_FOR_RATE = 5;
 
     return cached(
       fastify.redis,
-      cacheKey('leaderboard:season', { seasonId: resolvedSeasonId, page, pageSize, mode }),
+      cacheKey('leaderboard:version', { versionId: resolvedVersionId, page, pageSize, mode }),
       async () => {
         // ---------------------------------------------------------------
         // mode = 'rating_model' (default) — dynamic weighted leaderboard.
         // Derived live from confirmed match facts + the current rating model.
         // ---------------------------------------------------------------
         if (mode === 'rating_model') {
-          const all = await computeSeasonLeaderboard(fastify.prisma, fastify.redis, resolvedSeasonId);
+          const all = await computeVersionLeaderboard(fastify.prisma, fastify.redis, resolvedVersionId);
           const pageSlice = all.slice((page - 1) * pageSize, page * pageSize);
 
           return {
             mode,
-            season: {
-              id: season!.id,
-              name: season!.name,
-              start_date: season!.start_date.toISOString(),
-              end_date: season!.end_date.toISOString(),
-              is_active: season!.is_active,
+            version: {
+              id: version!.id,
+              name: version!.name,
+              start_date: version!.start_date.toISOString(),
+              end_date: version!.end_date.toISOString(),
+              is_active: version!.is_active,
             },
             entries: pageSlice.map((e, idx) => ({
               rank: (page - 1) * pageSize + idx + 1,
@@ -163,10 +163,10 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         // ---------------------------------------------------------------
         // mode = 'winrate' — sort by wins/totalGames desc, min 5 games.
         // Uses the same dynamic MatchGame source as rating_model so the
-        // filter is consistent with what the Season tab shows.
+        // filter is consistent with what the Version tab shows.
         // ---------------------------------------------------------------
         {
-          const all = await computeSeasonLeaderboard(fastify.prisma, fastify.redis, resolvedSeasonId);
+          const all = await computeVersionLeaderboard(fastify.prisma, fastify.redis, resolvedVersionId);
           const qualified = all
             .filter((e) => e.totalGames >= MIN_MATCHES_FOR_RATE)
             .sort((a, b) => {
@@ -180,12 +180,12 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
 
           return {
             mode,
-            season: {
-              id: season!.id,
-              name: season!.name,
-              start_date: season!.start_date.toISOString(),
-              end_date: season!.end_date.toISOString(),
-              is_active: season!.is_active,
+            version: {
+              id: version!.id,
+              name: version!.name,
+              start_date: version!.start_date.toISOString(),
+              end_date: version!.end_date.toISOString(),
+              is_active: version!.is_active,
             },
             entries: pageSlice.map((e, idx) => ({
               rank: (page - 1) * pageSize + idx + 1,
@@ -218,11 +218,11 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('leaderboard:all-time', { page, pageSize }),
       async () => {
-        // Aggregate per user across all seasons
+        // Aggregate per user across all versions
         const grouped = await fastify.prisma.leaderboardEntry.groupBy({
           by: ['user_id'],
           _sum: { total_points: true, games_played: true, wins: true, losses: true },
-          _count: { season_id: true },
+          _count: { version_id: true },
           orderBy: { _sum: { total_points: 'desc' } },
         });
 
@@ -248,7 +248,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
               games_played: g._sum.games_played ?? 0,
               wins: g._sum.wins ?? 0,
               losses: g._sum.losses ?? 0,
-              seasons_participated: g._count.season_id,
+              versions_participated: g._count.version_id,
             };
           }),
           total,
@@ -404,7 +404,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/api/leaderboard/skill', async (request, reply) => {
     const parsed = z
       .object({
-        seasonId: z.string().uuid().optional(),
+        versionId: z.string().uuid().optional(),
         page: z.coerce.number().int().min(1).default(1),
         pageSize: z.coerce.number().int().min(1).max(1000).default(100),
         // #8: the Skill leaderboard excludes players with fewer than 20 games (a handful of
@@ -415,26 +415,26 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
-    const { seasonId, page, pageSize, minGames } = parsed.data;
+    const { versionId, page, pageSize, minGames } = parsed.data;
 
-    let season;
-    if (seasonId) {
-      season = await fastify.prisma.season.findUnique({ where: { id: seasonId } });
-      if (!season) return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
+    let version;
+    if (versionId) {
+      version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+      if (!version) return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
     } else {
-      season = await fastify.prisma.season.findFirst({ where: { is_active: true } });
-      if (!season) return reply.code(404).send({ error: 'NotFound', message: 'No active season', statusCode: 404 });
+      version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
+      if (!version) return reply.code(404).send({ error: 'NotFound', message: 'No active version', statusCode: 404 });
     }
-    const resolvedSeasonId = season.id;
+    const resolvedVersionId = version.id;
 
     return cached(
       fastify.redis,
-      cacheKey('leaderboard:skill', { seasonId: resolvedSeasonId, page, pageSize, minGames }),
+      cacheKey('leaderboard:skill', { versionId: resolvedVersionId, page, pageSize, minGames }),
       async () => {
         // Force the hierarchical fit so the general-skill decomposition exists (mirrors the
         // skill-classification service — the flat default model has no GS).
         const model = await getRatingModel(fastify.prisma, fastify.redis, {
-          seasonId: resolvedSeasonId,
+          versionId: resolvedVersionId,
           config: { hierarchical: true },
         });
 
@@ -455,7 +455,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         // #8: real win/loss record (same dynamic MatchGame source as the old winrate tab) so the
         // Skill leaderboard can show an actual win-rate column next to the model-derived skill.
         const record = new Map(
-          (await computeSeasonLeaderboard(fastify.prisma, fastify.redis, resolvedSeasonId)).map((r) => [
+          (await computeVersionLeaderboard(fastify.prisma, fastify.redis, resolvedVersionId)).map((r) => [
             r.playerId,
             r,
           ]),
@@ -490,7 +490,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
           total,
           page,
           pageSize,
-          season: { id: season.id, name: season.name, is_active: season.is_active },
+          version: { id: version.id, name: version.name, is_active: version.is_active },
         };
       },
       { ttlSeconds: 3600 },

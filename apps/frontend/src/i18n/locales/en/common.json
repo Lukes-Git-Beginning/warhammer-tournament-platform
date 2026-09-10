@@ -123,12 +123,12 @@
   "leaderboard": {
     "title": "Leaderboard",
     "tabs": {
-      "season": "Season",
+      "version": "Version",
       "all_time": "All-Time"
     },
-    "season_select": "Season:",
-    "season_active": "(active)",
-    "season_all": "All Seasons",
+    "version_select": "Version:",
+    "version_active": "(active)",
+    "version_all": "All Versions",
     "columns": {
       "rank": "Rank",
       "player": "Player",
@@ -136,7 +136,7 @@
       "elo": "Elo",
       "wl": "W / L",
       "games": "Games",
-      "seasons": "Seasons"
+      "versions": "Versions"
     },
     "load_error": "Failed to load the Leaderboard.",
     "empty": "No entries yet.",
@@ -301,15 +301,15 @@
   "user_profile": {
     "not_found": "Player profile not found or unreachable.",
     "joined": "Joined {{date}}",
-    "current_season": "Current Season",
+    "current_version": "Current Version",
     "all_time": "All-Time",
     "recent_tournaments": "Recent Tournaments",
     "army_lists": "My Army Lists",
     "recent_matches": "Recent Matches",
     "empties": {
-      "season": {
-        "title": "No active season.",
-        "body": "The next season has not yet been announced."
+      "version": {
+        "title": "No active version.",
+        "body": "The next version has not yet been announced."
       },
       "tournaments": {
         "title": "No tournaments yet.",
@@ -423,7 +423,7 @@
         },
         "meta": {
           "title": "The Heatmap",
-          "body": "Matchup balance, season by season. Read the field before you ride it."
+          "body": "Matchup balance, version by version. Read the field before you ride it."
         },
         "sigil": {
           "title": "Your Sigil",
@@ -468,12 +468,12 @@
   },
   "meta_page": {
     "title": "Meta Dashboard",
-    "season_label": "Season: {{name}}",
+    "version_label": "Version: {{name}}",
     "error": "Failed to load meta data.",
-    "no_season_title": "No open season yet.",
-    "no_season_body": "Once a season is opened by the RizzOtto's Arena community, faction and matchup statistics will appear here.",
-    "no_season_motto": "\"Tempus Expectandi\"",
-    "no_season_motto_title": "A time of waiting",
+    "no_version_title": "No open version yet.",
+    "no_version_body": "Once a version is opened by the RizzOtto's Arena community, faction and matchup statistics will appear here.",
+    "no_version_motto": "\"Tempus Expectandi\"",
+    "no_version_motto_title": "A time of waiting",
     "stat_total_games": "Total games",
     "stat_faction_diversity": "Faction diversity",
     "top_winrate": "Top winrate factions",
@@ -489,12 +489,12 @@
   },
   "factions_page": {
     "title": "Factions",
-    "season_label": "Season: {{name}}",
+    "version_label": "Version: {{name}}",
     "error": "Failed to load factions.",
-    "no_season_title": "No open season yet.",
-    "no_season_body": "Once a season is running, every faction and its statistics will be listed here.",
-    "no_season_motto": "\"Patientia Ferraria\"",
-    "no_season_motto_title": "Iron patience",
+    "no_version_title": "No open version yet.",
+    "no_version_body": "Once a version is running, every faction and its statistics will be listed here.",
+    "no_version_motto": "\"Patientia Ferraria\"",
+    "no_version_motto_title": "Iron patience",
     "no_stats": "No data",
     "matches_count": "{{count}} matches",
     "winrate_short": "{{percent}}% WR"

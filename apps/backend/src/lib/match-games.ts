@@ -262,12 +262,12 @@ export async function finalizeGameResult(
   });
 
   // Rebuild FactionStats + MatchupStats from scratch — eliminates incremental drift.
-  const activeSeason = await fastify.prisma.season.findFirst({
+  const activeVersion = await fastify.prisma.gameVersion.findFirst({
     where: { is_active: true },
     select: { id: true },
   });
-  if (activeSeason) {
-    await recomputeFactionStats(fastify.prisma, activeSeason.id);
+  if (activeVersion) {
+    await recomputeFactionStats(fastify.prisma, activeVersion.id);
     if (fastify.redis) {
       await Promise.all([
         invalidate(fastify.redis, 'factions:*'),

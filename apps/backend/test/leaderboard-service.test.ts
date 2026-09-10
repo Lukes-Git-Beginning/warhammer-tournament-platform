@@ -1,7 +1,7 @@
 /**
  * Integration tests for the dynamic leaderboard pipeline against a real DB.
  *
- * Exercises load → fit → aggregate (computeSeasonLeaderboard) and the
+ * Exercises load → fit → aggregate (computeVersionLeaderboard) and the
  * explainability invariant: a player's leaderboard total equals the sum of the
  * per-match breakdowns. Also verifies anti-farm zeroing end-to-end.
  *
@@ -10,13 +10,13 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { prisma } from '@rizzotto/db';
-import { computeSeasonLeaderboard } from '../src/lib/leaderboard-service.js';
+import { computeVersionLeaderboard } from '../src/lib/leaderboard-service.js';
 import { matchBreakdown, playerOpponentBreakdown } from '../src/lib/breakdown-service.js';
 import {
   createTestUser,
-  createTestSeason,
+  createTestVersion,
   createTestTournament,
-  cleanupSeason,
+  cleanupVersion,
   cleanupTournament,
   cleanupUsers,
 } from './helpers/db-fixtures.js';
@@ -86,7 +86,7 @@ async function completedMatch(
       player2_faction_id: pf2,
       status: 'COMPLETED',
       result: winner === p1 ? 'PLAYER1_WIN' : 'PLAYER2_WIN',
-      season_id: seasonId,
+      version_id: seasonId,
       played_at: new Date('2026-06-01'),
     },
   });
@@ -107,8 +107,8 @@ async function completedMatch(
 }
 
 beforeAll(async () => {
-  const season1 = await createTestSeason({ is_active: true });
-  const season2 = await createTestSeason({ is_active: false });
+  const season1 = await createTestVersion({ is_active: true });
+  const season2 = await createTestVersion({ is_active: false });
   seasonRR = season1.id;
   seasonAF = season2.id;
 
@@ -146,7 +146,7 @@ beforeAll(async () => {
   //   even though 10 of P's 30 GAMES (33%) were vs Bg. The old games-based share
   //   would have zeroed Bg; the wins-based share spares it. 15 further wins vs
   //   distinct opponents make up the remaining 75% of P's wins.
-  const season3 = await createTestSeason({ is_active: false });
+  const season3 = await createTestVersion({ is_active: false });
   seasonTG = season3.id;
   P = await newUser();
   V = await newUser();
@@ -165,16 +165,16 @@ beforeAll(async () => {
 afterAll(async () => {
   await cleanupTournament(tournamentId); // deletes all matches first
   await prisma.faction.deleteMany({ where: { id: { in: factionIds } } });
-  await cleanupSeason(seasonRR);
-  await cleanupSeason(seasonAF);
-  await cleanupSeason(seasonTG);
+  await cleanupVersion(seasonRR);
+  await cleanupVersion(seasonAF);
+  await cleanupVersion(seasonTG);
   await cleanupUsers(userIds);
   await prisma.$disconnect();
 });
 
-describe('computeSeasonLeaderboard — round robin', () => {
+describe('computeVersionLeaderboard — round robin', () => {
   it('reports correct wins/losses/matches per player', async () => {
-    const board = await computeSeasonLeaderboard(prisma, undefined, seasonRR);
+    const board = await computeVersionLeaderboard(prisma, undefined, seasonRR);
     const byId = new Map(board.map((e) => [e.playerId, e]));
 
     expect(byId.get(A)).toMatchObject({ wins: 2, losses: 1, totalGames: 3 });
@@ -183,14 +183,14 @@ describe('computeSeasonLeaderboard — round robin', () => {
   });
 
   it('all modifiers are 1 (totals < 20), so final == raw points', async () => {
-    const board = await computeSeasonLeaderboard(prisma, undefined, seasonRR);
+    const board = await computeVersionLeaderboard(prisma, undefined, seasonRR);
     for (const e of board) {
       expect(e.totalFinalPoints).toBeCloseTo(e.totalRawPoints, 6);
     }
   });
 
   it("a player's leaderboard total equals the sum of its match breakdowns (explainability)", async () => {
-    const board = await computeSeasonLeaderboard(prisma, undefined, seasonRR);
+    const board = await computeVersionLeaderboard(prisma, undefined, seasonRR);
     const aEntry = board.find((e) => e.playerId === A)!;
 
     let sum = 0;
@@ -207,9 +207,9 @@ describe('computeSeasonLeaderboard — round robin', () => {
   });
 });
 
-describe('computeSeasonLeaderboard — anti-farm', () => {
+describe('computeVersionLeaderboard — anti-farm', () => {
   it('zeroes the over-played opponent while crediting the rest', async () => {
-    const board = await computeSeasonLeaderboard(prisma, undefined, seasonAF);
+    const board = await computeVersionLeaderboard(prisma, undefined, seasonAF);
     const dEntry = board.find((e) => e.playerId === D)!;
 
     expect(dEntry).toMatchObject({ wins: 20, losses: 0, totalGames: 20 });
@@ -226,7 +226,7 @@ describe('computeSeasonLeaderboard — anti-farm', () => {
   });
 });
 
-describe('computeSeasonLeaderboard — wins-based targeting', () => {
+describe('computeVersionLeaderboard — wins-based targeting', () => {
   it('penalises a favourite victim but spares a bogey opponent', async () => {
     // Favourite victim: 4 of P's 20 wins (20% share) → zeroed.
     const vsVictim = await playerOpponentBreakdown(prisma, undefined, seasonTG, P, V);
@@ -248,3 +248,4 @@ describe('computeSeasonLeaderboard — wins-based targeting', () => {
     );
   });
 });
+

@@ -217,14 +217,14 @@ function AntiFarmingSection({ playerId }: { playerId: string }) {
       <p className="text-[11px] text-stone-500 mb-4">
         Opponents against whom this player's wins are reduced in value, plus those
         approaching the cap (≥4% win-share, still full value). Reductions activate
-        once the player has ≥20 season wins.
+        once the player has ≥20 version wins.
       </p>
 
       {isLoading && <p className="text-xs text-stone-600">Loading…</p>}
 
       {!isLoading && data && !data.penaltyActive && (
         <p className="text-xs text-stone-600 italic">
-          No penalty active yet — player has {data.playerTotalWins} season win{data.playerTotalWins !== 1 ? 's' : ''} (threshold: 20).
+          No penalty active yet — player has {data.playerTotalWins} version win{data.playerTotalWins !== 1 ? 's' : ''} (threshold: 20).
         </p>
       )}
 
@@ -274,7 +274,7 @@ function AntiFarmingSection({ playerId }: { playerId: string }) {
             })}
           </div>
           <p className="mt-3 text-[10px] text-stone-600">
-            {data.playerTotalWins} total season wins. Share &gt;5% → penalty starts; &gt;10% → wins count at 0%.
+            {data.playerTotalWins} total version wins. Share &gt;5% → penalty starts; &gt;10% → wins count at 0%.
           </p>
         </>
       )}
@@ -384,7 +384,7 @@ export function UserProfilePage() {
     );
   }
 
-  const { user, current_season, all_time, recent_results } = data;
+  const { user, current_version, all_time, recent_results } = data;
 
   const joinedDate = formatInUserTimezone(user.created_at, undefined, { showTime: false });
 
@@ -435,32 +435,32 @@ export function UserProfilePage() {
         </div>
       )}
 
-      {/* Aktuelle Season */}
+      {/* Aktuelle Version */}
       <section>
         <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          {t('user_profile.current_season')}
+          {t('user_profile.current_version')}
         </h2>
-        {current_season ? (
+        {current_version ? (
           <div>
-            <p className="text-sm text-stone-400 mb-3">{current_season.season.name}</p>
+            <p className="text-sm text-stone-400 mb-3">{current_version.version.name}</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <StatCard
                 label={t('user_profile.stats.points')}
-                value={current_season.total_points.toFixed(1)}
+                value={current_version.total_points.toFixed(1)}
               />
               <StatCard
                 label={t('user_profile.stats.games')}
-                value={current_season.games_played}
+                value={current_version.games_played}
               />
-              <StatCard label={t('user_profile.stats.wins')} value={current_season.wins} />
-              <StatCard label={t('user_profile.stats.losses')} value={current_season.losses} />
+              <StatCard label={t('user_profile.stats.wins')} value={current_version.wins} />
+              <StatCard label={t('user_profile.stats.losses')} value={current_version.losses} />
             </div>
           </div>
         ) : (
           <EmptyState
             variant="compact"
-            title={t('user_profile.empties.season.title')}
-            body={t('user_profile.empties.season.body')}
+            title={t('user_profile.empties.version.title')}
+            body={t('user_profile.empties.version.body')}
           />
         )}
       </section>

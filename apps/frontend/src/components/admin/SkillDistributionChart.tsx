@@ -10,20 +10,20 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { getAdminSkillDistribution, listSeasons } from '@/lib/api.js';
+import { getAdminSkillDistribution, listVersions } from '@/lib/api.js';
 
 const COLOR_Q = '#d4a853'; // with questionnaire — gold
 const COLOR_DATA = '#78716c'; // games only — stone
 
 export function SkillDistributionChart() {
-  const [selectedSeason, setSelectedSeason] = useState<string | undefined>(undefined);
+  const [selectedVersion, setselectedVersion] = useState<string | undefined>(undefined);
 
-  const { data: seasonsData } = useQuery({ queryKey: ['seasons'], queryFn: listSeasons });
-  const seasons = seasonsData?.data ?? [];
+  const { data: versionsData } = useQuery({ queryKey: ['versions'], queryFn: listVersions });
+  const versions = versionsData?.data ?? [];
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['admin-skill-distribution', selectedSeason],
-    queryFn: () => getAdminSkillDistribution(selectedSeason),
+    queryKey: ['admin-skill-distribution', selectedVersion],
+    queryFn: () => getAdminSkillDistribution(selectedVersion),
   });
 
   const chartData = (data?.distribution ?? []).map((d) => ({
@@ -44,14 +44,14 @@ export function SkillDistributionChart() {
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <label className="text-xs text-stone-400">Season</label>
+          <label className="text-xs text-stone-400">Version</label>
           <select
             className="rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
-            value={selectedSeason ?? ''}
-            onChange={(e) => setSelectedSeason(e.target.value || undefined)}
+            value={selectedVersion ?? ''}
+            onChange={(e) => setselectedVersion(e.target.value || undefined)}
           >
-            <option value="">Active season</option>
-            {seasons.map((s) => (
+            <option value="">Active version</option>
+            {versions.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
@@ -97,3 +97,4 @@ export function SkillDistributionChart() {
     </div>
   );
 }
+

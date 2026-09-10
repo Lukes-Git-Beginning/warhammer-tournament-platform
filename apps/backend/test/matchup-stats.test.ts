@@ -5,13 +5,13 @@ import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
 import {
   createTestUser,
-  createTestSeason,
+  createTestVersion,
   createTestTournament,
-  cleanupSeason,
+  cleanupVersion,
   cleanupTournament,
   cleanupUsers,
   type TestUser,
-  type TestSeason,
+  type TestVersion,
   type TestTournament,
 } from './helpers/db-fixtures.js';
 
@@ -41,25 +41,25 @@ afterAll(async () => {
 
 let testUser1: TestUser | undefined;
 let testUser2: TestUser | undefined;
-let testSeason: TestSeason | undefined;
+let TestVersion: TestVersion | undefined;
 let testTournament: TestTournament | undefined;
 
 beforeEach(async () => {
   testUser1 = undefined;
   testUser2 = undefined;
-  testSeason = undefined;
+  TestVersion = undefined;
   testTournament = undefined;
 
   testUser1 = await createTestUser({ username: 'EmpirePlayer' });
   testUser2 = await createTestUser({ username: 'BretonniaPlayer' });
-  testSeason = await createTestSeason({ is_active: true });
+  TestVersion = await createTestVersion({ is_active: true });
   testTournament = await createTestTournament({ organizerId: testUser1!.id });
 });
 
 afterEach(async () => {
   // Clean up in dependency order — scoped to this run's IDs only
   if (testTournament) await cleanupTournament(testTournament.id);
-  if (testSeason) await cleanupSeason(testSeason!.id);
+  if (TestVersion) await cleanupVersion(TestVersion!.id);
   const ids = [testUser1?.id, testUser2?.id].filter(Boolean) as string[];
   if (ids.length > 0) await cleanupUsers(ids);
 });
@@ -136,10 +136,10 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_season_id: {
+        faction_a_id_faction_b_id_version_id: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
-          season_id: testSeason!.id,
+          version_id: TestVersion!.id,
         },
       },
     });
@@ -163,10 +163,10 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_season_id: {
+        faction_a_id_faction_b_id_version_id: {
           faction_a_id: EMPIRE,
           faction_b_id: EMPIRE,
-          season_id: testSeason!.id,
+          version_id: TestVersion!.id,
         },
       },
     });
@@ -192,10 +192,10 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_season_id: {
+        faction_a_id_faction_b_id_version_id: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
-          season_id: testSeason!.id,
+          version_id: TestVersion!.id,
         },
       },
     });
@@ -218,7 +218,7 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
     await reportResult({ matchId: MB, winnerId: testUser1!.id, token: makeToken(testUser1!.id) });
 
     // Only one row should exist (symmetric key)
-    const rows = await prisma.matchupStats.findMany({ where: { season_id: testSeason!.id } });
+    const rows = await prisma.matchupStats.findMany({ where: { version_id: TestVersion!.id } });
     expect(rows).toHaveLength(1);
 
     const row = rows[0]!;
@@ -239,10 +239,10 @@ describe('MatchupStats — POST /api/matches/:id/result', () => {
 
     const row = await prisma.matchupStats.findUnique({
       where: {
-        faction_a_id_faction_b_id_season_id: {
+        faction_a_id_faction_b_id_version_id: {
           faction_a_id: BRETONNIA,
           faction_b_id: EMPIRE,
-          season_id: testSeason!.id,
+          version_id: TestVersion!.id,
         },
       },
     });
@@ -267,10 +267,10 @@ describe('FactionStats pick_count — POST /api/matches/:id/result', () => {
     expect(res.statusCode).toBe(200);
 
     const empireStats = await prisma.factionStats.findUnique({
-      where: { faction_id_season_id: { faction_id: EMPIRE, season_id: testSeason!.id } },
+      where: { faction_id_version_id: { faction_id: EMPIRE, version_id: TestVersion!.id } },
     });
     const bretonniaStats = await prisma.factionStats.findUnique({
-      where: { faction_id_season_id: { faction_id: BRETONNIA, season_id: testSeason!.id } },
+      where: { faction_id_version_id: { faction_id: BRETONNIA, version_id: TestVersion!.id } },
     });
 
     expect(empireStats).not.toBeNull();
@@ -292,10 +292,10 @@ describe('FactionStats pick_count — POST /api/matches/:id/result', () => {
     expect(r2.statusCode).toBe(200);
 
     const empireStats = await prisma.factionStats.findUnique({
-      where: { faction_id_season_id: { faction_id: EMPIRE, season_id: testSeason!.id } },
+      where: { faction_id_version_id: { faction_id: EMPIRE, version_id: TestVersion!.id } },
     });
     const bretonniaStats = await prisma.factionStats.findUnique({
-      where: { faction_id_season_id: { faction_id: BRETONNIA, season_id: testSeason!.id } },
+      where: { faction_id_version_id: { faction_id: BRETONNIA, version_id: TestVersion!.id } },
     });
 
     // Beide Fraktionen wurden je 2× gespielt
@@ -303,3 +303,4 @@ describe('FactionStats pick_count — POST /api/matches/:id/result', () => {
     expect(bretonniaStats!.pick_count).toBe(2);
   });
 });
+

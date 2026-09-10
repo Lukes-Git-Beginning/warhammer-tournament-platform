@@ -541,7 +541,7 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
           <button
             type="button"
             onClick={() => {
-              if (confirm('Re-open this finalised tournament? Its placements and the season points it awarded are undone until you finalise again.')) {
+              if (confirm('Re-open this finalised tournament? Its placements and the version points it awarded are undone until you finalise again.')) {
                 doUnfinalize();
               }
             }}

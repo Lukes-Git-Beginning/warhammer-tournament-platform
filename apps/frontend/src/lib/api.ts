@@ -39,7 +39,7 @@ export type {
   PlayerFactionProficiencyResponse,
 };
 
-export type AllTimeEntry = LeaderboardEntryDto & { seasons_participated: number };
+export type AllTimeEntry = LeaderboardEntryDto & { versions_participated: number };
 
 export interface AllTimeLeaderboardResponse {
   entries: AllTimeEntry[];
@@ -48,7 +48,7 @@ export interface AllTimeLeaderboardResponse {
   pageSize: number;
 }
 
-export interface SeasonSummary {
+export interface VersionSummary {
   id: string;
   name: string;
   start_date: string;
@@ -567,12 +567,12 @@ export function getBracket(slug: string): Promise<BracketResponse> {
 // derive-on-read shape (playerId/displayName/totalFinalPoints).
 // 'winrate' mode is available via getLeaderboardByMode.
 export function getLeaderboard(opts?: {
-  seasonId?: string;
+  versionId?: string;
   page?: number;
   pageSize?: number;
 }): Promise<DynamicLeaderboardResponse> {
   const params = new URLSearchParams();
-  if (opts?.seasonId) params.set('seasonId', opts.seasonId);
+  if (opts?.versionId) params.set('versionId', opts.versionId);
   if (opts?.page) params.set('page', String(opts.page));
   if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
   const qs = params.toString();
@@ -622,18 +622,18 @@ export interface SkillLeaderboardEntry {
   factionsPlayed: number;
   wins: number;
   losses: number;
-  winRate: number; // #8: actual wins / games this season (0..1)
+  winRate: number; // #8: actual wins / games this version (0..1)
 }
 export interface SkillLeaderboardResponse {
   entries: SkillLeaderboardEntry[];
   total: number;
   page: number;
   pageSize: number;
-  season: { id: string; name: string; is_active: boolean };
+  version: { id: string; name: string; is_active: boolean };
 }
-export function getSkillLeaderboard(opts?: { seasonId?: string; page?: number; pageSize?: number; minGames?: number }): Promise<SkillLeaderboardResponse> {
+export function getSkillLeaderboard(opts?: { versionId?: string; page?: number; pageSize?: number; minGames?: number }): Promise<SkillLeaderboardResponse> {
   const params = new URLSearchParams();
-  if (opts?.seasonId) params.set('seasonId', opts.seasonId);
+  if (opts?.versionId) params.set('versionId', opts.versionId);
   if (opts?.page) params.set('page', String(opts.page));
   if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
   if (opts?.minGames != null) params.set('minGames', String(opts.minGames));
@@ -645,13 +645,13 @@ export function getUserProfile(id: string): Promise<UserProfileResponse> {
   return apiFetch<UserProfileResponse>(`/api/users/${id}`);
 }
 
-export function listSeasons(): Promise<{ data: SeasonSummary[] }> {
-  return apiFetch<{ data: SeasonSummary[] }>('/api/seasons');
+export function listVersions(): Promise<{ data: VersionSummary[] }> {
+  return apiFetch<{ data: VersionSummary[] }>('/api/versions');
 }
 
-export function getFactions(seasonId?: string): Promise<FactionListResponse> {
+export function getFactions(versionId?: string): Promise<FactionListResponse> {
   const params = new URLSearchParams();
-  if (seasonId) params.set('seasonId', seasonId);
+  if (versionId) params.set('versionId', versionId);
   const qs = params.toString();
   return apiFetch<FactionListResponse>(`/api/factions${qs ? `?${qs}` : ''}`)
     .then((res) => ({
@@ -660,9 +660,9 @@ export function getFactions(seasonId?: string): Promise<FactionListResponse> {
     }));
 }
 
-export function getFaction(id: string, seasonId?: string): Promise<FactionDetailResponse> {
+export function getFaction(id: string, versionId?: string): Promise<FactionDetailResponse> {
   const params = new URLSearchParams();
-  if (seasonId) params.set('seasonId', seasonId);
+  if (versionId) params.set('versionId', versionId);
   const qs = params.toString();
   return apiFetch<FactionDetailResponse>(`/api/factions/${id}${qs ? `?${qs}` : ''}`);
 }
@@ -672,16 +672,16 @@ export function getTakenFactions(slug: string): Promise<{ takenFactionIds: strin
   return apiFetch<{ takenFactionIds: string[] }>(`/api/tournaments/${encodeURIComponent(slug)}/taken-factions`);
 }
 
-export function getMetaOverview(seasonId?: string): Promise<MetaOverviewResponse> {
+export function getMetaOverview(versionId?: string): Promise<MetaOverviewResponse> {
   const params = new URLSearchParams();
-  if (seasonId) params.set('seasonId', seasonId);
+  if (versionId) params.set('versionId', versionId);
   const qs = params.toString();
   return apiFetch<MetaOverviewResponse>(`/api/meta/overview${qs ? `?${qs}` : ''}`);
 }
 
-export function getMatchupHeatmap(seasonId?: string): Promise<MatchupHeatmapResponse> {
+export function getMatchupHeatmap(versionId?: string): Promise<MatchupHeatmapResponse> {
   const params = new URLSearchParams();
-  if (seasonId) params.set('seasonId', seasonId);
+  if (versionId) params.set('versionId', versionId);
   const qs = params.toString();
   return apiFetch<MatchupHeatmapResponse>(`/api/meta/matchups${qs ? `?${qs}` : ''}`);
 }
@@ -848,7 +848,7 @@ export interface AdminStats {
   activeUsers: number;
   tournaments: { total: number; active: number; completed: number };
   gamesPlayed: number;
-  currentSeason: string | null;
+  currentVersion: string | null;
   topFactions: { faction_id: string; faction_name: string; pick_count: number }[];
   openPlay: { queueDepth: number; activeMatches: number; scheduledAccepted: number };
 }
@@ -1137,16 +1137,16 @@ export interface FactionWinRateEntry {
 
 export interface FactionWinRatesResponse {
   data: FactionWinRateEntry[];
-  season?: string;
+  version?: string;
   period?: string;
 }
 
 export function getAdminFactionWinRates(opts?: {
-  season?: string;
+  version?: string;
   period?: string;
 }): Promise<FactionWinRatesResponse> {
   const params = new URLSearchParams();
-  if (opts?.season) params.set('season', opts.season);
+  if (opts?.version) params.set('version', opts.version);
   if (opts?.period) params.set('period', opts.period);
   const qs = params.toString();
   return apiFetch(`/api/admin/stats/faction-winrates${qs ? `?${qs}` : ''}`);
@@ -1159,13 +1159,13 @@ export interface SkillDistributionEntry {
   dataOnly: number;
 }
 export interface SkillDistributionResponse {
-  seasonId: string | null;
+  versionId: string | null;
   total: number;
   unclassified: number;
   distribution: SkillDistributionEntry[];
 }
-export function getAdminSkillDistribution(season?: string): Promise<SkillDistributionResponse> {
-  return apiFetch(`/api/admin/stats/skill-distribution${season ? `?season=${encodeURIComponent(season)}` : ''}`);
+export function getAdminSkillDistribution(version?: string): Promise<SkillDistributionResponse> {
+  return apiFetch(`/api/admin/stats/skill-distribution${version ? `?version=${encodeURIComponent(version)}` : ''}`);
 }
 
 // #17 — engagement-gap report.
@@ -1211,11 +1211,11 @@ export interface AdminUnderratedPlayer {
   smurfSuspected: boolean;
 }
 export interface AdminUnderratedReport {
-  seasonId: string | null;
+  versionId: string | null;
   players: AdminUnderratedPlayer[];
 }
-export function getAdminUnderratedReport(season?: string): Promise<AdminUnderratedReport> {
-  return apiFetch(`/api/admin/reports/underrated${season ? `?season=${encodeURIComponent(season)}` : ''}`);
+export function getAdminUnderratedReport(version?: string): Promise<AdminUnderratedReport> {
+  return apiFetch(`/api/admin/reports/underrated${version ? `?version=${encodeURIComponent(version)}` : ''}`);
 }
 
 export interface GamesOverTimeEntry {
@@ -1244,11 +1244,11 @@ export interface DropOffFunnelResponse {
 
 export function getAdminDropOffFunnel(opts?: {
   tournament_id?: string;
-  season?: string;
+  version?: string;
 }): Promise<DropOffFunnelResponse> {
   const params = new URLSearchParams();
   if (opts?.tournament_id) params.set('tournament_id', opts.tournament_id);
-  if (opts?.season) params.set('season', opts.season);
+  if (opts?.version) params.set('version', opts.version);
   const qs = params.toString();
   return apiFetch(`/api/admin/stats/dropoff-funnel${qs ? `?${qs}` : ''}`);
 }
@@ -1269,11 +1269,11 @@ export interface PickBanStatsResponse {
 }
 
 export function getAdminPickBanStats(opts?: {
-  season?: string;
+  version?: string;
   entity?: 'maps' | 'factions';
 }): Promise<PickBanStatsResponse> {
   const params = new URLSearchParams();
-  if (opts?.season) params.set('season', opts.season);
+  if (opts?.version) params.set('version', opts.version);
   if (opts?.entity) params.set('entity', opts.entity);
   const qs = params.toString();
   return apiFetch(`/api/admin/stats/pickban-stats${qs ? `?${qs}` : ''}`);
@@ -1612,7 +1612,7 @@ export interface ExtendedLeaderboardEntry {
 
 export interface ExtendedLeaderboardResponse {
   mode: LeaderboardMode;
-  season?: string;
+  version?: string;
   entries: ExtendedLeaderboardEntry[];
   total: number;
   page: number;
@@ -1621,12 +1621,12 @@ export interface ExtendedLeaderboardResponse {
 
 export function getLeaderboardByMode(opts: {
   mode: LeaderboardMode;
-  season?: string;
+  version?: string;
   page?: number;
   pageSize?: number;
 }): Promise<ExtendedLeaderboardResponse> {
   const params = new URLSearchParams({ mode: opts.mode });
-  if (opts.season) params.set('season', opts.season);
+  if (opts.version) params.set('versionId', opts.version);
   if (opts.page) params.set('page', String(opts.page));
   if (opts.pageSize) params.set('pageSize', String(opts.pageSize));
   return apiFetch(`/api/leaderboard?${params.toString()}`);
@@ -1638,16 +1638,16 @@ export function getLeaderboardByMode(opts: {
 
 export interface UserStatsResponse {
   user_id: string;
-  season?: string;
+  version?: string;
   total_wins: number;
   total_losses: number;
   win_rate: number;
   win_rate_trend?: number;
 }
 
-export function getUserStats(userId: string, season?: string): Promise<UserStatsResponse> {
+export function getUserStats(userId: string, version?: string): Promise<UserStatsResponse> {
   const params = new URLSearchParams();
-  if (season) params.set('season', season);
+  if (version) params.set('version', version);
   const qs = params.toString();
   return apiFetch(`/api/users/${userId}/stats${qs ? `?${qs}` : ''}`);
 }
@@ -1797,9 +1797,9 @@ export const getScoringBreakdown = getMatchScoringBreakdown;
 // Explainability — Faction Matchup Matrix (#4)
 // ---------------------------------------------------------------------------
 
-export function getMatchupMatrix(seasonId?: string): Promise<FactionMatchupMatrixResponse> {
+export function getMatchupMatrix(versionId?: string): Promise<FactionMatchupMatrixResponse> {
   const params = new URLSearchParams();
-  if (seasonId) params.set('seasonId', seasonId);
+  if (versionId) params.set('versionId', versionId);
   const qs = params.toString();
   return apiFetch<FactionMatchupMatrixResponse>(`/api/factions/matchup-matrix${qs ? `?${qs}` : ''}`);
 }
@@ -1810,10 +1810,10 @@ export function getMatchupMatrix(seasonId?: string): Promise<FactionMatchupMatri
 
 export function getPlayerFactionProficiency(
   playerId: string,
-  seasonId?: string,
+  versionId?: string,
 ): Promise<PlayerFactionProficiencyResponse> {
   const params = new URLSearchParams();
-  if (seasonId) params.set('seasonId', seasonId);
+  if (versionId) params.set('versionId', versionId);
   const qs = params.toString();
   return apiFetch<PlayerFactionProficiencyResponse>(
     `/api/players/${playerId}/faction-proficiency${qs ? `?${qs}` : ''}`,
@@ -1827,10 +1827,10 @@ export function getPlayerFactionProficiency(
 export function getAntiFarmingBreakdown(
   playerId: string,
   opponentId: string,
-  seasonId?: string,
+  versionId?: string,
 ): Promise<PlayerOpponentBreakdownDto> {
   const params = new URLSearchParams({ playerId, opponentId });
-  if (seasonId) params.set('seasonId', seasonId);
+  if (versionId) params.set('versionId', versionId);
   return apiFetch<PlayerOpponentBreakdownDto>(`/api/leaderboard/anti-farming?${params.toString()}`);
 }
 
@@ -2516,12 +2516,12 @@ export type AntiFarmingOpponent = {
   status: 'reduced' | 'approaching';
 };
 
-export function getPlayerAntiFarming(playerId: string, seasonId?: string): Promise<{
+export function getPlayerAntiFarming(playerId: string, versionId?: string): Promise<{
   opponents: AntiFarmingOpponent[];
   playerTotalWins: number;
   penaltyActive: boolean;
 }> {
-  const q = seasonId ? `?seasonId=${seasonId}` : '';
+  const q = versionId ? `?versionId=${versionId}` : '';
   return apiFetch(`/api/admin/users/${playerId}/anti-farming${q}`);
 }
 
@@ -2629,3 +2629,4 @@ export interface ActiveMatchItem {
 export function getMyActiveMatches(): Promise<{ items: ActiveMatchItem[] }> {
   return apiFetch<{ items: ActiveMatchItem[] }>('/api/me/active-matches');
 }
+

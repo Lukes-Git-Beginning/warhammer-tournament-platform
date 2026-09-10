@@ -23,7 +23,7 @@ export interface FactionStatsDto {
   win_rate: number | null;
   pick_count: number;
   ban_count: number;
-  /** The player with the most games on this faction this season + their count (segmented bar). */
+  /** The player with the most games on this faction this version + their count (segmented bar). */
   top_player?: { username: string; games: number } | null;
 }
 
@@ -137,12 +137,12 @@ export function asFactionStatsDto(stats: NonNullable<PrismaFactionStats>): Facti
 
 export async function getFactionsWithStats(
   prisma: PrismaClient,
-  seasonId: string | null,
+  versionId: string | null,
 ): Promise<FactionWithStatsDto[]> {
   // Faction master data (name, icon, colour) is global reference data — always
-  // returned. Only the per-season stats are gated on a season; with no season
-  // (e.g. between seasons) every faction simply comes back with stats: null.
-  if (!seasonId) {
+  // returned. Only the per-version stats are gated on a version; with no version
+  // (e.g. between versions) every faction simply comes back with stats: null.
+  if (!versionId) {
     const factions = await prisma.faction.findMany({ orderBy: { display_order: 'asc' } });
     return factions.map((f) => ({ faction: asFactionDto(f), stats: null }));
   }
@@ -152,25 +152,25 @@ export async function getFactionsWithStats(
       orderBy: { display_order: 'asc' },
       include: {
         stats: {
-          where: { season_id: seasonId },
+          where: { version_id: versionId },
           take: 1,
         },
       },
     }),
-    // Top player per faction: the one with the most games on it this season. Counted per
-    // faction-SIDE over the same game set as matches_played (COMPLETED, this season, not deleted;
+    // Top player per faction: the one with the most games on it this version. Counted per
+    // faction-SIDE over the same game set as matches_played (COMPLETED, this version, not deleted;
     // no counts_for_leaderboard filter, mirrors count on both sides) so a segment never exceeds
     // its bar. Deterministic tie-break by player id.
     prisma.$queryRaw<{ faction_id: string; username: string; games: number }[]>`
       WITH sides AS (
         SELECT mg.player1_faction_id AS faction_id, m.player1_id AS player_id
         FROM "MatchGame" mg JOIN "Match" m ON m.id = mg.match_id
-        WHERE mg.status = 'COMPLETED' AND m.season_id = ${seasonId}::uuid AND m.deleted_at IS NULL
+        WHERE mg.status = 'COMPLETED' AND m.season_id = ${versionId}::uuid AND m.deleted_at IS NULL
           AND mg.player1_faction_id IS NOT NULL AND m.player1_id IS NOT NULL
         UNION ALL
         SELECT mg.player2_faction_id, m.player2_id
         FROM "MatchGame" mg JOIN "Match" m ON m.id = mg.match_id
-        WHERE mg.status = 'COMPLETED' AND m.season_id = ${seasonId}::uuid AND m.deleted_at IS NULL
+        WHERE mg.status = 'COMPLETED' AND m.season_id = ${versionId}::uuid AND m.deleted_at IS NULL
           AND mg.player2_faction_id IS NOT NULL AND m.player2_id IS NOT NULL
       ),
       counts AS (

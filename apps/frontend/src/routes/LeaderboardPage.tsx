@@ -7,7 +7,7 @@ import {
   getAllTimeLeaderboard,
   getMajorWinsLeaderboard,
   getSkillLeaderboard,
-  listSeasons,
+  listVersions,
   type AllTimeEntry,
 } from '@/lib/api.js';
 import type { LeaderboardEntryDto, DynamicLeaderboardEntryDto } from '@rizzotto/types';
@@ -15,7 +15,7 @@ import { PageShell } from '@/components/layout/PageShell.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 import { SupporterBadge } from '@/components/supporter/SupporterBadge.js';
 
-type Tab = 'season' | 'all-time' | 'majors' | 'skill';
+type Tab = 'version' | 'all-time' | 'majors' | 'skill';
 
 const PAGE_SIZE = 1000; // load every rank on one page; pagination is a fallback past 1000
 
@@ -71,66 +71,66 @@ function RankCell({ rank }: { rank: number }) {
 }
 
 // ---------------------------------------------------------------------------
-// Season-Tab
+// Version-Tab
 // ---------------------------------------------------------------------------
 
-function SeasonTab() {
+function VersionTab() {
   const { t } = useTranslation();
   const [page, setPage] = useState(1);
-  const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined);
+  const [selectedVersionId, setselectedVersionId] = useState<string | undefined>(undefined);
 
-  const { data: seasonsData } = useQuery({
-    queryKey: ['seasons'],
-    queryFn: listSeasons,
+  const { data: versionsData } = useQuery({
+    queryKey: ['versions'],
+    queryFn: listVersions,
   });
 
-  const seasons = seasonsData?.data ?? [];
-  const activeSeason = seasons.find((s) => s.is_active);
-  const effectiveSeasonId = selectedSeasonId ?? activeSeason?.id;
+  const versions = versionsData?.data ?? [];
+  const activeVersion = versions.find((s) => s.is_active);
+  const effectiveVersionId = selectedVersionId ?? activeVersion?.id;
 
   const [search, setSearch] = useState('');
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['leaderboard', effectiveSeasonId, page],
-    queryFn: () => getLeaderboard({ seasonId: effectiveSeasonId, page, pageSize: PAGE_SIZE }),
+    queryKey: ['leaderboard', effectiveVersionId, page],
+    queryFn: () => getLeaderboard({ versionId: effectiveVersionId, page, pageSize: PAGE_SIZE }),
   });
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
-  const seasonFiltered = (data?.entries ?? []).filter((e) =>
+  const versionFiltered = (data?.entries ?? []).filter((e) =>
     normalize(e.displayName).includes(normalize(search)),
   );
 
   return (
     <div>
       <div className="mb-4 flex items-center gap-3">
-        <label htmlFor="season-select" className="text-sm text-stone-400">
-          {t('leaderboard.season_select')}
+        <label htmlFor="version-select" className="text-sm text-stone-400">
+          {t('leaderboard.version_select')}
         </label>
         <select
-          id="season-select"
+          id="version-select"
           className="rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
-          value={effectiveSeasonId ?? ''}
+          value={effectiveVersionId ?? ''}
           onChange={(e) => {
             setPage(1);
-            setSelectedSeasonId(e.target.value || undefined);
+            setselectedVersionId(e.target.value || undefined);
           }}
         >
-          {!activeSeason && !selectedSeasonId && (
-            <option value="">{t('leaderboard.season_all')}</option>
+          {!activeVersion && !selectedVersionId && (
+            <option value="">{t('leaderboard.version_all')}</option>
           )}
-          {seasons.map((s) => (
+          {versions.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
-              {s.is_active ? ` ${t('leaderboard.season_active')}` : ''}
+              {s.is_active ? ` ${t('leaderboard.version_active')}` : ''}
             </option>
           ))}
         </select>
       </div>
 
-      <LeaderboardSearch value={search} onChange={setSearch} count={seasonFiltered.length} />
+      <LeaderboardSearch value={search} onChange={setSearch} count={versionFiltered.length} />
 
       <DynamicLeaderboardTable
-        entries={seasonFiltered}
+        entries={versionFiltered}
         isLoading={isLoading}
         error={error}
         page={page}
@@ -315,7 +315,7 @@ function AllTimeTab() {
         entries={allTimeFiltered}
         isLoading={isLoading}
         error={error}
-        extraColumn="seasons_participated"
+        extraColumn="versions_participated"
         page={page}
         totalPages={totalPages}
         onPageChange={setPage}
@@ -325,14 +325,14 @@ function AllTimeTab() {
 }
 
 // ---------------------------------------------------------------------------
-// Legacy LeaderboardTable (kept for season + all-time tabs)
+// Legacy LeaderboardTable (kept for version + all-time tabs)
 // ---------------------------------------------------------------------------
 
 interface LeaderboardTableProps {
   entries: (LeaderboardEntryDto | AllTimeEntry)[];
   isLoading: boolean;
   error: Error | null;
-  extraColumn: 'seasons_participated' | null;
+  extraColumn: 'versions_participated' | null;
   page: number;
   totalPages: number;
   onPageChange: (p: number) => void;
@@ -394,9 +394,9 @@ function LeaderboardTable({
               <th className="px-4 py-3 text-right font-medium text-stone-400">
                 {t('leaderboard.columns.games')}
               </th>
-              {extraColumn === 'seasons_participated' && (
+              {extraColumn === 'versions_participated' && (
                 <th className="px-4 py-3 text-right font-medium text-stone-400">
-                  {t('leaderboard.columns.seasons')}
+                  {t('leaderboard.columns.versions')}
                 </th>
               )}
             </tr>
@@ -436,9 +436,9 @@ function LeaderboardTable({
                     <span className="text-red-400">{entry.losses}</span>
                   </td>
                   <td className="px-4 py-3 text-right text-stone-400">{entry.games_played}</td>
-                  {extraColumn === 'seasons_participated' && (
+                  {extraColumn === 'versions_participated' && (
                     <td className="px-4 py-3 text-right text-stone-400">
-                      {(entry as AllTimeEntry).seasons_participated}
+                      {(entry as AllTimeEntry).versions_participated}
                     </td>
                   )}
                 </tr>
@@ -688,7 +688,7 @@ function SkillTab() {
 // ---------------------------------------------------------------------------
 
 const TABS_CONFIG: { id: Tab; label: string }[] = [
-  { id: 'season', label: 'Season' },
+  { id: 'version', label: 'Version' },
   { id: 'skill', label: 'Skill' },
   { id: 'majors', label: 'Majors' },
   { id: 'all-time', label: 'All Time' },
@@ -700,10 +700,10 @@ export function LeaderboardPage() {
   const searchParams = new URLSearchParams(
     typeof window !== 'undefined' ? window.location.search : '',
   );
-  const initialTab = (searchParams.get('tab') as Tab | null) ?? 'season';
+  const initialTab = (searchParams.get('tab') as Tab | null) ?? 'version';
   const validIds = TABS_CONFIG.map((tc) => tc.id);
   const [activeTab, setActiveTab] = useState<Tab>(
-    validIds.includes(initialTab as Tab) ? initialTab : 'season',
+    validIds.includes(initialTab as Tab) ? initialTab : 'version',
   );
 
   function changeTab(t: Tab) {
@@ -737,10 +737,11 @@ export function LeaderboardPage() {
         ))}
       </div>
 
-      {activeTab === 'season' && <SeasonTab />}
+      {activeTab === 'version' && <VersionTab />}
       {activeTab === 'all-time' && <AllTimeTab />}
       {activeTab === 'majors' && <MajorsTab />}
       {activeTab === 'skill' && <SkillTab />}
     </PageShell>
   );
 }
+

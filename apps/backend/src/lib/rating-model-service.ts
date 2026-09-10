@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
 // Rating Model Service — async wrapper around the pure rating-model fit.
 //
-// Loads the confirmed-match dataset of a season from Prisma, fits the model
+// Loads the confirmed-match dataset of a version from Prisma, fits the model
 // (rating-model.ts), and caches the (JSON-safe) fit in Redis. The cached value
 // is plain data; helpers are re-attached via createRatingModel() on read.
 //
-// The fit is expensive on a cold cache, so it is computed once per season and
+// The fit is expensive on a cold cache, so it is computed once per version and
 // invalidated whenever a confirmed match changes. Match facts stay
 // authoritative — the model is always rebuildable from them.
 // ---------------------------------------------------------------------------
@@ -29,15 +29,15 @@ const RATING_MODEL_TTL = 3600; // 1h fallback; primary refresh is event-driven i
 /**
  * Prisma `where` for MatchGame records that feed the leaderboard: decisive
  * (has a winner), belonging to a completed, leaderboard-counting match of this
- * season. Games are the statistical unit — one observation per Battle, not per
+ * version. Games are the statistical unit — one observation per Battle, not per
  * Match series.
  */
-export function confirmedGameWhere(seasonId: string): Prisma.MatchGameWhereInput {
+export function confirmedGameWhere(versionId: string): Prisma.MatchGameWhereInput {
   return {
     winner_id: { not: null },
     counts_for_leaderboard: true,
     match: {
-      season_id: seasonId,
+      version_id: versionId,
       status: 'COMPLETED',
       deleted_at: null,
       player1_id: { not: null },
@@ -50,9 +50,9 @@ export function confirmedGameWhere(seasonId: string): Prisma.MatchGameWhereInput
  * Prisma `where` for Match records (used by breakdown-service explainability
  * helpers that still operate at match level).
  */
-export function confirmedMatchWhere(seasonId: string): Prisma.MatchWhereInput {
+export function confirmedMatchWhere(versionId: string): Prisma.MatchWhereInput {
   return {
-    season_id: seasonId,
+    version_id: versionId,
     status: 'COMPLETED',
     deleted_at: null,
     winner_id: { not: null },
@@ -67,15 +67,15 @@ export function confirmedMatchWhere(seasonId: string): Prisma.MatchWhereInput {
 }
 
 /**
- * Load the decisive confirmed games of a season as model observations. Games are
+ * Load the decisive confirmed games of a version as model observations. Games are
  * the statistical unit: read MatchGame rows directly (a Bo3 yields up to three
  * observations) keyed by the leaderboard-eligible match filter. No synthetic
  * fallback — every confirmed match now carries its game rows (games-only backfill).
  * Games with an unknown faction on either side are skipped (cannot be attributed).
  */
-export async function loadSeasonObservations(
+export async function loadVersionObservations(
   prisma: PrismaClient,
-  seasonId: string,
+  versionId: string,
 ): Promise<MatchObservation[]> {
   // Same canonical game set as the raw matchup heatmap (getMatchupMatrix), plus a
   // decisive winner (draws carry no signal). Game-level only — the parent Match's
@@ -83,7 +83,7 @@ export async function loadSeasonObservations(
   // series still counts); leaderboard eligibility is authoritative at the game level.
   const games = await prisma.matchGame.findMany({
     where: {
-      ...eligibleStatGameWhere(seasonId),
+      ...eligibleStatGameWhere(versionId),
       winner_id: { not: null },
     },
     select: {
@@ -171,13 +171,13 @@ function toData(m: RatingModel): RatingModelData {
 }
 
 export interface GetRatingModelArgs {
-  seasonId: string;
+  versionId: string;
   /** Explicit overrides; when omitted, config is read from AdminConfig. */
   config?: Partial<RatingModelConfig>;
 }
 
 /**
- * Returns the (cached) fitted rating model for a season, with helpers attached.
+ * Returns the (cached) fitted rating model for a version, with helpers attached.
  * Cache key includes the effective config so a lambda change produces a fresh fit.
  */
 export async function getRatingModel(
@@ -185,7 +185,7 @@ export async function getRatingModel(
   redis: Redis | undefined,
   args: GetRatingModelArgs,
 ): Promise<RatingModel> {
-  const { seasonId } = args;
+  const { versionId } = args;
   const cfg: RatingModelConfig = {
     ...DEFAULT_RATING_MODEL_CONFIG,
     ...(await loadRatingModelConfig(prisma)),
@@ -195,7 +195,7 @@ export async function getRatingModel(
   const data = await cached<RatingModelData>(
     redis,
     cacheKey('rating-model', {
-      seasonId,
+      versionId,
       lpfs: cfg.lambdaPlayerFaction,
       lme: cfg.lambdaMatchup,
       iter: cfg.maxIterations,
@@ -205,7 +205,7 @@ export async function getRatingModel(
       lfo: cfg.lambdaFactionOffset,
     }),
     async () => {
-      const observations = await loadSeasonObservations(prisma, seasonId);
+      const observations = await loadVersionObservations(prisma, versionId);
       return toData(fitRatingModel(observations, cfg));
     },
     { ttlSeconds: RATING_MODEL_TTL },
@@ -214,10 +214,10 @@ export async function getRatingModel(
   return createRatingModel(data);
 }
 
-/** Invalidate the cached fit for a season (call after a confirmed match changes). */
+/** Invalidate the cached fit for a version (call after a confirmed match changes). */
 export async function invalidateRatingModelCache(
   redis: Redis | undefined,
-  seasonId: string,
+  versionId: string,
 ): Promise<void> {
-  await invalidate(redis, `rating-model:*seasonId=${seasonId}*`);
+  await invalidate(redis, `rating-model:*versionId=${versionId}*`);
 }

@@ -110,9 +110,9 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       // so what a player sees IS what decides which gated tournaments they can enter. A strong
       // player who out-performs their questionnaire is gated up quickly (soft-floor climb).
       if (tournament.min_band != null || tournament.max_band != null) {
-        const season = await fastify.prisma.season.findFirst({ where: { is_active: true }, select: { id: true } });
-        if (season) {
-          const classification = await getPlayerClassification(fastify.prisma, fastify.redis, season.id, request.user.sub);
+        const version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
+        if (version) {
+          const classification = await getPlayerClassification(fastify.prisma, fastify.redis, version.id, request.user.sub);
           if (!classification.rated) {
             return reply.code(422).send({ error: 'CalibrationRequired', message: 'Complete your skill calibration before registering for this tournament.', statusCode: 422 });
           }

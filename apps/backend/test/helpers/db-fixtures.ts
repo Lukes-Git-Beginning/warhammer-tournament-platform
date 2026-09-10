@@ -19,7 +19,7 @@ export interface TestUser {
   username: string;
 }
 
-export interface TestSeason {
+export interface TestVersion {
   id: string;
   name: string;
 }
@@ -45,11 +45,11 @@ export async function createTestUser(overrides?: { username?: string }): Promise
   return { id, discord_id, username };
 }
 
-export async function createTestSeason(overrides?: { is_active?: boolean }): Promise<TestSeason> {
+export async function createTestVersion(overrides?: { is_active?: boolean }): Promise<TestVersion> {
   const id = randomUUID();
-  const name = `test-season-${id}`;
+  const name = `test-version-${id}`;
 
-  await prisma.season.create({
+  await prisma.gameVersion.create({
     data: {
       id,
       name,
@@ -90,17 +90,17 @@ export async function createTestTournament(opts: {
 // ---------------------------------------------------------------------------
 
 /**
- * Delete all test data associated with a season (cascade-ordered).
- * Does NOT touch any other seasons — never calls updateMany on is_active.
+ * Delete all test data associated with a version (cascade-ordered).
+ * Does NOT touch any other versions — never calls updateMany on is_active.
  */
-export async function cleanupSeason(seasonId: string): Promise<void> {
-  await prisma.factionStatsSnapshot.deleteMany({ where: { season_id: seasonId } });
-  await prisma.matchupStats.deleteMany({ where: { season_id: seasonId } });
-  await prisma.factionStats.deleteMany({ where: { season_id: seasonId } });
-  await prisma.leaderboardEntry.deleteMany({ where: { season_id: seasonId } });
-  await prisma.tournamentResult.deleteMany({ where: { season_id: seasonId } });
-  // Season itself — cascades remaining relations
-  await prisma.season.deleteMany({ where: { id: seasonId } });
+export async function cleanupVersion(versionId: string): Promise<void> {
+  await prisma.factionStatsSnapshot.deleteMany({ where: { version_id: versionId } });
+  await prisma.matchupStats.deleteMany({ where: { version_id: versionId } });
+  await prisma.factionStats.deleteMany({ where: { version_id: versionId } });
+  await prisma.leaderboardEntry.deleteMany({ where: { version_id: versionId } });
+  await prisma.tournamentResult.deleteMany({ where: { version_id: versionId } });
+  // GameVersion itself — cascades remaining relations
+  await prisma.gameVersion.deleteMany({ where: { id: versionId } });
 }
 
 /**

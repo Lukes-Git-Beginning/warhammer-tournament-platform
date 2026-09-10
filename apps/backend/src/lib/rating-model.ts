@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Rating Model — L2-regularised logistic regression (Alex-Spec)
 //
-// Fits two parameter groups from confirmed match outcomes of one season:
+// Fits two parameter groups from confirmed match outcomes of one version:
 //   - PlayerFactionSkill(player, faction)  — one scalar per (player, faction)
 //   - MatchupEffect(factionX, factionY)    — antisymmetric, mirror = 0
 //

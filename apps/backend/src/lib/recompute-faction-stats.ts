@@ -1,18 +1,18 @@
 import type { PrismaClient } from '@rizzotto/db';
 
 export interface RecomputeFactionStatsResult {
-  seasonId: string;
+  versionId: string;
   factionStatsRows: number;
   matchupStatsRows: number;
   gamesProcessed: number;
 }
 
 /**
- * Rebuilds FactionStats and MatchupStats for a season from the source of truth:
+ * Rebuilds FactionStats and MatchupStats for a version from the source of truth:
  * the COMPLETED MatchGame records. Stats are GAME-level — a Bo3 contributes up to
  * three observations, and per-game factions (2FT/3FT/MATRIX) are honoured.
  *
- * Idempotent: existing rows for the season are deleted and rebuilt in a single
+ * Idempotent: existing rows for the version are deleted and rebuilt in a single
  * transaction. This both fixes incremental drift (void/cancel/edit never corrected
  * the counters) and guarantees game-level counting regardless of which completion
  * path produced the data.
@@ -27,12 +27,12 @@ export interface RecomputeFactionStatsResult {
  */
 export async function recomputeFactionStats(
   prisma: PrismaClient,
-  seasonId: string,
+  versionId: string,
 ): Promise<RecomputeFactionStatsResult> {
   const games = await prisma.matchGame.findMany({
     where: {
       status: 'COMPLETED',
-      match: { season_id: seasonId, deleted_at: null },
+      match: { version_id: versionId, deleted_at: null },
     },
     select: {
       winner_id: true,
@@ -104,7 +104,7 @@ export async function recomputeFactionStats(
 
   const factionRows = [...factionAgg.entries()].map(([faction_id, agg]) => ({
     faction_id,
-    season_id: seasonId,
+    version_id: versionId,
     matches_played: agg.games,
     wins: agg.wins,
     losses: agg.losses,
@@ -118,7 +118,7 @@ export async function recomputeFactionStats(
     return {
       faction_a_id,
       faction_b_id,
-      season_id: seasonId,
+      version_id: versionId,
       faction_a_wins: m.aWins,
       faction_b_wins: m.bWins,
       draws: m.draws,
@@ -126,14 +126,14 @@ export async function recomputeFactionStats(
   });
 
   await prisma.$transaction(async (tx) => {
-    await tx.factionStats.deleteMany({ where: { season_id: seasonId } });
-    await tx.matchupStats.deleteMany({ where: { season_id: seasonId } });
+    await tx.factionStats.deleteMany({ where: { version_id: versionId } });
+    await tx.matchupStats.deleteMany({ where: { version_id: versionId } });
     if (factionRows.length) await tx.factionStats.createMany({ data: factionRows });
     if (matchupRows.length) await tx.matchupStats.createMany({ data: matchupRows });
   });
 
   return {
-    seasonId,
+    versionId,
     factionStatsRows: factionRows.length,
     matchupStatsRows: matchupRows.length,
     gamesProcessed,

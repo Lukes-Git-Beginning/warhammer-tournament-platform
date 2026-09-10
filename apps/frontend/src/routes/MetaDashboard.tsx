@@ -64,10 +64,10 @@ export function MetaDashboard() {
   } = useQuery({
     queryKey: ['meta-matchups'],
     queryFn: () => getMatchupHeatmap(),
-    enabled: !!overview?.season,
+    enabled: !!overview?.version,
   });
 
-  const seasonId = overview?.season?.id;
+  const versionId = overview?.version?.id;
 
   const [gamesPage, setGamesPage] = useState(1);
   const GAMES_PAGE_SIZE = 50;
@@ -81,22 +81,22 @@ export function MetaDashboard() {
     isLoading: matrixLoading,
     error: matrixError,
   } = useQuery({
-    queryKey: ['matchup-matrix', seasonId],
-    queryFn: () => getMatchupMatrix(seasonId),
-    enabled: !!seasonId,
+    queryKey: ['matchup-matrix', versionId],
+    queryFn: () => getMatchupMatrix(versionId),
+    enabled: !!versionId,
   });
 
   const {
     data: factionsData,
     isLoading: factionsLoading,
   } = useQuery({
-    queryKey: ['factions', seasonId],
-    queryFn: () => getFactions(seasonId),
-    enabled: !!seasonId,
+    queryKey: ['factions', versionId],
+    queryFn: () => getFactions(versionId),
+    enabled: !!versionId,
   });
 
-  const hasNoSeason = !!overview && !overview.season;
-  const hasSeason = !!overview?.season;
+  const hasNoVersion = !!overview && !overview.version;
+  const hasVersion = !!overview?.version;
 
   return (
     <PageShell variant="wide">
@@ -104,9 +104,9 @@ export function MetaDashboard() {
         <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
           {t('meta_page.title')}
         </h1>
-        {overview?.season && (
+        {overview?.version && (
           <p className="mt-1 text-sm text-rizzotto-stone-500">
-            {t('meta_page.season_label', { name: overview.season.name })}
+            {t('meta_page.version_label', { name: overview.version.name })}
           </p>
         )}
       </header>
@@ -123,17 +123,17 @@ export function MetaDashboard() {
         </div>
       )}
 
-      {hasNoSeason && (
+      {hasNoVersion && (
         <EmptyState
           variant="sigil"
-          title={t('meta_page.no_season_title')}
-          body={t('meta_page.no_season_body')}
-          motto={t('meta_page.no_season_motto')}
-          mottoTitle={t('meta_page.no_season_motto_title')}
+          title={t('meta_page.no_version_title')}
+          body={t('meta_page.no_version_body')}
+          motto={t('meta_page.no_version_motto')}
+          mottoTitle={t('meta_page.no_version_motto_title')}
         />
       )}
 
-      {hasSeason && overview && (
+      {hasVersion && overview && (
         <>
           <div className="grid grid-cols-2 gap-4 mb-10 sm:grid-cols-4">
             <StatCard
@@ -238,7 +238,7 @@ export function MetaDashboard() {
 
             {matrixData && factionsData && matrixData.entries.length === 0 && (
               <p className="py-6 text-center text-sm text-rizzotto-stone-500 italic">
-                No model matchup data available for this season yet.
+                No model matchup data available for this version yet.
               </p>
             )}
 
@@ -291,3 +291,5 @@ export function MetaDashboard() {
     </PageShell>
   );
 }
+
+

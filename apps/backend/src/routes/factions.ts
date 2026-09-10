@@ -13,8 +13,8 @@ import { logistic } from '../lib/rating-model.js';
 // Query Schemas
 // ---------------------------------------------------------------------------
 
-const SeasonQuerySchema = z.object({
-  seasonId: z.string().uuid().optional(),
+const VersionQuerySchema = z.object({
+  versionId: z.string().uuid().optional(),
 });
 
 const FactionParamSchema = z.object({
@@ -27,10 +27,10 @@ const FactionParamSchema = z.object({
 
 const factionsRoutes: FastifyPluginAsync = async (fastify) => {
   // -------------------------------------------------------------------------
-  // GET /api/factions?seasonId=<uuid>
+  // GET /api/factions?versionId=<uuid>
   // -------------------------------------------------------------------------
   fastify.get('/api/factions', async (request, reply) => {
-    const parsed = SeasonQuerySchema.safeParse(request.query);
+    const parsed = VersionQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({
         error: 'BadRequest',
@@ -38,39 +38,39 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
         statusCode: 400,
       });
     }
-    const { seasonId } = parsed.data;
+    const { versionId } = parsed.data;
 
-    // Resolve season. A specific seasonId must exist; otherwise fall back to the
-    // active season — but NO active season is fine: faction master data (names,
-    // icons) is global reference data and must never be gated behind a season.
+    // Resolve version. A specific versionId must exist; otherwise fall back to the
+    // active version — but NO active version is fine: faction master data (names,
+    // icons) is global reference data and must never be gated behind a version.
     // In that case stats simply come back null.
-    let season;
-    if (seasonId) {
-      season = await fastify.prisma.season.findUnique({ where: { id: seasonId } });
-      if (!season) {
-        return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
+    let version;
+    if (versionId) {
+      version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+      if (!version) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
       }
     } else {
-      season = await fastify.prisma.season.findFirst({ where: { is_active: true } });
+      version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
     }
 
-    const resolvedSeasonId = season?.id ?? null;
+    const resolvedVersionId = version?.id ?? null;
 
     return cached(
       fastify.redis,
-      cacheKey('factions:list', { seasonId: resolvedSeasonId ?? 'none' }),
+      cacheKey('factions:list', { versionId: resolvedVersionId ?? 'none' }),
       async () => {
-        const data = await getFactionsWithStats(fastify.prisma, resolvedSeasonId);
+        const data = await getFactionsWithStats(fastify.prisma, resolvedVersionId);
         return {
           data,
-          season: season
+          version: version
             ? {
-                id: season.id,
-                name: season.name,
-                start_date: season.start_date.toISOString(),
-                end_date: season.end_date.toISOString(),
-                is_active: season.is_active,
-                dlc_tag: season.dlc_tag ?? null,
+                id: version.id,
+                name: version.name,
+                start_date: version.start_date.toISOString(),
+                end_date: version.end_date.toISOString(),
+                is_active: version.is_active,
+                dlc_tag: version.dlc_tag ?? null,
               }
             : null,
         };
@@ -80,7 +80,7 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // -------------------------------------------------------------------------
-  // GET /api/factions/:id?seasonId=<uuid>
+  // GET /api/factions/:id?versionId=<uuid>
   // -------------------------------------------------------------------------
   fastify.get('/api/factions/:id', async (request, reply) => {
     const paramParsed = FactionParamSchema.safeParse(request.params);
@@ -92,7 +92,7 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const queryParsed = SeasonQuerySchema.safeParse(request.query);
+    const queryParsed = VersionQuerySchema.safeParse(request.query);
     if (!queryParsed.success) {
       return reply.code(400).send({
         error: 'BadRequest',
@@ -102,22 +102,22 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const { id } = paramParsed.data;
-    const { seasonId } = queryParsed.data;
+    const { versionId } = queryParsed.data;
 
-    // Resolve season. As with the list endpoint, NO active season is fine: the
+    // Resolve version. As with the list endpoint, NO active version is fine: the
     // faction's master data is global reference data. Only stats + trend are
-    // season-scoped and simply come back null/empty without one.
-    let season;
-    if (seasonId) {
-      season = await fastify.prisma.season.findUnique({ where: { id: seasonId } });
-      if (!season) {
-        return reply.code(404).send({ error: 'NotFound', message: 'Season not found', statusCode: 404 });
+    // version-scoped and simply come back null/empty without one.
+    let version;
+    if (versionId) {
+      version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+      if (!version) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
       }
     } else {
-      season = await fastify.prisma.season.findFirst({ where: { is_active: true } });
+      version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
     }
 
-    const resolvedSeasonId = season?.id ?? null;
+    const resolvedVersionId = version?.id ?? null;
 
     // Check faction existence before caching
     const faction = await fastify.prisma.faction.findUnique({ where: { id } });
@@ -127,24 +127,24 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
 
     return cached(
       fastify.redis,
-      cacheKey('factions:detail', { id, seasonId: resolvedSeasonId ?? 'none' }),
+      cacheKey('factions:detail', { id, versionId: resolvedVersionId ?? 'none' }),
       async () => {
-        const stats = resolvedSeasonId
+        const stats = resolvedVersionId
           ? await fastify.prisma.factionStats.findUnique({
-              where: { faction_id_season_id: { faction_id: id, season_id: resolvedSeasonId } },
+              where: { faction_id_version_id: { faction_id: id, version_id: resolvedVersionId } },
             })
           : null;
 
-        // 30-day snapshot trend — season-scoped, empty without a season.
+        // 30-day snapshot trend — version-scoped, empty without a version.
         let trend: { date: string; matches_played: number; win_rate: number | null }[] = [];
-        if (resolvedSeasonId) {
+        if (resolvedVersionId) {
           const thirtyDaysAgo = new Date();
           thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
           const snapshots = await fastify.prisma.factionStatsSnapshot.findMany({
             where: {
               faction_id: id,
-              season_id: resolvedSeasonId,
+              version_id: resolvedVersionId,
               snapshot_date: { gte: thirtyDaysAgo },
             },
             orderBy: { snapshot_date: 'asc' },
@@ -231,8 +231,8 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
         });
         const userById = new Map(users.map((u) => [u.id, u]));
 
-        // Resolve active season for proficiency computation.
-        const activeSeason = await fastify.prisma.season.findFirst({ where: { is_active: true } });
+        // Resolve active version for proficiency computation.
+        const activeVersion = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
 
         const rawPlayers = rows
           .map((r) => {
@@ -252,15 +252,15 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
           .filter((p): p is NonNullable<typeof p> => p !== null);
 
         // Attach per-faction proficiency (neutralWinChance) for each player.
-        // The season-wide rating model is fitted once (cached, event-invalidated)
+        // The version-wide rating model is fitted once (cached, event-invalidated)
         // and already holds every player's skill for this faction, so we read it
         // directly — no per-player query. Same value & freshness as the profile
         // page (both derive from this one model). Unknown pairs default to 0 skill
         // → logistic(0) = 0.5; top players always have a fitted entry here.
         let players: (typeof rawPlayers[number] & { proficiency: number | null })[];
-        if (activeSeason) {
+        if (activeVersion) {
           const model = await getRatingModel(fastify.prisma, fastify.redis, {
-            seasonId: activeSeason.id,
+            versionId: activeVersion.id,
           });
           players = rawPlayers.map((p) => ({
             ...p,
