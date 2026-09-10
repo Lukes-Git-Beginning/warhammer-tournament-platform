@@ -75,7 +75,7 @@ export function confirmedMatchWhere(versionId: string): Prisma.MatchWhereInput {
  */
 export async function loadVersionObservations(
   prisma: PrismaClient,
-  versionId: string,
+  versionId: string | null, // null = all versions (timeless / all-time fit)
 ): Promise<MatchObservation[]> {
   // Same canonical game set as the raw matchup heatmap (getMatchupMatrix), plus a
   // decisive winner (draws carry no signal). Game-level only — the parent Match's
@@ -90,7 +90,8 @@ export async function loadVersionObservations(
       winner_id: true,
       player1_faction_id: true,
       player2_faction_id: true,
-      match: { select: { player1_id: true, player2_id: true } },
+      battle_type: true,
+      match: { select: { player1_id: true, player2_id: true, version_id: true } },
     },
   });
 
@@ -105,6 +106,11 @@ export async function loadVersionObservations(
         factionXId: fX,
         factionYId: fY,
         aWon: g.winner_id === g.match.player1_id,
+        // Dimensions: BTO uses battleType; the matchup effect is scoped per
+        // (versionId, battleType). Within a single-version fit versionId is
+        // constant, so only battleType splits here; the all-time fit spans versions.
+        battleType: g.battle_type,
+        versionId: g.match.version_id ?? undefined,
       };
     })
     .filter((obs): obs is MatchObservation => obs !== null);
@@ -172,7 +178,8 @@ function toData(m: RatingModel): RatingModelData {
 }
 
 export interface GetRatingModelArgs {
-  versionId: string;
+  /** A specific version, or null for the timeless all-time fit (every version). */
+  versionId: string | null;
   /** Explicit overrides; when omitted, config is read from AdminConfig. */
   config?: Partial<RatingModelConfig>;
 }
@@ -196,7 +203,7 @@ export async function getRatingModel(
   const data = await cached<RatingModelData>(
     redis,
     cacheKey('rating-model', {
-      versionId,
+      versionId: versionId ?? 'all',
       lpfs: cfg.lambdaPlayerFaction,
       lme: cfg.lambdaMatchup,
       iter: cfg.maxIterations,
@@ -221,4 +228,7 @@ export async function invalidateRatingModelCache(
   versionId: string,
 ): Promise<void> {
   await invalidate(redis, `rating-model:*versionId=${versionId}*`);
+  // The all-time (timeless) fit spans every version, so any confirmed-match change
+  // in any version invalidates it too.
+  await invalidate(redis, `rating-model:*versionId=all*`);
 }

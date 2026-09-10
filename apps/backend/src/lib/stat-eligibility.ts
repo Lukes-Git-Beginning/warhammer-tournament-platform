@@ -25,12 +25,13 @@ import type { Prisma } from '@rizzotto/db';
  * dropped by each consumer in application code — a field-to-field comparison
  * Prisma cannot express in a where-clause.
  */
-export function eligibleStatGameWhere(versionId: string): Prisma.MatchGameWhereInput {
+export function eligibleStatGameWhere(versionId: string | null): Prisma.MatchGameWhereInput {
   return {
     status: 'COMPLETED',
     counts_for_leaderboard: true,
     match: {
-      version_id: versionId,
+      // null versionId = the all-time fit (timeless GS): span every version.
+      ...(versionId !== null ? { version_id: versionId } : {}),
       deleted_at: null,
       player1_id: { not: null },
       player2_id: { not: null },
