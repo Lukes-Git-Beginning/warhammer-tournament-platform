@@ -7,7 +7,7 @@ import { canManageTournament, guardBalancedManualPairing } from '../lib/tourname
 import { notifyHostsOfMatchReport } from '../lib/discord-notify.js';
 import { runBalancedPairingTick, findNextDivisionSeed } from '../lib/balanced-liechtenstein-service.js';
 import { computeSwissStandings, sortSwissStandings } from '../lib/swiss.js';
-import { resolveCompetitors } from '../lib/competitors.js';
+import { resolveCompetitors, captainMap, isTeamFormat, resolveActingUserIds } from '../lib/competitors.js';
 import {
   DEFAULT_BAND,
   formDivisionPools,
@@ -96,7 +96,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           status: true,
           player1_id: true,
           player2_id: true,
-          tournament: { select: { host_id: true, counts_for_leaderboard: true } },
+          tournament: { select: { host_id: true, counts_for_leaderboard: true, competitor_format: true } },
         },
       });
 
@@ -119,8 +119,16 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const user = request.user;
       const isHost = match.tournament ? user.sub === match.tournament.host_id : false;
       const isModOrAdmin = user.role === 'MODERATOR' || user.role === 'ADMIN';
-      const isPlayer1 = match.player1_id !== null && user.sub === match.player1_id;
-      const isPlayer2 = match.player2_id !== null && user.sub === match.player2_id;
+      // Competitor slots are opaque: 1v1 → the user themselves; 2v2 → the team's captain
+      // acts for the team. A wrong check here lets a non-captain report team results.
+      const isTeam = isTeamFormat(match.tournament?.competitor_format);
+      const captains = isTeam ? await captainMap(fastify.prisma, [match.player1_id, match.player2_id]) : undefined;
+      const actsForSlot = (slotId: string | null): boolean => {
+        if (!slotId) return false;
+        return isTeam ? captains?.get(slotId) === user.sub : slotId === user.sub;
+      };
+      const isPlayer1 = actsForSlot(match.player1_id);
+      const isPlayer2 = actsForSlot(match.player2_id);
 
       if (!isHost && !isModOrAdmin && !isPlayer1 && !isPlayer2) {
         return reply.code(403).send({
@@ -305,11 +313,15 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           draftId = existingDraft.id;
         } else {
           try {
+            // The draft is driven by real User ids (Socket.IO rooms + pick attribution).
+            // 2v2 slots hold team ids, so resolve each slot to its acting user (the captain);
+            // for 1v1 this returns the slot id unchanged.
+            const actingUsers = await resolveActingUserIds(fastify.prisma, [match.player1_id, match.player2_id]);
             const result = await fastify.draftService.startDraft({
               matchId,
               presetId: match.tournament.draft_preset_id,
-              hostUserId: match.player1_id,
-              guestUserId: match.player2_id,
+              hostUserId: actingUsers.get(match.player1_id) ?? match.player1_id,
+              guestUserId: actingUsers.get(match.player2_id) ?? match.player2_id,
               allFactionIds: [], // service caches faction IDs
             });
             draftId = result.draftId;

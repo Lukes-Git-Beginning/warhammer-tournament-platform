@@ -99,4 +99,10 @@ id-agnostic — no change once callers pass competitor ids. Open Play is always 
   seed origins → auth captain-check → scoring FK-guards → DTO team branch → draft
   captain-lookup → tests.
 - **Phase B — per-member factions (D2):** game-level two-faction storage + blind-pick/
-  draft/report/DTO for two members. Layered after A, each commit green.
+  draft/report/DTO for two members. Layered after A, each commit green. **Also converts
+  the in-match auth + flow to captain/per-member** — `match-decision.ts` (coin flip,
+  map pick/ban) and `match-games.ts` (blind/matrix faction lock, per-game report, replay
+  disputes) still use `userId === player1_id`, which for 2v2 is FAIL-CLOSED (a team id
+  never equals a user id → 403, safe, no wrong-actor hole) but non-functional. Until
+  Phase B, a 2v2 tournament is completed via the captain/host **report-result** path
+  (`matches.ts` POST `/:id/result`, already captain-aware) — not the per-game GameTile flow.

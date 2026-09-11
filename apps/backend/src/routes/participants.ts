@@ -22,6 +22,8 @@ const RegisterSchema = z.object({
   // takes effect below their computed band — the effective band is max(computed,
   // requested) at Start — so a too-low value here is simply ignored.
   requested_band: z.number().int().min(1).max(5).optional(),
+  // 2v2: the ACTIVE team the captain is registering (team-as-actor). Ignored for 1v1.
+  team_id: z.string().uuid().optional(),
   // Attribution: the ?ref= code that brought this player here (set once, on first register).
   source: z.string().max(64).optional(),
 });
@@ -57,6 +59,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           status: true,
           mode: true,
+          competitor_format: true,
           start_date: true,
           max_participants: true,
           min_band: true,
@@ -123,6 +126,118 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           if (tournament.max_band != null && band > tournament.max_band) {
             return reply.code(422).send({ error: 'UnprocessableEntity', message: `This tournament is capped at ${BAND_NAMES[tournament.max_band]!} — your skill band is ${BAND_NAMES[band]!}.`, statusCode: 422 });
           }
+        }
+      }
+
+      // ---------------------------------------------------------------------
+      // 2v2: the competitor is a permanent Team (team-as-actor). The captain
+      // registers an ACTIVE team they own; per-member factions are decided in-match
+      // (Phase B), not at registration. Exactly ONE participant row carries the team
+      // (user_id = captain, team_id set, participant_type = TEAM) so it seeds as one
+      // competitor. Returns here — the 1v1 faction/2D3 path below does not apply.
+      // ---------------------------------------------------------------------
+      if (tournament.competitor_format === 'TWO_V_TWO') {
+        const teamId = parsed.data.team_id;
+        if (!teamId) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'A team is required to register for a 2v2 tournament', statusCode: 400 });
+        }
+        const team = await fastify.prisma.team.findUnique({
+          where: { id: teamId },
+          select: { id: true, status: true, captain_id: true, name: true },
+        });
+        if (!team) {
+          return reply.code(404).send({ error: 'NotFound', message: 'Team not found', statusCode: 404 });
+        }
+        if (team.captain_id !== request.user.sub) {
+          return reply.code(403).send({ error: 'Forbidden', message: 'Only the team captain can register the team', statusCode: 403 });
+        }
+        if (team.status !== 'ACTIVE') {
+          return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Your teammate must confirm the team before it can register', statusCode: 422 });
+        }
+
+        // Already registered as a team? (a WITHDREW team may re-register.)
+        const existingTeam = await fastify.prisma.tournamentParticipant.findFirst({
+          where: { tournament_id: tournament.id, team_id: teamId },
+          select: { id: true, status: true },
+        });
+        if (existingTeam && existingTeam.status !== 'WITHDREW') {
+          return reply.code(409).send({ error: 'Conflict', message: 'This team is already registered for this tournament', statusCode: 409 });
+        }
+        // The captain must not already hold a (non-withdrawn) row here — the
+        // [tournament_id, user_id] unique also enforces one entry per captain.
+        const captainRow = await fastify.prisma.tournamentParticipant.findFirst({
+          where: { tournament_id: tournament.id, user_id: request.user.sub },
+          select: { id: true, status: true },
+        });
+        if (captainRow && captainRow.status !== 'WITHDREW') {
+          return reply.code(409).send({ error: 'Conflict', message: 'You are already registered for this tournament', statusCode: 409 });
+        }
+
+        const nowTeam = new Date();
+        const teamCheckInOpen =
+          nowTeam.getTime() >= tournament.start_date.getTime() - 3_600_000 && nowTeam.getTime() < tournament.start_date.getTime();
+        const teamStatus: 'CHECKED_IN' | 'REGISTERED' = teamCheckInOpen ? 'CHECKED_IN' : 'REGISTERED';
+        const teamSelect = {
+          id: true,
+          tournament_id: true,
+          user_id: true,
+          team_id: true,
+          participant_type: true,
+          status: true,
+          registered_at: true,
+        } as const;
+
+        try {
+          const participant = captainRow
+            ? await fastify.prisma.tournamentParticipant.update({
+                where: { id: captainRow.id },
+                data: {
+                  team_id: teamId,
+                  participant_type: 'TEAM',
+                  status: teamStatus,
+                  registered_at: nowTeam,
+                  faction_id: null,
+                  faction_ids: [],
+                },
+                select: teamSelect,
+              })
+            : await fastify.prisma.tournamentParticipant.create({
+                data: {
+                  tournament_id: tournament.id,
+                  user_id: request.user.sub,
+                  team_id: teamId,
+                  participant_type: 'TEAM',
+                  status: teamStatus,
+                  source: parsed.data.source ?? null,
+                },
+                select: teamSelect,
+              });
+
+          await fastify.prisma.auditLog.create({
+            data: {
+              entity_type: 'TournamentParticipant',
+              entity_id: participant.id,
+              action: existingTeam ? 're-register' : 'register',
+              actor_id: request.user.sub,
+              new_value: { tournament_id: tournament.id, team_id: teamId, participant_type: 'TEAM', status: teamStatus },
+            },
+          });
+          void recordTournamentEvent({
+            tournamentId: tournament.id,
+            type: 'participant_registered',
+            actor: 'player',
+            actorId: request.user.sub,
+            subjectId: request.user.sub,
+            payload: { status: teamStatus, teamId },
+          });
+          emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId: request.user.sub, action: 'registered' });
+          request.log.info({ slug, teamId, captainId: request.user.sub, status: teamStatus }, 'Team registered for tournament');
+          return reply.code(201).send(participant);
+        } catch (err: unknown) {
+          if (err !== null && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'P2002') {
+            return reply.code(409).send({ error: 'Conflict', message: 'You are already registered for this tournament', statusCode: 409 });
+          }
+          throw err;
         }
       }
 

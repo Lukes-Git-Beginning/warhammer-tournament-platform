@@ -28,7 +28,8 @@ import { autoSwissConfig } from '../lib/auto-swiss-service.js';
 import { resolveFactionWarFairness, resolveFactionWarSeedOrder } from '../lib/matchmaking-service.js';
 import { projectBracketPlan } from '../lib/bracket-plan.js';
 import { DEFAULT_BAND } from '../lib/balanced-liechtenstein.js';
-import { effectiveTiersOf, SUPPORTER_FLAG_SELECT, NO_TIERS } from '../lib/supporter-service.js';
+import { NO_TIERS } from '../lib/supporter-service.js';
+import { resolveCompetitors, resolveCompetitorId } from '../lib/competitors.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
 import { createManualMatch } from '../lib/tournament-management.js';
 import { notifyMatchesCreated } from '../lib/discord-notify.js';
@@ -60,9 +61,10 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const participantFactions = await fastify.prisma.tournamentParticipant.findMany({
         where: { tournament_id: tournament.id, deleted_at: null },
-        select: { user_id: true, faction_id: true },
+        select: { user_id: true, team_id: true, faction_id: true },
       });
-      const factionByUser = new Map(participantFactions.map((p) => [p.user_id, p.faction_id]));
+      // Keyed by the opaque competitor id (team for 2v2) so it lines up with match slots.
+      const factionByUser = new Map(participantFactions.map((p) => [resolveCompetitorId(p), p.faction_id]));
 
       // factionFromGames is built after the matches query — see below.
       const matches = await fastify.prisma.match.findMany({
@@ -192,6 +194,30 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         })),
       };
 
+      // Resolve every competitor id appearing in the bracket (User 1v1 / Team 2v2) so the UI
+      // can render names on match nodes without a separate fetch.
+      const bracketCompetitors = await resolveCompetitors(
+        fastify.prisma,
+        matches.flatMap((m) => [m.player1_id, m.player2_id, m.winner_id]),
+      );
+      response.competitors = Object.fromEntries(
+        [...bracketCompetitors.values()].map((c) => [
+          c.id,
+          {
+            id: c.id,
+            type: c.type,
+            name: c.username,
+            avatarUrl: c.avatar_url,
+            members: c.members?.map((m) => ({
+              userId: m.user_id,
+              username: m.username,
+              avatarUrl: m.avatar_url,
+              isCaptain: m.is_captain,
+            })) ?? null,
+          },
+        ]),
+      );
+
       // Augment with standings for Swiss, Round Robin, Auto Swiss, and (Balanced) Liechtenstein
       if (tournament.format === TournamentFormat.SWISS || tournament.format === TournamentFormat.ROUND_ROBIN || tournament.format === TournamentFormat.LIECHTENSTEIN || tournament.format === TournamentFormat.BALANCED_LIECHTENSTEIN || tournament.format === TournamentFormat.AUTO_SWISS) {
         const participants = await fastify.prisma.tournamentParticipant.findMany({
@@ -202,17 +228,19 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           },
           select: {
             user_id: true,
+            team_id: true,
             status: true,
             skill_band: true,
-            user: { select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT } },
           },
         });
 
-        const participantIds = participants.map((p) => p.user_id);
-        const userMap = new Map(participants.map((p) => [p.user_id, p.user]));
-        const bandByUser = new Map(participants.map((p) => [p.user_id, p.skill_band]));
+        // Standings are keyed by the opaque competitor id (team for 2v2) so they line up
+        // with the match slots; resolve display names (username / team name) via the resolver.
+        const participantIds = participants.map((p) => resolveCompetitorId(p));
+        const competitorMap = await resolveCompetitors(fastify.prisma, participantIds);
+        const bandByUser = new Map(participants.map((p) => [resolveCompetitorId(p), p.skill_band]));
         const withdrawnIds = new Set(
-          participants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id),
+          participants.filter((p) => p.status === 'WITHDREW').map((p) => resolveCompetitorId(p)),
         );
 
         const completedMatches = matches
@@ -238,12 +266,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         const rawStandings = sortSwissStandings(computedStandings, completedMatches, tournament.id);
 
         const standings: SwissStandingEntry[] = rawStandings.map((s) => {
-          const user = userMap.get(s.userId);
+          const comp = competitorMap.get(s.userId);
           return {
             userId: s.userId,
-            username: user?.username ?? null,
-            avatarUrl: user?.avatar_url ?? null,
-            tiers: user ? effectiveTiersOf(user) : NO_TIERS,
+            username: comp?.username ?? null,
+            avatarUrl: comp?.avatar_url ?? null,
+            tiers: comp?.tiers ?? NO_TIERS,
             // #9: FREE_PICK shows "Free Pick" (null) until a host explicitly sets a faction — never
             // the first game's picked faction. Other modes keep the game-derived fallback.
             factionId:
@@ -272,7 +300,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         // sizing (checked-in contenders when any are checked in; no-shows excluded) so the
         // placeholder plan can't diverge from what will actually be generated.
         const droppedSet = new Set(rawStandings.filter((s) => s.dropped).map((s) => s.userId));
-        const contenders = participants.filter((p) => p.status !== 'WITHDREW' && !droppedSet.has(p.user_id));
+        const contenders = participants.filter((p) => p.status !== 'WITHDREW' && !droppedSet.has(resolveCompetitorId(p)));
         const anyCheckedIn = contenders.some((p) => p.status === 'CHECKED_IN');
         const activeBands = (anyCheckedIn ? contenders.filter((p) => p.status === 'CHECKED_IN') : contenders).map(
           (p) => p.skill_band ?? DEFAULT_BAND,
@@ -365,7 +393,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           deleted_at: null,
         },
         orderBy: { registered_at: 'asc' },
-        select: { user_id: true, status: true, faction_id: true },
+        select: { user_id: true, team_id: true, status: true, faction_id: true },
       });
 
       const now = new Date();
@@ -402,9 +430,10 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const participantIds = participants.map((p) => p.user_id);
+      // Seed by the opaque competitor id: the team for 2v2, else the user (team-as-actor).
+      const participantIds = participants.map((p) => resolveCompetitorId(p));
       const factionById = new Map<string, string | null>(
-        allEligible.map((p) => [p.user_id, p.faction_id]),
+        allEligible.map((p) => [resolveCompetitorId(p), p.faction_id]),
       );
       let bracketMatches: Array<{
         id: string;
@@ -703,24 +732,25 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
           deleted_at: null,
         },
-        select: { user_id: true, faction_id: true, status: true },
+        select: { user_id: true, team_id: true, faction_id: true, status: true },
       });
 
+      // Match slots hold opaque competitor ids (team for 2v2) — key everything by them.
       const playedIds = new Set<string>();
       for (const m of existingMatches) {
         if (m.player1_id) playedIds.add(m.player1_id);
         if (m.player2_id) playedIds.add(m.player2_id);
       }
       const participants = allParticipants.filter(
-        (p) => p.status !== 'REGISTERED' || playedIds.has(p.user_id),
+        (p) => p.status !== 'REGISTERED' || playedIds.has(resolveCompetitorId(p)),
       );
 
-      const participantIds = participants.map((p) => p.user_id);
+      const participantIds = participants.map((p) => resolveCompetitorId(p));
       const withdrawnIds = new Set(
-        participants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id),
+        participants.filter((p) => p.status === 'WITHDREW').map((p) => resolveCompetitorId(p)),
       );
       const factionById = new Map<string, string | null>(
-        participants.map((p) => [p.user_id, p.faction_id]),
+        participants.map((p) => [resolveCompetitorId(p), p.faction_id]),
       );
       const targetRound = currentRound + 1;
       // The host-configured rounds_count is authoritative; fall back to the
@@ -967,12 +997,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const participants = await fastify.prisma.tournamentParticipant.findMany({
         where: { tournament_id: id, status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] }, deleted_at: null },
-        select: { user_id: true, status: true },
+        select: { user_id: true, team_id: true, status: true },
       });
 
-      const participantIds = participants.map((p) => p.user_id);
+      // Standings/seeds are keyed by the opaque competitor id (team for 2v2).
+      const participantIds = participants.map((p) => resolveCompetitorId(p));
       const withdrawnIds = new Set(
-        participants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id),
+        participants.filter((p) => p.status === 'WITHDREW').map((p) => resolveCompetitorId(p)),
       );
       const currentRound = existingMatches.length > 0 ? Math.max(...existingMatches.map((m) => m.round)) : 0;
 

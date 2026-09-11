@@ -18,6 +18,7 @@ import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import tournamentRoutes from './routes/tournaments.js';
 import participantRoutes from './routes/participants.js';
+import teamRoutes from './routes/teams.js';
 import matchRoutes from './routes/matches.js';
 import versionRoutes from './routes/versions.js';
 import bracketRoutes from './routes/bracket.js';
@@ -150,6 +151,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(userRoutes);
   await app.register(tournamentRoutes);
   await app.register(participantRoutes);
+  await app.register(teamRoutes);
   await app.register(matchRoutes);
   await app.register(versionRoutes);
   await app.register(bracketRoutes);

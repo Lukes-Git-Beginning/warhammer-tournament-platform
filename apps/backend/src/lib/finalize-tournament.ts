@@ -291,6 +291,7 @@ export async function finalizeTournament(
       format: true,
       counts_for_leaderboard: true,
       is_major: true,
+      competitor_format: true,
     },
   });
 
@@ -409,8 +410,13 @@ export async function finalizeTournament(
 
   // ---------------------------------------------------------------------------
 
+  // 2v2: placements are keyed by team id, but TournamentResult.user_id and
+  // LeaderboardEntry.user_id FK to User. Teams are not written to the user-keyed boards in
+  // v1 (team GS is derive-on-read); skip these writes to keep the FK intact.
+  const writeUserKeyedResults = tournament.competitor_format !== 'TWO_V_TWO';
+
   await prisma.$transaction(async (tx) => {
-    for (const [userId, placement] of placements) {
+    if (writeUserKeyedResults) for (const [userId, placement] of placements) {
       const points = calculateTournamentPoints({
         placement,
         playerCount,

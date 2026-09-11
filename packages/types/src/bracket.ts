@@ -120,6 +120,27 @@ export interface SwissMeta {
   plan?: BracketPlan;
 }
 
+/** One member of a team competitor (2v2). */
+export interface BracketCompetitorMember {
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+  isCaptain: boolean;
+}
+
+/**
+ * Resolved display info for a competitor id in the bracket. A slot (player1Id/…) is opaque:
+ * a User id (1v1) or a Team id (2v2). `name` is the username or the team name; `members` is
+ * the roster for a team (null for a user). See plans/2v2-competitor-implementation.md.
+ */
+export interface BracketCompetitor {
+  id: string;
+  type: 'USER' | 'TEAM';
+  name: string;
+  avatarUrl: string | null;
+  members?: BracketCompetitorMember[] | null;
+}
+
 export interface BracketResponse {
   tournamentId: string;
   rounds: number;
@@ -130,4 +151,7 @@ export interface BracketResponse {
   status?: string;
   /** Present only for SWISS format tournaments */
   swiss?: SwissMeta;
+  /** Resolved competitor display info, keyed by competitor id (every id in `matches`).
+   *  Lets the UI render user / team names on bracket nodes without a separate fetch. */
+  competitors?: Record<string, BracketCompetitor>;
 }

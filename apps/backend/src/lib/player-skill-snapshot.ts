@@ -48,8 +48,16 @@ export async function snapshotPlayerSkills(
     version_id: active?.id ?? null,
   }));
   if (rows.length === 0) return 0;
+  // The fit's competitor ids can include Team ids (2v2), but PlayerSkillSnapshot.user_id FKs
+  // to User. Filter to real users — teams are not snapshotted in v1 (team GS stays derive-on-
+  // read). Without this, the daily cron would hit an FK violation once any 2v2 game exists.
+  const realUserIds = new Set(
+    (await prisma.user.findMany({ where: { id: { in: rows.map((r) => r.user_id) } }, select: { id: true } })).map((u) => u.id),
+  );
+  const userRows = rows.filter((r) => realUserIds.has(r.user_id));
+  if (userRows.length === 0) return 0;
   const result = await prisma.playerSkillSnapshot.createMany({
-    data: rows,
+    data: userRows,
     skipDuplicates: true,
   });
   return result.count;

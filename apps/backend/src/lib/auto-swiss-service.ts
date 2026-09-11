@@ -17,6 +17,7 @@ import {
   sortSwissStandings,
 } from './swiss.js';
 import { resolveFactionWarFairness } from './matchmaking-service.js';
+import { resolveCompetitorId } from './competitors.js';
 import {
   notifyRoundPairings,
   notifyMatchesCreated,
@@ -159,7 +160,7 @@ export async function startAutoSwiss(
   });
   const participants = await prisma.tournamentParticipant.findMany({
     where: { tournament_id: tournamentId, status: 'CHECKED_IN', deleted_at: null },
-    select: { user_id: true, faction_id: true },
+    select: { user_id: true, team_id: true, faction_id: true },
   });
 
   const config = autoSwissConfig(participants.length);
@@ -176,8 +177,9 @@ export async function startAutoSwiss(
     return;
   }
 
-  const factionById = new Map(participants.map((p) => [p.user_id, p.faction_id ?? null]));
-  const participantIds = participants.map((p) => p.user_id);
+  // Seed by opaque competitor id (team for 2v2, else user — team-as-actor).
+  const factionById = new Map(participants.map((p) => [resolveCompetitorId(p), p.faction_id ?? null]));
+  const participantIds = participants.map((p) => resolveCompetitorId(p));
 
   const swissPlayers = participantIds.map((userId) => ({
     userId,
@@ -328,13 +330,16 @@ async function generateNextSwissRound(
       OR: [
         { status: { in: ['CHECKED_IN', 'WITHDREW'] } },
         { user_id: { in: matchPlayerIds } },
+        // 2v2: match slots hold team ids, so union in participants by team_id too.
+        { team_id: { in: matchPlayerIds } },
       ],
     },
-    select: { user_id: true, faction_id: true, status: true },
+    select: { user_id: true, team_id: true, faction_id: true, status: true },
   });
-  const participantIds = dbParticipants.map((p) => p.user_id);
-  const factionById = new Map(dbParticipants.map((p) => [p.user_id, p.faction_id ?? null]));
-  const withdrawnIds = new Set(dbParticipants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
+  // Keyed by opaque competitor id (team for 2v2) to line up with match slots.
+  const participantIds = dbParticipants.map((p) => resolveCompetitorId(p));
+  const factionById = new Map(dbParticipants.map((p) => [resolveCompetitorId(p), p.faction_id ?? null]));
+  const withdrawnIds = new Set(dbParticipants.filter((p) => p.status === 'WITHDREW').map((p) => resolveCompetitorId(p)));
 
   const completed = swissMatches
     .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST')
@@ -481,10 +486,15 @@ async function startPlayoffs(
     swissMatches.flatMap((m) => [m.player1_id, m.player2_id].filter((id): id is string => id !== null)),
   )];
   const dbParticipants = await prisma.tournamentParticipant.findMany({
-    where: { tournament_id: tournament.id, user_id: { in: participantIds }, deleted_at: null },
-    select: { user_id: true, status: true },
+    where: {
+      tournament_id: tournament.id,
+      deleted_at: null,
+      // participantIds are opaque competitor ids (team for 2v2) — match user OR team.
+      OR: [{ user_id: { in: participantIds } }, { team_id: { in: participantIds } }],
+    },
+    select: { user_id: true, team_id: true, status: true },
   });
-  const withdrawnIds = new Set(dbParticipants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
+  const withdrawnIds = new Set(dbParticipants.filter((p) => p.status === 'WITHDREW').map((p) => resolveCompetitorId(p)));
   const completed = swissMatches
     .filter((m) => m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST')
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));

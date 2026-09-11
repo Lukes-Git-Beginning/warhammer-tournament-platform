@@ -114,6 +114,7 @@ export async function resolveMatchResult(
           counts_for_leaderboard: true,
           is_major: true,
           mode: true,
+          competitor_format: true,
           restricted_factions: { select: { faction_id: true } },
         },
       },
@@ -265,8 +266,10 @@ export async function resolveMatchResult(
       }
     }
 
-    // 3. LeaderboardEntry updates (only when tournament counts for leaderboard)
-    if (match.tournament?.counts_for_leaderboard ?? true) {
+    // 3. LeaderboardEntry updates (only when the tournament counts for the leaderboard).
+    // Skip 2v2: slots hold team ids and LeaderboardEntry.user_id FKs to User — teams are
+    // not written to the user board in v1 (team GS is derive-on-read); avoids an FK violation.
+    if ((match.tournament?.counts_for_leaderboard ?? true) && match.tournament?.competitor_format !== 'TWO_V_TWO') {
       if (activeVersion) {
         const versionId = activeVersion.id;
         const players: Array<{

@@ -243,6 +243,27 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // GET /api/users/search?q= — lightweight authenticated user search for pickers
+  // (e.g. the 2v2 teammate picker). Minimal public fields only; excludes the caller.
+  fastify.get('/api/users/search', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const parsed = z.object({ q: z.string().trim().min(2).max(50) }).safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { q } = parsed.data;
+    const users = await fastify.prisma.user.findMany({
+      where: {
+        deleted_at: null,
+        id: { not: request.user.sub },
+        OR: [{ username: { contains: q, mode: 'insensitive' } }, { discord_id: q }],
+      },
+      select: { id: true, username: true, avatar_url: true },
+      orderBy: { username: 'asc' },
+      take: 10,
+    });
+    return { users };
+  });
+
   // GET /api/users?search=&page=&limit= — Admin-only user search (Bug-Fix)
   fastify.get(
     '/api/users',

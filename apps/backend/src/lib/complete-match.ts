@@ -172,7 +172,7 @@ export async function completeMatch(
       match_number: true,
       player1_faction_id: true,
       player2_faction_id: true,
-      tournament: { select: { host_id: true, format: true, mode: true, counts_for_leaderboard: true } },
+      tournament: { select: { host_id: true, format: true, mode: true, counts_for_leaderboard: true, competitor_format: true } },
     },
   });
 
@@ -266,8 +266,15 @@ export async function completeMatch(
     }
 
     // LeaderboardEntry — mirrors resolveMatchResult so GameTile matches count on the leaderboard.
-    // A walkover played no game, so it never touches the leaderboard.
-    if (activeVersion && !opts.walkover && (match.tournament?.counts_for_leaderboard ?? true)) {
+    // A walkover played no game, so it never touches the leaderboard. 2v2 slots hold team ids,
+    // and LeaderboardEntry.user_id FKs to User — so teams are NOT written to the user board (v1;
+    // team GS stays derive-on-read). Guarding here also prevents an FK violation.
+    if (
+      activeVersion &&
+      !opts.walkover &&
+      (match.tournament?.counts_for_leaderboard ?? true) &&
+      match.tournament?.competitor_format !== 'TWO_V_TWO'
+    ) {
       const versionId = activeVersion.id;
       const WIN_PTS = 3, LOSS_PTS = 0;
       const entries = [

@@ -199,7 +199,16 @@ const CreateTournamentSchema = z.object({
   min_band: z.number().int().min(1).max(5).nullable().optional(),
   max_band: z.number().int().min(1).max(5).nullable().optional(),
   battle_type: BattleTypeSchema.optional(),
-}).superRefine(refineMapPool).superRefine(refineOneVThree);
+  competitor_format: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(),
+})
+  .superRefine(refineMapPool)
+  .superRefine(refineOneVThree)
+  .superRefine((data, ctx) => {
+    // 2v2 has no per-team skill bands, so Balanced Liechtenstein is unsupported for it.
+    if (data.competitor_format === 'TWO_V_TWO' && data.format === 'BALANCED_LIECHTENSTEIN') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: '2v2 is not supported with the Balanced Liechtenstein format', path: ['competitor_format'] });
+    }
+  });
 
 const PatchTournamentSchema = z.object({
   name: z.string().min(3).max(120).optional(),
@@ -244,6 +253,7 @@ const PatchTournamentSchema = z.object({
   min_band: z.number().int().min(1).max(5).nullable().optional(),
   max_band: z.number().int().min(1).max(5).nullable().optional(),
   battle_type: BattleTypeSchema.optional(),
+  competitor_format: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(),
 })
   .superRefine(refineMapPool)
   .superRefine(refineOneVThree)
@@ -513,6 +523,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           min_band: data.min_band ?? null,
           max_band: data.max_band ?? null,
           battle_type: data.battle_type ?? 'DOMINATION',
+          competitor_format: data.competitor_format ?? 'ONE_V_ONE',
         },
         select: {
           id: true,
@@ -532,6 +543,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           map_decision_mode: true,
           map_preset_config: true,
           battle_type: true,
+          competitor_format: true,
           created_at: true,
         },
       });
@@ -864,6 +876,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           min_band: true,
           max_band: true,
           battle_type: true,
+          competitor_format: true,
         },
       });
 
@@ -939,7 +952,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         // Reject only a genuine CHANGE to a structural field — a client that re-submits
         // the unchanged value (e.g. an edit form that always sends `mode`) must not 422.
         // battle_type is structural: changing it post-DRAFT invalidates the map pool.
-        const draftOnlyAttempted = (['format', 'mode', 'battle_type'] as const).filter(
+        const draftOnlyAttempted = (['format', 'mode', 'battle_type', 'competitor_format'] as const).filter(
           (f) => rest[f] !== undefined && rest[f] !== tournament[f as keyof typeof tournament],
         );
         if (draftOnlyAttempted.length > 0) {
@@ -953,6 +966,19 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(422).send({
             error: 'UnprocessableEntity',
             message: '"faction_pool" can only be changed while the tournament is in draft',
+            statusCode: 422,
+          });
+        }
+      }
+
+      // 2v2 has no per-team skill bands → incompatible with Balanced Liechtenstein.
+      {
+        const effFmt = (rest.format ?? tournament.format) as string;
+        const effComp = (rest.competitor_format ?? tournament.competitor_format) as string;
+        if (effComp === 'TWO_V_TWO' && effFmt === 'BALANCED_LIECHTENSTEIN') {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: '2v2 is not supported with the Balanced Liechtenstein format',
             statusCode: 422,
           });
         }
