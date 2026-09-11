@@ -14,6 +14,10 @@ export const MODE_DESCRIPTIONS: Record<string, string> = {
     "A coin flip sets roles each match: one player runs the host's set faction, the other brings three, and the set-faction player picks which of the three their opponent plays.",
   FACTION_WAR:
     'Like SFT, but every faction is exclusive: once a player claims a faction at registration, no one else can pick it — first come, first served, and no mirror matches.',
+  SFT_2V2:
+    '2v2 Single Faction — the captain pre-picks one faction per member at registration (captain, then teammate). Two factions per side, revealed at start.',
+  BPT_2V2:
+    '2v2 Blind Pick — the captain blind-picks one faction per member each game (captain + teammate), revealed once both teams have locked.',
 };
 
 export const FORMAT_DESCRIPTIONS: Record<string, string> = {

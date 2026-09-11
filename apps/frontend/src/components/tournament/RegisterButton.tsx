@@ -9,6 +9,7 @@ import {
   getFactions,
   getTakenFactions,
   getPlayerClassification,
+  getMyTeams,
 } from '@/lib/api';
 import type { Tournament, ParticipantStatus, ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -342,15 +343,28 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
   // Balanced Liechtenstein + Free Pick: the skill band is chosen first, then the
   // Free Pick choice — carry the band through so the final register call keeps it.
   const [requestedBand, setRequestedBand] = useState<number | null>(null);
+  // 2v2 (team-as-actor): the captain picks which ACTIVE team to register.
+  const [pickingTeam, setPickingTeam] = useState(false);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
 
   const isFreePick = tournament.mode === 'FREE_PICK';
   const isFactionWar = tournament.mode === 'FACTION_WAR';
   const needsFactionPick =
     tournament.mode === 'SFT' ||
     tournament.mode === 'TWO_D_THREE' ||
+    tournament.mode === 'SFT_2V2' ||
     isFactionWar ||
     (isFreePick && freePickChoice === 'fixed');
-  const pickCount = tournament.mode === 'TWO_D_THREE' ? 3 : 1;
+  // SFT_2V2 picks one faction per member (captain, then teammate) = 2.
+  const pickCount = tournament.mode === 'TWO_D_THREE' ? 3 : tournament.mode === 'SFT_2V2' ? 2 : 1;
+
+  const isTeamFormat = tournament.competitor_format === 'TWO_V_TWO';
+  const { data: myTeamsData } = useQuery({
+    queryKey: ['teams', 'me'],
+    queryFn: getMyTeams,
+    enabled: isTeamFormat && isLoggedIn,
+  });
+  const eligibleTeams = (myTeamsData?.teams ?? []).filter((tm) => tm.status === 'ACTIVE' && tm.is_captain);
 
   // FACTION_WAR: the factions already claimed by other players, so the picker can grey
   // them out. Refetched whenever the picker opens so a just-taken faction disappears.
@@ -376,10 +390,19 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
   const lateJoinMode = tournament.status === 'ONGOING' && !!tournament.allow_late_join_requests;
   const register = useMutation({
     mutationFn: (opts?: { requested_band?: number }) => {
-      const submit = lateJoinMode ? requestJoinTournament : registerForTournament;
-      return pickCount > 1
-        ? submit(tournament.slug, { factionIds: selectedFactions, ...opts })
-        : submit(tournament.slug, selectedFactions[0] ? { factionId: selectedFactions[0], ...opts } : opts);
+      const factionOpts =
+        pickCount > 1
+          ? { factionIds: selectedFactions }
+          : selectedFactions[0]
+            ? { factionId: selectedFactions[0] }
+            : {};
+      // Late-join (request) does not support teams; team registration is the OPEN path.
+      if (lateJoinMode) return requestJoinTournament(tournament.slug, { ...factionOpts, ...opts });
+      return registerForTournament(tournament.slug, {
+        ...factionOpts,
+        ...opts,
+        ...(selectedTeamId ? { teamId: selectedTeamId } : {}),
+      });
     },
     onSuccess: () => {
       setPickingFaction(false);
@@ -387,6 +410,8 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
       setChoosingFreePick(false);
       setFreePickChoice(null);
       setRequestedBand(null);
+      setPickingTeam(false);
+      setSelectedTeamId(null);
       void queryClient.invalidateQueries({ queryKey: ['tournament', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['participant-me', tournament.slug] });
       void queryClient.invalidateQueries({ queryKey: ['tournament-participants', tournament.slug] });
@@ -480,27 +505,103 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
     );
   }
 
+  if (isTeamFormat && pickingTeam) {
+    return (
+      <div className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4 space-y-4">
+        <div>
+          <p className="text-sm font-semibold text-rizzotto-stone-200 mb-1">Register a team</p>
+          <p className="text-xs text-rizzotto-stone-500">
+            Pick an active team you captain. Only the captain registers and acts for the team.
+          </p>
+        </div>
+        {eligibleTeams.length === 0 ? (
+          <p className="text-sm text-rizzotto-stone-400">
+            You have no active team.{' '}
+            <Link to="/teams" className="text-rizzotto-gold-400 underline hover:text-rizzotto-gold-300">
+              Create or manage teams
+            </Link>
+            .
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {eligibleTeams.map((tm) => (
+              <button
+                key={tm.id}
+                type="button"
+                onClick={() => setSelectedTeamId(tm.id)}
+                className={cn(
+                  'flex w-full items-center justify-between rounded-md border p-2 text-left transition-colors',
+                  selectedTeamId === tm.id
+                    ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/10'
+                    : 'border-rizzotto-iron-700 hover:border-rizzotto-iron-500',
+                )}
+              >
+                <span className="text-sm font-semibold text-rizzotto-stone-100">{tm.name}</span>
+                <span className="text-xs text-rizzotto-stone-500">{tm.members.map((m) => m.username).join(' & ')}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {register.isError && <p className="text-xs text-rizzotto-danger">{(register.error as Error).message}</p>}
+        <div className="flex gap-3 pt-1">
+          <Button
+            variant="forge"
+            size="md"
+            disabled={!selectedTeamId || register.isPending}
+            onClick={() => {
+              if (tournament.mode === 'SFT_2V2') {
+                setPickingTeam(false);
+                setPickingFaction(true);
+              } else {
+                register.mutate(undefined);
+              }
+            }}
+          >
+            {tournament.mode === 'SFT_2V2'
+              ? 'Next: pick factions'
+              : register.isPending
+                ? t('tournament.register.pending')
+                : 'Register team'}
+          </Button>
+          <button
+            type="button"
+            onClick={() => {
+              setPickingTeam(false);
+              setSelectedTeamId(null);
+            }}
+            className="text-sm text-rizzotto-stone-500 hover:text-rizzotto-stone-300 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (needsFactionPick && pickingFaction) {
     const is2D3 = tournament.mode === 'TWO_D_THREE';
+    const isSft2v2 = tournament.mode === 'SFT_2V2';
     return (
       <div className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4 space-y-4">
         <div>
           <p className="text-sm font-semibold text-rizzotto-stone-200 mb-1">
-            {is2D3 ? 'Choose your 3 factions' : 'Choose your faction'}
+            {is2D3 ? 'Choose your 3 factions' : isSft2v2 ? "Choose both members' factions" : 'Choose your faction'}
           </p>
           <p className="text-xs text-rizzotto-stone-500">
             {is2D3
               ? 'Pick exactly 3 factions. One of them is drawn at random for you before each game.'
-              : isFreePick
-                ? 'Free Pick — this faction is locked for the whole event and revealed to others at start.'
-                : 'SFT — Single Faction Tournament. Your faction is locked for the entire event.'}
+              : isSft2v2
+                ? 'Pick two factions — the first is the captain, the second the teammate. Locked for the whole event.'
+                : isFreePick
+                  ? 'Free Pick — this faction is locked for the whole event and revealed to others at start.'
+                  : 'SFT — Single Faction Tournament. Your faction is locked for the entire event.'}
           </p>
-          {is2D3 && (
+          {pickCount > 1 && (
             <p className="mt-1 text-xs">
               <span className={cn('font-semibold', selectedFactions.length === pickCount ? 'text-rizzotto-gold-400' : 'text-rizzotto-stone-300')}>
                 {selectedFactions.length}/{pickCount}
               </span>{' '}
-              <span className="text-rizzotto-stone-500">selected</span>
+              <span className="text-rizzotto-stone-500">selected{isSft2v2 ? ' (captain, then teammate)' : ''}</span>
             </p>
           )}
         </div>
@@ -618,7 +719,9 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
           size="md"
           disabled={register.isPending}
           onClick={() => {
-            if (isBalancedLiechtenstein && userId) {
+            if (isTeamFormat) {
+              setPickingTeam(true);
+            } else if (isBalancedLiechtenstein && userId) {
               setPickingBand(true);
             } else if (isFreePick) {
               setChoosingFreePick(true);

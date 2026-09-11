@@ -303,6 +303,12 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
       { name: p.user.username, avatarUrl: p.user.avatar_url },
     ]),
   );
+  // 2v2: match slots are Team ids, which the participants list doesn't cover. The bracket
+  // response resolves every competitor id (user or team) → name; layer it in so team nodes
+  // show the team name.
+  for (const c of Object.values(data.competitors ?? {})) {
+    players.set(c.id, { name: c.name, avatarUrl: c.avatarUrl });
+  }
 
   const swiss = data.swiss;
   const showNextRoundButton =

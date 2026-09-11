@@ -319,6 +319,9 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, format, 
         const p2 = m.player2Id ? players?.get(m.player2Id) : undefined;
         const f1 = m.player1FactionId ? factionMap?.get(m.player1FactionId) : undefined;
         const f2 = m.player2FactionId ? factionMap?.get(m.player2FactionId) : undefined;
+        // 2v2 (SFT_2V2/BPT_2V2): the teammate's faction per side.
+        const f1b = m.player1FactionId2 ? factionMap?.get(m.player1FactionId2) : undefined;
+        const f2b = m.player2FactionId2 ? factionMap?.get(m.player2FactionId2) : undefined;
         // Show faction logo for SFT (fixed faction per event), 2D3 (drawn per game at creation),
         // or Bo1 (single game → faction is unambiguous).
         const showFaction = isSft || is2d3 || m.matchFormat === 'BO1';
@@ -345,6 +348,8 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, format, 
                 player2AvatarUrl={p2?.avatarUrl}
                 player1Faction={f1}
                 player2Faction={f2}
+                player1Faction2={f1b}
+                player2Faction2={f2b}
                 showFaction={showFaction}
                 onClick={onMatchClick ? () => onMatchClick(m.matchId) : undefined}
                 p1SlotLabel={labels?.p1}

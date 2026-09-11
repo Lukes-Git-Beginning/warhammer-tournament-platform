@@ -539,7 +539,18 @@ function BlindPickPhase({
   factionAllowlist = [],
 }: BlindPickPhaseProps) {
   const queryClient = useQueryClient();
-  const [selectedFactionId, setSelectedFactionId] = useState<string | null>(null);
+  // 2v2 (BPT_2V2): the captain locks BOTH members' factions in one action (captain first,
+  // then teammate). 1v1: a single pick.
+  const is2v2 = decision.tournamentMode === 'BPT_2V2';
+  const pickCount = is2v2 ? 2 : 1;
+  const [selected, setSelected] = useState<string[]>([]);
+  const toggleFaction = (id: string) =>
+    setSelected((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (pickCount === 1) return [id];
+      if (prev.length >= pickCount) return prev;
+      return [...prev, id];
+    });
   const [locking, setLocking] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
   const [mapLightbox, setMapLightbox] = useState(false);
@@ -561,11 +572,11 @@ function BlindPickPhase({
   const revealed = bp?.revealedAt != null;
 
   async function handleLockIn() {
-    if (!selectedFactionId) return;
+    if (selected.length !== pickCount) return;
     setLocking(true);
     setLockError(null);
     try {
-      await lockBlindPick(matchId, selectedFactionId);
+      await lockBlindPick(matchId, selected[0]!, is2v2 ? selected[1] : undefined);
       // Immediately refetch so the UI updates even if the socket misses the event
       await queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
     } catch (err) {
@@ -576,64 +587,51 @@ function BlindPickPhase({
   }
 
   if (revealed && bp) {
-    const myFactionId = isMatchPlayer1 ? bp.player1FactionId : bp.player2FactionId;
-    const opponentFactionId = isMatchPlayer1 ? bp.player2FactionId : bp.player1FactionId;
-    const myEntry = factions.find((f) => f.faction.id === myFactionId);
-    const opponentEntry = factions.find((f) => f.faction.id === opponentFactionId);
+    const myIds = (isMatchPlayer1
+      ? [bp.player1FactionId, bp.player1FactionId2]
+      : [bp.player2FactionId, bp.player2FactionId2]
+    ).filter((x): x is string => !!x);
+    const oppIds = (isMatchPlayer1
+      ? [bp.player2FactionId, bp.player2FactionId2]
+      : [bp.player1FactionId, bp.player1FactionId2]
+    ).filter((x): x is string => !!x);
+    const entriesOf = (ids: string[]) =>
+      ids.map((id) => factions.find((f) => f.faction.id === id)).filter((e): e is (typeof factions)[number] => !!e);
+    const renderSide = (label: string, ids: string[], delay: number) => (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay }}
+        className="flex flex-col items-center gap-3"
+      >
+        <span className="text-xs text-rizzotto-stone-500 uppercase tracking-widest">{label}</span>
+        <div className="flex gap-4">
+          {entriesOf(ids).map((e) => (
+            <div key={e.faction.id} className="flex flex-col items-center gap-2">
+              <FactionBadge
+                colorHex={e.faction.color_hex}
+                initials={e.faction.initials}
+                name={e.faction.name}
+                size="lg"
+                iconUrl={e.faction.icon_url}
+              />
+              <span className="text-sm font-semibold text-rizzotto-stone-200">{e.faction.name}</span>
+            </div>
+          ))}
+          {entriesOf(ids).length === 0 && <span className="text-sm text-rizzotto-stone-400">—</span>}
+        </div>
+      </motion.div>
+    );
 
     return (
       <div className="flex flex-col items-center gap-6">
         <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">
           Factions Revealed
         </h2>
-        <div className="flex gap-8">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 }}
-            className="flex flex-col items-center gap-3"
-          >
-            <span className="text-xs text-rizzotto-stone-500 uppercase tracking-widest">You</span>
-            {myEntry && (
-              <FactionBadge
-                colorHex={myEntry.faction.color_hex}
-                initials={myEntry.faction.initials}
-                name={myEntry.faction.name}
-                size="lg"
-                iconUrl={myEntry.faction.icon_url}
-              />
-            )}
-            <span className="text-sm font-semibold text-rizzotto-stone-200">
-              {myEntry?.faction.name ?? '—'}
-            </span>
-          </motion.div>
-
-          <div className="flex items-center text-rizzotto-stone-600 font-display text-2xl">
-            vs
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            className="flex flex-col items-center gap-3"
-          >
-            <span className="text-xs text-rizzotto-stone-500 uppercase tracking-widest">
-              Opponent
-            </span>
-            {opponentEntry && (
-              <FactionBadge
-                colorHex={opponentEntry.faction.color_hex}
-                initials={opponentEntry.faction.initials}
-                name={opponentEntry.faction.name}
-                size="lg"
-                iconUrl={opponentEntry.faction.icon_url}
-              />
-            )}
-            <span className="text-sm font-semibold text-rizzotto-stone-200">
-              {opponentEntry?.faction.name ?? '—'}
-            </span>
-          </motion.div>
+        <div className="flex items-center gap-8">
+          {renderSide('You', myIds, 0.1)}
+          <div className="flex items-center text-rizzotto-stone-600 font-display text-2xl">vs</div>
+          {renderSide('Opponent', oppIds, 0.2)}
         </div>
       </div>
     );
@@ -708,8 +706,18 @@ function BlindPickPhase({
       ) : (
         <>
           <p className="text-sm text-rizzotto-stone-400 text-center max-w-sm">
-            Choose your faction. Your pick will be revealed only after both players lock in.
+            {is2v2
+              ? 'Choose both factions — captain first, then teammate. Revealed only after both teams lock in.'
+              : 'Choose your faction. Your pick will be revealed only after both players lock in.'}
           </p>
+          {pickCount > 1 && (
+            <p className="text-xs">
+              <span className={selected.length === pickCount ? 'font-semibold text-rizzotto-gold-400' : 'font-semibold text-rizzotto-stone-300'}>
+                {selected.length}/{pickCount}
+              </span>{' '}
+              <span className="text-rizzotto-stone-500">selected (captain, then teammate)</span>
+            </p>
+          )}
 
           <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-6">
             {factions.map(({ faction }) => {
@@ -728,13 +736,13 @@ function BlindPickPhase({
                       ? 'Restricted (nerfed) — does not count toward the leaderboard'
                       : undefined
                 }
-                onClick={() => !isDisabled && setSelectedFactionId(faction.id)}
+                onClick={() => !isDisabled && toggleFaction(faction.id)}
                 className={[
                   'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center',
                   'transition-[border-color,background-color] duration-150',
                   isDisabled
                     ? 'cursor-not-allowed opacity-40 border-rizzotto-iron-700 bg-rizzotto-iron-900'
-                    : selectedFactionId === faction.id
+                    : selected.includes(faction.id)
                       ? 'border-rizzotto-gold-500 bg-rizzotto-iron-800'
                       : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-rizzotto-gold-500/60 hover:bg-rizzotto-iron-800',
                 ].join(' ')}
@@ -748,7 +756,7 @@ function BlindPickPhase({
                 />
                 <span className={[
                   'line-clamp-2 font-display text-[10px] uppercase leading-tight tracking-wide',
-                  selectedFactionId === faction.id ? 'text-rizzotto-gold-300' : 'text-rizzotto-stone-300',
+                  selected.includes(faction.id) ? 'text-rizzotto-gold-300' : 'text-rizzotto-stone-300',
                 ].join(' ')}>
                   {faction.name}
                 </span>
@@ -760,10 +768,10 @@ function BlindPickPhase({
           <Button
             variant="forge"
             size="md"
-            disabled={!selectedFactionId || locking}
+            disabled={selected.length !== pickCount || locking}
             onClick={handleLockIn}
           >
-            {locking ? 'Locking…' : 'Lock In'}
+            {locking ? 'Locking…' : is2v2 ? 'Lock In Both' : 'Lock In'}
           </Button>
           {lockError && (
             <p className="text-sm text-red-400 text-center">{lockError}</p>
@@ -1742,8 +1750,8 @@ function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
     // Map decided — check blind pick
     if (d.blindPick?.revealedAt) return 'ready';
     if (d.blindPick != null) return 'blind_pick';
-    // blindPick is null: BPT requires a blind pick even before the first lock
-    if (d.tournamentMode === 'BPT') return 'blind_pick';
+    // blindPick is null: BPT / BPT_2V2 require a blind pick even before the first lock
+    if (d.tournamentMode === 'BPT' || d.tournamentMode === 'BPT_2V2') return 'blind_pick';
     return 'ready';
   }
   return mapPhase(d);

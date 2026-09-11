@@ -19,7 +19,8 @@ const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
   format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'AUTO_SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
-  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR']).default('BPT'),
+  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR', 'SFT_2V2', 'BPT_2V2']).default('BPT'),
+  competitor_format: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).default('ONE_V_ONE'),
   set_faction_id: z.string().min(1).optional(),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
@@ -173,6 +174,7 @@ export function TournamentCreateForm() {
   const [form, setForm] = useState<Partial<FormData>>({
     format: 'SINGLE_ELIMINATION',
     mode: 'BPT',
+    competitor_format: 'ONE_V_ONE',
     timezone: defaultTimezone,
     discord_link: 'https://discord.gg/MX3cs6gA54',
     start_date: nextRoundHour(),
@@ -352,6 +354,17 @@ export function TournamentCreateForm() {
           }
         : {}),
       ...(name === 'start_date' ? { registration_deadline: value } : {}),
+      // Team size ⟺ faction mechanic must stay consistent: switching to 2v2 picks a 2v2 mode,
+      // switching back to 1v1 restores a solo mode (matches the backend validation).
+      ...(name === 'competitor_format'
+        ? value === 'TWO_V_TWO'
+          ? prev.mode === 'SFT_2V2' || prev.mode === 'BPT_2V2'
+            ? {}
+            : { mode: 'BPT_2V2' as const }
+          : prev.mode === 'SFT_2V2' || prev.mode === 'BPT_2V2'
+            ? { mode: 'BPT' as const }
+            : {}
+        : {}),
     }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
   }
@@ -504,6 +517,24 @@ export function TournamentCreateForm() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="min-w-0">
+          <Label htmlFor="tcf-competitor-format">Team size</Label>
+          <Select
+            id="tcf-competitor-format"
+            name="competitor_format"
+            value={form.competitor_format ?? 'ONE_V_ONE'}
+            onChange={handleChange}
+          >
+            <option value="ONE_V_ONE">1v1 — Solo</option>
+            <option value="TWO_V_TWO">2v2 — Teams</option>
+          </Select>
+          <FieldHint>
+            {form.competitor_format === 'TWO_V_TWO'
+              ? 'Teams register and play as one competitor; the captain acts for the team.'
+              : 'Standard solo play.'}
+          </FieldHint>
+        </div>
+
+        <div className="min-w-0">
           <Label htmlFor="tcf-format" required>
             {t('tournament.form.format')}
           </Label>
@@ -532,14 +563,23 @@ export function TournamentCreateForm() {
             value={form.mode ?? 'BPT'}
             onChange={handleChange}
           >
-            <option value="BPT">BPT — Blind Pick Tournament</option>
-            <option value="SFT">SFT — Single Faction Tournament</option>
-            <option value="SLT">SLT — Single List Tournament</option>
-            <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
-            <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
-            <option value="FREE_PICK">Enticity&apos;s Free Pick — SFT/Matrix Hybrid</option>
-            <option value="ONE_V_THREE">1v3 — Set Faction vs. One of Three Counterpicks</option>
-            <option value="FACTION_WAR">Faction War — SFT with globally exclusive factions</option>
+            {form.competitor_format === 'TWO_V_TWO' ? (
+              <>
+                <option value="BPT_2V2">BPT 2v2 — Blind pick, both members</option>
+                <option value="SFT_2V2">SFT 2v2 — Single faction per member</option>
+              </>
+            ) : (
+              <>
+                <option value="BPT">BPT — Blind Pick Tournament</option>
+                <option value="SFT">SFT — Single Faction Tournament</option>
+                <option value="SLT">SLT — Single List Tournament</option>
+                <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
+                <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
+                <option value="FREE_PICK">Enticity&apos;s Free Pick — SFT/Matrix Hybrid</option>
+                <option value="ONE_V_THREE">1v3 — Set Faction vs. One of Three Counterpicks</option>
+                <option value="FACTION_WAR">Faction War — SFT with globally exclusive factions</option>
+              </>
+            )}
           </Select>
           <FieldHint>{MODE_DESCRIPTIONS[form.mode ?? 'BPT']}</FieldHint>
         </div>

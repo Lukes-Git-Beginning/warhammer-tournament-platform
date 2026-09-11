@@ -65,7 +65,10 @@ export interface Tournament {
   poster_url?: string | null;
   format: 'SINGLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN' | 'BALANCED_LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR';
+  mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR' | 'SFT_2V2' | 'BPT_2V2';
+  /** Team size (team-as-actor). 2v2 modes (SFT_2V2/BPT_2V2) require TWO_V_TWO. */
+  competitor_format?: 'ONE_V_ONE' | 'TWO_V_TWO';
+  battle_type?: BattleType;
   /** ONE_V_THREE: the host-set faction the Runner side plays. */
   set_faction_id?: string | null;
   status: 'DRAFT' | 'OPEN_REGISTRATION' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
@@ -170,6 +173,9 @@ export interface MatchDecisionState {
     firstLockedAt?: string | null;
     player1FactionId: string | null;
     player2FactionId: string | null;
+    // 2v2 (BPT_2V2): the teammate's faction per side (null for 1v1).
+    player1FactionId2?: string | null;
+    player2FactionId2?: string | null;
   } | null;
   factionMatrix?: {
     p1Locked: boolean;
@@ -193,7 +199,8 @@ export interface TournamentCreate {
   name: string;
   format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN' | 'BALANCED_LIECHTENSTEIN';
   has_third_place_match?: boolean;
-  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR';
+  mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR' | 'SFT_2V2' | 'BPT_2V2';
+  competitor_format?: 'ONE_V_ONE' | 'TWO_V_TWO';
   set_faction_id?: string | null;
   start_date: string;
   timezone: string;
@@ -1867,10 +1874,11 @@ export function randomPickMap(matchId: string): Promise<MatchDecisionState> {
   });
 }
 
-export function lockBlindPick(matchId: string, factionId: string): Promise<{ ok: true }> {
+export function lockBlindPick(matchId: string, factionId: string, factionId2?: string): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/matches/${matchId}/decision/blind-pick/lock`, {
     method: 'POST',
-    body: JSON.stringify({ faction_id: factionId }),
+    // 2v2 (BPT_2V2): the captain locks both members' factions in one call.
+    body: JSON.stringify(factionId2 ? { faction_id: factionId, faction_id_2: factionId2 } : { faction_id: factionId }),
   });
 }
 
@@ -2262,12 +2270,13 @@ export function getParticipants(slug: string): Promise<TournamentParticipantsRes
 
 export function registerForTournament(
   slug: string,
-  opts?: { factionId?: string; factionIds?: string[]; requested_band?: number },
+  opts?: { factionId?: string; factionIds?: string[]; requested_band?: number; teamId?: string },
 ): Promise<{ id: string; status: ParticipantStatus }> {
   const body: Record<string, unknown> = {};
   if (opts?.factionId) body.faction_id = opts.factionId;
   if (opts?.factionIds) body.faction_ids = opts.factionIds;
   if (opts?.requested_band != null) body.requested_band = opts.requested_band;
+  if (opts?.teamId) body.team_id = opts.teamId; // 2v2: the ACTIVE team the captain registers
   const src = storedRefLast();
   if (src) body.source = src;
   return apiFetch<{ id: string; status: ParticipantStatus }>(
@@ -2278,6 +2287,58 @@ export function registerForTournament(
 
 export function withdrawFromTournament(slug: string): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/tournaments/${slug}/withdraw`, { method: 'POST' });
+}
+
+// --- Teams (2v2, team-as-actor) --------------------------------------------
+
+export interface UserSearchResult {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+}
+
+/** Lightweight authenticated user search for the 2v2 teammate picker (distinct from the
+ *  admin `searchUsers` which hits `GET /api/users`). */
+export function searchTeammates(q: string): Promise<{ users: UserSearchResult[] }> {
+  return apiFetch<{ users: UserSearchResult[] }>(`/api/users/search?q=${encodeURIComponent(q)}`);
+}
+
+export type TeamStatus = 'FORMING' | 'ACTIVE' | 'ARCHIVED';
+
+export interface TeamMemberDto {
+  user_id: string;
+  username: string;
+  avatar_url: string | null;
+  is_captain: boolean;
+  accepted: boolean;
+}
+
+export interface TeamDto {
+  id: string;
+  name: string;
+  status: TeamStatus;
+  is_captain: boolean;
+  created_at: string;
+  members: TeamMemberDto[];
+}
+
+export function getMyTeams(): Promise<{ teams: TeamDto[] }> {
+  return apiFetch<{ teams: TeamDto[] }>('/api/teams/me');
+}
+
+export function createTeam(body: { name: string; partner_user_id: string }): Promise<{ id: string; status: TeamStatus }> {
+  return apiFetch<{ id: string; status: TeamStatus }>('/api/teams', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function acceptTeam(teamId: string): Promise<{ ok: true; status: TeamStatus }> {
+  return apiFetch<{ ok: true; status: TeamStatus }>(`/api/teams/${teamId}/accept`, { method: 'POST' });
+}
+
+export function declineTeam(teamId: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/teams/${teamId}/decline`, { method: 'POST' });
 }
 
 // --- Late join (host-approved) ---------------------------------------------

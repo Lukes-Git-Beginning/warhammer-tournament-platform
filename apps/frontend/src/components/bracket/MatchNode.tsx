@@ -9,6 +9,9 @@ interface MatchNodeProps {
   player2AvatarUrl?: string | null;
   player1Faction?: FactionDto | null;
   player2Faction?: FactionDto | null;
+  /** 2v2 (SFT_2V2/BPT_2V2): the teammate's faction per side, shown next to the first. */
+  player1Faction2?: FactionDto | null;
+  player2Faction2?: FactionDto | null;
   showFaction?: boolean;
   onClick?: () => void;
   /** Label shown in slot 1 when player is not yet determined (e.g. "Grombrindal / Louen") */
@@ -116,6 +119,8 @@ export function MatchNode({
   player2AvatarUrl,
   player1Faction,
   player2Faction,
+  player1Faction2,
+  player2Faction2,
   showFaction = false,
   onClick,
   p1SlotLabel,
@@ -275,6 +280,7 @@ export function MatchNode({
         {player1Band != null && match.player1Id && <BandDot band={player1Band} />}
         {p1UpArrows > 0 && <UpArrows count={p1UpArrows} />}
         {showFaction && match.player1Id && <FactionIndicator faction={player1Faction} />}
+        {showFaction && match.player1Id && player1Faction2 && <FactionIndicator faction={player1Faction2} />}
         {score1 && !p1Dropped && (
           <span
             className={`text-xs ml-1 tabular-nums ${isDraw ? 'text-amber-400' : p1Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}
@@ -309,6 +315,7 @@ export function MatchNode({
         {player2Band != null && match.player2Id && <BandDot band={player2Band} />}
         {p2UpArrows > 0 && <UpArrows count={p2UpArrows} />}
         {showFaction && match.player2Id && <FactionIndicator faction={player2Faction} />}
+        {showFaction && match.player2Id && player2Faction2 && <FactionIndicator faction={player2Faction2} />}
         {score2 && !p2Dropped && (
           <span
             className={`text-xs ml-1 tabular-nums ${isDraw ? 'text-amber-400' : p2Winner ? 'text-rizzotto-gold-500 font-semibold' : 'text-stone-400'}`}

@@ -39,6 +39,15 @@ export function Header() {
       >
         Open Play
       </Link>
+      {user && (
+        <Link
+          to="/teams"
+          className={NAV_LINK_CLASS}
+          activeProps={NAV_LINK_ACTIVE_PROPS}
+        >
+          Teams
+        </Link>
+      )}
       <Link
         to="/leaderboard"
         className={NAV_LINK_CLASS}

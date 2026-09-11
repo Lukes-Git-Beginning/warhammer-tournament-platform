@@ -72,6 +72,9 @@ type BlindPickRow = {
   revealed_at: Date | null;
   player1_faction_id: string | null;
   player2_faction_id: string | null;
+  // 2v2 (BPT_2V2): the teammate's faction per side.
+  player1_faction_id_2?: string | null;
+  player2_faction_id_2?: string | null;
 } | null;
 
 type FactionMatrixRow = {
@@ -150,6 +153,9 @@ function serializeDecisionState(
           )?.toISOString() ?? null,
           player1FactionId: blindPick.revealed_at ? (blindPick.player1_faction_id ?? null) : null,
           player2FactionId: blindPick.revealed_at ? (blindPick.player2_faction_id ?? null) : null,
+          // 2v2 (BPT_2V2): the teammate's faction per side, revealed together with the captain's.
+          player1FactionId2: blindPick.revealed_at ? (blindPick.player1_faction_id_2 ?? null) : null,
+          player2FactionId2: blindPick.revealed_at ? (blindPick.player2_faction_id_2 ?? null) : null,
         }
       : null,
     factionMatrix: serializedMatrix,

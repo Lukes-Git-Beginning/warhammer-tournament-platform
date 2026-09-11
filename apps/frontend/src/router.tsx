@@ -20,6 +20,7 @@ import { H2HPage } from './routes/H2HPage';
 import { CalendarPage } from './routes/CalendarPage';
 import { OpenPlayPage } from './routes/OpenPlayPage';
 import { SupportPage } from './routes/SupportPage';
+import { TeamsPage } from './routes/TeamsPage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -185,6 +186,12 @@ const supportRoute = createRoute({
   component: SupportPage,
 });
 
+const teamsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/teams',
+  component: TeamsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -211,6 +218,7 @@ const routeTree = rootRoute.addChildren([
   matchDecisionRoute,
   openPlayRoute,
   supportRoute,
+  teamsRoute,
 ]);
 
 export const router = createRouter({ routeTree });
