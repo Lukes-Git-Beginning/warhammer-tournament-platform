@@ -12,6 +12,7 @@ import { addLateParticipant, setParticipantFactionOp, createManualMatch } from '
 import { guardBalancedManualPairing } from '../lib/tournament-utils.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { auditReplays } from '../lib/audit-replays.js';
+import { resolveCompetitors } from '../lib/competitors.js';
 import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM, OPPONENT_SHARE_WARN } from '../lib/scoring-service.js';
 import { getNonGuildMemberIds, isGuildLookupConfigured, isBotConfigured, purgeRecentBotMessages } from '../lib/discord-notify.js';
 import {
@@ -180,8 +181,6 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
             player1_id: true,
             player2_id: true,
             source: true,
-            player1: { select: { id: true, username: true, avatar_url: true } },
-            player2: { select: { id: true, username: true, avatar_url: true } },
             tournament: { select: { id: true, name: true, slug: true, mode: true, faction_allowlist: { select: { faction_id: true } } } },
           },
         },
@@ -199,6 +198,16 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       : [];
     const regFaction = new Map<string, string | null>();
     for (const p of participants) regFaction.set(`${p.tournament_id}:${p.user_id}`, p.faction_id);
+
+    // Slots are opaque competitor ids (User 1v1 / Team 2v2) — resolve to display shapes.
+    const competitorMap = await resolveCompetitors(
+      fastify.prisma,
+      games.flatMap((g) => [g.match.player1_id, g.match.player2_id]),
+    );
+    const compDto = (cid: string | null) => {
+      const c = cid ? competitorMap.get(cid) : undefined;
+      return c ? { id: c.id, username: c.username, avatar_url: c.avatar_url, type: c.type } : null;
+    };
 
     const flagged = games.flatMap((g) => {
       const t = g.match.tournament;
@@ -231,8 +240,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         round: g.match.round,
         matchNumber: g.match.match_number,
         playedAt: (g.played_at ?? g.match.played_at)?.toISOString() ?? null,
-        player1: g.match.player1 ?? null,
-        player2: g.match.player2 ?? null,
+        player1: compDto(g.match.player1_id),
+        player2: compDto(g.match.player2_id),
         winnerId: g.winner_id,
         player1FactionId: p1f,
         player2FactionId: p2f,
@@ -885,6 +894,16 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get('/api/admin/reports/engagement', async () => {
+    // "Never played" = user id never appears in a completed match slot. Slots are opaque
+    // competitor ids (there is no Match→User relation), so we compute the played set by id.
+    const playedRows = await fastify.prisma.match.findMany({
+      where: { status: 'COMPLETED', deleted_at: null },
+      select: { player1_id: true, player2_id: true },
+    });
+    const playedUserIds = [
+      ...new Set(playedRows.flatMap((m) => [m.player1_id, m.player2_id]).filter((x): x is string => !!x)),
+    ];
+
     const [notSteamVerified, verifiedNeverPlayed] = await Promise.all([
       fastify.prisma.user.findMany({
         where: { deleted_at: null, steam_link: null },
@@ -901,8 +920,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         where: {
           deleted_at: null,
           steam_link: { isNot: null },
-          matches_as_player1: { none: { status: 'COMPLETED', deleted_at: null } },
-          matches_as_player2: { none: { status: 'COMPLETED', deleted_at: null } },
+          id: { notIn: playedUserIds },
         },
         select: {
           id: true,
@@ -2236,19 +2254,27 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         id: true,
         status: true,
         created_at: true,
-        player1: { select: { id: true, username: true } },
-        player2: { select: { id: true, username: true } },
+        player1_id: true,
+        player2_id: true,
       },
       orderBy: { created_at: 'desc' },
     });
+    const competitorMap = await resolveCompetitors(
+      fastify.prisma,
+      matches.flatMap((m) => [m.player1_id, m.player2_id]),
+    );
     return reply.code(200).send({
-      matches: matches.map((m) => ({
-        id: m.id,
-        status: m.status,
-        player1: m.player1 ? { id: m.player1.id, name: m.player1.username } : null,
-        player2: m.player2 ? { id: m.player2.id, name: m.player2.username } : null,
-        createdAt: m.created_at,
-      })),
+      matches: matches.map((m) => {
+        const p1 = m.player1_id ? competitorMap.get(m.player1_id) : undefined;
+        const p2 = m.player2_id ? competitorMap.get(m.player2_id) : undefined;
+        return {
+          id: m.id,
+          status: m.status,
+          player1: p1 ? { id: p1.id, name: p1.username } : null,
+          player2: p2 ? { id: p2.id, name: p2.username } : null,
+          createdAt: m.created_at,
+        };
+      }),
     });
   });
 
@@ -2269,16 +2295,28 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { page, limit, voided, tournamentSlug, search } = parsed.data;
     const skip = (page - 1) * limit;
 
+    // Name search resolves to opaque competitor ids across BOTH User and Team, then filters by id.
+    const searchCompetitorIds =
+      search && search.length >= 2
+        ? await (async () => {
+            const [users, teams] = await Promise.all([
+              fastify.prisma.user.findMany({ where: { username: { contains: search, mode: 'insensitive' } }, select: { id: true } }),
+              fastify.prisma.team.findMany({ where: { name: { contains: search, mode: 'insensitive' } }, select: { id: true } }),
+            ]);
+            return [...users.map((u) => u.id), ...teams.map((t) => t.id)];
+          })()
+        : null;
+
     const baseWhere: Prisma.MatchWhereInput = {
       deleted_at: null,
       status: { in: ['COMPLETED', 'FORFEIT', 'BYE', 'CANCELLED'] },
       ...(voided === 'true'  && { counts_for_leaderboard: false }),
       ...(voided === 'false' && { counts_for_leaderboard: true  }),
       ...(tournamentSlug     && { tournament: { slug: tournamentSlug } }),
-      ...(search && search.length >= 2 && {
+      ...(searchCompetitorIds && {
         OR: [
-          { player1: { username: { contains: search, mode: 'insensitive' } } },
-          { player2: { username: { contains: search, mode: 'insensitive' } } },
+          { player1_id: { in: searchCompetitorIds } },
+          { player2_id: { in: searchCompetitorIds } },
         ],
       }),
     };
@@ -2288,9 +2326,6 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         where: baseWhere,
         include: {
           tournament: { select: { name: true, slug: true, format: true } },
-          player1:    { select: { id: true, username: true } },
-          player2:    { select: { id: true, username: true } },
-          winner:     { select: { id: true, username: true } },
           games:      { select: { id: true, replay_url: true }, take: 1 },
         },
         // Most-recent first. A played match sorts by when it was played; CANCELLED/BYE rows
@@ -2303,6 +2338,16 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.match.count({ where: baseWhere }),
     ]);
 
+    // Slots are opaque competitor ids (User 1v1 / Team 2v2) — resolve to display shapes.
+    const competitorMap = await resolveCompetitors(
+      fastify.prisma,
+      rows.flatMap((m) => [m.player1_id, m.player2_id, m.winner_id]),
+    );
+    const compDto = (cid: string | null) => {
+      const c = cid ? competitorMap.get(cid) : undefined;
+      return c ? { id: c.id, username: c.username } : null;
+    };
+
     return reply.code(200).send({
       matches: rows.map((m) => ({
         id: m.id,
@@ -2314,9 +2359,9 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         playedAt: m.played_at?.toISOString() ?? null,
         createdAt: m.created_at.toISOString(),
         tournament: m.tournament ? { name: m.tournament.name, slug: m.tournament.slug, format: m.tournament.format } : null,
-        player1: m.player1 ? { id: m.player1.id, username: m.player1.username } : null,
-        player2: m.player2 ? { id: m.player2.id, username: m.player2.username } : null,
-        winner:  m.winner  ? { id: m.winner.id,  username: m.winner.username  } : null,
+        player1: compDto(m.player1_id),
+        player2: compDto(m.player2_id),
+        winner:  compDto(m.winner_id),
         hasReplay: m.games.some((g) => !!g.replay_url),
       })),
       total,

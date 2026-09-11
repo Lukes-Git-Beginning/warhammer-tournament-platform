@@ -34,3 +34,69 @@ Existing stubs (all currently unused): `Team{ id, tournament_id, name, captain_i
 
 ## Build order
 Schema+migration → Team create/registration (+ immutable roster, captain) → bracket seed + `resolveCompetitorId` → auth helper across the ~5 sites → DTO branch → draft captain-lookup → leaderboard/display name resolver → tests for each. Frontend (team creation UI, 2v2 registration, DTO consumption) comes in the frontend block.
+
+---
+
+## CONFIRMED 2026-09-11 (Alex) — supersedes any stale assumptions above
+
+The seam analysis above (opaque competitor ids, read-site inventory, auth/draft/rating
+touch points) is still accurate and drives the build. **But three product decisions
+override the pragmatic shortcuts the original Explore pass assumed from the old stubs:**
+
+### D1 — Team is PERMANENT, not tournament-scoped (fixes stale stub)
+Design §5 is authoritative: a Team is a permanent entity (own profile + stats, like a
+player account) — the SAME duo across all tournaments so team GS/stats accumulate.
+The `Team.tournament_id` column on the old stub is pre-planning cruft → **drop it**
+(the `Tournament.teams` relation too). Team identity = its immutable member set, made
+find-or-createable via a canonical `roster_key` (sorted member user-ids) `@unique`.
+Lifecycle: `enum TeamStatus { FORMING ACTIVE ARCHIVED }`. Captaincy transferable
+(`captain_id` mutable); roster immutable (a new pairing = a new team; dissolve = archive,
+never member-swap). `TournamentParticipant.team_id` → the permanent team; ONE participant
+row per team (the captain's), `participant_type = TEAM`.
+
+### D2 — BOTH members' factions per game (per-member factions), not one team faction
+Each of the two players plays their own faction. Store two factions per side per game
+(captain slot + teammate slot); pickers/draft resolve captain-vs-captain first, then
+teammate-vs-teammate (matrix in 2v2 is unlikely per Alex but the same shape works).
+This is an **additive faction subsystem** (nullable "_b"/member-2 fields on
+`MatchGame` + `MatchBlindPick`, draft-for-two, report+DTO), layered on top of the
+identity backbone — it does not disturb the 1v1 single-faction path. Faction-duo /
+per-player-faction analytics stay derive-later (design §5 "search-only, not built now").
+
+### D3 — Partner joins via invite + Discord-DM consent (not silent captain-names)
+Captain creates the team, searches for the teammate, teammate gets a Discord DM asking
+to confirm. So there is a real consent state: partner `TeamMember.accepted_at` null until
+accept; team `FORMING` → `ACTIVE` on accept. Only an `ACTIVE` team the captain owns may
+register for a 2v2 tournament. Needs create/invite/accept/decline endpoints + a user-search
+endpoint for the picker + the Discord DM.
+
+### Scoring FK-safety (scoring-critical — the real hidden risk)
+`LeaderboardEntry.user_id`, `TournamentResult.user_id`, `PlayerSkillSnapshot.user_id`
+all FK → User. A team id in a competitor slot would violate them. v1 rule (matches
+"teams not snapshotted yet"): **team competitors are NOT written to user-keyed tables.**
+Guard sites: `complete-match.ts` (~270) + `match-result-service.ts` (~268) per-match
+leaderboard upserts, `finalize-tournament.ts` (~420) result+leaderboard upserts →
+skip when `competitor_format === 'TWO_V_TWO'`; `player-skill-snapshot.ts` daily cron →
+filter GS rows to ids that exist in `User` (else the cron crashes once any 2v2 game
+exists). Team GS remains derive-on-read from the fit (opaque ids); persisted team boards
+arrive with the competition tracks (§6/§7).
+
+### Seed origins (broader than "ONE line")
+Per the 2026-09-11 seed-flow map there are ~7 seed origins, not one: `routes/bracket.ts`
+(/start, /next-round, /start-playoffs), `auto-swiss-service.ts` (startAutoSwiss,
+generateNextSwissRound, startPlayoffs), and `balanced-liechtenstein-service.ts`
+(pairing tick roster). Each needs `team_id` added to its participant `select` and its
+`participantIds`/faction/band maps keyed by `team_id ?? user_id`. Late-join paths
+(`createLateJoinerBye`, `admitBalancedLateJoiner`, `addLateParticipant`) take a bare
+userId param → callers must pass the competitor id for 2v2. Generators
+(`swiss.ts`/`bracket.ts`/`playoff-generator.ts`/`round-robin`/`liechtenstein`) are
+id-agnostic — no change once callers pass competitor ids. Open Play is always 1v1.
+
+### Session plan
+- **Phase A — identity backbone:** permanent Team schema + lifecycle (create/invite/
+  accept + Discord DM) → drop Match→User relations + CompetitorType/participant_type →
+  competitor resolver → refactor read-sites (green typecheck) → 2v2 registration →
+  seed origins → auth captain-check → scoring FK-guards → DTO team branch → draft
+  captain-lookup → tests.
+- **Phase B — per-member factions (D2):** game-level two-faction storage + blind-pick/
+  draft/report/DTO for two members. Layered after A, each commit green.

@@ -9,6 +9,7 @@ import { REPLAY_DIR } from './replays.js';
 import { parseReplayMeta, replayContainsName, extractReplayPlayers, type ReplayPlayer } from './replay-parser.js';
 import { verifyReplayMeta, type ReplayIssue } from './replay-verify.js';
 import { fetchSteamPersonaNames } from './steam.js';
+import { resolveCompetitors } from './competitors.js';
 
 export interface AuditRow {
   matchId: string;
@@ -66,8 +67,6 @@ export async function auditReplays(prisma: PrismaClient, limit = 5000): Promise<
           created_at: true,
           player1_id: true,
           player2_id: true,
-          player1: { select: { username: true } },
-          player2: { select: { username: true } },
         },
       },
     },
@@ -79,6 +78,10 @@ export async function auditReplays(prisma: PrismaClient, limit = 5000): Promise<
   const mapName = new Map(maps.map((m) => [m.id, m.name]));
 
   const userIds = [...new Set(games.flatMap((g) => [g.match?.player1_id, g.match?.player2_id]).filter(Boolean) as string[])];
+  // Competitor slots are opaque (User id 1v1 / Team id 2v2) — resolve display names for both.
+  // Steam persona / inReplay below stay user-specific (null for team ids — 2v2 replay audit is v1-out-of-scope).
+  const competitorMap = await resolveCompetitors(prisma, userIds);
+  const nameOf = (id: string | null | undefined): string | null => (id ? competitorMap.get(id)?.username ?? null : null);
   const links = await prisma.steamLink.findMany({ where: { user_id: { in: userIds } }, select: { user_id: true, steam_id: true } });
   const steamByUser = new Map(links.map((l) => [l.user_id, l.steam_id]));
   const persona = new Map<string, string>();
@@ -105,8 +108,8 @@ export async function auditReplays(prisma: PrismaClient, limit = 5000): Promise<
 
     // Per-player comparison (aligned to match player1/player2): reported vs replay.
     const sides = [
-      { uid: g.match.player1_id, name: g.match.player1?.username ?? null, reportedFaction: g.player1_faction_id },
-      { uid: g.match.player2_id, name: g.match.player2?.username ?? null, reportedFaction: g.player2_faction_id },
+      { uid: g.match.player1_id, name: nameOf(g.match.player1_id), reportedFaction: g.player1_faction_id },
+      { uid: g.match.player2_id, name: nameOf(g.match.player2_id), reportedFaction: g.player2_faction_id },
     ];
     const players = sides.map((s) => {
       const pers = s.uid ? personaByUser(s.uid) : null;
@@ -133,8 +136,8 @@ export async function auditReplays(prisma: PrismaClient, limit = 5000): Promise<
       report.rows.push({
         matchId: g.match.id,
         gameNumber: g.game_number,
-        player1: g.match.player1?.username ?? null,
-        player2: g.match.player2?.username ?? null,
+        player1: nameOf(g.match.player1_id),
+        player2: nameOf(g.match.player2_id),
         issues: v.issues,
         players,
         replayFactions: meta.factions,

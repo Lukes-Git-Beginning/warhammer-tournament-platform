@@ -4,6 +4,7 @@ import { cached, cacheKey } from '../lib/cache.js';
 import { asFactionDto, getFactionsWithStats } from '../lib/factions.js';
 import { getMatchupMatrix } from '../lib/heatmap.js';
 import { resolveStandardRuleset } from '../lib/standard-ruleset.js';
+import { resolveCompetitors } from '../lib/competitors.js';
 
 // ---------------------------------------------------------------------------
 // Query Schemas
@@ -216,19 +217,33 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const skip = (page - 1) * limit;
     const ci = (contains: string) => ({ contains, mode: 'insensitive' as const });
 
-    // Pre-resolve the winner (username → user ids) and map (name → map ids) filters.
-    const winnerIds = winner
-      ? (await fastify.prisma.user.findMany({ where: { username: ci(winner) }, select: { id: true } })).map((u) => u.id)
-      : null;
+    // Competitor names are opaque: a slot may be a User (1v1) or a Team (2v2). Resolve a
+    // free-text name to matching competitor ids across BOTH tables, then filter by id.
+    const resolveNameToCompetitorIds = async (text: string): Promise<string[]> => {
+      const [users, teams] = await Promise.all([
+        fastify.prisma.user.findMany({ where: { username: ci(text) }, select: { id: true } }),
+        fastify.prisma.team.findMany({ where: { name: ci(text) }, select: { id: true } }),
+      ]);
+      return [...users.map((u) => u.id), ...teams.map((t) => t.id)];
+    };
+
+    // Pre-resolve the winner (name → competitor ids) and map (name → map ids) filters.
+    const winnerIds = winner ? await resolveNameToCompetitorIds(winner) : null;
     const mapIdsFilter = mapQ
       ? (await fastify.prisma.map.findMany({ where: { name: ci(mapQ) }, select: { id: true } })).map((m) => m.id)
       : null;
 
     // Player-name search: each word must match player1 OR player2 (so "Rizz Welsh" = their head-to-head).
     const playerNameAnd = q
-      ? q.split(/\s+/).filter(Boolean).map((w) => ({
-          OR: [{ player1: { username: ci(w) } }, { player2: { username: ci(w) } }],
-        }))
+      ? await Promise.all(
+          q
+            .split(/\s+/)
+            .filter(Boolean)
+            .map(async (w) => {
+              const ids = await resolveNameToCompetitorIds(w);
+              return { OR: [{ player1_id: { in: ids } }, { player2_id: { in: ids } }] };
+            }),
+        )
       : [];
     const isLadderQ = tournamentQ ? /^(ladder|open( ?play)?|queue)$/i.test(tournamentQ) : false;
 
@@ -296,8 +311,8 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
               match_number: true,
               played_at: true,
               source: true,
-              player1: { select: { id: true, username: true, avatar_url: true } },
-              player2: { select: { id: true, username: true, avatar_url: true } },
+              player1_id: true,
+              player2_id: true,
               tournament: { select: { id: true, name: true, slug: true } },
             },
           },
@@ -309,11 +324,21 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.matchGame.count({ where: gameWhere }),
     ]);
 
+    // Slots are opaque competitor ids (User 1v1 / Team 2v2) — resolve to display shapes.
+    const competitorMap = await resolveCompetitors(
+      fastify.prisma,
+      games.flatMap((g) => [g.match.player1_id, g.match.player2_id]),
+    );
+    const compDto = (cid: string | null) => {
+      const c = cid ? competitorMap.get(cid) : undefined;
+      return c ? { id: c.id, username: c.username, avatar_url: c.avatar_url, type: c.type } : null;
+    };
+
     const rows = games.map((g) => ({
       round: g.match.round,
       matchNumber: g.match.match_number,
-      player1: g.match.player1 ?? null,
-      player2: g.match.player2 ?? null,
+      player1: compDto(g.match.player1_id),
+      player2: compDto(g.match.player2_id),
       tournament: g.match.tournament,
       matchSource: g.match.source ?? null,
       matchId: g.match.id,

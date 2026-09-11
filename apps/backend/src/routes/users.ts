@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { getPlayerVersionStats, getPlayerAllTimeStats } from '../lib/leaderboard-service.js';
 import { effectiveTiersOf } from '../lib/supporter-service.js';
+import { resolveCompetitors } from '../lib/competitors.js';
 
 const meSelect = {
   id: true,
@@ -376,23 +377,27 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
               player1_id: true,
               player2_id: true,
               tournament: { select: { slug: true } },
-              player1: { select: { id: true, username: true } },
-              player2: { select: { id: true, username: true } },
             },
           },
         },
       });
 
+      // Opponent slots are opaque competitor ids (User 1v1 / Team 2v2) — resolve names.
+      const opponentMap = await resolveCompetitors(
+        fastify.prisma,
+        recentGames.flatMap((g) => [g.match.player1_id, g.match.player2_id]),
+      );
+
       const matchHistory = recentGames.map((g) => {
         const m = g.match;
         const isPlayer1 = m.player1_id === id;
-        const opponentUser = isPlayer1 ? m.player2 : m.player1;
+        const opponentId = isPlayer1 ? m.player2_id : m.player1_id;
         const myFactionId = isPlayer1 ? g.player1_faction_id : g.player2_faction_id;
         const opponentFactionId = isPlayer1 ? g.player2_faction_id : g.player1_faction_id;
         const won = g.winner_id === id;
         return {
           tournament_slug: m.tournament?.slug ?? null,
-          opponent_username: opponentUser?.username ?? null,
+          opponent_username: opponentId ? opponentMap.get(opponentId)?.username ?? null : null,
           my_score: won ? 1 : 0,
           opponent_score: won ? 0 : 1,
           my_faction: fchip(myFactionId),
@@ -704,10 +709,14 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       take: 20,
       include: {
         tournament: { select: { slug: true, name: true } },
-        player1: { select: { id: true, username: true, avatar_url: true } },
-        player2: { select: { id: true, username: true, avatar_url: true } },
       },
     });
+
+    // Opponent slots are opaque competitor ids (User 1v1 / Team 2v2) — resolve display.
+    const recentOpponentMap = await resolveCompetitors(
+      fastify.prisma,
+      recentMatches.flatMap((m) => [m.player1_id, m.player2_id]),
+    );
 
     return {
       user: {
@@ -741,12 +750,13 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         };
       }),
       recent_matches: recentMatches.map((m) => {
-        const opponentUser = m.player1_id === id ? m.player2 : m.player1;
+        const opponentId = m.player1_id === id ? m.player2_id : m.player1_id;
+        const opponent = opponentId ? recentOpponentMap.get(opponentId) ?? null : null;
         return {
           tournament: m.tournament ? { slug: m.tournament.slug, name: m.tournament.name } : null,
           round: m.round,
-          opponent: opponentUser
-            ? { id: opponentUser.id, username: opponentUser.username, avatar_url: opponentUser.avatar_url }
+          opponent: opponent
+            ? { id: opponent.id, username: opponent.username, avatar_url: opponent.avatar_url }
             : null,
           winnerId: m.winner_id,
           score: m.score,

@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { MatchStatus, MatchType } from '@rizzotto/db';
+import { resolveCompetitors } from '../lib/competitors.js';
 
 // ---------------------------------------------------------------------------
 // N16: GET /api/me/active-matches
@@ -46,6 +47,15 @@ const activeMatchesRoutes: FastifyPluginAsync = async (fastify) => {
     async (request) => {
       const userId = request.user.sub;
 
+      // Competitor slots are opaque: a User id (1v1) or a Team id (2v2). Match on the
+      // user AND the teams they belong to, so a 2v2 player sees their team's matches.
+      const myTeams = await fastify.prisma.teamMember.findMany({
+        where: { user_id: userId },
+        select: { team_id: true },
+      });
+      const actorIds = [userId, ...myTeams.map((t) => t.team_id)];
+      const actorIdSet = new Set(actorIds);
+
       // Query 1 + 2: tournament + open-play matches in a single DB call.
       const matches = await fastify.prisma.match.findMany({
         where: {
@@ -54,22 +64,26 @@ const activeMatchesRoutes: FastifyPluginAsync = async (fastify) => {
             {
               type: TOURNAMENT_TYPE,
               status: { in: TOURNAMENT_ACTIVE },
-              OR: [{ player1_id: userId }, { player2_id: userId }],
+              OR: [{ player1_id: { in: actorIds } }, { player2_id: { in: actorIds } }],
             },
             {
               type: OPEN_PLAY_TYPE,
               status: { in: OPEN_PLAY_ACTIVE },
-              OR: [{ player1_id: userId }, { player2_id: userId }],
+              OR: [{ player1_id: { in: actorIds } }, { player2_id: { in: actorIds } }],
             },
           ],
         },
         include: {
-          player1: { select: { id: true, username: true } },
-          player2: { select: { id: true, username: true } },
           tournament: { select: { slug: true, name: true } },
         },
         orderBy: { created_at: 'asc' },
       });
+
+      // Resolve opponent competitor ids (user or team) to display names.
+      const competitorMap = await resolveCompetitors(
+        fastify.prisma,
+        matches.flatMap((m) => [m.player1_id, m.player2_id]),
+      );
 
       // Query 3: ACCEPTED scheduled matchups where I'm the acceptor, no Match yet.
       const challenges = await fastify.prisma.scheduledMatchup.findMany({
@@ -87,9 +101,9 @@ const activeMatchesRoutes: FastifyPluginAsync = async (fastify) => {
       const items: ActiveMatchItem[] = [];
 
       for (const m of matches) {
-        const isPlayer1 = m.player1_id === userId;
-        const opponentUser = isPlayer1 ? m.player2 : m.player1;
-        const opponentName = opponentUser?.username ?? null;
+        const isPlayer1 = m.player1_id !== null && actorIdSet.has(m.player1_id);
+        const opponentId = isPlayer1 ? m.player2_id : m.player1_id;
+        const opponentName = opponentId ? competitorMap.get(opponentId)?.username ?? null : null;
         const kind: 'tournament' | 'open_play' =
           m.type === 'OPEN_PLAY' ? 'open_play' : 'tournament';
 

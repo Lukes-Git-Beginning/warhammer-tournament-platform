@@ -69,6 +69,23 @@ enum CompetitorFormat {
   TWO_V_TWO
 }
 
+/// A competitor slot on a Match (player1_id/player2_id/winner_id) is opaque: a User
+/// id for 1v1, a Team id for 2v2. TournamentParticipant.participant_type discriminates
+/// how to resolve it. There is no FK on the slots (a slot may point at User OR Team).
+enum CompetitorType {
+  USER
+  TEAM
+}
+
+/// Permanent Team lifecycle. FORMING = created, awaiting the invited partner's accept;
+/// ACTIVE = roster confirmed, may register; ARCHIVED = dissolved (kept so past matches/
+/// results/ratings keep referring to the duo that earned them).
+enum TeamStatus {
+  FORMING
+  ACTIVE
+  ARCHIVED
+}
+
 enum PlayoffFormat {
   NONE
   TOP2 // GF + 3rd place only (no SF), used by Auto Swiss with 4-7 players
@@ -257,9 +274,8 @@ model User {
 
   // Player relations
   participations          TournamentParticipant[]
-  matches_as_player1      Match[]                 @relation("MatchPlayer1")
-  matches_as_player2      Match[]                 @relation("MatchPlayer2")
-  matches_won             Match[]                 @relation("MatchWinner")
+  // NOTE: Match player1/player2/winner are opaque competitor ids (User OR Team) — no
+  // back-relation from User. Query a user's matches via player1_id/player2_id directly.
   army_lists              ArmyList[]
   tournament_army_lists   TournamentArmyList[]
   leaderboard_entries     LeaderboardEntry[]
@@ -403,7 +419,6 @@ model Tournament {
   restricted_factions   TournamentRestrictedFaction[]
   participants          TournamentParticipant[]
   matches               Match[]
-  teams                 Team[]
   results               TournamentResult[]
   major_for_versions    GameVersion[]                 @relation("VersionMajor")
   map_pool              TournamentMapPool[]
@@ -458,29 +473,32 @@ model TournamentRestrictedFaction {
 }
 
 model TournamentParticipant {
-  id              String            @id @default(uuid()) @db.Uuid
-  tournament_id   String            @db.Uuid
-  user_id         String            @db.Uuid
-  team_id         String?           @db.Uuid // null for 1v1 (Phase 1+2)
-  faction_id      String? // pre-pick at registration (SFT mode) or post-draft
-  faction_ids     String[]          @default([]) // TWO_D_THREE — 3 factions picked at registration; one drawn per game
-  army_list_id    String?           @db.Uuid
-  status          ParticipantStatus @default(REGISTERED)
-  registered_at   DateTime          @default(now())
-  lists_locked_at DateTime? // Q3: after host locks lists, army_list_id becomes immutable
+  id               String            @id @default(uuid()) @db.Uuid
+  tournament_id    String            @db.Uuid
+  user_id          String            @db.Uuid // 1v1: the competitor. 2v2: the captain who registered the team.
+  team_id          String?           @db.Uuid // set for 2v2 (the permanent Team competing); null for 1v1
+  // Discriminates the competitor kind for this entry: USER (1v1, user_id is the actor)
+  // or TEAM (2v2, team_id is the actor / the id that flows into match slots).
+  participant_type CompetitorType    @default(USER)
+  faction_id       String? // pre-pick at registration (SFT mode) or post-draft
+  faction_ids      String[]          @default([]) // TWO_D_THREE — 3 factions picked at registration; one drawn per game
+  army_list_id     String?           @db.Uuid
+  status           ParticipantStatus @default(REGISTERED)
+  registered_at    DateTime          @default(now())
+  lists_locked_at  DateTime? // Q3: after host locks lists, army_list_id becomes immutable
   // BALANCED_LIECHTENSTEIN: the player's skill division (1..5), fixed at Start.
   // skill_band is the EFFECTIVE band (max of the computed band and requested_band);
   // requested_band is the division the player opted into at registration (never
   // below their computed band — play-up only). Both null for non-balanced formats.
-  skill_band      Int? // effective division, set at Start
-  requested_band  Int? // player's chosen division at registration (play-up)
+  skill_band       Int? // effective division, set at Start
+  requested_band   Int? // player's chosen division at registration (play-up)
   // BALANCED_LIECHTENSTEIN: set once at late admission (late-join OR post-bracket
   // force-checkin) and never reset. Drives the 0-point catch-up-bye rule (marker AND
   // no real game yet), independent of registered_at.
-  late_joined     Boolean           @default(false)
+  late_joined      Boolean           @default(false)
   // Attribution: the ?ref= code that drove THIS registration (which announcement/link).
-  source          String?
-  deleted_at      DateTime?
+  source           String?
+  deleted_at       DateTime?
 
   tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
   user       User       @relation(fields: [user_id], references: [id])
@@ -536,9 +554,9 @@ model Match {
 
   tournament       Tournament?   @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
   version          GameVersion?  @relation(fields: [version_id], references: [id])
-  player1          User?         @relation("MatchPlayer1", fields: [player1_id], references: [id])
-  player2          User?         @relation("MatchPlayer2", fields: [player2_id], references: [id])
-  winner           User?         @relation("MatchWinner", fields: [winner_id], references: [id])
+  // player1_id / player2_id / winner_id are OPAQUE competitor ids — a User id (1v1) or
+  // a Team id (2v2). No FK relation: the slot may reference User OR Team. Resolve via
+  // lib/competitors.ts (resolveCompetitors) using the tournament's competitor_format.
   next_match       Match?        @relation("BracketProgression", fields: [next_match_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   feeder_matches   Match[]       @relation("BracketProgression")
   loser_next_match Match?        @relation("LoserBracketProgression", fields: [loser_next_match_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -665,34 +683,50 @@ model MatchReport {
 }
 
 // -----------------------------------------------------------------------------
-// Team (stubs for 3v3, Phase 3 — unused in M1-M3)
+// Team — permanent competitor for 2v2 (team-as-actor). See plans/2v2-competitor-
+// implementation.md and design doc §5.
 // -----------------------------------------------------------------------------
 
+// A permanent Team is a fixed pairing, like a player account: own name + stats,
+// accumulating rating across tournaments/versions. Identity = the immutable member
+// set, made find-or-createable via roster_key (sorted member user-ids). The captain
+// acts for the team (register/check-in/report/draft); captaincy transferable. Roster
+// immutable: a different pairing is a different team; dissolving = ARCHIVE, never a
+// member swap, so past matches/results/ratings keep referring to the same duo.
 model Team {
-  id            String   @id @default(uuid()) @db.Uuid
-  tournament_id String   @db.Uuid
-  name          String
-  captain_id    String   @db.Uuid
-  created_at    DateTime @default(now())
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String
+  roster_key  String     @unique // canonical sorted member user-id join — permanent identity
+  size        Int        @default(2)
+  captain_id  String     @db.Uuid
+  status      TeamStatus @default(FORMING)
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+  archived_at DateTime?
 
-  tournament   Tournament              @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
   captain      User                    @relation("TeamCaptain", fields: [captain_id], references: [id])
   members      TeamMember[]
   participants TournamentParticipant[]
 
-  @@index([tournament_id])
+  @@index([captain_id])
+  @@index([status])
 }
 
 model TeamMember {
-  id      String  @id @default(uuid()) @db.Uuid
-  team_id String  @db.Uuid
-  user_id String  @db.Uuid
-  role    String? // e.g. "captain", "core", "sub" — unused in M1
+  id          String    @id @default(uuid()) @db.Uuid
+  team_id     String    @db.Uuid
+  user_id     String    @db.Uuid
+  role        String? // e.g. "captain", "core", "sub"
+  // Invite/consent: the captain is accepted at creation; an invited partner has
+  // accepted_at null until they confirm the Discord-DM invite.
+  invited_at  DateTime  @default(now())
+  accepted_at DateTime?
 
   user User @relation(fields: [user_id], references: [id])
   team Team @relation(fields: [team_id], references: [id], onDelete: Cascade)
 
   @@unique([team_id, user_id])
+  @@index([user_id])
 }
 
 // -----------------------------------------------------------------------------

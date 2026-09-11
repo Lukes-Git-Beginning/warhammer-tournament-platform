@@ -137,8 +137,6 @@ async function cancelOpenPlayNoShows(fastify: FastifyInstance, cutoff: Date): Pr
               id: true,
               player1_id: true,
               player2_id: true,
-              player1: { select: { id: true, username: true, discord_id: true } },
-              player2: { select: { id: true, username: true, discord_id: true } },
             },
           },
         },
@@ -148,14 +146,27 @@ async function cancelOpenPlayNoShows(fastify: FastifyInstance, cutoff: Date): Pr
 
   if (stale.length === 0) return 0;
 
+  // Open Play is always 1v1, so the match slots are User ids — resolve them directly
+  // (we need discord_id for the no-show penalty DMs).
+  const playerIds = [
+    ...new Set(stale.flatMap((p) => [p.game.match.player1_id, p.game.match.player2_id]).filter((x): x is string => !!x)),
+  ];
+  const players = await fastify.prisma.user.findMany({
+    where: { id: { in: playerIds } },
+    select: { id: true, username: true, discord_id: true },
+  });
+  const playerMap = new Map(players.map((u) => [u.id, u]));
+
   const nowMs = Date.now();
   let cancelled = 0;
 
   for (const pick of stale) {
     const match = pick.game.match;
+    const p1 = match.player1_id ? playerMap.get(match.player1_id) : null;
+    const p2 = match.player2_id ? playerMap.get(match.player2_id) : null;
     const noShows: { id: string; username: string; discord_id: string | null }[] = [];
-    if (!pick.player1_locked_at && match.player1) noShows.push(match.player1);
-    if (!pick.player2_locked_at && match.player2) noShows.push(match.player2);
+    if (!pick.player1_locked_at && p1) noShows.push(p1);
+    if (!pick.player2_locked_at && p2) noShows.push(p2);
 
     try {
       await cancelOpenPlayMatch(fastify, {

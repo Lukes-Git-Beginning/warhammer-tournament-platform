@@ -7,7 +7,7 @@ import { canManageTournament, guardBalancedManualPairing } from '../lib/tourname
 import { notifyHostsOfMatchReport } from '../lib/discord-notify.js';
 import { runBalancedPairingTick, findNextDivisionSeed } from '../lib/balanced-liechtenstein-service.js';
 import { computeSwissStandings, sortSwissStandings } from '../lib/swiss.js';
-import { effectiveTiersOf, SUPPORTER_FLAG_SELECT } from '../lib/supporter-service.js';
+import { resolveCompetitors } from '../lib/competitors.js';
 import {
   DEFAULT_BAND,
   formDivisionPools,
@@ -367,9 +367,6 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         player2_points: true,
         counts_for_leaderboard: true,
         tournament: { select: { id: true, slug: true } },
-        player1: { select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT } },
-        player2: { select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT } },
-        winner: { select: { id: true, username: true, avatar_url: true } },
         player1_faction: { select: { id: true, name: true, icon_url: true } },
         player2_faction: { select: { id: true, name: true, icon_url: true } },
       },
@@ -399,6 +396,20 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       // unauthenticated — fine, can_manage stays false
     }
 
+    // Slots are opaque competitor ids (User 1v1 / Team 2v2). Resolve to a uniform shape;
+    // `type` + `members` are additive so 1v1 consumers keep reading id/username/avatar_url.
+    const competitorMap = await resolveCompetitors(fastify.prisma, [
+      match.player1_id,
+      match.player2_id,
+      match.winner_id,
+    ]);
+    const competitorDto = (cid: string | null) => {
+      const c = cid ? competitorMap.get(cid) : undefined;
+      return c
+        ? { id: c.id, username: c.username, avatar_url: c.avatar_url, tiers: c.tiers, type: c.type, members: c.members }
+        : null;
+    };
+
     return reply.code(200).send({
       id: match.id,
       tournament_id: match.tournament?.id ?? null,
@@ -423,29 +434,9 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       player1_faction_id: match.player1_faction_id,
       player2_faction_id: match.player2_faction_id,
       // Enriched relations
-      player1: match.player1
-        ? {
-            id: match.player1.id,
-            username: match.player1.username,
-            avatar_url: match.player1.avatar_url ?? null,
-            tiers: effectiveTiersOf(match.player1),
-          }
-        : null,
-      player2: match.player2
-        ? {
-            id: match.player2.id,
-            username: match.player2.username,
-            avatar_url: match.player2.avatar_url ?? null,
-            tiers: effectiveTiersOf(match.player2),
-          }
-        : null,
-      winner: match.winner
-        ? {
-            id: match.winner.id,
-            username: match.winner.username,
-            avatar_url: match.winner.avatar_url ?? null,
-          }
-        : null,
+      player1: competitorDto(match.player1_id),
+      player2: competitorDto(match.player2_id),
+      winner: competitorDto(match.winner_id),
       player1_faction: match.player1_faction
         ? {
             id: match.player1_faction.id,
