@@ -76,6 +76,7 @@ export function confirmedMatchWhere(versionId: string): Prisma.MatchWhereInput {
 export async function loadVersionObservations(
   prisma: PrismaClient,
   versionId: string | null, // null = all versions (timeless / all-time fit)
+  window?: { from: Date; to: Date }, // optional played_at window (quarterly-quali fit, §6)
 ): Promise<MatchObservation[]> {
   // Same canonical game set as the raw matchup heatmap (getMatchupMatrix), plus a
   // decisive winner (draws carry no signal). Game-level only — the parent Match's
@@ -85,6 +86,8 @@ export async function loadVersionObservations(
     where: {
       ...eligibleStatGameWhere(versionId),
       winner_id: { not: null },
+      // Quarterly quali: a time-boxed fit over ALL games (tournament + ladder) in the window.
+      ...(window ? { played_at: { gte: window.from, lt: window.to } } : {}),
     },
     select: {
       winner_id: true,
@@ -180,6 +183,8 @@ function toData(m: RatingModel): RatingModelData {
 export interface GetRatingModelArgs {
   /** A specific version, or null for the timeless all-time fit (every version). */
   versionId: string | null;
+  /** Optional played_at window — a time-boxed fit (quarterly quali, §6). Spans all versions. */
+  window?: { from: Date; to: Date };
   /** Explicit overrides; when omitted, config is read from AdminConfig. */
   config?: Partial<RatingModelConfig>;
 }
@@ -193,7 +198,7 @@ export async function getRatingModel(
   redis: Redis | undefined,
   args: GetRatingModelArgs,
 ): Promise<RatingModel> {
-  const { versionId } = args;
+  const { versionId, window } = args;
   const cfg: RatingModelConfig = {
     ...DEFAULT_RATING_MODEL_CONFIG,
     ...(await loadRatingModelConfig(prisma)),
@@ -204,6 +209,9 @@ export async function getRatingModel(
     redis,
     cacheKey('rating-model', {
       versionId: versionId ?? 'all',
+      // Window keys the cache per time-box; versionId stays 'all' so the confirmed-match
+      // invalidation (rating-model:*versionId=all*) also refreshes windowed fits.
+      win: window ? `${window.from.toISOString()}_${window.to.toISOString()}` : 'none',
       lpfs: cfg.lambdaPlayerFaction,
       lme: cfg.lambdaMatchup,
       iter: cfg.maxIterations,
@@ -213,7 +221,7 @@ export async function getRatingModel(
       lfo: cfg.lambdaFactionOffset,
     }),
     async () => {
-      const observations = await loadVersionObservations(prisma, versionId);
+      const observations = await loadVersionObservations(prisma, versionId, window);
       return toData(fitRatingModel(observations, cfg));
     },
     { ttlSeconds: RATING_MODEL_TTL },

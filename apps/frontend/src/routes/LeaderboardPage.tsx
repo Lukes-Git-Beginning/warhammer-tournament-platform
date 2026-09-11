@@ -7,6 +7,9 @@ import {
   getAllTimeLeaderboard,
   getMajorWinsLeaderboard,
   getSkillLeaderboard,
+  getHallOfFame,
+  getQuarterlyLeaderboard,
+  getLadderLeaderboard,
   listVersions,
   type AllTimeEntry,
 } from '@/lib/api.js';
@@ -15,7 +18,7 @@ import { PageShell } from '@/components/layout/PageShell.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 import { SupporterBadge } from '@/components/supporter/SupporterBadge.js';
 
-type Tab = 'version' | 'all-time' | 'majors' | 'skill';
+type Tab = 'version' | 'all-time' | 'majors' | 'skill' | 'hall-of-fame' | 'quarterly' | 'ladder';
 
 const PAGE_SIZE = 1000; // load every rank on one page; pagination is a fallback past 1000
 
@@ -684,12 +687,178 @@ function SkillTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Competition tracks (design §6/§7): Hall of Fame · Quarterly quali · Monthly ladder
+// ---------------------------------------------------------------------------
+
+/** Win% vs the average active player, from a general-skill log-odds value. */
+function winPct(gs: number): number {
+  return Math.round((1 / (1 + Math.exp(-gs))) * 100);
+}
+
+const TABLE_WRAP =
+  'overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-stone-wall-texture bg-[length:512px_512px] bg-blend-soft-light backdrop-blur-sm';
+const THEAD_ROW = 'border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60';
+
+function PlayerCell({ entry }: { entry: { rank: number; user: { id: string; username: string; avatar_url: string | null; tiers?: { supporter: boolean; lord: boolean; champion: boolean } }; qualified?: boolean } }) {
+  const isFirst = entry.rank === 1;
+  return (
+    <Link
+      to="/users/$id"
+      params={{ id: entry.user.id }}
+      className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
+    >
+      <Avatar url={entry.user.avatar_url} username={entry.user.username} />
+      <span className={isFirst ? 'font-semibold text-rizzotto-gold-500' : 'text-stone-200'}>{entry.user.username}</span>
+      {entry.qualified && <span title="Hall of Fame (250+ games)" className="text-rizzotto-gold-400">★</span>}
+      {entry.user.tiers && <SupporterBadge tiers={entry.user.tiers} size={14} compact />}
+    </Link>
+  );
+}
+
+function HallOfFameTab() {
+  const [search, setSearch] = useState('');
+  const { data, isLoading, error } = useQuery({ queryKey: ['leaderboard-hof'], queryFn: () => getHallOfFame({ pageSize: PAGE_SIZE }) });
+  const entries = (data?.entries ?? []).filter((e) => normalize(e.user.username).includes(normalize(search)));
+  return (
+    <div>
+      <p className="mb-4 text-sm text-stone-400">
+        The all-time greats — ranked by their stable lifetime General Skill. Players with {data?.threshold ?? 250}+ games
+        are enshrined (★) and listed above everyone else.
+      </p>
+      <LeaderboardSearch value={search} onChange={setSearch} count={entries.length} />
+      {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>}
+      {error && <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">Failed to load leaderboard.</div>}
+      {!isLoading && !error && entries.length === 0 && (
+        <EmptyState variant="sigil" title="No rated players yet" body="No games on record yet." motto="In lapide sigillata." />
+      )}
+      {!isLoading && !error && entries.length > 0 && (
+        <div className={TABLE_WRAP}>
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className={THEAD_ROW}>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
+                <th className="px-4 py-3 text-right font-medium text-stone-400">Win% vs avg</th>
+                <th className="px-4 py-3 text-right font-medium text-stone-400">Games</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-800/60">
+              {entries.map((entry) => (
+                <tr key={entry.user.id} className={`transition-colors ${entry.rank === 1 ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10' : 'hover:bg-stone-800/30'}`}>
+                  <td className="px-4 py-3"><RankCell rank={entry.rank} /></td>
+                  <td className="px-4 py-3"><PlayerCell entry={entry} /></td>
+                  <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400 whitespace-nowrap" title={`GS ${entry.generalSkill.toFixed(2)} ± ${entry.stdError.toFixed(2)} · band ${entry.band}`}>{winPct(entry.generalSkill)}%</td>
+                  <td className="px-4 py-3 text-right text-stone-400 whitespace-nowrap">{entry.gamesCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuarterlyTab() {
+  const [search, setSearch] = useState('');
+  const { data, isLoading, error } = useQuery({ queryKey: ['leaderboard-quarterly'], queryFn: () => getQuarterlyLeaderboard({ pageSize: PAGE_SIZE }) });
+  const entries = (data?.entries ?? []).filter((e) => normalize(e.user.username).includes(normalize(search)));
+  return (
+    <div>
+      <p className="mb-4 text-sm text-stone-400">
+        Current-form qualification for the quarterly major{data?.quarter ? ` (${data.quarter})` : ''} — a skill fit over
+        this quarter&rsquo;s games only (tournament + ladder). Minimum {data?.minGames ?? 10} games this quarter.
+      </p>
+      <LeaderboardSearch value={search} onChange={setSearch} count={entries.length} />
+      {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>}
+      {error && <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">Failed to load leaderboard.</div>}
+      {!isLoading && !error && entries.length === 0 && (
+        <EmptyState variant="sigil" title="No qualifiers yet" body="No one has enough games this quarter." motto="In lapide sigillata." />
+      )}
+      {!isLoading && !error && entries.length > 0 && (
+        <div className={TABLE_WRAP}>
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className={THEAD_ROW}>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
+                <th className="px-4 py-3 text-right font-medium text-stone-400">Win% vs avg</th>
+                <th className="px-4 py-3 text-right font-medium text-stone-400">Games (qtr)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-800/60">
+              {entries.map((entry) => (
+                <tr key={entry.user.id} className={`transition-colors ${entry.rank === 1 ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10' : 'hover:bg-stone-800/30'}`}>
+                  <td className="px-4 py-3"><RankCell rank={entry.rank} /></td>
+                  <td className="px-4 py-3"><PlayerCell entry={entry} /></td>
+                  <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400 whitespace-nowrap" title={`GS ${entry.generalSkill.toFixed(2)} ± ${entry.stdError.toFixed(2)} · band ${entry.band}`}>{winPct(entry.generalSkill)}%</td>
+                  <td className="px-4 py-3 text-right text-stone-400 whitespace-nowrap">{entry.gamesCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LadderTab() {
+  const [search, setSearch] = useState('');
+  const { data, isLoading, error } = useQuery({ queryKey: ['leaderboard-ladder'], queryFn: () => getLadderLeaderboard({ pageSize: PAGE_SIZE }) });
+  const entries = (data?.entries ?? []).filter((e) => normalize(e.user.username).includes(normalize(search)));
+  return (
+    <div>
+      <p className="mb-4 text-sm text-stone-400">
+        Monthly Open Play ladder{data?.month ? ` — ${data.month}` : ''}. Points reward activity and results; resets every
+        month, so a fresh grind always pays off.
+      </p>
+      <LeaderboardSearch value={search} onChange={setSearch} count={entries.length} />
+      {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>}
+      {error && <div className="rounded-md border border-red-900 bg-red-950/40 p-4 text-red-300 text-sm">Failed to load leaderboard.</div>}
+      {!isLoading && !error && entries.length === 0 && (
+        <EmptyState variant="sigil" title="No ladder games yet" body="No Open Play games this month yet." motto="In lapide sigillata." />
+      )}
+      {!isLoading && !error && entries.length > 0 && (
+        <div className={TABLE_WRAP}>
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className={THEAD_ROW}>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
+                <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
+                <th className="px-4 py-3 text-right font-medium text-stone-400">Points</th>
+                <th className="px-4 py-3 text-right font-medium text-stone-400">W–L–D</th>
+                <th className="px-4 py-3 text-right font-medium text-stone-400">Games</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-800/60">
+              {entries.map((entry) => (
+                <tr key={entry.user.id} className={`transition-colors ${entry.rank === 1 ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10' : 'hover:bg-stone-800/30'}`}>
+                  <td className="px-4 py-3"><RankCell rank={entry.rank} /></td>
+                  <td className="px-4 py-3"><PlayerCell entry={entry} /></td>
+                  <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400 whitespace-nowrap">{entry.points}</td>
+                  <td className="px-4 py-3 text-right text-stone-300 whitespace-nowrap">{entry.wins}–{entry.losses}–{entry.draws}</td>
+                  <td className="px-4 py-3 text-right text-stone-400 whitespace-nowrap">{entry.games}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page Shell
 // ---------------------------------------------------------------------------
 
 const TABS_CONFIG: { id: Tab; label: string }[] = [
   { id: 'version', label: 'Version' },
   { id: 'skill', label: 'Skill' },
+  { id: 'hall-of-fame', label: 'Hall of Fame' },
+  { id: 'quarterly', label: 'Quarterly' },
+  { id: 'ladder', label: 'Ladder' },
   { id: 'majors', label: 'Majors' },
   { id: 'all-time', label: 'All Time' },
 ];
@@ -741,6 +910,9 @@ export function LeaderboardPage() {
       {activeTab === 'all-time' && <AllTimeTab />}
       {activeTab === 'majors' && <MajorsTab />}
       {activeTab === 'skill' && <SkillTab />}
+      {activeTab === 'hall-of-fame' && <HallOfFameTab />}
+      {activeTab === 'quarterly' && <QuarterlyTab />}
+      {activeTab === 'ladder' && <LadderTab />}
     </PageShell>
   );
 }

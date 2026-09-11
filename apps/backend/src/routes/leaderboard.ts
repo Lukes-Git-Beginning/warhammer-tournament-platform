@@ -5,6 +5,7 @@ import { computeVersionLeaderboard } from '../lib/leaderboard-service.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
 import { logistic, skillToBand } from '../lib/rating-model.js';
 import { effectiveTiersOf, SUPPORTER_FLAG_SELECT, NO_TIERS } from '../lib/supporter-service.js';
+import { currentQuarter, currentMonth, loadCompetitionConfig, computeLadderStandings } from '../lib/competition.js';
 import {
   computeSwissStandings,
   sortSwissStandings,
@@ -494,6 +495,158 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         };
       },
       { ttlSeconds: 3600 },
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // Competition tracks (design doc §6/§7).
+  // -------------------------------------------------------------------------
+
+  // GET /api/leaderboard/hall-of-fame — timeless GS; players with >= threshold games
+  // sort ABOVE everyone else (two-class), ranked by their stable lifetime GS. Listed forever.
+  fastify.get('/api/leaderboard/hall-of-fame', async (request, reply) => {
+    const parsed = z
+      .object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(1000).default(100) })
+      .safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    const { page, pageSize } = parsed.data;
+    const cfg = await loadCompetitionConfig(fastify.prisma);
+    return cached(
+      fastify.redis,
+      cacheKey('leaderboard:hof', { page, pageSize, min: cfg.hallOfFameMinGames }),
+      async () => {
+        const model = await getRatingModel(fastify.prisma, fastify.redis, { versionId: null, config: { hierarchical: true } });
+        const min = cfg.hallOfFameMinGames;
+        const ranked = model.generalSkills.slice().sort((a, b) => {
+          const qa = a.gamesCount >= min ? 1 : 0;
+          const qb = b.gamesCount >= min ? 1 : 0;
+          return qb - qa || b.generalSkill - a.generalSkill || b.gamesCount - a.gamesCount;
+        });
+        const total = ranked.length;
+        const qualifiedCount = ranked.filter((e) => e.gamesCount >= min).length;
+        const slice = ranked.slice((page - 1) * pageSize, page * pageSize);
+        const users = slice.length
+          ? await fastify.prisma.user.findMany({
+              where: { id: { in: slice.map((e) => e.playerId) } },
+              select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT },
+            })
+          : [];
+        const byId = new Map(users.map((u) => [u.id, u]));
+        const entries = slice.flatMap((e, i) => {
+          const u = byId.get(e.playerId);
+          if (!u) return [];
+          return [
+            {
+              rank: (page - 1) * pageSize + i + 1,
+              user: { id: u.id, username: u.username, avatar_url: u.avatar_url, tiers: effectiveTiersOf(u) },
+              generalSkill: e.generalSkill,
+              stdError: e.stdError,
+              band: skillToBand(e.generalSkill),
+              gamesCount: e.gamesCount,
+              qualified: e.gamesCount >= min,
+            },
+          ];
+        });
+        return { entries, total, page, pageSize, threshold: min, qualifiedCount };
+      },
+      { ttlSeconds: 3600 },
+    );
+  });
+
+  // GET /api/leaderboard/quarterly — the quarterly-quali GS (current form): a rating fit
+  // windowed to THIS quarter's games (tournament + ladder), with a min-games gate. Top-N → the
+  // quarterly major final. Separate from the timeless GS.
+  fastify.get('/api/leaderboard/quarterly', async (request, reply) => {
+    const parsed = z
+      .object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(1000).default(100) })
+      .safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    const { page, pageSize } = parsed.data;
+    const cfg = await loadCompetitionConfig(fastify.prisma);
+    const q = currentQuarter();
+    return cached(
+      fastify.redis,
+      cacheKey('leaderboard:quarterly', { page, pageSize, from: q.from.toISOString(), min: cfg.qualiMinGames }),
+      async () => {
+        const model = await getRatingModel(fastify.prisma, fastify.redis, {
+          versionId: null,
+          window: { from: q.from, to: q.to },
+          config: { hierarchical: true },
+        });
+        const eligible = model.generalSkills
+          .filter((e) => e.gamesCount >= cfg.qualiMinGames)
+          .sort((a, b) => b.generalSkill - a.generalSkill || b.gamesCount - a.gamesCount);
+        const total = eligible.length;
+        const slice = eligible.slice((page - 1) * pageSize, page * pageSize);
+        const users = slice.length
+          ? await fastify.prisma.user.findMany({
+              where: { id: { in: slice.map((e) => e.playerId) } },
+              select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT },
+            })
+          : [];
+        const byId = new Map(users.map((u) => [u.id, u]));
+        const entries = slice.flatMap((e, i) => {
+          const u = byId.get(e.playerId);
+          if (!u) return [];
+          return [
+            {
+              rank: (page - 1) * pageSize + i + 1,
+              user: { id: u.id, username: u.username, avatar_url: u.avatar_url, tiers: effectiveTiersOf(u) },
+              generalSkill: e.generalSkill,
+              stdError: e.stdError,
+              band: skillToBand(e.generalSkill),
+              gamesCount: e.gamesCount,
+            },
+          ];
+        });
+        return { entries, total, page, pageSize, quarter: q.label, minGames: cfg.qualiMinGames };
+      },
+      { ttlSeconds: 600 },
+    );
+  });
+
+  // GET /api/leaderboard/ladder — the monthly Open-Play points board (drives activity),
+  // reset each month.
+  fastify.get('/api/leaderboard/ladder', async (request, reply) => {
+    const parsed = z
+      .object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(1000).default(100) })
+      .safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    const { page, pageSize } = parsed.data;
+    const cfg = await loadCompetitionConfig(fastify.prisma);
+    const month = currentMonth();
+    return cached(
+      fastify.redis,
+      cacheKey('leaderboard:ladder', { page, pageSize, from: month.from.toISOString() }),
+      async () => {
+        const standings = await computeLadderStandings(fastify.prisma, month, cfg);
+        const total = standings.length;
+        const slice = standings.slice((page - 1) * pageSize, page * pageSize);
+        const users = slice.length
+          ? await fastify.prisma.user.findMany({
+              where: { id: { in: slice.map((s) => s.playerId) } },
+              select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT },
+            })
+          : [];
+        const byId = new Map(users.map((u) => [u.id, u]));
+        const entries = slice.flatMap((s, i) => {
+          const u = byId.get(s.playerId);
+          if (!u) return [];
+          return [
+            {
+              rank: (page - 1) * pageSize + i + 1,
+              user: { id: u.id, username: u.username, avatar_url: u.avatar_url, tiers: effectiveTiersOf(u) },
+              points: s.points,
+              games: s.games,
+              wins: s.wins,
+              losses: s.losses,
+              draws: s.draws,
+            },
+          ];
+        });
+        return { entries, total, page, pageSize, month: month.label };
+      },
+      { ttlSeconds: 300 },
     );
   });
 };

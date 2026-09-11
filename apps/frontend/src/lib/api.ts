@@ -652,6 +652,86 @@ export function getSkillLeaderboard(opts?: { versionId?: string; page?: number; 
   return apiFetch<SkillLeaderboardResponse>(`/api/leaderboard/skill${qs ? `?${qs}` : ''}`);
 }
 
+// --- Competition tracks (design §6/§7) -------------------------------------
+
+export interface CompetitorRef { id: string; username: string; avatar_url: string | null; tiers?: SupporterTiers }
+
+/** Hall of Fame — timeless GS; >= threshold games are listed first (two-class), forever. */
+export interface HallOfFameEntry {
+  rank: number;
+  user: CompetitorRef;
+  generalSkill: number;
+  stdError: number;
+  band: number;
+  gamesCount: number;
+  qualified: boolean;
+}
+export interface HallOfFameResponse {
+  entries: HallOfFameEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  threshold: number;
+  qualifiedCount: number;
+}
+export function getHallOfFame(opts?: { page?: number; pageSize?: number }): Promise<HallOfFameResponse> {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
+  const qs = params.toString();
+  return apiFetch<HallOfFameResponse>(`/api/leaderboard/hall-of-fame${qs ? `?${qs}` : ''}`);
+}
+
+/** Quarterly qualification GS (current form) — a fit windowed to this quarter's games. */
+export interface QuarterlyEntry {
+  rank: number;
+  user: CompetitorRef;
+  generalSkill: number;
+  stdError: number;
+  band: number;
+  gamesCount: number;
+}
+export interface QuarterlyResponse {
+  entries: QuarterlyEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  quarter: string;
+  minGames: number;
+}
+export function getQuarterlyLeaderboard(opts?: { page?: number; pageSize?: number }): Promise<QuarterlyResponse> {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
+  const qs = params.toString();
+  return apiFetch<QuarterlyResponse>(`/api/leaderboard/quarterly${qs ? `?${qs}` : ''}`);
+}
+
+/** Monthly ladder points (Open Play) — drives activity; resets each month. */
+export interface LadderEntry {
+  rank: number;
+  user: CompetitorRef;
+  points: number;
+  games: number;
+  wins: number;
+  losses: number;
+  draws: number;
+}
+export interface LadderResponse {
+  entries: LadderEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  month: string;
+}
+export function getLadderLeaderboard(opts?: { page?: number; pageSize?: number }): Promise<LadderResponse> {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
+  const qs = params.toString();
+  return apiFetch<LadderResponse>(`/api/leaderboard/ladder${qs ? `?${qs}` : ''}`);
+}
+
 export function getUserProfile(id: string): Promise<UserProfileResponse> {
   return apiFetch<UserProfileResponse>(`/api/users/${id}`);
 }
