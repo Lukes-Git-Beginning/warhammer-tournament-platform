@@ -126,5 +126,19 @@ id-agnostic — no change once callers pass competitor ids. Open Play is always 
     attribution is meaningless for four players — so the replay-mismatch/dispute endpoints
     (`assert-replay-correct`, `opponent-confirm/reject`) are never reached for 2v2 and stay
     fail-closed; a winner-disagreement dispute still goes to the host (`resolve-dispute`,
-    canManage). REMAINING: frontend GameTile display of both factions per side + a captain-only
-    per-game report affordance; multi-player replay verification (deferred).
+    canManage).
+  - **DONE 2026-09-11/12 — GameTile + drop frontend/UX.** `MyMatchSection` finds a member's
+    match via team membership and resolves the viewer's side + `canInteract` (1v1 self / 2v2
+    captain); `GameTile` takes `mySideId` + `canInteract` — both teammates SEE the tile, every
+    action is captain-only, and a teammate gets a read-only banner (team names layered into the
+    labels). Either member may self-withdraw the whole team before start (`/withdraw` +
+    `/participants/me` resolve a teammate to the team row via membership; `RegisterButton` labels
+    it "Withdraw team…" for 2v2). 1v1 / Open Play untouched (props default to the 1v1 identity).
+  - **WIEDERVORLAGE (Alex 2026-09-12) — replay verification MUST also work for 2v2.** Currently
+    skipped fail-open because `verify-report.ts` / `replay-apply.ts` attribute exactly TWO
+    players/factions. Blocked on evidence: we need real 2v2 replay files to inspect where the
+    four players + four factions live in the ESF/replay record (the 1v1 parser keys off the
+    player-name → nearest-faction-displayname heuristic; unknown how a 2-per-side game lays that
+    out). Next step when replays exist: parse a sample, map the 4-slot layout, then extend
+    `resolveReplayValues` + `verifyGameReplay` to a 4-player check and drop the 2v2 skip in
+    `routes/match-games.ts` (search `isTeam ? { ok: true`).
