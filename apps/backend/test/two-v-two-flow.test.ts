@@ -272,6 +272,83 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     expect([game?.player2_faction_id, game?.player2_faction_id_2]).toEqual(side2);
   });
 
+  it('BPT_2V2 lets the captain blind-lock both factions and stamps them on report', async () => {
+    const factions = await fourFactionIds();
+    if (!factions) return; // <4 seeded factions → skip
+    const [f0, f1, f2, f3] = factions;
+    const host = await createAdminHost('2v2bpthost');
+    const a = await makeActiveTeam('Kilo');
+    const b = await makeActiveTeam('Lima');
+    const { id, slug } = await setup2v2Tournament(host.id, 'BPT_2V2');
+
+    expect((await registerTeam(slug, a.captain.id, a.teamId)).statusCode).toBe(201);
+    expect((await registerTeam(slug, b.captain.id, b.teamId)).statusCode).toBe(201);
+    await prisma.tournament.update({ where: { id }, data: { status: 'REGISTRATION_CLOSED' } });
+    await app.inject({ method: 'POST', url: `/api/tournaments/${id}/start`, cookies: cookieFor(host.id, 'ADMIN') });
+
+    const bracket = await app.inject({ method: 'GET', url: `/api/tournaments/${slug}/bracket` });
+    const match = bracket.json().matches[0];
+    const matchId = match.matchId as string;
+    const aIsP1 = match.player1Id === a.teamId;
+
+    // Bring the match to the blind-pick-ready state (game with a decided map).
+    const mapRow = await prisma.map.findFirst({ select: { id: true } });
+    const game = await prisma.matchGame.create({ data: { match_id: matchId, game_number: 1, status: 'PENDING' } });
+    await prisma.matchMapDecision.create({
+      data: {
+        game_id: game.id,
+        mode: 'RANDOM_NO_REPEAT',
+        coin_flip_seed: 'test',
+        top_player_id: a.teamId,
+        bottom_player_id: b.teamId,
+        bans_top: [],
+        bans_bottom: [],
+        picked_map_id: mapRow?.id ?? 'test-map',
+        decided_at: new Date(),
+      },
+    });
+
+    const lock = (captainId: string, factionId: string, factionId2?: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/matches/${matchId}/decision/blind-pick/lock`,
+        cookies: cookieFor(captainId),
+        payload: factionId2 ? { faction_id: factionId, faction_id_2: factionId2 } : { faction_id: factionId },
+      });
+
+    // A non-captain (the teammate) may not lock for the team.
+    expect((await lock(a.partner.id, f0, f1)).statusCode).toBe(403);
+    // 2v2 requires BOTH factions.
+    expect((await lock(a.captain.id, f0)).statusCode).toBe(400);
+
+    // Both captains lock their pair → reveal.
+    expect((await lock(a.captain.id, f0, f1)).statusCode).toBe(200);
+    expect((await lock(b.captain.id, f2, f3)).statusCode).toBe(200);
+
+    const bp = await prisma.matchBlindPick.findUnique({ where: { game_id: game.id } });
+    expect(bp?.revealed_at).not.toBeNull();
+    const side1 = aIsP1 ? [f0, f1] : [f2, f3];
+    const side2 = aIsP1 ? [f2, f3] : [f0, f1];
+    expect([bp?.player1_faction_id, bp?.player1_faction_id_2]).toEqual(side1);
+    expect([bp?.player2_faction_id, bp?.player2_faction_id_2]).toEqual(side2);
+
+    // Report (captain) → completeMatch stamps all four factions from the revealed blind pick.
+    const report = await app.inject({
+      method: 'POST',
+      url: `/api/matches/${matchId}/result`,
+      cookies: cookieFor(a.captain.id),
+      payload: { winnerId: a.teamId },
+    });
+    expect(report.statusCode).toBe(200);
+
+    const stamped = await prisma.matchGame.findFirst({
+      where: { match_id: matchId },
+      select: { player1_faction_id: true, player1_faction_id_2: true, player2_faction_id: true, player2_faction_id_2: true },
+    });
+    expect([stamped?.player1_faction_id, stamped?.player1_faction_id_2]).toEqual(side1);
+    expect([stamped?.player2_faction_id, stamped?.player2_faction_id_2]).toEqual(side2);
+  });
+
   it('guards 2v2 registration (team required, captain-only, must be ACTIVE)', async () => {
     const host = await createTestUser({ username: '2v2host3' });
     createdUserIds.push(host.id);

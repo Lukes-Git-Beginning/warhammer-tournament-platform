@@ -148,6 +148,35 @@ export async function resolveActingUserIds(
   return out;
 }
 
+export interface ActorFlags {
+  isPlayer1: boolean;
+  isPlayer2: boolean;
+  isParticipant: boolean;
+}
+
+/**
+ * Which match slots the caller acts for, competitor-format-aware. 1v1: identity against the
+ * slot id. 2v2: the caller must be the CAPTAIN of the team in that slot (team-as-actor). The
+ * single seam that turns the in-match participant checks (map decision, blind pick, report)
+ * captain-aware without touching each endpoint's logic.
+ */
+export async function resolveActorFlags(
+  prisma: PrismaClient,
+  userSub: string,
+  match: { player1_id: string | null; player2_id: string | null },
+  isTeam: boolean,
+): Promise<ActorFlags> {
+  if (!isTeam) {
+    const isPlayer1 = match.player1_id !== null && userSub === match.player1_id;
+    const isPlayer2 = match.player2_id !== null && userSub === match.player2_id;
+    return { isPlayer1, isPlayer2, isParticipant: isPlayer1 || isPlayer2 };
+  }
+  const caps = await captainMap(prisma, [match.player1_id, match.player2_id]);
+  const isPlayer1 = match.player1_id !== null && caps.get(match.player1_id) === userSub;
+  const isPlayer2 = match.player2_id !== null && caps.get(match.player2_id) === userSub;
+  return { isPlayer1, isPlayer2, isParticipant: isPlayer1 || isPlayer2 };
+}
+
 /**
  * Whether `userSub` may act for competitor slot `slotId`. 1v1: identity. 2v2: the caller
  * must be the captain of that team. Pass `captains` (from captainMap) to avoid a query

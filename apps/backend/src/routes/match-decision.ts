@@ -8,6 +8,7 @@ import {
   OPEN_PLAY_BLIND_PICK_TIMEOUT_MS,
   TOURNAMENT_BLIND_PICK_TIMEOUT_MS,
 } from '../lib/blind-pick-auto-resolve.js';
+import { isTeamFormat, resolveActorFlags } from '../lib/competitors.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -19,6 +20,8 @@ const BanBodySchema = z.object({
 
 const BlindPickLockBodySchema = z.object({
   faction_id: z.string().min(1),
+  // 2v2 (BPT_2V2): the teammate's faction, locked together with the captain's in one action.
+  faction_id_2: z.string().min(1).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -520,6 +523,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
               id: true,
               map_decision_mode: true,
               map_preset_config: true,
+              competitor_format: true,
               map_pool: { select: { map_id: true } },
             },
           },
@@ -539,11 +543,10 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Authorization — only the two match participants or staff may start a
-      // decision flow (prevents a third party from triggering the coin flip /
-      // map draw on someone else's match).
+      // Authorization — only the two match participants or staff may start a decision flow
+      // (prevents a third party triggering the coin flip / map draw). 2v2 → the team captain.
       const actorId = request.user.sub;
-      const isParticipant = actorId === match.player1_id || actorId === match.player2_id;
+      const { isParticipant } = await resolveActorFlags(fastify.prisma, actorId, match, isTeamFormat(match.tournament?.competitor_format));
       const isStaff =
         request.user.role === 'HOST' ||
         request.user.role === 'MODERATOR' ||
@@ -954,6 +957,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
             select: { map_decision: true, blind_pick: true },
             take: 1,
           },
+          tournament: { select: { competitor_format: true } },
         },
       });
 
@@ -965,9 +969,9 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Authorization — only participants or staff may confirm the decision state.
+      // Authorization — only participants or staff may confirm the decision state (2v2 → captain).
       const actorId = request.user.sub;
-      const isParticipant = actorId === match.player1_id || actorId === match.player2_id;
+      const { isParticipant } = await resolveActorFlags(fastify.prisma, actorId, match, isTeamFormat(match.tournament?.competitor_format));
       const isStaff =
         request.user.role === 'HOST' ||
         request.user.role === 'MODERATOR' ||
@@ -1021,7 +1025,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { faction_id } = parsed.data;
+      const { faction_id, faction_id_2 } = parsed.data;
       const userId = request.user.sub;
 
       const match = await fastify.prisma.match.findFirst({
@@ -1043,6 +1047,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           tournament: {
             select: {
               mode: true,
+              competitor_format: true,
               faction_allowlist: { select: { faction_id: true } },
             },
           },
@@ -1060,7 +1065,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       // Blind pick is allowed for BPT tournaments and for Open Play matches
       // (no tournament). Other tournament modes (SFT, etc.) do not use it.
       const mode = match.tournament?.mode as string | undefined;
-      if (match.tournament !== null && mode !== 'BPT') {
+      if (match.tournament !== null && mode !== 'BPT' && mode !== 'BPT_2V2') {
         return reply.code(422).send({
           error: 'UnprocessableEntity',
           message: 'Blind pick is only available in BPT mode tournaments',
@@ -1104,20 +1109,41 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Determine if user is player1 or player2
-      const isPlayer1 = userId === match.player1_id;
-      const isPlayer2 = userId === match.player2_id;
+      // 2v2 (BPT_2V2): validate the teammate's faction the captain locks alongside their own.
+      if (faction_id_2) {
+        const faction2 = await fastify.prisma.faction.findUnique({ where: { id: faction_id_2 }, select: { id: true } });
+        if (!faction2) {
+          return reply.code(422).send({ error: 'UnprocessableEntity', message: `Faction "${faction_id_2}" does not exist`, statusCode: 422 });
+        }
+        if (factionAllowlist.length > 0 && !factionAllowlist.includes(faction_id_2)) {
+          return reply.code(422).send({ error: 'UnprocessableEntity', message: 'This faction is not in the allowed faction pool for this tournament', statusCode: 422 });
+        }
+      }
 
-      if (!isPlayer1 && !isPlayer2) {
+      // Competitor-format-aware: 2v2 (BPT_2V2) → the CAPTAIN acts for the team and locks BOTH
+      // members' factions in one action (captain + teammate). 1v1 → the player themselves.
+      const isTeam = isTeamFormat(match.tournament?.competitor_format);
+      const { isPlayer1, isPlayer2, isParticipant } = await resolveActorFlags(fastify.prisma, userId, match, isTeam);
+
+      if (!isParticipant) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'You are not a participant in this match',
           statusCode: 403,
         });
       }
+      if (isTeam && !faction_id_2) {
+        return reply.code(400).send({
+          error: 'BadRequest',
+          message: '2v2 blind pick requires both team factions (faction_id + faction_id_2)',
+          statusCode: 400,
+        });
+      }
 
       const now = new Date();
       const gameId = game.id;
+      // The teammate faction only applies in 2v2; 1v1 leaves the *_2 columns null.
+      const teammate = isTeam ? (faction_id_2 ?? null) : null;
 
       // Upsert MatchBlindPick
       let blindPick = game.blind_pick;
@@ -1128,12 +1154,14 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
             game_id: gameId,
             player1_faction_id: isPlayer1 ? faction_id : null,
             player2_faction_id: isPlayer2 ? faction_id : null,
+            player1_faction_id_2: isPlayer1 ? teammate : null,
+            player2_faction_id_2: isPlayer2 ? teammate : null,
             player1_locked_at: isPlayer1 ? now : null,
             player2_locked_at: isPlayer2 ? now : null,
           },
         });
       } else {
-        // Already exists — update the appropriate player's lock
+        // Already exists — update the appropriate side's lock (the captain acts for the team).
         if (isPlayer1 && blindPick.player1_locked_at) {
           return reply.code(409).send({
             error: 'Conflict',
@@ -1152,8 +1180,8 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         blindPick = await fastify.prisma.matchBlindPick.update({
           where: { game_id: gameId },
           data: {
-            ...(isPlayer1 ? { player1_faction_id: faction_id, player1_locked_at: now } : {}),
-            ...(isPlayer2 ? { player2_faction_id: faction_id, player2_locked_at: now } : {}),
+            ...(isPlayer1 ? { player1_faction_id: faction_id, player1_faction_id_2: teammate, player1_locked_at: now } : {}),
+            ...(isPlayer2 ? { player2_faction_id: faction_id, player2_faction_id_2: teammate, player2_locked_at: now } : {}),
           },
         });
       }

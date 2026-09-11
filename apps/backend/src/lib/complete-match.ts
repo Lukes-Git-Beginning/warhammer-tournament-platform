@@ -206,6 +206,25 @@ export async function completeMatch(
     effP1Faction2 = f1[1] ?? null;
     effP2Faction = f2[0] ?? player2FactionId;
     effP2Faction2 = f2[1] ?? null;
+  } else if (match.tournament?.mode === 'BPT_2V2' && match.player1_id && match.player2_id) {
+    // BPT_2V2: both members' factions were blind-locked per side and revealed. Stamp all four
+    // from the revealed blind pick (positional: player1_faction_id = captain, _2 = teammate).
+    const g = await fastify.prisma.matchGame.findFirst({
+      where: { match_id: matchId },
+      orderBy: { game_number: 'asc' },
+      select: {
+        blind_pick: {
+          select: { player1_faction_id: true, player1_faction_id_2: true, player2_faction_id: true, player2_faction_id_2: true, revealed_at: true },
+        },
+      },
+    });
+    const bp = g?.blind_pick;
+    if (bp?.revealed_at) {
+      effP1Faction = bp.player1_faction_id ?? player1FactionId;
+      effP1Faction2 = bp.player1_faction_id_2 ?? null;
+      effP2Faction = bp.player2_faction_id ?? player2FactionId;
+      effP2Faction2 = bp.player2_faction_id_2 ?? null;
+    }
   }
 
   await fastify.prisma.$transaction(async (tx) => {
