@@ -6,6 +6,7 @@ import { ArrowRight, Clock, Crown, Users } from 'lucide-react';
 import { listTournaments, type Tournament } from '@/lib/api.js';
 import { formatInUserTimezone } from '@/lib/timezone.js';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton.js';
+import { TournamentTypeBadges, battleTypeAccent } from '@/components/tournament/TournamentTypeBadges.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { Badge } from '@/components/ui/badge.js';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card.js';
@@ -48,7 +49,7 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
     <Card
       variant="banner"
       interactive
-      className={`flex h-full flex-col${isDraft ? ' border-2 border-dashed border-rizzotto-gold-500/40' : ''}`}
+      className={`flex h-full flex-col${isDraft ? ' border-2 border-dashed border-rizzotto-gold-500/40' : ''} ${battleTypeAccent(tournament.battle_type)}`}
     >
       <CardHeader>
         {tournament.poster_url && (
@@ -89,6 +90,11 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
             Major
           </Badge>
         )}
+        <TournamentTypeBadges
+          battleType={tournament.battle_type}
+          competitorFormat={tournament.competitor_format}
+          className="self-start"
+        />
         <CardTitle className="line-clamp-2">{tournament.name}</CardTitle>
         <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-rizzotto-stone-400">
           <span className="inline-flex items-center gap-1.5">

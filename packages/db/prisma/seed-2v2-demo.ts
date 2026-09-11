@@ -102,8 +102,10 @@ async function ensureTeam(name: string, captainId: string, mateId: string): Prom
 async function ensureTournament(opts: {
   slug: string;
   name: string;
-  mode: 'SFT_2V2' | 'BPT_2V2';
+  mode: 'SFT_2V2' | 'BPT_2V2' | 'BPT';
   hostId: string;
+  competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
+  battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
 }): Promise<string> {
   const existing = await prisma.tournament.findFirst({ where: { slug: opts.slug }, select: { id: true } });
   const data = {
@@ -111,7 +113,8 @@ async function ensureTournament(opts: {
     host_id: opts.hostId,
     format: 'SINGLE_ELIMINATION' as const,
     mode: opts.mode,
-    competitor_format: 'TWO_V_TWO' as const,
+    competitor_format: opts.competitorFormat ?? 'TWO_V_TWO',
+    battle_type: opts.battleType ?? 'DOMINATION',
     status: 'REGISTRATION_CLOSED' as const,
     start_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
     timezone: 'Europe/Berlin',
@@ -163,7 +166,22 @@ async function main() {
     }
   }
   console.log('  ✓ 4 teams registered in each of "2v2-demo-sft" and "2v2-demo-bpt"');
-  console.log('Done. Open the app as an admin, find the "2v2 Demo — …" tournaments and hit Start.');
+
+  // Battle-type tile showcase: 1v1 Conquest + 1v1 Siege (no participants needed — they just
+  // demonstrate the tile accents) and a combined 2v2 Siege (both markers on one tile).
+  await ensureTournament({ slug: 'battle-demo-conquest', name: 'Battle Demo — Conquest', mode: 'BPT', hostId, competitorFormat: 'ONE_V_ONE', battleType: 'CONQUEST' });
+  await ensureTournament({ slug: 'battle-demo-siege', name: 'Battle Demo — Siege', mode: 'BPT', hostId, competitorFormat: 'ONE_V_ONE', battleType: 'SIEGE' });
+  const siege2v2 = await ensureTournament({ slug: '2v2-demo-siege', name: '2v2 Demo — Siege', mode: 'SFT_2V2', hostId, competitorFormat: 'TWO_V_TWO', battleType: 'SIEGE' });
+  for (const [i, tm] of teamIds.entries()) {
+    const faction_ids = factions.length >= 8 ? [factions[i * 2].id, factions[i * 2 + 1].id] : [];
+    await prisma.tournamentParticipant.upsert({
+      where: { tournament_id_user_id: { tournament_id: siege2v2, user_id: tm.captainId } },
+      update: { team_id: tm.id, participant_type: 'TEAM', status: 'REGISTERED', deleted_at: null, faction_ids },
+      create: { tournament_id: siege2v2, user_id: tm.captainId, team_id: tm.id, participant_type: 'TEAM', status: 'REGISTERED', faction_ids },
+    });
+  }
+  console.log('  ✓ battle-type tiles: "Battle Demo — Conquest" / "— Siege" (1v1) + "2v2 Demo — Siege"');
+  console.log('Done. Open the app; the tiles under Tournaments now show the type/2v2 markers.');
 }
 
 main()

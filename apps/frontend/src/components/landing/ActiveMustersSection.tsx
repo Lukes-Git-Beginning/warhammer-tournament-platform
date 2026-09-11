@@ -13,6 +13,7 @@ import { listTournaments, type Tournament } from '@/lib/api';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { useAuthQuery } from '@/lib/auth';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton';
+import { TournamentTypeBadges, battleTypeAccent } from '@/components/tournament/TournamentTypeBadges';
 
 const FORMAT_LABELS: Record<string, string> = {
   AUTO_SWISS: 'Auto Swiss',
@@ -43,7 +44,7 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
       params={{ slug: tournament.slug }}
       className="block group"
     >
-    <Card variant="banner" interactive className="flex h-full flex-col">
+    <Card variant="banner" interactive className={`flex h-full flex-col ${battleTypeAccent(tournament.battle_type)}`}>
       <CardHeader>
         {isLive && (
           <Badge variant="forge" className="self-start">
@@ -67,6 +68,11 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
             Major
           </Badge>
         )}
+        <TournamentTypeBadges
+          battleType={tournament.battle_type}
+          competitorFormat={tournament.competitor_format}
+          className="self-start"
+        />
         <CardTitle className="line-clamp-2">{tournament.name}</CardTitle>
         <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-rizzotto-stone-400">
           <span className="inline-flex items-center gap-1.5">
