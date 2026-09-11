@@ -40,10 +40,17 @@ export const tournamentsListingRoute = createRoute({
   component: TournamentsListing,
   validateSearch: (search: Record<string, unknown>) => {
     const isMajor = search.major === true || search.major === 'true';
+    const bt = search.battle_type;
+    const battleType =
+      bt === 'DOMINATION' || bt === 'CONQUEST' || bt === 'SIEGE' ? bt : undefined;
+    const cf = search.competitor_format;
+    const competitorFormat = cf === 'ONE_V_ONE' || cf === 'TWO_V_TWO' ? cf : undefined;
     return {
       tab: (search.tab as 'upcoming' | 'live' | 'archive' | undefined) ?? 'upcoming',
       page: typeof search.page === 'number' ? search.page : 1,
       ...(isMajor ? { major: true as const } : {}),
+      ...(battleType ? { battle_type: battleType } : {}),
+      ...(competitorFormat ? { competitor_format: competitorFormat } : {}),
     };
   },
 });

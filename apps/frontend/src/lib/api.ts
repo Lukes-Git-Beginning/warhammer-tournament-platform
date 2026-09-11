@@ -499,10 +499,13 @@ export function listTournaments(
   pageSize = 20,
   status?: Tournament['status'],
   isMajor?: boolean,
+  filters?: { battleType?: BattleType; competitorFormat?: Tournament['competitor_format'] },
 ): Promise<{ data: Tournament[]; total: number; page: number; pageSize: number }> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (status) params.set('status', status);
   if (isMajor === true) params.set('is_major', 'true');
+  if (filters?.battleType) params.set('battle_type', filters.battleType);
+  if (filters?.competitorFormat) params.set('competitor_format', filters.competitorFormat);
   return apiFetch<{ data: Tournament[]; total: number; page: number; pageSize: number }>(
     `/api/tournaments?${params.toString()}`,
   );

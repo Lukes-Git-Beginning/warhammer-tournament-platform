@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthQuery } from '@/lib/auth.js';
 import { ArrowRight, Clock, Crown, Users } from 'lucide-react';
-import { listTournaments, type Tournament } from '@/lib/api.js';
+import { listTournaments, type Tournament, type BattleType } from '@/lib/api.js';
 import { formatInUserTimezone } from '@/lib/timezone.js';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton.js';
 import { Team2v2Badge, BattleTypeWatermark } from '@/components/tournament/TournamentTypeBadges.js';
@@ -154,6 +154,31 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
+        active
+          ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+          : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function TournamentsListing() {
   const { t } = useTranslation();
   const navigate = useNavigate({ from: '/tournaments' });
@@ -165,29 +190,39 @@ export function TournamentsListing() {
 
   const page = search.page ?? 1;
   const majorOnly = search.major === true;
+  const battleType = search.battle_type as BattleType | undefined;
+  const competitorFormat = search.competitor_format as Tournament['competitor_format'];
 
-  function setPage(p: number) {
-    void navigate({ search: { tab: 'archive', page: p, major: majorOnly || undefined } });
-  }
+  // Merge a search patch, preserving the other filters. undefined values drop from the URL.
+  const updateSearch = (patch: Partial<typeof search>) =>
+    void navigate({ search: (prev) => ({ ...prev, ...patch }) });
 
-  function toggleMajor() {
-    void navigate({
-      search: { tab: 'upcoming', page: 1, major: majorOnly ? undefined : true },
-    });
-  }
+  const setPage = (p: number) => updateSearch({ page: p });
+  const toggleMajor = () => updateSearch({ page: 1, major: majorOnly ? undefined : true });
+  const setBattleType = (bt: typeof battleType) => updateSearch({ page: 1, battle_type: bt });
+  const setCompetitorFormat = (cf: typeof competitorFormat) =>
+    updateSearch({ page: 1, competitor_format: cf });
+
+  const filters = { battleType, competitorFormat };
 
   // Active tournaments (live + upcoming) — fetched without status filter, split client-side
   const { data: activeData, isLoading: activeLoading } = useQuery({
-    queryKey: ['tournaments-active', majorOnly, viewerKey],
-    queryFn: () => listTournaments(1, 50, undefined, majorOnly || undefined),
+    queryKey: ['tournaments-active', majorOnly, battleType, competitorFormat, viewerKey],
+    queryFn: () => listTournaments(1, 50, undefined, majorOnly || undefined, filters),
     retry: false,
   });
 
   // Archive — paginated
   const { data: archiveData, isLoading: archiveLoading } = useQuery({
-    queryKey: ['tournaments-archive', page, majorOnly, viewerKey],
+    queryKey: ['tournaments-archive', page, majorOnly, battleType, competitorFormat, viewerKey],
     queryFn: () =>
-      listTournaments(page, PAGE_SIZE, 'COMPLETED' as Tournament['status'], majorOnly || undefined),
+      listTournaments(
+        page,
+        PAGE_SIZE,
+        'COMPLETED' as Tournament['status'],
+        majorOnly || undefined,
+        filters,
+      ),
     retry: false,
   });
 
@@ -216,21 +251,51 @@ export function TournamentsListing() {
         <p className="mt-2 text-sm text-rizzotto-stone-400">{t('brand.tagline')}</p>
       </div>
 
-      {/* Major filter */}
-      <div className="mb-8 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={toggleMajor}
-          className={`inline-flex items-center gap-2 rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
-            majorOnly
-              ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
-              : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
-          }`}
-          aria-pressed={majorOnly}
-        >
+      {/* Filters — Majors · Battle type · Team size (all preserved in the URL) */}
+      <div className="mb-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+        <FilterChip active={majorOnly} onClick={toggleMajor}>
           <Crown className="size-3.5" strokeWidth={1.5} />
           Majors only
-        </button>
+        </FilterChip>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-rizzotto-stone-500">
+            Type
+          </span>
+          <FilterChip active={!battleType} onClick={() => setBattleType(undefined)}>
+            All
+          </FilterChip>
+          <FilterChip active={battleType === 'DOMINATION'} onClick={() => setBattleType('DOMINATION')}>
+            Domination
+          </FilterChip>
+          <FilterChip active={battleType === 'CONQUEST'} onClick={() => setBattleType('CONQUEST')}>
+            Conquest
+          </FilterChip>
+          <FilterChip active={battleType === 'SIEGE'} onClick={() => setBattleType('SIEGE')}>
+            Siege
+          </FilterChip>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-rizzotto-stone-500">
+            Team
+          </span>
+          <FilterChip active={!competitorFormat} onClick={() => setCompetitorFormat(undefined)}>
+            All
+          </FilterChip>
+          <FilterChip
+            active={competitorFormat === 'ONE_V_ONE'}
+            onClick={() => setCompetitorFormat('ONE_V_ONE')}
+          >
+            1v1
+          </FilterChip>
+          <FilterChip
+            active={competitorFormat === 'TWO_V_TWO'}
+            onClick={() => setCompetitorFormat('TWO_V_TWO')}
+          >
+            2v2
+          </FilterChip>
+        </div>
       </div>
 
       {isLoading && <LoadingGrid />}
