@@ -15,6 +15,7 @@ Recommended: a transparent background, the gold symbol roughly square, ~256–51
 Until a matching file exists the watermark simply doesn't render (the image fails to load and is
 hidden), so it's safe to add them one at a time.
 
-The current `conquest.png` / `domination.png` / `siege.png` were extracted from the in-game
-Map-Setup UI screenshot and luminance-keyed to a transparent background. Replace them with the
+The current `conquest.png` / `domination.png` / `siege.png` were cropped from the in-game
+Map-Setup UI screenshot: each is the tile's inner area (inside the red frame, above the name
+strip), symbol centred, on the tile's dark maroon background. Replace them with the
 higher-resolution press-kit assets when available (same names, any of the extensions above).
