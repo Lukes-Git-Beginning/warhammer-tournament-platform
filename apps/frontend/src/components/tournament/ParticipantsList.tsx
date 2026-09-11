@@ -93,23 +93,59 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus, to
                 key={p.id}
                 className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 ${inactive ? 'opacity-50' : ''}`}
               >
-                {p.user.avatar_url ? (
-                  <img src={p.user.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" loading="lazy" />
+                {p.team ? (
+                  // 2v2: the team (name + both members, captain marked) instead of a single player.
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className={`text-sm font-semibold text-rizzotto-stone-100 ${inactive ? 'line-through' : ''}`}>
+                      {p.team.name}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      {p.team.members.map((m) => (
+                        <Link
+                          key={m.id}
+                          to="/users/$id"
+                          params={{ id: m.id }}
+                          className={`flex items-center gap-1.5 text-xs text-rizzotto-stone-300 hover:text-rizzotto-gold-400 transition-colors ${inactive ? 'line-through' : ''}`}
+                        >
+                          {m.avatar_url ? (
+                            <img src={m.avatar_url} alt="" className="h-5 w-5 rounded-full object-cover" loading="lazy" />
+                          ) : (
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rizzotto-iron-600 text-[9px] font-semibold text-rizzotto-stone-300">
+                              {m.username.slice(0, 2).toUpperCase()}
+                            </span>
+                          )}
+                          {m.username}
+                          {m.is_captain && (
+                            <span className="text-[9px] font-semibold uppercase tracking-wide text-rizzotto-gold-500" title="Captain">
+                              (C)
+                            </span>
+                          )}
+                          {m.tiers && <SupporterBadge tiers={m.tiers} size={11} compact />}
+                        </Link>
+                      ))}
+                    </span>
+                  </div>
                 ) : (
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-rizzotto-iron-600 text-xs font-semibold text-rizzotto-stone-300">
-                    {p.user.username.slice(0, 2).toUpperCase()}
-                  </span>
+                  <>
+                    {p.user.avatar_url ? (
+                      <img src={p.user.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" loading="lazy" />
+                    ) : (
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-rizzotto-iron-600 text-xs font-semibold text-rizzotto-stone-300">
+                        {p.user.username.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    <Link
+                      to="/users/$id"
+                      params={{ id: p.user.id }}
+                      className={`text-sm text-rizzotto-stone-200 hover:text-rizzotto-gold-400 transition-colors ${inactive ? 'line-through' : ''}`}
+                    >
+                      {p.user.username}
+                    </Link>
+                    {p.user.tiers && <SupporterBadge tiers={p.user.tiers} size={13} compact />}
+                  </>
                 )}
-                <Link
-                  to="/users/$id"
-                  params={{ id: p.user.id }}
-                  className={`text-sm text-rizzotto-stone-200 hover:text-rizzotto-gold-400 transition-colors ${inactive ? 'line-through' : ''}`}
-                >
-                  {p.user.username}
-                </Link>
-                {p.user.tiers && <SupporterBadge tiers={p.user.tiers} size={13} compact />}
 
-                {showFactionEdit && !inactive ? (
+                {!p.team && showFactionEdit && !inactive ? (
                   <select
                     value={p.faction?.id ?? ''}
                     disabled={setFactionMutation.isPending}

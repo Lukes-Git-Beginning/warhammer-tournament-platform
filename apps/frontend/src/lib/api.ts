@@ -2334,6 +2334,12 @@ export interface TournamentParticipantEntry {
   registered_at: string;
   lists_locked_at: string | null;
   user: { id: string; username: string; avatar_url: string | null; tiers?: SupporterTiers };
+  /** 2v2: the team roster behind this (captain's) row — team name + both members, captain first. null for 1v1. */
+  team?: {
+    id: string | null;
+    name: string;
+    members: { id: string; username: string; avatar_url: string | null; tiers?: SupporterTiers; is_captain: boolean }[];
+  } | null;
   faction: { id: string; name: string; color_hex: string } | null;
   faction_ids: string[]; // TWO_D_THREE: the player's 3-faction pool
   // BALANCED_LIECHTENSTEIN: division the player opted into / effective division.

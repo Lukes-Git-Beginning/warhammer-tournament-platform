@@ -438,6 +438,25 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     expect([g?.player2_faction_id, g?.player2_faction_id_2]).toEqual(side2);
   });
 
+  it('lists 2v2 participants as teams with both members (captain first)', async () => {
+    const host = await createAdminHost('2v2partshost');
+    const a = await makeActiveTeam('Quebec');
+    const { slug } = await setup2v2Tournament(host.id);
+    await registerTeam(slug, a.captain.id, a.teamId);
+
+    const res = await app.inject({ method: 'GET', url: `/api/tournaments/${slug}/participants` });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json().data as Array<{
+      team: { name: string; members: { id: string; is_captain: boolean }[] } | null;
+    }>;
+    const teamRow = rows.find((r) => r.team);
+    expect(teamRow?.team?.name).toBe('Quebec');
+    expect(teamRow?.team?.members).toHaveLength(2);
+    expect(teamRow?.team?.members[0]!.is_captain).toBe(true);
+    expect(teamRow?.team?.members[0]!.id).toBe(a.captain.id);
+    expect(teamRow?.team?.members.map((m) => m.id).sort()).toEqual([a.captain.id, a.partner.id].sort());
+  });
+
   it('lets either team member self-withdraw the whole team before start', async () => {
     const host = await createAdminHost('2v2withdrawhost');
     const a = await makeActiveTeam('Papa');
