@@ -5,9 +5,60 @@ import {
   createAdminMap,
   updateAdminMap,
   deleteAdminMap,
+  restoreAdminMap,
   uploadAdminMapImage,
   type MapDto,
+  type BattleType,
 } from '@/lib/api.js';
+
+const BATTLE_TYPES: BattleType[] = ['DOMINATION', 'CONQUEST', 'SIEGE'];
+
+const BATTLE_TYPE_LABELS: Record<BattleType, string> = {
+  DOMINATION: 'Dom',
+  CONQUEST: 'Con',
+  SIEGE: 'Siege',
+};
+
+interface BattleTypeChipsProps {
+  value: BattleType[];
+  onChange: (next: BattleType[]) => void;
+}
+
+function BattleTypeChips({ value, onChange }: BattleTypeChipsProps) {
+  function toggle(bt: BattleType) {
+    if (value.includes(bt)) {
+      // Enforce at least one selected
+      if (value.length === 1) return;
+      onChange(value.filter((t) => t !== bt));
+    } else {
+      onChange([...value, bt]);
+    }
+  }
+
+  return (
+    <div className="flex gap-1">
+      {BATTLE_TYPES.map((bt) => {
+        const active = value.includes(bt);
+        return (
+          <button
+            key={bt}
+            type="button"
+            onClick={() => toggle(bt)}
+            title={value.length === 1 && active ? 'At least one type required' : bt}
+            className={[
+              'rounded px-1.5 py-0.5 text-[10px] font-medium border transition-colors',
+              active
+                ? 'border-rizzotto-gold-600 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+                : 'border-stone-700 bg-transparent text-stone-600 hover:text-stone-400 hover:border-stone-500',
+            ].join(' ')}
+          >
+            {BATTLE_TYPE_LABELS[bt]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 interface AddMapModalProps {
   onClose: () => void;
@@ -18,10 +69,17 @@ function AddMapModal({ onClose, onCreated }: AddMapModalProps) {
   const [slug, setSlug] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [battleTypes, setBattleTypes] = useState<BattleType[]>(['DOMINATION']);
   const [error, setError] = useState<string | null>(null);
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => createAdminMap({ slug, name, description: description || undefined }),
+    mutationFn: () =>
+      createAdminMap({
+        slug,
+        name,
+        description: description || undefined,
+        battle_types: battleTypes,
+      }),
     onSuccess: () => { onCreated(); onClose(); },
     onError: (e: Error) => setError(e.message),
   });
@@ -60,6 +118,10 @@ function AddMapModal({ onClose, onCreated }: AddMapModalProps) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
+          </div>
+          <div>
+            <label className="block text-xs text-stone-400 mb-1">Battle types</label>
+            <BattleTypeChips value={battleTypes} onChange={setBattleTypes} />
           </div>
         </div>
 
@@ -161,13 +223,18 @@ export function MapPoolEditor() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-maps'] });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: { name?: string; description?: string } }) =>
+    mutationFn: ({ id, body }: { id: string; body: { name?: string; description?: string; battle_types?: BattleType[] } }) =>
       updateAdminMap(id, body),
     onSuccess: invalidate,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteAdminMap(id),
+    onSuccess: invalidate,
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => restoreAdminMap(id),
     onSuccess: invalidate,
   });
 
@@ -201,13 +268,14 @@ export function MapPoolEditor() {
               <th className="px-3 py-2 text-left text-stone-400 w-32">Slug</th>
               <th className="px-3 py-2 text-left text-stone-400">Name</th>
               <th className="px-3 py-2 text-left text-stone-400 hidden sm:table-cell">Description</th>
+              <th className="px-3 py-2 text-left text-stone-400">Battle types</th>
               <th className="px-3 py-2 text-right text-stone-400 w-24">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-800/60">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-stone-500">
+                <td colSpan={6} className="px-3 py-6 text-center text-stone-500">
                   None.
                 </td>
               </tr>
@@ -266,8 +334,24 @@ export function MapPoolEditor() {
                     <span className="text-stone-600 text-xs">{m.description ?? '—'}</span>
                   )}
                 </td>
+                <td className="px-3 py-2">
+                  {showDelete ? (
+                    <BattleTypeChips
+                      value={m.battle_types ?? ['DOMINATION']}
+                      onChange={(battle_types) =>
+                        updateMutation.mutate({ id: m.id, body: { battle_types } })
+                      }
+                    />
+                  ) : (
+                    <span className="text-stone-600 text-xs">
+                      {(m.battle_types ?? ['DOMINATION'])
+                        .map((bt) => BATTLE_TYPE_LABELS[bt])
+                        .join(', ')}
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-right">
-                  {showDelete && (
+                  {showDelete ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -279,6 +363,16 @@ export function MapPoolEditor() {
                       title="Soft-delete map"
                     >
                       ✕
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => restoreMutation.mutate(m.id)}
+                      disabled={restoreMutation.isPending}
+                      className="rounded px-2 py-0.5 border border-stone-600 text-stone-400 hover:bg-stone-700/40 hover:text-stone-200 disabled:opacity-40 transition-colors"
+                      title="Restore map"
+                    >
+                      Restore
                     </button>
                   )}
                 </td>

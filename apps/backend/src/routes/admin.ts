@@ -1426,7 +1426,28 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       orderBy: { name: 'asc' },
     });
 
-    return { maps };
+    return { data: maps };
+  });
+
+  fastify.post<{ Params: { id: string } }>('/api/admin/maps/:id/restore', async (request, reply) => {
+    const { id } = request.params;
+
+    const existing = await fastify.prisma.map.findUnique({ where: { id }, select: { id: true, deleted_at: true } });
+    if (!existing) {
+      return reply.code(404).send({ error: 'NotFound', message: 'Map not found', statusCode: 404 });
+    }
+    if (!existing.deleted_at) {
+      return reply.code(409).send({ error: 'Conflict', message: 'Map is not deleted', statusCode: 409 });
+    }
+
+    await fastify.prisma.map.update({ where: { id }, data: { deleted_at: null } });
+
+    await fastify.prisma.auditLog.create({
+      data: { entity_type: 'Map', entity_id: id, action: 'restore', actor_id: request.user.sub },
+    });
+
+    if (fastify.redis) await invalidate(fastify.redis, 'maps:*');
+    return reply.code(204).send();
   });
 
   fastify.post('/api/admin/maps', async (request, reply) => {

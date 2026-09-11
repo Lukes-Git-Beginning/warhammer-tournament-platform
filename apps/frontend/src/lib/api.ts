@@ -22,6 +22,7 @@ import type {
   PlayerFactionProficiencyResponse,
   PlayoffPreview,
   SupporterTiers,
+  BattleType,
 } from '@rizzotto/types';
 
 export type {
@@ -120,7 +121,10 @@ export interface MapDto {
   description: string | null;
   image_url: string | null;
   deleted_at?: string | null;
+  battle_types: BattleType[];
 }
+
+export type { BattleType };
 
 export type ParticipantStatus = 'REGISTERED' | 'CHECKED_IN' | 'WITHDREW' | 'DISQUALIFIED' | 'JOIN_REQUESTED';
 
@@ -1284,13 +1288,14 @@ export function getAdminPickBanStats(opts?: {
 // ---------------------------------------------------------------------------
 
 export function getAdminMaps(): Promise<{ data: MapDto[] }> {
-  return apiFetch('/api/admin/maps');
+  return apiFetch('/api/admin/maps?include_deleted=true');
 }
 
 export function createAdminMap(body: {
   slug: string;
   name: string;
   description?: string;
+  battle_types?: BattleType[];
 }): Promise<MapDto> {
   return apiFetch('/api/admin/maps', {
     method: 'POST',
@@ -1300,7 +1305,7 @@ export function createAdminMap(body: {
 
 export function updateAdminMap(
   id: string,
-  body: { name?: string; description?: string },
+  body: { name?: string; description?: string; battle_types?: BattleType[] },
 ): Promise<MapDto> {
   return apiFetch(`/api/admin/maps/${id}`, {
     method: 'PATCH',
@@ -1310,6 +1315,10 @@ export function updateAdminMap(
 
 export function deleteAdminMap(id: string): Promise<void> {
   return apiFetch(`/api/admin/maps/${id}`, { method: 'DELETE' });
+}
+
+export function restoreAdminMap(id: string): Promise<void> {
+  return apiFetch(`/api/admin/maps/${id}/restore`, { method: 'POST' });
 }
 
 export async function uploadAdminMapImage(id: string, file: File): Promise<MapDto> {
