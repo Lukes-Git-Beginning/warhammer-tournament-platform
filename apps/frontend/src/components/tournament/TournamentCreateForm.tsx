@@ -565,8 +565,8 @@ export function TournamentCreateForm() {
           >
             {form.competitor_format === 'TWO_V_TWO' ? (
               <>
-                <option value="BPT_2V2">BPT 2v2 — Blind pick, both members</option>
-                <option value="SFT_2V2">SFT 2v2 — Single faction per member</option>
+                <option value="BPT_2V2">BPT — Blind pick, both members</option>
+                <option value="SFT_2V2">SFT — Single faction per member</option>
               </>
             ) : (
               <>

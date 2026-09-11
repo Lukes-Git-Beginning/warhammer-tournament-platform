@@ -30,6 +30,8 @@ const MODE_LABELS: Record<string, string> = {
   SFT: 'SFT', BPT: 'BPT', SLT: 'SLT', MATRIX: 'Matrix', TWO_D_THREE: '2D3',
   FREE_PICK: 'Free Pick', ONE_V_THREE: '1v3',
   BLIND_PICK: 'Blind Pick', ONE_V_ONE: '1v1', THREE_V_THREE: '3v3',
+  // 2v2 modes render without the "2v2" suffix — the 2v2 badge already marks the format.
+  SFT_2V2: 'SFT', BPT_2V2: 'BPT',
 };
 
 function TournamentCard({ tournament }: { tournament: Tournament }) {

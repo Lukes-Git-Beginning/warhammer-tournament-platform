@@ -15,9 +15,9 @@ export const MODE_DESCRIPTIONS: Record<string, string> = {
   FACTION_WAR:
     'Like SFT, but every faction is exclusive: once a player claims a faction at registration, no one else can pick it — first come, first served, and no mirror matches.',
   SFT_2V2:
-    '2v2 Single Faction — the captain pre-picks one faction per member at registration (captain, then teammate). Two factions per side, revealed at start.',
+    'Single Faction — the captain pre-picks one faction per member at registration (captain, then teammate). Two factions per side, revealed at start.',
   BPT_2V2:
-    '2v2 Blind Pick — the captain blind-picks one faction per member each game (captain + teammate), revealed once both teams have locked.',
+    'Blind Pick — the captain blind-picks one faction per member each game (captain + teammate), revealed once both teams have locked.',
 };
 
 export const FORMAT_DESCRIPTIONS: Record<string, string> = {

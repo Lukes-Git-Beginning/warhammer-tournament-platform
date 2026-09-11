@@ -42,6 +42,9 @@ const MODE_LABELS: Record<string, string> = {
   BLIND_PICK: 'Blind Pick',
   ONE_V_ONE: '1v1',
   THREE_V_THREE: '3v3',
+  // 2v2 modes render without the "2v2" suffix — the 2v2 badge already marks the format.
+  SFT_2V2: 'SFT',
+  BPT_2V2: 'BPT',
 };
 
 const STATUS_LABELS: Record<string, string> = {
