@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getMatchGames, getTournamentMaps, getFactions, getParticipants, startMatchDecision } from '@/lib/api';
 import type { MapDto } from '@/lib/api';
-import type { BracketNode, FactionDto } from '@rizzotto/types';
+import type { BracketNode, BracketCompetitor, FactionDto } from '@rizzotto/types';
 import { useMatchDecisionSocket } from '@/hooks/useMatchDecisionSocket';
 import { GameTile } from './GameTile';
 
@@ -11,6 +11,29 @@ function matchPhaseLabel(phase: BracketNode['phase'], round: number): string {
   if (phase === 'PLAYOFF_QF') return 'Quarterfinal';
   if (phase === 'PLAYOFF_THIRD_PLACE') return '3rd Place';
   return `Round ${round}`;
+}
+
+/**
+ * Which match slot the viewer belongs to and whether they may act. A slot is opaque: a User id
+ * (1v1 → the viewer is that user, and may act) or a Team id (2v2 → the viewer is a member; only
+ * the captain may act — team-as-actor). Returns mySideId=null when the viewer is in neither slot.
+ */
+function resolveViewerSide(
+  match: BracketNode,
+  userId: string,
+  competitors?: Record<string, BracketCompetitor>,
+): { mySideId: string | null; canInteract: boolean } {
+  for (const slot of [match.player1Id, match.player2Id]) {
+    if (!slot) continue;
+    const comp = competitors?.[slot];
+    if (comp?.type === 'TEAM') {
+      const mine = comp.members?.find((m) => m.userId === userId);
+      if (mine) return { mySideId: slot, canInteract: mine.isCaptain };
+    } else if (slot === userId) {
+      return { mySideId: slot, canInteract: true };
+    }
+  }
+  return { mySideId: null, canInteract: false };
 }
 
 interface Props {
@@ -24,19 +47,22 @@ interface Props {
   tournamentSlug: string;
   /** Tournament mode (e.g. 'BPT') — forwarded to GameTile for blind-pick logic */
   tournamentMode?: string;
+  /** Resolved competitor info (2v2 team rosters) — lets a team member find their team's match. */
+  competitors?: Record<string, BracketCompetitor>;
 }
 
 /**
  * Shows the current user's active match tile(s) above the Bracket.
  * Only renders when the user has a PENDING or ONGOING match in the tournament.
  */
-export function MyMatchSection({ currentUserId, matches, playerNames, tournamentSlug, tournamentMode }: Props) {
+export function MyMatchSection({ currentUserId, matches, playerNames, tournamentSlug, tournamentMode, competitors }: Props) {
+  // A 2v2 slot is a Team id, so match on team membership (not id equality).
   const myMatch = matches.find(
     (m) =>
       (m.status === 'PENDING' || m.status === 'ONGOING') &&
       m.player1Id !== null &&
       m.player2Id !== null &&
-      (m.player1Id === currentUserId || m.player2Id === currentUserId),
+      resolveViewerSide(m, currentUserId, competitors).mySideId !== null,
   );
 
   if (!myMatch) return null;
@@ -48,6 +74,7 @@ export function MyMatchSection({ currentUserId, matches, playerNames, tournament
       playerNames={playerNames}
       tournamentSlug={tournamentSlug}
       tournamentMode={tournamentMode}
+      competitors={competitors}
     />
   );
 }
@@ -58,15 +85,18 @@ function MyMatchInner({
   playerNames,
   tournamentSlug,
   tournamentMode,
+  competitors,
 }: {
   match: BracketNode;
   currentUserId: string;
   playerNames: Record<string, string>;
   tournamentSlug: string;
   tournamentMode?: string;
+  competitors?: Record<string, BracketCompetitor>;
 }) {
   useMatchDecisionSocket(match.matchId);
   const queryClient = useQueryClient();
+  const { mySideId, canInteract } = resolveViewerSide(match, currentUserId, competitors);
 
   const { data, isLoading } = useQuery({
     queryKey: ['match-games', match.matchId],
@@ -136,7 +166,9 @@ function MyMatchInner({
               player2AvatarUrl={match.player2Id ? (playerAvatars[match.player2Id] ?? null) : null}
               matchPlayer1FactionId={match.player1FactionId}
               matchPlayer2FactionId={match.player2FactionId}
-              isParticipant={true}
+              isParticipant={mySideId !== null}
+              mySideId={mySideId}
+              canInteract={canInteract}
               maps={maps}
               factions={factions}
               tournamentMode={tournamentMode}
@@ -147,10 +179,9 @@ function MyMatchInner({
           {(() => {
             const games = data.games;
             const lastGame = games[games.length - 1];
-            const isParticipant =
-              match.player1Id === currentUserId || match.player2Id === currentUserId;
+            // Only the acting competitor (1v1 self / 2v2 captain) may start the next game.
             if (
-              isParticipant &&
+              canInteract &&
               match.status === 'ONGOING' &&
               lastGame?.status === 'COMPLETED' &&
               !games.some((g) => g.status === 'PENDING' || g.status === 'ONGOING')

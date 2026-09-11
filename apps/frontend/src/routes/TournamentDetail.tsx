@@ -1047,11 +1047,14 @@ export function TournamentDetail() {
         <MyMatchSection
           currentUserId={user.id}
           matches={bracket.matches}
-          playerNames={Object.fromEntries(
-            participantsData.data.map((p) => [p.user.id, p.user.username]),
-          )}
+          playerNames={{
+            ...Object.fromEntries(participantsData.data.map((p) => [p.user.id, p.user.username])),
+            // 2v2: a slot is a team id — layer in team names so the tile shows the team, not "Player 1".
+            ...Object.fromEntries(Object.values(bracket.competitors ?? {}).map((c) => [c.id, c.name])),
+          }}
           tournamentSlug={tournament.slug}
           tournamentMode={tournament.mode}
+          competitors={bracket.competitors}
         />
         </div>
       )}

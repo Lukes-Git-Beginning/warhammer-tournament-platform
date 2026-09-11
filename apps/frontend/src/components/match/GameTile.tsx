@@ -60,8 +60,14 @@ interface Props {
   /** Faction IDs from the BracketNode (3-level fallback incl. TournamentParticipant) */
   matchPlayer1FactionId?: string | null;
   matchPlayer2FactionId?: string | null;
-  /** Whether the current user is a participant in this match */
+  /** Whether the current user is a participant in this match (a team member, for 2v2 → sees the tile) */
   isParticipant: boolean;
+  /** The competitor slot the viewer belongs to (their team id for 2v2). Falls back to the 1v1
+   *  identity when omitted (Open Play). */
+  mySideId?: string | null;
+  /** Whether the viewer may act on this match: 1v1 self, or the 2v2 team CAPTAIN. A teammate sees
+   *  the tile read-only. Defaults to isParticipant when omitted (1v1). */
+  canInteract?: boolean;
   /** Map pool for resolving picked map name */
   maps?: MapDto[];
   /** Faction id → full DTO lookup */
@@ -89,6 +95,8 @@ export function GameTile({
   matchPlayer1FactionId,
   matchPlayer2FactionId,
   isParticipant,
+  mySideId,
+  canInteract,
   maps = [],
   factions = {},
   tournamentMode,
@@ -175,8 +183,15 @@ export function GameTile({
     },
   });
 
-  const isPlayer1 = currentUserId === player1Id;
-  const isPlayer2 = currentUserId === player2Id;
+  // Viewer's side: for 1v1 the viewer IS the slot id; for 2v2 the parent supplies the team id the
+  // viewer belongs to (mySideId). `canAct` gates every interaction (report, picks, lobby, void):
+  // 1v1 self or 2v2 captain. A teammate has isParticipant (sees the tile) but not canAct.
+  const viewerSideId =
+    mySideId ?? (currentUserId === player1Id ? player1Id : currentUserId === player2Id ? player2Id : null);
+  const isPlayer1 = viewerSideId === player1Id;
+  const isPlayer2 = viewerSideId === player2Id;
+  const canAct = canInteract ?? isParticipant;
+  const isReadOnlyMember = isParticipant && !canAct;
 
   // Banner visibility: show when the current user is the survivor (a participant whose
   // opponent withdrew) and the game has no result yet.
@@ -262,6 +277,14 @@ export function GameTile({
         <StatusBadge status={game.status} />
       </div>
 
+      {/* 2v2 teammate: sees everything, but only the captain acts. Make that unmistakable. */}
+      {isReadOnlyMember && (
+        <div className="flex items-center gap-2 rounded-md border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-200">
+          <span aria-hidden>👀</span>
+          <span>View only — your team captain picks, reports and manages this match for the team.</span>
+        </div>
+      )}
+
       {/* Opponent-withdrew banner — survivor only, unresolved game */}
       {showWithdrawnBanner && (
         <div className="rounded-lg border border-amber-700/60 bg-amber-950/40 p-4 flex flex-col gap-3">
@@ -273,17 +296,19 @@ export function GameTile({
                 : 'If you played this match, report the result below. If not, void it.'}
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="self-start border border-rizzotto-iron-600 text-rizzotto-stone-300 hover:border-rizzotto-stone-500 hover:text-rizzotto-stone-100"
-            onClick={() => voidDroppedMutation.mutate()}
-            disabled={voidDroppedMutation.isPending}
-          >
-            {voidDroppedMutation.isPending
-              ? (isPlayoffMatch ? 'Advancing…' : 'Voiding…')
-              : (isPlayoffMatch ? 'Take walkover (opponent withdrew)' : 'Void match (not played)')}
-          </Button>
+          {canAct && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="self-start border border-rizzotto-iron-600 text-rizzotto-stone-300 hover:border-rizzotto-stone-500 hover:text-rizzotto-stone-100"
+              onClick={() => voidDroppedMutation.mutate()}
+              disabled={voidDroppedMutation.isPending}
+            >
+              {voidDroppedMutation.isPending
+                ? (isPlayoffMatch ? 'Advancing…' : 'Voiding…')
+                : (isPlayoffMatch ? 'Take walkover (opponent withdrew)' : 'Void match (not played)')}
+            </Button>
+          )}
           {voidDroppedMutation.isError && (
             <p className="text-xs text-red-400">
               {(voidDroppedMutation.error as Error).message}
@@ -395,7 +420,7 @@ export function GameTile({
           {!decisionComplete && (
             <div className="flex flex-col gap-3">
               {!game.decision ? (
-                isParticipant ? (
+                canAct ? (
                   <div className="flex flex-col items-center gap-3">
                     <p className="text-sm text-rizzotto-stone-400 text-center">
                       {isFreePick ? 'Faction and map selection not started yet.' : 'Map and faction selection not started yet.'}
@@ -458,17 +483,19 @@ export function GameTile({
                         : 'until a faction is auto-picked'}
                     </p>
                   )}
-                  <Button variant="forge" size="sm" asChild>
-                    <Link to="/matches/$matchId/decision" params={{ matchId }}>
-                      {isFreePick
-                        ? 'Continue Setup'
-                        : game.decision?.pickedMapId && tournamentMode === 'MATRIX'
-                          ? 'Continue Faction Picking'
-                          : game.decision?.pickedMapId && needsBlindPick
-                            ? 'Pick Your Faction'
-                            : 'Go to Map Selection'}
-                    </Link>
-                  </Button>
+                  {canAct && (
+                    <Button variant="forge" size="sm" asChild>
+                      <Link to="/matches/$matchId/decision" params={{ matchId }}>
+                        {isFreePick
+                          ? 'Continue Setup'
+                          : game.decision?.pickedMapId && tournamentMode === 'MATRIX'
+                            ? 'Continue Faction Picking'
+                            : game.decision?.pickedMapId && needsBlindPick
+                              ? 'Pick Your Faction'
+                              : 'Go to Map Selection'}
+                      </Link>
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
@@ -514,13 +541,14 @@ export function GameTile({
                 gameNumber={game.gameNumber}
                 currentCode={game.lobbyCode}
                 currentPassword={game.lobbyPassword}
-                canEdit={isParticipant}
+                canEdit={canAct}
               />
 
-              {/* Result reporting — only for participants. Keep it open while the mismatch
-                  prompt is showing (paths A/B/C): the report sets reported_winner_id, so the
-                  5s Open-Play refetch would otherwise pull the block out from under the prompt. */}
-              {isParticipant && (!game.reportedWinnerId || mismatch) && (
+              {/* Result reporting — only for the acting competitor (1v1 self / 2v2 captain). Keep
+                  it open while the mismatch prompt is showing (paths A/B/C): the report sets
+                  reported_winner_id, so the 5s Open-Play refetch would otherwise pull the block
+                  out from under the prompt. */}
+              {canAct && (!game.reportedWinnerId || mismatch) && (
                 <div className="flex flex-col gap-3 pt-2 border-t border-rizzotto-iron-700">
                   <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider">Report Result</span>
                   <div className="flex gap-2">
@@ -643,7 +671,7 @@ export function GameTile({
               )}
 
               {/* Provisional — reporter sees countdown */}
-              {game.reportedWinnerId && !game.confirmedAt && isParticipant && (
+              {game.reportedWinnerId && !game.confirmedAt && canAct && (
                 <ProvisionalPanel
                   matchId={matchId}
                   game={game}
