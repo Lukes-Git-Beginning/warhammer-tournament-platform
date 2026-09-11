@@ -367,9 +367,17 @@ export function buildAnnouncementPrompt(
 ): string {
   const out: string[] = [];
   out.push(
+    'BEFORE writing a single line: open and read IN FULL these two files from your project memory. First ' +
+      '`announcement-writing-rules.md` (the standing voice/format/mode rules, built from past corrections you must ' +
+      'not repeat), then `project-announcements-and-attribution.md` (the push flow and where the push token is ' +
+      'stored). The one-line memory index is only a pointer, not the content; writing from the gist reproduces the ' +
+      'exact mistakes those files exist to prevent. Do this even under time pressure, that read IS the value of the task.',
+  );
+  out.push('');
+  out.push(
     "Write Discord tournament announcements for RizzOtto's Arena (rizzotto.gg). Produce ONE ready-to-paste " +
-      "Discord post per destination below, in Alex's own plain, direct voice. Follow the announcement-writing-rules " +
-      'in project memory (recalled automatically). Key points: the audience are Total War tournament REGULARS by ' +
+      "Discord post per destination below, in Alex's own plain, direct voice. Apply the announcement-writing-rules " +
+      'you just read. Key points: the audience are Total War tournament REGULARS by ' +
       'default, so do NOT explain the scene or formats as if new — honour each destination\'s explanation level. ' +
       "Lean hard on the host's description (lift wording where it's good). State the concrete plan (rounds, playoff), " +
       'do not hedge. No filler openers or sign-offs, no fluff, no em dashes. Light Discord markdown only. Always ' +
@@ -383,8 +391,9 @@ export function buildAnnouncementPrompt(
   out.push(
     `When the posts are ready, push them to the site: POST https://rizzotto.gg/api/announcements/push with ` +
       `{ "slug": "${slug}", "results": [{ "destinationId", "name", "text" }, …] } and the stored announcement ` +
-      `push token in the X-Push-Token header. Then they appear in the Announcements tab with a Copy button per ` +
-      `destination.`,
+      `push token in the X-Push-Token header (you saved it locally; the exact path is in ` +
+      `project-announcements-and-attribution.md, so check there before assuming you do not have it). Then they ` +
+      `appear in the Announcements tab with a Copy button per destination.`,
   );
   out.push('');
   out.push('=== TOURNAMENT FACTS (source of truth — do not invent beyond these) ===');
