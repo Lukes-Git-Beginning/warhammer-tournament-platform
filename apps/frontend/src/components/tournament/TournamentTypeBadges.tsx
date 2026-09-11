@@ -5,9 +5,9 @@ import { Badge } from '@/components/ui/badge';
 // Battle type → a faint full-tile watermark behind the content (Card `watermark` slot), using
 // the OFFICIAL symbol image supplied at /battle-types/<type>.png (see public/battle-types/).
 
-/** A "2v2" chip for the tile's status row — same Badge style as Upcoming/Live/Completed, in violet. */
+/** A "2v2" chip for the tile's status row — same Badge style as Upcoming/Live/Completed, in magenta. */
 export function Team2v2Badge() {
-  return <Badge variant="violet">2v2</Badge>;
+  return <Badge variant="magenta">2v2</Badge>;
 }
 
 const BATTLE_TYPES = new Set(['DOMINATION', 'CONQUEST', 'SIEGE']);

@@ -11,7 +11,7 @@ const badgeVariants = cva(
         gold: 'bg-rizzotto-gold-500/15 border-rizzotto-gold-500/40 text-rizzotto-gold-400',
         forge: 'bg-rizzotto-forge-500/20 border-rizzotto-forge-500/40 text-rizzotto-forge-400',
         blood: 'bg-rizzotto-blood-500/15 border-rizzotto-blood-500/40 text-rizzotto-blood-500',
-        violet: 'bg-violet-500/15 border-violet-500/40 text-violet-300',
+        magenta: 'bg-fuchsia-500/20 border-fuchsia-400/50 text-fuchsia-300',
         bronze: 'bg-rizzotto-bronze/15 border-rizzotto-bronze/40 text-rizzotto-bronze',
         success: 'bg-rizzotto-success/15 border-rizzotto-success/40 text-rizzotto-success',
         major:
