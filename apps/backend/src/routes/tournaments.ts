@@ -8,6 +8,7 @@ import { finalizeTournament, unfinalizeTournament } from '../lib/finalize-tourna
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
 import type { TournamentStatusLiteral } from '@rizzotto/types';
 import {
+  BattleTypeSchema,
   CalendarQuerySchema,
   CalendarTournamentSchema,
   TournamentStatusSchema,
@@ -197,6 +198,7 @@ const CreateTournamentSchema = z.object({
   has_third_place_match: z.boolean().optional(),
   min_band: z.number().int().min(1).max(5).nullable().optional(),
   max_band: z.number().int().min(1).max(5).nullable().optional(),
+  battle_type: BattleTypeSchema.optional(),
 }).superRefine(refineMapPool).superRefine(refineOneVThree);
 
 const PatchTournamentSchema = z.object({
@@ -241,6 +243,7 @@ const PatchTournamentSchema = z.object({
   restricted_factions: z.array(z.string().min(1)).optional(),
   min_band: z.number().int().min(1).max(5).nullable().optional(),
   max_band: z.number().int().min(1).max(5).nullable().optional(),
+  battle_type: BattleTypeSchema.optional(),
 })
   .superRefine(refineMapPool)
   .superRefine(refineOneVThree)
@@ -423,10 +426,15 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       const baseSlug = generateSlug(data.name);
       const slug = await resolveSlug(fastify.prisma, baseSlug);
 
-      // Validate map_pool IDs exist in the master pool
+      // Validate map_pool IDs exist in the master pool and are valid for the battle type
       if (data.map_pool && data.map_pool.length > 0) {
+        const effectiveBattleType = data.battle_type ?? 'DOMINATION';
         const existingMaps = await fastify.prisma.map.findMany({
-          where: { id: { in: data.map_pool }, deleted_at: null },
+          where: {
+            id: { in: data.map_pool },
+            deleted_at: null,
+            battle_types: { has: effectiveBattleType },
+          },
           select: { id: true },
         });
         if (existingMaps.length !== data.map_pool.length) {
@@ -434,7 +442,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           const missing = data.map_pool.filter((id) => !foundIds.includes(id));
           return reply.code(422).send({
             error: 'UnprocessableEntity',
-            message: `Map IDs not found in master pool: ${missing.join(', ')}`,
+            message: `Map IDs not found in master pool or not valid for battle type ${effectiveBattleType}: ${missing.join(', ')}`,
             statusCode: 422,
           });
         }
@@ -504,6 +512,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           has_third_place_match: data.has_third_place_match ?? false,
           min_band: data.min_band ?? null,
           max_band: data.max_band ?? null,
+          battle_type: data.battle_type ?? 'DOMINATION',
         },
         select: {
           id: true,
@@ -522,6 +531,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           finale_match_format: true,
           map_decision_mode: true,
           map_preset_config: true,
+          battle_type: true,
           created_at: true,
         },
       });
@@ -770,6 +780,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         map_preset_config: true,
         min_band: true,
         max_band: true,
+        battle_type: true,
         created_at: true,
         updated_at: true,
         host: { select: { id: true, username: true, avatar_url: true } },
@@ -852,6 +863,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           counts_for_leaderboard: true,
           min_band: true,
           max_band: true,
+          battle_type: true,
         },
       });
 
@@ -894,9 +906,16 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           });
         }
 
-        // Validate all map IDs exist
+        // Effective battle type: use the patched value (if provided) or fall back to the existing one.
+        const effectiveBattleType = (rest.battle_type ?? tournament.battle_type) as string;
+
+        // Validate all map IDs exist and are valid for the effective battle type
         const existingMaps = await fastify.prisma.map.findMany({
-          where: { id: { in: newMapPool }, deleted_at: null },
+          where: {
+            id: { in: newMapPool },
+            deleted_at: null,
+            battle_types: { has: effectiveBattleType as 'DOMINATION' | 'CONQUEST' | 'SIEGE' },
+          },
           select: { id: true },
         });
         if (existingMaps.length !== newMapPool.length) {
@@ -904,7 +923,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           const missing = newMapPool.filter((id) => !foundIds.includes(id));
           return reply.code(422).send({
             error: 'UnprocessableEntity',
-            message: `Map IDs not found in master pool: ${missing.join(', ')}`,
+            message: `Map IDs not found in master pool or not valid for battle type ${effectiveBattleType}: ${missing.join(', ')}`,
             statusCode: 422,
           });
         }
@@ -919,8 +938,9 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       if (tournament.status !== 'DRAFT') {
         // Reject only a genuine CHANGE to a structural field — a client that re-submits
         // the unchanged value (e.g. an edit form that always sends `mode`) must not 422.
-        const draftOnlyAttempted = (['format', 'mode'] as const).filter(
-          (f) => rest[f] !== undefined && rest[f] !== tournament[f],
+        // battle_type is structural: changing it post-DRAFT invalidates the map pool.
+        const draftOnlyAttempted = (['format', 'mode', 'battle_type'] as const).filter(
+          (f) => rest[f] !== undefined && rest[f] !== tournament[f as keyof typeof tournament],
         );
         if (draftOnlyAttempted.length > 0) {
           return reply.code(422).send({

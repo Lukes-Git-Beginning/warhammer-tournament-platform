@@ -379,6 +379,13 @@ export const MatchupHeatmapResponseSchema = z.object({
 export type MatchupHeatmapResponse = z.infer<typeof MatchupHeatmapResponseSchema>;
 
 // ---------------------------------------------------------------------------
+// Battle Type
+// ---------------------------------------------------------------------------
+
+export const BattleTypeSchema = z.enum(['DOMINATION', 'CONQUEST', 'SIEGE']);
+export type BattleType = z.infer<typeof BattleTypeSchema>;
+
+// ---------------------------------------------------------------------------
 // Tournament Enums (shared between Calendar + other Hub-Foundation routes)
 // ---------------------------------------------------------------------------
 

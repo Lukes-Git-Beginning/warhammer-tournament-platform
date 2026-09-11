@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { TournamentFormat, PlayoffFormat, Prisma } from '@rizzotto/db';
-import { ImportLogListResponseSchema } from '@rizzotto/types';
+import { BattleTypeSchema, ImportLogListResponseSchema } from '@rizzotto/types';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { runBalancedPairingTick } from '../lib/balanced-liechtenstein-service.js';
 import { emitBracketUpdate } from '../lib/emit.js';
@@ -93,12 +93,14 @@ const MapCreateSchema = z.object({
   slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
   description: z.string().max(500).optional(),
   image_url: z.string().url().optional(),
+  battle_types: z.array(BattleTypeSchema).min(1).optional(),
 });
 
 const MapUpdateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(500).optional(),
   image_url: z.string().url().optional(),
+  battle_types: z.array(BattleTypeSchema).min(1).optional(),
 });
 
 const FactionCreateSchema = z.object({
@@ -1448,7 +1450,13 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const map = await fastify.prisma.map.create({
-      data: { name, slug, description: description ?? null, image_url: image_url ?? null },
+      data: {
+        name,
+        slug,
+        description: description ?? null,
+        image_url: image_url ?? null,
+        battle_types: parsed.data.battle_types ?? ['DOMINATION'],
+      },
     });
 
     await fastify.prisma.auditLog.create({
