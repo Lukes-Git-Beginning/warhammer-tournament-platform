@@ -59,17 +59,20 @@ export function EliminationStandings({
     (p) => p.status === 'WITHDREW' || p.status === 'DISQUALIFIED',
   );
 
+  // A 2v2 competitor is keyed in the bracket by its TEAM id; 1v1 by the user id.
+  const cid = (p: TournamentParticipantEntry) => p.team?.id ?? p.user.id;
+
   const { placements, lastCompletedRound, gfParticipants } = getEliminationPlacements(matches);
 
   // Sort active participants by placement data
   const sorted = [...active].sort((a, b) => {
-    const pa = placements.get(a.user.id);
-    const pb = placements.get(b.user.id);
+    const pa = placements.get(cid(a));
+    const pb = placements.get(cid(b));
     if (pa !== undefined && pb !== undefined) return pa - pb;
     if (pa !== undefined) return -1;
     if (pb !== undefined) return 1;
-    const ra = lastCompletedRound.get(a.user.id) ?? -1;
-    const rb = lastCompletedRound.get(b.user.id) ?? -1;
+    const ra = lastCompletedRound.get(cid(a)) ?? -1;
+    const rb = lastCompletedRound.get(cid(b)) ?? -1;
     return rb - ra; // higher round = better
   });
 
@@ -78,16 +81,16 @@ export function EliminationStandings({
   const gfDividerAfter = (() => {
     // Insert GF divider after the last GF participant in the sorted list
     const lastGfIdx = sorted.reduce(
-      (acc, p, i) => (gfParticipants.has(p.user.id) ? i : acc),
+      (acc, p, i) => (gfParticipants.has(cid(p)) ? i : acc),
       -1,
     );
     return lastGfIdx >= 0 ? lastGfIdx : -1;
   })();
 
   function renderRow(p: TournamentParticipantEntry, dimmed = false) {
-    const placement = placements.get(p.user.id) as 1 | 2 | 3 | 4 | undefined;
+    const placement = placements.get(cid(p)) as 1 | 2 | 3 | 4 | undefined;
     const badge = placement ? PLACEMENT_BADGE[placement] : null;
-    const isGfRow = gfParticipants.has(p.user.id);
+    const isGfRow = gfParticipants.has(cid(p));
     const canDrop = showDropButtons && !dimmed;
 
     return (
@@ -99,30 +102,66 @@ export function EliminationStandings({
           isGfRow && !dimmed ? 'bg-rizzotto-gold-500/5' : '',
         ].join(' ')}
       >
-        {p.user.avatar_url ? (
-          <img
-            src={p.user.avatar_url}
-            alt=""
-            className="h-7 w-7 rounded-full object-cover shrink-0"
-            loading="lazy"
-          />
+        {p.team ? (
+          // 2v2: the team name + both members (captain marked).
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className={`text-sm font-semibold text-rizzotto-stone-100 ${dimmed ? 'line-through' : ''}`}>
+              {p.team.name}
+            </span>
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {p.team.members.map((m) => (
+                <Link
+                  key={m.id}
+                  to="/users/$id"
+                  params={{ id: m.id }}
+                  className={`flex items-center gap-1.5 text-xs text-rizzotto-stone-300 hover:text-rizzotto-gold-400 transition-colors ${dimmed ? 'line-through' : ''}`}
+                >
+                  {m.avatar_url ? (
+                    <img src={m.avatar_url} alt="" className="h-5 w-5 rounded-full object-cover" loading="lazy" />
+                  ) : (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rizzotto-iron-600 text-[9px] font-semibold text-rizzotto-stone-300">
+                      {m.username.slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                  {m.username}
+                  {m.is_captain && (
+                    <span className="text-[9px] font-semibold uppercase tracking-wide text-rizzotto-gold-500" title="Captain">
+                      (C)
+                    </span>
+                  )}
+                  {m.tiers && <SupporterBadge tiers={m.tiers} size={11} compact />}
+                </Link>
+              ))}
+            </span>
+          </div>
         ) : (
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rizzotto-iron-600 text-xs font-semibold text-rizzotto-stone-300">
-            {p.user.username.slice(0, 2).toUpperCase()}
-          </span>
-        )}
+          <>
+            {p.user.avatar_url ? (
+              <img
+                src={p.user.avatar_url}
+                alt=""
+                className="h-7 w-7 rounded-full object-cover shrink-0"
+                loading="lazy"
+              />
+            ) : (
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rizzotto-iron-600 text-xs font-semibold text-rizzotto-stone-300">
+                {p.user.username.slice(0, 2).toUpperCase()}
+              </span>
+            )}
 
-        <Link
-          to="/users/$id"
-          params={{ id: p.user.id }}
-          className={[
-            'text-sm text-rizzotto-stone-200 hover:text-rizzotto-gold-400 transition-colors',
-            dimmed ? 'line-through' : '',
-          ].join(' ')}
-        >
-          {p.user.username}
-        </Link>
-        {p.user.tiers && <SupporterBadge tiers={p.user.tiers} size={13} compact />}
+            <Link
+              to="/users/$id"
+              params={{ id: p.user.id }}
+              className={[
+                'text-sm text-rizzotto-stone-200 hover:text-rizzotto-gold-400 transition-colors',
+                dimmed ? 'line-through' : '',
+              ].join(' ')}
+            >
+              {p.user.username}
+            </Link>
+            {p.user.tiers && <SupporterBadge tiers={p.user.tiers} size={13} compact />}
+          </>
+        )}
 
         {badge && !dimmed && (
           <span
@@ -159,7 +198,7 @@ export function EliminationStandings({
             disabled={dropMutation.isPending}
             className="ml-auto rounded border border-red-900 px-2 py-0.5 text-xs text-red-500 hover:border-red-600 hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => {
-              if (confirm(`Drop ${p.user.username} from the tournament? Any open matches will be awarded to their opponent.`)) {
+              if (confirm(`Drop ${p.team?.name ?? p.user.username} from the tournament? Any open matches will be awarded to their opponent.`)) {
                 dropMutation.mutate(p.user.id);
               }
             }}
