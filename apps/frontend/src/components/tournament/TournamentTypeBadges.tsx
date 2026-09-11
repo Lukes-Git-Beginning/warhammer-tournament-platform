@@ -1,16 +1,13 @@
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 
-// Marks for a tournament's two new axes. Team size → a small "2v2" chip on the status row.
+// Marks for a tournament's two new axes. Team size → a "2v2" chip on the status row.
 // Battle type → a faint full-tile watermark behind the content (Card `watermark` slot), using
 // the OFFICIAL symbol image supplied at /battle-types/<type>.png (see public/battle-types/).
 
-/** A bold "2v2" chip for the tile's status row. */
+/** A "2v2" chip for the tile's status row — same Badge style as Upcoming/Live/Completed, in violet. */
 export function Team2v2Badge() {
-  return (
-    <span className="inline-flex items-center rounded border border-violet-500/50 bg-violet-900/70 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-violet-200">
-      2v2
-    </span>
-  );
+  return <Badge variant="violet">2v2</Badge>;
 }
 
 const BATTLE_TYPES = new Set(['DOMINATION', 'CONQUEST', 'SIEGE']);
