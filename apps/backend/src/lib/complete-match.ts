@@ -183,6 +183,16 @@ export async function completeMatch(
 
   const loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
 
+  // A 2v2 competitor slot is a Team id — not a valid AuditLog.actor_id (FK → User). When the
+  // caller passed a team slot as the actor (the per-game finalizer attributes to the winning
+  // competitor), record a null (system) actor. A real user actor (e.g. the reporting captain
+  // from the match-result path) is never equal to a team slot id, so it is preserved.
+  const auditActorId =
+    match.tournament?.competitor_format === 'TWO_V_TWO' &&
+    (actorId === match.player1_id || actorId === match.player2_id)
+      ? null
+      : actorId;
+
   const activeVersion = await fastify.prisma.gameVersion.findFirst({
     where: { is_active: true },
     select: { id: true },
@@ -338,7 +348,7 @@ export async function completeMatch(
         entity_type: 'Match',
         entity_id: matchId,
         action: 'match_result',
-        actor_id: actorId,
+        actor_id: auditActorId,
         new_value: {
           winnerId,
           loserId,

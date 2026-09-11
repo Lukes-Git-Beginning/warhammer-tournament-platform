@@ -122,6 +122,8 @@ export async function finalizeGameResult(
           revealed_at: true,
           player1_faction_id: true,
           player2_faction_id: true,
+          player1_faction_id_2: true,
+          player2_faction_id_2: true,
         },
       },
       faction_matrix: {
@@ -138,6 +140,7 @@ export async function finalizeGameResult(
           player2_id: true,
           player1_faction_id: true,
           player2_faction_id: true,
+          tournament_id: true,
           phase: true,
           match_format: true,
           tournament: {
@@ -170,11 +173,36 @@ export async function finalizeGameResult(
   // Priority: BPT blind-pick revealed > SFT participant faction > existing match faction
   let p1FactionId: string | null;
   let p2FactionId: string | null;
+  // 2v2 carries a second faction per side (captain + teammate); null for 1v1.
+  let p1Faction2: string | null = null;
+  let p2Faction2: string | null = null;
 
   const mode = game.match.tournament?.mode;
   if (mode === 'BPT' && game.blind_pick?.revealed_at) {
     p1FactionId = game.blind_pick.player1_faction_id ?? null;
     p2FactionId = game.blind_pick.player2_faction_id ?? null;
+  } else if (mode === 'BPT_2V2' && game.blind_pick?.revealed_at) {
+    // 2v2 blind pick: this game's own revealed pick holds both members per side.
+    p1FactionId = game.blind_pick.player1_faction_id ?? null;
+    p2FactionId = game.blind_pick.player2_faction_id ?? null;
+    p1Faction2 = game.blind_pick.player1_faction_id_2 ?? null;
+    p2Faction2 = game.blind_pick.player2_faction_id_2 ?? null;
+  } else if (mode === 'SFT_2V2') {
+    // 2v2 single-faction: each team pre-picked its pair [captain, teammate] at registration.
+    const teamIds = [game.match.player1_id, game.match.player2_id].filter((x): x is string => !!x);
+    const teamParts = teamIds.length
+      ? await fastify.prisma.tournamentParticipant.findMany({
+          where: { tournament_id: game.match.tournament_id ?? undefined, team_id: { in: teamIds }, deleted_at: null },
+          select: { team_id: true, faction_ids: true },
+        })
+      : [];
+    const byTeam = new Map(teamParts.map((t) => [t.team_id, t.faction_ids]));
+    const f1 = (game.match.player1_id ? byTeam.get(game.match.player1_id) : null) ?? [];
+    const f2 = (game.match.player2_id ? byTeam.get(game.match.player2_id) : null) ?? [];
+    p1FactionId = f1[0] ?? null;
+    p2FactionId = f2[0] ?? null;
+    p1Faction2 = f1[1] ?? null;
+    p2Faction2 = f2[1] ?? null;
   } else if (mode === 'SFT' || mode === 'FACTION_WAR') {
     // FACTION_WAR resolves identically to SFT — each player's single pre-picked faction
     // from their participant record (it is just globally exclusive at pick time).
@@ -255,6 +283,8 @@ export async function finalizeGameResult(
       winner_id: game.reported_winner_id,
       player1_faction_id: p1FactionId,
       player2_faction_id: p2FactionId,
+      ...(p1Faction2 ? { player1_faction_id_2: p1Faction2 } : {}),
+      ...(p2Faction2 ? { player2_faction_id_2: p2Faction2 } : {}),
       confirmed_at: now,
       played_at: now,
       ...(isRestrictedGame ? { counts_for_leaderboard: false } : {}),

@@ -116,3 +116,15 @@ id-agnostic — no change once callers pass competitor ids. Open Play is always 
   never equals a user id → 403, safe, no wrong-actor hole) but non-functional. Until
   Phase B, a 2v2 tournament is completed via the captain/host **report-result** path
   (`matches.ts` POST `/:id/result`, already captain-aware) — not the per-game GameTile flow.
+  - **DONE 2026-09-11 — GameTile per-game flow backend is now 2v2-capable.** `match-games.ts`:
+    result-report auth is captain-as-actor (`resolveActorFlags`); lobby-code / lobby-password /
+    GET games use `isCompetitorMember` (either teammate). `finalizeGameResult` resolves both
+    members' factions per game (BPT_2V2 from that game's revealed blind pick, SFT_2V2 from
+    registration) and stamps `player{1,2}_faction_id(_2)`, so per-game rows + recomputed stats
+    carry all four. `completeMatch` writes a **null** AuditLog actor when the actor is a team
+    slot (FK → User). Replay verification is **skipped (fail-open) for 2v2** — two-player
+    attribution is meaningless for four players — so the replay-mismatch/dispute endpoints
+    (`assert-replay-correct`, `opponent-confirm/reject`) are never reached for 2v2 and stay
+    fail-closed; a winner-disagreement dispute still goes to the host (`resolve-dispute`,
+    canManage). REMAINING: frontend GameTile display of both factions per side + a captain-only
+    per-game report affordance; multi-player replay verification (deferred).

@@ -10,6 +10,7 @@ import { resolveReplayValues } from '../lib/replay-apply.js';
 import { verifyGameReplay } from '../lib/verify-report.js';
 import type { ReplayIssue, ReplayVerification } from '../lib/replay-verify.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
+import { resolveActorFlags, isCompetitorMember, captainMap } from '../lib/competitors.js';
 import { notifyOpenPlayDispute, notifyReplayMismatchHeld, notifyHostsOfMatchReport, notifyDisputeAutoResolved } from '../lib/discord-notify.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { invalidate } from '../lib/cache.js';
@@ -312,7 +313,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           player2_id: true,
           withdrawn_player_id: true,
           tournament_id: true,
-          tournament: { select: { host_id: true, mode: true, counts_for_leaderboard: true } },
+          tournament: { select: { host_id: true, mode: true, counts_for_leaderboard: true, competitor_format: true } },
           games: {
             orderBy: { game_number: 'asc' },
             select: GAME_SELECT,
@@ -328,9 +329,11 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      // 2v2: either teammate (not just the captain) may see lobby codes → member check.
+      const isTeam = match.tournament?.competitor_format === 'TWO_V_TWO';
       const isParticipant =
         currentUserId !== null &&
-        (currentUserId === match.player1_id || currentUserId === match.player2_id);
+        (await isCompetitorMember(fastify.prisma, currentUserId, match, isTeam));
       const isStaff =
         currentUserId !== null &&
         (await canManageTournament(
@@ -1003,7 +1006,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           player1_id: true,
           player2_id: true,
           tournament_id: true,
-          tournament: { select: { host_id: true } },
+          tournament: { select: { host_id: true, competitor_format: true } },
         },
       });
 
@@ -1012,7 +1015,8 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const userId = request.user.sub;
-      const isParticipant = userId === match.player1_id || userId === match.player2_id;
+      const isTeam = match.tournament?.competitor_format === 'TWO_V_TWO';
+      const isParticipant = await isCompetitorMember(fastify.prisma, userId, match, isTeam);
       const isStaff = await canManageTournament(
         fastify.prisma,
         match.tournament_id ?? '',
@@ -1064,14 +1068,15 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const match = await fastify.prisma.match.findFirst({
         where: { id: matchId, deleted_at: null },
-        select: { player1_id: true, player2_id: true, tournament_id: true, tournament: { select: { host_id: true } } },
+        select: { player1_id: true, player2_id: true, tournament_id: true, tournament: { select: { host_id: true, competitor_format: true } } },
       });
       if (!match) {
         return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       }
 
       const userId = request.user.sub;
-      const isParticipant = userId === match.player1_id || userId === match.player2_id;
+      const isTeam = match.tournament?.competitor_format === 'TWO_V_TWO';
+      const isParticipant = await isCompetitorMember(fastify.prisma, userId, match, isTeam);
       const isStaff = await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, request.user.role);
       if (!isParticipant && !isStaff) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not a participant or staff', statusCode: 403 });
@@ -1126,6 +1131,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           player1_id: true,
           player2_id: true,
           tournament_id: true,
+          tournament: { select: { competitor_format: true } },
         },
       });
 
@@ -1141,16 +1147,28 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const isPlayer1 = userId === match.player1_id;
-      const isPlayer2 = userId === match.player2_id;
+      // Team-as-actor: for 2v2 the CAPTAIN of the slot's team reports; resolveActorFlags maps
+      // the caller to player1/player2 accordingly (identity for 1v1).
+      const isTeam = match.tournament?.competitor_format === 'TWO_V_TWO';
+      const flags = await resolveActorFlags(fastify.prisma, userId, match, isTeam);
+      const isPlayer1 = flags.isPlayer1;
+      const isPlayer2 = flags.isPlayer2;
 
-      if (!isPlayer1 && !isPlayer2) {
+      if (!flags.isParticipant) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'Only match participants can report game results',
           statusCode: 403,
         });
       }
+
+      // The opposing competitor's actor for notifications: the opposing team's captain (2v2)
+      // or the opposing user (1v1). A raw team id is never a valid DM target.
+      const opponentSlot = isPlayer1 ? match.player2_id : match.player1_id;
+      const opponentActorId =
+        isTeam && opponentSlot
+          ? ((await captainMap(fastify.prisma, [opponentSlot])).get(opponentSlot) ?? null)
+          : opponentSlot;
 
       // Parse multipart — buffer the file immediately before any DB work to
       // prevent the stream from expiring mid-handler (busboy is consumed serially).
@@ -1248,11 +1266,15 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         // Verify the replay against the reported game (fail-open) then finalize / hold / dispute.
-        const verification = await verifyGameReplay(fastify.prisma, gameId, buffer);
+        // Replay verification attributes exactly two players/factions — meaningless for a 2v2
+        // (four players per game), so skip it there (fail-open) and accept the reported result.
+        const verification: ReplayVerification = isTeam
+          ? { ok: true, issues: [] }
+          : await verifyGameReplay(fastify.prisma, gameId, buffer);
         const settled = await settleVerifiedReport(fastify, {
           gameId, matchId, gameNumber, tournamentId: match.tournament_id,
           reporterId: userId,
-          opponentId: userId === match.player1_id ? match.player2_id : match.player1_id,
+          opponentId: opponentActorId,
           winnerId: winnerIdField, verification, explanation,
           buffer, player1Id: match.player1_id, player2Id: match.player2_id,
         });
@@ -1281,11 +1303,15 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
             where: { id: gameId },
             data: { reported_winner_id: winnerIdField, replay_url: `/uploads/replays/${matchId}/${filename}` },
           });
-          const verification = await verifyGameReplay(fastify.prisma, gameId, buffer);
+          // Replay verification attributes exactly two players/factions — meaningless for a 2v2
+        // (four players per game), so skip it there (fail-open) and accept the reported result.
+        const verification: ReplayVerification = isTeam
+          ? { ok: true, issues: [] }
+          : await verifyGameReplay(fastify.prisma, gameId, buffer);
           const settled = await settleVerifiedReport(fastify, {
             gameId, matchId, gameNumber, tournamentId: match.tournament_id,
             reporterId: userId,
-            opponentId: userId === match.player1_id ? match.player2_id : match.player1_id,
+            opponentId: opponentActorId,
             winnerId: winnerIdField, verification, explanation,
             buffer, player1Id: match.player1_id, player2Id: match.player2_id,
           });
@@ -1297,7 +1323,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           const settled = await settleVerifiedReport(fastify, {
             gameId, matchId, gameNumber, tournamentId: match.tournament_id,
             reporterId: userId,
-            opponentId: userId === match.player1_id ? match.player2_id : match.player1_id,
+            opponentId: opponentActorId,
             winnerId: winnerIdField,
             verification: { ok: false, issues: (heldV.issues as ReplayIssue[]) ?? [] }, explanation,
             buffer: null, player1Id: match.player1_id, player2Id: match.player2_id,

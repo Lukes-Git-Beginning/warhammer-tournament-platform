@@ -17,6 +17,7 @@ import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
 import { createTestUser, cleanupTournament, cleanupUsers, type TestUser } from './helpers/db-fixtures.js';
 import { resolveCompetitorRecipients } from '../src/lib/discord-notify.js';
+import { finalizeGameResult } from '../src/lib/match-games.js';
 
 let app: FastifyInstance;
 
@@ -372,6 +373,69 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
       [team.captain.id, team.partner.id].sort(),
     );
     expect(teamRecips.every((r) => !!r.discord_id)).toBe(true);
+  });
+
+  it('per-game GameTile flow: only the captain may report, and finalize stamps all four factions', async () => {
+    const factions = await fourFactionIds();
+    if (!factions) return; // <4 seeded factions → skip
+    const [f0, f1, f2, f3] = factions;
+    const host = await createAdminHost('2v2gametilehost');
+    const a = await makeActiveTeam('November');
+    const b = await makeActiveTeam('Oscar');
+    const { id, slug } = await setup2v2Tournament(host.id, 'BPT_2V2');
+    await registerTeam(slug, a.captain.id, a.teamId);
+    await registerTeam(slug, b.captain.id, b.teamId);
+    await prisma.tournament.update({ where: { id }, data: { status: 'REGISTRATION_CLOSED' } });
+    await app.inject({ method: 'POST', url: `/api/tournaments/${id}/start`, cookies: cookieFor(host.id, 'ADMIN') });
+
+    const bracket = await app.inject({ method: 'GET', url: `/api/tournaments/${slug}/bracket` });
+    const match = bracket.json().matches[0];
+    const matchId = match.matchId as string;
+    const aIsP1 = match.player1Id === a.teamId;
+
+    // Auth: a teammate (non-captain) may NOT report a game — team-as-actor is the captain.
+    // (403 is returned before any multipart parsing, so a plain payload is enough.)
+    const byMate = await app.inject({
+      method: 'POST',
+      url: `/api/matches/${matchId}/games/1/result`,
+      cookies: cookieFor(a.partner.id),
+      payload: { winner_id: a.teamId },
+    });
+    expect(byMate.statusCode).toBe(403);
+
+    // Set up game 1 with a decided map + a revealed blind pick holding both members per side,
+    // then run the per-game finalizer directly and assert it stamps all four factions.
+    const mapRow = await prisma.map.findFirst({ select: { id: true } });
+    const game = await prisma.matchGame.create({ data: { match_id: matchId, game_number: 1, status: 'PENDING' } });
+    await prisma.matchMapDecision.create({
+      data: {
+        game_id: game.id, mode: 'RANDOM_NO_REPEAT', coin_flip_seed: 'test',
+        top_player_id: a.teamId, bottom_player_id: b.teamId, bans_top: [], bans_bottom: [],
+        picked_map_id: mapRow?.id ?? 'test-map', decided_at: new Date(),
+      },
+    });
+    const side1 = aIsP1 ? [f0, f1] : [f2, f3];
+    const side2 = aIsP1 ? [f2, f3] : [f0, f1];
+    await prisma.matchBlindPick.create({
+      data: {
+        game_id: game.id,
+        player1_faction_id: side1[0], player1_faction_id_2: side1[1],
+        player2_faction_id: side2[0], player2_faction_id_2: side2[1],
+        player1_locked_at: new Date(), player2_locked_at: new Date(), revealed_at: new Date(),
+      },
+    });
+    await prisma.matchGame.update({ where: { id: game.id }, data: { reported_winner_id: a.teamId } });
+
+    await finalizeGameResult(app, game.id);
+
+    const g = await prisma.matchGame.findUnique({
+      where: { id: game.id },
+      select: { status: true, winner_id: true, player1_faction_id: true, player1_faction_id_2: true, player2_faction_id: true, player2_faction_id_2: true },
+    });
+    expect(g?.status).toBe('COMPLETED');
+    expect(g?.winner_id).toBe(a.teamId);
+    expect([g?.player1_faction_id, g?.player1_faction_id_2]).toEqual(side1);
+    expect([g?.player2_faction_id, g?.player2_faction_id_2]).toEqual(side2);
   });
 
   it('guards 2v2 registration (team required, captain-only, must be ACTIVE)', async () => {

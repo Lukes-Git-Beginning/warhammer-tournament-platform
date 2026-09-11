@@ -148,6 +148,28 @@ export async function resolveActingUserIds(
   return out;
 }
 
+/**
+ * Whether `userSub` is a member of either competitor slot — the read-visibility counterpart to
+ * resolveActorFlags (which is captain-only). 1v1: identity against the slot. 2v2: membership in
+ * either team (any member, captain or teammate). Used to gate non-authoritative reads/writes like
+ * seeing lobby codes, where both teammates qualify (unlike result reporting = captain-as-actor).
+ */
+export async function isCompetitorMember(
+  prisma: PrismaClient,
+  userSub: string,
+  match: { player1_id: string | null; player2_id: string | null },
+  isTeam: boolean,
+): Promise<boolean> {
+  if (!isTeam) return userSub === match.player1_id || userSub === match.player2_id;
+  const slotIds = [match.player1_id, match.player2_id].filter((x): x is string => !!x);
+  if (slotIds.length === 0) return false;
+  const membership = await prisma.teamMember.findFirst({
+    where: { team_id: { in: slotIds }, user_id: userSub },
+    select: { id: true },
+  });
+  return membership !== null;
+}
+
 export interface ActorFlags {
   isPlayer1: boolean;
   isPlayer2: boolean;
