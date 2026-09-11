@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
-import type { FactionDto, SwissMeta, SwissStandingEntry } from '@rizzotto/types';
+import type { BracketCompetitor, FactionDto, SwissMeta, SwissStandingEntry } from '@rizzotto/types';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { dropParticipant, undropParticipant, adminCheckIn, setParticipantFaction, type ParticipantStatus } from '@/lib/api';
@@ -49,6 +49,8 @@ interface SwissStandingsProps {
   participantStatusMap?: Map<string, ParticipantStatus>;
   /** Faction IDs in the allowlist (empty = all factions allowed) */
   factionAllowlist?: string[];
+  /** Resolved competitor info — for 2v2, a standings row is a team (name + members). */
+  competitors?: Record<string, BracketCompetitor>;
 }
 
 function Avatar({ url, username }: { url: string | null; username: string }) {
@@ -104,6 +106,7 @@ export function SwissStandings({
   isCompleted = false,
   participantStatusMap,
   factionAllowlist,
+  competitors,
 }: SwissStandingsProps) {
   const queryClient = useQueryClient();
   const [factionPickTarget, setFactionPickTarget] = useState<string | null>(null);
@@ -196,7 +199,10 @@ export function SwissStandings({
   function renderRows(entries: SwissStandingEntry[], rankOffset = 0) {
     return entries.map((entry, idx) => {
       const rank = idx + 1 + rankOffset;
-      const displayName = entry.username ?? entry.userId;
+      // 2v2: a standings row is a team competitor (name + members); link to the team profile.
+      const comp = competitors?.[entry.userId];
+      const isTeam = comp?.type === 'TEAM';
+      const displayName = comp?.name ?? entry.username ?? entry.userId;
       // In FREE_PICK mode a null faction means "pick-later" (intentional), so don't
       // fill it from the per-game bracket fallback — that would overwrite "Free Pick"
       // with whatever faction the player happened to pick first. Match nodes still
@@ -249,7 +255,7 @@ export function SwissStandings({
             <td className="px-4 py-2 text-stone-500">{rank}</td>
             <td className="px-4 py-2">
               <Link
-                to="/users/$id"
+                to={isTeam ? '/teams/$id' : '/users/$id'}
                 params={{ id: entry.userId }}
                 className="flex items-center gap-2 hover:text-rizzotto-gold-500 transition-colors"
               >
@@ -295,6 +301,11 @@ export function SwissStandings({
                   <span className="text-[10px] text-amber-600/80 uppercase tracking-wider font-semibold">Withdrew</span>
                 )}
               </Link>
+              {isTeam && comp?.members && comp.members.length > 0 && (
+                <div className="ml-8 mt-0.5 text-xs text-rizzotto-stone-500">
+                  {comp.members.map((m) => m.username).join(' & ')}
+                </div>
+              )}
               {canManage && tournamentSlug && !isDropped && (
                 <button
                   type="button"

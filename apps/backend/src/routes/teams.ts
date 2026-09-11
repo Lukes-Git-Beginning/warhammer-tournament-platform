@@ -174,6 +174,86 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
     };
   });
 
+  // GET /api/teams — all non-archived teams (public), for the Teams directory. The caller's own
+  // teams come from /api/teams/me; the UI divides "your teams" from the rest.
+  fastify.get('/api/teams', async () => {
+    const teams = await fastify.prisma.team.findMany({
+      where: { status: { not: 'ARCHIVED' } },
+      orderBy: [{ status: 'asc' }, { created_at: 'desc' }],
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        captain_id: true,
+        created_at: true,
+        members: {
+          select: { user_id: true, role: true, accepted_at: true, user: { select: { username: true, avatar_url: true } } },
+        },
+      },
+    });
+    return {
+      teams: teams.map((t) => ({
+        id: t.id,
+        name: t.name,
+        status: t.status,
+        created_at: t.created_at.toISOString(),
+        members: t.members.map((m) => memberDto(m, t.captain_id)),
+      })),
+    };
+  });
+
+  // GET /api/teams/:id — public team profile: roster, status, match record, tournament history.
+  fastify.get('/api/teams/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const team = await fastify.prisma.team.findFirst({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        captain_id: true,
+        created_at: true,
+        members: {
+          select: { user_id: true, role: true, accepted_at: true, user: { select: { username: true, avatar_url: true } } },
+        },
+      },
+    });
+    if (!team) return reply.code(404).send({ error: 'NotFound', message: 'Team not found', statusCode: 404 });
+
+    // Team-as-actor: the team id sits in the opaque Match competitor slots.
+    const [matchesPlayed, matchesWon, parts] = await Promise.all([
+      fastify.prisma.match.count({
+        where: { deleted_at: null, status: 'COMPLETED', OR: [{ player1_id: id }, { player2_id: id }] },
+      }),
+      fastify.prisma.match.count({ where: { deleted_at: null, status: 'COMPLETED', winner_id: id } }),
+      fastify.prisma.tournamentParticipant.findMany({
+        where: { team_id: id, deleted_at: null },
+        orderBy: { registered_at: 'desc' },
+        select: {
+          status: true,
+          tournament: { select: { slug: true, name: true, status: true, start_date: true } },
+        },
+      }),
+    ]);
+
+    return {
+      id: team.id,
+      name: team.name,
+      status: team.status,
+      captain_id: team.captain_id,
+      created_at: team.created_at.toISOString(),
+      members: team.members.map((m) => memberDto(m, team.captain_id)),
+      record: { matchesPlayed, matchesWon },
+      tournaments: parts.map((p) => ({
+        slug: p.tournament.slug,
+        name: p.tournament.name,
+        status: p.tournament.status,
+        participantStatus: p.status,
+        start_date: p.tournament.start_date.toISOString(),
+      })),
+    };
+  });
+
   // POST /api/teams/:id/accept — the invited partner confirms; team turns ACTIVE once all accepted.
   fastify.post('/api/teams/:id/accept', { preHandler: fastify.authenticate }, async (request, reply) => {
     const { id } = request.params as { id: string };

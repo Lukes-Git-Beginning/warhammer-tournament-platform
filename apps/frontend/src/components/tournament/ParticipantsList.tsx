@@ -96,9 +96,19 @@ export function ParticipantsList({ slug, canManage = false, tournamentStatus, to
                 {p.team ? (
                   // 2v2: the team (name + both members, captain marked) instead of a single player.
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className={`text-sm font-semibold text-rizzotto-stone-100 ${inactive ? 'line-through' : ''}`}>
-                      {p.team.name}
-                    </span>
+                    {p.team.id ? (
+                      <Link
+                        to="/teams/$id"
+                        params={{ id: p.team.id }}
+                        className={`text-sm font-semibold text-rizzotto-stone-100 hover:text-rizzotto-gold-400 transition-colors ${inactive ? 'line-through' : ''}`}
+                      >
+                        {p.team.name}
+                      </Link>
+                    ) : (
+                      <span className={`text-sm font-semibold text-rizzotto-stone-100 ${inactive ? 'line-through' : ''}`}>
+                        {p.team.name}
+                      </span>
+                    )}
                     <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       {p.team.members.map((m) => (
                         <Link

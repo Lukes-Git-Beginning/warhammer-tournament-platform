@@ -438,6 +438,28 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     expect([g?.player2_faction_id, g?.player2_faction_id_2]).toEqual(side2);
   });
 
+  it('exposes a public team directory and team profile', async () => {
+    const a = await makeActiveTeam('Romeo');
+
+    const all = await app.inject({ method: 'GET', url: '/api/teams' });
+    expect(all.statusCode).toBe(200);
+    const teams = all.json().teams as Array<{ id: string; name: string; members: unknown[] }>;
+    const listed = teams.find((t) => t.id === a.teamId);
+    expect(listed?.name).toBe('Romeo');
+    expect(listed?.members).toHaveLength(2);
+
+    const prof = await app.inject({ method: 'GET', url: `/api/teams/${a.teamId}` });
+    expect(prof.statusCode).toBe(200);
+    const body = prof.json();
+    expect(body.name).toBe('Romeo');
+    expect(body.members[0].is_captain).toBe(true);
+    expect(body.record).toEqual({ matchesPlayed: 0, matchesWon: 0 });
+    expect(Array.isArray(body.tournaments)).toBe(true);
+
+    const missing = await app.inject({ method: 'GET', url: `/api/teams/${randomUUID()}` });
+    expect(missing.statusCode).toBe(404);
+  });
+
   it('lists 2v2 participants as teams with both members (captain first)', async () => {
     const host = await createAdminHost('2v2partshost');
     const a = await makeActiveTeam('Quebec');

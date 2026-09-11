@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRequireAuth } from '@/lib/auth';
 import { PageShell } from '@/components/layout/PageShell';
@@ -19,12 +20,16 @@ import {
   acceptTeam,
   createTeam,
   declineTeam,
+  getAllTeams,
   getMyTeams,
   searchTeammates,
+  type TeamDirectoryEntry,
   type TeamDto,
   type TeamMemberDto,
   type UserSearchResult,
 } from '@/lib/api';
+
+const STATUS_LABEL: Record<string, string> = { ACTIVE: 'Active', FORMING: 'Forming', ARCHIVED: 'Archived' };
 
 function initials(name: string): string {
   return name.slice(0, 2).toUpperCase();
@@ -53,15 +58,47 @@ function MemberRow({ m }: { m: TeamMemberDto }) {
   );
 }
 
+function TeamNameLink({ id, name }: { id: string; name: string }) {
+  return (
+    <Link
+      to="/teams/$id"
+      params={{ id }}
+      className="font-display text-rizzotto-stone-100 hover:text-rizzotto-gold-400 transition-colors"
+    >
+      {name}
+    </Link>
+  );
+}
+
 function TeamCard({ t }: { t: TeamDto }) {
   return (
     <Card variant="banner">
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
-          <div className="font-display text-rizzotto-stone-100">{t.name}</div>
+          <TeamNameLink id={t.id} name={t.name} />
           {t.is_captain && (
             <span className="text-[10px] font-display uppercase tracking-wide text-rizzotto-gold-400">You are captain</span>
           )}
+        </div>
+        <div className="mt-2 space-y-1">
+          {t.members.map((m) => (
+            <MemberRow key={m.user_id} m={m} />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DirectoryTeamCard({ t }: { t: TeamDirectoryEntry }) {
+  return (
+    <Card variant="banner">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-2">
+          <TeamNameLink id={t.id} name={t.name} />
+          <span className="text-[10px] font-display uppercase tracking-wide text-rizzotto-stone-500">
+            {STATUS_LABEL[t.status] ?? t.status}
+          </span>
         </div>
         <div className="mt-2 space-y-1">
           {t.members.map((m) => (
@@ -201,6 +238,11 @@ export function TeamsPage() {
     queryFn: getMyTeams,
     enabled: !!user,
   });
+  const { data: allTeamsData } = useQuery({
+    queryKey: ['teams', 'all'],
+    queryFn: getAllTeams,
+    enabled: !!user,
+  });
 
   const accept = useMutation({ mutationFn: (id: string) => acceptTeam(id), onSuccess: invalidate });
   const decline = useMutation({ mutationFn: (id: string) => declineTeam(id), onSuccess: invalidate });
@@ -221,6 +263,8 @@ export function TeamsPage() {
   );
   const active = teams.filter((t) => t.status === 'ACTIVE');
   const forming = teams.filter((t) => t.status === 'FORMING' && t.is_captain);
+  const myTeamIds = new Set(teams.map((t) => t.id));
+  const otherTeams = (allTeamsData?.teams ?? []).filter((t) => !myTeamIds.has(t.id));
 
   return (
     <PageShell variant="wide">
@@ -286,7 +330,7 @@ export function TeamsPage() {
                 {forming.map((t) => (
                   <Card key={t.id}>
                     <CardContent className="p-4">
-                      <div className="font-display text-rizzotto-stone-100">{t.name}</div>
+                      <TeamNameLink id={t.id} name={t.name} />
                       <p className="mt-1 text-xs text-rizzotto-stone-500">Waiting for your teammate to accept the invite.</p>
                       <div className="mt-2 space-y-1">
                         {t.members.map((m) => (
@@ -299,6 +343,19 @@ export function TeamsPage() {
               </div>
             </section>
           )}
+
+          <section>
+            <h2 className="mb-3 font-display text-lg text-rizzotto-gold-400">All teams</h2>
+            {otherTeams.length === 0 ? (
+              <p className="text-sm text-rizzotto-stone-500">No other teams yet.</p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {otherTeams.map((t) => (
+                  <DirectoryTeamCard key={t.id} t={t} />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       )}
     </PageShell>

@@ -1007,6 +1007,7 @@ export function TournamentDetail() {
                 isCompleted={tournament.status === 'COMPLETED'}
                 participantStatusMap={participantStatusMap}
                 factionAllowlist={tournament.faction_allowlist}
+                competitors={bracket.competitors}
               />
             </section>
           );

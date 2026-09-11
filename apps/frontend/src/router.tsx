@@ -21,6 +21,7 @@ import { CalendarPage } from './routes/CalendarPage';
 import { OpenPlayPage } from './routes/OpenPlayPage';
 import { SupportPage } from './routes/SupportPage';
 import { TeamsPage } from './routes/TeamsPage';
+import { TeamProfilePage } from './routes/TeamProfilePage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -199,6 +200,12 @@ const teamsRoute = createRoute({
   component: TeamsPage,
 });
 
+const teamProfileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/teams/$id',
+  component: TeamProfilePage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -226,6 +233,7 @@ const routeTree = rootRoute.addChildren([
   openPlayRoute,
   supportRoute,
   teamsRoute,
+  teamProfileRoute,
 ]);
 
 export const router = createRouter({ routeTree });

@@ -105,9 +105,19 @@ export function EliminationStandings({
         {p.team ? (
           // 2v2: the team name + both members (captain marked).
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className={`text-sm font-semibold text-rizzotto-stone-100 ${dimmed ? 'line-through' : ''}`}>
-              {p.team.name}
-            </span>
+            {p.team.id ? (
+              <Link
+                to="/teams/$id"
+                params={{ id: p.team.id }}
+                className={`text-sm font-semibold text-rizzotto-stone-100 hover:text-rizzotto-gold-400 transition-colors ${dimmed ? 'line-through' : ''}`}
+              >
+                {p.team.name}
+              </Link>
+            ) : (
+              <span className={`text-sm font-semibold text-rizzotto-stone-100 ${dimmed ? 'line-through' : ''}`}>
+                {p.team.name}
+              </span>
+            )}
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {p.team.members.map((m) => (
                 <Link

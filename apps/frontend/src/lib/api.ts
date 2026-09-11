@@ -2430,6 +2430,28 @@ export function declineTeam(teamId: string): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/teams/${teamId}/decline`, { method: 'POST' });
 }
 
+/** A team in the public directory (no per-viewer `is_captain`). */
+export type TeamDirectoryEntry = Omit<TeamDto, 'is_captain'>;
+
+export interface TeamProfileDto {
+  id: string;
+  name: string;
+  status: TeamStatus;
+  captain_id: string;
+  created_at: string;
+  members: TeamMemberDto[];
+  record: { matchesPlayed: number; matchesWon: number };
+  tournaments: { slug: string; name: string; status: string; participantStatus: string; start_date: string }[];
+}
+
+export function getAllTeams(): Promise<{ teams: TeamDirectoryEntry[] }> {
+  return apiFetch<{ teams: TeamDirectoryEntry[] }>('/api/teams');
+}
+
+export function getTeam(id: string): Promise<TeamProfileDto> {
+  return apiFetch<TeamProfileDto>(`/api/teams/${id}`);
+}
+
 // --- Dev login (local only) ------------------------------------------------
 
 export interface DevUser { discord_id: string; username: string; role: string }
