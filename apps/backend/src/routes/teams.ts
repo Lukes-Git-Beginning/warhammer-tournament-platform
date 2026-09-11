@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { sendDm } from '../lib/discord-notify.js';
+import { getRatingModel } from '../lib/rating-model-service.js';
+import { skillToBand } from '../lib/rating-model.js';
 
 // ---------------------------------------------------------------------------
 // Teams — permanent 2v2 competitors (design doc §5, plans/2v2-competitor-
@@ -220,6 +222,23 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
     });
     if (!team) return reply.code(404).send({ error: 'NotFound', message: 'Team not found', statusCode: 404 });
 
+    // Team GS (GreatSword) — a team is an opaque competitor in the rating fit, so it earns a
+    // general skill just like a player. Timeless (all-version) fit, same as the Hall of Fame.
+    // null until the team has decisive rated games.
+    const model = await getRatingModel(fastify.prisma, fastify.redis, {
+      versionId: null,
+      config: { hierarchical: true },
+    });
+    const gsEntry = model.generalSkills.find((e) => e.playerId === id);
+    const gs = gsEntry
+      ? {
+          generalSkill: gsEntry.generalSkill,
+          stdError: gsEntry.stdError,
+          band: skillToBand(gsEntry.generalSkill),
+          gamesCount: gsEntry.gamesCount,
+        }
+      : null;
+
     // Team-as-actor: the team id sits in the opaque Match competitor slots.
     const [matchesPlayed, matchesWon, parts] = await Promise.all([
       fastify.prisma.match.count({
@@ -243,6 +262,7 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
       captain_id: team.captain_id,
       created_at: team.created_at.toISOString(),
       members: team.members.map((m) => memberDto(m, team.captain_id)),
+      gs,
       record: { matchesPlayed, matchesWon },
       tournaments: parts.map((p) => ({
         slug: p.tournament.slug,

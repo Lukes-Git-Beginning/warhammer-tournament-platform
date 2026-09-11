@@ -3,12 +3,31 @@ import { Link, useParams } from '@tanstack/react-router';
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { SKILL_BAND_META } from '@/components/bracket/skillBandMeta.js';
 import { getTeam } from '@/lib/api';
 
 const STATUS_LABEL: Record<string, string> = { ACTIVE: 'Active', FORMING: 'Forming', ARCHIVED: 'Archived' };
 
 function initials(name: string): string {
   return name.slice(0, 2).toUpperCase();
+}
+
+/** Win% vs an average competitor, from a general-skill log-odds value (mirrors the leaderboard). */
+function winPct(gs: number): number {
+  return Math.round((1 / (1 + Math.exp(-gs))) * 100);
+}
+
+function BandBadge({ band }: { band: number }) {
+  const meta = SKILL_BAND_META[band];
+  if (!meta) return <span className="text-xs text-rizzotto-stone-400">Band {band}</span>;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${meta.textCls} ${meta.borderCls} ${meta.bgCls}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${meta.dotCls}`} />
+      {meta.name}
+    </span>
+  );
 }
 
 export function TeamProfilePage() {
@@ -51,6 +70,46 @@ export function TeamProfilePage() {
           {STATUS_LABEL[team.status] ?? team.status}
         </span>
       </header>
+
+      {/* Team GS (GreatSword) — win chance vs an average competitor, band, and raw rating. */}
+      {team.gs ? (
+        <Card variant="banner" className="mb-6">
+          <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-4 p-5">
+            <div className="text-center">
+              <div className="font-display text-4xl font-bold text-rizzotto-gold-400 leading-none">
+                {winPct(team.gs.generalSkill)}
+                <span className="text-xl">%</span>
+              </div>
+              <div className="mt-1 text-[11px] font-display uppercase tracking-wide text-rizzotto-stone-500">
+                Win chance vs avg
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <BandBadge band={team.gs.band} />
+              <span
+                className="text-xs text-rizzotto-stone-500"
+                title={`General skill ${team.gs.generalSkill.toFixed(2)} ± ${team.gs.stdError.toFixed(2)} (log-odds)`}
+              >
+                GS {team.gs.generalSkill.toFixed(2)} · {team.gs.gamesCount} rated game
+                {team.gs.gamesCount === 1 ? '' : 's'}
+              </span>
+            </div>
+            <div className="ml-auto w-full max-w-[200px]">
+              <div className="h-2 overflow-hidden rounded-full bg-rizzotto-iron-700">
+                <div
+                  className="h-full rounded-full bg-rizzotto-gold-500"
+                  style={{ width: `${winPct(team.gs.generalSkill)}%` }}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="mb-6 rounded-md border border-dashed border-rizzotto-iron-600 p-4 text-sm text-rizzotto-stone-500">
+          <span className="font-display uppercase tracking-wide text-rizzotto-stone-400">Team GS</span> — unrated.
+          Play some 2v2 games and a GreatSword rating appears here.
+        </div>
+      )}
 
       {/* Record */}
       <div className="mb-6 grid grid-cols-3 gap-3">
