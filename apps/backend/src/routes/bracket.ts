@@ -61,10 +61,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       const participantFactions = await fastify.prisma.tournamentParticipant.findMany({
         where: { tournament_id: tournament.id, deleted_at: null },
-        select: { user_id: true, team_id: true, faction_id: true },
+        select: { user_id: true, team_id: true, faction_id: true, faction_ids: true },
       });
       // Keyed by the opaque competitor id (team for 2v2) so it lines up with match slots.
       const factionByUser = new Map(participantFactions.map((p) => [resolveCompetitorId(p), p.faction_id]));
+      // 2v2 (SFT_2V2): both members' pre-picked factions per competitor ([0]=captain, [1]=teammate).
+      const teamFactionsById = new Map(participantFactions.map((p) => [resolveCompetitorId(p), p.faction_ids]));
 
       // factionFromGames is built after the matches query — see below.
       const matches = await fastify.prisma.match.findMany({
@@ -89,6 +91,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           withdrawn_player_id: true,
           player1_faction_id: true,
           player2_faction_id: true,
+          player1_faction_id_2: true,
+          player2_faction_id_2: true,
           draft: { select: { id: true, status: true } },
           games: {
             select: {
@@ -174,16 +178,24 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           // 2D3: the faction is drawn onto each MatchGame at creation, so surface it on the node
           // as soon as it's rolled (before the game is reported), like SFT/2FT. Other modes:
           // per-match faction first, then the locked pick, then TournamentParticipant.
-          player1FactionId: tournament.mode === TournamentMode.SFT
-            ? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null)
-            : tournament.mode === TournamentMode.TWO_D_THREE
-              ? (m.games.find((g) => g.player1_faction_id)?.player1_faction_id ?? null)
-              : m.player1_faction_id ?? lockedFactions(m.games).p1 ?? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null),
-          player2FactionId: tournament.mode === TournamentMode.SFT
-            ? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null)
-            : tournament.mode === TournamentMode.TWO_D_THREE
-              ? (m.games.find((g) => g.player2_faction_id)?.player2_faction_id ?? null)
-              : m.player2_faction_id ?? lockedFactions(m.games).p2 ?? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null),
+          player1FactionId: tournament.mode === 'SFT_2V2'
+            ? (m.player1_faction_id ?? (m.player1_id ? teamFactionsById.get(m.player1_id)?.[0] ?? null : null))
+            : tournament.mode === TournamentMode.SFT
+              ? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null)
+              : tournament.mode === TournamentMode.TWO_D_THREE
+                ? (m.games.find((g) => g.player1_faction_id)?.player1_faction_id ?? null)
+                : m.player1_faction_id ?? lockedFactions(m.games).p1 ?? (m.player1_id ? factionByUser.get(m.player1_id) ?? null : null),
+          player2FactionId: tournament.mode === 'SFT_2V2'
+            ? (m.player2_faction_id ?? (m.player2_id ? teamFactionsById.get(m.player2_id)?.[0] ?? null : null))
+            : tournament.mode === TournamentMode.SFT
+              ? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null)
+              : tournament.mode === TournamentMode.TWO_D_THREE
+                ? (m.games.find((g) => g.player2_faction_id)?.player2_faction_id ?? null)
+                : m.player2_faction_id ?? lockedFactions(m.games).p2 ?? (m.player2_id ? factionByUser.get(m.player2_id) ?? null : null),
+          // 2v2: the teammate's faction per side — from the game once reported, else (SFT_2V2)
+          // the team's registration pick. Null for 1v1.
+          player1FactionId2: m.player1_faction_id_2 ?? (tournament.mode === 'SFT_2V2' && m.player1_id ? teamFactionsById.get(m.player1_id)?.[1] ?? null : null),
+          player2FactionId2: m.player2_faction_id_2 ?? (tournament.mode === 'SFT_2V2' && m.player2_id ? teamFactionsById.get(m.player2_id)?.[1] ?? null : null),
           player1GameWins: m.games.filter((g) => g.winner_id === m.player1_id && g.status === 'COMPLETED').length,
           player2GameWins: m.games.filter((g) => g.winner_id === m.player2_id && g.status === 'COMPLETED').length,
           pickedMapId: m.games.find((g) => g.map_decision?.picked_map_id)?.map_decision?.picked_map_id ?? null,

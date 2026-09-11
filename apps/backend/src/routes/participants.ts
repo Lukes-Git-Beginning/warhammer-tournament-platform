@@ -155,6 +155,25 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Your teammate must confirm the team before it can register', statusCode: 422 });
         }
 
+        // SFT_2V2: the captain pre-picks one faction per member (index 0 = captain, 1 = teammate).
+        // Stored in faction_ids (reusing the 2D3 array). BPT_2V2 picks blind in-match → no factions here.
+        let teamFactionIds: string[] = [];
+        if (tournament.mode === 'SFT_2V2') {
+          teamFactionIds = parsed.data.faction_ids ?? [];
+          if (teamFactionIds.length !== 2) {
+            return reply.code(400).send({ error: 'BadRequest', message: 'This mode requires exactly 2 factions (one per team member)', statusCode: 400 });
+          }
+          const uniqueIds = [...new Set(teamFactionIds)];
+          const found = await fastify.prisma.faction.findMany({ where: { id: { in: uniqueIds } }, select: { id: true } });
+          if (found.length !== uniqueIds.length) {
+            return reply.code(400).send({ error: 'BadRequest', message: 'One or more selected factions do not exist', statusCode: 400 });
+          }
+          const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
+          if (allowlist.length > 0 && teamFactionIds.some((id) => !allowlist.includes(id))) {
+            return reply.code(400).send({ error: 'BadRequest', message: 'One or more selected factions are not permitted in this tournament', statusCode: 400 });
+          }
+        }
+
         // Already registered as a team? (a WITHDREW team may re-register.)
         const existingTeam = await fastify.prisma.tournamentParticipant.findFirst({
           where: { tournament_id: tournament.id, team_id: teamId },
@@ -197,7 +216,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
                   status: teamStatus,
                   registered_at: nowTeam,
                   faction_id: null,
-                  faction_ids: [],
+                  faction_ids: teamFactionIds,
                 },
                 select: teamSelect,
               })
@@ -208,6 +227,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
                   team_id: teamId,
                   participant_type: 'TEAM',
                   status: teamStatus,
+                  faction_ids: teamFactionIds,
                   source: parsed.data.source ?? null,
                 },
                 select: teamSelect,

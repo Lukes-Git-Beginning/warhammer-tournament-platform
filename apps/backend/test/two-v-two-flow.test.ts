@@ -90,7 +90,10 @@ async function createAdminHost(username: string): Promise<TestUser> {
   return host;
 }
 
-async function setup2v2Tournament(hostId: string): Promise<{ id: string; slug: string }> {
+async function setup2v2Tournament(
+  hostId: string,
+  mode: 'BPT_2V2' | 'SFT_2V2' = 'BPT_2V2',
+): Promise<{ id: string; slug: string }> {
   const id = randomUUID();
   const slug = `test-2v2-${id.slice(0, 8)}`;
   createdTournamentIds.push(id);
@@ -101,7 +104,7 @@ async function setup2v2Tournament(hostId: string): Promise<{ id: string; slug: s
       name: '2v2 Test',
       host_id: hostId,
       format: 'SINGLE_ELIMINATION',
-      mode: 'BPT',
+      mode,
       competitor_format: 'TWO_V_TWO',
       status: 'OPEN_REGISTRATION',
       start_date: new Date('2027-06-01'),
@@ -111,13 +114,21 @@ async function setup2v2Tournament(hostId: string): Promise<{ id: string; slug: s
   return { id, slug };
 }
 
-function registerTeam(slug: string, captainId: string, teamId: string | undefined) {
+function registerTeam(slug: string, captainId: string, teamId: string | undefined, factionIds?: string[]) {
+  const payload: Record<string, unknown> = {};
+  if (teamId) payload.team_id = teamId;
+  if (factionIds) payload.faction_ids = factionIds;
   return app.inject({
     method: 'POST',
     url: `/api/tournaments/${slug}/register`,
     cookies: cookieFor(captainId),
-    payload: teamId ? { team_id: teamId } : {},
+    payload,
   });
+}
+
+async function fourFactionIds(): Promise<[string, string, string, string] | null> {
+  const f = await prisma.faction.findMany({ take: 4, select: { id: true }, orderBy: { id: 'asc' } });
+  return f.length >= 4 ? [f[0]!.id, f[1]!.id, f[2]!.id, f[3]!.id] : null;
 }
 
 describe('2v2 — permanent team lifecycle + team-as-actor', () => {
@@ -214,6 +225,51 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
       payload: { winnerId: b.teamId },
     });
     expect(byCaptain.statusCode).toBe(200);
+  });
+
+  it('SFT_2V2 pre-picks and stamps both members’ factions positionally', async () => {
+    const factions = await fourFactionIds();
+    if (!factions) return; // <4 seeded factions → skip
+    const [f0, f1, f2, f3] = factions;
+    const host = await createAdminHost('2v2sfthost');
+    const a = await makeActiveTeam('India');
+    const b = await makeActiveTeam('Juliet');
+    const { id, slug } = await setup2v2Tournament(host.id, 'SFT_2V2');
+
+    // Missing factions → 400; exactly 2 required.
+    expect((await registerTeam(slug, a.captain.id, a.teamId, [f0])).statusCode).toBe(400);
+    expect((await registerTeam(slug, a.captain.id, a.teamId, [f0, f1])).statusCode).toBe(201);
+    expect((await registerTeam(slug, b.captain.id, b.teamId, [f2, f3])).statusCode).toBe(201);
+
+    await prisma.tournament.update({ where: { id }, data: { status: 'REGISTRATION_CLOSED' } });
+    await app.inject({ method: 'POST', url: `/api/tournaments/${id}/start`, cookies: cookieFor(host.id, 'ADMIN') });
+
+    const bracket = await app.inject({ method: 'GET', url: `/api/tournaments/${slug}/bracket` });
+    const match = bracket.json().matches[0];
+    const side1 = match.player1Id === a.teamId ? [f0, f1] : [f2, f3];
+    const side2 = match.player1Id === a.teamId ? [f2, f3] : [f0, f1];
+
+    // Bracket shows both factions per side from registration (pre-report), positional to slots.
+    expect(match.player1FactionId).toBe(side1[0]);
+    expect(match.player1FactionId2).toBe(side1[1]);
+    expect(match.player2FactionId).toBe(side2[0]);
+    expect(match.player2FactionId2).toBe(side2[1]);
+
+    // Report → the game stores all four factions positionally.
+    const report = await app.inject({
+      method: 'POST',
+      url: `/api/matches/${match.matchId}/result`,
+      cookies: cookieFor(a.captain.id),
+      payload: { winnerId: a.teamId },
+    });
+    expect(report.statusCode).toBe(200);
+
+    const game = await prisma.matchGame.findFirst({
+      where: { match_id: match.matchId },
+      select: { player1_faction_id: true, player1_faction_id_2: true, player2_faction_id: true, player2_faction_id_2: true },
+    });
+    expect([game?.player1_faction_id, game?.player1_faction_id_2]).toEqual(side1);
+    expect([game?.player2_faction_id, game?.player2_faction_id_2]).toEqual(side2);
   });
 
   it('guards 2v2 registration (team required, captain-only, must be ACTIVE)', async () => {

@@ -51,6 +51,11 @@ enum TournamentMode {
   FREE_PICK // Enticity's Free Pick — per player: fixed faction (faction_id set, SFT-like) OR pick-later (faction_id null); matchup resolves by both players' choices
   ONE_V_THREE // 1v3 — coin flip sets roles: the Runner plays the host-set faction, the Picker offers 3, the Runner picks which of the 3 the Picker plays
   FACTION_WAR // like SFT (faction pre-pick at registration) but each faction is globally exclusive — once claimed, no other player in the tournament can pick it
+  // 2v2 faction mechanics (team-as-actor). Dedicated modes so the 1v1 handlers stay untouched;
+  // require competitor_format = TWO_V_TWO. Each side carries TWO factions (captain + teammate);
+  // positional: captain-faction vs captain-faction, teammate vs teammate.
+  SFT_2V2 // 2v2 Single Faction — the captain pre-picks one faction per member at registration (2 per side)
+  BPT_2V2 // 2v2 Blind Pick — the captain blind-picks one faction per member per game (2 per side)
 }
 
 /// Battle type — the KIND of game. Orthogonal to TournamentMode (the faction-pick
@@ -538,6 +543,9 @@ model Match {
   match_format           MatchFormat? // per-match format override (NULL = derive from phase); used by the DE bracket-reset final
   player1_faction_id     String?
   player2_faction_id     String?
+  // 2v2 (SFT_2V2/BPT_2V2): the teammate's faction per side, mirrored from the game (NULL for 1v1).
+  player1_faction_id_2   String?
+  player2_faction_id_2   String?
   // Withdraw→Void: the player who dropped, flagging the survivor's still-open match
   // as "opponent withdrew — decide played vs void". Null in the normal case.
   withdrawn_player_id    String?          @db.Uuid
@@ -586,6 +594,10 @@ model MatchGame {
   winner_id              String?     @db.Uuid
   player1_faction_id     String? // auto-resolved from BlindPick/SFT on finalization
   player2_faction_id     String?
+  // 2v2 (SFT_2V2/BPT_2V2): the teammate's faction per side. NULL for 1v1. Positional —
+  // player1_faction_id = side-1 captain, player1_faction_id_2 = side-1 teammate.
+  player1_faction_id_2   String?
+  player2_faction_id_2   String?
   lobby_code             String? // optional ingame lobby code
   lobby_password         String? // optional ingame lobby password (paired with the code)
   // Provisional-result flow (30-min auto-confirm)
@@ -652,12 +664,16 @@ model MatchFactionMatrix {
 
 // Welle 2: Blind faction pick per game (BPT mode).
 model MatchBlindPick {
-  game_id            String    @id @db.Uuid
-  player1_faction_id String?
-  player2_faction_id String?
-  player1_locked_at  DateTime?
-  player2_locked_at  DateTime?
-  revealed_at        DateTime?
+  game_id              String    @id @db.Uuid
+  player1_faction_id   String?
+  player2_faction_id   String?
+  // 2v2 (BPT_2V2): the teammate's faction per side, locked together with the captain's by the
+  // captain. NULL for 1v1. player1_faction_id = side-1 captain, player1_faction_id_2 = teammate.
+  player1_faction_id_2 String?
+  player2_faction_id_2 String?
+  player1_locked_at    DateTime?
+  player2_locked_at    DateTime?
+  revealed_at          DateTime?
 
   game MatchGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
 }

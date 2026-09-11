@@ -368,6 +368,8 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         winner_id: true,
         player1_faction_id: true,
         player2_faction_id: true,
+        player1_faction_id_2: true,
+        player2_faction_id_2: true,
         status: true,
         result: true,
         phase: true,
@@ -445,6 +447,9 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       winner_id: match.winner_id,
       player1_faction_id: match.player1_faction_id,
       player2_faction_id: match.player2_faction_id,
+      // 2v2: the teammate's faction per side (null for 1v1).
+      player1_faction_id_2: match.player1_faction_id_2,
+      player2_faction_id_2: match.player2_faction_id_2,
       // Enriched relations
       player1: competitorDto(match.player1_id),
       player2: competitorDto(match.player2_id),

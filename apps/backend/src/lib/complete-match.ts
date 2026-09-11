@@ -188,6 +188,26 @@ export async function completeMatch(
     select: { id: true },
   });
 
+  // Effective per-side factions. 2v2 carries TWO per side (captain + teammate). SFT_2V2 pre-picks
+  // them at registration (participant.faction_ids: [captain, teammate]); stamp both from the teams.
+  let effP1Faction = player1FactionId;
+  let effP2Faction = player2FactionId;
+  let effP1Faction2: string | null = null;
+  let effP2Faction2: string | null = null;
+  if (match.tournament?.mode === 'SFT_2V2' && match.player1_id && match.player2_id) {
+    const teamParts = await fastify.prisma.tournamentParticipant.findMany({
+      where: { tournament_id: match.tournament_id ?? undefined, team_id: { in: [match.player1_id, match.player2_id] }, deleted_at: null },
+      select: { team_id: true, faction_ids: true },
+    });
+    const byTeam = new Map(teamParts.map((t) => [t.team_id, t.faction_ids]));
+    const f1 = byTeam.get(match.player1_id) ?? [];
+    const f2 = byTeam.get(match.player2_id) ?? [];
+    effP1Faction = f1[0] ?? player1FactionId;
+    effP1Faction2 = f1[1] ?? null;
+    effP2Faction = f2[0] ?? player2FactionId;
+    effP2Faction2 = f2[1] ?? null;
+  }
+
   await fastify.prisma.$transaction(async (tx) => {
     await tx.match.update({
       where: { id: matchId },
@@ -197,8 +217,10 @@ export async function completeMatch(
         status: opts.walkover ? 'FORFEIT' : 'COMPLETED',
         version_id: activeVersion?.id ?? null,
         played_at: new Date(),
-        ...(player1FactionId ? { player1_faction_id: player1FactionId } : {}),
-        ...(player2FactionId ? { player2_faction_id: player2FactionId } : {}),
+        ...(effP1Faction ? { player1_faction_id: effP1Faction } : {}),
+        ...(effP2Faction ? { player2_faction_id: effP2Faction } : {}),
+        ...(effP1Faction2 ? { player1_faction_id_2: effP1Faction2 } : {}),
+        ...(effP2Faction2 ? { player2_faction_id_2: effP2Faction2 } : {}),
       },
     });
 
@@ -253,8 +275,10 @@ export async function completeMatch(
       const gameData = {
         status: 'COMPLETED' as const,
         winner_id: winnerId,
-        player1_faction_id: player1FactionId,
-        player2_faction_id: player2FactionId,
+        player1_faction_id: effP1Faction,
+        player2_faction_id: effP2Faction,
+        player1_faction_id_2: effP1Faction2,
+        player2_faction_id_2: effP2Faction2,
         played_at: new Date(),
         counts_for_leaderboard: match.tournament?.counts_for_leaderboard ?? true,
       };

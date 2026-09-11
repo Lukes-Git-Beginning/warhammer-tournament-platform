@@ -29,6 +29,9 @@ export interface BracketNode {
   bracketSide: 'WINNERS' | 'LOSERS' | 'GRAND_FINAL' | null;
   player1FactionId: string | null;
   player2FactionId: string | null;
+  /** 2v2 (SFT_2V2/BPT_2V2): the teammate's faction per side (null for 1v1). */
+  player1FactionId2?: string | null;
+  player2FactionId2?: string | null;
   matchFormat?: string | null;
   player1GameWins: number;
   player2GameWins: number;

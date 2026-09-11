@@ -158,10 +158,13 @@ function refineOneVThree(
   }
 }
 
+/** Dedicated 2v2 faction-pick modes — require competitor_format = TWO_V_TWO (team-as-actor). */
+const TWO_V_TWO_MODES = ['SFT_2V2', 'BPT_2V2'] as const;
+
 const CreateTournamentSchema = z.object({
   name: z.string().min(3).max(120),
   format: z.enum(['SWISS', 'AUTO_SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
-  mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR']).optional(),
+  mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR', 'SFT_2V2', 'BPT_2V2']).optional(),
   set_faction_id: z.string().min(1).nullable().optional(),
   start_date: z.string().datetime(),
   timezone: z.string().min(1).max(64),
@@ -208,6 +211,15 @@ const CreateTournamentSchema = z.object({
     if (data.competitor_format === 'TWO_V_TWO' && data.format === 'BALANCED_LIECHTENSTEIN') {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: '2v2 is not supported with the Balanced Liechtenstein format', path: ['competitor_format'] });
     }
+    // The team-size axis (competitor_format) and the faction mechanic (mode) must agree:
+    // a 2v2 tournament needs a 2v2 mode, and a 2v2 mode needs competitor_format TWO_V_TWO.
+    const is2v2Mode = data.mode ? (TWO_V_TWO_MODES as readonly string[]).includes(data.mode) : false;
+    if (data.competitor_format === 'TWO_V_TWO' && !is2v2Mode) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'A 2v2 tournament needs a 2v2 mode (SFT_2V2 or BPT_2V2)', path: ['mode'] });
+    }
+    if (is2v2Mode && data.competitor_format !== 'TWO_V_TWO') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'SFT_2V2 / BPT_2V2 require a 2v2 tournament (competitor_format TWO_V_TWO)', path: ['competitor_format'] });
+    }
   });
 
 const PatchTournamentSchema = z.object({
@@ -244,7 +256,7 @@ const PatchTournamentSchema = z.object({
   is_major: z.boolean().optional(),
   // Fields added for full edit-form support
   format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']).optional(),
-  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR']).optional(),
+  mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR', 'SFT_2V2', 'BPT_2V2']).optional(),
   set_faction_id: z.string().min(1).nullable().optional(),
   has_third_place_match: z.boolean().optional(),
   counts_for_leaderboard: z.boolean().optional(),
@@ -971,14 +983,31 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // Team-size (competitor_format) and faction mechanic (mode) must stay consistent, and
       // 2v2 has no per-team skill bands → incompatible with Balanced Liechtenstein.
       {
         const effFmt = (rest.format ?? tournament.format) as string;
         const effComp = (rest.competitor_format ?? tournament.competitor_format) as string;
+        const effMode = (rest.mode ?? tournament.mode) as string;
+        const is2v2Mode = (TWO_V_TWO_MODES as readonly string[]).includes(effMode);
         if (effComp === 'TWO_V_TWO' && effFmt === 'BALANCED_LIECHTENSTEIN') {
           return reply.code(422).send({
             error: 'UnprocessableEntity',
             message: '2v2 is not supported with the Balanced Liechtenstein format',
+            statusCode: 422,
+          });
+        }
+        if (effComp === 'TWO_V_TWO' && !is2v2Mode) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'A 2v2 tournament needs a 2v2 mode (SFT_2V2 or BPT_2V2)',
+            statusCode: 422,
+          });
+        }
+        if (is2v2Mode && effComp !== 'TWO_V_TWO') {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'SFT_2V2 / BPT_2V2 require a 2v2 tournament (competitor_format TWO_V_TWO)',
             statusCode: 422,
           });
         }
