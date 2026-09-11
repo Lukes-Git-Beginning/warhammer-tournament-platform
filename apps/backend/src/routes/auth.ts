@@ -443,6 +443,25 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, user };
   });
 
+  // Dev-only: list the seeded dummy accounts (discord_id starts with "dummy") so the
+  // DevLoginPanel can offer exactly the users that actually exist locally (whatever seed ran).
+  fastify.get('/auth/dev-users', async (_request, reply) => {
+    if (process.env.NODE_ENV !== 'development') {
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: 'Dev-login endpoint is only available in local development',
+        statusCode: 403,
+      });
+    }
+    const users = await fastify.prisma.user.findMany({
+      where: { discord_id: { startsWith: 'dummy' }, deleted_at: null },
+      select: { discord_id: true, username: true, role: true },
+      orderBy: { username: 'asc' },
+      take: 200,
+    });
+    return { users };
+  });
+
   // Test-only: directly issue JWT cookie for a given userId.
   // Guarded by NODE_ENV=test — returns 403 in dev/prod.
   fastify.post('/auth/test-login', async (request, reply) => {

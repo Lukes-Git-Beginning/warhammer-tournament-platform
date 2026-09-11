@@ -68,6 +68,20 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(409).send({ error: 'Conflict', message: 'A team with this exact pairing already exists', statusCode: 409 });
     }
 
+    // Team names are unique among live (non-archived) teams, case-insensitive — a dissolved
+    // team frees its name. (DB-enforced by a partial unique index; checked here for a clear error.)
+    const nameClash = await fastify.prisma.team.findFirst({
+      where: {
+        name: { equals: name, mode: 'insensitive' },
+        status: { not: 'ARCHIVED' },
+        ...(existing ? { id: { not: existing.id } } : {}),
+      },
+      select: { id: true },
+    });
+    if (nameClash) {
+      return reply.code(409).send({ error: 'Conflict', message: 'A team with this name already exists — pick another', statusCode: 409 });
+    }
+
     const captainUser = await fastify.prisma.user.findUnique({ where: { id: captainId }, select: { username: true } });
     const memberCreate = [
       { user_id: captainId, role: 'captain', accepted_at: new Date() },
@@ -105,7 +119,16 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
       }
     } catch (err: unknown) {
       if (err !== null && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'P2002') {
-        return reply.code(409).send({ error: 'Conflict', message: 'A team with this exact pairing already exists', statusCode: 409 });
+        const target = (err as { meta?: { target?: unknown } }).meta?.target;
+        const isName =
+          typeof target === 'string'
+            ? target.includes('name')
+            : Array.isArray(target) && target.some((t) => String(t).includes('name'));
+        return reply.code(409).send({
+          error: 'Conflict',
+          message: isName ? 'A team with this name already exists — pick another' : 'A team with this exact pairing already exists',
+          statusCode: 409,
+        });
       }
       throw err;
     }

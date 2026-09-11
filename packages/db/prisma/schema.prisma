@@ -711,6 +711,8 @@ model MatchReport {
 // member swap, so past matches/results/ratings keep referring to the same duo.
 model Team {
   id          String     @id @default(uuid()) @db.Uuid
+  // Unique among live (non-archived) teams, case-insensitive — enforced by the partial
+  // functional index `Team_active_name_unique` (migration 20260911150000; not expressible here).
   name        String
   roster_key  String     @unique // canonical sorted member user-id join — permanent identity
   size        Int        @default(2)

@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { apiFetch } from '@/lib/api.js';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiFetch, getDevUsers } from '@/lib/api.js';
 import { useAuthQuery } from '@/lib/auth.js';
 
+// Fallback list (classic `pnpm db:seed:dummies` accounts) used only if the live query
+// of actually-seeded dummies is empty/unavailable.
 const DUMMY_USERS = [
   { discordId: 'dummy-01', name: 'Grombrindal' },
   { discordId: 'dummy-02', name: 'Settra' },
@@ -19,6 +21,11 @@ export function DevLoginPanel() {
   const [loading, setLoading] = useState<string | null>(null);
   const { data: me } = useAuthQuery();
   const queryClient = useQueryClient();
+  // List the dummies that actually exist locally (whatever seed ran); fall back to the classic set.
+  const { data: devUsers } = useQuery({ queryKey: ['dev-users'], queryFn: getDevUsers, retry: false, staleTime: 60_000 });
+  const list = devUsers?.users?.length
+    ? devUsers.users.map((u) => ({ discordId: u.discord_id, name: u.username }))
+    : DUMMY_USERS;
 
   async function loginAs(discordId: string) {
     setLoading(discordId);
@@ -66,7 +73,7 @@ export function DevLoginPanel() {
           <div className="border-t border-rizzotto-iron-700 px-2 pb-2 pt-1">
             <p className="mb-1 px-1 text-rizzotto-stone-500">Login as dummy:</p>
             <div className="grid grid-cols-2 gap-1">
-              {DUMMY_USERS.map((u) => (
+              {list.map((u) => (
                 <button
                   key={u.discordId}
                   onClick={() => loginAs(u.discordId)}

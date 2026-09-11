@@ -2421,6 +2421,15 @@ export function declineTeam(teamId: string): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/teams/${teamId}/decline`, { method: 'POST' });
 }
 
+// --- Dev login (local only) ------------------------------------------------
+
+export interface DevUser { discord_id: string; username: string; role: string }
+
+/** Seeded dummy accounts for the local DevLoginPanel (dev-only endpoint). */
+export function getDevUsers(): Promise<{ users: DevUser[] }> {
+  return apiFetch<{ users: DevUser[] }>('/auth/dev-users');
+}
+
 // --- Late join (host-approved) ---------------------------------------------
 
 export function requestJoinTournament(
