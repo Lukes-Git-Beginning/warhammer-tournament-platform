@@ -2440,7 +2440,7 @@ export interface TeamProfileDto {
   captain_id: string;
   created_at: string;
   members: TeamMemberDto[];
-  /** Team GS (GreatSword) from the timeless rating fit; null until the team has rated games. */
+  /** Team GS (General Skill) from the timeless rating fit; null until the team has rated games. */
   gs: { generalSkill: number; stdError: number; band: number; gamesCount: number } | null;
   record: { matchesPlayed: number; matchesWon: number };
   tournaments: { slug: string; name: string; status: string; participantStatus: string; start_date: string }[];

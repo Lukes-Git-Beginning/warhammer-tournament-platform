@@ -71,7 +71,7 @@ export function TeamProfilePage() {
         </span>
       </header>
 
-      {/* Team GS (GreatSword) — win chance vs an average competitor, band, and raw rating. */}
+      {/* Team GS (General Skill) — win chance vs an average competitor, band, and raw rating. */}
       {team.gs ? (
         <Card variant="banner" className="mb-6">
           <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-4 p-5">
@@ -107,7 +107,7 @@ export function TeamProfilePage() {
       ) : (
         <div className="mb-6 rounded-md border border-dashed border-rizzotto-iron-600 p-4 text-sm text-rizzotto-stone-500">
           <span className="font-display uppercase tracking-wide text-rizzotto-stone-400">Team GS</span> — unrated.
-          Play some 2v2 games and a GreatSword rating appears here.
+          Play some 2v2 games and a General Skill rating appears here.
         </div>
       )}
 

@@ -222,7 +222,7 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
     });
     if (!team) return reply.code(404).send({ error: 'NotFound', message: 'Team not found', statusCode: 404 });
 
-    // Team GS (GreatSword) — a team is an opaque competitor in the rating fit, so it earns a
+    // Team GS (General Skill) — a team is an opaque competitor in the rating fit, so it earns a
     // general skill just like a player. Timeless (all-version) fit, same as the Hall of Fame.
     // null until the team has decisive rated games.
     const model = await getRatingModel(fastify.prisma, fastify.redis, {
