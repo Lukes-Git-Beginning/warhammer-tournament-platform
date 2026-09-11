@@ -25,6 +25,7 @@ import {
   notifyPlayoffResults,
   notifyNoPlayoffComplete,
   notifyAutoSizeChanged,
+  resolveCompetitorRecipients,
 } from './discord-notify.js';
 
 // ---------------------------------------------------------------------------
@@ -412,20 +413,18 @@ async function generateNextSwissRound(
     payload: { phase: 'swiss', round: targetRound, count: newMatches.length },
   });
 
-  // Notify pairings — non-fatal
+  // Notify pairings — non-fatal. Slots are opaque competitor ids (a Team id for 2v2);
+  // notifyRoundPairings expands teams to all members, so a 2v2 pairing DMs all four players.
   try {
-    const pairings = (await Promise.all(
-      newMatches
-        .filter((m) => m.player1_id && m.player2_id)
-        .map(async (m) => {
-          const [p1, p2] = await Promise.all([
-            prisma.user.findUnique({ where: { id: m.player1_id! }, select: { username: true, discord_id: true } }),
-            prisma.user.findUnique({ where: { id: m.player2_id! }, select: { username: true, discord_id: true } }),
-          ]);
-          if (!p1?.discord_id || !p2?.discord_id) return null;
-          return { matchId: m.id, player1: { discord_id: p1.discord_id, username: p1.username }, player2: { discord_id: p2.discord_id, username: p2.username }, round: targetRound, map: null };
-        }),
-    )).filter((p): p is NonNullable<typeof p> => p !== null);
+    const pairings = newMatches
+      .filter((m) => m.player1_id && m.player2_id)
+      .map((m) => ({
+        matchId: m.id,
+        player1Id: m.player1_id!,
+        player2Id: m.player2_id!,
+        round: targetRound,
+        map: null,
+      }));
 
     if (pairings.length > 0) {
       await notifyRoundPairings(
@@ -453,15 +452,13 @@ async function generateNextSwissRound(
           ? true // no playoffs → the tournament ends for everyone after this round
           : swissPlayers.filter((p) => p.userId !== byeUserId && p.score > byePost).length >= cutoff;
       }
-      const byeUser = await prisma.user.findUnique({
-        where: { id: byeUserId },
-        select: { discord_id: true, username: true },
-      });
-      if (byeUser?.discord_id) {
+      // Resolve the bye competitor to its recipients — both members for a 2v2 team.
+      const byeRecipients = (await resolveCompetitorRecipients([byeUserId])).get(byeUserId) ?? [];
+      for (const r of byeRecipients) {
         await notifyBye(
           { name: tournament.name, slug: tournament.slug },
           targetRound,
-          { discord_id: byeUser.discord_id, username: byeUser.username },
+          { discord_id: r.discord_id, username: r.username },
           { eliminated },
         );
       }

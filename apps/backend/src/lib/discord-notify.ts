@@ -6,6 +6,7 @@
  */
 
 import { prisma } from '@rizzotto/db';
+import { resolveCompetitors } from './competitors.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
@@ -22,10 +23,66 @@ interface TournamentForNotify {
 
 interface PairingForNotify {
   matchId: string;
-  player1: { discord_id: string; username: string };
-  player2: { discord_id: string; username: string };
+  /** Opaque competitor slot ids — a User id for 1v1, a Team id for 2v2. Resolved to
+   *  recipients (all team members) inside notifyRoundPairings. */
+  player1Id: string;
+  player2Id: string;
   round: number;
   map?: string | null;
+}
+
+/** A DM recipient behind a competitor slot: one user for 1v1, each member for 2v2. */
+export interface CompetitorRecipient {
+  user_id: string;
+  discord_id: string;
+  username: string;
+  is_captain: boolean;
+}
+
+/**
+ * Resolve opaque competitor slot ids to their Discord recipients: the single user for a
+ * 1v1 slot, ALL team members (captain first) for a 2v2 slot. Members without a discord_id
+ * are dropped. This is the seam that makes every match/round DM reach all four players in a
+ * 2v2 — not just the captains.
+ */
+export async function resolveCompetitorRecipients(
+  ids: ReadonlyArray<string | null | undefined>,
+): Promise<Map<string, CompetitorRecipient[]>> {
+  const comps = await resolveCompetitors(prisma, ids);
+  const userIds = new Set<string>();
+  for (const c of comps.values()) {
+    if (c.type === 'USER') userIds.add(c.id);
+    else for (const m of c.members ?? []) userIds.add(m.user_id);
+  }
+  const users = await prisma.user.findMany({
+    where: { id: { in: [...userIds] } },
+    select: { id: true, discord_id: true, username: true },
+  });
+  const byUser = new Map(users.map((u) => [u.id, u]));
+  const out = new Map<string, CompetitorRecipient[]>();
+  for (const [id, c] of comps) {
+    if (c.type === 'USER') {
+      const u = byUser.get(c.id);
+      out.set(id, u?.discord_id
+        ? [{ user_id: u.id, discord_id: u.discord_id, username: u.username, is_captain: false }]
+        : []);
+    } else {
+      const recips: CompetitorRecipient[] = [];
+      for (const m of c.members ?? []) {
+        const u = byUser.get(m.user_id);
+        if (u?.discord_id) {
+          recips.push({ user_id: u.id, discord_id: u.discord_id, username: u.username, is_captain: m.is_captain });
+        }
+      }
+      out.set(id, recips);
+    }
+  }
+  return out;
+}
+
+/** Discord mention list for a set of recipients, e.g. `<@a> & <@b>`. */
+function mentionList(recipients: CompetitorRecipient[]): string {
+  return recipients.map((r) => `<@${r.discord_id}>`).join(' & ');
 }
 
 interface MatchForNotify {
@@ -675,22 +732,34 @@ export async function notifyCheckInReminder(tournament: TournamentForNotify): Pr
   }
 }
 
-/** Per-player pairing DM text — playoff rounds get a special, celebratory line. */
-function pairingDmText(name: string, label: string, opponentDiscordId: string, map: string | null | undefined, url: string): string {
-  const vs = `<@${opponentDiscordId}>` + (map ? ` on *${map}*` : '');
+/**
+ * Per-player pairing DM text — playoff rounds get a special, celebratory line.
+ * `opponentMention` is the already-rendered opponent side (`<@a>` or `<@a> & <@b>` for a team);
+ * `teammateMention` is the recipient's own teammate mention for 2v2 (null for 1v1).
+ */
+function pairingDmText(
+  name: string,
+  label: string,
+  opponentMention: string,
+  map: string | null | undefined,
+  url: string,
+  teammateMention?: string | null,
+): string {
+  const vs = opponentMention + (map ? ` on *${map}*` : '');
+  const mate = teammateMention ? ` (with your teammate ${teammateMention})` : '';
   if (label === 'Final') {
     return `**[RizzOtto's Arena] The Grand Final — ${name}** 🏆\n` +
-      `This is it — the last match of the tournament. You face ${vs}. Leave nothing on the field; the title is decided here. GG in advance, and may the best general win. <${url}>`;
+      `This is it — the last match of the tournament. You${mate} face ${vs}. Leave nothing on the field; the title is decided here. GG in advance, and may the best general win. <${url}>`;
   }
   if (label === 'Third-Place Match') {
     return `**[RizzOtto's Arena] The Third-Place Match — ${name}** 🥉\n` +
-      `One last battle to close out the tournament — you face ${vs} for the bronze. Finish strong. GG! <${url}>`;
+      `One last battle to close out the tournament — you${mate} face ${vs} for the bronze. Finish strong. GG! <${url}>`;
   }
   if (label === 'Semi-Finals' || label === 'Quarter-Finals' || label === 'Playoffs') {
     return `**[RizzOtto's Arena] ${label} — ${name}** 🏆\n` +
-      `Congratulations on reaching the ${label}! You face ${vs}. This is where legends are forged — good luck, and may your dice run hot. <${url}>`;
+      `Congratulations on reaching the ${label}! You${mate} face ${vs}. This is where legends are forged — good luck, and may your dice run hot. <${url}>`;
   }
-  return `**[RizzOtto's Arena] ${label} Pairing — ${name}**\nYou are playing against ${vs}.\nOpen your match: <${url}>`;
+  return `**[RizzOtto's Arena] ${label} Pairing — ${name}**\nYou${mate} are playing against ${vs}.\nOpen your match: <${url}>`;
 }
 
 /**
@@ -712,19 +781,40 @@ export async function notifyRoundPairings(
     const config = await getAdminConfig();
     const channelId = config['discord_announce_channel_id'];
     const label = roundLabel ?? `Round ${round}`;
+    const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
 
-    const pairingLines = pairings
-      .map(
-        (p) =>
-          `• <@${p.player1.discord_id}> vs <@${p.player2.discord_id}>` +
-          (p.map ? ` on *${p.map}*` : ''),
-      )
-      .join('\n');
+    // Resolve each competitor slot to its recipients: the user for 1v1, ALL members for 2v2.
+    const recipientsBySlot = await resolveCompetitorRecipients(
+      pairings.flatMap((p) => [p.player1Id, p.player2Id]),
+    );
 
-    if (channelId) {
+    const pairingLines: string[] = [];
+    const dmPromises: Promise<unknown>[] = [];
+
+    for (const p of pairings) {
+      const side1 = recipientsBySlot.get(p.player1Id) ?? [];
+      const side2 = recipientsBySlot.get(p.player2Id) ?? [];
+      if (side1.length === 0 || side2.length === 0) continue;
+      const m1 = mentionList(side1);
+      const m2 = mentionList(side2);
+      pairingLines.push(`• ${m1} vs ${m2}` + (p.map ? ` on *${p.map}*` : ''));
+
+      // DM every member of each side — their opponent is the whole other side, plus a note
+      // about their own teammate for 2v2.
+      for (const r of side1) {
+        const mate = mentionList(side1.filter((x) => x.user_id !== r.user_id)) || null;
+        dmPromises.push(sendDm(r.discord_id, pairingDmText(tournament.name, label, m2, p.map, url, mate)));
+      }
+      for (const r of side2) {
+        const mate = mentionList(side2.filter((x) => x.user_id !== r.user_id)) || null;
+        dmPromises.push(sendDm(r.discord_id, pairingDmText(tournament.name, label, m1, p.map, url, mate)));
+      }
+    }
+
+    if (channelId && pairingLines.length > 0) {
       const embed = {
         title: `⚔️ ${label} Pairings — ${tournament.name}`,
-        description: pairingLines,
+        description: pairingLines.join('\n'),
         color: 0xc8a96e,
         timestamp: new Date().toISOString(),
       };
@@ -732,13 +822,6 @@ export async function notifyRoundPairings(
         console.warn('[discord-notify] Round pairing embed error:', e),
       );
     }
-
-    const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
-    // DM each player their specific opponent — playoff rounds get a special text.
-    const dmPromises = pairings.flatMap((p) => [
-      sendDm(p.player1.discord_id, pairingDmText(tournament.name, label, p.player2.discord_id, p.map, url)),
-      sendDm(p.player2.discord_id, pairingDmText(tournament.name, label, p.player1.discord_id, p.map, url)),
-    ]);
 
     await Promise.allSettled(dmPromises);
   } catch (err) {
@@ -779,52 +862,39 @@ export async function notifyMatchesCreated(
     const byeMatches = matches.filter((m) => m.player1_id && !m.player2_id);
     if (playable.length === 0 && byeMatches.length === 0) return;
 
-    const userIds = [...new Set([
-      ...playable.flatMap((m) => [m.player1_id as string, m.player2_id as string]),
-      ...byeMatches.map((m) => m.player1_id as string),
-    ])];
-    const users = await prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, discord_id: true, username: true },
-    });
-    const byId = new Map(users.map((u) => [u.id, u]));
-
-    const pairings: PairingForNotify[] = [];
-    for (const m of playable) {
-      const p1 = byId.get(m.player1_id as string);
-      const p2 = byId.get(m.player2_id as string);
-      if (!p1 || !p2) continue;
-      pairings.push({
-        matchId: m.id,
-        player1: { discord_id: p1.discord_id, username: p1.username },
-        player2: { discord_id: p2.discord_id, username: p2.username },
-        round,
-        map: null,
-      });
-    }
-
     const phaseRows = await prisma.match.findMany({
       where: { id: { in: matches.map((m) => m.id) } },
       select: { phase: true },
     });
     const roundLabel = playoffRoundLabel(phaseRows.map((r) => r.phase));
 
-    if (pairings.length > 0) {
+    // Pairings carry opaque competitor slot ids; notifyRoundPairings expands teams to all
+    // members, so a 2v2 pairing DMs all four players.
+    if (playable.length > 0) {
+      const pairings: PairingForNotify[] = playable.map((m) => ({
+        matchId: m.id,
+        player1Id: m.player1_id as string,
+        player2Id: m.player2_id as string,
+        round,
+        map: null,
+      }));
       await notifyRoundPairings(tournament, round, pairings, roundLabel ?? undefined);
     }
 
-    // Bye players advance automatically — encouraging DM. Elimination on the final
-    // Swiss round is handled in auto-swiss-service (it has the standings), so here
-    // (round 1 / playoff byes) it's always "you advance".
-    for (const m of byeMatches) {
-      const p = byId.get(m.player1_id as string);
-      if (p?.discord_id) {
-        await notifyBye(
-          { name: tournament.name, slug: tournament.slug },
-          round,
-          { discord_id: p.discord_id, username: p.username },
-          { eliminated: false, roundLabel: roundLabel ?? undefined },
-        );
+    // Bye competitors advance automatically — DM every member (both, for a 2v2 team).
+    // Elimination on the final Swiss round is handled in auto-swiss-service (it has the
+    // standings), so here (round 1 / playoff byes) it's always "you advance".
+    if (byeMatches.length > 0) {
+      const byeRecipients = await resolveCompetitorRecipients(byeMatches.map((m) => m.player1_id));
+      for (const m of byeMatches) {
+        for (const r of byeRecipients.get(m.player1_id as string) ?? []) {
+          await notifyBye(
+            { name: tournament.name, slug: tournament.slug },
+            round,
+            { discord_id: r.discord_id, username: r.username },
+            { eliminated: false, roundLabel: roundLabel ?? undefined },
+          );
+        }
       }
     }
   } catch (err) {

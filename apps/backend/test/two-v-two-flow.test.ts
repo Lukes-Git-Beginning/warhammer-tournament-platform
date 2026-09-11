@@ -16,6 +16,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
 import { createTestUser, cleanupTournament, cleanupUsers, type TestUser } from './helpers/db-fixtures.js';
+import { resolveCompetitorRecipients } from '../src/lib/discord-notify.js';
 
 let app: FastifyInstance;
 
@@ -347,6 +348,30 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     });
     expect([stamped?.player1_faction_id, stamped?.player1_faction_id_2]).toEqual(side1);
     expect([stamped?.player2_faction_id, stamped?.player2_faction_id_2]).toEqual(side2);
+  });
+
+  it('resolves a 2v2 team competitor to BOTH members (captain first) so match DMs reach all four', async () => {
+    const team = await makeActiveTeam('Mike');
+    const solo = await createTestUser({ username: 'solo-competitor' });
+    createdUserIds.push(solo.id);
+
+    const map = await resolveCompetitorRecipients([team.teamId, solo.id]);
+
+    // A 1v1 (user) slot → the single user.
+    const soloRecips = map.get(solo.id) ?? [];
+    expect(soloRecips).toHaveLength(1);
+    expect(soloRecips[0]!.user_id).toBe(solo.id);
+    expect(soloRecips[0]!.discord_id).toBe(solo.discord_id);
+
+    // A 2v2 (team) slot → BOTH members, captain first, each with a usable discord_id.
+    const teamRecips = map.get(team.teamId) ?? [];
+    expect(teamRecips).toHaveLength(2);
+    expect(teamRecips[0]!.is_captain).toBe(true);
+    expect(teamRecips[0]!.user_id).toBe(team.captain.id);
+    expect(teamRecips.map((r) => r.user_id).sort()).toEqual(
+      [team.captain.id, team.partner.id].sort(),
+    );
+    expect(teamRecips.every((r) => !!r.discord_id)).toBe(true);
   });
 
   it('guards 2v2 registration (team required, captain-only, must be ACTIVE)', async () => {

@@ -98,6 +98,16 @@ id-agnostic — no change once callers pass competitor ids. Open Play is always 
   competitor resolver → refactor read-sites (green typecheck) → 2v2 registration →
   seed origins → auth captain-check → scoring FK-guards → DTO team branch → draft
   captain-lookup → tests.
+- **Notifications (Alex 2026-09-11):** every match/round DM must reach ALL players, not
+  just captains — a 2v2 "next match" pairing DMs all four. A competitor slot is opaque
+  (User id 1v1 / Team id 2v2), so the DM layer expands it to recipients. DONE:
+  `resolveCompetitorRecipients` (discord-notify.ts) resolves a slot → the user (1v1) or
+  all team members captain-first (2v2), each with a discord_id; `notifyRoundPairings` now
+  takes competitor slot ids, shows `<@a> & <@b> vs <@c> & <@d>` in the channel embed, and
+  DMs each member with the opposing side's mentions + a "(with your teammate …)" note. Bye
+  DMs (round-1/playoff via `notifyMatchesCreated`, final-round via `auto-swiss-service`)
+  likewise fan out to both members. Still per-user: the ~1h scheduled-match ready-check and
+  Open Play (always 1v1) are untouched.
 - **Phase B — per-member factions (D2):** game-level two-faction storage + blind-pick/
   draft/report/DTO for two members. Layered after A, each commit green. **Also converts
   the in-match auth + flow to captain/per-member** — `match-decision.ts` (coin flip,
