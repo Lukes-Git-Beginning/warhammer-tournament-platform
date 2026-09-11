@@ -463,11 +463,13 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
         </div>
         {!confirmingWithdraw ? (
           <button type="button" onClick={() => setConfirmingWithdraw(true)} className="rounded border border-stone-600 px-3 py-1 text-xs text-stone-400 hover:border-rizzotto-danger hover:text-rizzotto-danger transition-colors self-start">
-            Withdraw from tournament
+            {isTeamFormat ? 'Withdraw team from tournament' : 'Withdraw from tournament'}
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-rizzotto-stone-400">Are you sure?</span>
+            <span className="text-xs text-rizzotto-stone-400">
+              {isTeamFormat ? 'This withdraws your whole team. Are you sure?' : 'Are you sure?'}
+            </span>
             <button type="button" onClick={() => withdraw.mutate()} disabled={withdraw.isPending} className="text-xs text-rizzotto-danger hover:text-red-300 transition-colors disabled:opacity-50">
               {withdraw.isPending ? 'Withdrawing…' : 'Yes, withdraw'}
             </button>

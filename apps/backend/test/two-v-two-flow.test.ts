@@ -444,6 +444,14 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     const { id, slug } = await setup2v2Tournament(host.id);
     expect((await registerTeam(slug, a.captain.id, a.teamId)).statusCode).toBe(201);
 
+    // The teammate (no row of their own) still sees the team as registered via /participants/me.
+    const mePartner = await app.inject({
+      method: 'GET',
+      url: `/api/tournaments/${slug}/participants/me`,
+      cookies: cookieFor(a.partner.id),
+    });
+    expect(mePartner.json().status).toBe('REGISTERED');
+
     // The TEAMMATE (not the captain, who holds the participant row) withdraws → the whole
     // team's row goes WITHDREW (a 2v2 needs both, so either member may pull it out).
     const res = await app.inject({

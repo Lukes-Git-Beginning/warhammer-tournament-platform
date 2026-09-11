@@ -1021,7 +1021,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true },
+        select: { id: true, competitor_format: true },
       });
 
       if (!tournament) {
@@ -1032,19 +1032,32 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const participant = await fastify.prisma.tournamentParticipant.findFirst({
-        where: {
-          tournament_id: tournament.id,
-          user_id: request.user.sub,
-          deleted_at: null,
-        },
-        select: {
-          status: true,
-          registered_at: true,
-          faction_id: true,
-          lists_locked_at: true,
-        },
+      const meSelect = {
+        status: true,
+        registered_at: true,
+        faction_id: true,
+        lists_locked_at: true,
+      } as const;
+
+      let participant = await fastify.prisma.tournamentParticipant.findFirst({
+        where: { tournament_id: tournament.id, user_id: request.user.sub, deleted_at: null },
+        select: meSelect,
       });
+      // 2v2: only the captain holds a row; a teammate resolves to the team's row via membership,
+      // so both members see their team as registered (and can withdraw the team).
+      if (!participant && tournament.competitor_format === 'TWO_V_TWO') {
+        const memberships = await fastify.prisma.teamMember.findMany({
+          where: { user_id: request.user.sub },
+          select: { team_id: true },
+        });
+        const teamIds = memberships.map((m) => m.team_id);
+        if (teamIds.length > 0) {
+          participant = await fastify.prisma.tournamentParticipant.findFirst({
+            where: { tournament_id: tournament.id, team_id: { in: teamIds }, deleted_at: null },
+            select: meSelect,
+          });
+        }
+      }
 
       if (!participant) {
         // Not registered — return null status (not an error)
