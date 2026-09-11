@@ -671,7 +671,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, status: true },
+        select: { id: true, status: true, competitor_format: true },
       });
 
       if (!tournament) {
@@ -694,14 +694,26 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const participant = await fastify.prisma.tournamentParticipant.findFirst({
-        where: {
-          tournament_id: tournament.id,
-          user_id: request.user.sub,
-          deleted_at: null,
-        },
+      // 1v1: the participant is the caller's own row. 2v2: only the captain holds a row
+      // (team-as-actor), but EITHER member may pull the team out (a 2v2 needs both players),
+      // so a teammate resolves to the team's row via membership → the whole team withdraws.
+      let participant = await fastify.prisma.tournamentParticipant.findFirst({
+        where: { tournament_id: tournament.id, user_id: request.user.sub, deleted_at: null },
         select: { id: true, status: true },
       });
+      if (!participant && tournament.competitor_format === 'TWO_V_TWO') {
+        const memberships = await fastify.prisma.teamMember.findMany({
+          where: { user_id: request.user.sub },
+          select: { team_id: true },
+        });
+        const teamIds = memberships.map((m) => m.team_id);
+        if (teamIds.length > 0) {
+          participant = await fastify.prisma.tournamentParticipant.findFirst({
+            where: { tournament_id: tournament.id, team_id: { in: teamIds }, deleted_at: null },
+            select: { id: true, status: true },
+          });
+        }
+      }
 
       if (!participant) {
         return reply.code(404).send({

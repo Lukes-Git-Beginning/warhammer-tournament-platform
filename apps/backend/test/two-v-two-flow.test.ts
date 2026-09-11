@@ -438,6 +438,28 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     expect([g?.player2_faction_id, g?.player2_faction_id_2]).toEqual(side2);
   });
 
+  it('lets either team member self-withdraw the whole team before start', async () => {
+    const host = await createAdminHost('2v2withdrawhost');
+    const a = await makeActiveTeam('Papa');
+    const { id, slug } = await setup2v2Tournament(host.id);
+    expect((await registerTeam(slug, a.captain.id, a.teamId)).statusCode).toBe(201);
+
+    // The TEAMMATE (not the captain, who holds the participant row) withdraws → the whole
+    // team's row goes WITHDREW (a 2v2 needs both, so either member may pull it out).
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/tournaments/${slug}/withdraw`,
+      cookies: cookieFor(a.partner.id),
+    });
+    expect(res.statusCode).toBe(200);
+
+    const part = await prisma.tournamentParticipant.findFirst({
+      where: { tournament_id: id, team_id: a.teamId },
+      select: { status: true },
+    });
+    expect(part?.status).toBe('WITHDREW');
+  });
+
   it('guards 2v2 registration (team required, captain-only, must be ACTIVE)', async () => {
     const host = await createTestUser({ username: '2v2host3' });
     createdUserIds.push(host.id);
