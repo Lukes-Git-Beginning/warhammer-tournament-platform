@@ -106,12 +106,14 @@ async function ensureTournament(opts: {
   hostId: string;
   competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
   battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  format?: 'SINGLE_ELIMINATION' | 'SWISS';
+  roundsCount?: number;
 }): Promise<string> {
   const existing = await prisma.tournament.findFirst({ where: { slug: opts.slug }, select: { id: true } });
   const data = {
     name: opts.name,
     host_id: opts.hostId,
-    format: 'SINGLE_ELIMINATION' as const,
+    format: opts.format ?? ('SINGLE_ELIMINATION' as const),
     mode: opts.mode,
     competitor_format: opts.competitorFormat ?? 'TWO_V_TWO',
     battle_type: opts.battleType ?? 'DOMINATION',
@@ -119,6 +121,7 @@ async function ensureTournament(opts: {
     start_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
     timezone: 'Europe/Berlin',
     has_third_place_match: true,
+    ...(opts.roundsCount != null ? { rounds_count: opts.roundsCount } : {}),
   };
   if (existing) {
     await prisma.tournament.update({ where: { id: existing.id }, data });
@@ -166,6 +169,17 @@ async function main() {
     }
   }
   console.log('  ✓ 4 teams registered in each of "2v2-demo-sft" and "2v2-demo-bpt"');
+
+  // A Swiss 2v2 so the team standings table (SwissStandings) can be viewed for teams too.
+  const swissId = await ensureTournament({ slug: '2v2-demo-swiss', name: '2v2 Demo — Swiss', mode: 'BPT_2V2', hostId, format: 'SWISS', roundsCount: 3 });
+  for (const tm of teamIds) {
+    await prisma.tournamentParticipant.upsert({
+      where: { tournament_id_user_id: { tournament_id: swissId, user_id: tm.captainId } },
+      update: { team_id: tm.id, participant_type: 'TEAM', status: 'REGISTERED', deleted_at: null, faction_ids: [] },
+      create: { tournament_id: swissId, user_id: tm.captainId, team_id: tm.id, participant_type: 'TEAM', status: 'REGISTERED', faction_ids: [] },
+    });
+  }
+  console.log('  ✓ 4 teams registered in "2v2-demo-swiss" (Swiss format)');
 
   // Battle-type tile showcase: 1v1 Conquest + 1v1 Siege (no participants needed — they just
   // demonstrate the tile accents) and a combined 2v2 Siege (both markers on one tile).
