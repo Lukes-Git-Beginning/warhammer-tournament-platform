@@ -48,6 +48,14 @@ export async function createTestUser(overrides?: { username?: string }): Promise
 export async function createTestVersion(overrides?: { is_active?: boolean }): Promise<TestVersion> {
   const id = randomUUID();
   const name = `test-version-${id}`;
+  const isActive = overrides?.is_active ?? true;
+
+  // Tests run single-fork (serial). An active test version must be the ONLY active
+  // one — otherwise a seeded "8.1" leaves two actives and the match-result path's
+  // findFirst({ is_active }) picks non-deterministically (flaky: green in CI, red locally).
+  if (isActive) {
+    await prisma.gameVersion.updateMany({ where: { is_active: true }, data: { is_active: false } });
+  }
 
   await prisma.gameVersion.create({
     data: {
@@ -55,7 +63,7 @@ export async function createTestVersion(overrides?: { is_active?: boolean }): Pr
       name,
       start_date: new Date('2026-01-01'),
       end_date: new Date('2026-12-31'),
-      is_active: overrides?.is_active ?? true,
+      is_active: isActive,
     },
   });
 

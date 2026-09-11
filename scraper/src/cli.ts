@@ -72,10 +72,18 @@ program
           continue;
         }
         await prisma.factionStats.upsert({
-          where: { faction_id_version_id: { faction_id: faction.id, version_id: activeVersion.id } },
+          // TT archive data is Domination (the only battle type it covers).
+          where: {
+            faction_id_version_id_battle_type: {
+              faction_id: faction.id,
+              version_id: activeVersion.id,
+              battle_type: 'DOMINATION',
+            },
+          },
           create: {
             faction_id: faction.id,
             version_id: activeVersion.id,
+            battle_type: 'DOMINATION',
             matches_played: row.matches_played ?? 0,
             wins: Math.round((row.matches_played ?? 0) * row.winrate),
             losses: (row.matches_played ?? 0) - Math.round((row.matches_played ?? 0) * row.winrate),
