@@ -14,3 +14,7 @@ Expected files (exact, lowercase base names) — `.png`, `.svg` or `.webp` all w
 Recommended: a transparent background, the gold symbol roughly square, ~256–512 px.
 Until a matching file exists the watermark simply doesn't render (the image fails to load and is
 hidden), so it's safe to add them one at a time.
+
+The current `conquest.png` / `domination.png` / `siege.png` were extracted from the in-game
+Map-Setup UI screenshot and luminance-keyed to a transparent background. Replace them with the
+higher-resolution press-kit assets when available (same names, any of the extensions above).

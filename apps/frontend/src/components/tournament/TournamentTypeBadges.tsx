@@ -31,7 +31,7 @@ export function BattleTypeWatermark({ battleType }: { battleType?: string | null
       <img
         src={`/battle-types/${battleType.toLowerCase()}.${EXTS[attempt]}`}
         alt=""
-        className="h-4/5 w-4/5 max-w-[240px] object-contain opacity-[0.08]"
+        className="h-4/5 w-4/5 max-w-[240px] object-contain opacity-[0.12]"
         onError={() => setAttempt((a) => a + 1)}
       />
     </div>
