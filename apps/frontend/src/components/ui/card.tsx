@@ -1,4 +1,4 @@
-import { forwardRef, type HTMLAttributes } from 'react';
+import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
@@ -34,11 +34,16 @@ const cardVariants = cva(
 
 export interface CardProps
   extends HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof cardVariants> {}
+    VariantProps<typeof cardVariants> {
+  /** Optional layer rendered behind the content (e.g. a faint watermark). Sits above the
+   *  card background/texture but below the z-10 content. */
+  watermark?: ReactNode;
+}
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ className, variant, interactive, children, ...props }, ref) => (
+  ({ className, variant, interactive, watermark, children, ...props }, ref) => (
     <div ref={ref} className={cn(cardVariants({ variant, interactive, className }))} {...props}>
+      {watermark}
       <div className="relative z-10">{children}</div>
     </div>
   ),
