@@ -19,11 +19,13 @@ import {
 } from '@/components/ui/dialog';
 import {
   acceptTeam,
+  archiveTeam,
   createTeam,
   declineTeam,
   getAllTeams,
   getMyTeams,
   searchTeammates,
+  transferCaptain,
   type TeamDirectoryEntry,
   type TeamDto,
   type TeamMemberDto,
@@ -71,7 +73,19 @@ function TeamNameLink({ id, name }: { id: string; name: string }) {
   );
 }
 
-function TeamCard({ t }: { t: TeamDto }) {
+function TeamCard({
+  t,
+  onTransfer,
+  onDissolve,
+  busy,
+}: {
+  t: TeamDto;
+  onTransfer: (id: string) => void;
+  onDissolve: (id: string) => void;
+  busy?: boolean;
+}) {
+  const [confirm, setConfirm] = useState<null | 'transfer' | 'dissolve'>(null);
+  const teammate = t.members.find((m) => !m.is_captain && m.accepted);
   return (
     <Card variant="banner">
       <CardContent className="p-4">
@@ -86,6 +100,53 @@ function TeamCard({ t }: { t: TeamDto }) {
             <MemberRow key={m.user_id} m={m} />
           ))}
         </div>
+
+        {t.is_captain && (
+          <div className="mt-3 border-t border-rizzotto-iron-700 pt-3">
+            {confirm === 'dissolve' ? (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-rizzotto-stone-400">Dissolve this team?</span>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="etched" disabled={busy} onClick={() => setConfirm(null)}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" variant="forge" disabled={busy} onClick={() => onDissolve(t.id)}>
+                    Confirm
+                  </Button>
+                </div>
+              </div>
+            ) : confirm === 'transfer' && teammate ? (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-rizzotto-stone-400">Make {teammate.username} captain?</span>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="etched" disabled={busy} onClick={() => setConfirm(null)}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" variant="forge" disabled={busy} onClick={() => onTransfer(t.id)}>
+                    Confirm
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {teammate && (
+                  <Button size="sm" variant="etched" disabled={busy} onClick={() => setConfirm('transfer')}>
+                    Make {teammate.username} captain
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy}
+                  className="text-rizzotto-blood-400 hover:text-rizzotto-blood-300"
+                  onClick={() => setConfirm('dissolve')}
+                >
+                  Dissolve
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -262,7 +323,11 @@ function CreateTeamDialog({ onCreated }: { onCreated: () => void }) {
 export function TeamsPage() {
   const { data: user, isLoading } = useRequireAuth();
   const qc = useQueryClient();
-  const invalidate = () => void qc.invalidateQueries({ queryKey: ['teams', 'me'] });
+  const [actionError, setActionError] = useState<string | null>(null);
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ['teams', 'me'] });
+    void qc.invalidateQueries({ queryKey: ['teams', 'all'] });
+  };
 
   const { data, isLoading: teamsLoading } = useQuery({
     queryKey: ['teams', 'me'],
@@ -277,6 +342,23 @@ export function TeamsPage() {
 
   const accept = useMutation({ mutationFn: (id: string) => acceptTeam(id), onSuccess: invalidate });
   const decline = useMutation({ mutationFn: (id: string) => declineTeam(id), onSuccess: invalidate });
+  const onActionError = (e: unknown) => setActionError(e instanceof Error ? e.message : 'Action failed');
+  const transfer = useMutation({
+    mutationFn: (id: string) => transferCaptain(id),
+    onSuccess: () => {
+      setActionError(null);
+      invalidate();
+    },
+    onError: onActionError,
+  });
+  const dissolve = useMutation({
+    mutationFn: (id: string) => archiveTeam(id),
+    onSuccess: () => {
+      setActionError(null);
+      invalidate();
+    },
+    onError: onActionError,
+  });
 
   if (isLoading) {
     return (
@@ -343,12 +425,23 @@ export function TeamsPage() {
 
           <section>
             <h2 className="mb-3 font-display text-lg text-rizzotto-gold-400">Your teams</h2>
+            {actionError && (
+              <p className="mb-3 rounded-md border border-rizzotto-blood-500/40 bg-rizzotto-blood-950/30 p-2 text-sm text-rizzotto-blood-300">
+                {actionError}
+              </p>
+            )}
             {active.length === 0 ? (
               <p className="text-sm text-rizzotto-stone-500">No active teams yet. Create one to compete in 2v2 tournaments.</p>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {active.map((t) => (
-                  <TeamCard key={t.id} t={t} />
+                  <TeamCard
+                    key={t.id}
+                    t={t}
+                    onTransfer={(id) => transfer.mutate(id)}
+                    onDissolve={(id) => dissolve.mutate(id)}
+                    busy={transfer.isPending || dissolve.isPending}
+                  />
                 ))}
               </div>
             )}

@@ -2443,6 +2443,19 @@ export function declineTeam(teamId: string): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/teams/${teamId}/decline`, { method: 'POST' });
 }
 
+/** Captain hands captaincy to a teammate (defaults to the other member in a 2v2). */
+export function transferCaptain(teamId: string, newCaptainId?: string): Promise<{ ok: true; captain_id: string }> {
+  return apiFetch<{ ok: true; captain_id: string }>(`/api/teams/${teamId}/transfer-captain`, {
+    method: 'POST',
+    body: JSON.stringify(newCaptainId ? { new_captain_id: newCaptainId } : {}),
+  });
+}
+
+/** Captain dissolves (archives) the team. Blocked while entered in a live tournament. */
+export function archiveTeam(teamId: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/teams/${teamId}/archive`, { method: 'POST' });
+}
+
 /** Compact Team GS for the ranking board (null while the team + members are all unrated). */
 export interface TeamDirectoryGs {
   generalSkill: number;

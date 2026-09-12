@@ -428,6 +428,112 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.code(200).send({ ok: true });
   });
+
+  // POST /api/teams/:id/transfer-captain — the captain hands captaincy to a teammate.
+  // The roster is immutable; only captaincy moves. Body may name the new captain
+  // (new_captain_id); for a 2v2 team it defaults to the other accepted member.
+  fastify.post('/api/teams/:id/transfer-captain', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const uid = request.user.sub;
+    const parsed = z.object({ new_captain_id: z.string().uuid().optional() }).safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+
+    const team = await fastify.prisma.team.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        captain_id: true,
+        name: true,
+        members: { select: { user_id: true, accepted_at: true } },
+      },
+    });
+    if (!team) return reply.code(404).send({ error: 'NotFound', message: 'Team not found', statusCode: 404 });
+    if (team.captain_id !== uid) {
+      return reply.code(403).send({ error: 'Forbidden', message: 'Only the captain can transfer captaincy', statusCode: 403 });
+    }
+    if (team.status === 'ARCHIVED') {
+      return reply.code(409).send({ error: 'Conflict', message: 'This team is archived', statusCode: 409 });
+    }
+
+    // Target: the named member if given, else the other accepted member (unambiguous in 2v2).
+    const candidates = team.members.filter((m) => m.user_id !== uid && m.accepted_at);
+    const target = parsed.data.new_captain_id
+      ? candidates.find((m) => m.user_id === parsed.data.new_captain_id)
+      : candidates[0];
+    if (!target) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'No accepted teammate to receive captaincy', statusCode: 400 });
+    }
+
+    await fastify.prisma.team.update({ where: { id }, data: { captain_id: target.user_id } });
+
+    const [newCap, me] = await Promise.all([
+      fastify.prisma.user.findUnique({ where: { id: target.user_id }, select: { discord_id: true } }),
+      fastify.prisma.user.findUnique({ where: { id: uid }, select: { username: true } }),
+    ]);
+    if (newCap?.discord_id) {
+      void sendDm(newCap.discord_id, `**${me?.username ?? 'Your teammate'}** made you captain of **${team.name}**.`);
+    }
+
+    return reply.code(200).send({ ok: true, captain_id: target.user_id });
+  });
+
+  // POST /api/teams/:id/archive — the captain dissolves the team (roster is never
+  // member-swapped; dissolving = archive). Blocked while the team is entered in a live
+  // tournament. Re-creating the same duo later reactivates the archived row.
+  fastify.post('/api/teams/:id/archive', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const uid = request.user.sub;
+    const team = await fastify.prisma.team.findUnique({
+      where: { id },
+      select: { id: true, status: true, captain_id: true, name: true, members: { select: { user_id: true } } },
+    });
+    if (!team) return reply.code(404).send({ error: 'NotFound', message: 'Team not found', statusCode: 404 });
+    if (team.captain_id !== uid) {
+      return reply.code(403).send({ error: 'Forbidden', message: 'Only the captain can dissolve the team', statusCode: 403 });
+    }
+    if (team.status === 'ARCHIVED') {
+      return reply.code(409).send({ error: 'Conflict', message: 'This team is already archived', statusCode: 409 });
+    }
+
+    // Don't orphan a live tournament entry — the team must withdraw first.
+    const activeEntry = await fastify.prisma.tournamentParticipant.findFirst({
+      where: {
+        team_id: id,
+        deleted_at: null,
+        tournament: {
+          deleted_at: null,
+          status: { in: ['OPEN_REGISTRATION', 'REGISTRATION_CLOSED', 'ONGOING'] },
+        },
+      },
+      select: { id: true },
+    });
+    if (activeEntry) {
+      return reply.code(409).send({
+        error: 'Conflict',
+        message: 'Withdraw from active tournaments before dissolving the team',
+        statusCode: 409,
+      });
+    }
+
+    await fastify.prisma.team.update({ where: { id }, data: { status: 'ARCHIVED' } });
+
+    const me = await fastify.prisma.user.findUnique({ where: { id: uid }, select: { username: true } });
+    const otherIds = team.members.filter((m) => m.user_id !== uid).map((m) => m.user_id);
+    if (otherIds.length > 0) {
+      const others = await fastify.prisma.user.findMany({
+        where: { id: { in: otherIds } },
+        select: { discord_id: true },
+      });
+      for (const o of others) {
+        if (o.discord_id) void sendDm(o.discord_id, `**${me?.username ?? 'Your captain'}** dissolved the team **${team.name}**.`);
+      }
+    }
+
+    return reply.code(200).send({ ok: true });
+  });
 };
 
 export default teamRoutes;

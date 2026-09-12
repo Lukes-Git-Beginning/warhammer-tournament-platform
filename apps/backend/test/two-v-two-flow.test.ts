@@ -463,6 +463,55 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it('team lifecycle: captain transfers captaincy, then dissolves the team', async () => {
+    const t = await makeActiveTeam('Sierra');
+
+    // A non-captain cannot transfer captaincy.
+    const byMate = await app.inject({
+      method: 'POST', url: `/api/teams/${t.teamId}/transfer-captain`,
+      cookies: cookieFor(t.partner.id), payload: {},
+    });
+    expect(byMate.statusCode).toBe(403);
+
+    // The captain hands captaincy to the (only) teammate — defaults to the other accepted member.
+    const transfer = await app.inject({
+      method: 'POST', url: `/api/teams/${t.teamId}/transfer-captain`,
+      cookies: cookieFor(t.captain.id), payload: {},
+    });
+    expect(transfer.statusCode).toBe(200);
+    expect(transfer.json().captain_id).toBe(t.partner.id);
+    expect((await prisma.team.findUnique({ where: { id: t.teamId }, select: { captain_id: true } }))?.captain_id)
+      .toBe(t.partner.id);
+
+    // The former captain is no longer captain → cannot dissolve.
+    const byOldCap = await app.inject({
+      method: 'POST', url: `/api/teams/${t.teamId}/archive`, cookies: cookieFor(t.captain.id), payload: {},
+    });
+    expect(byOldCap.statusCode).toBe(403);
+
+    // The new captain dissolves the team → ARCHIVED, and it drops out of the directory.
+    const archive = await app.inject({
+      method: 'POST', url: `/api/teams/${t.teamId}/archive`, cookies: cookieFor(t.partner.id), payload: {},
+    });
+    expect(archive.statusCode).toBe(200);
+    expect((await prisma.team.findUnique({ where: { id: t.teamId }, select: { status: true } }))?.status)
+      .toBe('ARCHIVED');
+    const dir = await app.inject({ method: 'GET', url: '/api/teams' });
+    expect((dir.json().teams as Array<{ id: string }>).some((x) => x.id === t.teamId)).toBe(false);
+  });
+
+  it('blocks dissolving a team that is entered in a live tournament', async () => {
+    const host = await createAdminHost('2v2archivehost');
+    const t = await makeActiveTeam('Tango');
+    const { slug } = await setup2v2Tournament(host.id);
+    expect((await registerTeam(slug, t.captain.id, t.teamId)).statusCode).toBe(201);
+
+    const blocked = await app.inject({
+      method: 'POST', url: `/api/teams/${t.teamId}/archive`, cookies: cookieFor(t.captain.id), payload: {},
+    });
+    expect(blocked.statusCode).toBe(409);
+  });
+
   it('lists 2v2 participants as teams with both members (captain first)', async () => {
     const host = await createAdminHost('2v2partshost');
     const a = await makeActiveTeam('Quebec');
