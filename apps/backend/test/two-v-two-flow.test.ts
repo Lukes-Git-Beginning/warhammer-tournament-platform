@@ -456,6 +456,8 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     expect(body.record).toEqual({ matchesPlayed: 0, matchesWon: 0 });
     expect(body.gs).toBeNull(); // no rated games yet
     expect(Array.isArray(body.tournaments)).toBe(true);
+    expect(body.factionDuos).toEqual([]); // no games → no duos
+    expect(body.games).toEqual([]); // no games yet
 
     const missing = await app.inject({ method: 'GET', url: `/api/teams/${randomUUID()}` });
     expect(missing.statusCode).toBe(404);

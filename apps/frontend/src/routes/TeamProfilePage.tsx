@@ -168,6 +168,26 @@ export function TeamProfilePage() {
         </div>
       </section>
 
+      {/* Most-played faction duos (both members' factions, order-independent) */}
+      {team.factionDuos.length > 0 && (
+        <section className="mb-6">
+          <h2 className="mb-3 font-display text-lg text-rizzotto-gold-400">Most-played faction duos</h2>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {team.factionDuos.map((d, i) => (
+              <li
+                key={i}
+                className="flex items-center justify-between gap-3 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-4 py-2.5"
+              >
+                <span className="text-sm text-rizzotto-stone-200">{d.factions.map((f) => f.name).join(' + ')}</span>
+                <span className="shrink-0 text-xs text-rizzotto-stone-500">
+                  {d.games} game{d.games === 1 ? '' : 's'} · {Math.round((d.wins / d.games) * 100)}% W
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Tournament history */}
       <section>
         <h2 className="mb-3 font-display text-lg text-rizzotto-gold-400">Tournaments</h2>
@@ -187,6 +207,39 @@ export function TeamProfilePage() {
                 <span className="text-[11px] font-display uppercase tracking-wide text-rizzotto-stone-500">
                   {tr.participantStatus === 'WITHDREW' ? 'Withdrew' : tr.status.replace(/_/g, ' ').toLowerCase()}
                 </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Games — the team's completed games, newest first */}
+      <section className="mt-6">
+        <h2 className="mb-3 font-display text-lg text-rizzotto-gold-400">Games</h2>
+        {team.games.length === 0 ? (
+          <p className="text-sm text-rizzotto-stone-500">No games played yet.</p>
+        ) : (
+          <ul className="divide-y divide-rizzotto-iron-700 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900">
+            {team.games.map((g, i) => (
+              <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
+                <span
+                  className={`w-5 shrink-0 font-display text-xs font-bold uppercase ${g.won ? 'text-rizzotto-success' : 'text-rizzotto-stone-500'}`}
+                >
+                  {g.won ? 'W' : 'L'}
+                </span>
+                <span className="text-rizzotto-stone-300">{g.my_factions.map((f) => f?.name ?? '—').join(' + ')}</span>
+                <span className="text-xs text-rizzotto-stone-500">vs</span>
+                <span className="text-rizzotto-stone-300">
+                  {g.opponent_name ?? 'Unknown'}{' '}
+                  <span className="text-rizzotto-stone-500">
+                    ({g.opponent_factions.map((f) => f?.name ?? '—').join(' + ')})
+                  </span>
+                </span>
+                {g.played_at && (
+                  <span className="ml-auto text-xs text-rizzotto-stone-500">
+                    {new Date(g.played_at).toLocaleDateString()}
+                  </span>
+                )}
               </li>
             ))}
           </ul>

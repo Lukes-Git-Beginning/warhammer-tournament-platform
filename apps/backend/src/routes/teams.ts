@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { sendDm } from '../lib/discord-notify.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
 import { resolveTeamGs } from '../lib/team-rating.js';
+import { resolveCompetitors } from '../lib/competitors.js';
 
 // ---------------------------------------------------------------------------
 // Teams — permanent 2v2 competitors (design doc §5, plans/2v2-competitor-
@@ -233,7 +234,7 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
     const gs = resolveTeamGs(model, id, team.members.map((m) => m.user_id));
 
     // Team-as-actor: the team id sits in the opaque Match competitor slots.
-    const [matchesPlayed, matchesWon, parts] = await Promise.all([
+    const [matchesPlayed, matchesWon, parts, teamGames, factionList] = await Promise.all([
       fastify.prisma.match.count({
         where: { deleted_at: null, status: 'COMPLETED', OR: [{ player1_id: id }, { player2_id: id }] },
       }),
@@ -246,7 +247,59 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
           tournament: { select: { slug: true, name: true, status: true, start_date: true } },
         },
       }),
+      fastify.prisma.matchGame.findMany({
+        where: {
+          status: 'COMPLETED',
+          match: { deleted_at: null, OR: [{ player1_id: id }, { player2_id: id }] },
+        },
+        orderBy: { played_at: 'desc' },
+        select: {
+          winner_id: true,
+          played_at: true,
+          player1_faction_id: true,
+          player1_faction_id_2: true,
+          player2_faction_id: true,
+          player2_faction_id_2: true,
+          map_decision: { select: { picked_map_id: true } },
+          match: { select: { player1_id: true, player2_id: true, tournament: { select: { slug: true, name: true } } } },
+        },
+      }),
+      fastify.prisma.faction.findMany({ select: { id: true, name: true } }),
     ]);
+
+    const factionName = new Map(factionList.map((f) => [f.id, f.name]));
+    const fchip = (fid: string | null) => (fid ? { id: fid, name: factionName.get(fid) ?? fid } : null);
+    // Opponent slots are opaque competitor ids — resolve their display names (team names for 2v2).
+    const opponentMap = await resolveCompetitors(
+      fastify.prisma,
+      teamGames.flatMap((g) => [g.match.player1_id, g.match.player2_id]),
+    );
+
+    // Per game, split the four faction slots into "this team's pair" vs "the opponents'".
+    const perGame = teamGames.map((g) => {
+      const isP1 = g.match.player1_id === id;
+      const mine = isP1 ? [g.player1_faction_id, g.player1_faction_id_2] : [g.player2_faction_id, g.player2_faction_id_2];
+      const opp = isP1 ? [g.player2_faction_id, g.player2_faction_id_2] : [g.player1_faction_id, g.player1_faction_id_2];
+      const opponentId = isP1 ? g.match.player2_id : g.match.player1_id;
+      return { g, mine, opp, opponentId, won: g.winner_id === id };
+    });
+
+    // Most-played faction DUOS — the team's own two factions per game (order-independent), counted.
+    const duoAgg = new Map<string, { factions: { id: string; name: string }[]; games: number; wins: number }>();
+    for (const { mine, won } of perGame) {
+      const pair = mine.filter((f): f is string => !!f).sort();
+      if (pair.length < 2) continue; // need both members' factions to be a duo
+      const key = pair.join('|');
+      const entry = duoAgg.get(key) ?? {
+        factions: pair.map((fid) => ({ id: fid, name: factionName.get(fid) ?? fid })),
+        games: 0,
+        wins: 0,
+      };
+      entry.games += 1;
+      if (won) entry.wins += 1;
+      duoAgg.set(key, entry);
+    }
+    const factionDuos = [...duoAgg.values()].sort((a, b) => b.games - a.games || b.wins - a.wins).slice(0, 6);
 
     return {
       id: team.id,
@@ -257,6 +310,16 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
       members: team.members.map((m) => memberDto(m, team.captain_id)),
       gs,
       record: { matchesPlayed, matchesWon },
+      factionDuos,
+      games: perGame.slice(0, 40).map(({ g, mine, opp, opponentId, won }) => ({
+        tournament_slug: g.match.tournament?.slug ?? null,
+        opponent_name: opponentId ? opponentMap.get(opponentId)?.username ?? null : null,
+        my_factions: mine.map(fchip),
+        opponent_factions: opp.map(fchip),
+        map_id: g.map_decision?.picked_map_id ?? null,
+        won,
+        played_at: g.played_at?.toISOString() ?? null,
+      })),
       tournaments: parts.map((p) => ({
         slug: p.tournament.slug,
         name: p.tournament.name,

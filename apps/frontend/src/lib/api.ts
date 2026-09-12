@@ -2453,6 +2453,18 @@ export interface TeamProfileDto {
     fromMembers: boolean;
   } | null;
   record: { matchesPlayed: number; matchesWon: number };
+  /** The team's most-played faction pairs (both members), order-independent, most games first. */
+  factionDuos: { factions: { id: string; name: string }[]; games: number; wins: number }[];
+  /** The team's completed games, newest first (opponent + both factions per side + map + result). */
+  games: {
+    tournament_slug: string | null;
+    opponent_name: string | null;
+    my_factions: ({ id: string; name: string } | null)[];
+    opponent_factions: ({ id: string; name: string } | null)[];
+    map_id: string | null;
+    won: boolean;
+    played_at: string | null;
+  }[];
   tournaments: { slug: string; name: string; status: string; participantStatus: string; start_date: string }[];
 }
 
