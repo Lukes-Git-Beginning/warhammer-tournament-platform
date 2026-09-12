@@ -1550,8 +1550,18 @@ export interface StandardRuleset {
   conduct: string[];
 }
 
-export function getStandardRuleset(): Promise<StandardRuleset> {
-  return apiFetch('/api/meta/standard-ruleset');
+/** The Standard Ruleset for one (battle type × team size) combo. Defaults to Domination / 1v1. */
+export function getStandardRuleset(battleType?: BattleType, competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO'): Promise<StandardRuleset> {
+  const params = new URLSearchParams();
+  if (battleType) params.set('battleType', battleType);
+  if (competitorFormat) params.set('competitorFormat', competitorFormat);
+  const qs = params.toString();
+  return apiFetch(`/api/meta/standard-ruleset${qs ? `?${qs}` : ''}`);
+}
+
+/** All 6 (battle type × team size) rulesets, defaults filled — for the admin editor. */
+export function getAllStandardRulesets(): Promise<{ rulesets: Record<string, StandardRuleset> }> {
+  return apiFetch('/api/meta/standard-rulesets');
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { cached, cacheKey } from '../lib/cache.js';
 import { asFactionDto, getFactionsWithStats } from '../lib/factions.js';
 import { getMatchupMatrix } from '../lib/heatmap.js';
-import { resolveStandardRuleset } from '../lib/standard-ruleset.js';
+import { resolveStandardRuleset, resolveAllStandardRulesets } from '../lib/standard-ruleset.js';
 import { resolveCompetitors } from '../lib/competitors.js';
 import { computeDuoMeta } from '../lib/duo-meta.js';
 
@@ -465,11 +465,29 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // -------------------------------------------------------------------------
-  // GET /api/meta/standard-ruleset
-  // Public — the community Standard Ruleset (admin-editable, defaults otherwise).
+  // GET /api/meta/standard-ruleset?battleType=&competitorFormat=
+  // Public — the community Standard Ruleset for one (battle type × team size) combo
+  // (admin-editable, defaults otherwise). Defaults to Domination / 1v1.
   // -------------------------------------------------------------------------
-  fastify.get('/api/meta/standard-ruleset', async () => {
-    return resolveStandardRuleset();
+  fastify.get('/api/meta/standard-ruleset', async (request) => {
+    const q = z
+      .object({
+        battleType: z.enum(BATTLE_TYPES).optional(),
+        competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(),
+      })
+      .safeParse(request.query);
+    const battleType = q.success ? q.data.battleType : undefined;
+    const competitorFormat = q.success ? q.data.competitorFormat : undefined;
+    return resolveStandardRuleset(battleType ?? 'DOMINATION', competitorFormat ?? 'ONE_V_ONE');
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/meta/standard-rulesets
+  // Public — all 6 (battle type × team size) rulesets, defaults filled. Powers the
+  // admin editor (which edits every combo) and any client that wants them all.
+  // -------------------------------------------------------------------------
+  fastify.get('/api/meta/standard-rulesets', async () => {
+    return { rulesets: await resolveAllStandardRulesets() };
   });
 };
 

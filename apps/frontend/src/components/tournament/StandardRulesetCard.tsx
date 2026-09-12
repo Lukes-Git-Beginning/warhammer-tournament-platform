@@ -9,7 +9,7 @@
  * Host customisations still go into the "Custom Rules" / "Custom Restrictions" fields.
  */
 import { useQuery } from '@tanstack/react-query';
-import { getStandardRuleset, type StandardRuleset } from '@/lib/api.js';
+import { getStandardRuleset, type BattleType, type StandardRuleset } from '@/lib/api.js';
 
 export const STANDARD_RULESET: StandardRuleset = {
   settings: ['Default Funds', 'Ultra Unit Scale', '1500 Tickets', 'Unit Caps On'],
@@ -35,14 +35,19 @@ function Row({ label, items }: { label: string; items: readonly string[] }) {
 export function StandardRulesetCard({
   compact = false,
   ruleset,
+  battleType,
+  competitorFormat,
 }: {
   compact?: boolean;
   ruleset?: StandardRuleset;
+  /** Show the ruleset for this combo (defaults to Domination / 1v1 when omitted). */
+  battleType?: BattleType;
+  competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
 }) {
   // Skip the fetch when explicit values are supplied (editor preview).
   const { data } = useQuery({
-    queryKey: ['standard-ruleset'],
-    queryFn: getStandardRuleset,
+    queryKey: ['standard-ruleset', battleType ?? 'DOMINATION', competitorFormat ?? 'ONE_V_ONE'],
+    queryFn: () => getStandardRuleset(battleType, competitorFormat),
     staleTime: 5 * 60 * 1000,
     enabled: !ruleset,
   });
