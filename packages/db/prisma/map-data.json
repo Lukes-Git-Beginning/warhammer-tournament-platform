@@ -1,524 +1,1031 @@
 [
   {
+    "name": "Altdorf Outskirts",
+    "image_url": "(local)",
+    "slug": "altdorf-outskirts",
+    "local_path": "/maps/altdorf-outskirts.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Ash Plains",
+    "image_url": "(local)",
+    "slug": "ash-plains",
+    "local_path": "/maps/ash-plains.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Cliff of Beasts",
+    "image_url": "(local)",
+    "slug": "cliff-of-beasts",
+    "local_path": "/maps/cliff-of-beasts.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Dok Karaz",
+    "image_url": "(local)",
+    "slug": "dok-karaz",
+    "local_path": "/maps/dok-karaz.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Eschen",
+    "image_url": "(local)",
+    "slug": "eschen",
+    "local_path": "/maps/eschen.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Galbaraz",
+    "image_url": "(local)",
+    "slug": "galbaraz",
+    "local_path": "/maps/galbaraz.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Gor Gazan",
+    "image_url": "(local)",
+    "slug": "gor-gazan",
+    "local_path": "/maps/gor-gazan.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Knights Run",
+    "image_url": "(local)",
+    "slug": "knights-run",
+    "local_path": "/maps/knights-run.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Mortis Wastes",
+    "image_url": "(local)",
+    "slug": "mortis-wastes",
+    "local_path": "/maps/mortis-wastes.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Peak Pass",
+    "image_url": "(local)",
+    "slug": "peak-pass",
+    "local_path": "/maps/peak-pass.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Peasants Pasture",
+    "image_url": "(local)",
+    "slug": "peasants-pasture",
+    "local_path": "/maps/peasants-pasture.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Pillar of Bone",
+    "image_url": "(local)",
+    "slug": "pillar-of-bone",
+    "local_path": "/maps/pillar-of-bone.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Praag",
+    "image_url": "(local)",
+    "slug": "praag",
+    "local_path": "/maps/praag.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "River Amaxon",
+    "image_url": "(local)",
+    "slug": "river-amaxon",
+    "local_path": "/maps/river-amaxon.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Schwartzhafen",
+    "image_url": "(local)",
+    "slug": "schwartzhafen",
+    "local_path": "/maps/schwartzhafen.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Shimmersward",
+    "image_url": "(local)",
+    "slug": "shimmersward",
+    "local_path": "/maps/shimmersward.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Southern Chaos Wastes",
+    "image_url": "(local)",
+    "slug": "southern-chaos-wastes",
+    "local_path": "/maps/southern-chaos-wastes.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Sword of Torgald",
+    "image_url": "(local)",
+    "slug": "sword-of-torgald",
+    "local_path": "/maps/sword-of-torgald.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "The Bitter Dunes",
+    "image_url": "(local)",
+    "slug": "the-bitter-dunes",
+    "local_path": "/maps/the-bitter-dunes.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "The Flats of Kislev",
+    "image_url": "(local)",
+    "slug": "the-flats-of-kislev",
+    "local_path": "/maps/the-flats-of-kislev.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "The Lost Crater",
+    "image_url": "(local)",
+    "slug": "the-lost-crater",
+    "local_path": "/maps/the-lost-crater.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "The Reikland Estates",
+    "image_url": "(local)",
+    "slug": "the-reikland-estates",
+    "local_path": "/maps/the-reikland-estates.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "The Tourney Grounds",
+    "image_url": "(local)",
+    "slug": "the-tourney-grounds",
+    "local_path": "/maps/the-tourney-grounds.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Tower of Hoeth",
+    "image_url": "(local)",
+    "slug": "tower-of-hoeth",
+    "local_path": "/maps/tower-of-hoeth.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Troll Run",
+    "image_url": "(local)",
+    "slug": "troll-run",
+    "local_path": "/maps/troll-run.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Valley of Thieves",
+    "image_url": "(local)",
+    "slug": "valley-of-thieves",
+    "local_path": "/maps/valley-of-thieves.png",
+    "battle_type": "CONQUEST"
+  },
+  {
+    "name": "Wyvern Lake",
+    "image_url": "(local)",
+    "slug": "wyvern-lake",
+    "local_path": "/maps/wyvern-lake.png",
+    "battle_type": "CONQUEST"
+  },
+  {
     "name": "Altar of Hashut",
     "image_url": "https://i.imgur.com/LvLOtgm.jpeg",
     "slug": "altar-of-hashut",
-    "local_path": "/maps/altar-of-hashut.jpeg"
+    "local_path": "/maps/altar-of-hashut.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Altar of the Champion",
     "image_url": "https://i.imgur.com/yz5oLma.jpeg",
     "slug": "altar-of-the-champion",
-    "local_path": "/maps/altar-of-the-champion.jpeg"
+    "local_path": "/maps/altar-of-the-champion.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Altdorf Farmlands",
     "image_url": "https://i.imgur.com/cC1nDSM.jpeg",
     "slug": "altdorf-farmlands",
-    "local_path": "/maps/altdorf-farmlands.jpeg"
+    "local_path": "/maps/altdorf-farmlands.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Aracknarock Lair",
     "image_url": "https://i.imgur.com/saz9JBu.jpeg",
     "slug": "aracknarock-lair",
-    "local_path": "/maps/aracknarock-lair.jpeg"
+    "local_path": "/maps/aracknarock-lair.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Arbiter's Ground",
     "image_url": "https://i.imgur.com/sJXZxLk.jpeg",
     "slug": "arbiters-ground",
-    "local_path": "/maps/arbiters-ground.jpeg"
+    "local_path": "/maps/arbiters-ground.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Battered Bluff",
     "image_url": "https://i.imgur.com/LZh0MZh.jpeg",
     "slug": "battered-bluff",
-    "local_path": "/maps/battered-bluff.jpeg"
+    "local_path": "/maps/battered-bluff.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Blasphemous Snowfield",
     "image_url": "(local screenshot)",
     "slug": "blasphemous-snowfield",
-    "local_path": "/maps/blasphemous-snowfield.png"
+    "local_path": "/maps/blasphemous-snowfield.png",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Bleakspire Labour Camp",
     "image_url": "https://i.imgur.com/Ej0FME2.jpeg",
     "slug": "bleakspire-labour-camp",
-    "local_path": "/maps/bleakspire-labour-camp.jpeg"
+    "local_path": "/maps/bleakspire-labour-camp.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Blighted Marsh",
     "image_url": "(local screenshot)",
     "slug": "blighted-marsh",
-    "local_path": "/maps/blighted-marsh.png"
+    "local_path": "/maps/blighted-marsh.png",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Bordeleaux Landing",
     "image_url": "https://i.imgur.com/Cyp0j7l.jpeg",
     "slug": "bordeleaux-landing",
-    "local_path": "/maps/bordeleaux-landing.jpeg"
+    "local_path": "/maps/bordeleaux-landing.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Bray Valley",
     "image_url": "https://i.imgur.com/XJrDm83.jpeg",
     "slug": "bray-valley",
-    "local_path": "/maps/bray-valley.jpeg"
+    "local_path": "/maps/bray-valley.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Celestial Lake",
     "image_url": "https://i.imgur.com/JlWAhw7.jpeg",
     "slug": "celestial-lake",
-    "local_path": "/maps/celestial-lake.jpeg"
+    "local_path": "/maps/celestial-lake.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Chateau de Roquefort",
     "image_url": "https://i.imgur.com/QKZ8pt5.jpeg",
     "slug": "chateau-de-roquefort",
-    "local_path": "/maps/chateau-de-roquefort.jpeg"
+    "local_path": "/maps/chateau-de-roquefort.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Clash of Chaos",
     "image_url": "https://i.imgur.com/z9ZUKKb.jpeg",
     "slug": "clash-of-chaos",
-    "local_path": "/maps/clash-of-chaos.jpeg"
+    "local_path": "/maps/clash-of-chaos.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Coedill's Mistwood",
     "image_url": "https://i.imgur.com/dmsiCrL.jpeg",
     "slug": "coedills-mistwood",
-    "local_path": "/maps/coedills-mistwood.jpeg"
+    "local_path": "/maps/coedills-mistwood.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Crater of Decay",
     "image_url": "https://i.imgur.com/l75rvWR.jpeg",
     "slug": "crater-of-decay",
-    "local_path": "/maps/crater-of-decay.jpeg"
+    "local_path": "/maps/crater-of-decay.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Creeping Swamp",
     "image_url": "https://i.imgur.com/oTLPL1o.jpeg",
     "slug": "creeping-swamp",
-    "local_path": "/maps/creeping-swamp.jpeg"
+    "local_path": "/maps/creeping-swamp.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Crystal Lake",
     "image_url": "https://i.imgur.com/bcIE6QL.jpeg",
     "slug": "crystal-lake",
-    "local_path": "/maps/crystal-lake.jpeg"
+    "local_path": "/maps/crystal-lake.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Decrepit Moor",
     "image_url": "https://i.imgur.com/tdr9OGl.jpeg",
     "slug": "decrepit-moor",
-    "local_path": "/maps/decrepit-moor.jpeg"
+    "local_path": "/maps/decrepit-moor.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Dried Floodplain",
     "image_url": "https://i.imgur.com/jbwS3io.jpeg",
     "slug": "dried-floodplain",
-    "local_path": "/maps/dried-floodplain.jpeg"
+    "local_path": "/maps/dried-floodplain.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Dunes of Khaine",
     "image_url": "https://i.imgur.com/Cw07uU3.jpeg",
     "slug": "dunes-of-khaine",
-    "local_path": "/maps/dunes-of-khaine.jpeg"
+    "local_path": "/maps/dunes-of-khaine.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Dunes of Setep",
     "image_url": "https://i.imgur.com/VvHaExd.jpeg",
     "slug": "dunes-of-setep",
-    "local_path": "/maps/dunes-of-setep.jpeg"
+    "local_path": "/maps/dunes-of-setep.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Dustbowl",
     "image_url": "https://i.imgur.com/fbeT1cA.jpeg",
     "slug": "dustbowl",
-    "local_path": "/maps/dustbowl.jpeg"
+    "local_path": "/maps/dustbowl.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Dusted Steppe",
     "image_url": "https://i.imgur.com/57xWtNs.jpeg",
     "slug": "dusted-steppe",
-    "local_path": "/maps/dusted-steppe.jpeg"
+    "local_path": "/maps/dusted-steppe.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Eastern Isle Colony",
     "image_url": "https://i.imgur.com/XlbRBLa.jpeg",
     "slug": "eastern-isle-colony",
-    "local_path": "/maps/eastern-isle-colony.jpeg"
+    "local_path": "/maps/eastern-isle-colony.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Edge of the Darkwood",
     "image_url": "https://i.imgur.com/TNMw7j1.jpeg",
     "slug": "edge-of-the-darkwood",
-    "local_path": "/maps/edge-of-the-darkwood.jpeg"
+    "local_path": "/maps/edge-of-the-darkwood.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Excavation Site",
     "image_url": "https://i.imgur.com/YjKKcG7.jpeg",
     "slug": "excavation-site",
-    "local_path": "/maps/excavation-site.jpeg"
+    "local_path": "/maps/excavation-site.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Gates of Ekrund",
     "image_url": "https://i.imgur.com/wQVUIpP.jpeg",
     "slug": "gates-of-ekrund",
-    "local_path": "/maps/gates-of-ekrund.jpeg"
+    "local_path": "/maps/gates-of-ekrund.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Geothermal Crevice",
     "image_url": "https://i.imgur.com/xe8naxj.jpeg",
     "slug": "geothermal-crevice",
-    "local_path": "/maps/geothermal-crevice.jpeg"
+    "local_path": "/maps/geothermal-crevice.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Geyser Bluff",
     "image_url": "https://i.imgur.com/NgyRe7T.jpeg",
     "slug": "geyser-bluff",
-    "local_path": "/maps/geyser-bluff.jpeg"
+    "local_path": "/maps/geyser-bluff.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Glade of the Everqueen",
     "image_url": "https://i.imgur.com/LC6uWJ3.jpeg",
     "slug": "glade-of-the-everqueen",
-    "local_path": "/maps/glade-of-the-everqueen.jpeg"
+    "local_path": "/maps/glade-of-the-everqueen.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Glinty Toof's Crag",
     "image_url": "https://i.imgur.com/5wPEGhT.jpeg",
     "slug": "glinty-toofs-crag",
-    "local_path": "/maps/glinty-toofs-crag.jpeg"
+    "local_path": "/maps/glinty-toofs-crag.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Graveyard of Altdorf",
     "image_url": "https://i.imgur.com/lb1ceE9.jpeg",
     "slug": "graveyard-of-altdorf",
-    "local_path": "/maps/graveyard-of-altdorf.jpeg"
+    "local_path": "/maps/graveyard-of-altdorf.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Halls of Karag Dum",
     "image_url": "https://i.imgur.com/JU2Kw3Q.jpeg",
     "slug": "halls-of-karag-dum",
-    "local_path": "/maps/halls-of-karag-dum.jpeg"
+    "local_path": "/maps/halls-of-karag-dum.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Hashut's Oilfields",
     "image_url": "https://i.imgur.com/3cNieCe.jpeg",
     "slug": "hashuts-oilfields",
-    "local_path": "/maps/hashuts-oilfields.jpeg"
+    "local_path": "/maps/hashuts-oilfields.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Haunted Vale",
     "image_url": "https://i.imgur.com/0VnWsIb.jpeg",
     "slug": "haunted-vale",
-    "local_path": "/maps/haunted-vale.jpeg"
+    "local_path": "/maps/haunted-vale.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Hell Pit Depths",
     "image_url": "https://i.imgur.com/UEqYAd3.jpeg",
     "slug": "hell-pit-depths",
-    "local_path": "/maps/hell-pit-depths.jpeg"
+    "local_path": "/maps/hell-pit-depths.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Imperial Ambush",
     "image_url": "https://i.imgur.com/aFXp5qw.jpeg",
     "slug": "imperial-ambush",
-    "local_path": "/maps/imperial-ambush.jpeg"
+    "local_path": "/maps/imperial-ambush.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Imperial Road",
     "image_url": "https://i.imgur.com/wiMbaFw.jpeg",
     "slug": "imperial-road",
-    "local_path": "/maps/imperial-road.jpeg"
+    "local_path": "/maps/imperial-road.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Isle of Forgotten Kings",
     "image_url": "https://i.imgur.com/lCAk02w.jpeg",
     "slug": "isle-of-forgotten-kings",
-    "local_path": "/maps/isle-of-forgotten-kings.jpeg"
+    "local_path": "/maps/isle-of-forgotten-kings.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Jade Tomb",
     "image_url": "https://i.imgur.com/x7PC3mz.jpeg",
     "slug": "jade-tomb",
-    "local_path": "/maps/jade-tomb.jpeg"
+    "local_path": "/maps/jade-tomb.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Khsar's Cursed Oasis",
     "image_url": "https://i.imgur.com/0vLF5DV.jpeg",
     "slug": "khsars-cursed-oasis",
-    "local_path": "/maps/khsars-cursed-oasis.jpeg"
+    "local_path": "/maps/khsars-cursed-oasis.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Lost Isles of Culchan",
     "image_url": "https://i.imgur.com/leiTOnn.jpeg",
     "slug": "lost-isles-of-culchan",
-    "local_path": "/maps/lost-isles-of-culchan.jpeg"
+    "local_path": "/maps/lost-isles-of-culchan.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Lost Temple of Sotek",
     "image_url": "https://i.imgur.com/UpMzR5h.jpeg",
     "slug": "lost-temple-of-sotek",
-    "local_path": "/maps/lost-temple-of-sotek.jpeg"
+    "local_path": "/maps/lost-temple-of-sotek.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Lustrian Narrows",
     "image_url": "https://i.imgur.com/tHRMHIq.jpeg",
     "slug": "lustrian-narrows",
-    "local_path": "/maps/lustrian-narrows.jpeg"
+    "local_path": "/maps/lustrian-narrows.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Mercenaries of Tilea",
     "image_url": "https://i.imgur.com/4GvTXgU.jpeg",
     "slug": "mercenaries-of-tilea",
-    "local_path": "/maps/mercenaries-of-tilea.jpeg"
+    "local_path": "/maps/mercenaries-of-tilea.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Needlemyst Isle",
     "image_url": "https://i.imgur.com/1Shgs8S.jpeg",
     "slug": "needlemyst-isle",
-    "local_path": "/maps/needlemyst-isle.jpeg"
+    "local_path": "/maps/needlemyst-isle.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Nehekharan Wastes",
     "image_url": "https://i.imgur.com/dPIOj0V.jpeg",
     "slug": "nehekharan-wastes",
-    "local_path": "/maps/nehekharan-wastes.jpeg"
+    "local_path": "/maps/nehekharan-wastes.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Norscan Rise",
     "image_url": "https://i.imgur.com/olAbf3U.jpeg",
     "slug": "norscan-rise",
-    "local_path": "/maps/norscan-rise.jpeg"
+    "local_path": "/maps/norscan-rise.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Nuln Outskirts",
     "image_url": "https://i.imgur.com/M5x1wKX.jpeg",
     "slug": "nuln-outskirts",
-    "local_path": "/maps/nuln-outskirts.jpeg"
+    "local_path": "/maps/nuln-outskirts.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Oakenshield",
     "image_url": "https://i.imgur.com/7TzyZNQ.jpeg",
     "slug": "oakenshield",
-    "local_path": "/maps/oakenshield.jpeg"
+    "local_path": "/maps/oakenshield.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Oasis of Zedri",
     "image_url": "https://i.imgur.com/eBMHHuD.jpeg",
     "slug": "oasis-of-zedri",
-    "local_path": "/maps/oasis-of-zedri.jpeg"
+    "local_path": "/maps/oasis-of-zedri.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Otsuchi Castle",
     "image_url": "https://i.imgur.com/RskXrIz.jpeg",
     "slug": "otsuchi-castle",
-    "local_path": "/maps/otsuchi-castle.jpeg"
+    "local_path": "/maps/otsuchi-castle.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Pit of the Everchosen",
     "image_url": "https://i.imgur.com/Dlp5XAh.jpeg",
     "slug": "pit-of-the-everchosen",
-    "local_path": "/maps/pit-of-the-everchosen.jpeg"
+    "local_path": "/maps/pit-of-the-everchosen.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Pit of Treasures",
     "image_url": "https://i.imgur.com/ozsRahD.jpeg",
     "slug": "pit-of-treasures",
-    "local_path": "/maps/pit-of-treasures.jpeg"
+    "local_path": "/maps/pit-of-treasures.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Proving Grounds",
     "image_url": "https://i.imgur.com/dngqsiC.jpeg",
     "slug": "proving-grounds",
-    "local_path": "/maps/proving-grounds.jpeg"
+    "local_path": "/maps/proving-grounds.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Putrefying Carcass",
     "image_url": "https://i.imgur.com/XZ32CD1.jpeg",
     "slug": "putrefying-carcass",
-    "local_path": "/maps/putrefying-carcass.jpeg"
+    "local_path": "/maps/putrefying-carcass.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Rapturous Expanse",
     "image_url": "https://i.imgur.com/jU112ja.jpeg",
     "slug": "rapturous-expanse",
-    "local_path": "/maps/rapturous-expanse.jpeg"
+    "local_path": "/maps/rapturous-expanse.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Rift at the World's Edge",
     "image_url": "https://i.imgur.com/USxlGQx.jpeg",
     "slug": "rift-at-the-worlds-edge",
-    "local_path": "/maps/rift-at-the-worlds-edge.jpeg"
+    "local_path": "/maps/rift-at-the-worlds-edge.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Road to Talabheim",
     "image_url": "https://i.imgur.com/c7xXQvx.jpeg",
     "slug": "road-to-talabheim",
-    "local_path": "/maps/road-to-talabheim.jpeg"
+    "local_path": "/maps/road-to-talabheim.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Road to Vaul's Anvil",
     "image_url": "https://i.imgur.com/TnwQx8Y.jpeg",
     "slug": "road-to-vauls-anvil",
-    "local_path": "/maps/road-to-vauls-anvil.jpeg"
+    "local_path": "/maps/road-to-vauls-anvil.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Ruins of Arrogance",
     "image_url": "https://i.imgur.com/UfzOp5j.jpeg",
     "slug": "ruins-of-arrogance",
-    "local_path": "/maps/ruins-of-arrogance.jpeg"
+    "local_path": "/maps/ruins-of-arrogance.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Sacred Cenote of Chaqua",
     "image_url": "https://i.imgur.com/GaZPOtr.jpeg",
     "slug": "sacred-cenote-of-chaqua",
-    "local_path": "/maps/sacred-cenote-of-chaqua.jpeg"
+    "local_path": "/maps/sacred-cenote-of-chaqua.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Shambling Bog",
     "image_url": "https://i.imgur.com/65px0d0.jpeg",
     "slug": "shambling-bog",
-    "local_path": "/maps/shambling-bog.jpeg"
+    "local_path": "/maps/shambling-bog.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Siege of Salernum",
     "image_url": "https://i.imgur.com/RGdRLek.jpeg",
     "slug": "siege-of-salernum",
-    "local_path": "/maps/siege-of-salernum.jpeg"
+    "local_path": "/maps/siege-of-salernum.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Skjalandir's Cave",
     "image_url": "https://i.imgur.com/NtZ1Rxn.jpeg",
     "slug": "skjalandirs-cave",
-    "local_path": "/maps/skjalandirs-cave.jpeg"
+    "local_path": "/maps/skjalandirs-cave.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Stone'enge",
     "image_url": "https://i.imgur.com/7EcIhGa.jpeg",
     "slug": "stoneenge",
-    "local_path": "/maps/stoneenge.jpeg"
+    "local_path": "/maps/stoneenge.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Sunken Mire",
     "image_url": "https://i.imgur.com/MbIcKyg.jpeg",
     "slug": "sunken-mire",
-    "local_path": "/maps/sunken-mire.jpeg"
+    "local_path": "/maps/sunken-mire.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Talabheim Crater",
     "image_url": "https://i.imgur.com/5WkgGst.jpeg",
     "slug": "talabheim-crater",
-    "local_path": "/maps/talabheim-crater.jpeg"
+    "local_path": "/maps/talabheim-crater.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Temple of Usirian",
     "image_url": "https://i.imgur.com/IKSZxe2.jpeg",
     "slug": "temple-of-usirian",
-    "local_path": "/maps/temple-of-usirian.jpeg"
+    "local_path": "/maps/temple-of-usirian.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Terracotta Graveyard",
     "image_url": "https://i.imgur.com/cK0RCn7.jpeg",
     "slug": "terracotta-graveyard",
-    "local_path": "/maps/terracotta-graveyard.jpeg"
+    "local_path": "/maps/terracotta-graveyard.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "The Arena",
     "image_url": "https://i.imgur.com/E2fTPnc.jpeg",
     "slug": "the-arena",
-    "local_path": "/maps/the-arena.jpeg"
+    "local_path": "/maps/the-arena.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "The Blazing Ramparts",
     "image_url": "https://i.imgur.com/V7uKLph.jpeg",
     "slug": "the-blazing-ramparts",
-    "local_path": "/maps/the-blazing-ramparts.jpeg"
+    "local_path": "/maps/the-blazing-ramparts.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "The Blood Grove",
     "image_url": "https://i.imgur.com/Ju2vMRf.jpeg",
     "slug": "the-blood-grove",
-    "local_path": "/maps/the-blood-grove.jpeg"
+    "local_path": "/maps/the-blood-grove.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "The Changer's Madhouse",
     "image_url": "https://i.imgur.com/2QJZe1V.jpeg",
     "slug": "the-changers-madhouse",
-    "local_path": "/maps/the-changers-madhouse.jpeg"
+    "local_path": "/maps/the-changers-madhouse.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "The Crucible",
     "image_url": "https://i.imgur.com/b4HCX1N.jpeg",
     "slug": "the-crucible",
-    "local_path": "/maps/the-crucible.jpeg"
+    "local_path": "/maps/the-crucible.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "The Hag's Conclave",
     "image_url": "https://i.imgur.com/nUCNRaA.jpeg",
     "slug": "the-hags-conclave",
-    "local_path": "/maps/the-hags-conclave.jpeg"
+    "local_path": "/maps/the-hags-conclave.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "The Mountain of Truth",
     "image_url": "https://i.imgur.com/90iybRZ.jpeg",
     "slug": "the-mountain-of-truth",
-    "local_path": "/maps/the-mountain-of-truth.jpeg"
+    "local_path": "/maps/the-mountain-of-truth.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "The Sword of the Lake",
     "image_url": "https://i.imgur.com/Yog7p4C.jpeg",
     "slug": "the-sword-of-the-lake",
-    "local_path": "/maps/the-sword-of-the-lake.jpeg"
+    "local_path": "/maps/the-sword-of-the-lake.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "The Valley of Lies",
     "image_url": "https://i.imgur.com/XOll0lj.jpeg",
     "slug": "the-valley-of-lies",
-    "local_path": "/maps/the-valley-of-lies.jpeg"
+    "local_path": "/maps/the-valley-of-lies.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "The Vanishing Steppe",
     "image_url": "https://i.imgur.com/AZAPl4d.jpeg",
     "slug": "the-vanishing-steppe",
-    "local_path": "/maps/the-vanishing-steppe.jpeg"
+    "local_path": "/maps/the-vanishing-steppe.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Twilight Forest",
     "image_url": "https://i.imgur.com/bI2jrWf.jpeg",
     "slug": "twilight-forest",
-    "local_path": "/maps/twilight-forest.jpeg"
+    "local_path": "/maps/twilight-forest.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Urgot's Stompin Groundz",
     "image_url": "https://i.imgur.com/cUEXhx4.jpeg",
     "slug": "urgots-stompin-groundz",
-    "local_path": "/maps/urgots-stompin-groundz.jpeg"
+    "local_path": "/maps/urgots-stompin-groundz.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Vineyards of Varieno",
     "image_url": "https://i.imgur.com/WdgHVPF.jpeg",
     "slug": "vineyards-of-varieno",
-    "local_path": "/maps/vineyards-of-varieno.jpeg"
+    "local_path": "/maps/vineyards-of-varieno.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Whirling Maelstrom",
     "image_url": "https://i.imgur.com/VvrCxyx.jpeg",
     "slug": "whirling-maelstrom",
-    "local_path": "/maps/whirling-maelstrom.jpeg"
+    "local_path": "/maps/whirling-maelstrom.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Womb of Sorrow",
     "image_url": "https://i.imgur.com/xOoNocf.jpeg",
     "slug": "womb-of-sorrow",
-    "local_path": "/maps/womb-of-sorrow.jpeg"
+    "local_path": "/maps/womb-of-sorrow.jpeg",
+    "battle_type": "DOMINATION"
   },
   {
     "name": "Zharr-Naggrund Rebellion",
     "image_url": "https://i.imgur.com/BjdIfUG.jpeg",
     "slug": "zharr-naggrund-rebellion",
-    "local_path": "/maps/zharr-naggrund-rebellion.jpeg"
+    "local_path": "/maps/zharr-naggrund-rebellion.jpeg",
+    "battle_type": "DOMINATION"
+  },
+  {
+    "name": "Altdorf Empire",
+    "image_url": "(local)",
+    "slug": "altdorf-empire",
+    "local_path": "/maps/altdorf-empire.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Ancient City of Quitntex - Dark Elves",
+    "image_url": "(local)",
+    "slug": "ancient-city-of-quitntex-dark-elves",
+    "local_path": "/maps/ancient-city-of-quitntex-dark-elves.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Black Fortress - Chaos Dwarfs",
+    "image_url": "(local)",
+    "slug": "black-fortress-chaos-dwarfs",
+    "local_path": "/maps/black-fortress-chaos-dwarfs.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Black Fortress - Greenskins",
+    "image_url": "(local)",
+    "slug": "black-fortress-greenskins",
+    "local_path": "/maps/black-fortress-greenskins.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Couronne - Brettonia",
+    "image_url": "(local)",
+    "slug": "couronne-brettonia",
+    "local_path": "/maps/couronne-brettonia.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Dragon Fang Mount - Lizardmen",
+    "image_url": "(local)",
+    "slug": "dragon-fang-mount-lizardmen",
+    "local_path": "/maps/dragon-fang-mount-lizardmen.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Dragon Gate - Cathay",
+    "image_url": "(local)",
+    "slug": "dragon-gate-cathay",
+    "local_path": "/maps/dragon-gate-cathay.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Eagle Gate - High Elves",
+    "image_url": "(local)",
+    "slug": "eagle-gate-high-elves",
+    "local_path": "/maps/eagle-gate-high-elves.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Erengrad - Kislev",
+    "image_url": "(local)",
+    "slug": "erengrad-kislev",
+    "local_path": "/maps/erengrad-kislev.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Gaean Vale - High Elves",
+    "image_url": "(local)",
+    "slug": "gaean-vale-high-elves",
+    "local_path": "/maps/gaean-vale-high-elves.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Hell Pit - Skaven",
+    "image_url": "(local)",
+    "slug": "hell-pit-skaven",
+    "local_path": "/maps/hell-pit-skaven.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Helmgart - Empire",
+    "image_url": "(local)",
+    "slug": "helmgart-empire",
+    "local_path": "/maps/helmgart-empire.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Ka-Sabar - Tomb Kings",
+    "image_url": "(local)",
+    "slug": "ka-sabar-tomb-kings",
+    "local_path": "/maps/ka-sabar-tomb-kings.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Karak Kadrin - Dwarfs",
+    "image_url": "(local)",
+    "slug": "karak-kadrin-dwarfs",
+    "local_path": "/maps/karak-kadrin-dwarfs.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Khemri - Tomb Kings",
+    "image_url": "(local)",
+    "slug": "khemri-tomb-kings",
+    "local_path": "/maps/khemri-tomb-kings.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Kislev - Kislev",
+    "image_url": "(local)",
+    "slug": "kislev-kislev",
+    "local_path": "/maps/kislev-kislev.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Lothern - High Elves",
+    "image_url": "(local)",
+    "slug": "lothern-high-elves",
+    "local_path": "/maps/lothern-high-elves.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Middenheim - Empire",
+    "image_url": "(local)",
+    "slug": "middenheim-empire",
+    "local_path": "/maps/middenheim-empire.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Naggarond - Dark Elves",
+    "image_url": "(local)",
+    "slug": "naggarond-dark-elves",
+    "local_path": "/maps/naggarond-dark-elves.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Nan Gau - Cathay",
+    "image_url": "(local)",
+    "slug": "nan-gau-cathay",
+    "local_path": "/maps/nan-gau-cathay.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Nuln - Empire",
+    "image_url": "(local)",
+    "slug": "nuln-empire",
+    "local_path": "/maps/nuln-empire.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Parravon - Brettonia",
+    "image_url": "(local)",
+    "slug": "parravon-brettonia",
+    "local_path": "/maps/parravon-brettonia.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Praag - Kislev",
+    "image_url": "(local)",
+    "slug": "praag-kislev",
+    "local_path": "/maps/praag-kislev.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Red Fortress - Chaos",
+    "image_url": "(local)",
+    "slug": "red-fortress-chaos",
+    "local_path": "/maps/red-fortress-chaos.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Sartosa - Vampire Coast",
+    "image_url": "(local)",
+    "slug": "sartosa-vampire-coast",
+    "local_path": "/maps/sartosa-vampire-coast.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Shang Yang - Cathay",
+    "image_url": "(local)",
+    "slug": "shang-yang-cathay",
+    "local_path": "/maps/shang-yang-cathay.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Temple of Skulls - Lizardmen",
+    "image_url": "(local)",
+    "slug": "temple-of-skulls-lizardmen",
+    "local_path": "/maps/temple-of-skulls-lizardmen.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "The Shifting Monolith - Chaos",
+    "image_url": "(local)",
+    "slug": "the-shifting-monolith-chaos",
+    "local_path": "/maps/the-shifting-monolith-chaos.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "The Writhing Fortress - Chaos",
+    "image_url": "(local)",
+    "slug": "the-writhing-fortress-chaos",
+    "local_path": "/maps/the-writhing-fortress-chaos.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Tor Yvresse - Quest Battle",
+    "image_url": "(local)",
+    "slug": "tor-yvresse-quest-battle",
+    "local_path": "/maps/tor-yvresse-quest-battle.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Wei-Jin - Cathay",
+    "image_url": "(local)",
+    "slug": "wei-jin-cathay",
+    "local_path": "/maps/wei-jin-cathay.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Zharr-Naggrund - Chaos Dwarfs",
+    "image_url": "(local)",
+    "slug": "zharr-naggrund-chaos-dwarfs",
+    "local_path": "/maps/zharr-naggrund-chaos-dwarfs.png",
+    "battle_type": "SIEGE"
+  },
+  {
+    "name": "Zhufbar - Dwarfs",
+    "image_url": "(local)",
+    "slug": "zhufbar-dwarfs",
+    "local_path": "/maps/zhufbar-dwarfs.png",
+    "battle_type": "SIEGE"
   }
 ]

@@ -236,6 +236,7 @@ interface MapSeedEntry {
   name: string;
   slug: string;
   local_path: string | null;
+  battle_type?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
 }
 
 // The curated active pool (the original 36) — matched to the sheet by a normalised name so
@@ -266,8 +267,11 @@ async function seedMaps(): Promise<void> {
 
   let available = 0;
   for (const m of mapData) {
-    const isCanonical = canonical.has(normMapKey(m.name));
-    if (isCanonical) available += 1;
+    const battleType = m.battle_type ?? 'DOMINATION';
+    // Domination: only the curated set is available. Conquest / Siege: the whole imported pool
+    // is available (these are the intended pools for those battle types).
+    const isAvailable = battleType === 'DOMINATION' ? canonical.has(normMapKey(m.name)) : true;
+    if (isAvailable) available += 1;
     const match = byKey.get(normMapKey(m.name));
     if (match) {
       // Refresh name + local image; preserve the admin's battle_type/available choices.
@@ -278,8 +282,8 @@ async function seedMaps(): Promise<void> {
           slug: m.slug,
           name: m.name,
           image_url: m.local_path,
-          battle_type: 'DOMINATION',
-          available: isCanonical,
+          battle_type: battleType,
+          available: isAvailable,
         },
       });
     }
