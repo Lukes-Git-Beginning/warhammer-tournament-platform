@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { generateSlug, canManageTournament } from '../lib/tournament-utils.js';
 import { canManageSeries, resolveSeriesSlug } from '../lib/series-utils.js';
+import { getQualifierPlacements } from '../lib/series-qualification.js';
 import {
   ScoringConfigSchema,
   computeSeriesStandingsA,
@@ -85,16 +86,13 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
       };
     }
 
-    // Model C — per-qualifier Top-X, skipping already-qualified players.
-    const placements = await fastify.prisma.tournamentResult.findMany({
-      where: { tournament_id: { in: qualifierIds } },
-      select: { tournament_id: true, user_id: true, placement: true },
-    });
-    const perQualifier: QualifierPlacement[][] = qualifiers.map((q) =>
-      placements
-        .filter((p) => p.tournament_id === q.id)
-        .map((p) => ({ tournamentId: q.id, competitorId: p.user_id, position: p.placement })),
-    );
+    // Model C — per-qualifier Top-X, skipping already-qualified players. Placement source is
+    // format-aware (BaLi = highest-division playoff, else TournamentResult) via getQualifierPlacements.
+    const perQualifier: QualifierPlacement[][] = [];
+    for (const q of qualifiers) {
+      const placements = await getQualifierPlacements(fastify.prisma, q.id);
+      perQualifier.push(placements.map((p) => ({ tournamentId: q.id, competitorId: p.userId, position: p.position })));
+    }
     const entries = computeSeriesQualifiersC(perQualifier, config);
     const userMap = await loadUsers(entries.map((e) => e.competitorId));
     return {
