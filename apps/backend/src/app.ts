@@ -17,6 +17,7 @@ import graphqlPlugin from './plugins/graphql.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import tournamentRoutes from './routes/tournaments.js';
+import seriesRoutes from './routes/series.js';
 import participantRoutes from './routes/participants.js';
 import matchRoutes from './routes/matches.js';
 import seasonRoutes from './routes/seasons.js';
@@ -149,6 +150,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(authRoutes);
   await app.register(userRoutes);
   await app.register(tournamentRoutes);
+  await app.register(seriesRoutes);
   await app.register(participantRoutes);
   await app.register(matchRoutes);
   await app.register(seasonRoutes);
