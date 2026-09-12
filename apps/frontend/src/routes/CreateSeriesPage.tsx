@@ -55,15 +55,15 @@ export function CreateSeriesPage() {
             points_per_game_played: pointsPerGamePlayed,
             points_per_win: pointsPerWin,
             final_size: finalSize,
-            top_x: 0,
+            top_x: 2,
             tiebreakers: DEFAULT_TIEBREAKERS,
           }
         : model === 'C'
           ? {
               model: 'C',
-              points_per_game_played: 0,
-              points_per_win: 0,
-              final_size: 0,
+              points_per_game_played: 1,
+              points_per_win: 1,
+              final_size: 16,
               top_x: topX,
               tiebreakers: DEFAULT_TIEBREAKERS,
             }
@@ -252,15 +252,19 @@ export function CreateSeriesPage() {
           {model === 'C' && (
             <div>
               <label className={labelClass}>Top X per Qualifier</label>
-              <input
-                type="number"
-                min={1}
+              <select
                 value={topX}
                 onChange={(e) => setTopX(Number(e.target.value))}
                 className={numberInputClass}
-              />
+              >
+                <option value={1}>Top 1 (winner)</option>
+                <option value={2}>Top 2 (finalists)</option>
+                <option value={3}>Top 3</option>
+                <option value={4}>Top 4</option>
+              </select>
               <p className="mt-1 text-xs text-rizzotto-stone-500">
-                The top N finishers from each qualifier are seeded into the final.
+                The top X of each qualifier's highest-division playoff qualify. Top 3 or 4 requires a
+                third-place match in the qualifier (5th+ isn't cleanly rankable).
               </p>
             </div>
           )}

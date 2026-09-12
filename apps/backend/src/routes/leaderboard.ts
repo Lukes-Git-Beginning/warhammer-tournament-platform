@@ -79,6 +79,41 @@ export function tournamentChampion(
   return standings[0]?.userId ?? null;
 }
 
+/**
+ * The determinable podium (ordered top finishers) of a tournament, generalising
+ * {@link tournamentChampion} with the SAME highest-division-final method. For playoff formats the
+ * highest-band PLAYOFF_FINAL gives 1st (winner) + 2nd (loser); that division's PLAYOFF_THIRD_PLACE
+ * match (if any) gives 3rd + 4th. Positions beyond 4 (QF losers) are not cleanly rankable and are
+ * omitted — so a "top 3" cut REQUIRES a third-place match, and 5/6/7 are not derivable. Returns []
+ * for tournaments with no playoff final (caller falls back to standings). Used by the series feature.
+ */
+export function tournamentPodium(
+  matches: ChampionMatch[],
+  bandByUser: Map<string, number>,
+): { userId: string; position: number }[] {
+  const done = matches.filter((m) => m.status === 'COMPLETED' && m.winner_id);
+  const bandOf = (m: ChampionMatch): number =>
+    Math.max(bandByUser.get(m.player1_id ?? '') ?? 0, bandByUser.get(m.player2_id ?? '') ?? 0);
+  const highestBand = (pool: ChampionMatch[]): ChampionMatch | null =>
+    pool.reduce<ChampionMatch | null>((best, m) => (best === null || bandOf(m) > bandOf(best) ? m : best), null);
+
+  const podium: { userId: string; position: number }[] = [];
+  const final = highestBand(done.filter((m) => m.phase === 'PLAYOFF_FINAL'));
+  if (!final || !final.winner_id) return podium;
+  const runnerUp = final.player1_id === final.winner_id ? final.player2_id : final.player1_id;
+  podium.push({ userId: final.winner_id, position: 1 });
+  if (runnerUp) podium.push({ userId: runnerUp, position: 2 });
+
+  // 3rd/4th only from that division's third-place match — the reason a "top 3" cut needs one.
+  const third = highestBand(done.filter((m) => m.phase === 'PLAYOFF_THIRD_PLACE'));
+  if (third && third.winner_id) {
+    const fourth = third.player1_id === third.winner_id ? third.player2_id : third.player1_id;
+    podium.push({ userId: third.winner_id, position: 3 });
+    if (fourth) podium.push({ userId: fourth, position: 4 });
+  }
+  return podium;
+}
+
 const PaginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   // Cap raised to 1000 so the leaderboard page can load every rank in one request

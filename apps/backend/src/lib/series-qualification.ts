@@ -4,20 +4,50 @@ import {
   computeSeriesQualifiersC,
   type QualifierPlacement,
 } from './series-scoring.js';
-import { computeSingleElimPlacements } from './finalize-tournament.js';
+import { tournamentPodium, type ChampionMatch } from '../routes/leaderboard.js';
 
 /**
- * Placements for one qualifier, format-aware. For BALANCED_LIECHTENSTEIN the qualification
- * result is the **highest division's playoff** (Alex 2026-09-12) — NOT the group standing that
- * TournamentResult stores for BaLi. Every other format uses TournamentResult.placement.
- * Returns competitors ordered best-first with a 1-based `position`.
+ * Placements for one qualifier, format-aware. For BALANCED_LIECHTENSTEIN "who placed" is the
+ * highest division's PLAYOFF podium — reusing the SAME logic the platform already uses to crown a
+ * BaLi winner (`tournamentChampion`: highest-band final), generalised to the top 4 via
+ * `tournamentPodium`. So a top-3 cut needs a third-place match; 5/6/7 are not derivable. Every
+ * other format uses TournamentResult.placement. Returns competitors ordered best-first (1-based).
  */
 export async function getQualifierPlacements(
   prisma: PrismaClient,
   tournamentId: string,
 ): Promise<{ userId: string; position: number }[]> {
   const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true } });
-  if (t?.format === 'BALANCED_LIECHTENSTEIN') return getBaliHighestDivisionPlacements(prisma, tournamentId);
+
+  if (t?.format === 'BALANCED_LIECHTENSTEIN') {
+    const [parts, matches] = await Promise.all([
+      prisma.tournamentParticipant.findMany({
+        where: { tournament_id: tournamentId, deleted_at: null },
+        select: { user_id: true, skill_band: true },
+      }),
+      prisma.match.findMany({
+        where: {
+          tournament_id: tournamentId,
+          deleted_at: null,
+          phase: { in: ['PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] },
+        },
+        select: {
+          phase: true,
+          status: true,
+          round: true,
+          winner_id: true,
+          player1_id: true,
+          player2_id: true,
+          bracket_side: true,
+        },
+      }),
+    ]);
+    const bandByUser = new Map(parts.map((p) => [p.user_id, p.skill_band ?? 0]));
+    const podium = tournamentPodium(matches as ChampionMatch[], bandByUser);
+    if (podium.length > 0) return podium;
+    // No division playoff generated yet → fall through to the group-standing placement.
+  }
+
   const results = await prisma.tournamentResult.findMany({
     where: { tournament_id: tournamentId },
     select: { user_id: true, placement: true },
@@ -26,69 +56,10 @@ export async function getQualifierPlacements(
 }
 
 /**
- * Ordered finishers of a BaLi tournament's HIGHEST generated division playoff (champion=1,
- * runner-up=2, then SF losers, …). Highest division = the `playoff_division_generated` event
- * with the greatest band (5=Top … 1=New). Uses the existing single-elim placement logic on
- * that division's bracket only. Returns [] if no division playoff generated or its final is
- * not yet decided. See plans/tournament-series-design.md.
- */
-async function getBaliHighestDivisionPlacements(
-  prisma: PrismaClient,
-  tournamentId: string,
-): Promise<{ userId: string; position: number }[]> {
-  const events = await prisma.tournamentEvent.findMany({
-    where: { tournament_id: tournamentId, type: 'playoff_division_generated' },
-    select: { payload: true },
-  });
-  const divs = events
-    .map((e) => e.payload as unknown as { band?: number; seeds?: string[] })
-    .filter((p): p is { band: number; seeds: string[] } => typeof p?.band === 'number' && Array.isArray(p?.seeds));
-  if (divs.length === 0) return [];
-  divs.sort((a, b) => b.band - a.band); // highest band = top division
-  const top = divs[0];
-  if (!top) return [];
-  const seedSet = new Set(top.seeds);
-  const seedIndex = new Map(top.seeds.map((id, i) => [id, i] as const));
-
-  const matches = await prisma.match.findMany({
-    where: {
-      tournament_id: tournamentId,
-      deleted_at: null,
-      phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] },
-      OR: [{ player1_id: { in: top.seeds } }, { player2_id: { in: top.seeds } }],
-    },
-    select: { round: true, phase: true, winner_id: true, player1_id: true, player2_id: true, status: true, bracket_side: true },
-  });
-  // Isolate this division's bracket: both seated players belong to its seed pool.
-  const divMatches = matches.filter(
-    (m) => (m.player1_id == null || seedSet.has(m.player1_id)) && (m.player2_id == null || seedSet.has(m.player2_id)),
-  );
-  const finalDecided = divMatches.some((m) => m.phase === 'PLAYOFF_FINAL' && m.status === 'COMPLETED' && !!m.winner_id);
-  if (!finalDecided) return [];
-
-  const placements = computeSingleElimPlacements(
-    divMatches.map((m) => ({
-      round: m.round,
-      winner_id: m.winner_id,
-      player1_id: m.player1_id,
-      player2_id: m.player2_id,
-      status: m.status,
-      bracket_side: m.bracket_side ?? null,
-      phase: m.phase ?? null,
-    })),
-  );
-  return [...placements.entries()]
-    .map(([userId, position]) => ({ userId, position }))
-    // Tie-break equal placements (e.g. both SF losers = 3) by division seed order → deterministic.
-    .sort((a, b) => a.position - b.position || (seedIndex.get(a.userId) ?? 1e9) - (seedIndex.get(b.userId) ?? 1e9));
-}
-
-/**
  * Model C series: the set of competitor ids that already secured a final slot in EARLIER
- * qualifiers of the same series. Used to skip them when a later qualifier generates its
- * playoffs, so their slot passes to the next non-qualified finisher. Returns an empty set
- * for tournaments that are not part of a Model-C series (so callers are a no-op otherwise).
- * See plans/tournament-series-design.md.
+ * qualifiers of the same series. Used to skip them when a later qualifier generates its playoffs,
+ * so their slot passes to the next non-qualified finisher. Empty for non-Model-C tournaments (so
+ * callers are a no-op otherwise). See plans/tournament-series-design.md.
  */
 export async function getAlreadyQualifiedForQualifier(
   prisma: PrismaClient,
@@ -96,11 +67,7 @@ export async function getAlreadyQualifiedForQualifier(
 ): Promise<Set<string>> {
   const t = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    select: {
-      series_id: true,
-      series_position: true,
-      series: { select: { scoring_config: true } },
-    },
+    select: { series_id: true, series_position: true, series: { select: { scoring_config: true } } },
   });
   if (!t?.series_id || t.series_position == null || !t.series) return new Set();
 
