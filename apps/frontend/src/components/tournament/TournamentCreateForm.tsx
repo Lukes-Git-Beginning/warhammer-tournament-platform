@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { createTournament, getTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster } from '@/lib/api';
+import { createTournament, createSeries, getTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster, listTournaments, type ScoringConfig } from '@/lib/api';
 import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
 import { estimateDurationHours, intervalsOverlap, describeClash } from '@/lib/tournamentSchedule';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
@@ -14,6 +14,21 @@ import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { Select } from '@/components/ui/select';
 import { Label, FieldError, FieldHint } from '@/components/ui/label';
 import { MODE_DESCRIPTIONS } from '@/lib/tournamentDescriptions';
+
+// ---------------------------------------------------------------------------
+// Series mode types — used when CreateSeriesPage embeds this form
+// ---------------------------------------------------------------------------
+
+type SeriesModel = 'A' | 'C' | 'NONE';
+
+const DEFAULT_TIEBREAKERS: ScoringConfig['tiebreakers'] = ['points', 'wins', 'games', 'random'];
+
+/** When passed, the form renders series metadata above the poster and uses a
+ *  two-step submit (create final tournament, then create series). */
+export interface SeriesModeConfig {
+  /** Called with the new series slug after both creates succeed. */
+  onSuccess: (seriesSlug: string) => void;
+}
 
 const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
@@ -165,10 +180,34 @@ function nextRoundHour(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
 }
 
-export function TournamentCreateForm({ duplicateSlug }: { duplicateSlug?: string }) {
+export function TournamentCreateForm({
+  duplicateSlug,
+  seriesMode,
+}: {
+  duplicateSlug?: string;
+  seriesMode?: SeriesModeConfig;
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const defaultTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  // ── Series-mode state ───────────────────────────────────────────────────
+  const [seriesName, setSeriesName] = useState('');
+  const [seriesDescription, setSeriesDescription] = useState('');
+  const [seriesVisibility, setSeriesVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PUBLIC');
+  const [seriesModel, setSeriesModel] = useState<SeriesModel>('A');
+  // Model A
+  const [pointsPerGamePlayed, setPointsPerGamePlayed] = useState(1);
+  const [pointsPerWin, setPointsPerWin] = useState(1);
+  const [finalSize, setFinalSize] = useState(16);
+  // Model C
+  const [topX, setTopX] = useState(2);
+  // Qualifier multi-select
+  const [selectedQualifierIds, setSelectedQualifierIds] = useState<Set<string>>(new Set());
+  // Whether the host has manually touched the tournament name field
+  const finalNameTouched = useRef(false);
+  // Series-mode submit error (after tournament created but series failed)
+  const [seriesSubmitError, setSeriesSubmitError] = useState<string | null>(null);
 
   const defaultForm: Partial<FormData> = {
     format: 'SINGLE_ELIMINATION',
@@ -370,12 +409,23 @@ export function TournamentCreateForm({ duplicateSlug }: { duplicateSlug?: string
 
   const [posterFile, setPosterFile] = useState<File | null>(null);
 
+  // ── Series mode: qualifier list ─────────────────────────────────────────
+  const { data: tournamentsData } = useQuery({
+    queryKey: ['tournaments', 1, 50],
+    queryFn: () => listTournaments(1, 50),
+    enabled: !!seriesMode,
+    retry: false,
+  });
+  const qualifierCandidates = tournamentsData?.data ?? [];
+
+  // ── Mutations ────────────────────────────────────────────────────────────
+
+  const seriesMutation = useMutation({ mutationFn: createSeries });
+
   const mutation = useMutation({
     mutationFn: createTournament,
     onSuccess: async (tournament) => {
-      // The poster upload needs an existing tournament (its slug), so it runs
-      // here after creation. A failed upload is non-fatal — the tournament
-      // exists and the host can add the poster later on the edit page.
+      // Upload poster (non-fatal)
       if (posterFile) {
         try {
           await uploadTournamentPoster(tournament.slug, posterFile);
@@ -383,9 +433,65 @@ export function TournamentCreateForm({ duplicateSlug }: { duplicateSlug?: string
           // swallow — tournament is created, poster is optional
         }
       }
-      await router.navigate({ to: '/tournaments/$slug', params: { slug: tournament.slug } });
+
+      if (seriesMode) {
+        // Two-step: series create uses the new tournament as its final.
+        const scoringConfig = buildScoringConfig();
+        try {
+          const series = await seriesMutation.mutateAsync({
+            name: seriesName.trim(),
+            ...(seriesDescription.trim() ? { description: seriesDescription.trim() } : {}),
+            visibility: seriesVisibility,
+            scoring_config: scoringConfig,
+            ...(selectedQualifierIds.size > 0
+              ? { qualifier_ids: Array.from(selectedQualifierIds) }
+              : {}),
+            final_tournament_id: tournament.id,
+          });
+          seriesMode.onSuccess(series.slug);
+        } catch (err) {
+          // Tournament exists as a locked draft but series failed. Show error.
+          setSeriesSubmitError(
+            `The final tournament was created (slug: ${tournament.slug}) but the series could not be saved: ${(err as Error).message}. You can retry or set the final from the series edit page.`,
+          );
+        }
+      } else {
+        await router.navigate({ to: '/tournaments/$slug', params: { slug: tournament.slug } });
+      }
     },
   });
+
+  /** Build the ScoringConfig from current series state. */
+  function buildScoringConfig(): ScoringConfig {
+    if (seriesModel === 'A') {
+      return {
+        model: 'A',
+        points_per_game_played: pointsPerGamePlayed,
+        points_per_win: pointsPerWin,
+        final_size: finalSize,
+        top_x: 2,
+        tiebreakers: DEFAULT_TIEBREAKERS,
+      };
+    }
+    if (seriesModel === 'C') {
+      return {
+        model: 'C',
+        points_per_game_played: 1,
+        points_per_win: 1,
+        final_size: 16,
+        top_x: topX,
+        tiebreakers: DEFAULT_TIEBREAKERS,
+      };
+    }
+    return {
+      model: 'NONE',
+      points_per_game_played: 1,
+      points_per_win: 1,
+      final_size: 16,
+      top_x: 2,
+      tiebreakers: DEFAULT_TIEBREAKERS,
+    };
+  }
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
@@ -435,6 +541,33 @@ export function TournamentCreateForm({ duplicateSlug }: { duplicateSlug?: string
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSeriesSubmitError(null);
+
+    // ── Series mode: NONE — create only the series (no final tournament) ──
+    if (seriesMode && seriesModel === 'NONE') {
+      if (!seriesName.trim()) return;
+      const scoringConfig = buildScoringConfig();
+      seriesMutation.mutate(
+        {
+          name: seriesName.trim(),
+          ...(seriesDescription.trim() ? { description: seriesDescription.trim() } : {}),
+          visibility: seriesVisibility,
+          scoring_config: scoringConfig,
+          ...(selectedQualifierIds.size > 0
+            ? { qualifier_ids: Array.from(selectedQualifierIds) }
+            : {}),
+        },
+        { onSuccess: (data) => seriesMode.onSuccess(data.slug) },
+      );
+      return;
+    }
+
+    // ── Series-mode validation: require a series name ──────────────────────
+    if (seriesMode && !seriesName.trim()) {
+      // Scroll focus to the series name field — no-op here but the label makes it visible.
+      return;
+    }
+
     const result = TournamentCreateSchema.safeParse(form);
     if (!result.success) {
       const fieldErrors: Partial<Record<keyof FormData, string>> = {};
@@ -518,28 +651,255 @@ export function TournamentCreateForm({ duplicateSlug }: { duplicateSlug?: string
 
   const isBalanced = form.format === 'BALANCED_LIECHTENSTEIN';
 
+  // Auto-derive final tournament name from series name (as long as host hasn't touched it).
+  function handleSeriesNameChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setSeriesName(val);
+    if (!finalNameTouched.current) {
+      setForm((prev) => ({
+        ...prev,
+        name: val.trim() ? `${val.trim()} — Grand Final` : '',
+      }));
+    }
+  }
+
+  const isPending = mutation.isPending || seriesMutation.isPending;
+
   return (
     <form onSubmit={handleSubmit} className="w-full space-y-6">
-      {mutation.error && (
+      {(mutation.error || seriesMutation.error || seriesSubmitError) && (
         <div className="rounded-md border border-red-800 bg-red-950/50 p-4 text-sm text-red-300">
-          {(mutation.error as Error).message}
+          {seriesSubmitError ??
+            ((mutation.error || seriesMutation.error) as Error | null)?.message}
         </div>
       )}
 
-      {/* Poster at the very top (mirrors the Edit view). */}
-      <PosterPickField file={posterFile} onPick={setPosterFile} />
+      {/* ── Series metadata block (rendered above the poster when in series mode) ── */}
+      {seriesMode && (
+        <fieldset className="space-y-5 rounded-md border border-rizzotto-gold-500/40 bg-rizzotto-gold-500/5 p-5">
+          <legend className="px-1 text-sm font-semibold text-rizzotto-gold-400">Series Details</legend>
+
+          {/* Series name */}
+          <div>
+            <Label htmlFor="sm-series-name" required>
+              Series Name
+            </Label>
+            <Input
+              id="sm-series-name"
+              value={seriesName}
+              onChange={handleSeriesNameChange}
+              placeholder="e.g. Season 3 Championship"
+            />
+            <FieldHint>The series title shown on the series page — separate from the final tournament name below.</FieldHint>
+          </div>
+
+          {/* Series description */}
+          <div>
+            <Label htmlFor="sm-series-desc">Series Description</Label>
+            <textarea
+              id="sm-series-desc"
+              value={seriesDescription}
+              onChange={(e) => setSeriesDescription(e.target.value)}
+              placeholder="Optional description shown on the series page."
+              rows={3}
+              className="w-full resize-y rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 placeholder:text-rizzotto-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Visibility */}
+          <div>
+            <Label>Visibility</Label>
+            <div className="mt-1 flex gap-3">
+              {(['PUBLIC', 'PRIVATE'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setSeriesVisibility(v)}
+                  aria-pressed={seriesVisibility === v}
+                  className={`rounded border px-4 py-2 text-sm font-medium transition-colors ${
+                    seriesVisibility === v
+                      ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+                      : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+                  }`}
+                >
+                  {v === 'PUBLIC' ? 'Public' : 'Private'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Scoring model */}
+          <div className="space-y-3">
+            <Label>Scoring Model</Label>
+            <div className="flex flex-wrap gap-3">
+              {([
+                { value: 'A' as const, label: 'Points Race (A)' },
+                { value: 'C' as const, label: 'Per-Qualifier (C)' },
+                { value: 'NONE' as const, label: 'None — just group tournaments' },
+              ] as const).map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setSeriesModel(value)}
+                  aria-pressed={seriesModel === value}
+                  className={`rounded border px-4 py-2 text-sm font-medium transition-colors ${
+                    seriesModel === value
+                      ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+                      : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {seriesModel === 'NONE' && (
+              <p className="text-xs text-rizzotto-stone-500">
+                No scoring or qualification tracking — the series acts as a grouping / schedule for related
+                tournaments. No final tournament will be created.
+              </p>
+            )}
+
+            {seriesModel === 'A' && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <Label htmlFor="sm-ppgp">Points per Game Played</Label>
+                  <input
+                    id="sm-ppgp"
+                    type="number"
+                    min={0}
+                    value={pointsPerGamePlayed}
+                    onChange={(e) => setPointsPerGamePlayed(Number(e.target.value))}
+                    className="w-28 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="sm-ppw">Points per Win</Label>
+                  <input
+                    id="sm-ppw"
+                    type="number"
+                    min={0}
+                    value={pointsPerWin}
+                    onChange={(e) => setPointsPerWin(Number(e.target.value))}
+                    className="w-28 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="sm-fsize">Final Size</Label>
+                  <input
+                    id="sm-fsize"
+                    type="number"
+                    min={2}
+                    value={finalSize}
+                    onChange={(e) => setFinalSize(Number(e.target.value))}
+                    className="w-28 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
+                  />
+                  <FieldHint>Top N players qualify for the final.</FieldHint>
+                </div>
+              </div>
+            )}
+
+            {seriesModel === 'C' && (
+              <div>
+                <Label htmlFor="sm-topx">Top X per Qualifier</Label>
+                <select
+                  id="sm-topx"
+                  value={topX}
+                  onChange={(e) => setTopX(Number(e.target.value))}
+                  className="w-48 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
+                >
+                  <option value={1}>Top 1 (winner)</option>
+                  <option value={2}>Top 2 (finalists)</option>
+                  <option value={3}>Top 3</option>
+                  <option value={4}>Top 4</option>
+                  <option value={8}>Top 8 (full playoff)</option>
+                </select>
+                <FieldHint>
+                  Top X of each qualifier's highest-division playoff qualify. Top 3 needs a
+                  third-place match in the qualifier; 5–7 are not cleanly rankable.
+                </FieldHint>
+              </div>
+            )}
+          </div>
+
+          {/* Qualifier multi-select */}
+          {qualifierCandidates.length > 0 && (
+            <div className="space-y-2">
+              <Label>Attach Qualifying Tournaments (optional)</Label>
+              <p className="text-xs text-rizzotto-stone-500">
+                Optionally link existing tournaments as qualifiers now. You can add more later.
+              </p>
+              <div className="max-h-48 overflow-y-auto rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 divide-y divide-rizzotto-iron-800">
+                {qualifierCandidates.map((qt) => (
+                  <label
+                    key={qt.id}
+                    className="flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-rizzotto-iron-800 transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedQualifierIds.has(qt.id)}
+                      onChange={() => {
+                        setSelectedQualifierIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(qt.id)) next.delete(qt.id);
+                          else next.add(qt.id);
+                          return next;
+                        });
+                      }}
+                      className="accent-rizzotto-gold-500"
+                    />
+                    <span className="text-sm text-rizzotto-stone-200">{qt.name}</span>
+                    <span className="ml-auto text-xs text-rizzotto-stone-500 font-mono">
+                      {qt.status.replace(/_/g, ' ')}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {selectedQualifierIds.size > 0 && (
+                <p className="text-xs text-rizzotto-stone-500">
+                  {selectedQualifierIds.size} tournament{selectedQualifierIds.size !== 1 ? 's' : ''} selected
+                </p>
+              )}
+            </div>
+          )}
+        </fieldset>
+      )}
+
+      {/* Poster at the very top of the tournament section (mirrors the Edit view). */}
+      {/* For NONE model in series mode the entire tournament form is hidden. */}
+      {(!seriesMode || seriesModel !== 'NONE') && (
+        <>
+          {seriesMode && (
+            <p className="text-sm font-semibold text-rizzotto-stone-300">
+              Final Tournament
+              <span className="ml-2 font-normal text-rizzotto-stone-500 text-xs">
+                — configure the Grand Final tournament that this series leads up to
+              </span>
+            </p>
+          )}
+          <PosterPickField file={posterFile} onPick={setPosterFile} />
 
       <div>
         <Label htmlFor="tcf-name" required>
-          {t('tournament.form.name')}
+          {seriesMode ? 'Final Tournament Name' : t('tournament.form.name')}
         </Label>
         <Input
           id="tcf-name"
           name="name"
           value={form.name ?? ''}
-          onChange={handleChange}
-          placeholder={t('tournament.form.name_placeholder')}
+          onChange={(e) => {
+            finalNameTouched.current = true;
+            handleChange(e);
+          }}
+          placeholder={
+            seriesMode
+              ? 'e.g. Season 3 Championship — Grand Final'
+              : t('tournament.form.name_placeholder')
+          }
         />
+        {seriesMode && (
+          <FieldHint>Auto-filled from the series name. Edit freely.</FieldHint>
+        )}
         <FieldError message={errors.name} />
       </div>
 
@@ -1516,18 +1876,27 @@ export function TournamentCreateForm({ duplicateSlug }: { duplicateSlug?: string
           </div>
         )}
       </fieldset>
+        </>
+      )}
 
       <Button
         type="submit"
         variant="forge"
         size="md"
         disabled={
-          mutation.isPending ||
+          isPending ||
+          !!(seriesMode && !seriesName.trim()) ||
           !!(form.draft_enabled && !form.draft_preset_id) ||
-          (usesMapPool && (form.map_pool?.length ?? 0) < minPool)
+          (seriesModel !== 'NONE' && usesMapPool && (form.map_pool?.length ?? 0) < minPool)
         }
       >
-        {mutation.isPending ? t('tournament.form.submitting') : t('tournament.form.submit')}
+        {isPending
+          ? seriesMode
+            ? 'Creating…'
+            : t('tournament.form.submitting')
+          : seriesMode
+            ? 'Create Series'
+            : t('tournament.form.submit')}
       </Button>
     </form>
   );

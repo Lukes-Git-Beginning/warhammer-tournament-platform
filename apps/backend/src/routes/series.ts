@@ -242,6 +242,12 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
     const data = parsed.data;
     const user = request.user;
 
+    // A final is mandatory for scoring models A and C (it's where the qualified players go);
+    // a grouping-only NONE series has no final.
+    if (data.scoring_config.model !== 'NONE' && !data.final_tournament_id) {
+      return reply.code(400).send(badRequest('A final tournament is required for scoring models A and C.'));
+    }
+
     // Every qualifier (and the final, if given) must be one this user can manage.
     const attachIds = data.qualifier_ids ?? [];
     for (const tid of [...attachIds, ...(data.final_tournament_id ? [data.final_tournament_id] : [])]) {
@@ -272,9 +278,15 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
         data: { series_id: series.id, series_position: i + 1 },
       });
     }
-    // Flag the final.
+    // Flag the final and lock it to REGISTRATION_CLOSED (so nobody self-registers; it's populated
+    // by seed-final). Only lock a not-yet-started final — never downgrade a live/finished one.
     if (data.final_tournament_id) {
-      await fastify.prisma.tournament.update({ where: { id: data.final_tournament_id }, data: { is_series_final: true } });
+      const fin = await fastify.prisma.tournament.findUnique({ where: { id: data.final_tournament_id }, select: { status: true } });
+      const lock = fin && (fin.status === 'DRAFT' || fin.status === 'OPEN_REGISTRATION');
+      await fastify.prisma.tournament.update({
+        where: { id: data.final_tournament_id },
+        data: { is_series_final: true, ...(lock ? { status: 'REGISTRATION_CLOSED' as const } : {}) },
+      });
     }
 
     return reply.code(201).send({ id: series.id, slug: series.slug });
