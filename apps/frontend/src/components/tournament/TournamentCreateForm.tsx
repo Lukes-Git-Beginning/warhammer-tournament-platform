@@ -732,13 +732,14 @@ export function TournamentCreateForm({
           {/* Series description */}
           <div>
             <Label htmlFor="sm-series-desc">Series Description</Label>
-            <textarea
+            <MarkdownEditor
               id="sm-series-desc"
+              name="seriesDescription"
               value={seriesDescription}
               onChange={(e) => setSeriesDescription(e.target.value)}
+              rows={4}
+              maxLength={2000}
               placeholder="Optional description shown on the series page."
-              rows={3}
-              className="w-full resize-y rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 placeholder:text-rizzotto-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
             />
           </div>
 

@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.57.1] — 2026-09-12 — Series polish
+### Changed
+- The series standings table now spells out its column headers (Points, Games Played, Game Wins) instead of abbreviations.
+- A series' qualifier tournaments are now listed newest-first.
+### Fixed
+- The series description now supports full formatting — headings, lists, links and line breaks — both when editing it and where it is shown on the series page, matching tournament descriptions. Previously it was a single unformatted line.
+
 ## [1.57.0] — 2026-09-12 — Tournament Series
 ### Added
 - **Tournament Series** — bundle several tournaments into one series with a live standings tracker and an auto-seeded Grand Final. A new **Series** tab lists every public series; each has its own page showing the running standings, who has qualified so far, all the qualifying tournaments, and the Grand Final.

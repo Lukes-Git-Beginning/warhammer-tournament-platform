@@ -25,6 +25,8 @@ import { Badge } from '@/components/ui/badge.js';
 import { Skeleton } from '@/components/ui/skeleton.js';
 import { Button } from '@/components/ui/button.js';
 import { PosterUploadField } from '@/components/tournament/PosterUploadField.js';
+import { SafeMarkdown } from '@/components/ui/SafeMarkdown.js';
+import { MarkdownEditor } from '@/components/ui/markdown-editor.js';
 
 // ---------------------------------------------------------------------------
 // Standings table (model A — points race)
@@ -54,9 +56,9 @@ function StandingsTable({
             <tr>
               <th className="px-3 py-2 text-left font-semibold text-rizzotto-stone-300 w-10">#</th>
               <th className="px-3 py-2 text-left font-semibold text-rizzotto-stone-300">Player</th>
-              <th className="px-3 py-2 text-right font-semibold text-rizzotto-stone-300 font-mono">Pts</th>
-              <th className="px-3 py-2 text-right font-semibold text-rizzotto-stone-300 font-mono">GP</th>
-              <th className="px-3 py-2 text-right font-semibold text-rizzotto-stone-300 font-mono">GW</th>
+              <th className="px-3 py-2 text-right font-semibold text-rizzotto-stone-300">Points</th>
+              <th className="px-3 py-2 text-right font-semibold text-rizzotto-stone-300">Games Played</th>
+              <th className="px-3 py-2 text-right font-semibold text-rizzotto-stone-300">Game Wins</th>
             </tr>
           </thead>
           <tbody>
@@ -144,7 +146,7 @@ function QualifiedList({
             <th className="px-3 py-2 text-left font-semibold text-rizzotto-stone-300">Seed</th>
             <th className="px-3 py-2 text-left font-semibold text-rizzotto-stone-300">Player</th>
             <th className="px-3 py-2 text-left font-semibold text-rizzotto-stone-300">From</th>
-            <th className="px-3 py-2 text-right font-semibold text-rizzotto-stone-300 font-mono">Pos.</th>
+            <th className="px-3 py-2 text-right font-semibold text-rizzotto-stone-300">Position</th>
           </tr>
         </thead>
         <tbody>
@@ -649,16 +651,6 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
               className="w-full rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 placeholder:text-rizzotto-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
             />
           </div>
-          <div className="flex-1">
-            <label className="mb-1 block text-xs text-rizzotto-stone-400">Description</label>
-            <input
-              type="text"
-              value={editDesc}
-              onChange={(e) => setEditDesc(e.target.value)}
-              placeholder={series.description ?? ''}
-              className="w-full rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 placeholder:text-rizzotto-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
-            />
-          </div>
           <div>
             <label className="mb-1 block text-xs text-rizzotto-stone-400">Visibility</label>
             <select
@@ -670,6 +662,20 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
               <option value="PRIVATE">Private</option>
             </select>
           </div>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-rizzotto-stone-400">Description</label>
+          <MarkdownEditor
+            id="series-edit-desc"
+            name="description"
+            value={editDesc}
+            onChange={(e) => setEditDesc(e.target.value)}
+            rows={4}
+            maxLength={2000}
+            placeholder="Enter a new description (leave blank to keep the current one)…"
+          />
+        </div>
+        <div>
           <button
             type="button"
             disabled={patchMutation.isPending || !hasEditChanges}
@@ -709,7 +715,7 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
             Attached Qualifiers
           </h3>
           <ul className="space-y-2">
-            {series.qualifiers.map((q) => (
+            {[...series.qualifiers].reverse().map((q) => (
               <li
                 key={q.id}
                 className="flex items-center justify-between rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2"
@@ -827,7 +833,9 @@ export function SeriesDetailPage() {
           {series.name}
         </h1>
         {series.description && (
-          <p className="mt-2 max-w-2xl text-rizzotto-stone-300">{series.description}</p>
+          <div className="mt-2 max-w-2xl text-rizzotto-stone-300">
+            <SafeMarkdown>{series.description}</SafeMarkdown>
+          </div>
         )}
         <p className="mt-1 text-sm text-rizzotto-stone-500">
           Organised by{' '}
@@ -890,7 +898,7 @@ export function SeriesDetailPage() {
           <p className="text-sm text-rizzotto-stone-500">No qualifying tournaments attached yet.</p>
         ) : (
           <ul className="space-y-2">
-            {series.qualifiers.map((q) => {
+            {[...series.qualifiers].reverse().map((q) => {
               const statusColors: Record<string, string> = {
                 ONGOING: 'text-rizzotto-forge-400',
                 COMPLETED: 'text-rizzotto-stone-500',
