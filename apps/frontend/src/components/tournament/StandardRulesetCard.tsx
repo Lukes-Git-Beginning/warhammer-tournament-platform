@@ -10,6 +10,13 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { getStandardRuleset, type BattleType, type StandardRuleset } from '@/lib/api.js';
+import { BattleTypeWatermark } from '@/components/tournament/TournamentTypeBadges.js';
+
+const BATTLE_TYPE_LABEL: Record<string, string> = {
+  DOMINATION: 'Domination',
+  CONQUEST: 'Conquest',
+  SIEGE: 'Siege',
+};
 
 export const STANDARD_RULESET: StandardRuleset = {
   settings: ['Default Funds', 'Ultra Unit Scale', '1500 Tickets', 'Unit Caps On'],
@@ -52,21 +59,25 @@ export function StandardRulesetCard({
     enabled: !ruleset,
   });
   const rs = ruleset ?? data ?? STANDARD_RULESET;
+  const title = battleType ? `Standard ${BATTLE_TYPE_LABEL[battleType] ?? battleType} Ruleset` : 'Standard Ruleset';
 
   return (
     <div
-      className={`rounded-md border border-stone-800 bg-stone-900/50 text-sm leading-relaxed ${
+      className={`relative overflow-hidden rounded-md border border-stone-800 bg-stone-900/50 text-sm leading-relaxed ${
         compact ? 'p-3' : 'p-6'
       }`}
     >
-      <div className="mb-2 flex items-center gap-2">
-        <span className="text-rizzotto-gold-400">⚔️</span>
-        <span className="font-display font-semibold text-rizzotto-gold-500">Standard Ruleset</span>
-      </div>
-      <div className="space-y-1.5">
-        <Row label="Settings" items={rs.settings} />
-        <Row label="Banned" items={rs.banned} />
-        <Row label="Conduct" items={rs.conduct} />
+      {battleType && <BattleTypeWatermark battleType={battleType} />}
+      <div className="relative">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="text-rizzotto-gold-400">⚔️</span>
+          <span className="font-display font-semibold text-rizzotto-gold-500">{title}</span>
+        </div>
+        <div className="space-y-1.5">
+          <Row label="Settings" items={rs.settings} />
+          <Row label="Banned" items={rs.banned} />
+          <Row label="Conduct" items={rs.conduct} />
+        </div>
       </div>
     </div>
   );

@@ -250,7 +250,6 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
             })}
           </div>
         </div>
-        <StandardRulesetCard compact battleType={battleTypes.length === 1 ? battleTypes[0] : undefined} />
         <Button size="lg" onClick={() => join.mutate()} disabled={join.isPending}>
           {join.isPending ? 'Joining...' : 'Join Queue'}
         </Button>
@@ -266,6 +265,20 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
         <p className="text-xs text-stone-500">
           Counts towards the leaderboard when a replay is submitted via the bot and the reported outcome goes uncontested.
         </p>
+      </div>
+
+      {/* Standard Rules — one tile per selected battle type, side by side. The team size (1v1 /
+          2v2) picks the ruleset variant; there are never more than three tiles. */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-stone-300">Standard Rules</p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {battleTypes
+            .slice()
+            .sort((a, b) => OP_BATTLE_TYPES.findIndex((o) => o.value === a) - OP_BATTLE_TYPES.findIndex((o) => o.value === b))
+            .map((bt) => (
+              <StandardRulesetCard key={bt} compact battleType={bt} competitorFormat="ONE_V_ONE" />
+            ))}
+        </div>
       </div>
 
       <div className="space-y-2">

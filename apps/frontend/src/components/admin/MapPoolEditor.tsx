@@ -188,6 +188,7 @@ export function MapPoolEditor() {
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [collapsed, setCollapsed] = useState(true);
 
   const { data, isLoading, error } = useQuery({ queryKey: ['admin-maps'], queryFn: getAdminMaps });
 
@@ -344,19 +345,29 @@ export function MapPoolEditor() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-display text-base font-semibold text-rizzotto-gold-400">
-          Map Pool ({availableCount} available / {live.length} total)
-        </h3>
+      {/* Collapsible header — the map pool is long, so keep it folded by default. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
-          onClick={() => setShowAdd(true)}
-          className="rounded border border-rizzotto-gold-700 bg-rizzotto-gold-500/10 px-3 py-1.5 text-xs text-rizzotto-gold-400 hover:bg-rizzotto-gold-500/20 transition-colors"
+          onClick={() => setCollapsed((c) => !c)}
+          className="flex items-center gap-2 font-display text-base font-semibold text-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors"
         >
-          + Add Map
+          <span className="text-xs text-rizzotto-stone-500">{collapsed ? '▸' : '▾'}</span>
+          Map Pool ({availableCount} available / {live.length} total)
         </button>
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={() => setShowAdd(true)}
+            className="rounded border border-rizzotto-gold-700 bg-rizzotto-gold-500/10 px-3 py-1.5 text-xs text-rizzotto-gold-400 hover:bg-rizzotto-gold-500/20 transition-colors"
+          >
+            + Add Map
+          </button>
+        )}
       </div>
 
+      {collapsed ? null : (
+      <div className="mt-4">
       {/* Filters — by battle type and by availability */}
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs">
         <label className="flex items-center gap-2">
@@ -398,6 +409,8 @@ export function MapPoolEditor() {
             <MapTable rows={deleted} showControls={false} />
           </div>
         </details>
+      )}
+      </div>
       )}
 
       <input
