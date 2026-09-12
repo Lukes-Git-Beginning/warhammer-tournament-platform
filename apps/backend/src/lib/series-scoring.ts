@@ -102,11 +102,14 @@ export function computeSeriesStandingsA(
 
   const cmp = (a: SeriesStanding, b: SeriesStanding): number => {
     for (const tb of config.tiebreakers) {
-      let d = 0;
-      if (tb === 'points') d = b.points - a.points;
-      else if (tb === 'wins') d = b.wins - a.wins;
-      else if (tb === 'games') d = b.gamesPlayed - a.gamesPlayed;
-      else d = stableHash(`${seriesId}:${a.competitorId}`) - stableHash(`${seriesId}:${b.competitorId}`);
+      const d =
+        tb === 'points'
+          ? b.points - a.points
+          : tb === 'wins'
+            ? b.wins - a.wins
+            : tb === 'games'
+              ? b.gamesPlayed - a.gamesPlayed
+              : stableHash(`${seriesId}:${a.competitorId}`) - stableHash(`${seriesId}:${b.competitorId}`);
       if (d !== 0) return d;
     }
     return 0;
