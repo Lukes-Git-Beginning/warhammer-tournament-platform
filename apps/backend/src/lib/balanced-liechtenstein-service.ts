@@ -39,7 +39,7 @@ import { getRatingModel } from './rating-model-service.js';
 import { resolveTeamGs } from './team-rating.js';
 import { balancedRounds } from './auto-swiss-service.js';
 import { emitBracketUpdate } from './emit.js';
-import { notifyMatchesCreated, notifyFinalRoundBye } from './discord-notify.js';
+import { notifyMatchesCreated, notifyFinalRoundBye, resolveCompetitorRecipients } from './discord-notify.js';
 import { recordTournamentEvent } from './tournament-events.js';
 
 const LOCK_TTL_SECONDS = 15;
@@ -258,14 +258,19 @@ export async function runBalancedPairingTick(
 
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
       const [roster, matches] = await Promise.all([
-        fastify.prisma.tournamentParticipant.findMany({
-          where: {
-            tournament_id: tournamentId,
-            deleted_at: null,
-            status: { in: ['REGISTERED', 'CHECKED_IN'] },
-          },
-          select: { user_id: true, skill_band: true, status: true, late_joined: true },
-        }),
+        fastify.prisma.tournamentParticipant
+          .findMany({
+            where: {
+              tournament_id: tournamentId,
+              deleted_at: null,
+              status: { in: ['REGISTERED', 'CHECKED_IN'] },
+            },
+            select: { user_id: true, team_id: true, skill_band: true, status: true, late_joined: true },
+          })
+          // Identity is the opaque competitor id: a Team id for 2v2, else the user id. Aliasing it
+          // to `user_id` here lets the whole pairing engine below stay identity-agnostic (match
+          // slots hold the same competitor ids).
+          .then((rs) => rs.map((p) => ({ user_id: p.team_id ?? p.user_id, skill_band: p.skill_band, status: p.status, late_joined: p.late_joined }))),
         fastify.prisma.match.findMany({
           where: { tournament_id: tournamentId, deleted_at: null },
           select: {
@@ -632,17 +637,18 @@ export async function runBalancedPairingTick(
         select: { name: true, slug: true, stream_url: true },
       });
       if (tRow) {
-        const users = await fastify.prisma.user.findMany({
-          where: { id: { in: finalRoundByePlayers } },
-          select: { id: true, discord_id: true, username: true },
-        });
-        for (const u of users) {
-          if (!u.discord_id) continue;
-          await notifyFinalRoundBye(
-            { name: tRow.name, slug: tRow.slug, stream_url: tRow.stream_url },
-            { discord_id: u.discord_id, username: u.username },
-            { inPlayoffZone: qualifiers.has(u.id) },
-          );
+        // finalRoundByePlayers are competitor ids — resolve each to its recipient(s) (both
+        // members for a 2v2 team) and DM them; qualifiers is keyed by the same competitor id.
+        const recipientsBySlot = await resolveCompetitorRecipients(finalRoundByePlayers);
+        for (const competitorId of finalRoundByePlayers) {
+          const inPlayoffZone = qualifiers.has(competitorId);
+          for (const r of recipientsBySlot.get(competitorId) ?? []) {
+            await notifyFinalRoundBye(
+              { name: tRow.name, slug: tRow.slug, stream_url: tRow.stream_url },
+              { discord_id: r.discord_id, username: r.username },
+              { inPlayoffZone },
+            );
+          }
         }
       }
     }
@@ -729,10 +735,19 @@ export async function admitBalancedLateJoiner(
   // is the persistent signal (not registered_at) for the 0-point catch-up-bye rule, and
   // is set even if band classification fails — a classification hiccup must never turn a
   // late joiner into a scoring-bye farmer.
+  // Accept either a user id (1v1 / the captain) or a competitor id (2v2 team) as the handle.
   const participant = await fastify.prisma.tournamentParticipant.findFirst({
-    where: { tournament_id: tournamentId, user_id: userId, deleted_at: null },
-    select: { id: true, requested_band: true },
+    where: { tournament_id: tournamentId, deleted_at: null, OR: [{ user_id: userId }, { team_id: userId }] },
+    select: {
+      id: true,
+      requested_band: true,
+      user_id: true,
+      team_id: true,
+      team: { select: { members: { select: { user_id: true } } } },
+    },
   });
+  // Engine identity = the opaque competitor id (a Team id for 2v2, else the user id).
+  const competitorId = participant?.team_id ?? participant?.user_id ?? userId;
   if (participant) {
     let effective = participant.requested_band ?? 0;
     try {
@@ -741,8 +756,15 @@ export async function admitBalancedLateJoiner(
         select: { id: true },
       });
       if (version) {
-        const cls = await getPlayerClassification(fastify.prisma, fastify.redis, version.id, userId);
-        effective = Math.max(effective, cls.matchmakingBand);
+        if (participant.team_id) {
+          // 2v2: band the team by its blended GS (no questionnaire), mirroring assignSkillBands.
+          const model = await getRatingModel(fastify.prisma, fastify.redis, { versionId: version.id, config: { hierarchical: true } });
+          const gs = resolveTeamGs(model, participant.team_id, participant.team?.members.map((m) => m.user_id) ?? []);
+          if (gs) effective = Math.max(effective, gs.band);
+        } else {
+          const cls = await getPlayerClassification(fastify.prisma, fastify.redis, version.id, participant.user_id);
+          effective = Math.max(effective, cls.matchmakingBand);
+        }
       }
     } catch (err) {
       fastify.log.warn({ err, userId, tournamentId }, 'admitBalancedLateJoiner: skill-band classification failed (non-fatal)');
@@ -782,7 +804,7 @@ export async function admitBalancedLateJoiner(
   if (A > 1) {
     const playedRounds = new Set(
       allMatches
-        .filter((m) => m.player1_id === userId || m.player2_id === userId)
+        .filter((m) => m.player1_id === competitorId || m.player2_id === competitorId)
         .map((m) => m.round),
     );
     let next = allMatches.reduce((mx, m) => Math.max(mx, m.match_number), 0) + 1;
@@ -802,7 +824,7 @@ export async function admitBalancedLateJoiner(
         tournament_id: tournamentId,
         round: r,
         match_number: next++,
-        player1_id: userId,
+        player1_id: competitorId,
         player2_id: null,
         winner_id: null,
         status: 'CATCHUP_BYE',
@@ -811,7 +833,7 @@ export async function admitBalancedLateJoiner(
     }
     if (rows.length > 0) {
       await fastify.prisma.match.createMany({ data: rows });
-      void recordTournamentEvent({ tournamentId, type: 'match_created', actor: 'system', subjectId: userId, payload: { phase: 'catchup_bye', count: rows.length } });
+      void recordTournamentEvent({ tournamentId, type: 'match_created', actor: 'system', subjectId: competitorId, payload: { phase: 'catchup_bye', count: rows.length } });
     }
   }
 
@@ -953,10 +975,12 @@ export async function provisionalPlayoffQualifiers(
       games: { select: { status: true, winner_id: true } },
     },
   });
-  const roster = await fastify.prisma.tournamentParticipant.findMany({
-    where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] } },
-    select: { user_id: true, skill_band: true, status: true },
-  });
+  const roster = (
+    await fastify.prisma.tournamentParticipant.findMany({
+      where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] } },
+      select: { user_id: true, team_id: true, skill_band: true, status: true },
+    })
+  ).map((p) => ({ user_id: p.team_id ?? p.user_id, skill_band: p.skill_band, status: p.status }));
   const withdrawnIds = new Set(roster.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
   const active = roster.filter((p) => p.status !== 'WITHDREW');
   const anyCheckedIn = active.some((p) => p.status === 'CHECKED_IN');
@@ -1034,14 +1058,16 @@ export async function startBalancedPlayoffs(
   // Playoffs generate per division (see the loop below), so existing playoff matches
   // no longer block a call — divisions that are still ungenerated can be added.
 
-  const roster = await fastify.prisma.tournamentParticipant.findMany({
-    where: {
-      tournament_id: tournamentId,
-      deleted_at: null,
-      status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
-    },
-    select: { user_id: true, skill_band: true, status: true },
-  });
+  const roster = (
+    await fastify.prisma.tournamentParticipant.findMany({
+      where: {
+        tournament_id: tournamentId,
+        deleted_at: null,
+        status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
+      },
+      select: { user_id: true, team_id: true, skill_band: true, status: true },
+    })
+  ).map((p) => ({ user_id: p.team_id ?? p.user_id, skill_band: p.skill_band, status: p.status }));
   const withdrawnIds = new Set(roster.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
   const active = roster.filter((p) => p.status !== 'WITHDREW');
   const anyCheckedIn = active.some((p) => p.status === 'CHECKED_IN');
@@ -1257,10 +1283,12 @@ export async function findNextDivisionSeed(
     .filter((m) => !m.phase?.startsWith('PLAYOFF'))
     .reduce((mx, m) => Math.max(mx, m.round), 0);
   const roundsCount = Math.max(tournament.rounds_count ?? 0, playedGroupRounds);
-  const participants = await fastify.prisma.tournamentParticipant.findMany({
-    where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] } },
-    select: { user_id: true, status: true, skill_band: true },
-  });
+  const participants = (
+    await fastify.prisma.tournamentParticipant.findMany({
+      where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] } },
+      select: { user_id: true, team_id: true, status: true, skill_band: true },
+    })
+  ).map((p) => ({ user_id: p.team_id ?? p.user_id, status: p.status, skill_band: p.skill_band }));
   const bandByUser = new Map(participants.map((p) => [p.user_id, p.skill_band ?? DEFAULT_BAND]));
   const withdrawnIds = new Set(participants.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
   const inPlayoffs = new Set<string>();
@@ -1345,15 +1373,22 @@ export async function describeBalancedPlayoffPreview(
       games: { select: { status: true, winner_id: true } },
     },
   });
-  const roster = await fastify.prisma.tournamentParticipant.findMany({
-    where: {
-      tournament_id: tournamentId,
-      deleted_at: null,
-      status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
-    },
-    select: { user_id: true, skill_band: true, status: true, user: { select: { username: true } } },
-  });
-  const usernameById = new Map(roster.map((p) => [p.user_id, p.user?.username ?? 'Unknown']));
+  const roster = (
+    await fastify.prisma.tournamentParticipant.findMany({
+      where: {
+        tournament_id: tournamentId,
+        deleted_at: null,
+        status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
+      },
+      select: { user_id: true, team_id: true, skill_band: true, status: true, user: { select: { username: true } }, team: { select: { name: true } } },
+    })
+  ).map((p) => ({
+    user_id: p.team_id ?? p.user_id, // competitor id (team for 2v2)
+    skill_band: p.skill_band,
+    status: p.status,
+    displayName: p.team?.name ?? p.user?.username ?? 'Unknown',
+  }));
+  const usernameById = new Map(roster.map((p) => [p.user_id, p.displayName]));
   const withdrawnIds = new Set(roster.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
   const active = roster.filter((p) => p.status !== 'WITHDREW');
   const anyCheckedIn = active.some((p) => p.status === 'CHECKED_IN');

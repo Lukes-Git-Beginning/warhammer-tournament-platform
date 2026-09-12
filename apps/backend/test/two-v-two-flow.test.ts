@@ -480,6 +480,57 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     expect(teamRow?.team?.members.map((m) => m.id).sort()).toEqual([a.captain.id, a.partner.id].sort());
   });
 
+  it('runs a 2v2 Balanced Liechtenstein — teams are banded and paired by team id', async () => {
+    const host = await createAdminHost('2v2balihost');
+    const teams = await Promise.all(['Alpha', 'Bravo', 'Charlie', 'Delta'].map((n) => makeActiveTeam(n)));
+
+    const id = randomUUID();
+    const slug = `test-2v2-bali-${id.slice(0, 8)}`;
+    createdTournamentIds.push(id);
+    await prisma.tournament.create({
+      data: {
+        id, slug, name: '2v2 BaLi Test', host_id: host.id,
+        format: 'BALANCED_LIECHTENSTEIN', mode: 'BPT_2V2', competitor_format: 'TWO_V_TWO',
+        status: 'OPEN_REGISTRATION', start_date: new Date('2027-06-01'), timezone: 'Europe/Berlin', rounds_count: 3,
+      },
+    });
+
+    // Register the 4 teams; drive divisions deterministically via requested_band (2 in band 2,
+    // 2 in band 1 — with no games the computed team band is 0, so requested_band wins). Check in.
+    for (const [i, t] of teams.entries()) {
+      expect((await registerTeam(slug, t.captain.id, t.teamId)).statusCode).toBe(201);
+      await prisma.tournamentParticipant.updateMany({
+        where: { tournament_id: id, team_id: t.teamId },
+        data: { requested_band: i < 2 ? 2 : 1, status: 'CHECKED_IN' },
+      });
+    }
+    await prisma.tournament.update({ where: { id }, data: { status: 'REGISTRATION_CLOSED' } });
+
+    const start = await app.inject({ method: 'POST', url: `/api/tournaments/${id}/start`, cookies: cookieFor(host.id, 'ADMIN') });
+    expect(start.statusCode).toBeLessThan(300);
+
+    // Every team was banded (skill_band assigned = requested_band here).
+    const parts = await prisma.tournamentParticipant.findMany({ where: { tournament_id: id }, select: { skill_band: true } });
+    expect(parts.length).toBe(4);
+    expect(parts.every((p) => p.skill_band != null)).toBe(true);
+
+    // Round-1 matches carry TEAM ids in the slots (not null, not the captains' user ids) — the
+    // whole pairing engine keys by the competitor id now.
+    const teamIdSet = new Set(teams.map((t) => t.teamId));
+    const captainIdSet = new Set(teams.map((t) => t.captain.id));
+    const matches = await prisma.match.findMany({
+      where: { tournament_id: id, round: 1 },
+      select: { player1_id: true, player2_id: true },
+    });
+    const playable = matches.filter((m) => m.player1_id && m.player2_id);
+    expect(playable.length).toBeGreaterThan(0);
+    for (const m of playable) {
+      expect(teamIdSet.has(m.player1_id!)).toBe(true);
+      expect(teamIdSet.has(m.player2_id!)).toBe(true);
+      expect(captainIdSet.has(m.player1_id!)).toBe(false);
+    }
+  });
+
   it('lets either team member self-withdraw the whole team before start', async () => {
     const host = await createAdminHost('2v2withdrawhost');
     const a = await makeActiveTeam('Papa');

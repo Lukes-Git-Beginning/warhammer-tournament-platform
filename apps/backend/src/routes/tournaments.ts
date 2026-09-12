@@ -209,15 +209,9 @@ const CreateTournamentSchema = z.object({
   .superRefine(refineMapPool)
   .superRefine(refineOneVThree)
   .superRefine((data, ctx) => {
-    // 2v2 + Balanced Liechtenstein: the team BANDING is ready (resolveTeamGs blends the members'
-    // average GS with the team's own fitted 2v2 GS — see lib/team-rating.ts + assignSkillBands),
-    // but the BaLi pairing engine (runBalancedPairingTick: swiss scoring, byes, reclaim, late-join)
-    // is still keyed by user_id / user-vs-match-slot identity. Until that engine is rekeyed to the
-    // competitor id (team_id ?? user_id), a 2v2 BaLi would pair to empty/wrong slots — so keep it
-    // blocked. See plans/2v2-competitor-implementation.md.
-    if (data.competitor_format === 'TWO_V_TWO' && data.format === 'BALANCED_LIECHTENSTEIN') {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: '2v2 is not yet supported with the Balanced Liechtenstein format', path: ['competitor_format'] });
-    }
+    // 2v2 + Balanced Liechtenstein is supported: teams are banded by their blended GS
+    // (resolveTeamGs — members' average prior → the team's own fitted 2v2 GS), and the whole BaLi
+    // pairing engine keys by the opaque competitor id (team_id ?? user_id). See lib/team-rating.ts.
     // The team-size axis (competitor_format) and the faction mechanic (mode) must agree:
     // a 2v2 tournament needs a 2v2 mode, and a 2v2 mode needs competitor_format TWO_V_TWO.
     const is2v2Mode = data.mode ? (TWO_V_TWO_MODES as readonly string[]).includes(data.mode) : false;
