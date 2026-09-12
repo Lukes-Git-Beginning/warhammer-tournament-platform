@@ -81,25 +81,31 @@ pnpm db:seed
 sudo systemctl start rizzotto-backend
 ```
 
-### Einmaliger Rollout-Schritt: "Season 2026" → "8.1"
+### Rollout "Season 2026" → "8.1" (läuft AUTOMATISCH beim Deploy)
 
-Beim Rollout des Game-Versions-Updates muss die bestehende Prod-Version einmalig
-von "Season 2026" auf "8.1" umbenannt werden. Da alle Games (und FactionStats /
-MatchupStats / Snapshots) die Version per ID referenzieren, benennt das Script nur
-die Zeile um — **kein Massen-Update, keine Neuberechnung nötig**. Idempotent; Dry-Run
-ist Default.
+Der Game-Versions-Deploy benennt die bestehende Prod-Version von "Season 2026" auf
+"8.1" um. **Das passiert automatisch** in Schritt 3 (`prisma migrate deploy`) über die
+Migration `20260910120001_rename_active_version_to_8_1` (guarded + idempotent: greift
+nur auf die aktive Version, solange sie noch "Season 2026" heißt). Da alle Games —
+und FactionStats / MatchupStats / Snapshots — die Version per **ID** referenzieren,
+benennt die Migration nur die Zeile um: **kein Massen-Update, keine Neuberechnung**,
+alle Games sind danach 8.1-Games.
+
+**Verifikation / Fallback** (optional) — das Script prüft den Ist-Zustand und benennt
+nur um, falls die Migration den Namen nicht getroffen hat (z. B. leicht abweichender
+Prod-Name). Dry-Run ist Default:
 
 ```bash
-# Erst Dry-Run (zeigt Ist-Zustand + Plan, ändert nichts):
+# Nach dem Deploy zur Kontrolle (zeigt Versionen + evtl. Stragglers, ändert nichts):
 pnpm -F @rizzotto/db exec tsx prisma/rollout-season-to-8-1.ts
 
-# Nach Kontrolle anwenden:
+# Nur falls nötig (Migration hat nicht gegriffen):
 pnpm -F @rizzotto/db exec tsx prisma/rollout-season-to-8-1.ts --apply
 ```
 
 Zeigt der Dry-Run "Stragglers" (Games ohne Version oder auf einer anderen), können
-diese optional mit `--consolidate --apply` ebenfalls auf 8.1 gezogen werden — danach
-im Admin "Recompute faction stats" auslösen. (Nur nötig, falls Stragglers > 0.)
+diese optional mit `--consolidate --apply` auf 8.1 gezogen werden — danach im Admin
+"Recompute faction stats" auslösen. (Nur nötig, falls Stragglers > 0.)
 
 ## Reverse-Proxy: Caddy + systemd
 

@@ -1,6 +1,12 @@
 // ---------------------------------------------------------------------------
-// PROD ROLLOUT (one-time): rename the single existing game version ("Season 2026")
-// to "8.1".
+// PROD ROLLOUT — verification / fallback for renaming "Season 2026" → "8.1".
+//
+// NOTE: the rename normally happens AUTOMATICALLY at deploy time via the migration
+// 20260910120001_rename_active_version_to_8_1 (runs during `prisma migrate deploy`).
+// This script is a safe way to (a) confirm the current version state, and (b) rename
+// as a fallback if that migration didn't match the prod name (it targets the *active*
+// version regardless of its exact name). It also reports/consolidates stragglers,
+// which the migration does not.
 //
 // Games FK-reference their version by id (Match.season_id), and so do FactionStats,
 // MatchupStats and PlayerSkillSnapshot. Renaming the *row* re-labels every game as
