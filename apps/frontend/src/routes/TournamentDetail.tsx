@@ -764,7 +764,7 @@ export function TournamentDetail() {
             <div>
               <span className="text-stone-500">Format:</span>{' '}
               <span className="text-stone-200">
-                {({ AUTO_SWISS: 'Auto Swiss', SWISS: 'Swiss', SINGLE_ELIMINATION: 'Single Elimination', DOUBLE_ELIMINATION: 'Double Elimination', ROUND_ROBIN: 'Round Robin', LIECHTENSTEIN: 'Liechtenstein', BALANCED_LIECHTENSTEIN: 'Balanced Liechtenstein' } as Record<string, string>)[tournament.format] ?? tournament.format}
+                {({ AUTO_SWISS: 'Swiss', SWISS: 'Swiss', SINGLE_ELIMINATION: 'Single Elimination', DOUBLE_ELIMINATION: 'Double Elimination', ROUND_ROBIN: 'Round Robin', LIECHTENSTEIN: 'Liechtenstein', BALANCED_LIECHTENSTEIN: 'Balanced Liechtenstein' } as Record<string, string>)[tournament.format] ?? tournament.format}
                 {['SWISS', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN'].includes(tournament.format)
                   ? (tournament.auto_sizing && tournament.status !== 'ONGOING' && tournament.status !== 'COMPLETED'
                       ? ' · Rounds TBD' // #3: auto-sized rounds are only fixed at start — don't show the default

@@ -174,7 +174,7 @@ function refineOneVThree(
 
 const CreateTournamentSchema = z.object({
   name: z.string().min(3).max(120),
-  format: z.enum(['SWISS', 'AUTO_SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
+  format: z.enum(['SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
   mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR']).optional(),
   set_faction_id: z.string().min(1).nullable().optional(),
   start_date: z.string().datetime(),
@@ -471,16 +471,13 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const isAutoSwiss = data.format === 'AUTO_SWISS';
       const isBalanced = data.format === 'BALANCED_LIECHTENSTEIN';
       // Balanced Liechtenstein auto-sizes only its ROUND COUNT from the check-in count
       // at start (applyBalancedStartConfig), unless the host opts out via auto_sizing=false.
       // Auto-sizing defaults ON for Balanced. The PLAYOFF SIZE is always the host's choice
       // (it drives division formation — homogeneous band-pure vs. few large mixed brackets)
-      // and is stored verbatim. Match format + map decision stay host-configurable (unlike
-      // Auto Swiss, which forces BO1 / RANDOM_PICK_BAN).
+      // and is stored verbatim.
       const balancedAutoSized = isBalanced && (data.auto_sizing ?? true);
-      const autoSized = isAutoSwiss || balancedAutoSized;
 
       const tournament = await fastify.prisma.tournament.create({
         data: {
@@ -509,12 +506,10 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           restrictions: data.restrictions ?? '',
           host_id: request.user.sub,
           // Welle 2
-          rounds_count: autoSized ? undefined : data.rounds_count,
-          // BaLi: the playoff size is a host choice (it drives division formation —
-          // homogeneous vs. merged) and is no longer auto-derived, so store the host's
-          // value verbatim. Auto Swiss still drops it (derived at start). Other formats
-          // keep the host value unless auto-sized.
-          playoff_format: isBalanced ? data.playoff_format : autoSized ? undefined : data.playoff_format,
+          rounds_count: balancedAutoSized ? undefined : data.rounds_count,
+          // The playoff size is always the host's choice (for BaLi it drives division
+          // formation — homogeneous band-pure vs. few large mixed brackets), stored verbatim.
+          playoff_format: data.playoff_format,
           // #37: opt-in auto-sizing / auto-advancement (any format). Balanced
           // defaults auto-sizing ON; every other format defaults OFF.
           auto_sizing: isBalanced ? (data.auto_sizing ?? true) : (data.auto_sizing ?? false),
@@ -524,13 +519,13 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           // 1v3: Swiss defaults to BO2 (two-leg home/away — roles swap between legs,
           // 1–1 = Draw). Elimination playoffs/finals default to BO3 (flip/swap/flip;
           // a bracket needs a decisive winner, so no draw there).
-          swiss_match_format: isAutoSwiss ? 'BO1' : (data.swiss_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO2' : undefined)),
-          playoff_match_format: isAutoSwiss ? 'BO1' : (data.playoff_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO3' : undefined)),
-          finale_match_format: isAutoSwiss ? 'BO1' : (data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' || data.mode === 'ONE_V_THREE' ? 'BO3' : undefined)),
+          swiss_match_format: data.swiss_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO2' : undefined),
+          playoff_match_format: data.playoff_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO3' : undefined),
+          finale_match_format: data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' || data.mode === 'ONE_V_THREE' ? 'BO3' : undefined),
           // Double Elimination bracket reset (default on via schema); reset format null = inherit finale.
           grand_final_reset: data.grand_final_reset ?? undefined,
           grand_final_reset_format: data.grand_final_reset_format ?? undefined,
-          map_decision_mode: isAutoSwiss ? 'RANDOM_PICK_BAN' : data.map_decision_mode,
+          map_decision_mode: data.map_decision_mode,
           map_preset_config: data.map_preset_config != null ? (data.map_preset_config as Prisma.InputJsonValue) : undefined,
           has_third_place_match: data.has_third_place_match ?? false,
           min_band: data.min_band ?? null,

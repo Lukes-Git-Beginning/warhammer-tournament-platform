@@ -15,7 +15,7 @@ import { useAuthQuery } from '@/lib/auth';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton';
 
 const FORMAT_LABELS: Record<string, string> = {
-  AUTO_SWISS: 'Auto Swiss',
+  AUTO_SWISS: 'Swiss',
   SINGLE_ELIMINATION: 'Single Elim.',
   DOUBLE_ELIMINATION: 'Double Elim.',
   SWISS: 'Swiss',

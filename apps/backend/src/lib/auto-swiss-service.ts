@@ -48,6 +48,22 @@ export function autoSwissConfig(checkInCount: number): {
 }
 
 /**
+ * The host's chosen playoff_format is the CEILING. The ONLY automatic deviation allowed is a
+ * DOWNGRADE when the final seeding pool is too small to fill the chosen bracket: TOP8→TOP4→TOP2→NONE.
+ * It NEVER upgrades (a bigger field does not grow the bracket) and NEVER resurrects a playoff the
+ * host set to NONE. Thresholds are the minimum qualifiers needed to seed each bracket (8/4/2).
+ */
+export function downgradePlayoffFormat(
+  ceiling: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' | string | null,
+  qualifiers: number,
+): 'NONE' | 'TOP2' | 'TOP4' | 'TOP8' {
+  if (ceiling === 'TOP8' && qualifiers >= 8) return 'TOP8';
+  if ((ceiling === 'TOP8' || ceiling === 'TOP4') && qualifiers >= 4) return 'TOP4';
+  if ((ceiling === 'TOP8' || ceiling === 'TOP4' || ceiling === 'TOP2') && qualifiers >= 2) return 'TOP2';
+  return 'NONE';
+}
+
+/**
  * Balanced Liechtenstein round count. Unlike autoSwissConfig's 7-total scheduling, BaLi sizes
  * purely on field size — Top 8 almost never applies and the playoff size is the host's choice,
  * independent of the round count. 3 rounds under 8 players, 4 from 8 up; a tiny field (<4) gets
@@ -119,7 +135,9 @@ export async function reapplyDynamicSizing(
 
   const isBalanced = t.format === 'BALANCED_LIECHTENSTEIN';
   let rounds: number;
-  let nextPlayoffFormat = t.playoff_format;
+  // Playoff format is the host's ceiling and is never changed mid-event (only downgraded at Swiss
+  // end in startPlayoffs), so it stays as-is through a resize.
+  const nextPlayoffFormat = t.playoff_format;
   if (isBalanced) {
     // Balanced Liechtenstein sizes on its own (balancedRounds), NOT the 7-total autoSwissConfig
     // table. No-shows don't count — mirror applyBalancedStartConfig: once anyone has checked in,
@@ -129,11 +147,13 @@ export async function reapplyDynamicSizing(
     const active = checkedIn > 0 ? checkedIn : roster.length;
     rounds = Math.max(balancedRounds(active), currentRound); // never shrink below a played round
   } else {
-    // Auto Swiss / auto-sized Swiss keep the 7-total autoSwissConfig sizing and derive both the
-    // round count and the playoff size from the active pool (REGISTERED + CHECKED_IN, unchanged).
+    // Auto Swiss / auto-sized Swiss keep the 7-total autoSwissConfig sizing for the ROUND count
+    // (derived from the active pool). The playoff format is deliberately NOT touched mid-event: it
+    // stays the host's ceiling and is only ever downgraded at Swiss end (startPlayoffs), when the
+    // final seeding pool is known. Never grow it here, never resurrect a NONE — so nextPlayoffFormat
+    // keeps t.playoff_format.
     const dyn = computeDynamicSize(roster.length, currentRound);
     rounds = dyn.rounds;
-    nextPlayoffFormat = dyn.playoffFormat;
   }
   if (rounds === (t.rounds_count ?? 0) && nextPlayoffFormat === t.playoff_format) return false;
 
@@ -495,14 +515,16 @@ async function startPlayoffs(
   const alreadyQualified = await getAlreadyQualifiedForQualifier(prisma, tournament.id);
   const ranked = standings.filter((s) => !s.dropped).map((s) => s.userId).filter((id) => !alreadyQualified.has(id));
 
-  // Re-evaluate playoff format based on active player count at Swiss end.
-  // Players may have dropped during the Swiss phase, so the start-time config
-  // (stored in tournament.playoff_format) may no longer be appropriate.
-  const effectiveConfig = autoSwissConfig(ranked.length);
-  if (effectiveConfig && effectiveConfig.playoffFormat !== tournament.playoff_format) {
-    await prisma.tournament.update({ where: { id: tournament.id }, data: { playoff_format: effectiveConfig.playoffFormat } });
+  // The host's playoff_format is the ceiling. The ONLY automatic change is a DOWNGRADE when the
+  // final seeding pool (players who did not drop) is too small to fill the chosen bracket, e.g.
+  // TOP8→TOP4→TOP2→NONE after mid-Swiss drops. A host who chose NONE never gets a playoff, and a
+  // smaller-than-max field never inflates the bracket upward. (Fixes: an entry-level "6 Swiss, no
+  // playoffs" tournament generated a Top 4 because the old code re-derived the format purely from
+  // the player count via autoSwissConfig, which never yields NONE for 4+ players.)
+  const fmt = downgradePlayoffFormat(tournament.playoff_format, ranked.length);
+  if (fmt !== tournament.playoff_format) {
+    await prisma.tournament.update({ where: { id: tournament.id }, data: { playoff_format: fmt } });
   }
-  const fmt = effectiveConfig?.playoffFormat ?? tournament.playoff_format;
 
   // P1/P2/P5 (#23): congratulate the qualifiers, or thank everyone if there are no
   // playoffs. Qualifiers = the top `cutoff` of the final standings.

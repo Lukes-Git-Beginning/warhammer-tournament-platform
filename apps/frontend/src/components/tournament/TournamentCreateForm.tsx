@@ -33,7 +33,7 @@ export interface SeriesModeConfig {
 const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
   description: z.string().max(5000).optional(),
-  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'AUTO_SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
+  format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
   mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR']).default('BPT'),
   set_faction_id: z.string().min(1).optional(),
   start_date: z.string().min(1),
@@ -1063,7 +1063,7 @@ export function TournamentCreateForm({
           <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">Automation</legend>
           <p className="text-xs text-rizzotto-stone-500">
             {form.format === 'SWISS'
-              ? 'Turn both on for a fully self-running tournament (what “Auto Swiss” used to be).'
+              ? 'Turn both on for a fully self-running tournament: rounds are sized from the check-in count and advance on their own.'
               : 'Balanced Liechtenstein advances itself — you only choose whether the round count is auto-sized from the check-in count.'}
           </p>
           <label className="flex items-start gap-2 text-sm text-rizzotto-stone-300">
@@ -1104,12 +1104,6 @@ export function TournamentCreateForm({
         </label>
       )}
 
-      {form.format === 'AUTO_SWISS' && (
-        <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">
-          <p className="font-semibold text-rizzotto-gold-400">Auto Swiss — self-running tournament</p>
-          <p>Check-in opens automatically 1 hour before start. Rounds and playoff size are determined by how many players check in (4–7: 3R + Final, 8–15: 5R + Top 4, 16+: 4R + Top 8). Rounds advance automatically when all matches are complete. All matches: BO1 · Map: Random Ban&amp;Pick.</p>
-        </div>
-      )}
 
       {form.format === 'BALANCED_LIECHTENSTEIN' && (
         <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">
@@ -1344,7 +1338,7 @@ export function TournamentCreateForm({
               </div>
             </div>
           </>
-        ) : form.format !== 'AUTO_SWISS' && form.format !== 'BALANCED_LIECHTENSTEIN' ? (
+        ) : form.format !== 'BALANCED_LIECHTENSTEIN' ? (
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
@@ -1481,8 +1475,8 @@ export function TournamentCreateForm({
           Map Pool
         </legend>
 
-        {/* Map decision mode — hidden for AUTO_SWISS (always Random Ban&Pick) */}
-        {form.format !== 'AUTO_SWISS' && <div>
+        {/* Map Decision Mode */}
+        <div>
           <Label>Map Decision Mode</Label>
           <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-2">
             {MAP_DECISION_MODES.map((opt) => {
@@ -1515,7 +1509,7 @@ export function TournamentCreateForm({
               );
             })}
           </div>
-        </div>}
+        </div>
 
         {/* Preset configuration for HOST_PRESET and HOST_PRESET_PICK_BAN */}
         {(form.map_decision_mode === 'HOST_PRESET' || form.map_decision_mode === 'HOST_PRESET_PICK_BAN') && (() => {

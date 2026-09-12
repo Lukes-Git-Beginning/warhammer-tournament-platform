@@ -113,13 +113,14 @@ describe('POST /api/tournaments — auto-configured formats ignore manual round/
     expect(t.swiss_match_format).toBe('BO3');
   });
 
-  it('AUTO_SWISS behaves identically (parity guard)', async () => {
-    const t = await createAndFetch({ format: 'AUTO_SWISS' });
-    expect(t.rounds_count).toBe(5);
-    expect(t.playoff_format).toBe('NONE');
-    expect(t.swiss_match_format).toBe('BO1');
-    expect(t.playoff_match_format).toBe('BO1');
-    expect(t.finale_match_format).toBe('BO1');
+  it('rejects AUTO_SWISS — the legacy self-running format is no longer creatable', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/tournaments',
+      cookies: { auth_token: makeToken(ADMIN_ID, 'ADMIN') },
+      payload: body({ format: 'AUTO_SWISS' }),
+    });
+    expect(res.statusCode).toBe(400);
   });
 
   it('SWISS keeps the host-configured rounds/playoff/format (override is auto-format-specific)', async () => {

@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton.js';
 const PAGE_SIZE = 12;
 
 const FORMAT_LABELS: Record<string, string> = {
-  AUTO_SWISS: 'Auto Swiss',
+  AUTO_SWISS: 'Swiss',
   SINGLE_ELIMINATION: 'Single Elim.',
   DOUBLE_ELIMINATION: 'Double Elim.',
   SWISS: 'Swiss',
