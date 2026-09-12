@@ -19,9 +19,10 @@ export async function canManageSeries(
   if (!seriesId) return false;
   const s = await prisma.tournamentSeries.findUnique({
     where: { id: seriesId },
-    select: { owner_id: true },
+    select: { owner_id: true, co_hosts: { select: { user_id: true } } },
   });
-  return !!s && s.owner_id === userId;
+  if (!s) return false;
+  return s.owner_id === userId || s.co_hosts.some((h) => h.user_id === userId);
 }
 
 /**

@@ -239,6 +239,7 @@ model User {
   co_hosted_tournaments TournamentHost[]
   created_draft_presets DraftPreset[] @relation("CreatedDraftPresets")
   owned_series          TournamentSeries[] @relation("OwnedSeries")
+  co_hosted_series      TournamentSeriesHost[]
 
   // Player relations
   participations        TournamentParticipant[]
@@ -419,16 +420,34 @@ model TournamentSeries {
   final_tournament_id String?              @unique @db.Uuid
   final_seeded_at     DateTime? // set when the final has been locked & auto-seeded from standings
   visibility          TournamentVisibility @default(PUBLIC)
+  // Non-destructive lifecycle: a paused series is hidden from the public list (still visible to its
+  // managers + by direct link, still evaluable) and can be reactivated. Preferred over deletion.
+  paused              Boolean              @default(false)
   created_at          DateTime             @default(now())
   updated_at          DateTime             @updatedAt
   deleted_at          DateTime?
 
-  owner            User         @relation("OwnedSeries", fields: [owner_id], references: [id])
-  final_tournament Tournament?  @relation("SeriesFinal", fields: [final_tournament_id], references: [id])
-  qualifiers       Tournament[] @relation("SeriesQualifier")
+  owner            User                   @relation("OwnedSeries", fields: [owner_id], references: [id])
+  final_tournament Tournament?            @relation("SeriesFinal", fields: [final_tournament_id], references: [id])
+  qualifiers       Tournament[]           @relation("SeriesQualifier")
+  co_hosts         TournamentSeriesHost[]
 
   @@index([owner_id])
   @@index([deleted_at])
+}
+
+/// Series co-hosts: users who manage a series alongside its owner (mirrors TournamentHost).
+/// Full manage parity except transferring ownership and editing the co-host list (owner-only).
+model TournamentSeriesHost {
+  series_id String @db.Uuid
+  user_id   String @db.Uuid
+
+  series TournamentSeries @relation(fields: [series_id], references: [id], onDelete: Cascade)
+  user   User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([series_id, user_id])
+  @@index([series_id])
+  @@index([user_id])
 }
 
 /// Co-hosts: users who can manage a tournament alongside its host.
