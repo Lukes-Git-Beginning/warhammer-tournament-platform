@@ -346,6 +346,15 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
     async (request) => {
       const userId = request.user.sub;
 
+      // A 2v2 match slot holds the TEAM id, and only the captain can act on the blind pick
+      // (a teammate can't lock) — so the countdown must also surface for the caller's
+      // captained teams. actorIds = the user + every team they captain.
+      const captainTeams = await fastify.prisma.team.findMany({
+        where: { captain_id: userId, status: 'ACTIVE' },
+        select: { id: true },
+      });
+      const actorIds = [userId, ...captainTeams.map((t) => t.id)];
+
       const running = await fastify.prisma.matchBlindPick.findMany({
         where: {
           revealed_at: null,
@@ -358,7 +367,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
             match: {
               deleted_at: null,
               status: { in: ['PENDING', 'ONGOING'] },
-              OR: [{ player1_id: userId }, { player2_id: userId }],
+              OR: [{ player1_id: { in: actorIds } }, { player2_id: { in: actorIds } }],
             },
           },
         },
@@ -383,7 +392,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       const picks = running
         .map((bp) => {
           const match = bp.game.match;
-          const userIsP1 = match.player1_id === userId;
+          const userIsP1 = match.player1_id != null && actorIds.includes(match.player1_id);
           // Only surface to the player who has NOT locked yet — they are the one at
           // risk of a random auto-assignment.
           const userLockedAt = userIsP1 ? bp.player1_locked_at : bp.player2_locked_at;
