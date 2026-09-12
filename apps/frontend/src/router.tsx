@@ -20,6 +20,9 @@ import { H2HPage } from './routes/H2HPage';
 import { CalendarPage } from './routes/CalendarPage';
 import { OpenPlayPage } from './routes/OpenPlayPage';
 import { SupportPage } from './routes/SupportPage';
+import { SeriesListingPage } from './routes/SeriesListingPage';
+import { SeriesDetailPage } from './routes/SeriesDetailPage';
+import { CreateSeriesPage } from './routes/CreateSeriesPage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -185,6 +188,25 @@ const supportRoute = createRoute({
   component: SupportPage,
 });
 
+const seriesListingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/series',
+  component: SeriesListingPage,
+});
+
+// Must be registered BEFORE seriesDetailRoute so '/series/new' isn't captured as a slug.
+const createSeriesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/series/new',
+  component: CreateSeriesPage,
+});
+
+const seriesDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/series/$slug',
+  component: SeriesDetailPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -211,6 +233,9 @@ const routeTree = rootRoute.addChildren([
   matchDecisionRoute,
   openPlayRoute,
   supportRoute,
+  seriesListingRoute,
+  createSeriesRoute,
+  seriesDetailRoute,
 ]);
 
 export const router = createRouter({ routeTree });

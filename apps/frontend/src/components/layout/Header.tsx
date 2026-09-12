@@ -33,6 +33,13 @@ export function Header() {
         {t('header.tournaments')}
       </Link>
       <Link
+        to="/series"
+        className={NAV_LINK_CLASS}
+        activeProps={NAV_LINK_ACTIVE_PROPS}
+      >
+        Series
+      </Link>
+      <Link
         to="/open-play"
         className={NAV_LINK_CLASS}
         activeProps={NAV_LINK_ACTIVE_PROPS}

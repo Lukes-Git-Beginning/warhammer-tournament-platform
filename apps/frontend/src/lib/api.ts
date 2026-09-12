@@ -1443,6 +1443,122 @@ export function getStandardRuleset(): Promise<StandardRuleset> {
 }
 
 // ---------------------------------------------------------------------------
+// Tournament Series
+// ---------------------------------------------------------------------------
+
+export interface ScoringConfig {
+  model: 'A' | 'C';
+  points_per_game_played: number;
+  points_per_win: number;
+  final_size: number;
+  top_x: number;
+  tiebreakers: ('points' | 'wins' | 'games' | 'random')[];
+}
+
+export interface StandingA {
+  competitorId: string;
+  username: string;
+  avatar_url: string | null;
+  gamesPlayed: number;
+  wins: number;
+  points: number;
+  rank: number;
+  qualified: boolean;
+}
+
+export interface QualifiedC {
+  competitorId: string;
+  username: string;
+  avatar_url: string | null;
+  fromTournamentId: string;
+  position: number;
+  seed: number;
+}
+
+export interface SeriesSummary {
+  id: string;
+  slug: string;
+  name: string;
+  poster_url: string | null;
+  visibility: 'PUBLIC' | 'PRIVATE';
+  scoring_config: ScoringConfig;
+  created_at: string;
+  owner: { id: string; username: string; avatar_url: string | null };
+  final: { slug: string; name: string; status: string } | null;
+  qualifierCount: number;
+}
+
+export interface Series {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  poster_url: string | null;
+  visibility: 'PUBLIC' | 'PRIVATE';
+  scoring_config: ScoringConfig;
+  final_seeded_at: string | null;
+  created_at: string;
+  owner: { id: string; username: string; avatar_url: string | null };
+  final: { id: string; slug: string; name: string; status: string; start_date: string | null } | null;
+  qualifiers: { id: string; slug: string; name: string; status: string; series_position: number; start_date: string | null }[];
+  can_manage: boolean;
+  standings: StandingA[];
+  qualified: QualifiedC[];
+  standings_provisional: boolean;
+  ready_to_seed: boolean;
+}
+
+export interface SeriesCreateBody {
+  name: string;
+  description?: string;
+  poster_url?: string;
+  visibility?: 'PUBLIC' | 'PRIVATE';
+  scoring_config: ScoringConfig;
+  qualifier_ids?: string[];
+  final_tournament_id?: string;
+}
+
+export function listSeries(
+  page = 1,
+  pageSize = 20,
+): Promise<{ data: SeriesSummary[]; total: number; page: number; pageSize: number }> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  return apiFetch(`/api/series?${params.toString()}`);
+}
+
+export function getSeries(slug: string): Promise<Series> {
+  return apiFetch<Series>(`/api/series/${slug}`);
+}
+
+export function createSeries(body: SeriesCreateBody): Promise<{ id: string; slug: string }> {
+  return apiFetch('/api/series', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchSeries(slug: string, body: Partial<SeriesCreateBody>): Promise<{ ok: true }> {
+  return apiFetch(`/api/series/${slug}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function attachToSeries(slug: string, tournamentId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/series/${slug}/attach`, {
+    method: 'POST',
+    body: JSON.stringify({ tournamentId }),
+  });
+}
+
+export function detachFromSeries(slug: string, tournamentId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/series/${slug}/detach`, {
+    method: 'POST',
+    body: JSON.stringify({ tournamentId }),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Announcements (admin — AI-generated, per-Discord tournament copy)
 // ---------------------------------------------------------------------------
 
