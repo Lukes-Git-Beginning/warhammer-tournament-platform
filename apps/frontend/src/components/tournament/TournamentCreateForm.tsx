@@ -218,8 +218,6 @@ export function TournamentCreateForm({
   const [existingFinalName, setExistingFinalName] = useState<string | null>(null);
   // The loaded final's current poster, so the picker shows it instead of "no poster set".
   const [existingFinalPosterUrl, setExistingFinalPosterUrl] = useState<string | null>(null);
-  // The loaded final's status — draft-only structural fields are only sent when it's still DRAFT.
-  const [existingFinalStatus, setExistingFinalStatus] = useState<string | null>(null);
   // The slug currently selected in the picker dropdown (not yet loaded).
   const [pickerSlug, setPickerSlug] = useState<string>('');
   const [loadingExistingFinal, setLoadingExistingFinal] = useState(false);
@@ -588,7 +586,6 @@ export function TournamentCreateForm({
       setExistingFinalSlug(t.slug);
       setExistingFinalName(t.name);
       setExistingFinalPosterUrl(t.poster_url ?? null);
-      setExistingFinalStatus(t.status);
     } catch (err) {
       setLoadExistingFinalError((err as Error).message ?? 'Failed to load tournament.');
     } finally {
@@ -601,7 +598,6 @@ export function TournamentCreateForm({
     setExistingFinalSlug(null);
     setExistingFinalName(null);
     setExistingFinalPosterUrl(null);
-    setExistingFinalStatus(null);
     setPickerSlug('');
     setLoadExistingFinalError(null);
     // Reset to default form state and re-derive name from series name.
@@ -761,24 +757,11 @@ export function TournamentCreateForm({
     // When the host loaded an existing tournament via the picker, PATCH it
     // instead of creating a new one, then createSeries with its id.
     if (seriesMode && existingFinalId && existingFinalSlug) {
-      // Structural fields (format, mode, faction_pool, set_faction_id) can only change while the
-      // tournament is in DRAFT — the backend 422s even on an unchanged resubmit — so once the
-      // chosen final has left DRAFT, omit them and only patch the schedule/presentation fields.
-      const isDraftFinal = existingFinalStatus === 'DRAFT';
-      const { faction_pool: _omitFactionPool, format: loadedFormat, mode: loadedMode, set_faction_id: loadedSetFaction, ...restForPatch } = rest;
+      // A normal tournament-edit body. Structural fields (format, mode, faction_pool) are sent as
+      // loaded; the backend accepts them when unchanged and only rejects a genuine change once the
+      // tournament has left draft. `rules` must be a string (never null).
       const patchBody = {
-        ...restForPatch,
-        ...(isDraftFinal
-          ? {
-              format: loadedFormat,
-              mode: loadedMode,
-              ...(loadedMode === 'ONE_V_THREE' && loadedSetFaction ? { set_faction_id: loadedSetFaction } : {}),
-              faction_pool:
-                factionPoolEnabled && (form.faction_pool ?? []).length > 0 && (form.faction_pool ?? []).length < allFactions.length
-                  ? form.faction_pool
-                  : [],
-            }
-          : {}),
+        ...rest,
         grand_final_reset_format: rest.grand_final_reset_format || null,
         start_date: toIsoOrInvalid(start_date),
         ...(max_participants ? { max_participants: Number(max_participants) } : { max_participants: null }),
@@ -792,9 +775,15 @@ export function TournamentCreateForm({
         ...(draft_preset_id ? { draft_preset_id } : {}),
         map_pool: map_pool ?? [],
         ...(map_preset_config ? { map_preset_config: map_preset_config as Record<string, string[] | string[][]> } : {}),
+        ...(factionPoolEnabled && (form.faction_pool ?? []).length > 0 && (form.faction_pool ?? []).length < allFactions.length
+          ? { faction_pool: form.faction_pool }
+          : { faction_pool: [] }),
         ...(restrictedFactionsEnabled && (form.restricted_factions ?? []).length > 0
           ? { restricted_factions: form.restricted_factions }
           : { restricted_factions: [] }),
+        ...(rest.mode === 'ONE_V_THREE' && rest.set_faction_id
+          ? { set_faction_id: rest.set_faction_id }
+          : {}),
       };
       const slug = existingFinalSlug;
       const finalId = existingFinalId;

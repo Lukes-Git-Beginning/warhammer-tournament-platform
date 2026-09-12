@@ -905,6 +905,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           max_band: true,
           series_id: true,
           is_series_final: true,
+          faction_allowlist: { select: { faction_id: true } },
         },
       });
 
@@ -1005,12 +1006,20 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
             statusCode: 422,
           });
         }
+        // Reject only a genuine CHANGE to the faction pool — resubmitting the SAME pool (e.g. an
+        // edit form that always sends it) is a no-op and must not 422. Compare as unordered sets.
         if (newFactionPool !== undefined) {
-          return reply.code(422).send({
-            error: 'UnprocessableEntity',
-            message: '"faction_pool" can only be changed while the tournament is in draft',
-            statusCode: 422,
-          });
+          const current = new Set(tournament.faction_allowlist.map((fa) => fa.faction_id));
+          const submitted = new Set(newFactionPool);
+          const changed =
+            current.size !== submitted.size || [...submitted].some((id) => !current.has(id));
+          if (changed) {
+            return reply.code(422).send({
+              error: 'UnprocessableEntity',
+              message: '"faction_pool" can only be changed while the tournament is in draft',
+              statusCode: 422,
+            });
+          }
         }
       }
 
