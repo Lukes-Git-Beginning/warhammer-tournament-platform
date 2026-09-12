@@ -31,6 +31,12 @@ const ListQuerySchema = z.object({
     .optional(),
   date_from: z.string().datetime().optional(),
   date_to: z.string().datetime().optional(),
+  // Restrict to tournaments the viewer can MANAGE (own + co-hosted; staff = all). Used by the
+  // series qualifier picker so it only offers tournaments the user is allowed to attach.
+  manageable: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
 });
 
 // Map decision modes that draw from the shared tournament map pool. Host-preset
@@ -278,7 +284,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         statusCode: 400,
       });
     }
-    const { page, pageSize, status, is_major, date_from, date_to } = parsed.data;
+    const { page, pageSize, status, is_major, date_from, date_to, manageable } = parsed.data;
     const skip = (page - 1) * pageSize;
 
     // Optional auth: identify the viewer so a host or co-host (and staff) can see
@@ -296,7 +302,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
     const result = await cached(
       fastify.redis,
-      cacheKey('tournaments:list', { page, pageSize, status, is_major, date_from, date_to, viewer: viewerKey }),
+      cacheKey('tournaments:list', { page, pageSize, status, is_major, date_from, date_to, manageable, viewer: viewerKey }),
       async () => {
         const dateFilter =
           date_from !== undefined || date_to !== undefined
@@ -309,16 +315,21 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
             : {};
         // Everyone sees published PUBLIC tournaments; a signed-in host/co-host also
         // sees their own (any status, incl. DRAFT); staff see everything.
+        // manageable=true narrows to what the viewer can actually manage (own + co-hosted;
+        // staff = all; anonymous = nothing) — used by the series qualifier picker.
+        const ownable = viewerId
+          ? [{ host_id: viewerId }, { co_hosts: { some: { user_id: viewerId } } }]
+          : [];
         const visibility = isStaff
           ? {}
-          : {
-              OR: [
-                { visibility: 'PUBLIC' as const, status: { not: 'DRAFT' as const } },
-                ...(viewerId
-                  ? [{ host_id: viewerId }, { co_hosts: { some: { user_id: viewerId } } }]
-                  : []),
-              ],
-            };
+          : manageable
+            ? { OR: ownable.length ? ownable : [{ id: '00000000-0000-0000-0000-000000000000' }] }
+            : {
+                OR: [
+                  { visibility: 'PUBLIC' as const, status: { not: 'DRAFT' as const } },
+                  ...ownable,
+                ],
+              };
         const where = {
           deleted_at: null,
           ...(status !== undefined ? { status } : {}),
