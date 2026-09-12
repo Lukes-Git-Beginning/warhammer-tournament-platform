@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { generateSlug, canManageTournament } from '../lib/tournament-utils.js';
 import { canManageSeries, resolveSeriesSlug } from '../lib/series-utils.js';
 import { getQualifierPlacements } from '../lib/series-qualification.js';
+import { notifySeriesNewQualifier, notifySeriesFinalSeeded } from '../lib/series-notify.js';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
 import { POSTER_DIR } from '../lib/posters.js';
 import {
@@ -495,6 +496,9 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
 
     await invalidateSeries(slug);
 
+    // Invite the prior qualifiers' not-yet-qualified players to this new qualifier.
+    void notifySeriesNewQualifier(fastify.prisma, series.id, parsed.data.tournamentId);
+
     return { ok: true };
   });
 
@@ -572,6 +576,9 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
     await fastify.prisma.tournamentSeries.update({ where: { id: series.id }, data: { final_seeded_at: new Date() } });
 
     await invalidateSeries(slug);
+
+    // Congratulate the qualified players + confirm to series managers.
+    void notifySeriesFinalSeeded(fastify.prisma, series.id, orderedIds);
 
     return { ok: true, seeded: orderedIds.length, finalSlug: series.final_tournament.slug };
   });
