@@ -25,6 +25,7 @@ import {
   MAX_BAND,
   type RankedPlayer,
 } from './balanced-liechtenstein.js';
+import { getAlreadyQualifiedForQualifier } from './series-qualification.js';
 import {
   derivePlayoffPlan,
   resolvePoolsFromPlan,
@@ -1060,6 +1061,9 @@ export async function startBalancedPlayoffs(
   // never CHECKED_IN (or who withdrew) is not a contender and must not appear in a
   // division bracket — this is the "Big Bees" phantom-finalist fix.
   const contenderIds = new Set(contenders.map((p) => p.user_id));
+  // Model C series: exclude players already qualified in earlier qualifiers so their playoff
+  // slot passes to the next-ranked player. No-op for non-series / non-Model-C tournaments.
+  const alreadyQualified = await getAlreadyQualifiedForQualifier(fastify.prisma, tournamentId);
   const ranked = sorted
     .filter((s) => contenderIds.has(s.userId) && !withdrawnIds.has(s.userId))
     .map((s, i) => ({
@@ -1067,7 +1071,8 @@ export async function startBalancedPlayoffs(
       band: bandByUser.get(s.userId) ?? DEFAULT_BAND,
       rank: i + 1,
       rawScore: s.score,
-    }));
+    }))
+    .filter((p) => !alreadyQualified.has(p.userId));
 
   // Division pools. Before any division is generated the structure is fluid, so compute it live
   // from the current field (formDivisionPools). The moment the FIRST division generates we freeze the
@@ -1364,9 +1369,12 @@ export async function describeBalancedPlayoffPreview(
   );
   const bandByUser = new Map(roster.map((p) => [p.user_id, p.skill_band ?? DEFAULT_BAND]));
   const contenderIds = new Set(contenders.map((p) => p.user_id));
+  // Model C series: mirror startBalancedPlayoffs — exclude already-qualified players from the preview.
+  const alreadyQualified = await getAlreadyQualifiedForQualifier(fastify.prisma, tournamentId);
   const ranked = sorted
     .filter((s) => contenderIds.has(s.userId) && !withdrawnIds.has(s.userId))
-    .map((s, i) => ({ userId: s.userId, band: bandByUser.get(s.userId) ?? DEFAULT_BAND, rank: i + 1, rawScore: s.score }));
+    .map((s, i) => ({ userId: s.userId, band: bandByUser.get(s.userId) ?? DEFAULT_BAND, rank: i + 1, rawScore: s.score }))
+    .filter((p) => !alreadyQualified.has(p.userId));
   // Mirror startBalancedPlayoffs: once the plan is frozen, resolve from it so the preview shows the
   // same structure a (forced or automatic) generation would build; otherwise compute it live.
   const alreadyInPlayoff = new Set<string>();
