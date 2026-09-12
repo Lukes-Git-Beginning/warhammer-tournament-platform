@@ -105,12 +105,26 @@ export type LockListsResponse = z.infer<typeof LockListsResponseSchema>;
 // Includes player refs, faction refs, scoring fields, and timing.
 // ---------------------------------------------------------------------------
 
+export const MatchCompetitorMemberSchema = z.object({
+  user_id: z.string().uuid(),
+  username: z.string(),
+  avatar_url: z.string().url().nullable(),
+  is_captain: z.boolean(),
+  accepted: z.boolean().optional(),
+});
+export type MatchCompetitorMember = z.infer<typeof MatchCompetitorMemberSchema>;
+
 export const MatchPlayerRefSchema = z.object({
   id: z.string().uuid(),
   username: z.string(),
   avatar_url: z.string().url().nullable(),
   // Ko-Fi supporter tiers (cumulative). Present for player1/player2, omitted for winner.
   tiers: z.object({ supporter: z.boolean(), lord: z.boolean(), champion: z.boolean() }).optional(),
+  // Competitor discriminator — 'TEAM' for a 2v2 team slot (members populated with the
+  // captain first), 'USER' or absent for a 1v1 player. Lets a client resolve the viewer's
+  // acting side/captaincy for a team slot (the slot id is the team id in 2v2).
+  type: z.enum(['USER', 'TEAM']).optional(),
+  members: z.array(MatchCompetitorMemberSchema).nullable().optional(),
 });
 export type MatchPlayerRef = z.infer<typeof MatchPlayerRefSchema>;
 

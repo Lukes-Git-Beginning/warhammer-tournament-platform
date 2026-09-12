@@ -526,6 +526,8 @@ interface BlindPickPhaseProps {
   pickedMapImageUrl?: string | null;
   restrictedFactions?: string[];
   factionAllowlist?: string[];
+  /** Whether the viewer may act (1v1 player / 2v2 captain). Teammates/spectators are read-only. */
+  canAct?: boolean;
 }
 
 function BlindPickPhase({
@@ -537,6 +539,7 @@ function BlindPickPhase({
   pickedMapImageUrl,
   restrictedFactions = [],
   factionAllowlist = [],
+  canAct = true,
 }: BlindPickPhaseProps) {
   const queryClient = useQueryClient();
   // 2v2 (BPT_2V2): the captain locks BOTH members' factions in one action (captain first,
@@ -692,7 +695,21 @@ function BlindPickPhase({
         </div>
       )}
 
-      {myLocked ? (
+      {!canAct ? (
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="text-sm text-rizzotto-stone-400 max-w-sm">
+            {is2v2
+              ? 'Your captain chooses both factions for the team. This view is read-only.'
+              : 'Only the players in this match can pick. This view is read-only.'}
+          </p>
+          {bp?.firstLockedAt && (
+            <BlindPickCountdown
+              firstLockedAt={bp.firstLockedAt}
+              timeoutMs={decision.isOpenPlay ? 5 * 60 * 1000 : 2 * 60 * 1000}
+            />
+          )}
+        </div>
+      ) : myLocked ? (
         <div className="flex flex-col items-center gap-3 text-center">
           <span className="h-8 w-8 rounded-full border-2 border-rizzotto-gold-400 border-t-transparent animate-spin" />
           <p className="text-sm text-rizzotto-stone-400">
@@ -1985,6 +2002,30 @@ export function MatchDecisionPage() {
     ? (matchDetail.player1?.id === matrixRowPlayerId ? matchDetail.player2 : matchDetail.player1)
     : null;
 
+  // A match slot holds a COMPETITOR id — the user id in 1v1, the team id in 2v2. Identity
+  // checks (which side am I, may I act) must compare against the viewer's competitor id, not
+  // their raw user id. For 2v2 the acting party is the team CAPTAIN; a teammate/spectator
+  // gets a read-only view (viewerCompetitorId stays their user id, which matches no slot).
+  const viewerCompetitorId = (() => {
+    if (!user) return '';
+    for (const slot of [matchDetail?.player1, matchDetail?.player2]) {
+      if (!slot) continue;
+      if (slot.type === 'TEAM') {
+        if (slot.members?.some((m) => m.is_captain && m.user_id === user.id)) return slot.id;
+      } else if (slot.id === user.id) {
+        return slot.id;
+      }
+    }
+    return user.id;
+  })();
+  const viewerCanAct =
+    !!user &&
+    [matchDetail?.player1, matchDetail?.player2].some((slot) =>
+      slot?.type === 'TEAM'
+        ? slot.members?.some((m) => m.is_captain && m.user_id === user.id)
+        : slot?.id === user.id,
+    );
+
   const isHostOrAdmin =
     user && (user.role === 'HOST' || user.role === 'MODERATOR' || user.role === 'ADMIN');
 
@@ -2055,7 +2096,7 @@ export function MatchDecisionPage() {
             >
               <CoinFlipPhase
                 decision={decision}
-                currentUserId={user.id}
+                currentUserId={viewerCompetitorId}
                 topPlayerAvatar={topPlayer?.avatar_url ?? null}
                 bottomPlayerAvatar={bottomPlayer?.avatar_url ?? null}
                 topPlayerName={topPlayer?.username}
@@ -2074,7 +2115,7 @@ export function MatchDecisionPage() {
               transition={{ duration: 0.4 }}
             >
               {(decision.tournamentMode === 'FREE_PICK' || decision.tournamentMode === 'ONE_V_THREE') && (
-                <FreePickFactionBanner decision={decision} factions={factions} rowPlayer={matrixRowPlayer} colPlayer={matrixColPlayer} currentUserId={user.id} />
+                <FreePickFactionBanner decision={decision} factions={factions} rowPlayer={matrixRowPlayer} colPlayer={matrixColPlayer} currentUserId={viewerCompetitorId} />
               )}
               <RandomMapPhase pickedMapId={decision.pickedMapId} mapPool={mapPool} />
             </motion.div>
@@ -2089,12 +2130,12 @@ export function MatchDecisionPage() {
               transition={{ duration: 0.4 }}
             >
               {(decision.tournamentMode === 'FREE_PICK' || decision.tournamentMode === 'ONE_V_THREE') && (
-                <FreePickFactionBanner decision={decision} factions={factions} rowPlayer={matrixRowPlayer} colPlayer={matrixColPlayer} currentUserId={user.id} />
+                <FreePickFactionBanner decision={decision} factions={factions} rowPlayer={matrixRowPlayer} colPlayer={matrixColPlayer} currentUserId={viewerCompetitorId} />
               )}
               <PickBanPhase
                 decision={decision}
                 mapPool={mapPool}
-                currentUserId={user.id}
+                currentUserId={viewerCompetitorId}
                 matchId={matchId}
                 onDecisionUpdate={(d) => setDecision((prev) => prev ? { ...prev, ...d } : d)}
               />
@@ -2112,12 +2153,13 @@ export function MatchDecisionPage() {
               <BlindPickPhase
                 matchId={matchId}
                 decision={decision}
-                currentUserId={user.id}
+                currentUserId={viewerCompetitorId}
                 factions={factions}
                 pickedMapName={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.name ?? null}
                 pickedMapImageUrl={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.image_url ?? null}
                 restrictedFactions={decision.restrictedFactions ?? []}
                 factionAllowlist={decision.factionAllowlist ?? []}
+                canAct={viewerCanAct}
               />
             </motion.div>
           )}
@@ -2133,7 +2175,7 @@ export function MatchDecisionPage() {
               <FactionMatrixPhase
                 matchId={matchId}
                 decision={decision}
-                currentUserId={user.id}
+                currentUserId={viewerCompetitorId}
                 factions={factions}
                 rowPlayer={matrixRowPlayer}
                 colPlayer={matrixColPlayer}
@@ -2156,7 +2198,7 @@ export function MatchDecisionPage() {
               <FreePickMiniPhase
                 matchId={matchId}
                 decision={decision}
-                currentUserId={user.id}
+                currentUserId={viewerCompetitorId}
                 factions={factions}
                 rowPlayer={matrixRowPlayer}
                 colPlayer={matrixColPlayer}
@@ -2177,7 +2219,7 @@ export function MatchDecisionPage() {
               <OneVThreePhase
                 matchId={matchId}
                 decision={decision}
-                currentUserId={user.id}
+                currentUserId={viewerCompetitorId}
                 factions={factions}
                 rowPlayer={matrixRowPlayer}
                 colPlayer={matrixColPlayer}
@@ -2212,7 +2254,7 @@ export function MatchDecisionPage() {
                 )}
               </div>
               {(decision.tournamentMode === 'FREE_PICK' || decision.tournamentMode === 'ONE_V_THREE') && (
-                <FreePickFactionBanner decision={decision} factions={factions} rowPlayer={matrixRowPlayer} colPlayer={matrixColPlayer} currentUserId={user.id} />
+                <FreePickFactionBanner decision={decision} factions={factions} rowPlayer={matrixRowPlayer} colPlayer={matrixColPlayer} currentUserId={viewerCompetitorId} />
               )}
               <Button
                 variant="forge"
