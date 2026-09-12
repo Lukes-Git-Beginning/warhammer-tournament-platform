@@ -378,6 +378,22 @@ export const MatchupHeatmapResponseSchema = z.object({
 });
 export type MatchupHeatmapResponse = z.infer<typeof MatchupHeatmapResponseSchema>;
 
+// 2v2 faction-duo meta — replaces the (infeasible) 576-cell heatmap for 2v2.
+export const DuoStatDtoSchema = z.object({
+  factions: z.array(FactionDtoSchema.nullable()), // the duo's two factions (null if a slug is unknown)
+  games: z.number().int(),
+  wins: z.number().int(),
+  win_rate: z.number(),
+});
+export type DuoStatDto = z.infer<typeof DuoStatDtoSchema>;
+
+export const DuoMetaResponseSchema = z.object({
+  version_id: z.string().uuid().nullable(),
+  top_duos_by_winrate: z.array(DuoStatDtoSchema),
+  top_duos_by_pickrate: z.array(DuoStatDtoSchema),
+});
+export type DuoMetaResponse = z.infer<typeof DuoMetaResponseSchema>;
+
 // ---------------------------------------------------------------------------
 // Battle Type
 // ---------------------------------------------------------------------------

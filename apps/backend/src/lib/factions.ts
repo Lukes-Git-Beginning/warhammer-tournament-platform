@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@rizzotto/db';
+import type { PrismaClient, $Enums } from '@rizzotto/db';
 
 // ---------------------------------------------------------------------------
 // Types (local — mirrors Zod DTOs without importing from packages/types)
@@ -138,10 +138,13 @@ export function asFactionStatsDto(stats: NonNullable<PrismaFactionStats>): Facti
 export async function getFactionsWithStats(
   prisma: PrismaClient,
   versionId: string | null,
+  battleType: $Enums.BattleType = 'DOMINATION',
 ): Promise<FactionWithStatsDto[]> {
   // Faction master data (name, icon, colour) is global reference data — always
   // returned. Only the per-version stats are gated on a version; with no version
   // (e.g. between versions) every faction simply comes back with stats: null.
+  // FactionStats are keyed per (faction, version, battle_type) — read the requested
+  // battle type (default Domination, the standard) rather than an arbitrary first row.
   if (!versionId) {
     const factions = await prisma.faction.findMany({ orderBy: { display_order: 'asc' } });
     return factions.map((f) => ({ faction: asFactionDto(f), stats: null }));
@@ -152,7 +155,7 @@ export async function getFactionsWithStats(
       orderBy: { display_order: 'asc' },
       include: {
         stats: {
-          where: { version_id: versionId },
+          where: { version_id: versionId, battle_type: battleType },
           take: 1,
         },
       },

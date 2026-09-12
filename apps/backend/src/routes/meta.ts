@@ -5,13 +5,19 @@ import { asFactionDto, getFactionsWithStats } from '../lib/factions.js';
 import { getMatchupMatrix } from '../lib/heatmap.js';
 import { resolveStandardRuleset } from '../lib/standard-ruleset.js';
 import { resolveCompetitors } from '../lib/competitors.js';
+import { computeDuoMeta } from '../lib/duo-meta.js';
 
 // ---------------------------------------------------------------------------
 // Query Schemas
 // ---------------------------------------------------------------------------
 
+const BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'SIEGE'] as const;
+
+// Meta views are sliced by version × battle type. `battleType` defaults to DOMINATION
+// (the standard) when omitted so the dashboard has a sensible first render.
 const VersionQuerySchema = z.object({
   versionId: z.string().uuid().optional(),
+  battleType: z.enum(BATTLE_TYPES).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -32,6 +38,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
     const { versionId } = parsed.data;
+    const battleType = parsed.data.battleType ?? 'DOMINATION';
 
     // Resolve version
     let version;
@@ -57,7 +64,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
 
     return cached(
       fastify.redis,
-      cacheKey('meta:overview', { versionId: resolvedVersionId }),
+      cacheKey('meta:overview', { versionId: resolvedVersionId, battleType }),
       async () => {
         // Identical filter to /api/meta/games so the counter matches the list. Games are
         // the statistical unit: count COMPLETED MatchGame rows directly (every real match
@@ -73,7 +80,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         };
 
         const [allFactions, total_games] = await Promise.all([
-          getFactionsWithStats(fastify.prisma, resolvedVersionId),
+          getFactionsWithStats(fastify.prisma, resolvedVersionId, battleType),
           fastify.prisma.matchGame.count({ where: { status: 'COMPLETED', match: globalMatchWhere } }),
         ]);
 
@@ -148,6 +155,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
     const { versionId } = parsed.data;
+    const battleType = parsed.data.battleType ?? 'DOMINATION';
 
     // Resolve version
     let version;
@@ -171,10 +179,10 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
 
     return cached(
       fastify.redis,
-      cacheKey('meta:matchups', { versionId: resolvedVersionId }),
+      cacheKey('meta:matchups', { versionId: resolvedVersionId, battleType }),
       async () => {
         const [cells, factions] = await Promise.all([
-          getMatchupMatrix(fastify.prisma, resolvedVersionId),
+          getMatchupMatrix(fastify.prisma, resolvedVersionId, battleType),
           fastify.prisma.faction.findMany({ orderBy: { display_order: 'asc' } }),
         ]);
 
@@ -182,6 +190,67 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           version_id: resolvedVersionId,
           cells,
           factions: factions.map(asFactionDto),
+        };
+      },
+      { ttlSeconds: 120 },
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/meta/duos?versionId=<uuid>&battleType=<type>
+  // 2v2 only — the faction-duo meta (Top Winrate Duos + Most-picked Duos). The 24×24
+  // matchup heatmap is infeasible for 2v2 (576 duos), so this replaces it. No minimum
+  // games threshold (Alex: "lieber verzerrte Winrates als eine leere Liste"); Top 25 each.
+  // -------------------------------------------------------------------------
+  fastify.get('/api/meta/duos', async (request, reply) => {
+    const parsed = VersionQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { versionId } = parsed.data;
+    const battleType = parsed.data.battleType ?? 'DOMINATION';
+
+    // Resolve version
+    let version;
+    if (versionId) {
+      version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+      if (!version) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
+      }
+    } else {
+      version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
+      if (!version) {
+        return { version_id: null, top_duos_by_winrate: [], top_duos_by_pickrate: [] };
+      }
+    }
+
+    const resolvedVersionId = version.id;
+
+    return cached(
+      fastify.redis,
+      cacheKey('meta:duos', { versionId: resolvedVersionId, battleType }),
+      async () => {
+        const [duos, factions] = await Promise.all([
+          computeDuoMeta(fastify.prisma, resolvedVersionId, battleType),
+          fastify.prisma.faction.findMany({ orderBy: { display_order: 'asc' } }),
+        ]);
+        const factionById = new Map(factions.map((f) => [f.id, asFactionDto(f)]));
+        const toDto = (d: (typeof duos)[number]) => ({
+          factions: d.factionIds.map((id) => factionById.get(id) ?? null),
+          games: d.games,
+          wins: d.wins,
+          win_rate: d.winRate,
+        });
+
+        // Most-picked: games desc, then win_rate. Top winrate: win_rate desc, then games (so a
+        // heavily-played duo outranks a 1-0 curiosity at equal rate). No min-games threshold.
+        const byPickrate = [...duos].sort((a, b) => b.games - a.games || b.winRate - a.winRate);
+        const byWinrate = [...duos].sort((a, b) => b.winRate - a.winRate || b.games - a.games);
+
+        return {
+          version_id: resolvedVersionId,
+          top_duos_by_winrate: byWinrate.slice(0, 25).map(toDto),
+          top_duos_by_pickrate: byPickrate.slice(0, 25).map(toDto),
         };
       },
       { ttlSeconds: 120 },
@@ -200,6 +269,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       factionId: z.string().optional(),
       opponentFactionId: z.string().optional(),
       playerId: z.string().uuid().optional(),
+      competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(), // team-size filter (meta tab)
       // Admin "All Games" search (all optional, AND-combined, case-insensitive substrings):
       q: z.string().trim().optional(),            // player-name words (each must match a player)
       winner: z.string().trim().optional(),       // winner's username
@@ -212,7 +282,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
 
-    const { page, limit, tournamentSlug, factionId, opponentFactionId, playerId } = parsed.data;
+    const { page, limit, tournamentSlug, factionId, opponentFactionId, playerId, competitorFormat } = parsed.data;
     const { q, winner, map: mapQ, faction: factionQ, tournament: tournamentQ } = parsed.data;
     const skip = (page - 1) * limit;
     const ci = (contains: string) => ({ contains, mode: 'insensitive' as const });
@@ -247,6 +317,18 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       : [];
     const isLadderQ = tournamentQ ? /^(ladder|open( ?play)?|queue)$/i.test(tournamentQ) : false;
 
+    // Team-size filter. 2v2 ⇒ the match's tournament is competitor_format TWO_V_TWO.
+    // 1v1 ⇒ everything that isn't (incl. Open Play, whose tournament is null). Applied via
+    // the match AND array so it composes with the tournament name/slug filters without
+    // colliding on the `tournament` key.
+    const competitorFormatCond =
+      competitorFormat === 'TWO_V_TWO'
+        ? [{ tournament: { competitor_format: 'TWO_V_TWO' as const } }]
+        : competitorFormat === 'ONE_V_ONE'
+          ? [{ NOT: { tournament: { competitor_format: 'TWO_V_TWO' as const } } }]
+          : [];
+    const matchAnd = [...playerNameAnd, ...competitorFormatCond];
+
     // Faction filter at the game level — games are the statistical unit and now always
     // carry their own factions (no participant/match fallback). When both factionId and
     // opponentFactionId are given, match either orientation within a single game.
@@ -280,8 +362,8 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         counts_for_leaderboard: true,
         ...(tournamentSlug ? { tournament: { slug: tournamentSlug, deleted_at: null } } : { deleted_at: null }),
         ...(playerId ? { OR: [{ player1_id: playerId }, { player2_id: playerId }] } : {}),
-        // q:<words> — each word matches at least one of the two players.
-        ...(playerNameAnd.length ? { AND: playerNameAnd } : {}),
+        // q:<words> — each word matches at least one of the two players; plus the team-size filter.
+        ...(matchAnd.length ? { AND: matchAnd } : {}),
         // tournament:<name> or the "ladder"/"open play" shortcut for non-tournament games.
         ...(tournamentQ
           ? isLadderQ

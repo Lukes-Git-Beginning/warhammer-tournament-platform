@@ -22,6 +22,10 @@ import { eligibleStatGameWhere } from './stat-eligibility.js';
  * Mirrors the matchup logic in `recomputeFactionStats()`: pairs are keyed with
  * the lexicographically smaller faction id as `faction_a`, draws have no winner,
  * and games with a faction missing on either side cannot be attributed.
+ *
+ * 1v1 only — like recomputeFactionStats, 2v2 games are excluded because
+ * player1/2_faction_id hold only the captains' factions (the 2v2 meta is the
+ * separate duo view). Open Play (null tournament) is always 1v1, so it stays.
  */
 export async function getMatchupMatrix(
   prisma: PrismaClient,
@@ -30,10 +34,12 @@ export async function getMatchupMatrix(
 ): Promise<MatchupCell[]> {
   // Same canonical game set as the rating model (loadVersionObservations) so the two
   // heatmaps' sample sizes agree — see stat-eligibility.ts.
+  const base = eligibleStatGameWhere(versionId);
   const games = await prisma.matchGame.findMany({
     where: {
-      ...eligibleStatGameWhere(versionId),
+      ...base,
       ...(battleType ? { battle_type: battleType } : {}),
+      match: { ...(base.match as object), NOT: { tournament: { competitor_format: 'TWO_V_TWO' } } },
     },
     select: {
       winner_id: true,

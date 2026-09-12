@@ -10,6 +10,7 @@ import type {
   FactionDetailResponse,
   MetaOverviewResponse,
   MatchupHeatmapResponse,
+  DuoMetaResponse,
   DraftPreset,
   CreateDraftPresetRequest,
   UpdateDraftPresetRequest,
@@ -34,6 +35,7 @@ export type {
   FactionDetailResponse,
   MetaOverviewResponse,
   MatchupHeatmapResponse,
+  DuoMetaResponse,
   MatchScoringBreakdownDto,
   PlayerOpponentBreakdownDto,
   FactionMatchupMatrixResponse,
@@ -766,18 +768,29 @@ export function getTakenFactions(slug: string): Promise<{ takenFactionIds: strin
   return apiFetch<{ takenFactionIds: string[] }>(`/api/tournaments/${encodeURIComponent(slug)}/taken-factions`);
 }
 
-export function getMetaOverview(versionId?: string): Promise<MetaOverviewResponse> {
+export function getMetaOverview(versionId?: string, battleType?: BattleType): Promise<MetaOverviewResponse> {
   const params = new URLSearchParams();
   if (versionId) params.set('versionId', versionId);
+  if (battleType) params.set('battleType', battleType);
   const qs = params.toString();
   return apiFetch<MetaOverviewResponse>(`/api/meta/overview${qs ? `?${qs}` : ''}`);
 }
 
-export function getMatchupHeatmap(versionId?: string): Promise<MatchupHeatmapResponse> {
+export function getMatchupHeatmap(versionId?: string, battleType?: BattleType): Promise<MatchupHeatmapResponse> {
   const params = new URLSearchParams();
   if (versionId) params.set('versionId', versionId);
+  if (battleType) params.set('battleType', battleType);
   const qs = params.toString();
   return apiFetch<MatchupHeatmapResponse>(`/api/meta/matchups${qs ? `?${qs}` : ''}`);
+}
+
+/** 2v2 faction-duo meta (Top Winrate Duos + Most-picked Duos), per version × battle type. */
+export function getDuoMeta(versionId?: string, battleType?: BattleType): Promise<DuoMetaResponse> {
+  const params = new URLSearchParams();
+  if (versionId) params.set('versionId', versionId);
+  if (battleType) params.set('battleType', battleType);
+  const qs = params.toString();
+  return apiFetch<DuoMetaResponse>(`/api/meta/duos${qs ? `?${qs}` : ''}`);
 }
 
 export function startNextSwissRound(tournamentId: string): Promise<{ ok: true }> {
@@ -2548,6 +2561,7 @@ export interface GameSearchFilters {
   map?: string;        // map name
   faction?: string;    // faction slug
   tournament?: string; // tournament name, or "ladder"/"open play" for Open Play
+  competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO'; // team-size filter (meta tab)
 }
 
 export function getMetaGames(

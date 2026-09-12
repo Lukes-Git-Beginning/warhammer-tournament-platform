@@ -29,6 +29,9 @@ export interface RecomputeFactionStatsResult {
  * - Games where neither faction is known are skipped (cannot be attributed).
  * - Rows are keyed per (faction, version, battle_type) so Domination / Conquest /
  *   Siege stay separate meta epochs.
+ * - 2v2 games are EXCLUDED: player1/2_faction_id hold only the captains' factions,
+ *   so counting them would pollute the 1v1 faction meta with half a team's picks.
+ *   The 2v2 faction meta lives in the duo view (see lib/duo-meta.ts) instead.
  */
 export async function recomputeFactionStats(
   prisma: PrismaClient,
@@ -37,7 +40,12 @@ export async function recomputeFactionStats(
   const games = await prisma.matchGame.findMany({
     where: {
       status: 'COMPLETED',
-      match: { version_id: versionId, deleted_at: null },
+      match: {
+        version_id: versionId,
+        deleted_at: null,
+        // 1v1 only — Open Play (null tournament) is always 1v1, so keep it.
+        NOT: { tournament: { competitor_format: 'TWO_V_TWO' } },
+      },
     },
     select: {
       winner_id: true,
