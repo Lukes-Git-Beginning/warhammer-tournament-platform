@@ -238,6 +238,7 @@ model User {
   hosted_tournaments    Tournament[]  @relation("HostedTournaments")
   co_hosted_tournaments TournamentHost[]
   created_draft_presets DraftPreset[] @relation("CreatedDraftPresets")
+  owned_series          TournamentSeries[] @relation("OwnedSeries")
 
   // Player relations
   participations        TournamentParticipant[]
@@ -370,6 +371,11 @@ model Tournament {
   map_decision_mode      MapDecisionMode      @default(PICK_BAN)
   map_preset_config      Json?                // HOST_PRESET / HOST_PRESET_PICK_BAN: runden-spez. Map-Konfiguration
   random_map_pool_played String[]             @default([]) // RANDOM_NO_REPEAT / RANDOM_PICK_BAN: turnierweit gespielte Maps
+  // Tournament Series (plans/tournament-series-design.md): a qualifier belongs to a series via
+  // series_id; the series' grand final carries is_series_final; series_position orders qualifiers.
+  series_id              String?              @db.Uuid
+  is_series_final        Boolean              @default(false)
+  series_position        Int?
   created_at             DateTime             @default(now())
   updated_at             DateTime             @updatedAt
   deleted_at             DateTime?
@@ -389,10 +395,39 @@ model Tournament {
   co_hosts              TournamentHost[]
   events                TournamentEvent[]
   referral_hits         ReferralHit[]
+  series                TournamentSeries?            @relation("SeriesQualifier", fields: [series_id], references: [id])
+  series_as_final       TournamentSeries?            @relation("SeriesFinal")
 
   @@index([status])
   @@index([host_id])
   @@index([start_date])
+  @@index([deleted_at])
+}
+
+/// A qualifier series: groups several tournaments (qualifiers) whose results feed a single
+/// grand final. The scoring + qualification model (A = cumulative points, C = per-qualifier
+/// top-X) live in scoring_config (JSON), validated by a Zod schema in the backend.
+/// See plans/tournament-series-design.md.
+model TournamentSeries {
+  id                  String               @id @default(uuid()) @db.Uuid
+  slug                String               @unique
+  name                String
+  description         String?
+  poster_url          String?
+  owner_id            String               @db.Uuid
+  scoring_config      Json
+  final_tournament_id String?              @unique @db.Uuid
+  final_seeded_at     DateTime? // set when the final has been locked & auto-seeded from standings
+  visibility          TournamentVisibility @default(PUBLIC)
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+  deleted_at          DateTime?
+
+  owner            User         @relation("OwnedSeries", fields: [owner_id], references: [id])
+  final_tournament Tournament?  @relation("SeriesFinal", fields: [final_tournament_id], references: [id])
+  qualifiers       Tournament[] @relation("SeriesQualifier")
+
+  @@index([owner_id])
   @@index([deleted_at])
 }
 
@@ -445,6 +480,7 @@ model TournamentParticipant {
   army_list_id    String?           @db.Uuid
   status          ParticipantStatus @default(REGISTERED)
   registered_at   DateTime          @default(now())
+  seed            Int? // series-final: explicit seed order when auto-populated from series standings
   lists_locked_at DateTime? // Q3: after host locks lists, army_list_id becomes immutable
   // BALANCED_LIECHTENSTEIN: the player's skill division (1..5), fixed at Start.
   // skill_band is the EFFECTIVE band (max of the computed band and requested_band);
