@@ -81,6 +81,26 @@ pnpm db:seed
 sudo systemctl start rizzotto-backend
 ```
 
+### Einmaliger Rollout-Schritt: "Season 2026" → "8.1"
+
+Beim Rollout des Game-Versions-Updates muss die bestehende Prod-Version einmalig
+von "Season 2026" auf "8.1" umbenannt werden. Da alle Games (und FactionStats /
+MatchupStats / Snapshots) die Version per ID referenzieren, benennt das Script nur
+die Zeile um — **kein Massen-Update, keine Neuberechnung nötig**. Idempotent; Dry-Run
+ist Default.
+
+```bash
+# Erst Dry-Run (zeigt Ist-Zustand + Plan, ändert nichts):
+pnpm -F @rizzotto/db exec tsx prisma/rollout-season-to-8-1.ts
+
+# Nach Kontrolle anwenden:
+pnpm -F @rizzotto/db exec tsx prisma/rollout-season-to-8-1.ts --apply
+```
+
+Zeigt der Dry-Run "Stragglers" (Games ohne Version oder auf einer anderen), können
+diese optional mit `--consolidate --apply` ebenfalls auf 8.1 gezogen werden — danach
+im Admin "Recompute faction stats" auslösen. (Nur nötig, falls Stragglers > 0.)
+
 ## Reverse-Proxy: Caddy + systemd
 
 ### Übersicht
