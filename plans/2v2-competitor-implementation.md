@@ -148,14 +148,14 @@ id-agnostic — no change once callers pass competitor ids. Open Play is always 
     fitted 2v2 GS (data) via the same Fisher-weighted Bayes blend as the player soft-floor
     (`blendSkill`). Shown on the team profile (win% + band, Provisional badge while the prior
     leads). Reused for 2v2 BaLi banding (below).
-  - **WIEDERVORLAGE (Alex 2026-09-12) — 2v2 Balanced Liechtenstein: banding DONE, pairing engine
-    NOT.** `assignSkillBandsForTournament` already bands each team by its blended GS (verified live:
-    winners band 3, losers band 2). BUT the rest of the BaLi engine (`runBalancedPairingTick`:
-    ~400 lines of swiss scoring, byes, PENDING_BYE/CATCHUP_BYE reclaim, late-join, `movedOn`/
-    `hasPlayedReal`, match creation) is keyed by `user_id` and compares `match.player1_id === userId`
-    — for 2v2 the slots hold TEAM ids, so it pairs to empty/wrong slots (a start produced 2
-    null-player matches). The create-schema block was briefly removed then **restored** (kept
-    blocked) so no broken 2v2 BaLi can be created. To finish: rekey the whole pairing tick + start
-    roster to the competitor id (`team_id ?? user_id`) — a dedicated, tests-first pass on
-    ongoing-critical code — then drop the create block again. `resolveTeamGs` + the banding branch
-    are already in place and harmless while blocked.
+  - **2v2 Balanced Liechtenstein — DONE 2026-09-12.** The engine rekey is complete: every roster
+    read in `balanced-liechtenstein-service.ts` aliases the identity to the competitor id
+    (`team_id ?? user_id`), so the whole pairing engine (swiss scoring, byes, PENDING_BYE/
+    CATCHUP_BYE reclaim, rest-merge, playoffs, projected qualifiers, preview) stays identity-agnostic
+    — match slots already hold competitor ids. Final-round-bye DMs resolve the competitor → members;
+    the playoff preview shows team names; `admitBalancedLateJoiner` resolves by user_id OR team_id,
+    bands a team via `resolveTeamGs`, and creates catch-up byes with the team id. Create-schema block
+    removed. Verified live: 4 teams banded by GS (winners band 3, losers band 2) and paired WITHIN
+    divisions. Integration test in `two-v-two-flow.test.ts`; full suite green (895). 1v1 BaLi
+    unchanged. NOTE: the test suite toggles the shared `Season.is_active`, so after a full test run
+    the dev DB may have no active version → reactivate `8.1` for BaLi/leaderboard QA.
