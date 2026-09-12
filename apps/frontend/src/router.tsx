@@ -54,6 +54,9 @@ const createTournamentRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tournaments/create',
   component: CreateTournamentPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    duplicate: typeof search.duplicate === 'string' ? search.duplicate : undefined,
+  }),
 });
 
 const calendarRoute = createRoute({

@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { createTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster } from '@/lib/api';
+import { createTournament, getTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster } from '@/lib/api';
 import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
 import { estimateDurationHours, intervalsOverlap, describeClash } from '@/lib/tournamentSchedule';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
@@ -165,12 +165,12 @@ function nextRoundHour(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
 }
 
-export function TournamentCreateForm() {
+export function TournamentCreateForm({ duplicateSlug }: { duplicateSlug?: string }) {
   const { t } = useTranslation();
   const router = useRouter();
   const defaultTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  const [form, setForm] = useState<Partial<FormData>>({
+  const defaultForm: Partial<FormData> = {
     format: 'SINGLE_ELIMINATION',
     mode: 'BPT',
     timezone: defaultTimezone,
@@ -195,7 +195,9 @@ export function TournamentCreateForm() {
     map_preset_config: null,
     min_band: null,
     max_band: null,
-  });
+  };
+
+  const [form, setForm] = useState<Partial<FormData>>(defaultForm);
   const [mapSearch, setMapSearch] = useState('');
   const [factionPoolEnabled, setFactionPoolEnabled] = useState(false);
   const [restrictedFactionsEnabled, setRestrictedFactionsEnabled] = useState(false);
@@ -214,6 +216,81 @@ export function TournamentCreateForm() {
 
   // Default the map pool to ALL maps once they load (only if untouched).
   const mapPoolInitialized = useRef(false);
+
+  // Duplication: fetch source tournament and prefill the form once.
+  const { data: sourceForDuplicate } = useQuery({
+    queryKey: ['tournament', duplicateSlug],
+    queryFn: () => getTournament(duplicateSlug!),
+    enabled: !!duplicateSlug,
+    retry: false,
+  });
+
+  const duplicatePrefilled = useRef(false);
+  useEffect(() => {
+    if (!sourceForDuplicate || duplicatePrefilled.current) return;
+    duplicatePrefilled.current = true;
+
+    // Compute the start date: original + 7 days if still in the future, else form default.
+    const originalStart = new Date(sourceForDuplicate.start_date);
+    const candidateStart = new Date(originalStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const toLocalDatetime = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const useStart = candidateStart > new Date() ? toLocalDatetime(candidateStart) : nextRoundHour();
+
+    setForm((prev) => ({
+      ...prev,
+      // Identity
+      name: sourceForDuplicate.name,
+      description: sourceForDuplicate.description ?? undefined,
+      // Scheduling
+      start_date: useStart,
+      registration_deadline: useStart,
+      timezone: sourceForDuplicate.timezone,
+      // Format / mode
+      format: sourceForDuplicate.format as FormData['format'],
+      mode: (sourceForDuplicate.mode ?? 'BPT') as FormData['mode'],
+      set_faction_id: sourceForDuplicate.set_faction_id ?? undefined,
+      // Match mechanics
+      rounds_count: sourceForDuplicate.rounds_count ?? prev.rounds_count,
+      playoff_format: (sourceForDuplicate.playoff_format ?? 'NONE') as FormData['playoff_format'],
+      has_third_place_match: sourceForDuplicate.has_third_place_match ?? false,
+      auto_sizing: sourceForDuplicate.auto_sizing ?? false,
+      auto_advance: sourceForDuplicate.auto_advance ?? false,
+      allow_late_join_requests: sourceForDuplicate.allow_late_join_requests ?? false,
+      swiss_match_format: (sourceForDuplicate.swiss_match_format ?? 'BO1') as FormData['swiss_match_format'],
+      playoff_match_format: (sourceForDuplicate.playoff_match_format ?? 'BO1') as FormData['playoff_match_format'],
+      finale_match_format: (sourceForDuplicate.finale_match_format ?? 'BO1') as FormData['finale_match_format'],
+      grand_final_reset: sourceForDuplicate.grand_final_reset ?? true,
+      grand_final_reset_format: (sourceForDuplicate.grand_final_reset_format ?? '') as FormData['grand_final_reset_format'],
+      // Map / factions
+      map_decision_mode: (sourceForDuplicate.map_decision_mode ?? 'RANDOM_PICK_BAN') as FormData['map_decision_mode'],
+      map_pool: sourceForDuplicate.map_pool?.map((m) => m.id) ?? prev.map_pool ?? [],
+      map_preset_config: sourceForDuplicate.map_preset_config ?? null,
+      faction_pool: sourceForDuplicate.faction_allowlist ?? undefined,
+      restricted_factions: sourceForDuplicate.restricted_factions ?? undefined,
+      // Skill gate
+      min_band: sourceForDuplicate.min_band ?? null,
+      max_band: sourceForDuplicate.max_band ?? null,
+      // Rules
+      standard_rules_enabled: sourceForDuplicate.standard_rules_enabled ?? true,
+      rules: sourceForDuplicate.rules ?? undefined,
+      restrictions: sourceForDuplicate.restrictions ?? undefined,
+      // Metadata
+      discord_link: sourceForDuplicate.discord_link ?? prev.discord_link,
+      stream_url: sourceForDuplicate.stream_url ?? undefined,
+    }));
+
+    // Sync the faction pool toggles
+    if ((sourceForDuplicate.faction_allowlist ?? []).length > 0) {
+      setFactionPoolEnabled(true);
+    }
+    if ((sourceForDuplicate.restricted_factions ?? []).length > 0) {
+      setRestrictedFactionsEnabled(true);
+    }
+    // Prevent the map-pool default-all-maps effect from overwriting the prefilled pool
+    mapPoolInitialized.current = true;
+  }, [sourceForDuplicate]);
   useEffect(() => {
     if (mapPoolInitialized.current || allMaps.length === 0) return;
     mapPoolInitialized.current = true;

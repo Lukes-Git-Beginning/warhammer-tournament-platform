@@ -388,6 +388,13 @@ export function TournamentDetail() {
           >
             {t('tournament.detail.edit')}
           </button>
+          <button
+            type="button"
+            className="rounded border border-stone-700 px-4 py-1.5 text-sm text-stone-300 hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-500 transition-colors"
+            onClick={() => void navigate({ to: '/tournaments/create', search: { duplicate: slug } })}
+          >
+            Duplicate
+          </button>
           {tournament.status === 'DRAFT' && (
             <button
               type="button"

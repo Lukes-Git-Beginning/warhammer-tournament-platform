@@ -1447,7 +1447,7 @@ export function getStandardRuleset(): Promise<StandardRuleset> {
 // ---------------------------------------------------------------------------
 
 export interface ScoringConfig {
-  model: 'A' | 'C';
+  model: 'A' | 'C' | 'NONE';
   points_per_game_played: number;
   points_per_win: number;
   final_size: number;
@@ -1556,6 +1556,10 @@ export function detachFromSeries(slug: string, tournamentId: string): Promise<{ 
     method: 'POST',
     body: JSON.stringify({ tournamentId }),
   });
+}
+
+export function seedFinal(slug: string): Promise<{ ok: true; seeded: number; finalSlug: string }> {
+  return apiFetch(`/api/series/${slug}/seed-final`, { method: 'POST' });
 }
 
 // ---------------------------------------------------------------------------

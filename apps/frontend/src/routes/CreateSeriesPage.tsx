@@ -5,7 +5,7 @@ import { createSeries, listTournaments, type ScoringConfig } from '@/lib/api.js'
 import { useRequireAuth } from '@/lib/auth.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 
-type SeriesModel = 'A' | 'C';
+type SeriesModel = 'A' | 'C' | 'NONE';
 
 const DEFAULT_TIEBREAKERS: ScoringConfig['tiebreakers'] = ['points', 'wins', 'games', 'random'];
 
@@ -58,14 +58,23 @@ export function CreateSeriesPage() {
             top_x: 0,
             tiebreakers: DEFAULT_TIEBREAKERS,
           }
-        : {
-            model: 'C',
-            points_per_game_played: 0,
-            points_per_win: 0,
-            final_size: 0,
-            top_x: topX,
-            tiebreakers: DEFAULT_TIEBREAKERS,
-          };
+        : model === 'C'
+          ? {
+              model: 'C',
+              points_per_game_played: 0,
+              points_per_win: 0,
+              final_size: 0,
+              top_x: topX,
+              tiebreakers: DEFAULT_TIEBREAKERS,
+            }
+          : {
+              model: 'NONE',
+              points_per_game_played: 1,
+              points_per_win: 1,
+              final_size: 16,
+              top_x: 2,
+              tiebreakers: DEFAULT_TIEBREAKERS,
+            };
 
     createMutation.mutate({
       name: name.trim(),
@@ -157,7 +166,7 @@ export function CreateSeriesPage() {
             Scoring Model
           </h2>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => setModel('A')}
@@ -182,7 +191,25 @@ export function CreateSeriesPage() {
             >
               Per-Qualifier (C)
             </button>
+            <button
+              type="button"
+              onClick={() => setModel('NONE')}
+              aria-pressed={model === 'NONE'}
+              className={`rounded border px-4 py-2 text-sm font-medium transition-colors ${
+                model === 'NONE'
+                  ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+                  : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+              }`}
+            >
+              None — just group tournaments (weekly format)
+            </button>
           </div>
+
+          {model === 'NONE' && (
+            <p className="text-xs text-rizzotto-stone-500">
+              No scoring or qualification tracking — the series acts as a grouping / schedule for related tournaments. A final is optional.
+            </p>
+          )}
 
           {model === 'A' && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

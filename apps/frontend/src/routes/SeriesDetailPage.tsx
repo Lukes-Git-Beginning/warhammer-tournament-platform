@@ -8,6 +8,8 @@ import {
   patchSeries,
   attachToSeries,
   detachFromSeries,
+  seedFinal,
+  type Series,
   type StandingA,
   type QualifiedC,
 } from '@/lib/api.js';
@@ -188,6 +190,90 @@ function QualifiedList({
 }
 
 // ---------------------------------------------------------------------------
+// Seed-final panel (model A/C only)
+// ---------------------------------------------------------------------------
+
+function SeedFinalPanel({ series, seriesSlug }: { series: Series; seriesSlug: string }) {
+  const queryClient = useQueryClient();
+
+  const seedMutation = useMutation({
+    mutationFn: () => seedFinal(seriesSlug),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['series', seriesSlug] });
+    },
+  });
+
+  if (series.final_seeded_at) {
+    return (
+      <div className="mt-4">
+        <p className="text-sm text-rizzotto-stone-300">
+          Final seeded ✓ —{' '}
+          {series.final ? (
+            <Link
+              to="/tournaments/$slug"
+              params={{ slug: series.final.slug }}
+              className="text-rizzotto-gold-400 hover:text-rizzotto-gold-300 underline underline-offset-2"
+            >
+              open the final to start it
+            </Link>
+          ) : (
+            'open the final to start it'
+          )}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-2">
+      <button
+        type="button"
+        disabled={!series.ready_to_seed || seedMutation.isPending}
+        title={
+          series.ready_to_seed
+            ? undefined
+            : 'Available once every qualifier is completed.'
+        }
+        onClick={() => {
+          if (
+            window.confirm(
+              'Lock standings and seed the final tournament with the qualified players? This cannot be undone.',
+            )
+          ) {
+            seedMutation.mutate();
+          }
+        }}
+        className="rounded border border-rizzotto-gold-500/60 px-4 py-2 text-sm font-semibold text-rizzotto-gold-400 hover:bg-rizzotto-gold-500/10 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {seedMutation.isPending ? 'Seeding…' : 'Lock standings & seed final'}
+      </button>
+      {!series.ready_to_seed && (
+        <p className="text-xs text-rizzotto-stone-600">
+          Available once every qualifier is completed.
+        </p>
+      )}
+      {seedMutation.isError && (
+        <p className="text-xs text-red-400">{(seedMutation.error as Error).message}</p>
+      )}
+      {seedMutation.isSuccess && (
+        <p className="text-xs text-rizzotto-gold-400">
+          Final seeded successfully.{' '}
+          {seedMutation.data.finalSlug && (
+            <Link
+              to="/tournaments/$slug"
+              params={{ slug: seedMutation.data.finalSlug }}
+              className="underline underline-offset-2"
+            >
+              Open the final
+            </Link>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Management panel
 // ---------------------------------------------------------------------------
 
@@ -241,8 +327,6 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
   });
 
   if (!series) return null;
-
-  const readyToSeed = series.ready_to_seed;
 
   return (
     <section className="mt-10 rounded border border-rizzotto-gold-500/30 bg-rizzotto-iron-900/60 p-6">
@@ -353,29 +437,10 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
         </div>
       )}
 
-      {/* Lock & seed final */}
-      <div>
-        <button
-          type="button"
-          disabled
-          title={
-            readyToSeed
-              ? 'Seeding endpoint coming soon — all qualifiers are complete.'
-              : 'Not all qualifiers are complete yet.'
-          }
-          className="rounded border border-rizzotto-iron-700 px-4 py-2 text-sm font-semibold text-rizzotto-stone-600 cursor-not-allowed opacity-50"
-        >
-          Lock &amp; Seed Final
-          {readyToSeed && (
-            <span className="ml-2 text-xs text-rizzotto-gold-600">(coming soon)</span>
-          )}
-        </button>
-        <p className="mt-1 text-xs text-rizzotto-stone-600">
-          {readyToSeed
-            ? 'All qualifiers are complete. Seeding will be available in a future update.'
-            : 'Available once all qualifying tournaments are completed.'}
-        </p>
-      </div>
+      {/* Lock & seed final — only shown for scoring models A/C */}
+      {series.scoring_config.model !== 'NONE' && (
+        <SeedFinalPanel series={series} seriesSlug={seriesSlug} />
+      )}
     </section>
   );
 }
@@ -424,10 +489,14 @@ export function SeriesDetailPage() {
     );
   }
 
-  const isModelA = series.scoring_config.model === 'A';
+  const model = series.scoring_config.model;
+  const isModelA = model === 'A';
+  const isModelNone = model === 'NONE';
 
   // Build a map from qualifier tournament id → slug for the QualifiedList
   const qualifierSlugById = new Map(series.qualifiers.map((q) => [q.id, q.slug]));
+
+  const modelBadgeLabel = isModelA ? 'Points race' : isModelNone ? 'Grouping only' : 'Per-qualifier';
 
   return (
     <PageShell variant="wide" spacing="base">
@@ -446,7 +515,7 @@ export function SeriesDetailPage() {
             {series.visibility === 'PRIVATE' ? 'Private' : 'Public'}
           </Badge>
           <Badge variant="default" className="font-mono text-xs">
-            {isModelA ? 'Points race' : 'Per-qualifier'}
+            {modelBadgeLabel}
           </Badge>
         </div>
         <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
@@ -467,25 +536,27 @@ export function SeriesDetailPage() {
         </p>
       </div>
 
-      {/* Standings / Qualified section */}
-      <section className="mb-10">
-        <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-5">
-          {isModelA ? 'Standings' : 'Qualified Players'}
-        </h2>
+      {/* Standings / Qualified section — hidden for NONE model */}
+      {!isModelNone && (
+        <section className="mb-10">
+          <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-5">
+            {isModelA ? 'Standings' : 'Qualified Players'}
+          </h2>
 
-        {isModelA ? (
-          <StandingsTable
-            standings={series.standings}
-            finalSize={series.scoring_config.final_size}
-            provisional={series.standings_provisional}
-          />
-        ) : (
-          <QualifiedList
-            qualified={series.qualified}
-            qualifierSlugById={qualifierSlugById}
-          />
-        )}
-      </section>
+          {isModelA ? (
+            <StandingsTable
+              standings={series.standings}
+              finalSize={series.scoring_config.final_size}
+              provisional={series.standings_provisional}
+            />
+          ) : (
+            <QualifiedList
+              qualified={series.qualified}
+              qualifierSlugById={qualifierSlugById}
+            />
+          )}
+        </section>
+      )}
 
       {/* Qualifiers list + final */}
       <section className="mb-10">

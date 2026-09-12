@@ -81,6 +81,7 @@ export function Header() {
       {canCreate && (
         <Link
           to="/tournaments/create"
+          search={{ duplicate: undefined }}
           className={NAV_LINK_CLASS}
           activeProps={NAV_LINK_ACTIVE_PROPS}
         >
