@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.56.1] — 2026-09-12 — Respect "no playoffs" in auto-advanced Swiss
+### Fixed
+- A Swiss tournament with a fixed playoff setting (including **no playoffs**) could still auto-generate a Top 4 / Top 8 bracket when its rounds advanced automatically. At the end of the Swiss phase the playoff size was re-derived purely from the player count, which never resolves to "none" for four or more players, so a host's "no playoffs" choice (or a deliberately smaller bracket) was overridden. The host's playoff choice is now the ceiling: the only automatic change is a **downgrade** when the final field is too small to fill the chosen bracket (Top 8 → Top 4 → Top 2 → none). It never grows the bracket and never brings back a playoff a host switched off.
+
 ## [1.56.0] — 2026-09-09 — Consistent edit form + referral overview
 ### Fixed
 - The tournament **edit** form now lists its fields in the same order as the **create** form (name, description, links, then format & mode, then schedule, then match mechanics), so moving between creating and editing a tournament no longer feels jumbled.
