@@ -3,6 +3,7 @@ import type { Prisma } from '@rizzotto/db';
 import { z } from 'zod';
 import ical from 'ical-generator';
 import { generateSlug, validateStatusTransition, TournamentStatus, canManageTournament } from '../lib/tournament-utils.js';
+import { canManageSeries } from '../lib/series-utils.js';
 import { emitStatusChange } from '../lib/emit.js';
 import { finalizeTournament, unfinalizeTournament } from '../lib/finalize-tournament.js';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
@@ -212,6 +213,9 @@ const CreateTournamentSchema = z.object({
   has_third_place_match: z.boolean().optional(),
   min_band: z.number().int().min(1).max(5).nullable().optional(),
   max_band: z.number().int().min(1).max(5).nullable().optional(),
+  // Optional: attach the new tournament to a series (as a qualifier) in one step. The
+  // caller must be able to manage the series; validated in the handler.
+  series_id: z.string().uuid().nullable().optional(),
 }).superRefine(refineMapPool).superRefine(refineOneVThree);
 
 const PatchTournamentSchema = z.object({
@@ -256,6 +260,8 @@ const PatchTournamentSchema = z.object({
   restricted_factions: z.array(z.string().min(1)).optional(),
   min_band: z.number().int().min(1).max(5).nullable().optional(),
   max_band: z.number().int().min(1).max(5).nullable().optional(),
+  // Attach to / move between / detach (null) a series. Validated in the handler.
+  series_id: z.string().uuid().nullable().optional(),
 })
   .superRefine(refineMapPool)
   .superRefine(refineOneVThree)
@@ -585,6 +591,22 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      // Optionally attach the new tournament to a series (as a qualifier), in series order.
+      if (data.series_id) {
+        if (!(await canManageSeries(fastify.prisma, data.series_id, request.user.sub, request.user.role))) {
+          return reply.code(403).send({ error: 'Forbidden', message: 'You cannot manage that series', statusCode: 403 });
+        }
+        const max = await fastify.prisma.tournament.aggregate({
+          where: { series_id: data.series_id },
+          _max: { series_position: true },
+        });
+        await fastify.prisma.tournament.update({
+          where: { id: tournament.id },
+          data: { series_id: data.series_id, series_position: (max._max.series_position ?? 0) + 1 },
+        });
+        await invalidate(fastify.redis, 'series:*');
+      }
+
       await fastify.prisma.auditLog.create({
         data: {
           entity_type: 'Tournament',
@@ -799,6 +821,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         created_at: true,
         updated_at: true,
         host: { select: { id: true, username: true, avatar_url: true } },
+        is_series_final: true,
+        series: { select: { id: true, slug: true, name: true } },
         _count: {
           select: { participants: { where: { deleted_at: null } } },
         },
@@ -878,6 +902,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           counts_for_leaderboard: true,
           min_band: true,
           max_band: true,
+          series_id: true,
+          is_series_final: true,
         },
       });
 
@@ -907,7 +933,30 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { status: newStatus, map_pool: newMapPool, faction_pool: newFactionPool, restricted_factions: newRestrictedFactions, ...rest } = parsed.data;
+      const { status: newStatus, map_pool: newMapPool, faction_pool: newFactionPool, restricted_factions: newRestrictedFactions, series_id: newSeriesId, ...rest } = parsed.data;
+
+      // Series membership change (attach / move / detach). Validated up front so a bad request
+      // aborts before any write; applied after the main update below.
+      const seriesChangeRequested = 'series_id' in parsed.data;
+      if (seriesChangeRequested) {
+        if (tournament.is_series_final) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'This tournament is a series final and cannot be reassigned as a qualifier.',
+            statusCode: 422,
+          });
+        }
+        if (newSeriesId) {
+          if (!(await canManageSeries(fastify.prisma, newSeriesId, user.sub, user.role))) {
+            return reply.code(403).send({ error: 'Forbidden', message: 'You cannot manage that series', statusCode: 403 });
+          }
+        } else if (tournament.series_id) {
+          // Detaching from the current series requires managing that series too.
+          if (!(await canManageSeries(fastify.prisma, tournament.series_id, user.sub, user.role))) {
+            return reply.code(403).send({ error: 'Forbidden', message: 'You cannot manage the current series', statusCode: 403 });
+          }
+        }
+      }
 
       // Validate map_pool change: only allowed before tournament starts (DRAFT or ANNOUNCED)
       if (newMapPool !== undefined) {
@@ -1169,6 +1218,27 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           invalidations.push(invalidate(fastify.redis, 'draft-presets:*'));
         }
         await Promise.all(invalidations);
+      }
+
+      // Apply the series membership change (validated above), only on an actual change.
+      if (seriesChangeRequested) {
+        if (newSeriesId && newSeriesId !== tournament.series_id) {
+          const max = await fastify.prisma.tournament.aggregate({
+            where: { series_id: newSeriesId },
+            _max: { series_position: true },
+          });
+          await fastify.prisma.tournament.update({
+            where: { id: tournament.id },
+            data: { series_id: newSeriesId, series_position: (max._max.series_position ?? 0) + 1 },
+          });
+          await invalidate(fastify.redis, 'series:*');
+        } else if (!newSeriesId && tournament.series_id) {
+          await fastify.prisma.tournament.update({
+            where: { id: tournament.id },
+            data: { series_id: null, series_position: null },
+          });
+          await invalidate(fastify.redis, 'series:*');
+        }
       }
 
       // Emit socket event on status change

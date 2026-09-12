@@ -15,6 +15,7 @@ import {
   searchCoHostCandidates,
   addTournamentCoHost,
   removeTournamentCoHost,
+  listSeries,
   type Tournament,
   type TournamentPatchInput,
   type MapDecisionMode,
@@ -550,6 +551,16 @@ export function TournamentEditPage() {
   });
   const scheduledTournaments = useCalendarTournaments(tournament?.id);
 
+  // Series selector: series the viewer can manage — loaded only when the tournament is
+  // not a series final (finals cannot be re-assigned).
+  const { data: manageableSeriesData } = useQuery({
+    queryKey: ['series', 'manageable'],
+    queryFn: () => listSeries(1, 100, { manageable: true }),
+    enabled: !tournament?.is_series_final,
+    staleTime: 30 * 1000,
+  });
+  const manageableSeries = manageableSeriesData?.data ?? [];
+
   const [form, setForm] = useState<EditFormData | null>(null);
   const [initialMapIds, setInitialMapIds] = useState<string[]>([]);
   const [initialFactionIds, setInitialFactionIds] = useState<string[]>([]);
@@ -558,6 +569,8 @@ export function TournamentEditPage() {
   const [factionPoolEnabled, setFactionPoolEnabled] = useState(false);
   const [restrictedFactionsEnabled, setRestrictedFactionsEnabled] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; discord_link?: string }>({});
+  // Series selector: '' = no series (None), or a series id.
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
 
   useEffect(() => {
     if (tournament && form === null) {
@@ -570,6 +583,7 @@ export function TournamentEditPage() {
       const restrictedIds = tournament.restricted_factions ?? [];
       setInitialRestrictedIds(restrictedIds);
       if (restrictedIds.length > 0) setRestrictedFactionsEnabled(true);
+      setSelectedSeriesId(tournament.series?.id ?? '');
     }
   }, [tournament, form]);
 
@@ -691,6 +705,16 @@ export function TournamentEditPage() {
     }
 
     const body = buildPatchBody(tournament, form, initialMapIds, initialFactionIds, initialRestrictedIds);
+
+    // Attach/detach series if the selection changed and the tournament is not a final.
+    if (!tournament.is_series_final) {
+      const currentSeriesId = tournament.series?.id ?? '';
+      if (selectedSeriesId !== currentSeriesId) {
+        // selectedSeriesId === '' means detach (send null); otherwise send the chosen id.
+        body.series_id = selectedSeriesId || null;
+      }
+    }
+
     if (Object.keys(body).length === 0) {
       void navigate({ to: '/tournaments/$slug', params: { slug } });
       return;
@@ -1811,6 +1835,32 @@ export function TournamentEditPage() {
               <option value="PRIVATE">Private</option>
             </Select>
           </div>
+
+          {/* Series membership — shown unless this tournament IS a series final (finals cannot
+              be moved between series). */}
+          {tournament.is_series_final ? (
+            <div className="min-w-0 max-w-xs">
+              <Label>Series</Label>
+              <p className="mt-1 text-sm text-rizzotto-stone-400">
+                This is a series final — it cannot be reassigned to another series.
+              </p>
+            </div>
+          ) : (
+            <div className="min-w-0 max-w-xs">
+              <Label htmlFor="tef-series">Part of a series (optional)</Label>
+              <Select
+                id="tef-series"
+                value={selectedSeriesId}
+                onChange={(e) => setSelectedSeriesId(e.target.value)}
+              >
+                <option value="">— None —</option>
+                {manageableSeries.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </Select>
+              <FieldHint>Attach this tournament as a qualifier to one of your series. Choose "— None —" to detach.</FieldHint>
+            </div>
+          )}
 
           <div className="flex flex-col gap-3">
             <label className="flex cursor-pointer items-center gap-3">

@@ -108,6 +108,9 @@ export interface Tournament {
   restricted_factions?: string[];
   min_band?: number | null;
   max_band?: number | null;
+  // Series (detail endpoint only)
+  series?: { id: string; slug: string; name: string } | null;
+  is_series_final?: boolean;
 }
 
 export type MapDecisionMode = 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
@@ -221,6 +224,7 @@ export interface TournamentCreate {
   faction_pool?: string[];
   min_band?: number | null;
   max_band?: number | null;
+  series_id?: string | null;
 }
 
 // Mirror of backend PatchTournamentSchema (apps/backend/src/routes/tournaments.ts).
@@ -267,6 +271,7 @@ export interface TournamentPatchInput {
   counts_for_leaderboard?: boolean;
   min_band?: number | null;
   max_band?: number | null;
+  series_id?: string | null;
 }
 
 export interface TournamentPatchResponse {
@@ -1529,8 +1534,10 @@ export interface SeriesCreateBody {
 export function listSeries(
   page = 1,
   pageSize = 20,
+  opts?: { manageable?: boolean },
 ): Promise<{ data: SeriesSummary[]; total: number; page: number; pageSize: number }> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (opts?.manageable) params.set('manageable', 'true');
   return apiFetch(`/api/series?${params.toString()}`);
 }
 

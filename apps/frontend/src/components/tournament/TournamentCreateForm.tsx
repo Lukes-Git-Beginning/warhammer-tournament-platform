@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { createTournament, createSeries, getTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster, uploadSeriesPoster, listTournaments, type ScoringConfig } from '@/lib/api';
+import { createTournament, createSeries, getTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster, uploadSeriesPoster, listTournaments, listSeries, type ScoringConfig } from '@/lib/api';
 import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
 import { estimateDurationHours, intervalsOverlap, describeClash } from '@/lib/tournamentSchedule';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
@@ -210,6 +210,9 @@ export function TournamentCreateForm({
   const [seriesSubmitError, setSeriesSubmitError] = useState<string | null>(null);
   // Series poster (separate from the final tournament's poster)
   const [seriesPosterFile, setSeriesPosterFile] = useState<File | null>(null);
+
+  // Normal create path: optional "attach to an existing series" selector.
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
 
   const defaultForm: Partial<FormData> = {
     format: 'SINGLE_ELIMINATION',
@@ -419,6 +422,15 @@ export function TournamentCreateForm({
     retry: false,
   });
   const qualifierCandidates = tournamentsData?.data ?? [];
+
+  // Normal create path: all series the viewer can manage (to offer as "attach to" options).
+  const { data: manageableSeriesData } = useQuery({
+    queryKey: ['series', 'manageable'],
+    queryFn: () => listSeries(1, 100, { manageable: true }),
+    enabled: !seriesMode,
+    staleTime: 30 * 1000,
+  });
+  const manageableSeries = manageableSeriesData?.data ?? [];
 
   // ── Mutations ────────────────────────────────────────────────────────────
 
@@ -668,6 +680,8 @@ export function TournamentCreateForm({
       ...(rest.mode === 'ONE_V_THREE' && rest.set_faction_id
         ? { set_faction_id: rest.set_faction_id }
         : {}),
+      // Normal create path: attach to an existing series if one was chosen.
+      ...(!seriesMode && selectedSeriesId ? { series_id: selectedSeriesId } : {}),
     });
   }
 
@@ -972,6 +986,25 @@ export function TournamentCreateForm({
           placeholder="https://twitch.tv/…"
         />
       </div>
+
+      {/* Part of a series — normal create path only (seriesMode already embeds this form
+          as the series final, so the selector is irrelevant there). */}
+      {!seriesMode && manageableSeries.length > 0 && (
+        <div>
+          <Label htmlFor="tcf-series">Part of a series (optional)</Label>
+          <Select
+            id="tcf-series"
+            value={selectedSeriesId}
+            onChange={(e) => setSelectedSeriesId(e.target.value)}
+          >
+            <option value="">— None —</option>
+            {manageableSeries.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </Select>
+          <FieldHint>Attach this tournament as a qualifier to one of your series.</FieldHint>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="min-w-0">

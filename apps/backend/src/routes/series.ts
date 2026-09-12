@@ -154,10 +154,16 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
   // -------------------------------------------------------------------------
   fastify.get('/api/series', async (request, reply) => {
     const parsed = z
-      .object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(20) })
+      .object({
+        page: z.coerce.number().int().min(1).default(1),
+        pageSize: z.coerce.number().int().min(1).max(100).default(20),
+        // manageable=true → only series the viewer can manage (owner/co-host; staff = all).
+        // Used by the tournament create/edit "Part of a series" picker.
+        manageable: z.coerce.boolean().optional(),
+      })
       .safeParse(request.query);
     if (!parsed.success) return reply.code(400).send(badRequest(parsed.error.message));
-    const { page, pageSize } = parsed.data;
+    const { page, pageSize, manageable } = parsed.data;
 
     let viewerId: string | null = null;
     let role = 'USER';
@@ -175,7 +181,7 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
 
     const data = await cached(
       fastify.redis,
-      cacheKey('series:list', { page, pageSize, viewer: viewerKey }),
+      cacheKey('series:list', { page, pageSize, viewer: viewerKey, manageable: manageable ? 1 : 0 }),
       async () => {
         // Visibility: staff see everything; owner/co-host see their own private ones;
         // anonymous + others see only PUBLIC and non-paused.
@@ -184,18 +190,25 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
           ? [{ owner_id: viewerId }, { co_hosts: { some: { user_id: viewerId } } }]
           : [];
 
-        const where = {
-          deleted_at: null,
-          // Visibility: staff see all; others see PUBLIC or their own
-          ...(isStaff
-            ? {}
-            : {
-                OR: [
-                  { visibility: 'PUBLIC' as const, paused: false },
-                  ...ownable,
-                ],
-              }),
-        };
+        const where = manageable
+          ? {
+              // Only series the viewer can manage. Staff manage all; others = own/co-hosted
+              // (an empty OR for an anonymous caller matches nothing, which is correct).
+              deleted_at: null,
+              ...(isStaff ? {} : { OR: ownable }),
+            }
+          : {
+              deleted_at: null,
+              // Visibility: staff see all; others see PUBLIC or their own
+              ...(isStaff
+                ? {}
+                : {
+                    OR: [
+                      { visibility: 'PUBLIC' as const, paused: false },
+                      ...ownable,
+                    ],
+                  }),
+            };
 
         const [rows, total] = await Promise.all([
           fastify.prisma.tournamentSeries.findMany({

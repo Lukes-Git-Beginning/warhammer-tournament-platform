@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
   - **Points race** — every game played and every game won earns points across all qualifiers; the top N by points make the final.
   - **Per-qualifier** — the top finishers of each qualifier go straight through; anyone who already secured a spot is skipped, so the place passes down to the next player.
   - **Grouping only** — simply collect related tournaments under one page, with no scoring.
+- Qualifiers can be attached from the series page, or directly from a tournament's own create/edit form via a **"Part of a series"** picker — whichever is more convenient.
 - When the qualifiers are done, the host locks the standings and seeds the Grand Final in one click — qualified players are placed into the final in standings order, ready to start.
 - Series can have co-hosts and transferred ownership (just like tournaments), can be paused and reactivated, and carry their own poster.
 - Players receive a Discord DM when they qualify for a Grand Final (with their seed), and an invitation when a new qualifier is added to a series they have been competing in.
