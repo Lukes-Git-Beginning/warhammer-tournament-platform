@@ -181,6 +181,18 @@ async function main() {
   }
   console.log('  ✓ 4 teams registered in "2v2-demo-swiss" (Swiss format)');
 
+  // A Balanced-Liechtenstein 2v2 — teams are banded into divisions by their blended team GS
+  // (members' average prior → the team's own fitted 2v2 GS). See lib/team-rating.ts.
+  const baliId = await ensureTournament({ slug: '2v2-demo-bali', name: '2v2 Demo — Balanced Liechtenstein', mode: 'BPT_2V2', hostId, format: 'BALANCED_LIECHTENSTEIN', roundsCount: 3 });
+  for (const tm of teamIds) {
+    await prisma.tournamentParticipant.upsert({
+      where: { tournament_id_user_id: { tournament_id: baliId, user_id: tm.captainId } },
+      update: { team_id: tm.id, participant_type: 'TEAM', status: 'REGISTERED', deleted_at: null, faction_ids: [] },
+      create: { tournament_id: baliId, user_id: tm.captainId, team_id: tm.id, participant_type: 'TEAM', status: 'REGISTERED', faction_ids: [] },
+    });
+  }
+  console.log('  ✓ 4 teams registered in "2v2-demo-bali" (Balanced Liechtenstein)');
+
   // Battle-type tile showcase: 1v1 Conquest + 1v1 Siege (no participants needed — they just
   // demonstrate the tile accents) and a combined 2v2 Siege (both markers on one tile).
   await ensureTournament({ slug: 'battle-demo-conquest', name: 'Battle Demo — Conquest', mode: 'BPT', hostId, competitorFormat: 'ONE_V_ONE', battleType: 'CONQUEST' });
