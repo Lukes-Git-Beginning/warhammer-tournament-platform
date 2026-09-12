@@ -1,0 +1,542 @@
+[
+  {
+    "name": "[Invasion] Assault on Ash River",
+    "image_url": "https://i.imgur.com/ZqMUMUj.jpeg",
+    "slug": "invasion-assault-on-ash-river",
+    "local_path": "/maps/invasion-assault-on-ash-river.jpeg"
+  },
+  {
+    "name": "[Invasion] Assault on Karag Rhyn",
+    "image_url": "https://i.imgur.com/Uv0aBO2.jpeg",
+    "slug": "invasion-assault-on-karag-rhyn",
+    "local_path": "/maps/invasion-assault-on-karag-rhyn.jpeg"
+  },
+  {
+    "name": "[Invasion] Assault on Spite Peak",
+    "image_url": "https://i.imgur.com/vnoycC5.jpeg",
+    "slug": "invasion-assault-on-spite-peak",
+    "local_path": "/maps/invasion-assault-on-spite-peak.jpeg"
+  },
+  {
+    "name": "Altar of Hashut",
+    "image_url": "https://i.imgur.com/LvLOtgm.jpeg",
+    "slug": "altar-of-hashut",
+    "local_path": "/maps/altar-of-hashut.jpeg"
+  },
+  {
+    "name": "Altar of the Champion",
+    "image_url": "https://i.imgur.com/yz5oLma.jpeg",
+    "slug": "altar-of-the-champion",
+    "local_path": "/maps/altar-of-the-champion.jpeg"
+  },
+  {
+    "name": "Altdorf Farmlands",
+    "image_url": "https://i.imgur.com/cC1nDSM.jpeg",
+    "slug": "altdorf-farmlands",
+    "local_path": "/maps/altdorf-farmlands.jpeg"
+  },
+  {
+    "name": "Aracknarock Lair",
+    "image_url": "https://i.imgur.com/saz9JBu.jpeg",
+    "slug": "aracknarock-lair",
+    "local_path": "/maps/aracknarock-lair.jpeg"
+  },
+  {
+    "name": "Arbiter's Ground",
+    "image_url": "https://i.imgur.com/sJXZxLk.jpeg",
+    "slug": "arbiters-ground",
+    "local_path": "/maps/arbiters-ground.jpeg"
+  },
+  {
+    "name": "Battered Bluff",
+    "image_url": "https://i.imgur.com/LZh0MZh.jpeg",
+    "slug": "battered-bluff",
+    "local_path": "/maps/battered-bluff.jpeg"
+  },
+  {
+    "name": "Blasphemous Snowfield",
+    "image_url": null,
+    "slug": "blasphemous-snowfield",
+    "local_path": null
+  },
+  {
+    "name": "Bleakspire Labour Camp",
+    "image_url": "https://i.imgur.com/Ej0FME2.jpeg",
+    "slug": "bleakspire-labour-camp",
+    "local_path": "/maps/bleakspire-labour-camp.jpeg"
+  },
+  {
+    "name": "Blighted Marsh",
+    "image_url": null,
+    "slug": "blighted-marsh",
+    "local_path": null
+  },
+  {
+    "name": "Bordeleaux Landing",
+    "image_url": "https://i.imgur.com/Cyp0j7l.jpeg",
+    "slug": "bordeleaux-landing",
+    "local_path": "/maps/bordeleaux-landing.jpeg"
+  },
+  {
+    "name": "Bray Valley",
+    "image_url": "https://i.imgur.com/XJrDm83.jpeg",
+    "slug": "bray-valley",
+    "local_path": "/maps/bray-valley.jpeg"
+  },
+  {
+    "name": "Celestial Lake",
+    "image_url": "https://i.imgur.com/JlWAhw7.jpeg",
+    "slug": "celestial-lake",
+    "local_path": "/maps/celestial-lake.jpeg"
+  },
+  {
+    "name": "Chateau de Roquefort",
+    "image_url": "https://i.imgur.com/QKZ8pt5.jpeg",
+    "slug": "chateau-de-roquefort",
+    "local_path": "/maps/chateau-de-roquefort.jpeg"
+  },
+  {
+    "name": "Clash of Chaos",
+    "image_url": "https://i.imgur.com/z9ZUKKb.jpeg",
+    "slug": "clash-of-chaos",
+    "local_path": "/maps/clash-of-chaos.jpeg"
+  },
+  {
+    "name": "Coedill's Mistwood",
+    "image_url": "https://i.imgur.com/dmsiCrL.jpeg",
+    "slug": "coedills-mistwood",
+    "local_path": "/maps/coedills-mistwood.jpeg"
+  },
+  {
+    "name": "Crater of Decay",
+    "image_url": "https://i.imgur.com/l75rvWR.jpeg",
+    "slug": "crater-of-decay",
+    "local_path": "/maps/crater-of-decay.jpeg"
+  },
+  {
+    "name": "Creeping Swamp",
+    "image_url": "https://i.imgur.com/oTLPL1o.jpeg",
+    "slug": "creeping-swamp",
+    "local_path": "/maps/creeping-swamp.jpeg"
+  },
+  {
+    "name": "Crystal Lake",
+    "image_url": "https://i.imgur.com/bcIE6QL.jpeg",
+    "slug": "crystal-lake",
+    "local_path": "/maps/crystal-lake.jpeg"
+  },
+  {
+    "name": "Decrepit Moor",
+    "image_url": "https://i.imgur.com/tdr9OGl.jpeg",
+    "slug": "decrepit-moor",
+    "local_path": "/maps/decrepit-moor.jpeg"
+  },
+  {
+    "name": "Dried Floodplain",
+    "image_url": "https://i.imgur.com/jbwS3io.jpeg",
+    "slug": "dried-floodplain",
+    "local_path": "/maps/dried-floodplain.jpeg"
+  },
+  {
+    "name": "Dunes of Khaine",
+    "image_url": "https://i.imgur.com/Cw07uU3.jpeg",
+    "slug": "dunes-of-khaine",
+    "local_path": "/maps/dunes-of-khaine.jpeg"
+  },
+  {
+    "name": "Dunes of Setep",
+    "image_url": "https://i.imgur.com/VvHaExd.jpeg",
+    "slug": "dunes-of-setep",
+    "local_path": "/maps/dunes-of-setep.jpeg"
+  },
+  {
+    "name": "Dustbowl",
+    "image_url": "https://i.imgur.com/fbeT1cA.jpeg",
+    "slug": "dustbowl",
+    "local_path": "/maps/dustbowl.jpeg"
+  },
+  {
+    "name": "Dusted Steppe",
+    "image_url": "https://i.imgur.com/57xWtNs.jpeg",
+    "slug": "dusted-steppe",
+    "local_path": "/maps/dusted-steppe.jpeg"
+  },
+  {
+    "name": "Eastern Isle Colony",
+    "image_url": "https://i.imgur.com/XlbRBLa.jpeg",
+    "slug": "eastern-isle-colony",
+    "local_path": "/maps/eastern-isle-colony.jpeg"
+  },
+  {
+    "name": "Edge of the Darkwood",
+    "image_url": "https://i.imgur.com/TNMw7j1.jpeg",
+    "slug": "edge-of-the-darkwood",
+    "local_path": "/maps/edge-of-the-darkwood.jpeg"
+  },
+  {
+    "name": "Excavation Site",
+    "image_url": "https://i.imgur.com/YjKKcG7.jpeg",
+    "slug": "excavation-site",
+    "local_path": "/maps/excavation-site.jpeg"
+  },
+  {
+    "name": "Gates of Ekrund",
+    "image_url": "https://i.imgur.com/wQVUIpP.jpeg",
+    "slug": "gates-of-ekrund",
+    "local_path": "/maps/gates-of-ekrund.jpeg"
+  },
+  {
+    "name": "Geothermal Crevice",
+    "image_url": "https://i.imgur.com/xe8naxj.jpeg",
+    "slug": "geothermal-crevice",
+    "local_path": "/maps/geothermal-crevice.jpeg"
+  },
+  {
+    "name": "Geyser Bluff",
+    "image_url": "https://i.imgur.com/NgyRe7T.jpeg",
+    "slug": "geyser-bluff",
+    "local_path": "/maps/geyser-bluff.jpeg"
+  },
+  {
+    "name": "Glade of the Everqueen",
+    "image_url": "https://i.imgur.com/LC6uWJ3.jpeg",
+    "slug": "glade-of-the-everqueen",
+    "local_path": "/maps/glade-of-the-everqueen.jpeg"
+  },
+  {
+    "name": "Glinty Toof's Crag",
+    "image_url": "https://i.imgur.com/5wPEGhT.jpeg",
+    "slug": "glinty-toofs-crag",
+    "local_path": "/maps/glinty-toofs-crag.jpeg"
+  },
+  {
+    "name": "Graveyard of Altdorf",
+    "image_url": "https://i.imgur.com/lb1ceE9.jpeg",
+    "slug": "graveyard-of-altdorf",
+    "local_path": "/maps/graveyard-of-altdorf.jpeg"
+  },
+  {
+    "name": "Halls of Karag Dum",
+    "image_url": "https://i.imgur.com/JU2Kw3Q.jpeg",
+    "slug": "halls-of-karag-dum",
+    "local_path": "/maps/halls-of-karag-dum.jpeg"
+  },
+  {
+    "name": "Hashut's Oilfields",
+    "image_url": "https://i.imgur.com/3cNieCe.jpeg",
+    "slug": "hashuts-oilfields",
+    "local_path": "/maps/hashuts-oilfields.jpeg"
+  },
+  {
+    "name": "Haunted Vale",
+    "image_url": "https://i.imgur.com/0VnWsIb.jpeg",
+    "slug": "haunted-vale",
+    "local_path": "/maps/haunted-vale.jpeg"
+  },
+  {
+    "name": "Hell Pit Depths",
+    "image_url": "https://i.imgur.com/UEqYAd3.jpeg",
+    "slug": "hell-pit-depths",
+    "local_path": "/maps/hell-pit-depths.jpeg"
+  },
+  {
+    "name": "Imperial Ambush",
+    "image_url": "https://i.imgur.com/aFXp5qw.jpeg",
+    "slug": "imperial-ambush",
+    "local_path": "/maps/imperial-ambush.jpeg"
+  },
+  {
+    "name": "Imperial Road",
+    "image_url": "https://i.imgur.com/wiMbaFw.jpeg",
+    "slug": "imperial-road",
+    "local_path": "/maps/imperial-road.jpeg"
+  },
+  {
+    "name": "Isle of Forgotten Kings",
+    "image_url": "https://i.imgur.com/lCAk02w.jpeg",
+    "slug": "isle-of-forgotten-kings",
+    "local_path": "/maps/isle-of-forgotten-kings.jpeg"
+  },
+  {
+    "name": "Jade Tomb",
+    "image_url": "https://i.imgur.com/x7PC3mz.jpeg",
+    "slug": "jade-tomb",
+    "local_path": "/maps/jade-tomb.jpeg"
+  },
+  {
+    "name": "Khsar's Cursed Oasis",
+    "image_url": "https://i.imgur.com/0vLF5DV.jpeg",
+    "slug": "khsars-cursed-oasis",
+    "local_path": "/maps/khsars-cursed-oasis.jpeg"
+  },
+  {
+    "name": "Lost Isles of Culchan",
+    "image_url": "https://i.imgur.com/leiTOnn.jpeg",
+    "slug": "lost-isles-of-culchan",
+    "local_path": "/maps/lost-isles-of-culchan.jpeg"
+  },
+  {
+    "name": "Lost Temple of Sotek",
+    "image_url": "https://i.imgur.com/UpMzR5h.jpeg",
+    "slug": "lost-temple-of-sotek",
+    "local_path": "/maps/lost-temple-of-sotek.jpeg"
+  },
+  {
+    "name": "Lustrian Narrows",
+    "image_url": "https://i.imgur.com/tHRMHIq.jpeg",
+    "slug": "lustrian-narrows",
+    "local_path": "/maps/lustrian-narrows.jpeg"
+  },
+  {
+    "name": "Mercenaries of Tilea",
+    "image_url": "https://i.imgur.com/4GvTXgU.jpeg",
+    "slug": "mercenaries-of-tilea",
+    "local_path": "/maps/mercenaries-of-tilea.jpeg"
+  },
+  {
+    "name": "Needlemyst Isle",
+    "image_url": "https://i.imgur.com/1Shgs8S.jpeg",
+    "slug": "needlemyst-isle",
+    "local_path": "/maps/needlemyst-isle.jpeg"
+  },
+  {
+    "name": "Nehekharan Wastes",
+    "image_url": "https://i.imgur.com/dPIOj0V.jpeg",
+    "slug": "nehekharan-wastes",
+    "local_path": "/maps/nehekharan-wastes.jpeg"
+  },
+  {
+    "name": "Norscan Rise",
+    "image_url": "https://i.imgur.com/olAbf3U.jpeg",
+    "slug": "norscan-rise",
+    "local_path": "/maps/norscan-rise.jpeg"
+  },
+  {
+    "name": "Nuln Outskirts",
+    "image_url": "https://i.imgur.com/M5x1wKX.jpeg",
+    "slug": "nuln-outskirts",
+    "local_path": "/maps/nuln-outskirts.jpeg"
+  },
+  {
+    "name": "Oakenshield",
+    "image_url": "https://i.imgur.com/7TzyZNQ.jpeg",
+    "slug": "oakenshield",
+    "local_path": "/maps/oakenshield.jpeg"
+  },
+  {
+    "name": "Oasis of Zedri",
+    "image_url": "https://i.imgur.com/eBMHHuD.jpeg",
+    "slug": "oasis-of-zedri",
+    "local_path": "/maps/oasis-of-zedri.jpeg"
+  },
+  {
+    "name": "Otsuchi Castle",
+    "image_url": "https://i.imgur.com/RskXrIz.jpeg",
+    "slug": "otsuchi-castle",
+    "local_path": "/maps/otsuchi-castle.jpeg"
+  },
+  {
+    "name": "Pit of the Everchosen",
+    "image_url": "https://i.imgur.com/Dlp5XAh.jpeg",
+    "slug": "pit-of-the-everchosen",
+    "local_path": "/maps/pit-of-the-everchosen.jpeg"
+  },
+  {
+    "name": "Pit of Treasures",
+    "image_url": "https://i.imgur.com/ozsRahD.jpeg",
+    "slug": "pit-of-treasures",
+    "local_path": "/maps/pit-of-treasures.jpeg"
+  },
+  {
+    "name": "Proving Grounds",
+    "image_url": "https://i.imgur.com/dngqsiC.jpeg",
+    "slug": "proving-grounds",
+    "local_path": "/maps/proving-grounds.jpeg"
+  },
+  {
+    "name": "Putrefying Carcass",
+    "image_url": "https://i.imgur.com/XZ32CD1.jpeg",
+    "slug": "putrefying-carcass",
+    "local_path": "/maps/putrefying-carcass.jpeg"
+  },
+  {
+    "name": "Rapturous Expanse",
+    "image_url": "https://i.imgur.com/jU112ja.jpeg",
+    "slug": "rapturous-expanse",
+    "local_path": "/maps/rapturous-expanse.jpeg"
+  },
+  {
+    "name": "Rift at the World's Edge",
+    "image_url": "https://i.imgur.com/USxlGQx.jpeg",
+    "slug": "rift-at-the-worlds-edge",
+    "local_path": "/maps/rift-at-the-worlds-edge.jpeg"
+  },
+  {
+    "name": "Road to Talabheim",
+    "image_url": "https://i.imgur.com/c7xXQvx.jpeg",
+    "slug": "road-to-talabheim",
+    "local_path": "/maps/road-to-talabheim.jpeg"
+  },
+  {
+    "name": "Road to Vaul's Anvil",
+    "image_url": "https://i.imgur.com/TnwQx8Y.jpeg",
+    "slug": "road-to-vauls-anvil",
+    "local_path": "/maps/road-to-vauls-anvil.jpeg"
+  },
+  {
+    "name": "Ruins of Arrogance",
+    "image_url": "https://i.imgur.com/UfzOp5j.jpeg",
+    "slug": "ruins-of-arrogance",
+    "local_path": "/maps/ruins-of-arrogance.jpeg"
+  },
+  {
+    "name": "Sacred Cenote of Chaqua",
+    "image_url": "https://i.imgur.com/GaZPOtr.jpeg",
+    "slug": "sacred-cenote-of-chaqua",
+    "local_path": "/maps/sacred-cenote-of-chaqua.jpeg"
+  },
+  {
+    "name": "Shambling Bog",
+    "image_url": "https://i.imgur.com/65px0d0.jpeg",
+    "slug": "shambling-bog",
+    "local_path": "/maps/shambling-bog.jpeg"
+  },
+  {
+    "name": "Siege of Salernum",
+    "image_url": "https://i.imgur.com/RGdRLek.jpeg",
+    "slug": "siege-of-salernum",
+    "local_path": "/maps/siege-of-salernum.jpeg"
+  },
+  {
+    "name": "Skjalandir's Cave",
+    "image_url": "https://i.imgur.com/NtZ1Rxn.jpeg",
+    "slug": "skjalandirs-cave",
+    "local_path": "/maps/skjalandirs-cave.jpeg"
+  },
+  {
+    "name": "Stone'enge",
+    "image_url": "https://i.imgur.com/7EcIhGa.jpeg",
+    "slug": "stoneenge",
+    "local_path": "/maps/stoneenge.jpeg"
+  },
+  {
+    "name": "Sunken Mire",
+    "image_url": "https://i.imgur.com/MbIcKyg.jpeg",
+    "slug": "sunken-mire",
+    "local_path": "/maps/sunken-mire.jpeg"
+  },
+  {
+    "name": "Talabheim Crater",
+    "image_url": "https://i.imgur.com/5WkgGst.jpeg",
+    "slug": "talabheim-crater",
+    "local_path": "/maps/talabheim-crater.jpeg"
+  },
+  {
+    "name": "Temple of Usirian",
+    "image_url": "https://i.imgur.com/IKSZxe2.jpeg",
+    "slug": "temple-of-usirian",
+    "local_path": "/maps/temple-of-usirian.jpeg"
+  },
+  {
+    "name": "Terracotta Graveyard",
+    "image_url": "https://i.imgur.com/cK0RCn7.jpeg",
+    "slug": "terracotta-graveyard",
+    "local_path": "/maps/terracotta-graveyard.jpeg"
+  },
+  {
+    "name": "The Arena",
+    "image_url": "https://i.imgur.com/E2fTPnc.jpeg",
+    "slug": "the-arena",
+    "local_path": "/maps/the-arena.jpeg"
+  },
+  {
+    "name": "The Blazing Ramparts",
+    "image_url": "https://i.imgur.com/V7uKLph.jpeg",
+    "slug": "the-blazing-ramparts",
+    "local_path": "/maps/the-blazing-ramparts.jpeg"
+  },
+  {
+    "name": "The Blood Grove",
+    "image_url": "https://i.imgur.com/Ju2vMRf.jpeg",
+    "slug": "the-blood-grove",
+    "local_path": "/maps/the-blood-grove.jpeg"
+  },
+  {
+    "name": "The Changer's Madhouse",
+    "image_url": "https://i.imgur.com/2QJZe1V.jpeg",
+    "slug": "the-changers-madhouse",
+    "local_path": "/maps/the-changers-madhouse.jpeg"
+  },
+  {
+    "name": "The Crucible",
+    "image_url": "https://i.imgur.com/b4HCX1N.jpeg",
+    "slug": "the-crucible",
+    "local_path": "/maps/the-crucible.jpeg"
+  },
+  {
+    "name": "The Hag's Conclave",
+    "image_url": "https://i.imgur.com/nUCNRaA.jpeg",
+    "slug": "the-hags-conclave",
+    "local_path": "/maps/the-hags-conclave.jpeg"
+  },
+  {
+    "name": "The Mountain of Truth",
+    "image_url": "https://i.imgur.com/90iybRZ.jpeg",
+    "slug": "the-mountain-of-truth",
+    "local_path": "/maps/the-mountain-of-truth.jpeg"
+  },
+  {
+    "name": "The Sword of the Lake",
+    "image_url": "https://i.imgur.com/Yog7p4C.jpeg",
+    "slug": "the-sword-of-the-lake",
+    "local_path": "/maps/the-sword-of-the-lake.jpeg"
+  },
+  {
+    "name": "The Valley of Lies",
+    "image_url": "https://i.imgur.com/XOll0lj.jpeg",
+    "slug": "the-valley-of-lies",
+    "local_path": "/maps/the-valley-of-lies.jpeg"
+  },
+  {
+    "name": "The Vanishing Steppe",
+    "image_url": "https://i.imgur.com/AZAPl4d.jpeg",
+    "slug": "the-vanishing-steppe",
+    "local_path": "/maps/the-vanishing-steppe.jpeg"
+  },
+  {
+    "name": "Twilight Forest",
+    "image_url": "https://i.imgur.com/bI2jrWf.jpeg",
+    "slug": "twilight-forest",
+    "local_path": "/maps/twilight-forest.jpeg"
+  },
+  {
+    "name": "Urgot's Stompin Groundz",
+    "image_url": "https://i.imgur.com/cUEXhx4.jpeg",
+    "slug": "urgots-stompin-groundz",
+    "local_path": "/maps/urgots-stompin-groundz.jpeg"
+  },
+  {
+    "name": "Vineyards of Varieno",
+    "image_url": "https://i.imgur.com/WdgHVPF.jpeg",
+    "slug": "vineyards-of-varieno",
+    "local_path": "/maps/vineyards-of-varieno.jpeg"
+  },
+  {
+    "name": "Whirling Maelstrom",
+    "image_url": "https://i.imgur.com/VvrCxyx.jpeg",
+    "slug": "whirling-maelstrom",
+    "local_path": "/maps/whirling-maelstrom.jpeg"
+  },
+  {
+    "name": "Womb of Sorrow",
+    "image_url": "https://i.imgur.com/xOoNocf.jpeg",
+    "slug": "womb-of-sorrow",
+    "local_path": "/maps/womb-of-sorrow.jpeg"
+  },
+  {
+    "name": "Zharr-Naggrund Rebellion",
+    "image_url": "https://i.imgur.com/BjdIfUG.jpeg",
+    "slug": "zharr-naggrund-rebellion",
+    "local_path": "/maps/zharr-naggrund-rebellion.jpeg"
+  }
+]
