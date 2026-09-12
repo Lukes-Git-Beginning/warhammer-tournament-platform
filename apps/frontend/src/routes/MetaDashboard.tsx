@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   getMetaOverview,
@@ -36,29 +36,36 @@ function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-/** Dark, compact native select shared by the three meta selectors. */
-function MetaSelect({
-  label,
-  value,
-  onChange,
+/** Segmented filter pill — mirrors the Tournaments tab filter style. */
+function FilterChip({
+  active,
+  onClick,
   children,
 }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
+  active: boolean;
+  onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[11px] font-display uppercase tracking-wide text-rizzotto-stone-500">{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-1.5 text-sm text-rizzotto-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
-      >
-        {children}
-      </select>
-    </label>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
+        active
+          ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+          : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Small uppercase group label to the left of a filter cluster. */
+function FilterLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-rizzotto-stone-500">{children}</span>
   );
 }
 
@@ -183,52 +190,61 @@ export function MetaDashboard() {
 
   const hasNoVersion = !!versionsData && versions.length === 0;
   const hasVersion = !!versionId;
-  const versionName = useMemo(
-    () => versions.find((v) => v.id === versionId)?.name ?? overview?.version?.name,
-    [versions, versionId, overview],
-  );
 
   return (
     <PageShell variant="wide">
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">{t('meta_page.title')}</h1>
-          {versionName && (
-            <p className="mt-1 text-sm text-rizzotto-stone-500">
-              {t('meta_page.version_label', { name: versionName })}
-            </p>
-          )}
-        </div>
+      <header className="mb-8">
+        <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">{t('meta_page.title')}</h1>
 
-        {/* Selectors: version × battle type × team size */}
+        {/* Filters — Version · Battle type · Format (Tournaments-tab style) */}
         {versions.length > 0 && (
-          <div className="flex flex-wrap items-end gap-3">
-            <MetaSelect label="Version" value={versionId ?? ''} onChange={setSelectedVersionId}>
-              {versions.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                  {v.is_active ? ' (active)' : ''}
-                </option>
-              ))}
-            </MetaSelect>
-            <MetaSelect label="Battle type" value={battleType} onChange={(v) => setBattleType(v as BattleType)}>
+          <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3">
+            <div className="flex items-center gap-2">
+              <FilterLabel>Version</FilterLabel>
+              <select
+                value={versionId ?? ''}
+                onChange={(e) => setSelectedVersionId(e.target.value)}
+                className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-1.5 text-sm font-medium text-rizzotto-stone-200 transition-colors hover:border-rizzotto-iron-500 focus:border-rizzotto-gold-500 focus:outline-none"
+              >
+                {versions.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                    {v.is_active ? ' (active)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <FilterLabel>Battle type</FilterLabel>
               {BATTLE_TYPES.map((b) => (
-                <option key={b.value} value={b.value}>
+                <FilterChip key={b.value} active={battleType === b.value} onClick={() => setBattleType(b.value)}>
                   {b.label}
-                </option>
+                </FilterChip>
               ))}
-            </MetaSelect>
-            <MetaSelect
-              label="Format"
-              value={format}
-              onChange={(v) => {
-                setFormat(v as Format);
-                setGamesPage(1);
-              }}
-            >
-              <option value="ONE_V_ONE">1v1</option>
-              <option value="TWO_V_TWO">2v2</option>
-            </MetaSelect>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <FilterLabel>Format</FilterLabel>
+              <FilterChip
+                active={format === 'ONE_V_ONE'}
+                onClick={() => {
+                  setFormat('ONE_V_ONE');
+                  setGamesPage(1);
+                }}
+              >
+                1v1
+              </FilterChip>
+              <FilterChip
+                active={format === 'TWO_V_TWO'}
+                onClick={() => {
+                  setFormat('TWO_V_TWO');
+                  setGamesPage(1);
+                }}
+              >
+                2v2
+              </FilterChip>
+            </div>
           </div>
         )}
       </header>
