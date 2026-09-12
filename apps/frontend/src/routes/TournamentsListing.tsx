@@ -8,6 +8,7 @@ import { formatInUserTimezone } from '@/lib/timezone.js';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { Badge } from '@/components/ui/badge.js';
+import { PrivateBadge } from '@/components/ui/PrivateBadge.js';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 import { Separator } from '@/components/ui/separator.js';
@@ -37,6 +38,7 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
   const isLive = tournament.status === 'ONGOING';
   const isCompleted = tournament.status === 'COMPLETED';
   const isDraft = tournament.status === 'DRAFT';
+  const isPrivate = tournament.visibility === 'PRIVATE';
   const startDate = formatInUserTimezone(tournament.start_date, me?.timezone ?? undefined);
 
   return (
@@ -48,7 +50,13 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
     <Card
       variant="banner"
       interactive
-      className={`flex h-full flex-col${isDraft ? ' border-2 border-dashed border-rizzotto-gold-500/40' : ''}`}
+      className={`flex h-full flex-col${
+        isDraft
+          ? ' border-2 border-dashed border-rizzotto-gold-500/40'
+          : isPrivate
+            ? ' border border-dashed border-stone-500/40'
+            : ''
+      }`}
     >
       <CardHeader>
         {tournament.poster_url && (
@@ -89,6 +97,7 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
             Major
           </Badge>
         )}
+        {isPrivate && <PrivateBadge className="self-start" />}
         <CardTitle className="line-clamp-2">{tournament.name}</CardTitle>
         <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-rizzotto-stone-400">
           <span className="inline-flex items-center gap-1.5">

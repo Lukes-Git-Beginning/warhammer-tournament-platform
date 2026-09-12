@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.57.4] — 2026-09-12 — Private marker in the overview
+### Changed
+- The subtle **Private** marker now also appears in the tournament overview — the listing and the homepage — as a muted dashed border and a lock badge on private tournaments (distinct from the dashed-gold draft styling), for the hosts, moderators and admins who can see them.
+
 ## [1.57.3] — 2026-09-12 — Private tournament marker
 ### Added
 - A subtle **Private** marker now appears on private tournaments — on the tournament page and on its card — for the hosts, moderators and admins who can still see them, so it's clear at a glance that an event isn't public. (Series already showed this.)
