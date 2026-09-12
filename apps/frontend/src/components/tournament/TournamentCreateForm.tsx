@@ -216,6 +216,8 @@ export function TournamentCreateForm({
   const [existingFinalId, setExistingFinalId] = useState<string | null>(null);
   const [existingFinalSlug, setExistingFinalSlug] = useState<string | null>(null);
   const [existingFinalName, setExistingFinalName] = useState<string | null>(null);
+  // The loaded final's current poster, so the picker shows it instead of "no poster set".
+  const [existingFinalPosterUrl, setExistingFinalPosterUrl] = useState<string | null>(null);
   // The slug currently selected in the picker dropdown (not yet loaded).
   const [pickerSlug, setPickerSlug] = useState<string>('');
   const [loadingExistingFinal, setLoadingExistingFinal] = useState(false);
@@ -371,7 +373,8 @@ export function TournamentCreateForm({
 
   // Existing tournaments (next 7 days) overlaid on the calendar, plus a live clash
   // warning when the chosen start time overlaps one of them.
-  const scheduledTournaments = useCalendarTournaments();
+  // Exclude the loaded existing final from the clash check so it never clashes with itself.
+  const scheduledTournaments = useCalendarTournaments(existingFinalId ?? undefined);
   const startDate = new Date(form.start_date ?? '');
   const ownStart = Number.isNaN(startDate.getTime()) ? null : startDate;
   const ownDurationHours = estimateDurationHours({
@@ -582,6 +585,7 @@ export function TournamentCreateForm({
       setExistingFinalId(t.id);
       setExistingFinalSlug(t.slug);
       setExistingFinalName(t.name);
+      setExistingFinalPosterUrl(t.poster_url ?? null);
     } catch (err) {
       setLoadExistingFinalError((err as Error).message ?? 'Failed to load tournament.');
     } finally {
@@ -593,6 +597,7 @@ export function TournamentCreateForm({
     setExistingFinalId(null);
     setExistingFinalSlug(null);
     setExistingFinalName(null);
+    setExistingFinalPosterUrl(null);
     setPickerSlug('');
     setLoadExistingFinalError(null);
     // Reset to default form state and re-derive name from series name.
@@ -762,7 +767,7 @@ export function TournamentCreateForm({
         stream_url: stream_url || null,
         registration_deadline: registration_deadline ? toIsoOrInvalid(registration_deadline) : null,
         description: description || null,
-        rules: rules || null,
+        rules: rules || '',
         draft_enabled: draft_enabled ?? false,
         ...(draft_preset_id ? { draft_preset_id } : {}),
         map_pool: map_pool ?? [],
@@ -782,6 +787,10 @@ export function TournamentCreateForm({
       void (async () => {
         try {
           await patchTournament(slug, patchBody);
+          // Upload a newly picked poster for the final; if none, its existing poster is kept.
+          if (posterFile) {
+            try { await uploadTournamentPoster(slug, posterFile); } catch { /* swallow — non-fatal */ }
+          }
           const scoringConfig = buildScoringConfig();
           const series = await seriesMutation.mutateAsync({
             name: seriesName.trim(),
@@ -1130,7 +1139,7 @@ export function TournamentCreateForm({
               )}
             </div>
           )}
-          <PosterPickField file={posterFile} onPick={setPosterFile} />
+          <PosterPickField file={posterFile} onPick={setPosterFile} existingUrl={existingFinalPosterUrl} />
 
       <div>
         <Label htmlFor="tcf-name" required>

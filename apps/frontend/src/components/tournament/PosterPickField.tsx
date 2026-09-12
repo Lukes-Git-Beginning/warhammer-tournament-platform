@@ -11,6 +11,7 @@ export function PosterPickField({
   onPick,
   legend = 'Poster',
   description = 'No poster set. Upload a banner image — shown on the tournament page and its card.',
+  existingUrl = null,
 }: {
   file: File | null;
   onPick: (file: File | null) => void;
@@ -18,6 +19,8 @@ export function PosterPickField({
   legend?: string;
   /** Empty-state helper text shown when no file is picked. */
   description?: string;
+  /** An already-saved poster to preview when no new file is picked (e.g. editing an existing tournament). */
+  existingUrl?: string | null;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -32,14 +35,17 @@ export function PosterPickField({
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
+  // A freshly picked file wins; otherwise fall back to any already-saved poster.
+  const shownUrl = preview ?? existingUrl;
+
   return (
     <fieldset className="space-y-3 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
       <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
         {legend} <span className="text-rizzotto-stone-600">(optional)</span>
       </legend>
-      {preview ? (
+      {shownUrl ? (
         <img
-          src={preview}
+          src={shownUrl}
           alt={`${legend} preview`}
           className="aspect-[10/3] w-full rounded border border-stone-800 object-cover"
         />
@@ -63,7 +69,7 @@ export function PosterPickField({
           onClick={() => inputRef.current?.click()}
           className="rounded border border-rizzotto-iron-600 px-3 py-1.5 text-sm text-rizzotto-stone-200 transition-colors hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-400"
         >
-          {preview ? 'Replace poster' : 'Upload poster'}
+          {shownUrl ? 'Replace poster' : 'Upload poster'}
         </button>
         {preview && (
           <button
