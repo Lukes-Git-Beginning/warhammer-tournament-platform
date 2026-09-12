@@ -177,12 +177,13 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
     };
   });
 
-  // GET /api/teams — all non-archived teams (public), for the Teams directory. The caller's own
-  // teams come from /api/teams/me; the UI divides "your teams" from the rest.
+  // GET /api/teams — all non-archived teams (public), a Team-GS ranking board. ACTIVE teams
+  // are ranked by their (timeless) team General Skill; FORMING teams (no accepted partner yet)
+  // follow, unranked. The caller's own teams come from /api/teams/me; the UI divides "your
+  // teams" from the ranked rest.
   fastify.get('/api/teams', async () => {
     const teams = await fastify.prisma.team.findMany({
       where: { status: { not: 'ARCHIVED' } },
-      orderBy: [{ status: 'asc' }, { created_at: 'desc' }],
       select: {
         id: true,
         name: true,
@@ -194,14 +195,52 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     });
+
+    // One timeless fit (cached); each team's GS blends its members' prior with its own 2v2 games.
+    const model = await getRatingModel(fastify.prisma, fastify.redis, {
+      versionId: null,
+      config: { hierarchical: true },
+    });
+    const withGs = teams.map((t) => ({
+      t,
+      gs: resolveTeamGs(model, t.id, t.members.map((m) => m.user_id)),
+    }));
+
+    const gsDto = (gs: ReturnType<typeof resolveTeamGs>) =>
+      gs
+        ? {
+            generalSkill: gs.generalSkill,
+            band: gs.band,
+            winChance: gs.winChance,
+            provisional: gs.provisional,
+            gamesCount: gs.gamesCount,
+          }
+        : null;
+    const base = (x: (typeof withGs)[number]) => ({
+      id: x.t.id,
+      name: x.t.name,
+      status: x.t.status,
+      created_at: x.t.created_at.toISOString(),
+      members: x.t.members.map((m) => memberDto(m, x.t.captain_id)),
+      gs: gsDto(x.gs),
+    });
+
+    const active = withGs
+      .filter((x) => x.t.status === 'ACTIVE')
+      .sort(
+        (a, b) =>
+          (b.gs?.generalSkill ?? -Infinity) - (a.gs?.generalSkill ?? -Infinity) ||
+          b.t.created_at.getTime() - a.t.created_at.getTime(),
+      );
+    const forming = withGs
+      .filter((x) => x.t.status !== 'ACTIVE')
+      .sort((a, b) => b.t.created_at.getTime() - a.t.created_at.getTime());
+
     return {
-      teams: teams.map((t) => ({
-        id: t.id,
-        name: t.name,
-        status: t.status,
-        created_at: t.created_at.toISOString(),
-        members: t.members.map((m) => memberDto(m, t.captain_id)),
-      })),
+      teams: [
+        ...active.map((x, i) => ({ ...base(x), rank: i + 1 })),
+        ...forming.map((x) => ({ ...base(x), rank: null })),
+      ],
     };
   });
 

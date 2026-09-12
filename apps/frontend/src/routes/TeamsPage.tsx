@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { SKILL_BAND_META } from '@/components/bracket/skillBandMeta.js';
 import {
   Dialog,
   DialogContent,
@@ -90,15 +91,45 @@ function TeamCard({ t }: { t: TeamDto }) {
   );
 }
 
-function DirectoryTeamCard({ t }: { t: TeamDirectoryEntry }) {
+function BandChip({ band }: { band: number }) {
+  const meta = SKILL_BAND_META[band];
+  if (!meta) return null;
   return (
-    <Card variant="banner">
+    <span
+      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${meta.textCls} ${meta.borderCls} ${meta.bgCls}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${meta.dotCls}`} />
+      {meta.name}
+    </span>
+  );
+}
+
+function DirectoryTeamCard({ t, highlight }: { t: TeamDirectoryEntry; highlight?: boolean }) {
+  return (
+    <Card variant="banner" className={highlight ? 'border-rizzotto-gold-500/50' : undefined}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-2">
-          <TeamNameLink id={t.id} name={t.name} />
-          <span className="text-[10px] font-display uppercase tracking-wide text-rizzotto-stone-500">
-            {STATUS_LABEL[t.status] ?? t.status}
-          </span>
+          <div className="flex items-center gap-2 min-w-0">
+            {t.rank != null && (
+              <span className="shrink-0 w-7 text-right font-display text-sm text-rizzotto-stone-500">#{t.rank}</span>
+            )}
+            <TeamNameLink id={t.id} name={t.name} />
+          </div>
+          {t.gs ? (
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="font-display text-sm font-bold text-rizzotto-gold-400">{t.gs.winChance}%</span>
+              <BandChip band={t.gs.band} />
+              {t.gs.provisional && (
+                <span className="rounded border border-rizzotto-iron-600 px-1 py-0.5 text-[9px] font-display uppercase tracking-wide text-rizzotto-stone-500">
+                  Prov
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="shrink-0 text-[10px] font-display uppercase tracking-wide text-rizzotto-stone-500">
+              {STATUS_LABEL[t.status] ?? t.status}
+            </span>
+          )}
         </div>
         <div className="mt-2 space-y-1">
           {t.members.map((m) => (
@@ -264,7 +295,7 @@ export function TeamsPage() {
   const active = teams.filter((t) => t.status === 'ACTIVE');
   const forming = teams.filter((t) => t.status === 'FORMING' && t.is_captain);
   const myTeamIds = new Set(teams.map((t) => t.id));
-  const otherTeams = (allTeamsData?.teams ?? []).filter((t) => !myTeamIds.has(t.id));
+  const rankedTeams = allTeamsData?.teams ?? [];
 
   return (
     <PageShell variant="wide">
@@ -345,13 +376,16 @@ export function TeamsPage() {
           )}
 
           <section>
-            <h2 className="mb-3 font-display text-lg text-rizzotto-gold-400">All teams</h2>
-            {otherTeams.length === 0 ? (
-              <p className="text-sm text-rizzotto-stone-500">No other teams yet.</p>
+            <h2 className="mb-1 font-display text-lg text-rizzotto-gold-400">Team rankings</h2>
+            <p className="mb-3 text-xs text-rizzotto-stone-500">
+              Active teams ranked by team General Skill (win chance vs an average team).
+            </p>
+            {rankedTeams.length === 0 ? (
+              <p className="text-sm text-rizzotto-stone-500">No teams yet.</p>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {otherTeams.map((t) => (
-                  <DirectoryTeamCard key={t.id} t={t} />
+              <div className="grid gap-2">
+                {rankedTeams.map((t) => (
+                  <DirectoryTeamCard key={t.id} t={t} highlight={myTeamIds.has(t.id)} />
                 ))}
               </div>
             )}

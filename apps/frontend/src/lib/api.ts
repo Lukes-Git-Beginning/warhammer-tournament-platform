@@ -2443,8 +2443,21 @@ export function declineTeam(teamId: string): Promise<{ ok: true }> {
   return apiFetch<{ ok: true }>(`/api/teams/${teamId}/decline`, { method: 'POST' });
 }
 
-/** A team in the public directory (no per-viewer `is_captain`). */
-export type TeamDirectoryEntry = Omit<TeamDto, 'is_captain'>;
+/** Compact Team GS for the ranking board (null while the team + members are all unrated). */
+export interface TeamDirectoryGs {
+  generalSkill: number;
+  band: number;
+  winChance: number;
+  provisional: boolean;
+  gamesCount: number;
+}
+
+/** A team in the public directory / ranking board (no per-viewer `is_captain`). ACTIVE teams
+ *  carry a `rank` (by team GS); FORMING teams have `rank: null`. */
+export type TeamDirectoryEntry = Omit<TeamDto, 'is_captain'> & {
+  gs: TeamDirectoryGs | null;
+  rank: number | null;
+};
 
 export interface TeamProfileDto {
   id: string;
