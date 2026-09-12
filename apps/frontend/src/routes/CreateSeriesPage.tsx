@@ -261,10 +261,11 @@ export function CreateSeriesPage() {
                 <option value={2}>Top 2 (finalists)</option>
                 <option value={3}>Top 3</option>
                 <option value={4}>Top 4</option>
+                <option value={8}>Top 8 (full playoff)</option>
               </select>
               <p className="mt-1 text-xs text-rizzotto-stone-500">
-                The top X of each qualifier's highest-division playoff qualify. Top 3 or 4 requires a
-                third-place match in the qualifier (5th+ isn't cleanly rankable).
+                The top X of each qualifier's highest-division playoff qualify. Top 3 needs a
+                third-place match in the qualifier; 5-7 aren't cleanly rankable.
               </p>
             </div>
           )}

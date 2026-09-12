@@ -29,7 +29,7 @@ export async function getQualifierPlacements(
         where: {
           tournament_id: tournamentId,
           deleted_at: null,
-          phase: { in: ['PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] },
+          phase: { in: ['PLAYOFF_QF', 'PLAYOFF_SF', 'PLAYOFF_FINAL', 'PLAYOFF_THIRD_PLACE'] },
         },
         select: {
           phase: true,

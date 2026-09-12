@@ -23,10 +23,18 @@ export const ScoringConfigSchema = z
     points_per_game_played: z.number().int().min(0).max(100).default(1),
     points_per_win: z.number().int().min(0).max(100).default(1),
     final_size: z.number().int().min(1).max(256).default(16),
-    // Model C — per-qualifier direct qualification. Determinable cutoffs only: 1,2 from the
-    // final; 3,4 from the highest division's third-place match (so top-3/4 needs one). Positions
-    // 5/6/7 (QF losers) are not cleanly rankable → capped at 4.
-    top_x: z.number().int().min(1).max(4).default(2),
+    // Model C — per-qualifier direct qualification. Determinable cutoffs: 1, 2, 4, 8 (the whole
+    // playoff) always; 3 only with a third-place match. 5/6/7 split the tied QF-loser tier and are
+    // not derivable, so they're rejected.
+    top_x: z
+      .number()
+      .int()
+      .min(1)
+      .max(8)
+      .refine((x) => x !== 5 && x !== 6 && x !== 7, {
+        message: 'top_x must be 1, 2, 3, 4, or 8 (5-7 are not determinable from a bracket)',
+      })
+      .default(2),
     // Ordered tiebreak chain for Model A (evaluated left→right; 'random' is
     // deterministic per series so results are stable and reproducible).
     tiebreakers: z.array(TiebreakerSchema).min(1).default(['points', 'wins', 'games', 'random']),

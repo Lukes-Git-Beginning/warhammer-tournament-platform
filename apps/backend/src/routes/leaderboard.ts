@@ -80,12 +80,12 @@ export function tournamentChampion(
 }
 
 /**
- * The determinable podium (ordered top finishers) of a tournament, generalising
- * {@link tournamentChampion} with the SAME highest-division-final method. For playoff formats the
- * highest-band PLAYOFF_FINAL gives 1st (winner) + 2nd (loser); that division's PLAYOFF_THIRD_PLACE
- * match (if any) gives 3rd + 4th. Positions beyond 4 (QF losers) are not cleanly rankable and are
- * omitted — so a "top 3" cut REQUIRES a third-place match, and 5/6/7 are not derivable. Returns []
- * for tournaments with no playoff final (caller falls back to standings). Used by the series feature.
+ * The determinable podium (ordered top finishers) of a tournament's HIGHEST-division playoff,
+ * generalising {@link tournamentChampion} with the SAME highest-band-final method. Positions:
+ * 1/2 from the final; 3/4 from that division's third-place match, else both SF losers tie at 3;
+ * QF losers tie at 5. So the determinable qualification cuts are 1, 2, 4 and 8 (whole playoff)
+ * always, and 3 only with a third-place match; 5/6/7 split the tied QF-loser tier and are NOT
+ * derivable. Returns [] when there is no playoff final (caller falls back to standings).
  */
 export function tournamentPodium(
   matches: ChampionMatch[],
@@ -94,23 +94,40 @@ export function tournamentPodium(
   const done = matches.filter((m) => m.status === 'COMPLETED' && m.winner_id);
   const bandOf = (m: ChampionMatch): number =>
     Math.max(bandByUser.get(m.player1_id ?? '') ?? 0, bandByUser.get(m.player2_id ?? '') ?? 0);
-  const highestBand = (pool: ChampionMatch[]): ChampionMatch | null =>
-    pool.reduce<ChampionMatch | null>((best, m) => (best === null || bandOf(m) > bandOf(best) ? m : best), null);
+  const loserOf = (m: ChampionMatch): string | null =>
+    m.player1_id === m.winner_id ? m.player2_id : m.player1_id;
+
+  const finals = done.filter((m) => m.phase === 'PLAYOFF_FINAL');
+  if (finals.length === 0) return [];
+  // Top division = the final whose finalists carry the highest skill band.
+  let final = finals[0]!;
+  for (const f of finals) if (bandOf(f) > bandOf(final)) final = f;
+  if (!final.winner_id) return [];
+  const topBand = bandOf(final);
+  const sameBand = (m: ChampionMatch): boolean => bandOf(m) === topBand;
 
   const podium: { userId: string; position: number }[] = [];
-  const final = highestBand(done.filter((m) => m.phase === 'PLAYOFF_FINAL'));
-  if (!final || !final.winner_id) return podium;
-  const runnerUp = final.player1_id === final.winner_id ? final.player2_id : final.player1_id;
-  podium.push({ userId: final.winner_id, position: 1 });
-  if (runnerUp) podium.push({ userId: runnerUp, position: 2 });
+  const placed = new Set<string>();
+  const add = (uid: string | null, position: number): void => {
+    if (uid && !placed.has(uid)) {
+      podium.push({ userId: uid, position });
+      placed.add(uid);
+    }
+  };
 
-  // 3rd/4th only from that division's third-place match — the reason a "top 3" cut needs one.
-  const third = highestBand(done.filter((m) => m.phase === 'PLAYOFF_THIRD_PLACE'));
+  add(final.winner_id, 1);
+  add(loserOf(final), 2);
+  // 3rd/4th: a third-place match ranks them cleanly (3 vs 4); otherwise the two SF losers tie at 3
+  // (so "top 3" is ambiguous without one, but "top 4" takes both regardless).
+  const third = done.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE' && sameBand(m));
   if (third && third.winner_id) {
-    const fourth = third.player1_id === third.winner_id ? third.player2_id : third.player1_id;
-    podium.push({ userId: third.winner_id, position: 3 });
-    if (fourth) podium.push({ userId: fourth, position: 4 });
+    add(third.winner_id, 3);
+    add(loserOf(third), 4);
+  } else {
+    for (const sf of done.filter((m) => m.phase === 'PLAYOFF_SF' && sameBand(m))) add(loserOf(sf), 3);
   }
+  // 5th: QF losers (tied) — completes the field so a full "top 8" cut takes the whole playoff.
+  for (const qf of done.filter((m) => m.phase === 'PLAYOFF_QF' && sameBand(m))) add(loserOf(qf), 5);
   return podium;
 }
 
