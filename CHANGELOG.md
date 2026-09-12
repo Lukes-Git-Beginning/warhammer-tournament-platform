@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.57.7] — 2026-09-12 — Fix saving a non-draft tournament as a series final
+### Fixed
+- Attaching an existing tournament that has already left draft as a series Grand Final no longer fails with "faction_pool can only be changed while the tournament is in draft". Structural fields that can't change after draft (format, mode, faction pool) are no longer resent when saving such a final.
+
 ## [1.57.6] — 2026-09-12 — Fix using an existing tournament as a series final
 ### Fixed
 - Creating a series from an existing tournament as the Grand Final now works end to end: it no longer flags the tournament as clashing with itself on the schedule, the tournament's already-set poster is now shown in the form, and saving no longer fails with a validation error.
