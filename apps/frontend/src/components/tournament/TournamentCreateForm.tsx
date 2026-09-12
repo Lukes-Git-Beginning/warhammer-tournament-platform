@@ -411,8 +411,8 @@ export function TournamentCreateForm({
 
   // ── Series mode: qualifier list ─────────────────────────────────────────
   const { data: tournamentsData } = useQuery({
-    queryKey: ['tournaments', 'manageable', 1, 50],
-    queryFn: () => listTournaments(1, 50, undefined, undefined, { manageable: true }),
+    queryKey: ['tournaments', 'manageable', 'unassigned', 1, 50],
+    queryFn: () => listTournaments(1, 50, undefined, undefined, { manageable: true, notInSeries: true }),
     enabled: !!seriesMode,
     retry: false,
   });

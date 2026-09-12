@@ -37,6 +37,12 @@ const ListQuerySchema = z.object({
     .enum(['true', 'false'])
     .transform((v) => v === 'true')
     .optional(),
+  // Exclude tournaments already assigned to a series (as a qualifier or a final) — the series
+  // qualifier picker uses this, since series membership is exclusive.
+  not_in_series: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
 });
 
 // Map decision modes that draw from the shared tournament map pool. Host-preset
@@ -284,7 +290,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         statusCode: 400,
       });
     }
-    const { page, pageSize, status, is_major, date_from, date_to, manageable } = parsed.data;
+    const { page, pageSize, status, is_major, date_from, date_to, manageable, not_in_series } = parsed.data;
     const skip = (page - 1) * pageSize;
 
     // Optional auth: identify the viewer so a host or co-host (and staff) can see
@@ -302,7 +308,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
     const result = await cached(
       fastify.redis,
-      cacheKey('tournaments:list', { page, pageSize, status, is_major, date_from, date_to, manageable, viewer: viewerKey }),
+      cacheKey('tournaments:list', { page, pageSize, status, is_major, date_from, date_to, manageable, not_in_series, viewer: viewerKey }),
       async () => {
         const dateFilter =
           date_from !== undefined || date_to !== undefined
@@ -334,6 +340,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           deleted_at: null,
           ...(status !== undefined ? { status } : {}),
           ...(is_major !== undefined ? { is_major } : {}),
+          ...(not_in_series ? { series_id: null, is_series_final: false } : {}),
           ...dateFilter,
           ...visibility,
         };

@@ -488,12 +488,13 @@ export function listTournaments(
   pageSize = 20,
   status?: Tournament['status'],
   isMajor?: boolean,
-  opts?: { manageable?: boolean },
+  opts?: { manageable?: boolean; notInSeries?: boolean },
 ): Promise<{ data: Tournament[]; total: number; page: number; pageSize: number }> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (status) params.set('status', status);
   if (isMajor === true) params.set('is_major', 'true');
   if (opts?.manageable) params.set('manageable', 'true');
+  if (opts?.notInSeries) params.set('not_in_series', 'true');
   return apiFetch<{ data: Tournament[]; total: number; page: number; pageSize: number }>(
     `/api/tournaments?${params.toString()}`,
   );
