@@ -10,7 +10,6 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { getStandardRuleset, type BattleType, type StandardRuleset } from '@/lib/api.js';
-import { BattleTypeWatermark } from '@/components/tournament/TournamentTypeBadges.js';
 
 const BATTLE_TYPE_LABEL: Record<string, string> = {
   DOMINATION: 'Domination',
@@ -63,21 +62,24 @@ export function StandardRulesetCard({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-md border border-stone-800 bg-stone-900/50 text-sm leading-relaxed ${
+      className={`rounded-md border border-stone-800 bg-stone-900/50 text-sm leading-relaxed ${
         compact ? 'p-3' : 'p-6'
       }`}
     >
-      {battleType && <BattleTypeWatermark battleType={battleType} />}
-      <div className="relative">
-        <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex items-center gap-2">
+        {battleType ? (
+          // The battle-type symbol as a small, crisp header icon (the source art is only ~100px,
+          // so a full-bleed watermark would upscale + blur — a downscaled icon stays sharp).
+          <img src={`/battle-types/${battleType.toLowerCase()}.png`} alt="" className="h-5 w-5 shrink-0 object-contain" />
+        ) : (
           <span className="text-rizzotto-gold-400">⚔️</span>
-          <span className="font-display font-semibold text-rizzotto-gold-500">{title}</span>
-        </div>
-        <div className="space-y-1.5">
-          <Row label="Settings" items={rs.settings} />
-          <Row label="Banned" items={rs.banned} />
-          <Row label="Conduct" items={rs.conduct} />
-        </div>
+        )}
+        <span className="font-display font-semibold text-rizzotto-gold-500">{title}</span>
+      </div>
+      <div className="space-y-1.5">
+        <Row label="Settings" items={rs.settings} />
+        <Row label="Banned" items={rs.banned} />
+        <Row label="Conduct" items={rs.conduct} />
       </div>
     </div>
   );
