@@ -142,3 +142,20 @@ id-agnostic — no change once callers pass competitor ids. Open Play is always 
     out). Next step when replays exist: parse a sample, map the 4-slot layout, then extend
     `resolveReplayValues` + `verifyGameReplay` to a 4-player check and drop the 2v2 skip in
     `routes/match-games.ts` (search `isTeam ? { ok: true`).
+  - **Team GS (General Skill) — DONE 2026-09-12 (Alex's cold-start idea).** A team is an opaque
+    competitor in the rating fit, so it earns a fitted GS. `lib/team-rating.ts` `resolveTeamGs`
+    blends the members' AVERAGE individual GS (prior, ~10 team-games' worth) with the team's own
+    fitted 2v2 GS (data) via the same Fisher-weighted Bayes blend as the player soft-floor
+    (`blendSkill`). Shown on the team profile (win% + band, Provisional badge while the prior
+    leads). Reused for 2v2 BaLi banding (below).
+  - **WIEDERVORLAGE (Alex 2026-09-12) — 2v2 Balanced Liechtenstein: banding DONE, pairing engine
+    NOT.** `assignSkillBandsForTournament` already bands each team by its blended GS (verified live:
+    winners band 3, losers band 2). BUT the rest of the BaLi engine (`runBalancedPairingTick`:
+    ~400 lines of swiss scoring, byes, PENDING_BYE/CATCHUP_BYE reclaim, late-join, `movedOn`/
+    `hasPlayedReal`, match creation) is keyed by `user_id` and compares `match.player1_id === userId`
+    — for 2v2 the slots hold TEAM ids, so it pairs to empty/wrong slots (a start produced 2
+    null-player matches). The create-schema block was briefly removed then **restored** (kept
+    blocked) so no broken 2v2 BaLi can be created. To finish: rekey the whole pairing tick + start
+    roster to the competitor id (`team_id ?? user_id`) — a dedicated, tests-first pass on
+    ongoing-critical code — then drop the create block again. `resolveTeamGs` + the banding branch
+    are already in place and harmless while blocked.
