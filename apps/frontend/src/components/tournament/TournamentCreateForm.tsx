@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { createTournament, createSeries, getTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster, listTournaments, type ScoringConfig } from '@/lib/api';
+import { createTournament, createSeries, getTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster, uploadSeriesPoster, listTournaments, type ScoringConfig } from '@/lib/api';
 import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
 import { estimateDurationHours, intervalsOverlap, describeClash } from '@/lib/tournamentSchedule';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
@@ -208,6 +208,8 @@ export function TournamentCreateForm({
   const finalNameTouched = useRef(false);
   // Series-mode submit error (after tournament created but series failed)
   const [seriesSubmitError, setSeriesSubmitError] = useState<string | null>(null);
+  // Series poster (separate from the final tournament's poster)
+  const [seriesPosterFile, setSeriesPosterFile] = useState<File | null>(null);
 
   const defaultForm: Partial<FormData> = {
     format: 'SINGLE_ELIMINATION',
@@ -448,6 +450,14 @@ export function TournamentCreateForm({
               : {}),
             final_tournament_id: tournament.id,
           });
+          // Upload series poster after series is created (non-fatal)
+          if (seriesPosterFile) {
+            try {
+              await uploadSeriesPoster(series.slug, seriesPosterFile);
+            } catch {
+              // swallow — series exists, poster is optional
+            }
+          }
           seriesMode.onSuccess(series.slug);
         } catch (err) {
           // Tournament exists as a locked draft but series failed. Show error.
@@ -557,7 +567,19 @@ export function TournamentCreateForm({
             ? { qualifier_ids: Array.from(selectedQualifierIds) }
             : {}),
         },
-        { onSuccess: (data) => seriesMode.onSuccess(data.slug) },
+        {
+          onSuccess: async (data) => {
+            // Upload series poster (non-fatal)
+            if (seriesPosterFile) {
+              try {
+                await uploadSeriesPoster(data.slug, seriesPosterFile);
+              } catch {
+                // swallow — series exists, poster is optional
+              }
+            }
+            seriesMode.onSuccess(data.slug);
+          },
+        },
       );
       return;
     }
@@ -791,10 +813,15 @@ export function TournamentCreateForm({
                     type="number"
                     min={2}
                     value={finalSize}
-                    onChange={(e) => setFinalSize(Number(e.target.value))}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setFinalSize(n);
+                      // Mirror to max_participants so the final tournament cap matches.
+                      setForm((prev) => ({ ...prev, max_participants: n }));
+                    }}
                     className="w-28 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
                   />
-                  <FieldHint>Top N players qualify for the final.</FieldHint>
+                  <FieldHint>Top N players qualify for the final. Sets the final tournament cap.</FieldHint>
                 </div>
               </div>
             )}
@@ -862,6 +889,18 @@ export function TournamentCreateForm({
               )}
             </div>
           )}
+          {/* Series poster — separate from the final tournament's poster */}
+          <div>
+            <Label htmlFor="sm-series-poster">Series Poster (optional)</Label>
+            <input
+              id="sm-series-poster"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setSeriesPosterFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-rizzotto-stone-300 file:mr-3 file:rounded file:border-0 file:bg-rizzotto-iron-700 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-rizzotto-stone-200 hover:file:bg-rizzotto-iron-600"
+            />
+            <FieldHint>Shown on the series page — distinct from the final tournament poster below.</FieldHint>
+          </div>
         </fieldset>
       )}
 
@@ -1142,10 +1181,20 @@ export function TournamentCreateForm({
             type="number"
             name="max_participants"
             value={form.max_participants ?? ''}
-            onChange={handleChange}
+            onChange={(e) => {
+              handleChange(e);
+              // Two-way sync: keep series Final Size in step when in series mode A.
+              if (seriesMode && seriesModel === 'A') {
+                const n = Number(e.target.value);
+                if (!Number.isNaN(n) && n >= 2) setFinalSize(n);
+              }
+            }}
             min={2}
             placeholder={t('tournament.form.max_participants_placeholder')}
           />
+          {seriesMode && seriesModel === 'A' && (
+            <span className="mt-1 block text-xs text-rizzotto-stone-500">Synced with Final Size above.</span>
+          )}
         </div>
       </div>
 

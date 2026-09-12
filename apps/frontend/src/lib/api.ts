@@ -488,13 +488,14 @@ export function listTournaments(
   pageSize = 20,
   status?: Tournament['status'],
   isMajor?: boolean,
-  opts?: { manageable?: boolean; notInSeries?: boolean },
+  opts?: { manageable?: boolean; notInSeries?: boolean; seriesExempt?: string },
 ): Promise<{ data: Tournament[]; total: number; page: number; pageSize: number }> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (status) params.set('status', status);
   if (isMajor === true) params.set('is_major', 'true');
   if (opts?.manageable) params.set('manageable', 'true');
   if (opts?.notInSeries) params.set('not_in_series', 'true');
+  if (opts?.seriesExempt) params.set('series_exempt', opts.seriesExempt);
   return apiFetch<{ data: Tournament[]; total: number; page: number; pageSize: number }>(
     `/api/tournaments?${params.toString()}`,
   );
@@ -1509,6 +1510,10 @@ export interface Series {
   qualified: QualifiedC[];
   standings_provisional: boolean;
   ready_to_seed: boolean;
+  /** Whether the series is paused (no new qualifiers run, standings frozen). */
+  paused: boolean;
+  /** Co-hosts who can manage the series alongside the owner. */
+  co_hosts: { id: string; username: string; avatar_url: string | null }[];
 }
 
 export interface SeriesCreateBody {
@@ -1563,6 +1568,64 @@ export function detachFromSeries(slug: string, tournamentId: string): Promise<{ 
 
 export function seedFinal(slug: string): Promise<{ ok: true; seeded: number; finalSlug: string }> {
   return apiFetch(`/api/series/${slug}/seed-final`, { method: 'POST' });
+}
+
+// ---------------------------------------------------------------------------
+// Series — management (co-hosts, pause, poster, transfer owner)
+// ---------------------------------------------------------------------------
+
+export function transferSeriesOwner(slug: string, newOwnerId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/series/${slug}/transfer-owner`, {
+    method: 'PATCH',
+    body: JSON.stringify({ new_owner_id: newOwnerId }),
+  });
+}
+
+export function getSeriesCoHosts(slug: string): Promise<CoHostUser[]> {
+  return apiFetch(`/api/series/${slug}/co-hosts`);
+}
+
+export function searchSeriesCoHostCandidates(slug: string, q: string): Promise<CoHostUser[]> {
+  return apiFetch(`/api/series/${slug}/co-host-candidates?q=${encodeURIComponent(q)}`);
+}
+
+export function addSeriesCoHost(slug: string, userId: string): Promise<CoHostUser> {
+  return apiFetch(`/api/series/${slug}/co-hosts`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export function removeSeriesCoHost(slug: string, userId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/series/${slug}/co-hosts/${userId}`, { method: 'DELETE' });
+}
+
+export function pauseSeries(slug: string, paused: boolean): Promise<{ ok: true }> {
+  return apiFetch(`/api/series/${slug}/pause`, {
+    method: 'PATCH',
+    body: JSON.stringify({ paused }),
+  });
+}
+
+export async function uploadSeriesPoster(slug: string, file: File): Promise<{ poster_url: string }> {
+  const formData = new FormData();
+  formData.append('poster', file);
+  const res = await fetch(`/api/series/${slug}/poster`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = (await res.json()) as { error?: string; message?: string };
+      message = body.message ?? body.error ?? message;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+  return res.json() as Promise<{ poster_url: string }>;
 }
 
 // ---------------------------------------------------------------------------

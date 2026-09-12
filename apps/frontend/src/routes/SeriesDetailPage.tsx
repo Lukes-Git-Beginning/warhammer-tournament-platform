@@ -3,20 +3,27 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from '@tanstack/react-router';
 import {
   getSeries,
-  getTournament,
   listTournaments,
   patchSeries,
   attachToSeries,
   detachFromSeries,
   seedFinal,
+  pauseSeries,
+  uploadSeriesPoster,
+  getSeriesCoHosts,
+  searchSeriesCoHostCandidates,
+  addSeriesCoHost,
+  removeSeriesCoHost,
+  transferSeriesOwner,
   type Series,
   type StandingA,
   type QualifiedC,
+  type CoHostUser,
 } from '@/lib/api.js';
-import { useAuthQuery } from '@/lib/auth.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { Badge } from '@/components/ui/badge.js';
 import { Skeleton } from '@/components/ui/skeleton.js';
+import { Button } from '@/components/ui/button.js';
 
 // ---------------------------------------------------------------------------
 // Standings table (model A — points race)
@@ -274,6 +281,305 @@ function SeedFinalPanel({ series, seriesSlug }: { series: Series; seriesSlug: st
 }
 
 // ---------------------------------------------------------------------------
+// Series co-hosts section (mirrored 1:1 from tournament CoHostsSection)
+// ---------------------------------------------------------------------------
+
+function SeriesCoHostsSection({ seriesSlug }: { seriesSlug: string }) {
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+
+  const { data: coHosts = [] } = useQuery<CoHostUser[]>({
+    queryKey: ['series-co-hosts', seriesSlug],
+    queryFn: () => getSeriesCoHosts(seriesSlug),
+  });
+  const { data: candidates = [] } = useQuery<CoHostUser[]>({
+    queryKey: ['series-co-host-candidates', seriesSlug, search],
+    queryFn: () => searchSeriesCoHostCandidates(seriesSlug, search),
+    enabled: search.trim().length >= 2,
+  });
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ['series-co-hosts', seriesSlug] });
+    void queryClient.invalidateQueries({ queryKey: ['series-co-host-candidates', seriesSlug] });
+    void queryClient.invalidateQueries({ queryKey: ['series', seriesSlug] });
+  };
+
+  const addMutation = useMutation({
+    mutationFn: (userId: string) => addSeriesCoHost(seriesSlug, userId),
+    onSuccess: () => {
+      setSearch('');
+      refresh();
+    },
+  });
+  const removeMutation = useMutation({
+    mutationFn: (userId: string) => removeSeriesCoHost(seriesSlug, userId),
+    onSuccess: refresh,
+  });
+
+  return (
+    <div className="border-t border-rizzotto-iron-700 pt-6 mt-6">
+      <h3 className="text-sm font-semibold text-rizzotto-stone-300 mb-1">Co-hosts</h3>
+      <p className="text-xs text-rizzotto-stone-500 mb-3">
+        Co-hosts manage this series alongside you — except transferring ownership or editing this list.
+      </p>
+
+      {coHosts.length > 0 ? (
+        <ul className="flex flex-col gap-2 mb-3">
+          {coHosts.map((u) => (
+            <li
+              key={u.id}
+              className="flex items-center gap-2 rounded bg-rizzotto-iron-800/60 px-3 py-2"
+            >
+              {u.avatar_url && <img src={u.avatar_url} alt="" className="h-6 w-6 rounded-full" />}
+              <span className="flex-1 text-sm text-rizzotto-stone-200">{u.username}</span>
+              <button
+                type="button"
+                onClick={() => removeMutation.mutate(u.id)}
+                disabled={removeMutation.isPending}
+                className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-rizzotto-stone-500 mb-3">No co-hosts yet.</p>
+      )}
+
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search players to add…"
+        className="w-full rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-800 px-3 py-2 text-sm text-rizzotto-stone-200 placeholder-rizzotto-stone-500 focus:outline-none focus:ring-1 focus:ring-rizzotto-gold-400"
+      />
+      {search.trim().length >= 2 && (
+        <div className="mt-1 max-h-48 overflow-y-auto rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900">
+          {candidates.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-rizzotto-stone-500">No matching players.</p>
+          ) : (
+            candidates.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => addMutation.mutate(u.id)}
+                disabled={addMutation.isPending}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rizzotto-stone-200 transition-colors hover:bg-rizzotto-iron-800 disabled:opacity-50"
+              >
+                {u.avatar_url && <img src={u.avatar_url} alt="" className="h-6 w-6 rounded-full" />}
+                <span>{u.username}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+      {addMutation.isError && <p className="text-xs text-red-400 mt-2">Could not add co-host.</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Transfer series owner section
+// ---------------------------------------------------------------------------
+
+function SeriesTransferOwnerSection({
+  seriesSlug,
+  series,
+}: {
+  seriesSlug: string;
+  series: Series;
+}) {
+  const queryClient = useQueryClient();
+  // Candidates: existing co-hosts are the natural transfer targets (owner/admin may also
+  // know the user id directly). We reuse the co-host list for the dropdown.
+  const { data: coHosts = [] } = useQuery<CoHostUser[]>({
+    queryKey: ['series-co-hosts', seriesSlug],
+    queryFn: () => getSeriesCoHosts(seriesSlug),
+  });
+
+  const [selectedId, setSelectedId] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: (id: string) => transferSeriesOwner(seriesSlug, id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['series', seriesSlug] });
+    },
+  });
+
+  // Build the selectable list: co-hosts + any search results (fallback: empty)
+  const options = coHosts.filter((u) => u.id !== series.owner.id);
+
+  return (
+    <div className="border-t border-rizzotto-iron-700 pt-6 mt-6">
+      <h3 className="text-sm font-semibold text-rizzotto-stone-300 mb-3">Transfer Ownership</h3>
+      {options.length === 0 ? (
+        <p className="text-xs text-rizzotto-stone-500">
+          Add a co-host first — only current co-hosts (who are HOST or ADMIN) can receive ownership.
+        </p>
+      ) : (
+        <div className="flex gap-3 items-center">
+          <select
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+            className="flex-1 bg-rizzotto-iron-800 border border-rizzotto-iron-600 rounded px-3 py-2 text-sm text-rizzotto-stone-200"
+          >
+            <option value="">Select new owner…</option>
+            {options.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.username}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="etched"
+            size="sm"
+            disabled={!selectedId || mutation.isPending}
+            onClick={() => {
+              if (window.confirm(`Transfer series ownership to ${options.find((u) => u.id === selectedId)?.username ?? selectedId}? You will lose management access.`)) {
+                mutation.mutate(selectedId);
+              }
+            }}
+          >
+            {mutation.isPending ? 'Transferring…' : 'Transfer'}
+          </Button>
+        </div>
+      )}
+      {mutation.isSuccess && <p className="text-xs text-green-400 mt-2">Ownership transferred.</p>}
+      {mutation.isError && (
+        <p className="text-xs text-red-400 mt-2">{(mutation.error as Error).message}</p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Poster upload section
+// ---------------------------------------------------------------------------
+
+function SeriesPosterSection({ seriesSlug }: { seriesSlug: string }) {
+  const queryClient = useQueryClient();
+  const [file, setFile] = useState<File | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: (f: File) => uploadSeriesPoster(seriesSlug, f),
+    onSuccess: () => {
+      setFile(null);
+      void queryClient.invalidateQueries({ queryKey: ['series', seriesSlug] });
+    },
+  });
+
+  return (
+    <div className="mb-6 space-y-3">
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-rizzotto-stone-400">
+        Series Poster
+      </h3>
+      <div className="flex items-end gap-3">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs text-rizzotto-stone-400">
+            Upload new poster image
+          </label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-sm text-rizzotto-stone-300 file:mr-3 file:rounded file:border-0 file:bg-rizzotto-iron-700 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-rizzotto-stone-200 hover:file:bg-rizzotto-iron-600"
+          />
+        </div>
+        <button
+          type="button"
+          disabled={!file || mutation.isPending}
+          onClick={() => { if (file) mutation.mutate(file); }}
+          className="shrink-0 rounded border border-rizzotto-iron-700 px-4 py-2 text-sm font-semibold text-rizzotto-stone-300 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {mutation.isPending ? 'Uploading…' : 'Upload'}
+        </button>
+      </div>
+      {mutation.isSuccess && (
+        <p className="text-xs text-green-400">Poster updated.</p>
+      )}
+      {mutation.isError && (
+        <p className="text-xs text-red-400">{(mutation.error as Error).message}</p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Attach qualifier picker
+// ---------------------------------------------------------------------------
+
+function AttachQualifierPicker({
+  seriesSlug,
+  seriesId,
+}: {
+  seriesSlug: string;
+  seriesId: string;
+}) {
+  const queryClient = useQueryClient();
+  const [selectedId, setSelectedId] = useState('');
+  const [attachError, setAttachError] = useState<string | null>(null);
+
+  const { data: tournamentsData, isLoading } = useQuery({
+    queryKey: ['tournaments', 'manageable', 'not-in-series', seriesId],
+    queryFn: () =>
+      listTournaments(1, 50, undefined, undefined, {
+        manageable: true,
+        notInSeries: true,
+        seriesExempt: seriesId,
+      }),
+  });
+  const candidates = tournamentsData?.data ?? [];
+
+  const attachMutation = useMutation({
+    mutationFn: (tournamentId: string) => attachToSeries(seriesSlug, tournamentId),
+    onSuccess: () => {
+      setSelectedId('');
+      setAttachError(null);
+      void queryClient.invalidateQueries({ queryKey: ['series', seriesSlug] });
+      void queryClient.invalidateQueries({ queryKey: ['tournaments', 'manageable', 'not-in-series', seriesId] });
+    },
+    onError: (err: Error) => setAttachError(err.message),
+  });
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-end gap-3">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs text-rizzotto-stone-400">
+            Pick a tournament to attach as qualifier
+          </label>
+          <select
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+            disabled={isLoading || candidates.length === 0}
+            className="w-full rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none disabled:opacity-50"
+          >
+            <option value="">
+              {isLoading ? 'Loading…' : candidates.length === 0 ? 'No eligible tournaments' : 'Select tournament…'}
+            </option>
+            {candidates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} ({t.status.replace(/_/g, ' ')})
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          disabled={attachMutation.isPending || !selectedId}
+          onClick={() => attachMutation.mutate(selectedId)}
+          className="shrink-0 rounded border border-rizzotto-iron-700 px-4 py-2 text-sm font-semibold text-rizzotto-stone-300 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {attachMutation.isPending ? 'Attaching…' : 'Attach'}
+        </button>
+      </div>
+      {attachError && <p className="text-xs text-red-400">{attachError}</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Management panel
 // ---------------------------------------------------------------------------
 
@@ -281,8 +587,7 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
   const queryClient = useQueryClient();
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
-  const [attachInput, setAttachInput] = useState('');
-  const [attachError, setAttachError] = useState<string | null>(null);
+  const [editVisibility, setEditVisibility] = useState<'PUBLIC' | 'PRIVATE' | ''>('');
 
   const { data: series } = useQuery({
     queryKey: ['series', seriesSlug],
@@ -291,32 +596,21 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
   });
 
   const patchMutation = useMutation({
-    mutationFn: (body: { name?: string; description?: string }) =>
+    mutationFn: (body: { name?: string; description?: string; visibility?: 'PUBLIC' | 'PRIVATE' }) =>
       patchSeries(seriesSlug, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['series', seriesSlug] });
       setEditName('');
       setEditDesc('');
+      setEditVisibility('');
     },
   });
 
-  const attachMutation = useMutation({
-    mutationFn: async (slugOrId: string) => {
-      // Try to resolve: if it looks like a UUID treat as ID, otherwise fetch by slug
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      let tournamentId = slugOrId;
-      if (!uuidRegex.test(slugOrId)) {
-        const t = await getTournament(slugOrId);
-        tournamentId = t.id;
-      }
-      return attachToSeries(seriesSlug, tournamentId);
-    },
+  const pauseMutation = useMutation({
+    mutationFn: (paused: boolean) => pauseSeries(seriesSlug, paused),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['series', seriesSlug] });
-      setAttachInput('');
-      setAttachError(null);
     },
-    onError: (err: Error) => setAttachError(err.message),
   });
 
   const detachMutation = useMutation({
@@ -328,18 +622,54 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
 
   if (!series) return null;
 
+  const hasEditChanges = !!(editName || editDesc || editVisibility);
+
   return (
     <section className="mt-10 rounded border border-rizzotto-gold-500/30 bg-rizzotto-iron-900/60 p-6">
       <h2 className="font-display text-xl font-semibold text-rizzotto-gold-500 mb-5">
         Manage Series
       </h2>
 
-      {/* Edit name / description */}
+      {/* Pause / Reactivate toggle */}
+      <div className="mb-6 flex items-center justify-between rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold text-rizzotto-stone-200">
+            {series.paused ? 'Series is paused' : 'Series is active'}
+          </p>
+          <p className="text-xs text-rizzotto-stone-500 mt-0.5">
+            {series.paused
+              ? 'Resume the series to allow new qualifier results to update standings.'
+              : 'Pause to freeze standings temporarily while you reorganise.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={pauseMutation.isPending}
+          onClick={() => pauseMutation.mutate(!series.paused)}
+          className={`shrink-0 rounded border px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            series.paused
+              ? 'border-rizzotto-gold-500/60 text-rizzotto-gold-400 hover:bg-rizzotto-gold-500/10'
+              : 'border-rizzotto-iron-700 text-rizzotto-stone-300 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-100'
+          }`}
+        >
+          {pauseMutation.isPending
+            ? series.paused ? 'Resuming…' : 'Pausing…'
+            : series.paused ? 'Resume' : 'Pause'}
+        </button>
+      </div>
+      {pauseMutation.isError && (
+        <p className="mb-4 text-xs text-red-400">{(pauseMutation.error as Error).message}</p>
+      )}
+
+      {/* Poster upload */}
+      <SeriesPosterSection seriesSlug={seriesSlug} />
+
+      {/* Edit name / description / visibility */}
       <div className="mb-6 space-y-3">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-rizzotto-stone-400">
           Edit Details
         </h3>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">
             <label className="mb-1 block text-xs text-rizzotto-stone-400">Name</label>
             <input
@@ -360,13 +690,25 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
               className="w-full rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 placeholder:text-rizzotto-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
             />
           </div>
+          <div>
+            <label className="mb-1 block text-xs text-rizzotto-stone-400">Visibility</label>
+            <select
+              value={editVisibility || series.visibility}
+              onChange={(e) => setEditVisibility(e.target.value as 'PUBLIC' | 'PRIVATE')}
+              className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
+            >
+              <option value="PUBLIC">Public</option>
+              <option value="PRIVATE">Private</option>
+            </select>
+          </div>
           <button
             type="button"
-            disabled={patchMutation.isPending || (!editName && !editDesc)}
+            disabled={patchMutation.isPending || !hasEditChanges}
             onClick={() => {
-              const body: { name?: string; description?: string } = {};
+              const body: { name?: string; description?: string; visibility?: 'PUBLIC' | 'PRIVATE' } = {};
               if (editName) body.name = editName;
               if (editDesc) body.description = editDesc;
+              if (editVisibility) body.visibility = editVisibility;
               patchMutation.mutate(body);
             }}
             className="shrink-0 rounded border border-rizzotto-gold-500/60 px-4 py-2 text-sm font-semibold text-rizzotto-gold-400 hover:bg-rizzotto-gold-500/10 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
@@ -375,33 +717,20 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
           </button>
         </div>
         {patchMutation.isError && (
-          <p className="text-xs text-red-400">{(patchMutation.error as Error).message}</p>
+          <p className="text-xs text-red-400">
+            {(patchMutation.error as Error).message === 'Conflict'
+              ? 'Could not change scoring model: a qualifier has already completed. Name, description, and visibility were saved if provided.'
+              : (patchMutation.error as Error).message}
+          </p>
         )}
       </div>
 
-      {/* Attach tournament */}
+      {/* Attach qualifier via picker */}
       <div className="mb-6 space-y-3">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-rizzotto-stone-400">
           Attach Qualifier
         </h3>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={attachInput}
-            onChange={(e) => setAttachInput(e.target.value)}
-            placeholder="Tournament slug or ID"
-            className="flex-1 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 placeholder:text-rizzotto-stone-600 focus:border-rizzotto-gold-500 focus:outline-none"
-          />
-          <button
-            type="button"
-            disabled={attachMutation.isPending || !attachInput.trim()}
-            onClick={() => attachMutation.mutate(attachInput.trim())}
-            className="shrink-0 rounded border border-rizzotto-iron-700 px-4 py-2 text-sm font-semibold text-rizzotto-stone-300 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {attachMutation.isPending ? 'Attaching…' : 'Attach'}
-          </button>
-        </div>
-        {attachError && <p className="text-xs text-red-400">{attachError}</p>}
+        <AttachQualifierPicker seriesSlug={seriesSlug} seriesId={series.id} />
       </div>
 
       {/* Current qualifiers with detach buttons */}
@@ -437,9 +766,17 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
         </div>
       )}
 
+      {/* Co-host management */}
+      <SeriesCoHostsSection seriesSlug={seriesSlug} />
+
+      {/* Transfer ownership */}
+      <SeriesTransferOwnerSection seriesSlug={seriesSlug} series={series} />
+
       {/* Lock & seed final — only shown for scoring models A/C */}
       {series.scoring_config.model !== 'NONE' && (
-        <SeedFinalPanel series={series} seriesSlug={seriesSlug} />
+        <div className="border-t border-rizzotto-iron-700 pt-6 mt-6">
+          <SeedFinalPanel series={series} seriesSlug={seriesSlug} />
+        </div>
       )}
     </section>
   );
@@ -451,20 +788,14 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
 
 export function SeriesDetailPage() {
   const { slug } = useParams({ from: '/series/$slug' });
-  const { data: me } = useAuthQuery();
 
+  // Refetch at the same interval as TournamentDetail (15 s) so standings and
+  // qualifier statuses self-update without a manual reload.
   const { data: series, isLoading, error } = useQuery({
     queryKey: ['series', slug],
     queryFn: () => getSeries(slug),
     retry: false,
-  });
-
-  // Prefetch tournament list for the attach dropdown (small, best-effort)
-  useQuery({
-    queryKey: ['tournaments', 1, 50],
-    queryFn: () => listTournaments(1, 50),
-    retry: false,
-    enabled: !!me && !!series?.can_manage,
+    refetchInterval: 15000,
   });
 
   if (isLoading) {
@@ -517,6 +848,11 @@ export function SeriesDetailPage() {
           <Badge variant="default" className="font-mono text-xs">
             {modelBadgeLabel}
           </Badge>
+          {series.paused && (
+            <Badge variant="default" className="font-mono text-xs text-amber-400 border-amber-500/40 bg-amber-500/10">
+              Paused
+            </Badge>
+          )}
         </div>
         <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
           {series.name}
@@ -533,6 +869,23 @@ export function SeriesDetailPage() {
           >
             {series.owner.username}
           </Link>
+          {series.co_hosts.length > 0 && (
+            <>
+              {' · Co-hosted by '}
+              {series.co_hosts.map((u, i) => (
+                <span key={u.id}>
+                  {i > 0 && ', '}
+                  <Link
+                    to="/users/$id"
+                    params={{ id: u.id }}
+                    className="text-rizzotto-stone-300 hover:text-rizzotto-gold-400 transition-colors"
+                  >
+                    {u.username}
+                  </Link>
+                </span>
+              ))}
+            </>
+          )}
         </p>
       </div>
 
