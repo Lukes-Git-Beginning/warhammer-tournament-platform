@@ -4,6 +4,7 @@ import { z } from 'zod';
 import ical from 'ical-generator';
 import { generateSlug, validateStatusTransition, TournamentStatus, canManageTournament } from '../lib/tournament-utils.js';
 import { canManageSeries } from '../lib/series-utils.js';
+import { maybeSendSeriesInvite } from '../lib/series-notify.js';
 import { emitStatusChange } from '../lib/emit.js';
 import { finalizeTournament, unfinalizeTournament } from '../lib/finalize-tournament.js';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
@@ -1248,6 +1249,10 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           status: newStatus as TournamentStatusLiteral,
         });
       }
+
+      // Series-qualifier invite: self-gated — fires once when a series qualifier's registration
+      // is open (covers both opening registration and attaching an already-open tournament).
+      void maybeSendSeriesInvite(fastify.prisma, tournament.id);
 
       return updated;
     },

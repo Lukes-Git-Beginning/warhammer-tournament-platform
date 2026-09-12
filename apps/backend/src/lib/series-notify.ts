@@ -72,6 +72,28 @@ export async function notifySeriesFinalSeeded(
 }
 
 /**
+ * Fire the new-qualifier invite for a tournament IFF it's a series qualifier whose registration
+ * is now open and the invite hasn't been sent yet — then latch `series_invite_sent` so a later
+ * re-open never re-sends. Safe to call from any lifecycle hook (attach, status change); it self-
+ * gates. No-op for finals, non-series tournaments, or qualifiers not yet in OPEN_REGISTRATION.
+ */
+export async function maybeSendSeriesInvite(prisma: PrismaClient, tournamentId: string): Promise<void> {
+  if (!isBotConfigured()) return;
+  try {
+    const t = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { id: true, series_id: true, is_series_final: true, status: true, series_invite_sent: true },
+    });
+    if (!t || !t.series_id || t.is_series_final || t.status !== 'OPEN_REGISTRATION' || t.series_invite_sent) return;
+    // Latch first so concurrent callers can't double-send.
+    await prisma.tournament.update({ where: { id: t.id }, data: { series_invite_sent: true } });
+    await notifySeriesNewQualifier(prisma, t.series_id, t.id);
+  } catch (err) {
+    console.warn('[series-notify] maybeSendSeriesInvite error (non-fatal):', err);
+  }
+}
+
+/**
  * A new qualifier was attached to a series that already has prior qualifiers: invite the
  * players from those prior qualifiers who have NOT yet secured a final slot (Model C) — for
  * Model A / NONE nobody is locked in yet, so everyone who played is invited. Excludes anyone

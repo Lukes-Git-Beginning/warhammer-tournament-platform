@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { createTournament, createSeries, getTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster, uploadSeriesPoster, listTournaments, listSeries, type ScoringConfig } from '@/lib/api';
+import { createTournament, createSeries, getTournament, patchTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster, uploadSeriesPoster, listTournaments, listSeries, type ScoringConfig } from '@/lib/api';
 import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
 import { estimateDurationHours, intervalsOverlap, describeClash } from '@/lib/tournamentSchedule';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
@@ -210,6 +210,16 @@ export function TournamentCreateForm({
   const [seriesSubmitError, setSeriesSubmitError] = useState<string | null>(null);
   // Series poster (separate from the final tournament's poster)
   const [seriesPosterFile, setSeriesPosterFile] = useState<File | null>(null);
+
+  // "Load existing final" mode — when set, submit PATCHes the existing tournament
+  // instead of creating a new one.
+  const [existingFinalId, setExistingFinalId] = useState<string | null>(null);
+  const [existingFinalSlug, setExistingFinalSlug] = useState<string | null>(null);
+  const [existingFinalName, setExistingFinalName] = useState<string | null>(null);
+  // The slug currently selected in the picker dropdown (not yet loaded).
+  const [pickerSlug, setPickerSlug] = useState<string>('');
+  const [loadingExistingFinal, setLoadingExistingFinal] = useState(false);
+  const [loadExistingFinalError, setLoadExistingFinalError] = useState<string | null>(null);
 
   // Normal create path: optional "attach to an existing series" selector.
   const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
@@ -515,6 +525,91 @@ export function TournamentCreateForm({
     };
   }
 
+  /** Load an existing tournament into the form (reuses the duplicate prefill mapping). */
+  async function handleLoadExistingFinal() {
+    if (!pickerSlug) return;
+    setLoadingExistingFinal(true);
+    setLoadExistingFinalError(null);
+    try {
+      const t = await getTournament(pickerSlug);
+      // Reuse the same prefill mapping as the duplicate flow.
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const toLocalDatetime = (d: Date) =>
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const startLocal = toLocalDatetime(new Date(t.start_date));
+
+      setForm((prev) => ({
+        ...prev,
+        name: t.name,
+        description: t.description ?? undefined,
+        start_date: startLocal,
+        registration_deadline: t.registration_deadline ? toLocalDatetime(new Date(t.registration_deadline)) : startLocal,
+        timezone: t.timezone,
+        format: t.format as FormData['format'],
+        mode: (t.mode ?? 'BPT') as FormData['mode'],
+        set_faction_id: t.set_faction_id ?? undefined,
+        rounds_count: t.rounds_count ?? prev.rounds_count,
+        playoff_format: (t.playoff_format ?? 'NONE') as FormData['playoff_format'],
+        has_third_place_match: t.has_third_place_match ?? false,
+        auto_sizing: t.auto_sizing ?? false,
+        auto_advance: t.auto_advance ?? false,
+        allow_late_join_requests: t.allow_late_join_requests ?? false,
+        swiss_match_format: (t.swiss_match_format ?? 'BO1') as FormData['swiss_match_format'],
+        playoff_match_format: (t.playoff_match_format ?? 'BO1') as FormData['playoff_match_format'],
+        finale_match_format: (t.finale_match_format ?? 'BO1') as FormData['finale_match_format'],
+        grand_final_reset: t.grand_final_reset ?? true,
+        grand_final_reset_format: (t.grand_final_reset_format ?? '') as FormData['grand_final_reset_format'],
+        map_decision_mode: (t.map_decision_mode ?? 'RANDOM_PICK_BAN') as FormData['map_decision_mode'],
+        map_pool: t.map_pool?.map((m) => m.id) ?? prev.map_pool ?? [],
+        map_preset_config: t.map_preset_config ?? null,
+        faction_pool: t.faction_allowlist ?? undefined,
+        restricted_factions: t.restricted_factions ?? undefined,
+        min_band: t.min_band ?? null,
+        max_band: t.max_band ?? null,
+        standard_rules_enabled: t.standard_rules_enabled ?? true,
+        rules: t.rules ?? undefined,
+        restrictions: t.restrictions ?? undefined,
+        discord_link: t.discord_link ?? prev.discord_link,
+        stream_url: t.stream_url ?? undefined,
+      }));
+
+      if ((t.faction_allowlist ?? []).length > 0) setFactionPoolEnabled(true);
+      if ((t.restricted_factions ?? []).length > 0) setRestrictedFactionsEnabled(true);
+      // Prevent the map-pool default-all-maps effect from overwriting the loaded pool.
+      mapPoolInitialized.current = true;
+      finalNameTouched.current = true;
+
+      setExistingFinalId(t.id);
+      setExistingFinalSlug(t.slug);
+      setExistingFinalName(t.name);
+    } catch (err) {
+      setLoadExistingFinalError((err as Error).message ?? 'Failed to load tournament.');
+    } finally {
+      setLoadingExistingFinal(false);
+    }
+  }
+
+  function handleClearExistingFinal() {
+    setExistingFinalId(null);
+    setExistingFinalSlug(null);
+    setExistingFinalName(null);
+    setPickerSlug('');
+    setLoadExistingFinalError(null);
+    // Reset to default form state and re-derive name from series name.
+    setForm(defaultForm);
+    setFactionPoolEnabled(false);
+    setRestrictedFactionsEnabled(false);
+    mapPoolInitialized.current = false;
+    finalNameTouched.current = false;
+    if (allMaps.length > 0) {
+      setForm((prev) => ({ ...prev, map_pool: allMaps.map((m) => m.id) }));
+      mapPoolInitialized.current = true;
+    }
+    if (seriesName.trim()) {
+      setForm((prev) => ({ ...prev, name: `${seriesName.trim()} — Grand Final` }));
+    }
+  }
+
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) {
@@ -653,6 +748,60 @@ export function TournamentCreateForm({
       return Number.isNaN(d.getTime()) ? local : d.toISOString();
     };
 
+    // ── Series mode: attach existing final ────────────────────────────────
+    // When the host loaded an existing tournament via the picker, PATCH it
+    // instead of creating a new one, then createSeries with its id.
+    if (seriesMode && existingFinalId && existingFinalSlug) {
+      const patchBody = {
+        ...rest,
+        grand_final_reset_format: rest.grand_final_reset_format || null,
+        start_date: toIsoOrInvalid(start_date),
+        ...(max_participants ? { max_participants: Number(max_participants) } : { max_participants: null }),
+        ...(min_participants ? { min_participants: Number(min_participants) } : { min_participants: null }),
+        discord_link: discord_link || null,
+        stream_url: stream_url || null,
+        registration_deadline: registration_deadline ? toIsoOrInvalid(registration_deadline) : null,
+        description: description || null,
+        rules: rules || null,
+        draft_enabled: draft_enabled ?? false,
+        ...(draft_preset_id ? { draft_preset_id } : {}),
+        map_pool: map_pool ?? [],
+        ...(map_preset_config ? { map_preset_config: map_preset_config as Record<string, string[] | string[][]> } : {}),
+        ...(factionPoolEnabled && (form.faction_pool ?? []).length > 0 && (form.faction_pool ?? []).length < allFactions.length
+          ? { faction_pool: form.faction_pool }
+          : { faction_pool: [] }),
+        ...(restrictedFactionsEnabled && (form.restricted_factions ?? []).length > 0
+          ? { restricted_factions: form.restricted_factions }
+          : { restricted_factions: [] }),
+        ...(rest.mode === 'ONE_V_THREE' && rest.set_faction_id
+          ? { set_faction_id: rest.set_faction_id }
+          : {}),
+      };
+      const slug = existingFinalSlug;
+      const finalId = existingFinalId;
+      void (async () => {
+        try {
+          await patchTournament(slug, patchBody);
+          const scoringConfig = buildScoringConfig();
+          const series = await seriesMutation.mutateAsync({
+            name: seriesName.trim(),
+            ...(seriesDescription.trim() ? { description: seriesDescription.trim() } : {}),
+            visibility: seriesVisibility,
+            scoring_config: scoringConfig,
+            ...(selectedQualifierIds.size > 0 ? { qualifier_ids: Array.from(selectedQualifierIds) } : {}),
+            final_tournament_id: finalId,
+          });
+          if (seriesPosterFile) {
+            try { await uploadSeriesPoster(series.slug, seriesPosterFile); } catch { /* swallow */ }
+          }
+          seriesMode.onSuccess(series.slug);
+        } catch (err) {
+          setSeriesSubmitError((err as Error).message ?? 'Failed to save series.');
+        }
+      })();
+      return;
+    }
+
     mutation.mutate({
       ...rest,
       // '' (Same as Grand Final) → null so the reset match inherits finale_match_format.
@@ -699,7 +848,7 @@ export function TournamentCreateForm({
     }
   }
 
-  const isPending = mutation.isPending || seriesMutation.isPending;
+  const isPending = mutation.isPending || seriesMutation.isPending || loadingExistingFinal;
 
   return (
     <form onSubmit={handleSubmit} className="w-full space-y-6">
@@ -919,12 +1068,67 @@ export function TournamentCreateForm({
       {(!seriesMode || seriesModel !== 'NONE') && (
         <>
           {seriesMode && (
-            <p className="text-sm font-semibold text-rizzotto-stone-300">
-              Final Tournament
-              <span className="ml-2 font-normal text-rizzotto-stone-500 text-xs">
-                — configure the Grand Final tournament that this series leads up to
-              </span>
-            </p>
+            <div className="space-y-2">
+              {existingFinalName ? (
+                <p className="text-sm font-semibold text-rizzotto-gold-300">
+                  Editing existing tournament:{' '}
+                  <span className="font-normal italic">{existingFinalName}</span>
+                  <button
+                    type="button"
+                    onClick={handleClearExistingFinal}
+                    className="ml-3 text-xs font-normal text-rizzotto-stone-400 hover:text-rizzotto-stone-200 underline underline-offset-2 transition-colors"
+                  >
+                    Use a new final instead
+                  </button>
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-rizzotto-stone-300">
+                    Final Tournament
+                    <span className="ml-2 font-normal text-rizzotto-stone-500 text-xs">
+                      — configure the Grand Final tournament that this series leads up to
+                    </span>
+                  </p>
+
+                  {/* Existing-final picker — only shown for models A and C */}
+                  {(seriesModel === 'A' || seriesModel === 'C') && qualifierCandidates.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 px-4 py-3">
+                      <Label htmlFor="tcf-existing-final" className="shrink-0 whitespace-nowrap">
+                        Use an existing tournament as the Grand Final
+                      </Label>
+                      <select
+                        id="tcf-existing-final"
+                        value={pickerSlug}
+                        onChange={(e) => {
+                          setPickerSlug(e.target.value);
+                          setLoadExistingFinalError(null);
+                        }}
+                        className="min-w-0 flex-1 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
+                      >
+                        <option value="">— select a tournament —</option>
+                        {qualifierCandidates.map((qt) => (
+                          <option key={qt.id} value={qt.slug}>
+                            {qt.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        variant="etched"
+                        size="sm"
+                        disabled={!pickerSlug || loadingExistingFinal}
+                        onClick={() => void handleLoadExistingFinal()}
+                      >
+                        {loadingExistingFinal ? 'Loading…' : 'Load'}
+                      </Button>
+                      {loadExistingFinalError && (
+                        <p className="w-full text-xs text-red-400">{loadExistingFinalError}</p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           )}
           <PosterPickField file={posterFile} onPick={setPosterFile} />
 

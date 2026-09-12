@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { generateSlug, canManageTournament } from '../lib/tournament-utils.js';
 import { canManageSeries, resolveSeriesSlug } from '../lib/series-utils.js';
 import { getQualifierPlacements } from '../lib/series-qualification.js';
-import { notifySeriesNewQualifier, notifySeriesFinalSeeded } from '../lib/series-notify.js';
+import { maybeSendSeriesInvite, notifySeriesFinalSeeded } from '../lib/series-notify.js';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
 import { POSTER_DIR } from '../lib/posters.js';
 import {
@@ -509,8 +509,9 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
 
     await invalidateSeries(slug);
 
-    // Invite the prior qualifiers' not-yet-qualified players to this new qualifier.
-    void notifySeriesNewQualifier(fastify.prisma, series.id, parsed.data.tournamentId);
+    // Invite prior qualifiers' not-yet-qualified players — but only once the qualifier's
+    // registration is open (self-gated; a DRAFT qualifier invites nobody until it opens).
+    void maybeSendSeriesInvite(fastify.prisma, parsed.data.tournamentId);
 
     return { ok: true };
   });

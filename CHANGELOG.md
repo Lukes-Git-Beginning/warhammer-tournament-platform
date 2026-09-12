@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.57.2] — 2026-09-12 — Series refinements
+### Added
+- When creating a series you can now use an **existing tournament as the Grand Final** instead of always creating a new one — pick it from a dropdown, load it into the form, and adjust it before the series is created.
+### Changed
+- The invite DM for a new series qualifier is now sent when that qualifier's **registration opens** (players are invited exactly when they can sign up), and only once.
+- Series qualifiers are numbered by when they happened (1 = the first/oldest) and shown newest-first.
+- Widened the top navigation bar so the menu has more breathing room.
+
 ## [1.57.1] — 2026-09-12 — Series polish
 ### Changed
 - The series standings table now spells out its column headers (Points, Games Played, Game Wins) instead of abbreviations.

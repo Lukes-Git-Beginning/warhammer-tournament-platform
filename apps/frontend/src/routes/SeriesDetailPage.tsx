@@ -898,16 +898,19 @@ export function SeriesDetailPage() {
           <p className="text-sm text-rizzotto-stone-500">No qualifying tournaments attached yet.</p>
         ) : (
           <ul className="space-y-2">
-            {[...series.qualifiers].reverse().map((q) => {
+            {[...series.qualifiers].reverse().map((q, i) => {
               const statusColors: Record<string, string> = {
                 ONGOING: 'text-rizzotto-forge-400',
                 COMPLETED: 'text-rizzotto-stone-500',
               };
+              // Chronological number: 1 = oldest/first qualifier, highest = newest.
+              // Derived from rank (not raw series_position) so detach/reattach gaps stay clean.
+              const num = series.qualifiers.length - i;
               return (
                 <li key={q.id} className="flex items-center justify-between rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900/50 px-4 py-3">
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-xs text-rizzotto-stone-500 w-4">
-                      {q.series_position}
+                      {num}
                     </span>
                     <Link
                       to="/tournaments/$slug"
