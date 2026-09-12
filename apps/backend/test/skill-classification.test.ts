@@ -6,7 +6,34 @@ import {
   questionnaireFloor,
   bandToLogOdds,
   classify,
+  blendSkill,
 } from '../src/lib/skill-classification.js';
+
+// ---------------------------------------------------------------------------
+// blendSkill — continuous prior blended with fitted data (2v2 team-GS cold-start)
+// ---------------------------------------------------------------------------
+
+describe('blendSkill', () => {
+  it('returns the prior when there is no data', () => {
+    expect(blendSkill(0.8, { generalSkill: null, stdError: null }, 10).skill).toBeCloseTo(0.8, 6);
+  });
+
+  it('stays near the prior with few decisive games (large SE)', () => {
+    // One game ≈ SE 2 (very weak evidence) barely moves a 10-game prior.
+    const { skill } = blendSkill(0.8, { generalSkill: -0.5, stdError: 2 }, 10);
+    expect(skill).toBeGreaterThan(0.6); // still hugging the prior (0.8), far from the data (−0.5)
+  });
+
+  it('converges toward the data as evidence strengthens (small SE)', () => {
+    const { skill } = blendSkill(0.8, { generalSkill: -0.5, stdError: 0.1 }, 10);
+    expect(skill).toBeLessThan(-0.3); // data now dominates
+  });
+
+  it('shrinks the posterior SE below the data SE (prior adds information)', () => {
+    const { se } = blendSkill(0.8, { generalSkill: 0.2, stdError: 0.5 }, 10);
+    expect(se).toBeLessThan(0.5);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Questionnaire floor — conservative-up MAX, cap-at-3 for volume/proxy

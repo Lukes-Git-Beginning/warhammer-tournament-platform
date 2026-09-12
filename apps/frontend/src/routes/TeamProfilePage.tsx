@@ -85,14 +85,28 @@ export function TeamProfilePage() {
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <BandBadge band={team.gs.band} />
+              <div className="flex items-center gap-2">
+                <BandBadge band={team.gs.band} />
+                {team.gs.provisional && (
+                  <span className="rounded border border-rizzotto-iron-600 px-1.5 py-0.5 text-[10px] font-display uppercase tracking-wide text-rizzotto-stone-400">
+                    Provisional
+                  </span>
+                )}
+              </div>
               <span
                 className="text-xs text-rizzotto-stone-500"
                 title={`General skill ${team.gs.generalSkill.toFixed(2)} ± ${team.gs.stdError.toFixed(2)} (log-odds)`}
               >
-                GS {team.gs.generalSkill.toFixed(2)} · {team.gs.gamesCount} rated game
+                GS {team.gs.generalSkill.toFixed(2)} · {team.gs.gamesCount} team game
                 {team.gs.gamesCount === 1 ? '' : 's'}
               </span>
+              {team.gs.provisional && (
+                <span className="text-[11px] text-rizzotto-stone-500">
+                  {team.gs.fromMembers
+                    ? '≈ your members’ average GS — converges to the team’s own rating as you play.'
+                    : 'Blending your members’ average GS with the team’s own games.'}
+                </span>
+              )}
             </div>
             <div className="ml-auto w-full max-w-[200px]">
               <div className="h-2 overflow-hidden rounded-full bg-rizzotto-iron-700">
@@ -107,7 +121,8 @@ export function TeamProfilePage() {
       ) : (
         <div className="mb-6 rounded-md border border-dashed border-rizzotto-iron-600 p-4 text-sm text-rizzotto-stone-500">
           <span className="font-display uppercase tracking-wide text-rizzotto-stone-400">Team GS</span> — unrated.
-          Play some 2v2 games and a General Skill rating appears here.
+          Neither the team nor its members have rated games yet; a General Skill appears once either
+          side does.
         </div>
       )}
 

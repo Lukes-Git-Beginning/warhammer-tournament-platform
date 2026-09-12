@@ -2,7 +2,13 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { sendDm } from '../lib/discord-notify.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
-import { skillToBand } from '../lib/rating-model.js';
+import { skillToBand, logistic } from '../lib/rating-model.js';
+import { blendSkill } from '../lib/skill-classification.js';
+
+// The team's own 2v2 GS is worth this many balanced games against the members' average-GS
+// prior, so a fresh duo starts at its members' strength and converges to its real team rating.
+// A dial candidate (AdminConfig) once teams have played enough to calibrate it.
+const TEAM_GS_PRIOR_EQUIV_GAMES = 10;
 
 // ---------------------------------------------------------------------------
 // Teams — permanent 2v2 competitors (design doc §5, plans/2v2-competitor-
@@ -222,22 +228,52 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
     });
     if (!team) return reply.code(404).send({ error: 'NotFound', message: 'Team not found', statusCode: 404 });
 
-    // Team GS (General Skill) — a team is an opaque competitor in the rating fit, so it earns a
-    // general skill just like a player. Timeless (all-version) fit, same as the Hall of Fame.
-    // null until the team has decisive rated games.
+    // Team GS (General Skill). A team is an opaque competitor in the timeless rating fit, so it
+    // earns a fitted GS just like a player. Cold-start (Alex 2026-09-12): blend the members'
+    // average individual GS (prior) with the team's own fitted 2v2 GS (data) — a fresh duo shows
+    // its members' strength immediately and converges to its real team rating as it plays.
     const model = await getRatingModel(fastify.prisma, fastify.redis, {
       versionId: null,
       config: { hierarchical: true },
     });
-    const gsEntry = model.generalSkills.find((e) => e.playerId === id);
-    const gs = gsEntry
-      ? {
-          generalSkill: gsEntry.generalSkill,
-          stdError: gsEntry.stdError,
-          band: skillToBand(gsEntry.generalSkill),
-          gamesCount: gsEntry.gamesCount,
-        }
+    const teamEntry = model.generalSkills.find((e) => e.playerId === id);
+    const memberSkills = team.members
+      .map((m) => model.generalSkills.find((e) => e.playerId === m.user_id)?.generalSkill)
+      .filter((s): s is number => s != null);
+    const priorMu = memberSkills.length
+      ? memberSkills.reduce((a, b) => a + b, 0) / memberSkills.length
       : null;
+
+    let gs: {
+      generalSkill: number;
+      stdError: number;
+      band: number;
+      winChance: number;
+      gamesCount: number;
+      provisional: boolean;
+      fromMembers: boolean;
+    } | null = null;
+    if (priorMu != null || teamEntry) {
+      const base =
+        priorMu != null
+          ? blendSkill(
+              priorMu,
+              { generalSkill: teamEntry?.generalSkill ?? null, stdError: teamEntry?.stdError ?? null },
+              TEAM_GS_PRIOR_EQUIV_GAMES,
+            )
+          : { skill: teamEntry!.generalSkill, se: teamEntry!.stdError };
+      const teamGames = teamEntry?.gamesCount ?? 0;
+      gs = {
+        generalSkill: base.skill,
+        stdError: base.se,
+        band: skillToBand(base.skill),
+        winChance: logistic(base.skill),
+        gamesCount: teamGames,
+        // Still leaning on the members' prior until the team has enough of its own games.
+        provisional: priorMu != null && teamGames < TEAM_GS_PRIOR_EQUIV_GAMES,
+        fromMembers: teamGames === 0,
+      };
+    }
 
     // Team-as-actor: the team id sits in the opaque Match competitor slots.
     const [matchesPlayed, matchesWon, parts] = await Promise.all([

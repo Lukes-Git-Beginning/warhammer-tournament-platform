@@ -330,3 +330,30 @@ export function classify(
 export function skillToWinChance(logOdds: number): number {
   return logistic(logOdds);
 }
+
+/**
+ * Bayes-blend a continuous prior skill (log-odds) with observed data (a fitted GS + its
+ * Fisher SE), weighting the prior as `priorEquivGames` balanced games. With no data the
+ * estimate is the prior; as decisive games accumulate (SE shrinks) it slides to the data.
+ *
+ * The 2v2 team-GS cold-start (Alex 2026-09-12): prior = the two members' average individual
+ * GS, data = the team's own fitted 2v2 GS — so a brand-new duo starts at its members' strength
+ * and converges to its real team rating as it plays. Symmetric (unlike the questionnaire
+ * soft-floor in classify(), there is no sandbag direction to resist here).
+ */
+export function blendSkill(
+  priorMu: number,
+  data: DataSkill,
+  priorEquivGames: number,
+): { skill: number; se: number } {
+  const priorTau = priorEquivGames * INFO_PER_GAME;
+  if (data.generalSkill == null || data.stdError == null || data.stdError <= 0) {
+    return { skill: priorMu, se: 1 / Math.sqrt(priorTau) };
+  }
+  const dataTau = 1 / (data.stdError * data.stdError);
+  const postTau = priorTau + dataTau;
+  return {
+    skill: (priorTau * priorMu + dataTau * data.generalSkill) / postTau,
+    se: 1 / Math.sqrt(postTau),
+  };
+}

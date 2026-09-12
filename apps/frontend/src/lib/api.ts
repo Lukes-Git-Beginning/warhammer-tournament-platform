@@ -2440,8 +2440,18 @@ export interface TeamProfileDto {
   captain_id: string;
   created_at: string;
   members: TeamMemberDto[];
-  /** Team GS (General Skill) from the timeless rating fit; null until the team has rated games. */
-  gs: { generalSkill: number; stdError: number; band: number; gamesCount: number } | null;
+  /** Team GS (General Skill): the members' average-GS prior blended with the team's own fitted
+   *  2v2 GS. null only when neither the team nor its members have any rated games.
+   *  `provisional` = still leaning on the member prior; `fromMembers` = no own games yet. */
+  gs: {
+    generalSkill: number;
+    stdError: number;
+    band: number;
+    winChance: number;
+    gamesCount: number;
+    provisional: boolean;
+    fromMembers: boolean;
+  } | null;
   record: { matchesPlayed: number; matchesWon: number };
   tournaments: { slug: string; name: string; status: string; participantStatus: string; start_date: string }[];
 }
