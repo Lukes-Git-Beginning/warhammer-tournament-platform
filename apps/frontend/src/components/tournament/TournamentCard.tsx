@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { useAuthQuery } from '@/lib/auth';
 import { DiscordTimestampButton } from './DiscordTimestampButton';
+import { PrivateBadge } from '@/components/ui/PrivateBadge';
 
 interface TournamentCardProps {
   tournament: {
@@ -11,6 +12,7 @@ interface TournamentCardProps {
     format: string;
     mode?: string | null;
     status: string;
+    visibility?: string | null;
     start_date: string;
     timezone?: string;
     max_participants?: number | null;
@@ -114,6 +116,7 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
         <span className={`rounded px-2 py-0.5 text-xs font-medium ${statusColor}`}>
           {statusLabel}
         </span>
+        {tournament.visibility === 'PRIVATE' && <PrivateBadge />}
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-2">

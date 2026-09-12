@@ -21,6 +21,7 @@ import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { PrivateBadge } from '@/components/ui/PrivateBadge';
 import { FORMAT_DESCRIPTIONS, MODE_DESCRIPTIONS } from '@/lib/tournamentDescriptions';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { sortStandingsByPlayoffResult, getFinalistIds, getSemifinalistIds, getChampionIds, getBalancedTopDivisionPodium } from '@/lib/bracketStandings';
@@ -347,6 +348,7 @@ export function TournamentDetail() {
           <span className={`rounded px-2 py-1 text-xs font-medium ${statusColor}`}>
             {tournament.status}
           </span>
+          {tournament.visibility === 'PRIVATE' && <PrivateBadge className="py-1" />}
         </div>
       </div>
 
