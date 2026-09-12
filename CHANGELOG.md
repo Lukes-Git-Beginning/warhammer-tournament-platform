@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.57.0] — 2026-09-12 — Tournament Series
+### Added
+- **Tournament Series** — bundle several tournaments into one series with a live standings tracker and an auto-seeded Grand Final. A new **Series** tab lists every public series; each has its own page showing the running standings, who has qualified so far, all the qualifying tournaments, and the Grand Final.
+- Hosts create a series together with its Grand Final in a single step, attach qualifying tournaments, and choose how players qualify:
+  - **Points race** — every game played and every game won earns points across all qualifiers; the top N by points make the final.
+  - **Per-qualifier** — the top finishers of each qualifier go straight through; anyone who already secured a spot is skipped, so the place passes down to the next player.
+  - **Grouping only** — simply collect related tournaments under one page, with no scoring.
+- When the qualifiers are done, the host locks the standings and seeds the Grand Final in one click — qualified players are placed into the final in standings order, ready to start.
+- Series can have co-hosts and transferred ownership (just like tournaments), can be paused and reactivated, and carry their own poster.
+- Players receive a Discord DM when they qualify for a Grand Final (with their seed), and an invitation when a new qualifier is added to a series they have been competing in.
+
 ## [1.56.2] — 2026-09-12 — Retire the legacy "Auto Swiss" format
 ### Changed
 - The old self-running "Auto Swiss" format has been retired. It can no longer be created or selected (a regular Swiss tournament with auto-advance covers the same ground), and it no longer appears as an option on the create or edit forms. Existing and historical tournaments are unaffected and simply display as "Swiss". Internal auto-advance handling is unchanged.
