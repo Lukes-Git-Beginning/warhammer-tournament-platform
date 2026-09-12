@@ -4,6 +4,7 @@ import { apiFetch } from '@/lib/api.js';
 import { useAuthQuery } from '@/lib/auth.js';
 
 const DUMMY_USERS = [
+  { discordId: 'demo-admin', name: 'SeriesAdmin (ADMIN)' },
   { discordId: 'dummy-01', name: 'Grombrindal' },
   { discordId: 'dummy-02', name: 'Settra' },
   { discordId: 'dummy-03', name: 'Sigvald' },
