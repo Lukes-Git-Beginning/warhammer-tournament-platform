@@ -9,9 +9,15 @@ import { useEffect, useRef, useState } from 'react';
 export function PosterPickField({
   file,
   onPick,
+  legend = 'Poster',
+  description = 'No poster set. Upload a banner image — shown on the tournament page and its card.',
 }: {
   file: File | null;
   onPick: (file: File | null) => void;
+  /** Field heading (e.g. "Series Poster"). Defaults to the tournament wording. */
+  legend?: string;
+  /** Empty-state helper text shown when no file is picked. */
+  description?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -29,18 +35,16 @@ export function PosterPickField({
   return (
     <fieldset className="space-y-3 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
       <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
-        Poster <span className="text-rizzotto-stone-600">(optional)</span>
+        {legend} <span className="text-rizzotto-stone-600">(optional)</span>
       </legend>
       {preview ? (
         <img
           src={preview}
-          alt="Tournament poster preview"
+          alt={`${legend} preview`}
           className="aspect-[10/3] w-full rounded border border-stone-800 object-cover"
         />
       ) : (
-        <p className="text-sm text-rizzotto-stone-500">
-          No poster set. Upload a banner image — shown on the tournament page and its card.
-        </p>
+        <p className="text-sm text-rizzotto-stone-500">{description}</p>
       )}
       <input
         ref={inputRef}

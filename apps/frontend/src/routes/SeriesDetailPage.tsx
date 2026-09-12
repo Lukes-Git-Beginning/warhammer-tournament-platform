@@ -24,6 +24,7 @@ import { PageShell } from '@/components/layout/PageShell.js';
 import { Badge } from '@/components/ui/badge.js';
 import { Skeleton } from '@/components/ui/skeleton.js';
 import { Button } from '@/components/ui/button.js';
+import { PosterUploadField } from '@/components/tournament/PosterUploadField.js';
 
 // ---------------------------------------------------------------------------
 // Standings table (model A — points race)
@@ -457,50 +458,18 @@ function SeriesTransferOwnerSection({
 // Poster upload section
 // ---------------------------------------------------------------------------
 
-function SeriesPosterSection({ seriesSlug }: { seriesSlug: string }) {
+function SeriesPosterSection({ seriesSlug, posterUrl }: { seriesSlug: string; posterUrl?: string | null }) {
   const queryClient = useQueryClient();
-  const [file, setFile] = useState<File | null>(null);
-
-  const mutation = useMutation({
-    mutationFn: (f: File) => uploadSeriesPoster(seriesSlug, f),
-    onSuccess: () => {
-      setFile(null);
-      void queryClient.invalidateQueries({ queryKey: ['series', seriesSlug] });
-    },
-  });
-
   return (
-    <div className="mb-6 space-y-3">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-rizzotto-stone-400">
-        Series Poster
-      </h3>
-      <div className="flex items-end gap-3">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs text-rizzotto-stone-400">
-            Upload new poster image
-          </label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="block w-full text-sm text-rizzotto-stone-300 file:mr-3 file:rounded file:border-0 file:bg-rizzotto-iron-700 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-rizzotto-stone-200 hover:file:bg-rizzotto-iron-600"
-          />
-        </div>
-        <button
-          type="button"
-          disabled={!file || mutation.isPending}
-          onClick={() => { if (file) mutation.mutate(file); }}
-          className="shrink-0 rounded border border-rizzotto-iron-700 px-4 py-2 text-sm font-semibold text-rizzotto-stone-300 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-100 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {mutation.isPending ? 'Uploading…' : 'Upload'}
-        </button>
-      </div>
-      {mutation.isSuccess && (
-        <p className="text-xs text-green-400">Poster updated.</p>
-      )}
-      {mutation.isError && (
-        <p className="text-xs text-red-400">{(mutation.error as Error).message}</p>
-      )}
+    <div className="mb-6">
+      <PosterUploadField
+        slug={seriesSlug}
+        posterUrl={posterUrl}
+        uploadFn={uploadSeriesPoster}
+        legend="Series Poster"
+        description="No poster set. Upload a banner image — shown on the series page and its card."
+        onUploaded={() => void queryClient.invalidateQueries({ queryKey: ['series', seriesSlug] })}
+      />
     </div>
   );
 }
@@ -662,7 +631,7 @@ function ManagementPanel({ seriesSlug }: { seriesSlug: string }) {
       )}
 
       {/* Poster upload */}
-      <SeriesPosterSection seriesSlug={seriesSlug} />
+      <SeriesPosterSection seriesSlug={seriesSlug} posterUrl={series.poster_url} />
 
       {/* Edit name / description / visibility */}
       <div className="mb-6 space-y-3">

@@ -890,17 +890,12 @@ export function TournamentCreateForm({
             </div>
           )}
           {/* Series poster — separate from the final tournament's poster */}
-          <div>
-            <Label htmlFor="sm-series-poster">Series Poster (optional)</Label>
-            <input
-              id="sm-series-poster"
-              type="file"
-              accept="image/*"
-              onChange={(e) => setSeriesPosterFile(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-rizzotto-stone-300 file:mr-3 file:rounded file:border-0 file:bg-rizzotto-iron-700 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-rizzotto-stone-200 hover:file:bg-rizzotto-iron-600"
-            />
-            <FieldHint>Shown on the series page — distinct from the final tournament poster below.</FieldHint>
-          </div>
+          <PosterPickField
+            file={seriesPosterFile}
+            onPick={setSeriesPosterFile}
+            legend="Series Poster"
+            description="No poster set. Upload a banner image — shown on the series page, distinct from the final tournament poster below."
+          />
         </fieldset>
       )}
 
