@@ -3,6 +3,7 @@
  * so the widely-imported base module stays free of the series-qualification import chain.
  * All functions are fire-and-forget safe (never throw) and no-op without a bot token.
  * DMs go through the base sendDm() → per-recipient rate caps + NO_BOT_MESSAGES opt-out apply.
+ * The new-qualifier invite fires once, when the qualifier's registration opens (maybeSendSeriesInvite).
  */
 
 import type { PrismaClient } from '@rizzotto/db';
