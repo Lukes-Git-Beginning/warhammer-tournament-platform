@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.57.5] — 2026-09-12 — Private tiles fade instead of a badge
+### Changed
+- In the tournament overview (listing + homepage), a private tournament is now shown by fading the whole tile — poster included — to a muted grey, instead of a badge and border. Subtler and clearer at a glance for the hosts, moderators and admins who can see them.
+
 ## [1.57.4] — 2026-09-12 — Private marker in the overview
 ### Changed
 - The subtle **Private** marker now also appears in the tournament overview — the listing and the homepage — as a muted dashed border and a lock badge on private tournaments (distinct from the dashed-gold draft styling), for the hosts, moderators and admins who can see them.
