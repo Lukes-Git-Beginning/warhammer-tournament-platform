@@ -13,8 +13,8 @@ const MapsQuerySchema = z.object({
 });
 
 const mapsRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/maps — public, all active maps, cached 5 min
-  // Optional ?battle_type=DOMINATION|CONQUEST|SIEGE filter — returns only maps valid for that type.
+  // GET /api/maps — public, all AVAILABLE maps (offered to hosts + Open Play), cached 5 min.
+  // Optional ?battle_type=DOMINATION|CONQUEST|SIEGE filter — a map is built for one battle type.
   fastify.get('/api/maps', async (request, _reply) => {
     const parsed = MapsQuerySchema.safeParse(request.query);
     // Silently ignore invalid battle_type values — treat as unfiltered.
@@ -27,7 +27,8 @@ const mapsRoutes: FastifyPluginAsync = async (fastify) => {
         return fastify.prisma.map.findMany({
           where: {
             deleted_at: null,
-            ...(bt !== undefined ? { battle_types: { has: bt } } : {}),
+            available: true,
+            ...(bt !== undefined ? { battle_type: bt } : {}),
           },
           select: {
             id: true,
@@ -35,7 +36,8 @@ const mapsRoutes: FastifyPluginAsync = async (fastify) => {
             name: true,
             description: true,
             image_url: true,
-            battle_types: true,
+            battle_type: true,
+            available: true,
             created_at: true,
           },
           orderBy: { name: 'asc' },

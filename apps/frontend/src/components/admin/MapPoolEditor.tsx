@@ -12,51 +12,26 @@ import {
 } from '@/lib/api.js';
 
 const BATTLE_TYPES: BattleType[] = ['DOMINATION', 'CONQUEST', 'SIEGE'];
-
 const BATTLE_TYPE_LABELS: Record<BattleType, string> = {
-  DOMINATION: 'Dom',
-  CONQUEST: 'Con',
+  DOMINATION: 'Domination',
+  CONQUEST: 'Conquest',
   SIEGE: 'Siege',
 };
 
-interface BattleTypeChipsProps {
-  value: BattleType[];
-  onChange: (next: BattleType[]) => void;
-}
-
-function BattleTypeChips({ value, onChange }: BattleTypeChipsProps) {
-  function toggle(bt: BattleType) {
-    if (value.includes(bt)) {
-      // Enforce at least one selected
-      if (value.length === 1) return;
-      onChange(value.filter((t) => t !== bt));
-    } else {
-      onChange([...value, bt]);
-    }
-  }
-
+/** Single battle-type select — a map is built for exactly one type. */
+function BattleTypeSelect({ value, onChange }: { value: BattleType; onChange: (bt: BattleType) => void }) {
   return (
-    <div className="flex gap-1">
-      {BATTLE_TYPES.map((bt) => {
-        const active = value.includes(bt);
-        return (
-          <button
-            key={bt}
-            type="button"
-            onClick={() => toggle(bt)}
-            title={value.length === 1 && active ? 'At least one type required' : bt}
-            className={[
-              'rounded px-1.5 py-0.5 text-[10px] font-medium border transition-colors',
-              active
-                ? 'border-rizzotto-gold-600 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
-                : 'border-stone-700 bg-transparent text-stone-600 hover:text-stone-400 hover:border-stone-500',
-            ].join(' ')}
-          >
-            {BATTLE_TYPE_LABELS[bt]}
-          </button>
-        );
-      })}
-    </div>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as BattleType)}
+      className="rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
+    >
+      {BATTLE_TYPES.map((bt) => (
+        <option key={bt} value={bt}>
+          {BATTLE_TYPE_LABELS[bt]}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -69,17 +44,13 @@ function AddMapModal({ onClose, onCreated }: AddMapModalProps) {
   const [slug, setSlug] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [battleTypes, setBattleTypes] = useState<BattleType[]>(['DOMINATION']);
+  const [battleType, setBattleType] = useState<BattleType>('DOMINATION');
+  const [available, setAvailable] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const { mutate, isPending } = useMutation({
     mutationFn: () =>
-      createAdminMap({
-        slug,
-        name,
-        description: description || undefined,
-        battle_types: battleTypes,
-      }),
+      createAdminMap({ slug, name, description: description || undefined, battle_type: battleType, available }),
     onSuccess: () => { onCreated(); onClose(); },
     onError: (e: Error) => setError(e.message),
   });
@@ -87,9 +58,7 @@ function AddMapModal({ onClose, onCreated }: AddMapModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
       <div className="w-full max-w-md rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-950 p-6 shadow-xl">
-        <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-4">
-          Add Map
-        </h3>
+        <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-4">Add Map</h3>
 
         <div className="space-y-3">
           <div>
@@ -119,15 +88,19 @@ function AddMapModal({ onClose, onCreated }: AddMapModalProps) {
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
-          <div>
-            <label className="block text-xs text-stone-400 mb-1">Battle types</label>
-            <BattleTypeChips value={battleTypes} onChange={setBattleTypes} />
+          <div className="flex items-center gap-4">
+            <div>
+              <label className="block text-xs text-stone-400 mb-1">Battle type</label>
+              <BattleTypeSelect value={battleType} onChange={setBattleType} />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-stone-300 pt-4">
+              <input type="checkbox" checked={available} onChange={(e) => setAvailable(e.target.checked)} />
+              Available for hosts + Open Play
+            </label>
           </div>
         </div>
 
-        {error && (
-          <p className="mt-3 text-xs text-red-400">{error}</p>
-        )}
+        {error && <p className="mt-3 text-xs text-red-400">{error}</p>}
 
         <div className="mt-5 flex justify-end gap-3">
           <button
@@ -205,38 +178,38 @@ function InlineEdit({ value, onSave, placeholder, multiline }: InlineEditProps) 
   );
 }
 
+type TypeFilter = 'ALL' | BattleType;
+type StatusFilter = 'ALL' | 'AVAILABLE' | 'UNAVAILABLE';
+
 export function MapPoolEditor() {
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['admin-maps'],
-    queryFn: getAdminMaps,
-  });
+  const { data, isLoading, error } = useQuery({ queryKey: ['admin-maps'], queryFn: getAdminMaps });
 
   const maps = data?.data ?? [];
-  const active = maps.filter((m) => !m.deleted_at);
+  const live = maps.filter((m) => !m.deleted_at);
   const deleted = maps.filter((m) => m.deleted_at);
+  const filtered = live.filter(
+    (m) =>
+      (typeFilter === 'ALL' || m.battle_type === typeFilter) &&
+      (statusFilter === 'ALL' ||
+        (statusFilter === 'AVAILABLE' ? m.available !== false : m.available === false)),
+  );
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-maps'] });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: { name?: string; description?: string; battle_types?: BattleType[] } }) =>
+    mutationFn: ({ id, body }: { id: string; body: { name?: string; description?: string; battle_type?: BattleType; available?: boolean } }) =>
       updateAdminMap(id, body),
     onSuccess: invalidate,
   });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteAdminMap(id),
-    onSuccess: invalidate,
-  });
-
-  const restoreMutation = useMutation({
-    mutationFn: (id: string) => restoreAdminMap(id),
-    onSuccess: invalidate,
-  });
+  const deleteMutation = useMutation({ mutationFn: (id: string) => deleteAdminMap(id), onSuccess: invalidate });
+  const restoreMutation = useMutation({ mutationFn: (id: string) => restoreAdminMap(id), onSuccess: invalidate });
 
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -246,19 +219,12 @@ export function MapPoolEditor() {
     setUploadingFor(null);
   }
 
-  if (isLoading) {
-    return <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>;
-  }
-
+  if (isLoading) return <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>;
   if (error) {
-    return (
-      <div className="rounded border border-red-900 bg-red-950/40 p-3 text-red-300 text-xs">
-        Failed to load maps.
-      </div>
-    );
+    return <div className="rounded border border-red-900 bg-red-950/40 p-3 text-red-300 text-xs">Failed to load maps.</div>;
   }
 
-  function MapTable({ rows, showDelete }: { rows: MapDto[]; showDelete: boolean }) {
+  function MapTable({ rows, showControls }: { rows: MapDto[]; showControls: boolean }) {
     return (
       <div className="overflow-x-auto rounded-md border border-stone-800">
         <table className="min-w-full text-xs">
@@ -268,16 +234,15 @@ export function MapPoolEditor() {
               <th className="px-3 py-2 text-left text-stone-400 w-32">Slug</th>
               <th className="px-3 py-2 text-left text-stone-400">Name</th>
               <th className="px-3 py-2 text-left text-stone-400 hidden sm:table-cell">Description</th>
-              <th className="px-3 py-2 text-left text-stone-400">Battle types</th>
-              <th className="px-3 py-2 text-right text-stone-400 w-24">Actions</th>
+              <th className="px-3 py-2 text-left text-stone-400">Type</th>
+              <th className="px-3 py-2 text-center text-stone-400 w-24">Available</th>
+              <th className="px-3 py-2 text-right text-stone-400 w-20">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-800/60">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-stone-500">
-                  None.
-                </td>
+                <td colSpan={7} className="px-3 py-6 text-center text-stone-500">None.</td>
               </tr>
             )}
             {rows.map((m) => (
@@ -285,23 +250,16 @@ export function MapPoolEditor() {
                 <td className="px-3 py-2">
                   <div className="relative group">
                     {m.image_url ? (
-                      <img
-                        src={m.image_url}
-                        alt={m.name}
-                        className="h-9 w-14 object-cover rounded border border-stone-700"
-                      />
+                      <img src={m.image_url} alt={m.name} className="h-9 w-14 object-cover rounded border border-stone-700" />
                     ) : (
                       <div className="h-9 w-14 rounded border border-stone-700 bg-stone-800 flex items-center justify-center text-[10px] text-stone-600">
                         No img
                       </div>
                     )}
-                    {showDelete && (
+                    {showControls && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setUploadingFor(m.id);
-                          fileInputRef.current?.click();
-                        }}
+                        onClick={() => { setUploadingFor(m.id); fileInputRef.current?.click(); }}
                         className="absolute inset-0 flex items-center justify-center rounded bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-stone-200"
                       >
                         Upload
@@ -311,22 +269,17 @@ export function MapPoolEditor() {
                 </td>
                 <td className="px-3 py-2 text-stone-500 font-mono">{m.slug}</td>
                 <td className="px-3 py-2">
-                  {showDelete ? (
-                    <InlineEdit
-                      value={m.name}
-                      onSave={(name) => updateMutation.mutate({ id: m.id, body: { name } })}
-                    />
+                  {showControls ? (
+                    <InlineEdit value={m.name} onSave={(name) => updateMutation.mutate({ id: m.id, body: { name } })} />
                   ) : (
                     <span className="text-stone-500 line-through">{m.name}</span>
                   )}
                 </td>
                 <td className="px-3 py-2 hidden sm:table-cell">
-                  {showDelete ? (
+                  {showControls ? (
                     <InlineEdit
                       value={m.description ?? ''}
-                      onSave={(description) =>
-                        updateMutation.mutate({ id: m.id, body: { description } })
-                      }
+                      onSave={(description) => updateMutation.mutate({ id: m.id, body: { description } })}
                       placeholder="no description"
                       multiline
                     />
@@ -335,30 +288,33 @@ export function MapPoolEditor() {
                   )}
                 </td>
                 <td className="px-3 py-2">
-                  {showDelete ? (
-                    <BattleTypeChips
-                      value={m.battle_types ?? ['DOMINATION']}
-                      onChange={(battle_types) =>
-                        updateMutation.mutate({ id: m.id, body: { battle_types } })
-                      }
+                  {showControls ? (
+                    <BattleTypeSelect
+                      value={m.battle_type}
+                      onChange={(battle_type) => updateMutation.mutate({ id: m.id, body: { battle_type } })}
                     />
                   ) : (
-                    <span className="text-stone-600 text-xs">
-                      {(m.battle_types ?? ['DOMINATION'])
-                        .map((bt) => BATTLE_TYPE_LABELS[bt])
-                        .join(', ')}
-                    </span>
+                    <span className="text-stone-600">{BATTLE_TYPE_LABELS[m.battle_type]}</span>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {showControls ? (
+                    <input
+                      type="checkbox"
+                      checked={m.available !== false}
+                      onChange={(e) => updateMutation.mutate({ id: m.id, body: { available: e.target.checked } })}
+                      title="Available for hosts + Open Play"
+                      className="cursor-pointer"
+                    />
+                  ) : (
+                    <span className="text-stone-600">—</span>
                   )}
                 </td>
                 <td className="px-3 py-2 text-right">
-                  {showDelete ? (
+                  {showControls ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (confirm(`Delete map "${m.name}"?`)) {
-                          deleteMutation.mutate(m.id);
-                        }
-                      }}
+                      onClick={() => { if (confirm(`Delete map "${m.name}"?`)) deleteMutation.mutate(m.id); }}
                       className="rounded px-2 py-0.5 border border-red-800 text-red-400 hover:bg-red-900/30 transition-colors"
                       title="Soft-delete map"
                     >
@@ -384,11 +340,13 @@ export function MapPoolEditor() {
     );
   }
 
+  const availableCount = live.filter((m) => m.available !== false).length;
+
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 className="font-display text-base font-semibold text-rizzotto-gold-400">
-          Map Pool ({active.length} active)
+          Map Pool ({availableCount} available / {live.length} total)
         </h3>
         <button
           type="button"
@@ -399,7 +357,37 @@ export function MapPoolEditor() {
         </button>
       </div>
 
-      <MapTable rows={active} showDelete />
+      {/* Filters — by battle type and by availability */}
+      <div className="mb-3 flex flex-wrap items-center gap-4 text-xs">
+        <label className="flex items-center gap-2">
+          <span className="text-stone-500">Type</span>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+            className="rounded border border-stone-700 bg-stone-900 px-2 py-1 text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
+          >
+            <option value="ALL">All</option>
+            {BATTLE_TYPES.map((bt) => (
+              <option key={bt} value={bt}>{BATTLE_TYPE_LABELS[bt]}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="text-stone-500">Status</span>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="rounded border border-stone-700 bg-stone-900 px-2 py-1 text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
+          >
+            <option value="ALL">All</option>
+            <option value="AVAILABLE">Available</option>
+            <option value="UNAVAILABLE">Unavailable</option>
+          </select>
+        </label>
+        <span className="text-stone-600">{filtered.length} shown</span>
+      </div>
+
+      <MapTable rows={filtered} showControls />
 
       {deleted.length > 0 && (
         <details className="mt-4">
@@ -407,12 +395,11 @@ export function MapPoolEditor() {
             Show {deleted.length} soft-deleted map(s)
           </summary>
           <div className="mt-2">
-            <MapTable rows={deleted} showDelete={false} />
+            <MapTable rows={deleted} showControls={false} />
           </div>
         </details>
       )}
 
-      {/* Hidden file input for image upload */}
       <input
         ref={fileInputRef}
         type="file"
@@ -421,9 +408,7 @@ export function MapPoolEditor() {
         onChange={handleImageUpload}
       />
 
-      {showAdd && (
-        <AddMapModal onClose={() => setShowAdd(false)} onCreated={invalidate} />
-      )}
+      {showAdd && <AddMapModal onClose={() => setShowAdd(false)} onCreated={invalidate} />}
     </div>
   );
 }

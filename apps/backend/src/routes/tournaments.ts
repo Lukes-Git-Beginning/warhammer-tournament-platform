@@ -461,7 +461,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           where: {
             id: { in: data.map_pool },
             deleted_at: null,
-            battle_types: { has: effectiveBattleType },
+            available: true,
+            battle_type: effectiveBattleType,
           },
           select: { id: true },
         });
@@ -945,7 +946,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           where: {
             id: { in: newMapPool },
             deleted_at: null,
-            battle_types: { has: effectiveBattleType as 'DOMINATION' | 'CONQUEST' | 'SIEGE' },
+            available: true,
+            battle_type: effectiveBattleType as 'DOMINATION' | 'CONQUEST' | 'SIEGE',
           },
           select: { id: true },
         });

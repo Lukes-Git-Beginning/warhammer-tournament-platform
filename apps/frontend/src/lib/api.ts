@@ -126,7 +126,10 @@ export interface MapDto {
   description: string | null;
   image_url: string | null;
   deleted_at?: string | null;
-  battle_types: BattleType[];
+  /** The single battle type this map is built for. */
+  battle_type: BattleType;
+  /** Whether the map is offered to hosts + Open Play (admin checkbox). */
+  available?: boolean;
 }
 
 export type { BattleType };
@@ -1398,7 +1401,8 @@ export function createAdminMap(body: {
   slug: string;
   name: string;
   description?: string;
-  battle_types?: BattleType[];
+  battle_type?: BattleType;
+  available?: boolean;
 }): Promise<MapDto> {
   return apiFetch('/api/admin/maps', {
     method: 'POST',
@@ -1408,7 +1412,7 @@ export function createAdminMap(body: {
 
 export function updateAdminMap(
   id: string,
-  body: { name?: string; description?: string; battle_types?: BattleType[] },
+  body: { name?: string; description?: string; battle_type?: BattleType; available?: boolean },
 ): Promise<MapDto> {
   return apiFetch(`/api/admin/maps/${id}`, {
     method: 'PATCH',

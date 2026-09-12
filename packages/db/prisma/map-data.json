@@ -1,23 +1,5 @@
 [
   {
-    "name": "[Invasion] Assault on Ash River",
-    "image_url": "https://i.imgur.com/ZqMUMUj.jpeg",
-    "slug": "invasion-assault-on-ash-river",
-    "local_path": "/maps/invasion-assault-on-ash-river.jpeg"
-  },
-  {
-    "name": "[Invasion] Assault on Karag Rhyn",
-    "image_url": "https://i.imgur.com/Uv0aBO2.jpeg",
-    "slug": "invasion-assault-on-karag-rhyn",
-    "local_path": "/maps/invasion-assault-on-karag-rhyn.jpeg"
-  },
-  {
-    "name": "[Invasion] Assault on Spite Peak",
-    "image_url": "https://i.imgur.com/vnoycC5.jpeg",
-    "slug": "invasion-assault-on-spite-peak",
-    "local_path": "/maps/invasion-assault-on-spite-peak.jpeg"
-  },
-  {
     "name": "Altar of Hashut",
     "image_url": "https://i.imgur.com/LvLOtgm.jpeg",
     "slug": "altar-of-hashut",
@@ -55,9 +37,9 @@
   },
   {
     "name": "Blasphemous Snowfield",
-    "image_url": null,
+    "image_url": "(local screenshot)",
     "slug": "blasphemous-snowfield",
-    "local_path": null
+    "local_path": "/maps/blasphemous-snowfield.png"
   },
   {
     "name": "Bleakspire Labour Camp",
@@ -67,9 +49,9 @@
   },
   {
     "name": "Blighted Marsh",
-    "image_url": null,
+    "image_url": "(local screenshot)",
     "slug": "blighted-marsh",
-    "local_path": null
+    "local_path": "/maps/blighted-marsh.png"
   },
   {
     "name": "Bordeleaux Landing",

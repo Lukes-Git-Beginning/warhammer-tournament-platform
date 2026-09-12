@@ -1,9 +1,9 @@
-import type { PrismaClient } from '@rizzotto/db';
+import type { PrismaClient, $Enums } from '@rizzotto/db';
 
 /**
  * Creates an Open Play match with:
- * - A random map drawn from the global map pool
- * - A MatchGame ready for blind faction pick
+ * - A random map drawn from the AVAILABLE pool for the given battle type
+ * - A MatchGame (stamped with the battle type) ready for blind faction pick
  * - A MatchBlindPick (both factions null — awaiting player input)
  */
 export async function createOpenPlayMatch(
@@ -11,9 +11,10 @@ export async function createOpenPlayMatch(
   player1Id: string,
   player2Id: string,
   source: 'QUEUE' | 'CHALLENGE' | 'AVAILABILITY' = 'QUEUE',
+  battleType: $Enums.BattleType = 'DOMINATION',
 ): Promise<{ matchId: string; mapId: string | null; mapName: string | null }> {
   const maps = await prisma.map.findMany({
-    where: { deleted_at: null },
+    where: { deleted_at: null, available: true, battle_type: battleType },
     select: { id: true, name: true },
   });
   const randomMap = maps.length > 0 ? maps[Math.floor(Math.random() * maps.length)] : null;
@@ -43,6 +44,7 @@ export async function createOpenPlayMatch(
         game_number: 1,
         status: 'PENDING',
         counts_for_leaderboard: true,
+        battle_type: battleType,
       },
     });
 

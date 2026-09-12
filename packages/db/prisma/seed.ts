@@ -3,6 +3,7 @@
 //
 // Invoke via `pnpm db:seed` (which runs `tsx prisma/seed.ts`).
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -226,66 +227,66 @@ async function seedDraftPresets(systemUserId: string): Promise<void> {
 // Maps (Welle 2) — 36 maps from Alex. Slugs are kebab-case from name.
 // ---------------------------------------------------------------------------
 
-function toSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/['']/g, '')            // remove apostrophes
-    .replace(/[^a-z0-9]+/g, '-')    // non-alphanum → hyphen
-    .replace(/^-|-$/g, '');          // trim leading/trailing hyphens
+// Maps — re-pulled from the community map spreadsheet into map-data.json (name + local
+// image path under apps/frontend/public/maps; images hosted locally, off Imgur). Every map
+// is one battle type (Domination for the whole current set). The ~36 that were the curated
+// active pool come in `available`; the rest come in unavailable, for hosts to enable via the
+// admin map pool.
+interface MapSeedEntry {
+  name: string;
+  slug: string;
+  local_path: string | null;
 }
 
-// Source: TT Map Notes.xlsx (community spreadsheet), imgur URLs extracted 2026-06-07.
-// Pool: original 36 maps from Alex. Names are the authoritative in-game names.
-const MAP_DATA: { name: string; image_url: string | null }[] = [
-  { name: 'Altar of the Champion',     image_url: 'https://i.imgur.com/yz5oLma.jpeg' },
-  { name: 'Aracknarock Lair',          image_url: 'https://i.imgur.com/saz9JBu.jpeg' },
-  { name: 'Battle for Itza',           image_url: '/maps/battle-for-itza.png' },
-  { name: 'Blazing Ramparts',          image_url: 'https://i.imgur.com/V7uKLph.jpeg' },
-  { name: 'Bleakspire Labor Camp',     image_url: 'https://i.imgur.com/Ej0FME2.jpeg' },
-  { name: 'Bordeleaux Landing',        image_url: 'https://i.imgur.com/Cyp0j7l.jpeg' },
-  { name: 'Bray Valley',               image_url: 'https://i.imgur.com/XJrDm83.jpeg' },
-  { name: 'Celestial Lake',            image_url: 'https://i.imgur.com/JlWAhw7.jpeg' },
-  { name: 'Chateau de Roquefort',      image_url: 'https://i.imgur.com/QKZ8pt5.jpeg' },
-  { name: 'Creeping Swamp',            image_url: 'https://i.imgur.com/oTLPL1o.jpeg' },
-  { name: 'Crystal Lake',              image_url: 'https://i.imgur.com/bcIE6QL.jpeg' },
-  { name: 'Decrepit Moor',             image_url: 'https://i.imgur.com/tdr9OGl.jpeg' },
-  { name: 'Dried Floodplain',          image_url: 'https://i.imgur.com/jbwS3io.jpeg' },
-  { name: 'Dunes of Khaine',           image_url: 'https://i.imgur.com/Cw07uU3.jpeg' },
-  { name: 'Dustbowl',                  image_url: 'https://i.imgur.com/fbeT1cA.jpeg' },
-  { name: 'Eastern Isle Colony',       image_url: 'https://i.imgur.com/XlbRBLa.jpeg' },
-  { name: 'Edge of the Darkwood',      image_url: 'https://i.imgur.com/TNMw7j1.jpeg' },
-  { name: 'Glade of the Everqueen',    image_url: 'https://i.imgur.com/LC6uWJ3.jpeg' },
-  { name: "Glinty Toof's Crag",        image_url: 'https://i.imgur.com/5wPEGhT.jpeg' },
-  { name: "Hashut's Oilfields",        image_url: 'https://i.imgur.com/3cNieCe.jpeg' },
-  { name: 'Haunted Vale',              image_url: 'https://i.imgur.com/0VnWsIb.jpeg' },
-  { name: 'Imperial Ambush',           image_url: 'https://i.imgur.com/aFXp5qw.jpeg' },
-  { name: 'Imperial Road',             image_url: 'https://i.imgur.com/wiMbaFw.jpeg' },
-  { name: 'Jade Tomb',                 image_url: 'https://i.imgur.com/x7PC3mz.jpeg' },
-  { name: "Khsar's Cursed Oasis",      image_url: 'https://i.imgur.com/0vLF5DV.jpeg' },
-  { name: 'Lost Temple of Sotek',      image_url: 'https://i.imgur.com/UpMzR5h.jpeg' },
-  { name: 'Norscan Rise',              image_url: 'https://i.imgur.com/olAbf3U.jpeg' },
-  { name: 'Proving Grounds',           image_url: 'https://i.imgur.com/dngqsiC.jpeg' },
-  { name: 'Putrefying Carcass',        image_url: 'https://i.imgur.com/XZ32CD1.jpeg' },
-  { name: 'Rapturous Expanse',         image_url: 'https://i.imgur.com/jU112ja.jpeg' },
-  { name: "Rifts at World's Edge",     image_url: 'https://i.imgur.com/USxlGQx.jpeg' },
-  { name: 'Road to Talabheim',         image_url: 'https://i.imgur.com/c7xXQvx.jpeg' },
-  { name: "Skjalandir's Cave",         image_url: 'https://i.imgur.com/NtZ1Rxn.jpeg' },
-  { name: "The Changer's Madhouse",    image_url: 'https://i.imgur.com/2QJZe1V.jpeg' },
-  { name: 'The Blood Grove',           image_url: 'https://i.imgur.com/Ju2vMRf.jpeg' },
-  { name: 'Whirling Maelstrom',        image_url: 'https://i.imgur.com/VvrCxyx.jpeg' },
+// The curated active pool (the original 36) — matched to the sheet by a normalised name so
+// slug/spelling drift (e.g. "Labor" vs "Labour", a "The" prefix) still lines up.
+const CANONICAL_MAP_NAMES = [
+  'Altar of the Champion', 'Aracknarock Lair', 'Battle for Itza', 'Blazing Ramparts',
+  'Bleakspire Labor Camp', 'Bordeleaux Landing', 'Bray Valley', 'Celestial Lake',
+  'Chateau de Roquefort', 'Creeping Swamp', 'Crystal Lake', 'Decrepit Moor',
+  'Dried Floodplain', 'Dunes of Khaine', 'Dustbowl', 'Eastern Isle Colony',
+  'Edge of the Darkwood', 'Glade of the Everqueen', "Glinty Toof's Crag", "Hashut's Oilfields",
+  'Haunted Vale', 'Imperial Ambush', 'Imperial Road', 'Jade Tomb', "Khsar's Cursed Oasis",
+  'Lost Temple of Sotek', 'Norscan Rise', 'Proving Grounds', 'Putrefying Carcass',
+  'Rapturous Expanse', "Rifts at World's Edge", 'Road to Talabheim', "Skjalandir's Cave",
+  "The Changer's Madhouse", 'The Blood Grove', 'Whirling Maelstrom',
 ];
 
+const normMapKey = (n: string): string =>
+  n.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/the/g, '').replace('labour', 'labor').replace('rifts', 'rift');
+
 async function seedMaps(): Promise<void> {
-  for (const { name, image_url } of MAP_DATA) {
-    const slug = toSlug(name);
-    await prisma.map.upsert({
-      where: { slug },
-      update: { name, image_url },
-      create: { slug, name, image_url },
-    });
+  const mapData = JSON.parse(fs.readFileSync(path.join(__dirname, 'map-data.json'), 'utf8')) as MapSeedEntry[];
+  const canonical = new Set(CANONICAL_MAP_NAMES.map(normMapKey));
+
+  // Reconcile against existing rows BY NORMALISED NAME (not slug) so re-pulling the sheet
+  // updates the curated maps in place instead of creating duplicates when spelling differs.
+  const existing = await prisma.map.findMany({ select: { id: true, name: true } });
+  const byKey = new Map(existing.map((m) => [normMapKey(m.name), m]));
+
+  let available = 0;
+  for (const m of mapData) {
+    const isCanonical = canonical.has(normMapKey(m.name));
+    if (isCanonical) available += 1;
+    const match = byKey.get(normMapKey(m.name));
+    if (match) {
+      // Refresh name + local image; preserve the admin's battle_type/available choices.
+      await prisma.map.update({ where: { id: match.id }, data: { slug: m.slug, name: m.name, image_url: m.local_path } });
+    } else {
+      await prisma.map.create({
+        data: {
+          slug: m.slug,
+          name: m.name,
+          image_url: m.local_path,
+          battle_type: 'DOMINATION',
+          available: isCanonical,
+        },
+      });
+    }
   }
   const total = await prisma.map.count({ where: { deleted_at: null } });
-  console.log(`  ✓ Maps: ${total} active in DB (upserted ${MAP_DATA.length})`);
+  const availTotal = await prisma.map.count({ where: { deleted_at: null, available: true } });
+  console.log(`  ✓ Maps: ${total} in DB (${mapData.length} from sheet; ${availTotal} available)`);
 }
 
 // ---------------------------------------------------------------------------

@@ -819,18 +819,23 @@ model TournamentResult {
 // -----------------------------------------------------------------------------
 
 model Map {
-  id           String       @id @default(cuid())
-  slug         String       @unique
-  name         String
-  description  String?
-  image_url    String?
-  battle_types BattleType[] @default([DOMINATION]) // which battle types this map is valid for
-  deleted_at   DateTime?
-  created_at   DateTime     @default(now())
-  updated_at   DateTime     @updatedAt
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  name        String
+  description String?
+  image_url   String?
+  // A map is built for exactly ONE battle type. `available` is the host/Open-Play toggle:
+  // only available maps are offered in tournament map pools + the Open Play queue. A map can
+  // exist but be unavailable (e.g. imported-but-not-vetted). `deleted_at` = fully removed.
+  battle_type BattleType @default(DOMINATION)
+  available   Boolean    @default(true)
+  deleted_at  DateTime?
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
 
   tournament_pools TournamentMapPool[]
 
+  @@index([battle_type])
   @@index([deleted_at])
 }
 

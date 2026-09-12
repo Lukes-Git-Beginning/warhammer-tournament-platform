@@ -1,17 +1,14 @@
 /**
- * Integration tests for battle_type support on Tournament + Map.
+ * Integration tests for battle_type + availability on Tournament + Map.
  *
  * Covers:
- *  1. POST /api/tournaments with battle_type:'SIEGE' persists the value and
- *     returns it in the create response.
- *  2. GET /api/tournaments/:slug includes battle_type in the response.
- *  3. Map pool validation on CREATE: a map not valid for the tournament's
- *     battle type is rejected with 422.
- *  4. Map pool validation on PATCH: same guard with the effective battle type
- *     (patched value wins if provided, otherwise the existing one is used).
- *  5. GET /api/admin/maps — POST /api/admin/maps persists battle_types and
- *     PATCH /api/admin/maps/:id updates them.
- *  6. GET /api/maps?battle_type=SIEGE returns only SIEGE-valid maps.
+ *  1. POST /api/tournaments with battle_type:'SIEGE' persists + returns it.
+ *  2. GET /api/tournaments/:slug includes battle_type.
+ *  3. Map pool validation on CREATE: a map of a different battle type (or an
+ *     unavailable one) is rejected with 422.
+ *  4. Map pool validation on PATCH: effective battle type logic.
+ *  5. Admin map CRUD: battle_type (single) + available persist and update.
+ *  6. GET /api/maps?battle_type=SIEGE returns only available SIEGE maps.
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -20,15 +17,9 @@ import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
 import { randomUUID } from 'node:crypto';
 
-// ---------------------------------------------------------------------------
-// Deterministic IDs
-// ---------------------------------------------------------------------------
+type BT = 'DOMINATION' | 'CONQUEST' | 'SIEGE';
 
 const ADMIN_ID = 'ba000000-0000-0000-0000-000000000001';
-
-// ---------------------------------------------------------------------------
-// App lifecycle
-// ---------------------------------------------------------------------------
 
 let app: FastifyInstance;
 
@@ -48,30 +39,18 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// ---------------------------------------------------------------------------
-// Cleanup helpers
-// ---------------------------------------------------------------------------
-
 const createdMapIds: string[] = [];
 const createdTournamentIds: string[] = [];
 
 async function cleanup() {
   if (createdTournamentIds.length > 0) {
-    await prisma.tournamentMapPool.deleteMany({
-      where: { tournament_id: { in: createdTournamentIds } },
-    });
-    await prisma.auditLog.deleteMany({
-      where: { entity_id: { in: createdTournamentIds } },
-    });
-    await prisma.tournament.deleteMany({
-      where: { id: { in: createdTournamentIds } },
-    });
+    await prisma.tournamentMapPool.deleteMany({ where: { tournament_id: { in: createdTournamentIds } } });
+    await prisma.auditLog.deleteMany({ where: { entity_id: { in: createdTournamentIds } } });
+    await prisma.tournament.deleteMany({ where: { id: { in: createdTournamentIds } } });
     createdTournamentIds.length = 0;
   }
   if (createdMapIds.length > 0) {
-    await prisma.auditLog.deleteMany({
-      where: { entity_type: 'Map', entity_id: { in: createdMapIds } },
-    });
+    await prisma.auditLog.deleteMany({ where: { entity_type: 'Map', entity_id: { in: createdMapIds } } });
     await prisma.map.deleteMany({ where: { id: { in: createdMapIds } } });
     createdMapIds.length = 0;
   }
@@ -90,21 +69,14 @@ afterEach(async () => {
   await cleanup();
 });
 
-// ---------------------------------------------------------------------------
-// Auth helpers
-// ---------------------------------------------------------------------------
-
 function adminCookie() {
   const token = app.jwt.sign({ sub: ADMIN_ID, username: 'BTAdmin', role: 'ADMIN' });
   const cookieName = process.env.JWT_COOKIE_NAME ?? 'auth_token';
   return `${cookieName}=${token}`;
 }
 
-// ---------------------------------------------------------------------------
-// Seed helpers
-// ---------------------------------------------------------------------------
-
-async function createMap(opts: { battleTypes?: string[]; suffix?: string }) {
+// A map is built for ONE battle type; `available` gates whether it's offered to hosts + Open Play.
+async function createMap(opts: { battleType?: BT; available?: boolean; suffix?: string }) {
   const id = randomUUID();
   const slug = `bt-map-${id.slice(0, 8)}${opts.suffix ?? ''}`;
   await prisma.map.create({
@@ -112,7 +84,8 @@ async function createMap(opts: { battleTypes?: string[]; suffix?: string }) {
       id,
       slug,
       name: `BT Test Map ${id.slice(0, 8)}`,
-      battle_types: (opts.battleTypes as ('DOMINATION' | 'CONQUEST' | 'SIEGE')[]) ?? ['DOMINATION'],
+      battle_type: opts.battleType ?? 'DOMINATION',
+      available: opts.available ?? true,
     },
   });
   createdMapIds.push(id);
@@ -139,22 +112,20 @@ async function createTournamentViaHttp(payload: Record<string, unknown>) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. POST /api/tournaments — battle_type persists + appears in response
+// 1. POST /api/tournaments — battle_type
 // ---------------------------------------------------------------------------
 
 describe('POST /api/tournaments — battle_type', () => {
   it('persists battle_type:SIEGE and returns it in the 201 response', async () => {
     const res = await createTournamentViaHttp({ battle_type: 'SIEGE' });
     expect(res.statusCode).toBe(201);
-    const body = res.json<{ battle_type: string }>();
-    expect(body.battle_type).toBe('SIEGE');
+    expect(res.json<{ battle_type: string }>().battle_type).toBe('SIEGE');
   });
 
   it('defaults battle_type to DOMINATION when omitted', async () => {
     const res = await createTournamentViaHttp({});
     expect(res.statusCode).toBe(201);
-    const body = res.json<{ battle_type: string }>();
-    expect(body.battle_type).toBe('DOMINATION');
+    expect(res.json<{ battle_type: string }>().battle_type).toBe('DOMINATION');
   });
 
   it('returns 400 for an invalid battle_type value', async () => {
@@ -173,145 +144,116 @@ describe('GET /api/tournaments/:slug — battle_type in response', () => {
     expect(createRes.statusCode).toBe(201);
     const { slug } = createRes.json<{ slug: string }>();
 
-    const getRes = await app.inject({
-      method: 'GET',
-      url: `/api/tournaments/${slug}`,
-      headers: { cookie: adminCookie() },
-    });
+    const getRes = await app.inject({ method: 'GET', url: `/api/tournaments/${slug}`, headers: { cookie: adminCookie() } });
     expect(getRes.statusCode).toBe(200);
     expect(getRes.json<{ battle_type: string }>().battle_type).toBe('CONQUEST');
   });
 });
 
 // ---------------------------------------------------------------------------
-// 3. Map pool validation on CREATE — invalid battle type rejected
+// 3. Map pool validation on CREATE
 // ---------------------------------------------------------------------------
 
-describe('POST /api/tournaments — map pool filtered by battle type', () => {
-  it('accepts maps valid for the tournament battle type', async () => {
+describe('POST /api/tournaments — map pool filtered by battle type + availability', () => {
+  it('accepts maps of the tournament battle type', async () => {
     const [m1, m2, m3] = await Promise.all([
-      createMap({ battleTypes: ['SIEGE'] }),
-      createMap({ battleTypes: ['SIEGE'] }),
-      createMap({ battleTypes: ['SIEGE'] }),
+      createMap({ battleType: 'SIEGE' }),
+      createMap({ battleType: 'SIEGE' }),
+      createMap({ battleType: 'SIEGE' }),
     ]);
-    const res = await createTournamentViaHttp({
-      battle_type: 'SIEGE',
-      map_pool: [m1, m2, m3],
-    });
+    const res = await createTournamentViaHttp({ battle_type: 'SIEGE', map_pool: [m1, m2, m3] });
     expect(res.statusCode).toBe(201);
   });
 
-  it('rejects a map not valid for the tournament battle type (422)', async () => {
-    const [m1, m2] = await Promise.all([
-      createMap({ battleTypes: ['SIEGE'] }),
-      createMap({ battleTypes: ['SIEGE'] }),
-    ]);
-    const dominationOnlyId = await createMap({ battleTypes: ['DOMINATION'] });
-    // two SIEGE maps + one DOMINATION-only map in a SIEGE tournament
-    const res = await createTournamentViaHttp({
-      battle_type: 'SIEGE',
-      map_pool: [m1, m2, dominationOnlyId],
-    });
+  it('rejects a map of a different battle type (422)', async () => {
+    const [m1, m2] = await Promise.all([createMap({ battleType: 'SIEGE' }), createMap({ battleType: 'SIEGE' })]);
+    const dominationId = await createMap({ battleType: 'DOMINATION' });
+    const res = await createTournamentViaHttp({ battle_type: 'SIEGE', map_pool: [m1, m2, dominationId] });
     expect(res.statusCode).toBe(422);
-    const body = res.json<{ message: string }>();
-    expect(body.message).toMatch(/battle type SIEGE/i);
+    expect(res.json<{ message: string }>().message).toMatch(/battle type SIEGE/i);
+  });
+
+  it('rejects an unavailable map even if the battle type matches (422)', async () => {
+    const [m1, m2] = await Promise.all([createMap({ battleType: 'SIEGE' }), createMap({ battleType: 'SIEGE' })]);
+    const unavailableId = await createMap({ battleType: 'SIEGE', available: false });
+    const res = await createTournamentViaHttp({ battle_type: 'SIEGE', map_pool: [m1, m2, unavailableId] });
+    expect(res.statusCode).toBe(422);
   });
 
   it('defaults to DOMINATION filter when battle_type is omitted', async () => {
-    const [m1, m2] = await Promise.all([
-      createMap({ battleTypes: ['DOMINATION'] }),
-      createMap({ battleTypes: ['DOMINATION'] }),
-    ]);
-    const siegeOnlyId = await createMap({ battleTypes: ['SIEGE'] });
-    // No battle_type → effective is DOMINATION; SIEGE-only map should be rejected
-    const res = await createTournamentViaHttp({
-      map_pool: [m1, m2, siegeOnlyId],
-    });
+    const [m1, m2] = await Promise.all([createMap({ battleType: 'DOMINATION' }), createMap({ battleType: 'DOMINATION' })]);
+    const siegeId = await createMap({ battleType: 'SIEGE' });
+    const res = await createTournamentViaHttp({ map_pool: [m1, m2, siegeId] });
     expect(res.statusCode).toBe(422);
-    const body = res.json<{ message: string }>();
-    expect(body.message).toMatch(/battle type DOMINATION/i);
+    expect(res.json<{ message: string }>().message).toMatch(/battle type DOMINATION/i);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 4. Map pool validation on PATCH — effective battle type logic
+// 4. Map pool validation on PATCH
 // ---------------------------------------------------------------------------
 
 describe('PATCH /api/tournaments/:slug — map pool filtered by effective battle type', () => {
   it('uses the patched battle_type when both are changed together', async () => {
-    // Create a DOMINATION tournament in DRAFT
     const createRes = await createTournamentViaHttp({ battle_type: 'DOMINATION' });
     expect(createRes.statusCode).toBe(201);
     const { slug } = createRes.json<{ slug: string }>();
 
     const [sm1, sm2, sm3] = await Promise.all([
-      createMap({ battleTypes: ['SIEGE'] }),
-      createMap({ battleTypes: ['SIEGE'] }),
-      createMap({ battleTypes: ['SIEGE'] }),
+      createMap({ battleType: 'SIEGE' }),
+      createMap({ battleType: 'SIEGE' }),
+      createMap({ battleType: 'SIEGE' }),
     ]);
 
-    // Patch: change battle_type to SIEGE + set a SIEGE map pool
     const patchRes = await app.inject({
       method: 'PATCH',
       url: `/api/tournaments/${slug}`,
       headers: { cookie: adminCookie() },
-      payload: {
-        battle_type: 'SIEGE',
-        map_pool: [sm1, sm2, sm3],
-      },
+      payload: { battle_type: 'SIEGE', map_pool: [sm1, sm2, sm3] },
     });
-    // DRAFT → battle_type change is allowed; maps are valid for SIEGE
     expect(patchRes.statusCode).toBe(200);
   });
 
-  it('rejects a map that is not valid for the existing battle type when battle_type is not being patched', async () => {
-    // Create a DOMINATION tournament in DRAFT
+  it('rejects a map not of the existing battle type when battle_type is not patched', async () => {
     const createRes = await createTournamentViaHttp({ battle_type: 'DOMINATION' });
     expect(createRes.statusCode).toBe(201);
     const { slug } = createRes.json<{ slug: string }>();
 
-    const [m1, m2] = await Promise.all([
-      createMap({ battleTypes: ['DOMINATION'] }),
-      createMap({ battleTypes: ['DOMINATION'] }),
-    ]);
-    const siegeOnlyId = await createMap({ battleTypes: ['SIEGE'] });
+    const [m1, m2] = await Promise.all([createMap({ battleType: 'DOMINATION' }), createMap({ battleType: 'DOMINATION' })]);
+    const siegeId = await createMap({ battleType: 'SIEGE' });
 
-    // Patch: only change map_pool (no battle_type change) — effective type = DOMINATION
     const patchRes = await app.inject({
       method: 'PATCH',
       url: `/api/tournaments/${slug}`,
       headers: { cookie: adminCookie() },
-      payload: {
-        map_pool: [m1, m2, siegeOnlyId],
-      },
+      payload: { map_pool: [m1, m2, siegeId] },
     });
     expect(patchRes.statusCode).toBe(422);
-    const body = patchRes.json<{ message: string }>();
-    expect(body.message).toMatch(/battle type DOMINATION/i);
+    expect(patchRes.json<{ message: string }>().message).toMatch(/battle type DOMINATION/i);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 5. POST /api/admin/maps — battle_types persisted; PATCH updates them
+// 5. Admin map CRUD — battle_type + available
 // ---------------------------------------------------------------------------
 
-describe('Admin map CRUD — battle_types', () => {
-  it('POST /api/admin/maps persists battle_types', async () => {
+describe('Admin map CRUD — battle_type + available', () => {
+  it('POST /api/admin/maps persists battle_type + available', async () => {
     const slug = `bt-adm-${randomUUID().slice(0, 8)}`;
     const res = await app.inject({
       method: 'POST',
       url: '/api/admin/maps',
       headers: { cookie: adminCookie() },
-      payload: { name: 'Siege Test Map', slug, battle_types: ['SIEGE', 'CONQUEST'] },
+      payload: { name: 'Siege Test Map', slug, battle_type: 'SIEGE', available: false },
     });
     expect(res.statusCode).toBe(201);
-    const created = res.json<{ id: string; battle_types: string[] }>();
+    const created = res.json<{ id: string; battle_type: string; available: boolean }>();
     createdMapIds.push(created.id);
-    expect(created.battle_types).toEqual(expect.arrayContaining(['SIEGE', 'CONQUEST']));
-    expect(created.battle_types).toHaveLength(2);
+    expect(created.battle_type).toBe('SIEGE');
+    expect(created.available).toBe(false);
   });
 
-  it('POST /api/admin/maps defaults battle_types to [DOMINATION] when omitted', async () => {
+  it('POST /api/admin/maps defaults to DOMINATION + available when omitted', async () => {
     const slug = `bt-adm-dom-${randomUUID().slice(0, 8)}`;
     const res = await app.inject({
       method: 'POST',
@@ -320,63 +262,61 @@ describe('Admin map CRUD — battle_types', () => {
       payload: { name: 'Default BT Map', slug },
     });
     expect(res.statusCode).toBe(201);
-    const created = res.json<{ id: string; battle_types: string[] }>();
+    const created = res.json<{ id: string; battle_type: string; available: boolean }>();
     createdMapIds.push(created.id);
-    expect(created.battle_types).toEqual(['DOMINATION']);
+    expect(created.battle_type).toBe('DOMINATION');
+    expect(created.available).toBe(true);
   });
 
-  it('PATCH /api/admin/maps/:id updates battle_types', async () => {
-    const id = await createMap({ battleTypes: ['DOMINATION'] });
+  it('PATCH /api/admin/maps/:id updates battle_type + available', async () => {
+    const id = await createMap({ battleType: 'DOMINATION' });
     const res = await app.inject({
       method: 'PATCH',
       url: `/api/admin/maps/${id}`,
       headers: { cookie: adminCookie() },
-      payload: { battle_types: ['DOMINATION', 'SIEGE'] },
+      payload: { battle_type: 'SIEGE', available: false },
     });
     expect(res.statusCode).toBe(200);
-    const updated = res.json<{ battle_types: string[] }>();
-    expect(updated.battle_types).toEqual(expect.arrayContaining(['DOMINATION', 'SIEGE']));
+    const updated = res.json<{ battle_type: string; available: boolean }>();
+    expect(updated.battle_type).toBe('SIEGE');
+    expect(updated.available).toBe(false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 6. GET /api/maps?battle_type= — filter
+// 6. GET /api/maps?battle_type= — filter (available only)
 // ---------------------------------------------------------------------------
 
-describe('GET /api/maps — battle_type filter', () => {
-  it('returns only maps valid for SIEGE when ?battle_type=SIEGE', async () => {
-    const siegeId = await createMap({ battleTypes: ['SIEGE'] });
-    const domId = await createMap({ battleTypes: ['DOMINATION'] });
-    const bothId = await createMap({ battleTypes: ['SIEGE', 'DOMINATION'] });
+describe('GET /api/maps — battle_type + availability filter', () => {
+  it('returns only available SIEGE maps when ?battle_type=SIEGE', async () => {
+    const siegeId = await createMap({ battleType: 'SIEGE' });
+    const domId = await createMap({ battleType: 'DOMINATION' });
+    const unavailableSiegeId = await createMap({ battleType: 'SIEGE', available: false });
 
     const res = await app.inject({ method: 'GET', url: '/api/maps?battle_type=SIEGE' });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ data: { id: string }[] }>();
-    const ids = body.data.map((m) => m.id);
+    const ids = res.json<{ data: { id: string }[] }>().data.map((m) => m.id);
     expect(ids).toContain(siegeId);
-    expect(ids).toContain(bothId);
     expect(ids).not.toContain(domId);
+    expect(ids).not.toContain(unavailableSiegeId);
   });
 
-  it('returns all maps (no filter) when battle_type is omitted', async () => {
-    const siegeId = await createMap({ battleTypes: ['SIEGE'] });
-    const domId = await createMap({ battleTypes: ['DOMINATION'] });
+  it('returns all available maps (no filter) when battle_type is omitted', async () => {
+    const siegeId = await createMap({ battleType: 'SIEGE' });
+    const domId = await createMap({ battleType: 'DOMINATION' });
 
     const res = await app.inject({ method: 'GET', url: '/api/maps' });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ data: { id: string }[] }>();
-    const ids = body.data.map((m) => m.id);
+    const ids = res.json<{ data: { id: string }[] }>().data.map((m) => m.id);
     expect(ids).toContain(siegeId);
     expect(ids).toContain(domId);
   });
 
-  it('ignores an invalid battle_type value and returns all maps', async () => {
-    const someId = await createMap({ battleTypes: ['DOMINATION'] });
-
+  it('ignores an invalid battle_type value and returns all available maps', async () => {
+    const someId = await createMap({ battleType: 'DOMINATION' });
     const res = await app.inject({ method: 'GET', url: '/api/maps?battle_type=INVALID' });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ data: { id: string }[] }>();
-    const ids = body.data.map((m) => m.id);
+    const ids = res.json<{ data: { id: string }[] }>().data.map((m) => m.id);
     expect(ids).toContain(someId);
   });
 });

@@ -94,14 +94,16 @@ const MapCreateSchema = z.object({
   slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
   description: z.string().max(500).optional(),
   image_url: z.string().url().optional(),
-  battle_types: z.array(BattleTypeSchema).min(1).optional(),
+  battle_type: BattleTypeSchema.optional(),
+  available: z.boolean().optional(),
 });
 
 const MapUpdateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(500).optional(),
   image_url: z.string().url().optional(),
-  battle_types: z.array(BattleTypeSchema).min(1).optional(),
+  battle_type: BattleTypeSchema.optional(),
+  available: z.boolean().optional(),
 });
 
 const FactionCreateSchema = z.object({
@@ -1494,7 +1496,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         slug,
         description: description ?? null,
         image_url: image_url ?? null,
-        battle_types: parsed.data.battle_types ?? ['DOMINATION'],
+        battle_type: parsed.data.battle_type ?? 'DOMINATION',
+        available: parsed.data.available ?? true,
       },
     });
 
