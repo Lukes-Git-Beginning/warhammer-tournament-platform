@@ -311,7 +311,7 @@ export function MatchDetailPage() {
 
   // Placed here (before early returns) to satisfy Rules of Hooks
   const queueAgain = useMutation({
-    mutationFn: joinQueue,
+    mutationFn: () => joinQueue(),
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ['queue-status'] });
       if (data.matched && data.match_id) {

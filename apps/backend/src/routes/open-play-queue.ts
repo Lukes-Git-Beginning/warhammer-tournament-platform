@@ -1,11 +1,21 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 import { logQueueActivity } from '../lib/queue-activity.js';
 import {
   QUEUE_KEY,
   JOINED_AT_KEY,
   JOIN_SCRIPT,
+  QUEUE_PREFS_KEY,
+  ALL_BATTLE_TYPES,
   runMatchmakingTick,
 } from '../lib/matchmaking-tick.js';
+
+// Queue join preferences: which battle types the player will accept (multi-select) + team size.
+// 2v2 team queueing is a separate path (captain queues the team) — not accepted here yet.
+const QueueJoinSchema = z.object({
+  battleTypes: z.array(z.enum(ALL_BATTLE_TYPES)).min(1).optional(),
+  competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(),
+});
 import { getQueueTimeoutRemaining, recordQueueLeave } from '../lib/queue-penalty.js';
 import { cancelOpenPlayMatch } from '../lib/cancel-open-play-match.js';
 import { notifyQueueTimeout, notifyQueueWarning, notifyQueueAbuseToStaff } from '../lib/discord-notify.js';
@@ -17,6 +27,19 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user.sub;
+
+      const parsedPrefs = QueueJoinSchema.safeParse(request.body ?? {});
+      if (!parsedPrefs.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: parsedPrefs.error.message, statusCode: 400 });
+      }
+      // 2v2 queueing (captain queues the team) is a separate path — reject it here for now.
+      if (parsedPrefs.data.competitorFormat === 'TWO_V_TWO') {
+        return reply.code(400).send({ error: 'BadRequest', message: '2v2 queue is not available yet', statusCode: 400 });
+      }
+      const prefs = {
+        format: 'ONE_V_ONE' as const,
+        battleTypes: parsedPrefs.data.battleTypes ?? [...ALL_BATTLE_TYPES],
+      };
 
       if (!fastify.redis) {
         return reply.code(503).send({ error: 'ServiceUnavailable', message: 'Queue service unavailable', statusCode: 503 });
@@ -60,6 +83,9 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(409).send({ error: 'Conflict', message: 'Already in queue', statusCode: 409 });
       }
 
+      // Record the player's battle-type / team-size selection for preference-aware matching.
+      await fastify.redis.hset(QUEUE_PREFS_KEY, userId, JSON.stringify(prefs));
+
       await logQueueActivity(fastify.prisma, 'JOIN', userId);
       await runMatchmakingTick(fastify);
 
@@ -93,7 +119,10 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       // Read the join timestamp before clearing it, to measure the stint (#14).
       const joinedAtRaw = fastify.redis ? await fastify.redis.hget(JOINED_AT_KEY, userId) : null;
       const removed = fastify.redis ? await fastify.redis.lrem(QUEUE_KEY, 0, userId) : 0;
-      if (fastify.redis) await fastify.redis.hdel(JOINED_AT_KEY, userId);
+      if (fastify.redis) {
+        await fastify.redis.hdel(JOINED_AT_KEY, userId);
+        await fastify.redis.hdel(QUEUE_PREFS_KEY, userId);
+      }
       if (removed > 0) {
         await logQueueActivity(fastify.prisma, 'LEAVE', userId);
         // #14: a short stint counts toward the abuse threshold; every 3 within 24h trips

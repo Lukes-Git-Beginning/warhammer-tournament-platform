@@ -2795,9 +2795,12 @@ export function getPlayerAntiFarming(playerId: string, versionId?: string): Prom
   return apiFetch(`/api/admin/users/${playerId}/anti-farming${q}`);
 }
 
-export function joinQueue(): Promise<{ matched: boolean; match_id?: string; position?: number }> {
+export function joinQueue(opts?: {
+  battleTypes?: BattleType[];
+}): Promise<{ matched: boolean; match_id?: string; position?: number }> {
   return apiFetch<{ matched: boolean; match_id?: string; position?: number }>('/api/open-play/queue', {
     method: 'POST',
+    body: JSON.stringify(opts?.battleTypes?.length ? { battleTypes: opts.battleTypes } : {}),
   });
 }
 

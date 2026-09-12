@@ -9,6 +9,60 @@ import { logQueueActivity } from './queue-activity.js';
 // cleanup cron and for "oldest in queue"). Both are shared with the queue routes.
 export const QUEUE_KEY = 'rizzotto:queue:open_play';
 export const JOINED_AT_KEY = 'rizzotto:queue:open_play:joined_at';
+// Per-queuer preferences (battle types the player will accept + team size). A single FIFO
+// queue still runs "as always"; the tick only pairs two queuers whose preferences overlap.
+export const QUEUE_PREFS_KEY = 'rizzotto:queue:open_play:prefs';
+
+export const ALL_BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'SIEGE'] as const;
+export type QueueBattleType = (typeof ALL_BATTLE_TYPES)[number];
+export type QueueCompetitorFormat = 'ONE_V_ONE' | 'TWO_V_TWO';
+
+export interface QueuePrefs {
+  format: QueueCompetitorFormat;
+  battleTypes: QueueBattleType[];
+}
+
+export interface QueueEntry {
+  id: string;
+  prefs: QueuePrefs;
+}
+
+/** Parse a stored prefs value; a missing/invalid one defaults to 1v1 across all battle types
+ *  (so legacy joins — Discord buttons, availability — still match anyone). */
+export function parseQueuePrefs(raw: string | null | undefined): QueuePrefs {
+  if (raw) {
+    try {
+      const p = JSON.parse(raw) as { format?: unknown; battleTypes?: unknown };
+      const format: QueueCompetitorFormat = p.format === 'TWO_V_TWO' ? 'TWO_V_TWO' : 'ONE_V_ONE';
+      const battleTypes = Array.isArray(p.battleTypes)
+        ? (p.battleTypes.filter((b): b is QueueBattleType =>
+            (ALL_BATTLE_TYPES as readonly string[]).includes(b as string)) as QueueBattleType[])
+        : [];
+      if (battleTypes.length > 0) return { format, battleTypes };
+    } catch {
+      /* fall through to default */
+    }
+  }
+  return { format: 'ONE_V_ONE', battleTypes: [...ALL_BATTLE_TYPES] };
+}
+
+/**
+ * FIFO-fair compatible pairing: the oldest queuer is matched with the earliest later queuer
+ * of the same team size whose battle-type selection overlaps. The chosen battle type is the
+ * oldest queuer's first preference that the partner also accepts. Pure — unit-testable.
+ */
+export function findCompatiblePair(entries: QueueEntry[]): { a: string; b: string; battleType: QueueBattleType } | null {
+  for (let i = 0; i < entries.length; i++) {
+    for (let j = i + 1; j < entries.length; j++) {
+      const A = entries[i]!;
+      const B = entries[j]!;
+      if (A.prefs.format !== B.prefs.format) continue;
+      const battleType = A.prefs.battleTypes.find((bt) => B.prefs.battleTypes.includes(bt));
+      if (battleType) return { a: A.id, b: B.id, battleType };
+    }
+  }
+  return null;
+}
 
 // Wait-cycle matchmaking state (see runMatchmakingTick).
 const HOLD_KEY = 'rizzotto:mm:hold';           // global 60s hold after a DM wave
@@ -269,23 +323,34 @@ async function maybeSendDmWave(fastify: FastifyInstance, queueLen: number): Prom
   );
 }
 
-/** FIFO-match queued players in pairs while no hold is active. */
+/**
+ * Match queued players in preference-compatible pairs while no hold is active. The tick holds
+ * the mutex, so reading the queue snapshot + removing the matched pair is safe against other
+ * ticks; a concurrent leave just makes an LREM a no-op.
+ */
 async function drainQueue(fastify: FastifyInstance): Promise<void> {
   const redis = fastify.redis!;
   const prisma = fastify.prisma;
 
   for (;;) {
-    const result = (await redis.eval(FIFO_MATCH_SCRIPT, 2, QUEUE_KEY, HOLD_KEY)) as
-      | [string, string]
-      | false
-      | null;
-    if (!Array.isArray(result) || result.length !== 2) break;
-    const [p1Id, p2Id] = result;
+    if (await redis.exists(HOLD_KEY)) break;
+    const ids = await redis.lrange(QUEUE_KEY, 0, -1);
+    if (ids.length < 2) break;
+
+    const prefsRaw = await redis.hmget(QUEUE_PREFS_KEY, ...ids);
+    const entries: QueueEntry[] = ids.map((id, i) => ({ id, prefs: parseQueuePrefs(prefsRaw[i]) }));
+    const pair = findCompatiblePair(entries);
+    if (!pair) break; // no compatible pair right now
+    const { a: p1Id, b: p2Id, battleType } = pair;
+
+    // Claim both before the (slower) match creation so a parallel drain can't double-book them.
+    await redis.lrem(QUEUE_KEY, 1, p1Id);
+    await redis.lrem(QUEUE_KEY, 1, p2Id);
 
     let matchId: string;
     let mapName: string | null;
     try {
-      ({ matchId, mapName } = await createOpenPlayMatch(prisma, p1Id, p2Id, 'QUEUE'));
+      ({ matchId, mapName } = await createOpenPlayMatch(prisma, p1Id, p2Id, 'QUEUE', battleType));
     } catch (err) {
       // Requeue front-first so nobody is dropped, then stop this drain.
       await redis.lpush(QUEUE_KEY, p2Id, p1Id);
@@ -294,6 +359,7 @@ async function drainQueue(fastify: FastifyInstance): Promise<void> {
     }
 
     await redis.hdel(JOINED_AT_KEY, p1Id, p2Id);
+    await redis.hdel(QUEUE_PREFS_KEY, p1Id, p2Id);
     await announceMatch(fastify, matchId, mapName, p1Id, p2Id);
   }
 }

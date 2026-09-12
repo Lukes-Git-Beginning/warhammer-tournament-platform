@@ -44,7 +44,7 @@ function QueueCard({ userId }: { userId?: string }) {
   });
 
   const join = useMutation({
-    mutationFn: joinQueue,
+    mutationFn: () => joinQueue(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['queue-status'] }),
   });
 

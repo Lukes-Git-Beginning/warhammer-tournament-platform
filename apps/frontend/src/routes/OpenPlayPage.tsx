@@ -19,6 +19,7 @@ import {
   type AvailabilityContext,
   type HeatmapSlot,
   type MatchFormat,
+  type BattleType,
 } from '../lib/api';
 import { Select } from '../components/ui/select';
 import { Button } from '../components/ui/button';
@@ -175,13 +176,27 @@ export function OpenPlayPage() {
 // Queue Tab
 // ---------------------------------------------------------------------------
 
+const OP_BATTLE_TYPES: { value: BattleType; label: string }[] = [
+  { value: 'DOMINATION', label: 'Domination' },
+  { value: 'CONQUEST', label: 'Conquest' },
+  { value: 'SIEGE', label: 'Siege' },
+];
+
 function QueueTab({ userTimezone }: { userTimezone?: string }) {
   const qc = useQueryClient();
   const { data: me } = useAuthQuery();
   const isStaff = me?.role === 'ADMIN' || me?.role === 'MODERATOR';
 
+  // Which battle types the player will accept (multi-select; at least one). The queue matches
+  // two players whose selections overlap and draws that battle type's map pool.
+  const [battleTypes, setBattleTypes] = useState<BattleType[]>(['DOMINATION', 'CONQUEST', 'SIEGE']);
+  const toggleBt = (bt: BattleType) =>
+    setBattleTypes((prev) =>
+      prev.includes(bt) ? (prev.length > 1 ? prev.filter((x) => x !== bt) : prev) : [...prev, bt],
+    );
+
   const join = useMutation({
-    mutationFn: joinQueue,
+    mutationFn: () => joinQueue({ battleTypes }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['queue-status'] }),
   });
 
@@ -211,7 +226,31 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
           drawn and both players pick their faction blind — you'll receive a Discord DM when your
           match is found.
         </p>
-        <StandardRulesetCard compact />
+        {/* Battle-type selection — pick one or more; you'll be matched on a shared type. */}
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">Battle types</p>
+          <div className="flex flex-wrap gap-2">
+            {OP_BATTLE_TYPES.map((b) => {
+              const active = battleTypes.includes(b.value);
+              return (
+                <button
+                  key={b.value}
+                  type="button"
+                  onClick={() => toggleBt(b.value)}
+                  aria-pressed={active}
+                  className={`rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    active
+                      ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+                      : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+                  }`}
+                >
+                  {b.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <StandardRulesetCard compact battleType={battleTypes.length === 1 ? battleTypes[0] : undefined} />
         <Button size="lg" onClick={() => join.mutate()} disabled={join.isPending}>
           {join.isPending ? 'Joining...' : 'Join Queue'}
         </Button>
