@@ -23,6 +23,7 @@ import {
   type PlayoffMatch,
   InsufficientPlayersError,
 } from '../lib/playoff-generator.js';
+import { getAlreadyQualifiedForQualifier } from '../lib/series-qualification.js';
 import { emitStatusChange, emitBracketUpdate } from '../lib/emit.js';
 import { autoSwissConfig } from '../lib/auto-swiss-service.js';
 import { resolveFactionWarFairness, resolveFactionWarSeedOrder } from '../lib/matchmaking-service.js';
@@ -364,7 +365,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           status: { in: ['REGISTERED', 'CHECKED_IN'] },
           deleted_at: null,
         },
-        orderBy: { registered_at: 'asc' },
+        // Series-final seeding: honour an explicit `seed` (nulls last), else registration time.
+        orderBy: [{ seed: { sort: 'asc', nulls: 'last' } }, { registered_at: 'asc' }],
         select: { user_id: true, status: true, faction_id: true },
       });
 
@@ -1029,6 +1031,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       const standings = sortSwissStandings(rawStandings, completedMatchRecords, tournament.id);
       const activeStandings = standings.filter((s) => !s.dropped);
 
+      // Model C series: exclude players already qualified in earlier qualifiers so their
+      // playoff slot passes to the next-ranked player. No-op for non-series tournaments.
+      const alreadyQualified = await getAlreadyQualifiedForQualifier(fastify.prisma, tournament.id);
+      const playoffEligibleIds = new Set(
+        activeStandings.map((s) => s.userId).filter((id) => !alreadyQualified.has(id)),
+      );
+
       let playoffFallbackApplied: string | undefined;
 
       try {
@@ -1040,7 +1049,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           },
           finalStandings: activeStandings,
           // B6: count only active (non-dropped) players for the reduction thresholds.
-          checkedInPlayerIds: new Set(activeStandings.map((s) => s.userId)),
+          // Model C: already-qualified players are removed so their slot passes down.
+          checkedInPlayerIds: playoffEligibleIds,
         });
 
         if (playoffResult.fallbackApplied) {

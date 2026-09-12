@@ -16,6 +16,7 @@ import {
   computeSwissStandings,
   sortSwissStandings,
 } from './swiss.js';
+import { getAlreadyQualifiedForQualifier } from './series-qualification.js';
 import { resolveFactionWarFairness } from './matchmaking-service.js';
 import {
   notifyRoundPairings,
@@ -490,7 +491,9 @@ async function startPlayoffs(
     .map((m) => ({ round: m.round, player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, status: m.status }));
   const rawStandings = computeSwissStandings(participantIds, completed, withdrawnIds);
   const standings = sortSwissStandings(rawStandings, completed, tournament.id);
-  const ranked = standings.filter((s) => !s.dropped).map((s) => s.userId);
+  // Model C series: skip players already qualified in earlier qualifiers (no-op otherwise).
+  const alreadyQualified = await getAlreadyQualifiedForQualifier(prisma, tournament.id);
+  const ranked = standings.filter((s) => !s.dropped).map((s) => s.userId).filter((id) => !alreadyQualified.has(id));
 
   // Re-evaluate playoff format based on active player count at Swiss end.
   // Players may have dropped during the Swiss phase, so the start-time config

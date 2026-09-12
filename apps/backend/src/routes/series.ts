@@ -50,6 +50,9 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
     const qualifierIds = qualifiers.map((q) => q.id);
     if (qualifierIds.length === 0) return { model: config.model, standings: [], qualifiers: [] };
 
+    // NONE = grouping-only series: no scoring, no qualification.
+    if (config.model === 'NONE') return { model: 'NONE' as const, standings: [], qualifiers: [] };
+
     if (config.model === 'A') {
       const games = await fastify.prisma.matchGame.findMany({
         where: {
@@ -228,7 +231,7 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
       qualified: computed.qualifiers,
       // Model A "qualified" is provisional until every qualifier is done.
       standings_provisional: config.model === 'A' && !allQualifiersComplete,
-      ready_to_seed: allQualifiersComplete && !series.final_seeded_at && !!series.final_tournament,
+      ready_to_seed: config.model !== 'NONE' && allQualifiersComplete && !series.final_seeded_at && !!series.final_tournament,
     };
   });
 
@@ -348,6 +351,61 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
       data: { series_id: null, series_position: null },
     });
     return { ok: true };
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /api/series/:slug/seed-final — lock standings & populate the final
+  // Adds the qualified players to the final tournament as CHECKED_IN participants,
+  // in seed order (seed 1 = top qualifier). The host then starts the final normally;
+  // the start flow honours the persisted `seed`. One-click confirm safety step.
+  // -------------------------------------------------------------------------
+  fastify.post('/api/series/:slug/seed-final', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const series = await fastify.prisma.tournamentSeries.findFirst({
+      where: { slug, deleted_at: null },
+      select: {
+        id: true,
+        scoring_config: true,
+        final_seeded_at: true,
+        final_tournament: { select: { id: true, slug: true } },
+        qualifiers: {
+          where: { deleted_at: null },
+          select: { id: true, status: true },
+          orderBy: [{ series_position: 'asc' }, { created_at: 'asc' }],
+        },
+      },
+    });
+    if (!series) return reply.code(404).send({ error: 'NotFound', message: 'Series not found', statusCode: 404 });
+    if (!(await canManageSeries(fastify.prisma, series.id, request.user.sub, request.user.role))) {
+      return reply.code(403).send({ error: 'Forbidden', message: 'You cannot manage this series', statusCode: 403 });
+    }
+
+    const config = ScoringConfigSchema.parse(series.scoring_config);
+    if (config.model === 'NONE') return reply.code(400).send(badRequest('This is a grouping-only series with no final to seed.'));
+    if (!series.final_tournament) return reply.code(400).send(badRequest('This series has no final tournament to seed.'));
+    if (series.final_seeded_at) return reply.code(409).send({ error: 'Conflict', message: 'The final has already been seeded.', statusCode: 409 });
+    const allComplete = series.qualifiers.length > 0 && series.qualifiers.every((q) => q.status === 'COMPLETED');
+    if (!allComplete) return reply.code(409).send({ error: 'Conflict', message: 'All qualifiers must be completed before seeding the final.', statusCode: 409 });
+
+    const computed = await computeStandings(series.id, config, series.qualifiers);
+    const orderedIds =
+      config.model === 'A'
+        ? computed.standings.filter((s) => s.qualified).map((s) => s.competitorId)
+        : computed.qualifiers.map((e) => e.competitorId);
+    if (orderedIds.length === 0) return reply.code(409).send({ error: 'Conflict', message: 'No qualified players to seed.', statusCode: 409 });
+
+    const finalId = series.final_tournament.id;
+    let seed = 0;
+    for (const userId of orderedIds) {
+      seed += 1;
+      await fastify.prisma.tournamentParticipant.upsert({
+        where: { tournament_id_user_id: { tournament_id: finalId, user_id: userId } },
+        update: { seed, status: 'CHECKED_IN', deleted_at: null },
+        create: { tournament_id: finalId, user_id: userId, seed, status: 'CHECKED_IN' },
+      });
+    }
+    await fastify.prisma.tournamentSeries.update({ where: { id: series.id }, data: { final_seeded_at: new Date() } });
+    return { ok: true, seeded: orderedIds.length, finalSlug: series.final_tournament.slug };
   });
 };
 

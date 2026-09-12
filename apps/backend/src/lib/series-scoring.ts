@@ -17,7 +17,8 @@ export type Tiebreaker = z.infer<typeof TiebreakerSchema>;
 
 export const ScoringConfigSchema = z
   .object({
-    model: z.enum(['A', 'C']),
+    // 'NONE' = grouping-only series (weekly format): no scoring, no qualification, final optional.
+    model: z.enum(['A', 'C', 'NONE']),
     // Model A — cumulative points
     points_per_game_played: z.number().int().min(0).max(100).default(1),
     points_per_win: z.number().int().min(0).max(100).default(1),
