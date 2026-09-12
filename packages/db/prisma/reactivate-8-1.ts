@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
+// eslint-disable-next-line import/no-relative-packages
+import { recomputeFactionStats } from '../../../apps/backend/src/lib/recompute-faction-stats.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
@@ -26,7 +28,16 @@ async function main() {
   await prisma.gameVersion.update({ where: { id: VERSION_8_1 }, data: { is_active: true } });
   console.log('✓ 8.1 active, all others deactivated');
 
-  // Prune leftover test versions (created by the suite) that have no matches attached.
+  // Consolidate every dev game onto 8.1 so the version-scoped meta views have data for QA.
+  // The suite leaves games under fixed test versions (FactionTest / Heatmap Test) and some
+  // matches null-versioned (completed while no version was active) — re-point them all to 8.1.
+  const backfill = await prisma.match.updateMany({
+    where: { deleted_at: null, OR: [{ version_id: null }, { version_id: { not: VERSION_8_1 } }] },
+    data: { version_id: VERSION_8_1 },
+  });
+  console.log(`✓ re-pointed ${backfill.count} matches → 8.1`);
+
+  // Prune the now-empty test versions so they drop out of the version selector.
   const versions = await prisma.gameVersion.findMany({ orderBy: { start_date: 'desc' } });
   for (const v of versions) {
     if (v.id === VERSION_8_1) continue;
@@ -41,6 +52,10 @@ async function main() {
       console.log(`• kept "${v.name}" — ${games} matches`);
     }
   }
+
+  // Rebuild FactionStats/MatchupStats for 8.1 from the (now attributed) games.
+  const rc = await recomputeFactionStats(prisma as never, VERSION_8_1);
+  console.log(`✓ recomputed 8.1: ${rc.factionStatsRows} faction rows, ${rc.gamesProcessed} games`);
 
   // Report 2v2 game distribution by battle type + season.
   const rows = await prisma.matchGame.findMany({

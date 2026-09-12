@@ -7,7 +7,14 @@ import { formatInUserTimezone } from '@/lib/timezone';
 interface Props {
   games: GameHistoryEntry[];
   showTournament?: boolean;
+  showBattleType?: boolean;
 }
+
+const BATTLE_TYPE_LABEL: Record<string, string> = {
+  DOMINATION: 'Domination',
+  CONQUEST: 'Conquest',
+  SIEGE: 'Siege',
+};
 
 function FactionChip({ factionId, factionMap }: {
   factionId: string | null;
@@ -27,7 +34,7 @@ function FactionChip({ factionId, factionMap }: {
   );
 }
 
-export function GameHistoryTable({ games, showTournament = false }: Props) {
+export function GameHistoryTable({ games, showTournament = false, showBattleType = false }: Props) {
   const { data: factionData } = useQuery({
     queryKey: ['factions'],
     queryFn: () => getFactions(),
@@ -52,6 +59,9 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
             )}
             <th className="px-3 py-2 text-left font-medium text-stone-400">Date</th>
             <th className="px-3 py-2 text-center font-medium text-stone-400">Round</th>
+            {showBattleType && (
+              <th className="px-3 py-2 text-left font-medium text-stone-400">Type</th>
+            )}
             <th className="px-3 py-2 text-left font-medium text-stone-400">Player 1</th>
             <th className="px-3 py-2 text-left font-medium text-stone-400">Faction</th>
             <th className="px-3 py-2 text-left font-medium text-stone-400">Player 2</th>
@@ -95,6 +105,11 @@ export function GameHistoryTable({ games, showTournament = false }: Props) {
                 <td className="px-3 py-2 text-center text-stone-400 text-xs">
                   R{g.round}·G{g.gameNumber}
                 </td>
+                {showBattleType && (
+                  <td className="px-3 py-2 text-stone-400 text-xs whitespace-nowrap">
+                    {g.battleType ? (BATTLE_TYPE_LABEL[g.battleType] ?? g.battleType) : '—'}
+                  </td>
+                )}
                 <td className={`px-3 py-2 font-medium ${p1Won ? 'text-rizzotto-gold-400' : 'text-stone-300'}`}>
                   {g.player1 ? (
                     <Link to="/users/$id" params={{ id: g.player1.id }} className="hover:text-rizzotto-gold-400 transition-colors">

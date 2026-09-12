@@ -192,6 +192,7 @@ export interface GameHistoryEntry {
   winnerId: string | null;
   player1FactionId: string | null;
   player2FactionId: string | null;
+  battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
   mapName: string | null;
   replayUrl: string | null;
   countsForLeaderboard?: boolean;

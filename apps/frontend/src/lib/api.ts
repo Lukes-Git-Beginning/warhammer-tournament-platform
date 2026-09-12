@@ -2562,6 +2562,8 @@ export interface GameSearchFilters {
   faction?: string;    // faction slug
   tournament?: string; // tournament name, or "ladder"/"open play" for Open Play
   competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO'; // team-size filter (meta tab)
+  versionId?: string;  // version filter (meta tab)
+  battleType?: BattleType; // battle-type filter (meta tab)
 }
 
 export function getMetaGames(

@@ -66,22 +66,26 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('meta:overview', { versionId: resolvedVersionId, battleType }),
       async () => {
-        // Identical filter to /api/meta/games so the counter matches the list. Games are
-        // the statistical unit: count COMPLETED MatchGame rows directly (every real match
-        // now has game rows — no synthetic fallback). A draw IS a played game (no winner_id
-        // filter); admin-voided matches (counts_for_leaderboard = false) are excluded. The
-        // match's lifecycle status is intentionally NOT filtered — a real game stays counted
-        // even if its container was later cancelled.
-        const globalMatchWhere = {
+        // total_games counts the games behind THIS view: the selected version, battle type,
+        // and 1v1 (the overview is the 1v1 faction meta; 2v2 has its own duo view). Games are
+        // the statistical unit — a draw IS a played game (no winner_id filter); admin-voided
+        // matches (counts_for_leaderboard = false) are excluded. The match's lifecycle status
+        // is intentionally NOT filtered — a real game stays counted even if its container was
+        // later cancelled.
+        const overviewMatchWhere = {
+          version_id: resolvedVersionId,
           player1_id: { not: null },
           player2_id: { not: null },
           counts_for_leaderboard: true,
           deleted_at: null,
+          NOT: { tournament: { competitor_format: 'TWO_V_TWO' as const } },
         };
 
         const [allFactions, total_games] = await Promise.all([
           getFactionsWithStats(fastify.prisma, resolvedVersionId, battleType),
-          fastify.prisma.matchGame.count({ where: { status: 'COMPLETED', match: globalMatchWhere } }),
+          fastify.prisma.matchGame.count({
+            where: { status: 'COMPLETED', battle_type: battleType, match: overviewMatchWhere },
+          }),
         ]);
 
         // Coverage × Evenness:
@@ -270,6 +274,8 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       opponentFactionId: z.string().optional(),
       playerId: z.string().uuid().optional(),
       competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(), // team-size filter (meta tab)
+      versionId: z.string().uuid().optional(),                          // version filter (meta tab)
+      battleType: z.enum(BATTLE_TYPES).optional(),                      // battle-type filter (meta tab)
       // Admin "All Games" search (all optional, AND-combined, case-insensitive substrings):
       q: z.string().trim().optional(),            // player-name words (each must match a player)
       winner: z.string().trim().optional(),       // winner's username
@@ -283,6 +289,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const { page, limit, tournamentSlug, factionId, opponentFactionId, playerId, competitorFormat } = parsed.data;
+    const { versionId: gamesVersionId, battleType: gamesBattleType } = parsed.data;
     const { q, winner, map: mapQ, faction: factionQ, tournament: tournamentQ } = parsed.data;
     const skip = (page - 1) * limit;
     const ci = (contains: string) => ({ contains, mode: 'insensitive' as const });
@@ -350,6 +357,8 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const gameWhere = {
       status: 'COMPLETED' as const,
       ...gameFactionFilter,
+      // battleType — meta-tab battle-type selector (per-game column).
+      ...(gamesBattleType ? { battle_type: gamesBattleType } : {}),
       // faction:<text> — either side's faction slug contains the text.
       ...(factionQ ? { OR: [{ player1_faction_id: ci(factionQ) }, { player2_faction_id: ci(factionQ) }] } : {}),
       // winner:<name> — resolved to user ids above (empty list → no match).
@@ -360,6 +369,8 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         player1_id: { not: null },
         player2_id: { not: null },
         counts_for_leaderboard: true,
+        // versionId — meta-tab version selector.
+        ...(gamesVersionId ? { version_id: gamesVersionId } : {}),
         ...(tournamentSlug ? { tournament: { slug: tournamentSlug, deleted_at: null } } : { deleted_at: null }),
         ...(playerId ? { OR: [{ player1_id: playerId }, { player2_id: playerId }] } : {}),
         // q:<words> — each word matches at least one of the two players; plus the team-size filter.
@@ -382,6 +393,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           winner_id: true,
           player1_faction_id: true,
           player2_faction_id: true,
+          battle_type: true,
           played_at: true,
           replay_url: true,
           counts_for_leaderboard: true,
@@ -430,6 +442,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       winnerId: g.winner_id,
       player1FactionId: g.player1_faction_id,
       player2FactionId: g.player2_faction_id,
+      battleType: g.battle_type,
       mapPickedId: g.map_decision?.picked_map_id ?? null,
       replayUrl: g.replay_url,
       countsForLeaderboard: g.counts_for_leaderboard,

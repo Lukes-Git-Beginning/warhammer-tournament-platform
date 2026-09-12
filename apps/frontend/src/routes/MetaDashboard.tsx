@@ -184,8 +184,10 @@ export function MetaDashboard() {
   const [gamesPage, setGamesPage] = useState(1);
   const GAMES_PAGE_SIZE = 50;
   const { data: gamesData } = useQuery({
-    queryKey: ['meta-games', gamesPage, format],
-    queryFn: () => getMetaGames(gamesPage, GAMES_PAGE_SIZE, { competitorFormat: format }),
+    queryKey: ['meta-games', gamesPage, format, versionId, battleType],
+    queryFn: () =>
+      getMetaGames(gamesPage, GAMES_PAGE_SIZE, { competitorFormat: format, versionId, battleType }),
+    enabled: !!versionId,
   });
 
   const hasNoVersion = !!versionsData && versions.length === 0;
@@ -203,7 +205,10 @@ export function MetaDashboard() {
               <FilterLabel>Version</FilterLabel>
               <select
                 value={versionId ?? ''}
-                onChange={(e) => setSelectedVersionId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedVersionId(e.target.value);
+                  setGamesPage(1);
+                }}
                 className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-1.5 text-sm font-medium text-rizzotto-stone-200 transition-colors hover:border-rizzotto-iron-500 focus:border-rizzotto-gold-500 focus:outline-none"
               >
                 {versions.map((v) => (
@@ -216,16 +221,23 @@ export function MetaDashboard() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <FilterLabel>Battle type</FilterLabel>
+              <FilterLabel>Type</FilterLabel>
               {BATTLE_TYPES.map((b) => (
-                <FilterChip key={b.value} active={battleType === b.value} onClick={() => setBattleType(b.value)}>
+                <FilterChip
+                  key={b.value}
+                  active={battleType === b.value}
+                  onClick={() => {
+                    setBattleType(b.value);
+                    setGamesPage(1);
+                  }}
+                >
                   {b.label}
                 </FilterChip>
               ))}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <FilterLabel>Format</FilterLabel>
+              <FilterLabel>Team</FilterLabel>
               <FilterChip
                 active={format === 'ONE_V_ONE'}
                 onClick={() => {
@@ -427,7 +439,7 @@ export function MetaDashboard() {
             </div>
           )}
         </div>
-        {gamesData && <GameHistoryTable games={gamesData.games} showTournament />}
+        {gamesData && <GameHistoryTable games={gamesData.games} showTournament showBattleType />}
         {!gamesData && (
           <div className="flex justify-center py-6">
             <span className="h-5 w-5 rounded-full border-2 border-rizzotto-gold-400 border-t-transparent animate-spin" />
