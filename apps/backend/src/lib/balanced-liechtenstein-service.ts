@@ -35,6 +35,8 @@ import {
 import { isLegalLateJoinReclaim } from './bali-pairing-cost.js';
 import { computeSwissStandings, sortSwissStandings, type CompletedMatchRecord } from './swiss.js';
 import { getPlayerClassification } from './skill-classification-service.js';
+import { getRatingModel } from './rating-model-service.js';
+import { resolveTeamGs } from './team-rating.js';
 import { balancedRounds } from './auto-swiss-service.js';
 import { emitBracketUpdate } from './emit.js';
 import { notifyMatchesCreated, notifyFinalRoundBye } from './discord-notify.js';
@@ -87,10 +89,11 @@ export async function assignSkillBandsForTournament(
   fastify: FastifyInstance,
   tournamentId: string,
 ): Promise<void> {
-  const version = await fastify.prisma.gameVersion.findFirst({
-    where: { is_active: true },
-    select: { id: true },
-  });
+  const [version, tournament] = await Promise.all([
+    fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } }),
+    fastify.prisma.tournament.findFirst({ where: { id: tournamentId }, select: { competitor_format: true } }),
+  ]);
+  const isTeam = tournament?.competitor_format === 'TWO_V_TWO';
 
   const participants = await fastify.prisma.tournamentParticipant.findMany({
     where: {
@@ -98,20 +101,39 @@ export async function assignSkillBandsForTournament(
       deleted_at: null,
       status: { in: ['REGISTERED', 'CHECKED_IN'] },
     },
-    select: { id: true, user_id: true, requested_band: true },
+    select: {
+      id: true,
+      user_id: true,
+      requested_band: true,
+      team_id: true,
+      // 2v2: the team roster, to average the members' GS for the team prior.
+      team: { select: { members: { select: { user_id: true } } } },
+    },
   });
+
+  // 2v2: teams have no questionnaire — band each team by its blended GS (members' average prior
+  // + the team's own fitted 2v2 GS). Fit the active-version model once (cached), like the players.
+  const teamModel =
+    isTeam && version
+      ? await getRatingModel(fastify.prisma, fastify.redis, { versionId: version.id, config: { hierarchical: true } })
+      : null;
 
   for (const p of participants) {
     try {
-      // Computed band from the classification (needs an active version); when there
-      // is none, fall back to the player's own choice.
+      // Computed band: the team's blended GS (2v2) or the player's classification (1v1). When
+      // neither is available (no active version / no rated games), fall back to the requested one.
       let computed = 0;
-      if (version) {
+      if (isTeam) {
+        if (teamModel && p.team_id) {
+          const gs = resolveTeamGs(teamModel, p.team_id, p.team?.members.map((m) => m.user_id) ?? []);
+          computed = gs?.band ?? 0;
+        }
+      } else if (version) {
         const cls = await getPlayerClassification(fastify.prisma, fastify.redis, version.id, p.user_id);
         computed = cls.matchmakingBand;
       }
       // Effective band = the higher of the computed band and the requested one —
-      // play-up only, so a player can enter a higher division but never a lower one.
+      // play-up only, so a competitor can enter a higher division but never a lower one.
       const effective = Math.max(computed, p.requested_band ?? 0);
       if (effective > 0) {
         await fastify.prisma.tournamentParticipant.update({
@@ -120,7 +142,7 @@ export async function assignSkillBandsForTournament(
         });
       }
     } catch (err) {
-      fastify.log.warn({ err, userId: p.user_id }, 'balanced skill-band assignment failed');
+      fastify.log.warn({ err, participantId: p.id }, 'balanced skill-band assignment failed');
     }
   }
 }

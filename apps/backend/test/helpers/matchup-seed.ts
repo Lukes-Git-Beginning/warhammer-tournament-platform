@@ -75,6 +75,9 @@ export async function cleanupMatchupGames(
   const ids = matches.map((m) => m.id);
   if (ids.length) await prisma.matchGame.deleteMany({ where: { match_id: { in: ids } } });
   await prisma.match.deleteMany({ where: { version_id: versionId } });
+  // Drop User-FK children first — the shared dev DB's snapshot cron may have written a
+  // PlayerSkillSnapshot for these test users, which would otherwise block the user delete.
+  await prisma.playerSkillSnapshot.deleteMany({ where: { user_id: { in: userIds } } });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
 }
 

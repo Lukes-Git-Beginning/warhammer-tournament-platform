@@ -209,10 +209,8 @@ const CreateTournamentSchema = z.object({
   .superRefine(refineMapPool)
   .superRefine(refineOneVThree)
   .superRefine((data, ctx) => {
-    // 2v2 has no per-team skill bands, so Balanced Liechtenstein is unsupported for it.
-    if (data.competitor_format === 'TWO_V_TWO' && data.format === 'BALANCED_LIECHTENSTEIN') {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: '2v2 is not supported with the Balanced Liechtenstein format', path: ['competitor_format'] });
-    }
+    // 2v2 + Balanced Liechtenstein is now supported: teams are banded by their blended GS
+    // (members' average prior → the team's own fitted 2v2 GS). See lib/team-rating.ts.
     // The team-size axis (competitor_format) and the faction mechanic (mode) must agree:
     // a 2v2 tournament needs a 2v2 mode, and a 2v2 mode needs competitor_format TWO_V_TWO.
     const is2v2Mode = data.mode ? (TWO_V_TWO_MODES as readonly string[]).includes(data.mode) : false;
