@@ -10,6 +10,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { getStandardRuleset, type BattleType, type StandardRuleset } from '@/lib/api.js';
+import { BattleTypeWatermark } from '@/components/tournament/TournamentTypeBadges.js';
 
 const BATTLE_TYPE_LABEL: Record<string, string> = {
   DOMINATION: 'Domination',
@@ -66,14 +67,8 @@ export function StandardRulesetCard({
         compact ? 'p-3' : 'p-6'
       }`}
     >
-      {battleType && (
-        // Faint battle-type watermark. The source art is only ~100px, so it is shown at its
-        // native size (not stretched to the card width) — that keeps it crisp instead of the
-        // upscaled blur a full-bleed watermark would produce on these small tiles.
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
-          <img src={`/battle-types/${battleType.toLowerCase()}.png`} alt="" className="h-28 w-28 object-contain opacity-[0.10]" />
-        </div>
-      )}
+      {/* Full-bleed battle-type watermark — the same component the tournament tiles use. */}
+      {battleType && <BattleTypeWatermark battleType={battleType} />}
       <div className="relative">
         <div className="mb-2 flex items-center gap-2">
           <span className="text-rizzotto-gold-400">⚔️</span>
