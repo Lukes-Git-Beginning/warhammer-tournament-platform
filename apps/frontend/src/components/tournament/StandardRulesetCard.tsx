@@ -76,7 +76,11 @@ export function StandardRulesetCard({
       )}
       <div className="relative">
         <div className="mb-2 flex items-center gap-2">
-          <span className="text-rizzotto-gold-400">⚔️</span>
+          {battleType ? (
+            <img src={`/battle-types/${battleType.toLowerCase()}.png`} alt="" className="h-5 w-5 shrink-0 object-contain" />
+          ) : (
+            <span className="text-rizzotto-gold-400">⚔️</span>
+          )}
           <span className="font-display font-semibold text-rizzotto-gold-500">{title}</span>
         </div>
         <div className="space-y-1.5">
