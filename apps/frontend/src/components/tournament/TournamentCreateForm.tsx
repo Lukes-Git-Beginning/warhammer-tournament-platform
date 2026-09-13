@@ -21,6 +21,7 @@ const TournamentCreateSchema = z.object({
   format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'AUTO_SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
   mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR', 'SFT_2V2', 'BPT_2V2']).default('BPT'),
   competitor_format: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).default('ONE_V_ONE'),
+  battle_type: z.enum(['DOMINATION', 'CONQUEST', 'SIEGE']).default('DOMINATION'),
   set_faction_id: z.string().min(1).optional(),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
@@ -175,6 +176,7 @@ export function TournamentCreateForm() {
     format: 'SINGLE_ELIMINATION',
     mode: 'BPT',
     competitor_format: 'ONE_V_ONE',
+    battle_type: 'DOMINATION',
     timezone: defaultTimezone,
     discord_link: 'https://discord.gg/MX3cs6gA54',
     start_date: nextRoundHour(),
@@ -208,23 +210,27 @@ export function TournamentCreateForm() {
     queryFn: listDraftPresets,
   });
 
+  // Maps are per battle type — only the selected type's maps may be in the pool.
   const { data: mapsData } = useQuery({
-    queryKey: ['maps'],
-    queryFn: getMaps,
+    queryKey: ['maps', form.battle_type],
+    queryFn: () => getMaps(form.battle_type),
   });
   const allMaps = mapsData?.data ?? [];
 
-  // Default the map pool to ALL maps once they load (only if untouched).
-  const mapPoolInitialized = useRef(false);
+  // Default the pool to all maps of the current battle type; reset it when the battle type
+  // changes (a stale pool of the old type's maps would be rejected on submit).
+  const lastBattleType = useRef<string | null>(null);
   useEffect(() => {
-    if (mapPoolInitialized.current || allMaps.length === 0) return;
-    mapPoolInitialized.current = true;
-    setForm((prev) =>
-      (prev.map_pool ?? []).length === 0
-        ? { ...prev, map_pool: allMaps.map((m) => m.id) }
-        : prev,
-    );
-  }, [allMaps]);
+    if (allMaps.length === 0) return;
+    const changed = lastBattleType.current !== null && lastBattleType.current !== form.battle_type;
+    const firstLoad = lastBattleType.current === null;
+    lastBattleType.current = form.battle_type ?? 'DOMINATION';
+    if (changed) {
+      setForm((prev) => ({ ...prev, map_pool: allMaps.map((m) => m.id) }));
+    } else if (firstLoad) {
+      setForm((prev) => ((prev.map_pool ?? []).length === 0 ? { ...prev, map_pool: allMaps.map((m) => m.id) } : prev));
+    }
+  }, [allMaps, form.battle_type]);
 
   const { data: factionsData } = useQuery({
     queryKey: ['factions'],
@@ -532,6 +538,21 @@ export function TournamentCreateForm() {
               ? 'Teams register and play as one competitor; the captain acts for the team.'
               : 'Standard solo play.'}
           </FieldHint>
+        </div>
+
+        <div className="min-w-0">
+          <Label htmlFor="tcf-battle-type">Battle type</Label>
+          <Select
+            id="tcf-battle-type"
+            name="battle_type"
+            value={form.battle_type ?? 'DOMINATION'}
+            onChange={handleChange}
+          >
+            <option value="DOMINATION">Domination</option>
+            <option value="CONQUEST">Conquest</option>
+            <option value="SIEGE">Siege</option>
+          </Select>
+          <FieldHint>Sets the map pool and the standard ruleset for this tournament.</FieldHint>
         </div>
 
         <div className="min-w-0">
@@ -1273,7 +1294,9 @@ export function TournamentCreateForm() {
           />
           <span className="text-sm text-rizzotto-stone-300">Enable standard rules</span>
         </label>
-        {form.standard_rules_enabled && <StandardRulesetCard compact />}
+        {form.standard_rules_enabled && (
+          <StandardRulesetCard compact battleType={form.battle_type} competitorFormat={form.competitor_format} />
+        )}
 
         <div>
           <Label htmlFor="tcf-rules">Custom Rules</Label>

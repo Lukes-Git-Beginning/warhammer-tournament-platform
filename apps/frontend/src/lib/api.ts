@@ -206,6 +206,7 @@ export interface TournamentCreate {
   has_third_place_match?: boolean;
   mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR' | 'SFT_2V2' | 'BPT_2V2';
   competitor_format?: 'ONE_V_ONE' | 'TWO_V_TWO';
+  battle_type?: BattleType;
   set_faction_id?: string | null;
   start_date: string;
   timezone: string;
@@ -1782,8 +1783,9 @@ export function getUserStats(userId: string, version?: string): Promise<UserStat
 // Maps
 // ---------------------------------------------------------------------------
 
-export function getMaps(): Promise<{ data: MapDto[] }> {
-  return apiFetch<{ data: MapDto[] }>('/api/maps');
+export function getMaps(battleType?: BattleType): Promise<{ data: MapDto[] }> {
+  const qs = battleType ? `?battle_type=${battleType}` : '';
+  return apiFetch<{ data: MapDto[] }>(`/api/maps${qs}`);
 }
 
 // ---------------------------------------------------------------------------

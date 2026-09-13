@@ -952,7 +952,9 @@ export function TournamentDetail() {
             {t('tournament.detail.rules')}
           </h2>
           <div className="space-y-4">
-            {tournament.standard_rules_enabled && <StandardRulesetCard />}
+            {tournament.standard_rules_enabled && (
+              <StandardRulesetCard battleType={tournament.battle_type} competitorFormat={tournament.competitor_format} />
+            )}
             {tournament.rules && (
               <div className="rounded-md border border-stone-800 bg-stone-900/50 p-6 text-stone-300 leading-relaxed">
                 <SafeMarkdown>{tournament.rules}</SafeMarkdown>

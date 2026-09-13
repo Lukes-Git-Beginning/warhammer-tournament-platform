@@ -107,7 +107,11 @@ export function StandardRulesetEditor() {
 
             <div className="flex-1">
               <p className="mb-1 text-xs text-stone-500">Live preview — {COMBOS.find((c) => c.key === selected)?.label}</p>
-              <StandardRulesetCard ruleset={current} />
+              <StandardRulesetCard
+                ruleset={current}
+                battleType={selected.split(':')[0] as 'DOMINATION' | 'CONQUEST' | 'SIEGE'}
+                competitorFormat={selected.split(':')[1] as 'ONE_V_ONE' | 'TWO_V_TWO'}
+              />
             </div>
           </div>
         </>

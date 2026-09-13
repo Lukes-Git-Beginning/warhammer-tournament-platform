@@ -288,7 +288,7 @@ export function MatchDetailPage() {
 
   const { data: mapsData } = useQuery({
     queryKey: ['maps'],
-    queryFn: getMaps,
+    queryFn: () => getMaps(),
     staleTime: 60 * 60_000,
     enabled: isOpenPlay,
   });

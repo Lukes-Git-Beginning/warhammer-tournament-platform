@@ -535,7 +535,7 @@ export function TournamentEditPage() {
     retry: false,
   });
 
-  const { data: mapsData } = useQuery({ queryKey: ['maps'], queryFn: getMaps });
+  const { data: mapsData } = useQuery({ queryKey: ['maps'], queryFn: () => getMaps() });
   const allMaps = mapsData?.data ?? [];
 
   const { data: factionsData } = useQuery({ queryKey: ['factions'], queryFn: () => getFactions() });
@@ -1766,7 +1766,9 @@ export function TournamentEditPage() {
             />
             <span className="text-sm text-rizzotto-stone-300">Enable standard rules</span>
           </label>
-          {form.standard_rules_enabled && <StandardRulesetCard compact />}
+          {form.standard_rules_enabled && (
+            <StandardRulesetCard compact battleType={tournament.battle_type} competitorFormat={tournament.competitor_format} />
+          )}
 
           <div>
             <Label htmlFor="tef-rules">Custom Rules</Label>
