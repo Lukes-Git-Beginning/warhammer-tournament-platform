@@ -532,7 +532,18 @@ async function startPlayoffs(
   if (cutoff > 0) {
     void notifyPlayoffResults(tournament.id, ranked.slice(0, cutoff), ranked.slice(cutoff));
   } else {
-    void notifyNoPlayoffComplete(tournament.id, ranked);
+    // No playoffs: send the "that's a wrap" DM exactly ONCE. Since NONE creates no playoff matches,
+    // advanceAutoSwissRound's playoff-existence guard can't detect re-entry, so this branch runs
+    // every cron minute until the host finalises — which spammed every player. A durable one-shot
+    // event makes it idempotent.
+    const alreadyNotified = await prisma.tournamentEvent.findFirst({
+      where: { tournament_id: tournament.id, type: 'auto_swiss_phase_completed' },
+      select: { id: true },
+    });
+    if (!alreadyNotified) {
+      void notifyNoPlayoffComplete(tournament.id, ranked);
+      await recordTournamentEvent({ tournamentId: tournament.id, type: 'auto_swiss_phase_completed', actor: 'system' });
+    }
   }
 
   type PlayoffPhase = 'PLAYOFF_QF' | 'PLAYOFF_SF' | 'PLAYOFF_FINAL' | 'PLAYOFF_THIRD_PLACE';

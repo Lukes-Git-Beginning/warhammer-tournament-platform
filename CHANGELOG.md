@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.57.9] — 2026-09-13 — Fix repeated end-of-event DM (no-playoff Swiss)
+### Fixed
+- An auto-advancing Swiss tournament with **no playoffs** re-sent its "you've played your final round" DM to every player once per minute (until the host finalised) instead of just once. It now fires exactly once. (Regression from the recent "respect no playoffs" change: a no-playoff bracket creates no matches, so the every-minute re-entry guard never tripped.)
+
 ## [1.57.8] — 2026-09-12 — Editing a non-draft tournament as a series final
 ### Fixed
 - Attaching an existing tournament that has already left draft as a series Grand Final now saves cleanly. The faction pool — like format and mode — is only blocked when it genuinely changes, not merely when it is resubmitted unchanged, so saving with the same pool no longer errors. Empty custom rules/restrictions are accepted, and the tournament no longer reports clashing with itself on the schedule.
