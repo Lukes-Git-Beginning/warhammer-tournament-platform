@@ -62,24 +62,28 @@ export function StandardRulesetCard({
 
   return (
     <div
-      className={`rounded-md border border-stone-800 bg-stone-900/50 text-sm leading-relaxed ${
+      className={`relative overflow-hidden rounded-md border border-stone-800 bg-stone-900/50 text-sm leading-relaxed ${
         compact ? 'p-3' : 'p-6'
       }`}
     >
-      <div className="mb-2 flex items-center gap-2">
-        {battleType ? (
-          // The battle-type symbol as a small, crisp header icon (the source art is only ~100px,
-          // so a full-bleed watermark would upscale + blur — a downscaled icon stays sharp).
-          <img src={`/battle-types/${battleType.toLowerCase()}.png`} alt="" className="h-5 w-5 shrink-0 object-contain" />
-        ) : (
+      {battleType && (
+        // Faint battle-type watermark. The source art is only ~100px, so it is shown at its
+        // native size (not stretched to the card width) — that keeps it crisp instead of the
+        // upscaled blur a full-bleed watermark would produce on these small tiles.
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
+          <img src={`/battle-types/${battleType.toLowerCase()}.png`} alt="" className="h-28 w-28 object-contain opacity-[0.10]" />
+        </div>
+      )}
+      <div className="relative">
+        <div className="mb-2 flex items-center gap-2">
           <span className="text-rizzotto-gold-400">⚔️</span>
-        )}
-        <span className="font-display font-semibold text-rizzotto-gold-500">{title}</span>
-      </div>
-      <div className="space-y-1.5">
-        <Row label="Settings" items={rs.settings} />
-        <Row label="Banned" items={rs.banned} />
-        <Row label="Conduct" items={rs.conduct} />
+          <span className="font-display font-semibold text-rizzotto-gold-500">{title}</span>
+        </div>
+        <div className="space-y-1.5">
+          <Row label="Settings" items={rs.settings} />
+          <Row label="Banned" items={rs.banned} />
+          <Row label="Conduct" items={rs.conduct} />
+        </div>
       </div>
     </div>
   );
