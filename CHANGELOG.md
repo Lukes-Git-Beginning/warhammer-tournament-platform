@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 ### Fixed
 - When your login expired, the site could get stuck half-logged-in — some things kept working while others silently failed — until a hard refresh (Ctrl+F5). An expired session is now detected immediately: the app cleanly returns to logged-out and shows a banner to sign back in with one click.
 ### Changed
-- Your session now renews automatically while you're using the site, so you stay signed in as long as you're active and only get logged out after a genuine stretch of inactivity.
+- Your login now renews automatically as you use the site: the 7-day timer restarts on every action, so you're never logged out mid-session — only after about a week of not using the site at all.
 
 ## [1.57.9] — 2026-09-13 — Fix repeated end-of-event DM (no-playoff Swiss)
 ### Fixed

@@ -56,14 +56,17 @@ export default fp(
           statusCode: 401,
         });
       }
-      // Sliding session: once a valid token is past the halfway point of its lifetime, re-issue the
-      // cookie so an ACTIVE user is never logged out mid-session — only genuinely idle sessions
-      // lapse. Best-effort: a refresh failure must never break the request.
+      // Sliding session: re-issue the cookie so the full lifetime always counts from the user's LAST
+      // action. An active user is therefore NEVER logged out mid-session; a session only lapses after
+      // a full period of true inactivity (default 7 days without any request). Throttled to at most
+      // once per hour of activity (re-sign only once the token is >1h old) to avoid a Set-Cookie on
+      // every response. Best-effort: a refresh failure must never break the request.
       try {
         const exp = (request.user as unknown as { exp?: number }).exp;
         if (exp) {
           const now = Math.floor(Date.now() / 1000);
-          if (exp - now < expiresInSec / 2) {
+          const REFRESH_AFTER_SEC = 3600; // token older than 1h → slide the window forward
+          if (exp - now < expiresInSec - REFRESH_AFTER_SEC) {
             const { sub, username, role } = request.user;
             fastify.signAuthCookie(reply, { sub, username, role });
           }
