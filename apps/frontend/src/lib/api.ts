@@ -2978,3 +2978,24 @@ export function getMyActiveMatches(): Promise<{ items: ActiveMatchItem[] }> {
   return apiFetch<{ items: ActiveMatchItem[] }>('/api/me/active-matches');
 }
 
+// ---------------------------------------------------------------------------
+// Skill history (GS over time)
+// ---------------------------------------------------------------------------
+
+export interface SkillHistoryPoint {
+  date: string; // "YYYY-MM-DD"
+  generalSkill: number;
+  stdError: number;
+  band: number;
+  gamesCount: number;
+}
+
+export interface SkillHistory {
+  userId: string;
+  points: SkillHistoryPoint[];
+}
+
+export function getSkillHistory(userId: string): Promise<SkillHistory> {
+  return apiFetch<SkillHistory>(`/api/users/${userId}/skill-history`);
+}
+

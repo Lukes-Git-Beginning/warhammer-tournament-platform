@@ -619,6 +619,31 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // GET /api/users/:id/skill-history — public: the player's daily timeless-GS snapshots
+  // (PlayerSkillSnapshot), oldest first. Powers the GS-over-time chart on the profile.
+  fastify.get('/api/users/:id/skill-history', async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const user = await fastify.prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!user) {
+      return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
+    }
+    const snapshots = await fastify.prisma.playerSkillSnapshot.findMany({
+      where: { user_id: id },
+      orderBy: { snapshot_date: 'asc' },
+      select: { snapshot_date: true, general_skill: true, std_error: true, band: true, games_count: true },
+    });
+    return {
+      userId: id,
+      points: snapshots.map((s) => ({
+        date: s.snapshot_date.toISOString().slice(0, 10),
+        generalSkill: s.general_skill,
+        stdError: s.std_error,
+        band: s.band,
+        gamesCount: s.games_count,
+      })),
+    };
+  });
+
   // GET /api/users/:id — public
   fastify.get('/api/users/:id', async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
