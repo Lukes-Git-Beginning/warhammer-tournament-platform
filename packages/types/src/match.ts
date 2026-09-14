@@ -35,8 +35,6 @@ export type SubmitMatchReportPayload = z.infer<typeof SubmitMatchReportSchema>;
 // Admin/organizer override — bypass dual-submit, force a final outcome.
 export const OverrideMatchResultSchema = z.object({
   result: MatchResultTypeSchema,
-  player1_points: z.number().min(0).max(100).nullable().optional(),
-  player2_points: z.number().min(0).max(100).nullable().optional(),
   player1_score: z.number().int().min(0).max(10000).nullable().optional(),
   player2_score: z.number().int().min(0).max(10000).nullable().optional(),
   reason: z.string().min(1).max(2000).optional(),
@@ -157,8 +155,6 @@ export const MatchDetailDtoSchema = z.object({
   scheduled_time: z.string().datetime().nullable(),
   played_at: z.string().datetime().nullable(),
   score: z.string().nullable(),
-  player1_points: z.number().nullable(),
-  player2_points: z.number().nullable(),
   // Raw ID fields — preserved for backwards compatibility
   player1_id: z.string().uuid().nullable(),
   player2_id: z.string().uuid().nullable(),

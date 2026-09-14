@@ -40,10 +40,87 @@ export function currentMonth(now: Date = new Date()): TimeWindow {
   };
 }
 
+/** Site launch — game counts (and the Rankings self-scaling cutoff) count from here. */
+export const LAUNCH_DATE = new Date('2026-06-27T00:00:00.000Z');
+
+/** Whole days from `from` until `now` (never negative). */
+export function daysSince(from: Date, now: Date = new Date()): number {
+  return Math.max(0, Math.floor((now.getTime() - from.getTime()) / 86_400_000));
+}
+
+// ---------------------------------------------------------------------------
+// Selectable periods — quarter (Qualifier) and month (Ladder) selectors. Past
+// periods are computed live via a windowed re-fit (no freeze needed to VIEW them).
+// ---------------------------------------------------------------------------
+
+export interface Period {
+  /** Stable key, e.g. "2026-Q3" or "2026-09". */
+  value: string;
+  label: string;
+  from: Date;
+  to: Date;
+}
+
+/** Calendar quarter containing `d` (UTC). */
+export function quarterOf(d: Date): TimeWindow {
+  const y = d.getUTCFullYear();
+  const q = Math.floor(d.getUTCMonth() / 3);
+  return { from: new Date(Date.UTC(y, q * 3, 1)), to: new Date(Date.UTC(y, q * 3 + 3, 1)), label: `Q${q + 1} ${y}` };
+}
+export function quarterValue(w: TimeWindow): string {
+  return `${w.from.getUTCFullYear()}-Q${Math.floor(w.from.getUTCMonth() / 3) + 1}`;
+}
+/** Parse "YYYY-Qn" → that quarter's window, or null if malformed. */
+export function parseQuarter(value: string): TimeWindow | null {
+  const m = /^(\d{4})-Q([1-4])$/.exec(value);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const q = Number(m[2]) - 1;
+  return { from: new Date(Date.UTC(y, q * 3, 1)), to: new Date(Date.UTC(y, q * 3 + 3, 1)), label: `Q${q + 1} ${y}` };
+}
+export function monthValue(w: TimeWindow): string {
+  return `${w.from.getUTCFullYear()}-${String(w.from.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+/** Parse "YYYY-MM" → that month's window, or null. */
+export function parseMonth(value: string): TimeWindow | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(value);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  if (mo < 0 || mo > 11) return null;
+  const from = new Date(Date.UTC(y, mo, 1));
+  return { from, to: new Date(Date.UTC(y, mo + 1, 1)), label: from.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }) };
+}
+
+/** Selectable quarters from the launch quarter to the current one (most recent first). */
+export function listQuartersSinceLaunch(now: Date = new Date()): Period[] {
+  const out: Period[] = [];
+  const launchStart = quarterOf(LAUNCH_DATE).from.getTime();
+  let cur = quarterOf(now);
+  while (cur.from.getTime() >= launchStart) {
+    out.push({ value: quarterValue(cur), label: cur.label, from: cur.from, to: cur.to });
+    cur = quarterOf(new Date(cur.from.getTime() - 1)); // step back one quarter
+  }
+  return out;
+}
+/** Selectable months from the launch month to the current one (most recent first). */
+export function listMonthsSinceLaunch(now: Date = new Date()): Period[] {
+  const out: Period[] = [];
+  const launchStart = currentMonth(LAUNCH_DATE).from.getTime();
+  let cur = currentMonth(now);
+  while (cur.from.getTime() >= launchStart) {
+    out.push({ value: monthValue(cur), label: cur.label, from: cur.from, to: cur.to });
+    cur = currentMonth(new Date(cur.from.getTime() - 1)); // step back one month
+  }
+  return out;
+}
+
 export interface CompetitionConfig {
-  /** Min games this quarter to appear on the quarterly quali board. */
+  /** Cap for the quarterly qualifier's self-scaling gate = min(this, days into the quarter).
+   *  90 ≈ "~1 tournament/week + ladder" — the legitimacy bar for a cash-prize final. */
   qualiMinGames: number;
-  /** Games threshold for Hall of Fame membership (two-class sort above everyone else). */
+  /** "Permanence" threshold: reaching it lists a player forever on Rankings (HoF badge), immune
+   *  to the self-scaling cutoff. Starts generous (50) and is raised over time toward ~250. */
   hallOfFameMinGames: number;
   /** Monthly ladder points per Open-Play result. */
   ladderWinPoints: number;
@@ -52,8 +129,8 @@ export interface CompetitionConfig {
 }
 
 const DEFAULT_COMPETITION_CONFIG: CompetitionConfig = {
-  qualiMinGames: 10,
-  hallOfFameMinGames: 250,
+  qualiMinGames: 90,
+  hallOfFameMinGames: 50,
   ladderWinPoints: 3,
   ladderDrawPoints: 1,
   ladderLossPoints: 0,
@@ -89,6 +166,20 @@ export async function loadCompetitionConfig(prisma: PrismaClient): Promise<Compe
   };
 }
 
+/** Rankings inclusion cutoff = min(permanence, days since launch). A competitor with at least
+ *  this many decisive games is listed; reaching `hallOfFameMinGames` makes them permanent (HoF). */
+export function rankingsCutoff(cfg: CompetitionConfig, now: Date = new Date()): number {
+  return Math.min(cfg.hallOfFameMinGames, daysSince(LAUNCH_DATE, now));
+}
+
+/** Quarterly qualifier gate = min(cap, days into the quarter up to now). Self-scaling for the
+ *  CURRENT quarter ("sharpens" toward the full cap by quarter end); a fully-elapsed PAST quarter
+ *  uses the full cap. */
+export function qualiGate(cfg: CompetitionConfig, window: TimeWindow, now: Date = new Date()): number {
+  const end = new Date(Math.min(now.getTime(), window.to.getTime()));
+  return Math.min(cfg.qualiMinGames, daysSince(window.from, end));
+}
+
 export interface LadderStanding {
   playerId: string;
   points: number;
@@ -101,7 +192,8 @@ export interface LadderStanding {
 /**
  * Monthly ladder standings from Open-Play games in the window. Points reward activity ×
  * success (the ladder's job is to drive Open-Play activity); reset each month by the caller
- * passing the current-month window. Open Play is always 1v1 → slots are user ids.
+ * passing the current-month window. The ladder is INDIVIDUAL: 1v1 slots are user ids; 2v2
+ * slots are team ids → resolved to their members so BOTH teammates score the same result.
  */
 export async function computeLadderStandings(
   prisma: PrismaClient,
@@ -120,8 +212,31 @@ export async function computeLadderStandings(
         player2_id: { not: null },
       },
     },
-    select: { winner_id: true, match: { select: { player1_id: true, player2_id: true } } },
+    select: { winner_id: true, match: { select: { player1_id: true, player2_id: true, competitor_format: true } } },
   });
+
+  // Resolve any 2v2 team slots → member user ids (both teammates get the individual result).
+  const teamIds = new Set<string>();
+  for (const g of games) {
+    if (g.match.competitor_format === 'TWO_V_TWO') {
+      if (g.match.player1_id) teamIds.add(g.match.player1_id);
+      if (g.match.player2_id) teamIds.add(g.match.player2_id);
+    }
+  }
+  const membersByTeam = new Map<string, string[]>();
+  if (teamIds.size > 0) {
+    const members = await prisma.teamMember.findMany({
+      where: { team_id: { in: [...teamIds] } },
+      select: { team_id: true, user_id: true },
+    });
+    for (const m of members) {
+      const arr = membersByTeam.get(m.team_id) ?? [];
+      arr.push(m.user_id);
+      membersByTeam.set(m.team_id, arr);
+    }
+  }
+  const usersOf = (slotId: string | null, isTeam: boolean): string[] =>
+    !slotId ? [] : isTeam ? (membersByTeam.get(slotId) ?? []) : [slotId];
 
   const byPlayer = new Map<string, LadderStanding>();
   const entry = (id: string): LadderStanding => {
@@ -134,23 +249,27 @@ export async function computeLadderStandings(
   };
 
   for (const g of games) {
-    const p1 = g.match.player1_id;
-    const p2 = g.match.player2_id;
-    if (!p1 || !p2) continue;
-    const e1 = entry(p1);
-    const e2 = entry(p2);
-    e1.games++;
-    e2.games++;
-    if (g.winner_id === null) {
-      e1.draws++; e2.draws++;
-      e1.points += cfg.ladderDrawPoints; e2.points += cfg.ladderDrawPoints;
-    } else if (g.winner_id === p1) {
-      e1.wins++; e2.losses++;
-      e1.points += cfg.ladderWinPoints; e2.points += cfg.ladderLossPoints;
-    } else {
-      e2.wins++; e1.losses++;
-      e2.points += cfg.ladderWinPoints; e1.points += cfg.ladderLossPoints;
-    }
+    const isTeam = g.match.competitor_format === 'TWO_V_TWO';
+    const side1 = usersOf(g.match.player1_id, isTeam);
+    const side2 = usersOf(g.match.player2_id, isTeam);
+    const isDraw = g.winner_id === null;
+    const side1Won = !isDraw && g.winner_id === g.match.player1_id;
+    const credit = (uid: string, won: boolean) => {
+      const e = entry(uid);
+      e.games++;
+      if (isDraw) {
+        e.draws++;
+        e.points += cfg.ladderDrawPoints;
+      } else if (won) {
+        e.wins++;
+        e.points += cfg.ladderWinPoints;
+      } else {
+        e.losses++;
+        e.points += cfg.ladderLossPoints;
+      }
+    };
+    for (const uid of side1) credit(uid, side1Won);
+    for (const uid of side2) credit(uid, !isDraw && !side1Won);
   }
 
   return [...byPlayer.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || a.games - b.games);

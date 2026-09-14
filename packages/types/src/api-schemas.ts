@@ -126,11 +126,6 @@ export const LeaderboardResponseSchema = z.object({
 });
 export type LeaderboardResponse = z.infer<typeof LeaderboardResponseSchema>;
 
-export const AllTimeLeaderboardEntryDtoSchema = LeaderboardEntryDtoSchema.extend({
-  versions_participated: z.number().int(),
-});
-export type AllTimeLeaderboardEntryDto = z.infer<typeof AllTimeLeaderboardEntryDtoSchema>;
-
 // ---------------------------------------------------------------------------
 // Dynamic Weighted Leaderboard (Alex-Spec) — derive-on-read scoring
 //
@@ -275,7 +270,6 @@ export const UserProfileResponseSchema = z.object({
       tournament: z.object({ slug: z.string(), name: z.string(), start_date: z.string().datetime() }),
       version_name: z.string().nullable(),
       placement: z.number().int(),
-      points_earned: z.number(),
       created_at: z.string().datetime(),
     }),
   ),

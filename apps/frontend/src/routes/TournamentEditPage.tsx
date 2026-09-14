@@ -31,6 +31,7 @@ import { PosterUploadField } from '@/components/tournament/PosterUploadField';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
 import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
 import { estimateDurationHours, intervalsOverlap, describeClash } from '@/lib/tournamentSchedule';
+import { useMajorsEnabled } from '@/hooks/useFeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Lock helpers
@@ -528,6 +529,7 @@ export function TournamentEditPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: user } = useAuthQuery();
+  const majorsEnabled = useMajorsEnabled();
 
   const { data: tournament, isLoading, error } = useQuery({
     queryKey: ['tournament', slug],
@@ -1832,16 +1834,18 @@ export function TournamentEditPage() {
               />
               <span className="text-sm text-rizzotto-stone-300">Counts for leaderboard</span>
             </label>
-            <label className="flex cursor-pointer items-center gap-3">
-              <input
-                type="checkbox"
-                name="is_major"
-                checked={form.is_major}
-                onChange={handleChange}
-                className="h-4 w-4 rounded border-rizzotto-iron-600 bg-rizzotto-iron-800 text-rizzotto-gold-500 focus:ring-rizzotto-gold-500"
-              />
-              <span className="text-sm text-rizzotto-stone-300">Major tournament</span>
-            </label>
+            {majorsEnabled && (
+              <label className="flex cursor-pointer items-center gap-3">
+                <input
+                  type="checkbox"
+                  name="is_major"
+                  checked={form.is_major}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded border-rizzotto-iron-600 bg-rizzotto-iron-800 text-rizzotto-gold-500 focus:ring-rizzotto-gold-500"
+                />
+                <span className="text-sm text-rizzotto-stone-300">Major tournament</span>
+              </label>
+            )}
           </div>
         </fieldset>
 

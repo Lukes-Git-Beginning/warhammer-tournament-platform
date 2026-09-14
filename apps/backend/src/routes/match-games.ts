@@ -313,6 +313,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           player2_id: true,
           withdrawn_player_id: true,
           tournament_id: true,
+          competitor_format: true,
           tournament: { select: { host_id: true, mode: true, counts_for_leaderboard: true, competitor_format: true } },
           games: {
             orderBy: { game_number: 'asc' },
@@ -330,7 +331,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // 2v2: either teammate (not just the captain) may see lobby codes → member check.
-      const isTeam = match.tournament?.competitor_format === 'TWO_V_TWO';
+      const isTeam = (match.tournament?.competitor_format ?? match.competitor_format) === 'TWO_V_TWO';
       const isParticipant =
         currentUserId !== null &&
         (await isCompetitorMember(fastify.prisma, currentUserId, match, isTeam));
@@ -1006,6 +1007,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           player1_id: true,
           player2_id: true,
           tournament_id: true,
+          competitor_format: true,
           tournament: { select: { host_id: true, competitor_format: true } },
         },
       });
@@ -1015,7 +1017,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const userId = request.user.sub;
-      const isTeam = match.tournament?.competitor_format === 'TWO_V_TWO';
+      const isTeam = (match.tournament?.competitor_format ?? match.competitor_format) === 'TWO_V_TWO';
       const isParticipant = await isCompetitorMember(fastify.prisma, userId, match, isTeam);
       const isStaff = await canManageTournament(
         fastify.prisma,
@@ -1068,14 +1070,14 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const match = await fastify.prisma.match.findFirst({
         where: { id: matchId, deleted_at: null },
-        select: { player1_id: true, player2_id: true, tournament_id: true, tournament: { select: { host_id: true, competitor_format: true } } },
+        select: { player1_id: true, player2_id: true, tournament_id: true, competitor_format: true, tournament: { select: { host_id: true, competitor_format: true } } },
       });
       if (!match) {
         return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
       }
 
       const userId = request.user.sub;
-      const isTeam = match.tournament?.competitor_format === 'TWO_V_TWO';
+      const isTeam = (match.tournament?.competitor_format ?? match.competitor_format) === 'TWO_V_TWO';
       const isParticipant = await isCompetitorMember(fastify.prisma, userId, match, isTeam);
       const isStaff = await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, request.user.role);
       if (!isParticipant && !isStaff) {
@@ -1131,6 +1133,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           player1_id: true,
           player2_id: true,
           tournament_id: true,
+          competitor_format: true,
           tournament: { select: { competitor_format: true } },
         },
       });
@@ -1149,7 +1152,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Team-as-actor: for 2v2 the CAPTAIN of the slot's team reports; resolveActorFlags maps
       // the caller to player1/player2 accordingly (identity for 1v1).
-      const isTeam = match.tournament?.competitor_format === 'TWO_V_TWO';
+      const isTeam = (match.tournament?.competitor_format ?? match.competitor_format) === 'TWO_V_TWO';
       const flags = await resolveActorFlags(fastify.prisma, userId, match, isTeam);
       const isPlayer1 = flags.isPlayer1;
       const isPlayer2 = flags.isPlayer2;

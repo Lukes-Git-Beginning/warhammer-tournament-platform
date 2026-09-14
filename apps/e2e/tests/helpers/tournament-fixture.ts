@@ -389,12 +389,7 @@ export async function cleanupTestData(userIds: string[]): Promise<void> {
     where: { user_id: { in: userIds } },
   });
 
-  // 4. LeaderboardEntry
-  await prisma.leaderboardEntry.deleteMany({
-    where: { user_id: { in: userIds } },
-  });
-
-  // 5. AuditLog (actor)
+  // 4. AuditLog (actor)
   await prisma.auditLog.deleteMany({
     where: { actor_id: { in: userIds } },
   });

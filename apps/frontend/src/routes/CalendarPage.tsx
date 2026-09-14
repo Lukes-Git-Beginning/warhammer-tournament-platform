@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api.js';
 import type { CalendarTournament, TournamentStatus } from '@rizzotto/types';
+import { useMajorsEnabled } from '@/hooks/useFeatureFlags.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { Skeleton } from '@/components/ui/skeleton.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
@@ -69,6 +70,7 @@ export function CalendarPage() {
 
   const [statusFilter, setStatusFilter] = useState<TournamentStatus | ''>('');
   const [majorOnly, setMajorOnly] = useState(false);
+  const majorsEnabled = useMajorsEnabled();
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -123,16 +125,18 @@ export function CalendarPage() {
           ))}
         </select>
 
-        {/* Majors toggle */}
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-rizzotto-stone-300">
-          <input
-            type="checkbox"
-            checked={majorOnly}
-            onChange={(e) => setMajorOnly(e.target.checked)}
-            className="accent-rizzotto-gold-500 size-4 cursor-pointer rounded"
-          />
-          Majors only
-        </label>
+        {/* Majors toggle — only shown when Majors feature is enabled */}
+        {majorsEnabled && (
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-rizzotto-stone-300">
+            <input
+              type="checkbox"
+              checked={majorOnly}
+              onChange={(e) => setMajorOnly(e.target.checked)}
+              className="accent-rizzotto-gold-500 size-4 cursor-pointer rounded"
+            />
+            Majors only
+          </label>
+        )}
 
         {/* Spacer */}
         <div className="flex-1" />

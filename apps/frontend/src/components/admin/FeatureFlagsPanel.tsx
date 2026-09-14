@@ -9,6 +9,7 @@ interface FeatureFlags {
   slt: boolean;
   bpt: boolean;
   sft: boolean;
+  enable_majors: boolean;
   [key: string]: boolean;
 }
 
@@ -17,6 +18,7 @@ const FLAG_LABELS: Record<string, string> = {
   slt: 'SLT (Swiss League Tournament)',
   bpt: 'BPT (Bracket Points Tournament)',
   sft: 'SFT (Swiss Finals Tournament)',
+  enable_majors: 'Enable Majors (Champions board · Majors filter · is_major option)',
 };
 
 const DEFAULT_FLAGS: FeatureFlags = {
@@ -24,6 +26,7 @@ const DEFAULT_FLAGS: FeatureFlags = {
   slt: false,
   bpt: false,
   sft: false,
+  enable_majors: false,
 };
 
 function Toggle({

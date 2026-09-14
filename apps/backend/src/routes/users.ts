@@ -709,7 +709,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
               where: { user_id: id },
               select: {
                 placement: true,
-                points_earned: true,
                 created_at: true,
                 version: { select: { name: true } },
               },
@@ -766,7 +765,6 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           },
           version_name: result?.version?.name ?? null,
           placement: result?.placement ?? null,
-          points_earned: result?.points_earned ?? null,
           created_at: result?.created_at.toISOString() ?? p.registered_at.toISOString(),
         };
       }),

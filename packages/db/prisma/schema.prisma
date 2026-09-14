@@ -283,7 +283,6 @@ model User {
   // back-relation from User. Query a user's matches via player1_id/player2_id directly.
   army_lists              ArmyList[]
   tournament_army_lists   TournamentArmyList[]
-  leaderboard_entries     LeaderboardEntry[]
   skill_snapshots         PlayerSkillSnapshot[]
   tournament_results      TournamentResult[]
   captained_teams         Team[]                  @relation("TeamCaptain")
@@ -532,8 +531,6 @@ model Match {
   winner_id              String?          @db.Uuid
   score                  String? // DEPRECATED in favour of `result` + points; kept for backwards-read of historical rows
   result                 MatchResultType? // Q12: structured outcome
-  player1_points         Float? // Q12: 1.0 / 0.5 / 0.0 for Swiss, 3 / 1 / 0 for round-based scoring
-  player2_points         Float?
   status                 MatchStatus      @default(PENDING)
   scheduled_time         DateTime?
   next_match_id          String?          @db.Uuid
@@ -546,6 +543,10 @@ model Match {
   // 2v2 (SFT_2V2/BPT_2V2): the teammate's faction per side, mirrored from the game (NULL for 1v1).
   player1_faction_id_2   String?
   player2_faction_id_2   String?
+  // Team size for THIS match, independent of any tournament (Open-Play 2v2 has no tournament).
+  // Drives isTeam across the play/report flow; set from the tournament at creation, or
+  // TWO_V_TWO for Open-Play 2v2. Backfilled for historical rows from their tournament.
+  competitor_format      CompetitorFormat @default(ONE_V_ONE)
   // Withdraw→Void: the player who dropped, flagging the survivor's still-open match
   // as "opponent withdrew — decide played vs void". Null in the normal case.
   withdrawn_player_id    String?          @db.Uuid
@@ -767,7 +768,6 @@ model GameVersion {
 
   major_tournament Tournament?            @relation("VersionMajor", fields: [major_tournament_id], references: [id])
   matches          Match[]
-  leaderboard      LeaderboardEntry[]
   results          TournamentResult[]
   faction_stats    FactionStats[]
   matchup_stats    MatchupStats[]
@@ -778,31 +778,12 @@ model GameVersion {
   @@map("Season")
 }
 
-model LeaderboardEntry {
-  id           String   @id @default(uuid()) @db.Uuid
-  user_id      String   @db.Uuid
-  version_id   String   @map("season_id") @db.Uuid
-  total_points Float    @default(0)
-  games_played Int      @default(0)
-  wins         Int      @default(0)
-  losses       Int      @default(0)
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
-
-  user    User        @relation(fields: [user_id], references: [id])
-  version GameVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
-
-  @@unique([user_id, version_id])
-  @@index([version_id, total_points(sort: Desc)])
-}
-
 model TournamentResult {
   id            String   @id @default(uuid()) @db.Uuid
   tournament_id String   @db.Uuid
   user_id       String   @db.Uuid
   version_id    String?  @map("season_id") @db.Uuid // null if tournament not counted for leaderboard
   placement     Int
-  points_earned Float    @default(0)
   created_at    DateTime @default(now())
 
   tournament Tournament   @relation(fields: [tournament_id], references: [id], onDelete: Cascade)

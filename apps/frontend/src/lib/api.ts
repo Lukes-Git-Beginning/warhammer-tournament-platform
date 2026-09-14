@@ -3,7 +3,6 @@ import type {
   UserMe,
   BracketResponse,
   LeaderboardResponse,
-  LeaderboardEntryDto,
   DynamicLeaderboardResponse,
   UserProfileResponse,
   FactionListResponse,
@@ -41,15 +40,6 @@ export type {
   FactionMatchupMatrixResponse,
   PlayerFactionProficiencyResponse,
 };
-
-export type AllTimeEntry = LeaderboardEntryDto & { versions_participated: number };
-
-export interface AllTimeLeaderboardResponse {
-  entries: AllTimeEntry[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
 
 export interface VersionSummary {
   id: string;
@@ -599,17 +589,6 @@ export function getLeaderboard(opts?: {
   return apiFetch<DynamicLeaderboardResponse>(`/api/leaderboard${qs ? `?${qs}` : ''}`);
 }
 
-export function getAllTimeLeaderboard(opts?: {
-  page?: number;
-  pageSize?: number;
-}): Promise<AllTimeLeaderboardResponse> {
-  const params = new URLSearchParams();
-  if (opts?.page) params.set('page', String(opts.page));
-  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
-  const qs = params.toString();
-  return apiFetch<AllTimeLeaderboardResponse>(`/api/leaderboard/all-time${qs ? `?${qs}` : ''}`);
-}
-
 // #6 — major-tournament-wins leaderboard.
 export interface MajorWinTournament {
   id: string;
@@ -665,6 +644,57 @@ export function getSkillLeaderboard(opts?: { versionId?: string; page?: number; 
 
 export interface CompetitorRef { id: string; username: string; avatar_url: string | null; tiers?: SupporterTiers }
 
+export type LeaderboardBattleType = 'OVERALL' | 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+export type LeaderboardFormat = 'ONE_V_ONE' | 'TWO_V_TWO';
+
+/** A selectable period (quarter for the Qualifier, month for the Ladder). */
+export interface LeaderboardPeriod { value: string; label: string }
+
+/** A 2v2 team on a board (name + member avatars). */
+export interface TeamRef {
+  id: string;
+  name: string;
+  members: { id: string; username: string; avatar_url: string | null }[];
+}
+
+/** Rankings — timeless GS board (merges Skill + Hall of Fame). Entry is a 1v1 player OR a 2v2 team. */
+export interface RankingsEntry {
+  rank: number;
+  user?: CompetitorRef; // 1v1
+  team?: TeamRef; // 2v2
+  generalSkill: number;
+  stdError: number;
+  band: number;
+  winChance: number;
+  gamesCount: number;
+  permanent: boolean; // reached permanence → Hall of Fame, listed forever (1v1)
+  provisional: boolean; // fresh team still leaning on members' prior (2v2)
+}
+export interface RankingsResponse {
+  entries: RankingsEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  battleType: LeaderboardBattleType;
+  competitorFormat: LeaderboardFormat;
+  permanenceThreshold: number;
+  cutoff: number;
+}
+export function getRankings(opts?: {
+  battleType?: LeaderboardBattleType;
+  competitorFormat?: LeaderboardFormat;
+  page?: number;
+  pageSize?: number;
+}): Promise<RankingsResponse> {
+  const params = new URLSearchParams();
+  if (opts?.battleType) params.set('battleType', opts.battleType);
+  if (opts?.competitorFormat) params.set('competitorFormat', opts.competitorFormat);
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
+  const qs = params.toString();
+  return apiFetch<RankingsResponse>(`/api/leaderboard/rankings${qs ? `?${qs}` : ''}`);
+}
+
 /** Hall of Fame — timeless GS; >= threshold games are listed first (two-class), forever. */
 export interface HallOfFameEntry {
   rank: number;
@@ -691,14 +721,16 @@ export function getHallOfFame(opts?: { page?: number; pageSize?: number }): Prom
   return apiFetch<HallOfFameResponse>(`/api/leaderboard/hall-of-fame${qs ? `?${qs}` : ''}`);
 }
 
-/** Quarterly qualification GS (current form) — a fit windowed to this quarter's games. */
+/** Quarterly Qualifier — GS windowed to this quarter, strict self-scaling gate. Player OR team. */
 export interface QuarterlyEntry {
   rank: number;
-  user: CompetitorRef;
+  user?: CompetitorRef; // 1v1
+  team?: TeamRef; // 2v2
   generalSkill: number;
   stdError: number;
   band: number;
   gamesCount: number;
+  provisional: boolean;
 }
 export interface QuarterlyResponse {
   entries: QuarterlyEntry[];
@@ -706,10 +738,24 @@ export interface QuarterlyResponse {
   page: number;
   pageSize: number;
   quarter: string;
-  minGames: number;
+  quarterValue: string;
+  quarters: LeaderboardPeriod[];
+  battleType: LeaderboardBattleType;
+  competitorFormat: LeaderboardFormat;
+  gate: number;
+  capGames: number;
 }
-export function getQuarterlyLeaderboard(opts?: { page?: number; pageSize?: number }): Promise<QuarterlyResponse> {
+export function getQuarterlyLeaderboard(opts?: {
+  battleType?: LeaderboardBattleType;
+  competitorFormat?: LeaderboardFormat;
+  quarter?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<QuarterlyResponse> {
   const params = new URLSearchParams();
+  if (opts?.battleType) params.set('battleType', opts.battleType);
+  if (opts?.competitorFormat) params.set('competitorFormat', opts.competitorFormat);
+  if (opts?.quarter) params.set('quarter', opts.quarter);
   if (opts?.page) params.set('page', String(opts.page));
   if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
   const qs = params.toString();
@@ -732,9 +778,12 @@ export interface LadderResponse {
   page: number;
   pageSize: number;
   month: string;
+  monthValue: string;
+  months: LeaderboardPeriod[];
 }
-export function getLadderLeaderboard(opts?: { page?: number; pageSize?: number }): Promise<LadderResponse> {
+export function getLadderLeaderboard(opts?: { month?: string; page?: number; pageSize?: number }): Promise<LadderResponse> {
   const params = new URLSearchParams();
+  if (opts?.month) params.set('month', opts.month);
   if (opts?.page) params.set('page', String(opts.page));
   if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
   const qs = params.toString();
@@ -749,6 +798,19 @@ export function listVersions(): Promise<{ data: VersionSummary[] }> {
   return apiFetch<{ data: VersionSummary[] }>('/api/versions');
 }
 
+/** Public feature flags — gates UI like the Champions board / "Majors only" filter / is_major option. */
+export interface FeatureFlags {
+  arena: boolean;
+  slt: boolean;
+  bpt: boolean;
+  sft: boolean;
+  enable_majors: boolean;
+  [key: string]: boolean;
+}
+export function getFeatureFlags(): Promise<FeatureFlags> {
+  return apiFetch<FeatureFlags>('/api/feature-flags');
+}
+
 export function getFactions(versionId?: string): Promise<FactionListResponse> {
   const params = new URLSearchParams();
   if (versionId) params.set('versionId', versionId);
@@ -760,9 +822,14 @@ export function getFactions(versionId?: string): Promise<FactionListResponse> {
     }));
 }
 
-export function getFaction(id: string, versionId?: string): Promise<FactionDetailResponse> {
+export function getFaction(
+  id: string,
+  versionId?: string,
+  battleType?: BattleType,
+): Promise<FactionDetailResponse> {
   const params = new URLSearchParams();
   if (versionId) params.set('versionId', versionId);
+  if (battleType) params.set('battleType', battleType);
   const qs = params.toString();
   return apiFetch<FactionDetailResponse>(`/api/factions/${id}${qs ? `?${qs}` : ''}`);
 }
@@ -2799,10 +2866,16 @@ export function getPlayerAntiFarming(playerId: string, versionId?: string): Prom
 
 export function joinQueue(opts?: {
   battleTypes?: BattleType[];
+  competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
 }): Promise<{ matched: boolean; match_id?: string; position?: number }> {
+  const body: Record<string, unknown> = {};
+  if (opts?.battleTypes?.length) body.battleTypes = opts.battleTypes;
+  if (opts?.competitorFormat && opts.competitorFormat !== 'ONE_V_ONE') {
+    body.competitorFormat = opts.competitorFormat;
+  }
   return apiFetch<{ matched: boolean; match_id?: string; position?: number }>('/api/open-play/queue', {
     method: 'POST',
-    body: JSON.stringify(opts?.battleTypes?.length ? { battleTypes: opts.battleTypes } : {}),
+    body: JSON.stringify(body),
   });
 }
 

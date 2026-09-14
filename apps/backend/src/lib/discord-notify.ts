@@ -697,6 +697,37 @@ export async function notifyTournamentAnnounce(tournament: TournamentForNotify):
 }
 
 /**
+ * DM users who marked TOURNAMENT availability for the tournament's start slot (its day-of-week +
+ * UTC hour) when it opens for registration — the tournament counterpart to the Open-Play
+ * availability ping. Automatic → per-recipient DM caps + the NO_BOT_MESSAGES opt-out apply
+ * (via sendDm). Best-effort; a single DM per opened tournament per available user.
+ */
+export async function notifyTournamentAvailability(tournament: TournamentForNotify): Promise<void> {
+  const token = getToken();
+  if (!token) return;
+  try {
+    const start = tournament.start_date;
+    const dayOfWeek = (start.getUTCDay() + 6) % 7; // 0=Mon..6=Sun — matches AvailabilitySlot
+    const hourUtc = start.getUTCHours();
+    const slots = await prisma.availabilitySlot.findMany({
+      where: { context: 'TOURNAMENT', day_of_week: dayOfWeek, hour_utc: hourUtc },
+      select: { user: { select: { discord_id: true } } },
+    });
+    const recipients = slots
+      .map((s) => s.user?.discord_id)
+      .filter((id): id is string => !!id);
+    if (recipients.length === 0) return;
+
+    const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
+    const startTs = Math.floor(start.getTime() / 1000);
+    const content = `⚔️ A tournament you're available for just opened for registration: **${tournament.name}** — starts <t:${startTs}:F>.\n${url}`;
+    await Promise.allSettled(recipients.map((discordId) => sendDm(discordId, content)));
+  } catch (err) {
+    console.warn('[discord-notify] Tournament availability DM error (non-fatal):', err);
+  }
+}
+
+/**
  * DM all REGISTERED participants of a tournament reminding them to check in.
  */
 export async function notifyCheckInReminder(tournament: TournamentForNotify): Promise<void> {

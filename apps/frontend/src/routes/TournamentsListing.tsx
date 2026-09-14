@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthQuery } from '@/lib/auth.js';
 import { ArrowRight, Clock, Crown, Users } from 'lucide-react';
 import { listTournaments, type Tournament, type BattleType } from '@/lib/api.js';
+import { useMajorsEnabled } from '@/hooks/useFeatureFlags.js';
 import { formatInUserTimezone } from '@/lib/timezone.js';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton.js';
 import { Team2v2Badge, BattleTypeWatermark } from '@/components/tournament/TournamentTypeBadges.js';
@@ -187,6 +188,7 @@ export function TournamentsListing() {
   // viewer's own drafts) refetches when they sign in or out.
   const { data: me } = useAuthQuery();
   const viewerKey = me?.id ?? 'anon';
+  const majorsEnabled = useMajorsEnabled();
 
   const page = search.page ?? 1;
   const majorOnly = search.major === true;
@@ -253,10 +255,12 @@ export function TournamentsListing() {
 
       {/* Filters — Majors · Battle type · Team size (all preserved in the URL) */}
       <div className="mb-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-        <FilterChip active={majorOnly} onClick={toggleMajor}>
-          <Crown className="size-3.5" strokeWidth={1.5} />
-          Majors only
-        </FilterChip>
+        {majorsEnabled && (
+          <FilterChip active={majorOnly} onClick={toggleMajor}>
+            <Crown className="size-3.5" strokeWidth={1.5} />
+            Majors only
+          </FilterChip>
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-rizzotto-stone-500">

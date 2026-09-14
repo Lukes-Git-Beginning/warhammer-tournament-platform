@@ -476,9 +476,6 @@ describe('DE match progression (integration)', () => {
     await prisma.match.deleteMany({ where: { tournament_id: DE_TOURN_ID } });
     await prisma.tournamentParticipant.deleteMany({ where: { tournament_id: DE_TOURN_ID } });
     await prisma.tournament.deleteMany({ where: { id: DE_TOURN_ID } });
-    await prisma.leaderboardEntry.deleteMany({
-      where: { user_id: { in: [DE_ORG_ID, DE_P1_ID, DE_P2_ID, DE_P3_ID] } },
-    });
     await prisma.user.deleteMany({
       where: { id: { in: [DE_ORG_ID, DE_P1_ID, DE_P2_ID, DE_P3_ID] } },
     });

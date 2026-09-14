@@ -17,6 +17,10 @@ const VersionQuerySchema = z.object({
   versionId: z.string().uuid().optional(),
 });
 
+const FactionDetailQuerySchema = VersionQuerySchema.extend({
+  battleType: z.enum(['DOMINATION', 'CONQUEST', 'SIEGE']).default('DOMINATION'),
+});
+
 const FactionParamSchema = z.object({
   id: z.string().min(1),
 });
@@ -92,7 +96,7 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const queryParsed = VersionQuerySchema.safeParse(request.query);
+    const queryParsed = FactionDetailQuerySchema.safeParse(request.query);
     if (!queryParsed.success) {
       return reply.code(400).send({
         error: 'BadRequest',
@@ -102,7 +106,7 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const { id } = paramParsed.data;
-    const { versionId } = queryParsed.data;
+    const { versionId, battleType } = queryParsed.data;
 
     // Resolve version. As with the list endpoint, NO active version is fine: the
     // faction's master data is global reference data. Only stats + trend are
@@ -127,18 +131,15 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
 
     return cached(
       fastify.redis,
-      cacheKey('factions:detail', { id, versionId: resolvedVersionId ?? 'none' }),
+      cacheKey('factions:detail', { id, versionId: resolvedVersionId ?? 'none', battleType }),
       async () => {
-        // TODO(meta): battle-type filter. The detail view shows Domination stats for
-        // now (primary mode + the only populated type initially); an "all types"
-        // aggregate + a battle-type dropdown follow with the meta API filter.
         const stats = resolvedVersionId
           ? await fastify.prisma.factionStats.findUnique({
               where: {
                 faction_id_version_id_battle_type: {
                   faction_id: id,
                   version_id: resolvedVersionId,
-                  battle_type: 'DOMINATION',
+                  battle_type: battleType,
                 },
               },
             })
@@ -154,6 +155,7 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
             where: {
               faction_id: id,
               version_id: resolvedVersionId,
+              battle_type: battleType,
               snapshot_date: { gte: thirtyDaysAgo },
             },
             orderBy: { snapshot_date: 'asc' },

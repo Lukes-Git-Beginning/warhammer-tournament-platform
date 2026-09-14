@@ -9,7 +9,7 @@
 export const schema = /* GraphQL */ `
   type Query {
     factions(versionId: ID): FactionListResult!
-    faction(id: ID!, versionId: ID): FactionDetail
+    faction(id: ID!, versionId: ID, battleType: String): FactionDetail
     metaOverview(versionId: ID): MetaOverview
     matchupHeatmap(versionId: ID): MatchupHeatmapResult!
   }

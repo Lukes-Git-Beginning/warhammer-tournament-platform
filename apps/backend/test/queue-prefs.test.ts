@@ -39,7 +39,7 @@ describe('findCompatiblePair', () => {
       e('a', 'ONE_V_ONE', ['DOMINATION']),
       e('b', 'ONE_V_ONE', ['DOMINATION', 'SIEGE']),
     ]);
-    expect(pair).toEqual({ a: 'a', b: 'b', battleType: 'DOMINATION' });
+    expect(pair).toEqual({ a: 'a', b: 'b', battleType: 'DOMINATION', format: 'ONE_V_ONE' });
   });
 
   it('never pairs across team sizes', () => {
@@ -55,7 +55,7 @@ describe('findCompatiblePair', () => {
       e('c', 'ONE_V_ONE', ['SIEGE', 'CONQUEST']),
     ]);
     // a (SIEGE) can't play b (DOMINATION) but can play c (SIEGE) — a stays oldest.
-    expect(pair).toEqual({ a: 'a', b: 'c', battleType: 'SIEGE' });
+    expect(pair).toEqual({ a: 'a', b: 'c', battleType: 'SIEGE', format: 'ONE_V_ONE' });
   });
 
   it('uses the oldest queuer’s preference order for the chosen battle type', () => {
@@ -70,5 +70,13 @@ describe('findCompatiblePair', () => {
     expect(
       findCompatiblePair([e('a', 'ONE_V_ONE', ['SIEGE']), e('b', 'ONE_V_ONE', ['DOMINATION'])]),
     ).toBeNull();
+  });
+
+  it('pairs two 2v2 teams and reports the 2v2 format', () => {
+    const pair = findCompatiblePair([
+      e('t1', 'TWO_V_TWO', ['DOMINATION', 'SIEGE']),
+      e('t2', 'TWO_V_TWO', ['SIEGE']),
+    ]);
+    expect(pair).toEqual({ a: 't1', b: 't2', battleType: 'SIEGE', format: 'TWO_V_TWO' });
   });
 });

@@ -1,5 +1,4 @@
 import type { PrismaClient } from '@rizzotto/db';
-import { calculateTournamentPoints } from './tournament-utils.js';
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -320,7 +319,6 @@ export async function finalizeTournament(
   ]);
 
   const participantIds = participants.map((p) => p.user_id);
-  const playerCount = participantIds.length;
 
   // Compute placements
   let placements: Map<string, number>;
@@ -347,66 +345,8 @@ export async function finalizeTournament(
   });
   const versionId = activeVersion?.id ?? null;
 
-  // Build list of userIds from finalized placements
-  const finalizedUserIds = [...placements.keys()];
-
-  // -------------------------------------------------------------------------
-  // Version-level pre-computation (outside transaction for performance).
-  // All values are SET on LeaderboardEntry — never incremented — so
-  // finalizeTournament is fully idempotent regardless of how many times it runs.
-  // -------------------------------------------------------------------------
-
-  // 1. Version-total points: sum of ALL TournamentResults in the version for each
-  //    player, replacing this tournament's old value with the newly computed one.
-  const priorVersionResults =
-    versionId && finalizedUserIds.length > 0
-      ? await prisma.tournamentResult.findMany({
-          where: {
-            version_id: versionId,
-            user_id: { in: finalizedUserIds },
-            tournament_id: { not: tournamentId }, // exclude current — will be added fresh
-          },
-          select: { user_id: true, points_earned: true },
-        })
-      : [];
-  const priorPointsMap = new Map<string, number>();
-  for (const r of priorVersionResults) {
-    priorPointsMap.set(r.user_id, (priorPointsMap.get(r.user_id) ?? 0) + r.points_earned);
-  }
-
-  // 3. Version-total W/L at game level across ALL version tournaments.
-  //    BYEs have no MatchGame records → automatically excluded.
-  const allVersionGames =
-    versionId && finalizedUserIds.length > 0
-      ? await prisma.matchGame.findMany({
-          where: {
-            status: 'COMPLETED',
-            winner_id: { not: null },
-            match: {
-              version_id: versionId,
-              deleted_at: null,
-              tournament: { counts_for_leaderboard: true },
-              OR: [
-                { player1_id: { in: finalizedUserIds } },
-                { player2_id: { in: finalizedUserIds } },
-              ],
-            },
-          },
-          select: {
-            winner_id: true,
-            match: { select: { player1_id: true, player2_id: true } },
-          },
-        })
-      : [];
-
-  const versionWins = new Map<string, number>();
-  const versionLosses = new Map<string, number>();
-  for (const g of allVersionGames) {
-    if (!g.winner_id) continue;
-    const loser = g.winner_id === g.match.player1_id ? g.match.player2_id : g.match.player1_id;
-    versionWins.set(g.winner_id, (versionWins.get(g.winner_id) ?? 0) + 1);
-    if (loser) versionLosses.set(loser, (versionLosses.get(loser) ?? 0) + 1);
-  }
+  // (Legacy version-points pre-computation removed — no points/LeaderboardEntry are written;
+  // the leaderboard is GS-derived live from match facts. Only placements are recorded below.)
 
   // ---------------------------------------------------------------------------
 
@@ -416,13 +356,10 @@ export async function finalizeTournament(
   const writeUserKeyedResults = tournament.competitor_format !== 'TWO_V_TWO';
 
   await prisma.$transaction(async (tx) => {
+    // Record final placements only (kept for tournament history / profile "recent results").
+    // Legacy points (points_earned / LeaderboardEntry) are no longer written — the leaderboard
+    // is GS-derived live from match facts.
     if (writeUserKeyedResults) for (const [userId, placement] of placements) {
-      const points = calculateTournamentPoints({
-        placement,
-        playerCount,
-        isMajor: tournament.is_major,
-      });
-
       await tx.tournamentResult.upsert({
         where: { tournament_id_user_id: { tournament_id: tournamentId, user_id: userId } },
         create: {
@@ -430,38 +367,12 @@ export async function finalizeTournament(
           user_id: userId,
           version_id: versionId,
           placement,
-          points_earned: points,
         },
         update: {
           version_id: versionId,
           placement,
-          points_earned: points,
         },
       });
-
-      if (versionId && tournament.counts_for_leaderboard) {
-        const totalPoints = (priorPointsMap.get(userId) ?? 0) + points;
-        const totalWins = versionWins.get(userId) ?? 0;
-        const totalLosses = versionLosses.get(userId) ?? 0;
-
-        await tx.leaderboardEntry.upsert({
-          where: { user_id_version_id: { user_id: userId, version_id: versionId } },
-          create: {
-            user_id: userId,
-            version_id: versionId,
-            total_points: totalPoints,
-            games_played: totalWins + totalLosses,
-            wins: totalWins,
-            losses: totalLosses,
-          },
-          update: {
-            total_points: totalPoints,
-            games_played: totalWins + totalLosses,
-            wins: totalWins,
-            losses: totalLosses,
-          },
-        });
-      }
     }
 
     await tx.auditLog.create({
@@ -479,12 +390,9 @@ export async function finalizeTournament(
 }
 
 /**
- * Reverse a finalisation: reopen a COMPLETED tournament to ONGOING and undo the stats
- * finalizeTournament wrote. finalize is idempotent (it recomputes each player's version
- * aggregate from ALL their version results), so the exact reversal is: drop THIS tournament's
- * placement results, then recompute every affected player's version-leaderboard points from
- * their REMAINING results. Games / W-L are left untouched — the matches still happened and the
- * tournament still exists — so re-finalising after fixing the bracket is clean. No-op unless the
+ * Reverse a finalisation: reopen a COMPLETED tournament to ONGOING and drop the placement
+ * results it wrote, so re-finalising after fixing the bracket is clean. Games / W-L and the
+ * GS-derived leaderboard are left untouched — the matches still happened. No-op unless the
  * tournament is currently COMPLETED. Returns whether it was reopened.
  */
 export async function unfinalizeTournament(
@@ -497,36 +405,9 @@ export async function unfinalizeTournament(
   });
   if (!tournament || tournament.status !== 'COMPLETED') return { reopened: false };
 
-  const results = await prisma.tournamentResult.findMany({
-    where: { tournament_id: tournamentId },
-    select: { user_id: true, version_id: true },
-  });
-  const versionId = results.find((r) => r.version_id)?.version_id ?? null;
-  const affectedUserIds = [...new Set(results.map((r) => r.user_id))];
-
   await prisma.$transaction(async (tx) => {
-    // Drop this tournament's placement results.
+    // Drop this tournament's placement results so a re-finalise is clean.
     await tx.tournamentResult.deleteMany({ where: { tournament_id: tournamentId } });
-
-    // Recompute each affected player's version leaderboard points from their REMAINING results.
-    if (versionId) {
-      for (const userId of affectedUserIds) {
-        const remaining = await tx.tournamentResult.findMany({
-          where: { version_id: versionId, user_id: userId },
-          select: { points_earned: true },
-        });
-        if (remaining.length === 0) {
-          // No version results left → the player drops off the version points board entirely.
-          await tx.leaderboardEntry.deleteMany({ where: { user_id: userId, version_id: versionId} });
-        } else {
-          const totalPoints = remaining.reduce((sum, r) => sum + r.points_earned, 0);
-          await tx.leaderboardEntry.updateMany({
-            where: { user_id: userId, version_id: versionId},
-            data: { total_points: totalPoints },
-          });
-        }
-      }
-    }
 
     // Reopen the tournament.
     await tx.tournament.update({ where: { id: tournamentId }, data: { status: 'ONGOING' } });

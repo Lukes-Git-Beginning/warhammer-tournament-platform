@@ -10,6 +10,7 @@ import {
   getAvailabilityNow,
   getQueueCount,
   getQueueStatus,
+  getMyTeams,
   getScheduledMatchups,
   createScheduledMatchup,
   acceptScheduledMatchup,
@@ -195,8 +196,32 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
       prev.includes(bt) ? (prev.length > 1 ? prev.filter((x) => x !== bt) : prev) : [...prev, bt],
     );
 
+  // 1v1 / 2v2 team-size selection.
+  const [competitorFormat, setCompetitorFormat] = useState<'ONE_V_ONE' | 'TWO_V_TWO'>('ONE_V_ONE');
+  const is2v2 = competitorFormat === 'TWO_V_TWO';
+
+  // Eligibility check for 2v2: the user must be captain of an ACTIVE team with 2 members.
+  const { data: teamsData } = useQuery({
+    queryKey: ['my-teams'],
+    queryFn: getMyTeams,
+    enabled: !!me && is2v2,
+    staleTime: 60_000,
+  });
+  const activeTeamAsCaptain = is2v2
+    ? (teamsData?.teams ?? []).find(
+        (t) => t.status === 'ACTIVE' && t.is_captain && t.members.length >= 2,
+      )
+    : null;
+  // Only block when we've actually loaded and confirmed there's no eligible team.
+  const teamCheckLoaded = !is2v2 || teamsData !== undefined;
+  const canQueue2v2 = !is2v2 || !!activeTeamAsCaptain;
+
   const join = useMutation({
-    mutationFn: () => joinQueue({ battleTypes }),
+    mutationFn: () =>
+      joinQueue({
+        battleTypes,
+        ...(is2v2 ? { competitorFormat: 'TWO_V_TWO' } : {}),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['queue-status'] }),
   });
 
@@ -226,6 +251,31 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
           drawn and both players pick their faction blind — you'll receive a Discord DM when your
           match is found.
         </p>
+        {/* Team-size selection — 1v1 (default) or 2v2 (requires captain of an active team). */}
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">Team size</p>
+          <div className="flex gap-2">
+            {(['ONE_V_ONE', 'TWO_V_TWO'] as const).map((fmt) => {
+              const active = competitorFormat === fmt;
+              return (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => setCompetitorFormat(fmt)}
+                  aria-pressed={active}
+                  className={`rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    active
+                      ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+                      : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+                  }`}
+                >
+                  {fmt === 'ONE_V_ONE' ? '1v1' : '2v2'}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Battle-type selection — pick one or more; you'll be matched on a shared type. */}
         <div>
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">Battle types</p>
@@ -250,7 +300,22 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
             })}
           </div>
         </div>
-        <Button size="lg" onClick={() => join.mutate()} disabled={join.isPending}>
+
+        {/* 2v2 eligibility hint — shown while the check is loading or when ineligible. */}
+        {is2v2 && teamCheckLoaded && !canQueue2v2 && (
+          <p className="rounded border border-amber-800/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-400/90">
+            You need to be captain of an active 2-member team to queue for 2v2.{' '}
+            <a href="/teams" className="underline hover:text-amber-300 transition-colors">
+              Manage teams →
+            </a>
+          </p>
+        )}
+
+        <Button
+          size="lg"
+          onClick={() => join.mutate()}
+          disabled={join.isPending || (is2v2 && teamCheckLoaded && !canQueue2v2)}
+        >
           {join.isPending ? 'Joining...' : 'Join Queue'}
         </Button>
         {join.data?.matched && (
@@ -276,7 +341,7 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
             .slice()
             .sort((a, b) => OP_BATTLE_TYPES.findIndex((o) => o.value === a) - OP_BATTLE_TYPES.findIndex((o) => o.value === b))
             .map((bt) => (
-              <StandardRulesetCard key={bt} compact battleType={bt} competitorFormat="ONE_V_ONE" />
+              <StandardRulesetCard key={bt} compact battleType={bt} competitorFormat={competitorFormat} />
             ))}
         </div>
       </div>

@@ -11,8 +11,6 @@ export interface BracketNode {
   winnerId: string | null;
   score: string | null;
   result: MatchResultType | null;
-  player1Points: number | null;
-  player2Points: number | null;
   status:
     | 'PENDING'
     | 'ONGOING'

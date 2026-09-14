@@ -58,7 +58,7 @@ export const resolvers = {
     // -----------------------------------------------------------------------
     faction: async (
       _parent: unknown,
-      args: { id: string; versionId?: string | null },
+      args: { id: string; versionId?: string | null; battleType?: string | null },
       ctx: GqlContext,
     ) => {
       const faction = await ctx.prisma.faction.findUnique({ where: { id: args.id } });
@@ -67,13 +67,15 @@ export const resolvers = {
       const version = await resolveActiveVersion(ctx.prisma, args.versionId);
       if (!version) return null;
 
+      const battleType =
+        args.battleType === 'CONQUEST' || args.battleType === 'SIEGE' ? args.battleType : 'DOMINATION';
+
       const stats = await ctx.prisma.factionStats.findUnique({
-        // TODO(meta): battle-type filter — Domination for now (see routes/factions.ts).
         where: {
           faction_id_version_id_battle_type: {
             faction_id: args.id,
             version_id: version.id,
-            battle_type: 'DOMINATION',
+            battle_type: battleType,
           },
         },
       });
@@ -85,6 +87,7 @@ export const resolvers = {
         where: {
           faction_id: args.id,
           version_id: version.id,
+          battle_type: battleType,
           snapshot_date: { gte: thirtyDaysAgo },
         },
         orderBy: { snapshot_date: 'asc' },

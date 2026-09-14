@@ -84,8 +84,6 @@ async function createMatch(opts: {
   player2_faction_id?: string | null;
   status?: string;
   result?: string | null;
-  player1_points?: number | null;
-  player2_points?: number | null;
   score?: string | null;
   played_at?: Date | null;
   phase?: string | null;
@@ -108,8 +106,6 @@ async function createMatch(opts: {
       player2_faction_id: opts.player2_faction_id ?? null,
       status: (opts.status ?? 'PENDING') as never,
       result: (opts.result ?? null) as never,
-      player1_points: opts.player1_points ?? null,
-      player2_points: opts.player2_points ?? null,
       score: opts.score ?? null,
       played_at: opts.played_at ?? null,
       phase: (opts.phase ?? null) as never,
@@ -137,8 +133,6 @@ describe('GET /api/matches/:id', () => {
       player2_faction_id: FACTION_P2,
       status: 'COMPLETED',
       result: 'PLAYER1_WIN',
-      player1_points: 1.0,
-      player2_points: 0.0,
       score: '20-0',
       played_at: playedAt,
       phase: 'SWISS',
@@ -164,8 +158,6 @@ describe('GET /api/matches/:id', () => {
     expect(body.phase).toBe('SWISS');
     expect(body.bracket_side).toBeNull();
     expect(body.score).toBe('20-0');
-    expect(body.player1_points).toBe(1.0);
-    expect(body.player2_points).toBe(0.0);
     expect(body.played_at).toBe(playedAt.toISOString());
 
     // Enriched player refs
@@ -222,8 +214,6 @@ describe('GET /api/matches/:id', () => {
     expect(body.phase).toBeNull();
     expect(body.bracket_side).toBeNull();
     expect(body.score).toBeNull();
-    expect(body.player1_points).toBeNull();
-    expect(body.player2_points).toBeNull();
     expect(body.played_at).toBeNull();
     expect(body.player1).toBeNull();
     expect(body.player2).toBeNull();

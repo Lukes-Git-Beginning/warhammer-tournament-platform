@@ -105,7 +105,6 @@ export async function cleanupVersion(versionId: string): Promise<void> {
   await prisma.factionStatsSnapshot.deleteMany({ where: { version_id: versionId } });
   await prisma.matchupStats.deleteMany({ where: { version_id: versionId } });
   await prisma.factionStats.deleteMany({ where: { version_id: versionId } });
-  await prisma.leaderboardEntry.deleteMany({ where: { version_id: versionId } });
   await prisma.tournamentResult.deleteMany({ where: { version_id: versionId } });
   // GameVersion itself — cascades remaining relations
   await prisma.gameVersion.deleteMany({ where: { id: versionId } });

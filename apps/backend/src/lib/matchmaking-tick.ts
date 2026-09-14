@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { FastifyInstance } from 'fastify';
 import { createOpenPlayMatch } from './create-open-play-match.js';
+import { resolveCompetitors } from './competitors.js';
 import { notifyAvailabilityPing, notifyMatchFoundWithButtons } from './discord-notify.js';
 import { logQueueActivity } from './queue-activity.js';
 
@@ -51,14 +52,16 @@ export function parseQueuePrefs(raw: string | null | undefined): QueuePrefs {
  * of the same team size whose battle-type selection overlaps. The chosen battle type is the
  * oldest queuer's first preference that the partner also accepts. Pure — unit-testable.
  */
-export function findCompatiblePair(entries: QueueEntry[]): { a: string; b: string; battleType: QueueBattleType } | null {
+export function findCompatiblePair(
+  entries: QueueEntry[],
+): { a: string; b: string; battleType: QueueBattleType; format: QueueCompetitorFormat } | null {
   for (let i = 0; i < entries.length; i++) {
     for (let j = i + 1; j < entries.length; j++) {
       const A = entries[i]!;
       const B = entries[j]!;
       if (A.prefs.format !== B.prefs.format) continue;
       const battleType = A.prefs.battleTypes.find((bt) => B.prefs.battleTypes.includes(bt));
-      if (battleType) return { a: A.id, b: B.id, battleType };
+      if (battleType) return { a: A.id, b: B.id, battleType, format: A.prefs.format };
     }
   }
   return null;
@@ -341,7 +344,7 @@ async function drainQueue(fastify: FastifyInstance): Promise<void> {
     const entries: QueueEntry[] = ids.map((id, i) => ({ id, prefs: parseQueuePrefs(prefsRaw[i]) }));
     const pair = findCompatiblePair(entries);
     if (!pair) break; // no compatible pair right now
-    const { a: p1Id, b: p2Id, battleType } = pair;
+    const { a: p1Id, b: p2Id, battleType, format } = pair;
 
     // Claim both before the (slower) match creation so a parallel drain can't double-book them.
     await redis.lrem(QUEUE_KEY, 1, p1Id);
@@ -350,7 +353,7 @@ async function drainQueue(fastify: FastifyInstance): Promise<void> {
     let matchId: string;
     let mapName: string | null;
     try {
-      ({ matchId, mapName } = await createOpenPlayMatch(prisma, p1Id, p2Id, 'QUEUE', battleType));
+      ({ matchId, mapName } = await createOpenPlayMatch(prisma, p1Id, p2Id, 'QUEUE', battleType, format));
     } catch (err) {
       // Requeue front-first so nobody is dropped, then stop this drain.
       await redis.lpush(QUEUE_KEY, p2Id, p1Id);
@@ -360,7 +363,7 @@ async function drainQueue(fastify: FastifyInstance): Promise<void> {
 
     await redis.hdel(JOINED_AT_KEY, p1Id, p2Id);
     await redis.hdel(QUEUE_PREFS_KEY, p1Id, p2Id);
-    await announceMatch(fastify, matchId, mapName, p1Id, p2Id);
+    await announceMatch(fastify, matchId, mapName, p1Id, p2Id, format);
   }
 }
 
@@ -371,9 +374,44 @@ async function announceMatch(
   mapName: string | null,
   p1Id: string,
   p2Id: string,
+  format: QueueCompetitorFormat,
 ): Promise<void> {
   const prisma = fastify.prisma;
   try {
+    if (format === 'TWO_V_TWO') {
+      // p1Id/p2Id are Team ids: DM each captain the actionable match-found buttons (team vs
+      // team) and log the match for every member. Teammates also see it in-app (my-match).
+      const teams = await resolveCompetitors(prisma, [p1Id, p2Id]);
+      const t1 = teams.get(p1Id);
+      const t2 = teams.get(p2Id);
+      const memberIds = [...(t1?.members ?? []), ...(t2?.members ?? [])].map((m) => m.user_id);
+      const cap1 = t1?.members?.find((m) => m.is_captain);
+      const cap2 = t2?.members?.find((m) => m.is_captain);
+      if (t1 && t2 && cap1 && cap2) {
+        const discordByUser = new Map(
+          (
+            await prisma.user.findMany({
+              where: { id: { in: [cap1.user_id, cap2.user_id] } },
+              select: { id: true, discord_id: true },
+            })
+          ).map((u) => [u.id, u.discord_id]),
+        );
+        const d1 = discordByUser.get(cap1.user_id);
+        const d2 = discordByUser.get(cap2.user_id);
+        if (d1 && d2) {
+          setImmediate(() =>
+            void notifyMatchFoundWithButtons(
+              matchId,
+              { discordId: d1, username: t1.username },
+              { discordId: d2, username: t2.username },
+              mapName,
+            ),
+          );
+        }
+      }
+      await Promise.all(memberIds.map((uid) => logQueueActivity(prisma, 'MATCH', uid, { matchId })));
+      return;
+    }
     const [p1, p2] = await Promise.all([
       prisma.user.findUnique({ where: { id: p1Id }, select: { username: true, discord_id: true } }),
       prisma.user.findUnique({ where: { id: p2Id }, select: { username: true, discord_id: true } }),

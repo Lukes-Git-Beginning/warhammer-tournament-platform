@@ -172,6 +172,7 @@ export async function completeMatch(
       match_number: true,
       player1_faction_id: true,
       player2_faction_id: true,
+      competitor_format: true,
       tournament: { select: { host_id: true, format: true, mode: true, counts_for_leaderboard: true, competitor_format: true } },
     },
   });
@@ -188,7 +189,7 @@ export async function completeMatch(
   // competitor), record a null (system) actor. A real user actor (e.g. the reporting captain
   // from the match-result path) is never equal to a team slot id, so it is preserved.
   const auditActorId =
-    match.tournament?.competitor_format === 'TWO_V_TWO' &&
+    (match.tournament?.competitor_format ?? match.competitor_format) === 'TWO_V_TWO' &&
     (actorId === match.player1_id || actorId === match.player2_id)
       ? null
       : actorId;
@@ -318,30 +319,8 @@ export async function completeMatch(
       }
     }
 
-    // LeaderboardEntry — mirrors resolveMatchResult so GameTile matches count on the leaderboard.
-    // A walkover played no game, so it never touches the leaderboard. 2v2 slots hold team ids,
-    // and LeaderboardEntry.user_id FKs to User — so teams are NOT written to the user board (v1;
-    // team GS stays derive-on-read). Guarding here also prevents an FK violation.
-    if (
-      activeVersion &&
-      !opts.walkover &&
-      (match.tournament?.counts_for_leaderboard ?? true) &&
-      match.tournament?.competitor_format !== 'TWO_V_TWO'
-    ) {
-      const versionId = activeVersion.id;
-      const WIN_PTS = 3, LOSS_PTS = 0;
-      const entries = [
-        match.player1_id ? { userId: match.player1_id, isWinner: winnerId === match.player1_id, points: winnerId === match.player1_id ? WIN_PTS : LOSS_PTS } : null,
-        match.player2_id ? { userId: match.player2_id, isWinner: winnerId === match.player2_id, points: winnerId === match.player2_id ? WIN_PTS : LOSS_PTS } : null,
-      ].filter((e): e is NonNullable<typeof e> => e !== null);
-      for (const e of entries) {
-        await tx.leaderboardEntry.upsert({
-          where: { user_id_version_id: { user_id: e.userId, version_id: versionId } },
-          create: { user_id: e.userId, version_id: versionId, games_played: 1, wins: e.isWinner ? 1 : 0, losses: e.isWinner ? 0 : 1, total_points: e.points },
-          update: { games_played: { increment: 1 }, wins: e.isWinner ? { increment: 1 } : undefined, losses: !e.isWinner ? { increment: 1 } : undefined, total_points: { increment: e.points } },
-        });
-      }
-    }
+    // (Legacy LeaderboardEntry points accrual removed — the leaderboard is now GS-derived
+    // live from match/game facts; no per-win "3 points" are written any more.)
 
     await tx.auditLog.create({
       data: {

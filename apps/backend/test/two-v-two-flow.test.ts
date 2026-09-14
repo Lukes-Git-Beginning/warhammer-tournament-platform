@@ -179,10 +179,6 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     const completed = await prisma.match.findUnique({ where: { id: match.matchId }, select: { status: true, winner_id: true } });
     expect(completed?.status).toBe('COMPLETED');
     expect(completed?.winner_id).toBe(a.teamId);
-
-    // Scoring FK-safety: a team id must NEVER be written into the user-keyed leaderboard.
-    const teamLeaderboard = await prisma.leaderboardEntry.count({ where: { user_id: { in: [a.teamId, b.teamId] } } });
-    expect(teamLeaderboard).toBe(0);
   });
 
   it('lets only the captain report a 2v2 result', async () => {

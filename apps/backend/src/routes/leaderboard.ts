@@ -4,8 +4,10 @@ import { cached, cacheKey } from '../lib/cache.js';
 import { computeVersionLeaderboard } from '../lib/leaderboard-service.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
 import { logistic, skillToBand } from '../lib/rating-model.js';
-import { effectiveTiersOf, SUPPORTER_FLAG_SELECT, NO_TIERS } from '../lib/supporter-service.js';
-import { currentQuarter, currentMonth, loadCompetitionConfig, computeLadderStandings } from '../lib/competition.js';
+import { effectiveTiersOf, SUPPORTER_FLAG_SELECT } from '../lib/supporter-service.js';
+import { currentQuarter, currentMonth, loadCompetitionConfig, computeLadderStandings, rankingsCutoff, qualiGate, parseQuarter, quarterValue, listQuartersSinceLaunch, parseMonth, monthValue, listMonthsSinceLaunch } from '../lib/competition.js';
+import { computeGsBoard, type CompetitorFormatFilter } from '../lib/gs-board.js';
+import type { PrismaClient } from '@rizzotto/db';
 import {
   computeSwissStandings,
   sortSwissStandings,
@@ -94,6 +96,54 @@ const VersionLeaderboardQuerySchema = PaginationSchema.extend({
     .enum(['rating_model', 'winrate'])
     .default('rating_model'),
 });
+
+/** Resolve display info for a sliced GS board: user (1v1) or team + members (2v2). */
+async function resolveBoardDisplay(
+  prisma: PrismaClient,
+  format: CompetitorFormatFilter,
+  competitorIds: string[],
+): Promise<(id: string) => Record<string, unknown> | null> {
+  if (format === 'TWO_V_TWO') {
+    const teams = competitorIds.length
+      ? await prisma.team.findMany({
+          where: { id: { in: competitorIds } },
+          select: {
+            id: true,
+            name: true,
+            members: { select: { user_id: true, user: { select: { username: true, avatar_url: true } } } },
+          },
+        })
+      : [];
+    const byId = new Map(teams.map((t) => [t.id, t]));
+    return (id: string) => {
+      const t = byId.get(id);
+      return t
+        ? {
+            team: {
+              id: t.id,
+              name: t.name,
+              members: t.members.map((m) => ({
+                id: m.user_id,
+                username: m.user.username,
+                avatar_url: m.user.avatar_url,
+              })),
+            },
+          }
+        : null;
+    };
+  }
+  const users = competitorIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: competitorIds } },
+        select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT },
+      })
+    : [];
+  const byId = new Map(users.map((u) => [u.id, u]));
+  return (id: string) => {
+    const u = byId.get(id);
+    return u ? { user: { id: u.id, username: u.username, avatar_url: u.avatar_url, tiers: effectiveTiersOf(u) } } : null;
+  };
+}
 
 const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/leaderboard?versionId=...&page=1&pageSize=50
@@ -204,60 +254,6 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         }
       },
       { ttlSeconds: 60 },
-    );
-  });
-
-  // GET /api/leaderboard/all-time?page=1&pageSize=50
-  fastify.get('/api/leaderboard/all-time', async (request, reply) => {
-    const parsed = PaginationSchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
-    }
-    const { page, pageSize } = parsed.data;
-
-    return cached(
-      fastify.redis,
-      cacheKey('leaderboard:all-time', { page, pageSize }),
-      async () => {
-        // Aggregate per user across all versions
-        const grouped = await fastify.prisma.leaderboardEntry.groupBy({
-          by: ['user_id'],
-          _sum: { total_points: true, games_played: true, wins: true, losses: true },
-          _count: { version_id: true },
-          orderBy: { _sum: { total_points: 'desc' } },
-        });
-
-        const total = grouped.length;
-        const pageSlice = grouped.slice((page - 1) * pageSize, page * pageSize);
-
-        const userIds = pageSlice.map((g) => g.user_id);
-        const users = await fastify.prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT },
-        });
-        const userMap = new Map(users.map((u) => [u.id, u]));
-
-        return {
-          entries: pageSlice.map((g, idx) => {
-            const user = userMap.get(g.user_id);
-            return {
-              rank: (page - 1) * pageSize + idx + 1,
-              user: user
-                ? { id: user.id, username: user.username, avatar_url: user.avatar_url, tiers: effectiveTiersOf(user) }
-                : { id: g.user_id, username: 'Unknown', avatar_url: null, tiers: NO_TIERS },
-              total_points: g._sum.total_points ?? 0,
-              games_played: g._sum.games_played ?? 0,
-              wins: g._sum.wins ?? 0,
-              losses: g._sum.losses ?? 0,
-              versions_participated: g._count.version_id,
-            };
-          }),
-          total,
-          page,
-          pageSize,
-        };
-      },
-      { ttlSeconds: 120 },
     );
   });
 
@@ -502,6 +498,62 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
   // Competition tracks (design doc §6/§7).
   // -------------------------------------------------------------------------
 
+  // GET /api/leaderboard/rankings — the timeless GS board (merges the old Skill + Hall of Fame),
+  // sorted purely by GS. Self-scaling inclusion: a competitor is listed with >= cutoff decisive
+  // games, cutoff = min(permanence, days since launch); reaching `permanence` makes them permanent
+  // (HoF badge), immune to the rising cutoff. Filters: battleType (Overall / Domination / Conquest
+  // / Siege) × competitorFormat (1v1 players | 2v2 teams — the latter folds in the old Teams board).
+  fastify.get('/api/leaderboard/rankings', async (request, reply) => {
+    const parsed = z
+      .object({
+        page: z.coerce.number().int().min(1).default(1),
+        pageSize: z.coerce.number().int().min(1).max(1000).default(100),
+        battleType: z.enum(['OVERALL', 'DOMINATION', 'CONQUEST', 'SIEGE']).default('OVERALL'),
+        competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).default('ONE_V_ONE'),
+      })
+      .safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    const { page, pageSize, battleType, competitorFormat } = parsed.data;
+    const cfg = await loadCompetitionConfig(fastify.prisma);
+    const permanence = cfg.hallOfFameMinGames;
+    const cutoff = rankingsCutoff(cfg);
+    return cached(
+      fastify.redis,
+      cacheKey('leaderboard:rankings', { page, pageSize, battleType, competitorFormat, cutoff, permanence }),
+      async () => {
+        const board = await computeGsBoard(fastify.prisma, fastify.redis, {
+          versionId: null,
+          battleType,
+          competitorFormat,
+        });
+        // 1v1: self-scaling cutoff. 2v2: show all active teams (folds in the old Teams board).
+        const eligible = competitorFormat === 'ONE_V_ONE' ? board.filter((e) => e.gamesCount >= cutoff) : board;
+        const total = eligible.length;
+        const slice = eligible.slice((page - 1) * pageSize, page * pageSize);
+        const display = await resolveBoardDisplay(fastify.prisma, competitorFormat, slice.map((e) => e.competitorId));
+        const entries = slice.flatMap((e, i) => {
+          const d = display(e.competitorId);
+          if (!d) return [];
+          return [
+            {
+              rank: (page - 1) * pageSize + i + 1,
+              ...d,
+              generalSkill: e.gs,
+              stdError: e.stdError,
+              band: e.band,
+              winChance: logistic(e.gs),
+              gamesCount: e.gamesCount,
+              permanent: competitorFormat === 'ONE_V_ONE' && e.gamesCount >= permanence,
+              provisional: e.provisional,
+            },
+          ];
+        });
+        return { entries, total, page, pageSize, battleType, competitorFormat, permanenceThreshold: permanence, cutoff };
+      },
+      { ttlSeconds: 3600 },
+    );
+  });
+
   // GET /api/leaderboard/hall-of-fame — timeless GS; players with >= threshold games
   // sort ABOVE everyone else (two-class), ranked by their stable lifetime GS. Listed forever.
   fastify.get('/api/leaderboard/hall-of-fame', async (request, reply) => {
@@ -553,53 +605,56 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
     );
   });
 
-  // GET /api/leaderboard/quarterly — the quarterly-quali GS (current form): a rating fit
-  // windowed to THIS quarter's games (tournament + ladder), with a min-games gate. Top-N → the
-  // quarterly major final. Separate from the timeless GS.
+  // GET /api/leaderboard/quarterly — the Quarterly Qualifier: a GS fit windowed to THIS quarter's
+  // games (tournament + ladder), with a STRICT self-scaling gate = min(cap, days into quarter).
+  // Top-N seeds the Quarterly Final. Same battleType × competitorFormat filters as Rankings.
   fastify.get('/api/leaderboard/quarterly', async (request, reply) => {
     const parsed = z
-      .object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(1000).default(100) })
+      .object({
+        page: z.coerce.number().int().min(1).default(1),
+        pageSize: z.coerce.number().int().min(1).max(1000).default(100),
+        battleType: z.enum(['OVERALL', 'DOMINATION', 'CONQUEST', 'SIEGE']).default('OVERALL'),
+        competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).default('ONE_V_ONE'),
+        quarter: z.string().optional(), // "YYYY-Qn"; default = current quarter
+      })
       .safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
-    const { page, pageSize } = parsed.data;
+    const { page, pageSize, battleType, competitorFormat, quarter } = parsed.data;
+    const q = quarter ? parseQuarter(quarter) : currentQuarter();
+    if (!q) return reply.code(400).send({ error: 'BadRequest', message: 'Invalid quarter', statusCode: 400 });
     const cfg = await loadCompetitionConfig(fastify.prisma);
-    const q = currentQuarter();
+    const gate = qualiGate(cfg, q);
+    const quarters = listQuartersSinceLaunch().map((p) => ({ value: p.value, label: p.label }));
     return cached(
       fastify.redis,
-      cacheKey('leaderboard:quarterly', { page, pageSize, from: q.from.toISOString(), min: cfg.qualiMinGames }),
+      cacheKey('leaderboard:quarterly', { page, pageSize, battleType, competitorFormat, quarter: quarterValue(q), gate }),
       async () => {
-        const model = await getRatingModel(fastify.prisma, fastify.redis, {
+        const board = await computeGsBoard(fastify.prisma, fastify.redis, {
           versionId: null,
           window: { from: q.from, to: q.to },
-          config: { hierarchical: true },
+          battleType,
+          competitorFormat,
         });
-        const eligible = model.generalSkills
-          .filter((e) => e.gamesCount >= cfg.qualiMinGames)
-          .sort((a, b) => b.generalSkill - a.generalSkill || b.gamesCount - a.gamesCount);
+        const eligible = board.filter((e) => e.gamesCount >= gate);
         const total = eligible.length;
         const slice = eligible.slice((page - 1) * pageSize, page * pageSize);
-        const users = slice.length
-          ? await fastify.prisma.user.findMany({
-              where: { id: { in: slice.map((e) => e.playerId) } },
-              select: { id: true, username: true, avatar_url: true, ...SUPPORTER_FLAG_SELECT },
-            })
-          : [];
-        const byId = new Map(users.map((u) => [u.id, u]));
+        const display = await resolveBoardDisplay(fastify.prisma, competitorFormat, slice.map((e) => e.competitorId));
         const entries = slice.flatMap((e, i) => {
-          const u = byId.get(e.playerId);
-          if (!u) return [];
+          const d = display(e.competitorId);
+          if (!d) return [];
           return [
             {
               rank: (page - 1) * pageSize + i + 1,
-              user: { id: u.id, username: u.username, avatar_url: u.avatar_url, tiers: effectiveTiersOf(u) },
-              generalSkill: e.generalSkill,
+              ...d,
+              generalSkill: e.gs,
               stdError: e.stdError,
-              band: skillToBand(e.generalSkill),
+              band: e.band,
               gamesCount: e.gamesCount,
+              provisional: e.provisional,
             },
           ];
         });
-        return { entries, total, page, pageSize, quarter: q.label, minGames: cfg.qualiMinGames };
+        return { entries, total, page, pageSize, quarter: q.label, quarterValue: quarterValue(q), quarters, battleType, competitorFormat, gate, capGames: cfg.qualiMinGames };
       },
       { ttlSeconds: 600 },
     );
@@ -609,12 +664,18 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
   // reset each month.
   fastify.get('/api/leaderboard/ladder', async (request, reply) => {
     const parsed = z
-      .object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(1000).default(100) })
+      .object({
+        page: z.coerce.number().int().min(1).default(1),
+        pageSize: z.coerce.number().int().min(1).max(1000).default(100),
+        month: z.string().optional(), // "YYYY-MM"; default = current month
+      })
       .safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
-    const { page, pageSize } = parsed.data;
+    const { page, pageSize, month: monthParam } = parsed.data;
+    const month = monthParam ? parseMonth(monthParam) : currentMonth();
+    if (!month) return reply.code(400).send({ error: 'BadRequest', message: 'Invalid month', statusCode: 400 });
     const cfg = await loadCompetitionConfig(fastify.prisma);
-    const month = currentMonth();
+    const months = listMonthsSinceLaunch().map((p) => ({ value: p.value, label: p.label }));
     return cached(
       fastify.redis,
       cacheKey('leaderboard:ladder', { page, pageSize, from: month.from.toISOString() }),
@@ -644,7 +705,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
             },
           ];
         });
-        return { entries, total, page, pageSize, month: month.label };
+        return { entries, total, page, pageSize, month: month.label, monthValue: monthValue(month), months };
       },
       { ttlSeconds: 300 },
     );

@@ -11,13 +11,14 @@ import {
 } from '../lib/matchmaking-tick.js';
 
 // Queue join preferences: which battle types the player will accept (multi-select) + team size.
-// 2v2 team queueing is a separate path (captain queues the team) — not accepted here yet.
+// For 2v2 the CAPTAIN queues on behalf of their ACTIVE team (team-as-actor, committed duo).
 const QueueJoinSchema = z.object({
   battleTypes: z.array(z.enum(ALL_BATTLE_TYPES)).min(1).optional(),
   competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(),
 });
 import { getQueueTimeoutRemaining, recordQueueLeave } from '../lib/queue-penalty.js';
 import { cancelOpenPlayMatch } from '../lib/cancel-open-play-match.js';
+import { isCompetitorMember } from '../lib/competitors.js';
 import { notifyQueueTimeout, notifyQueueWarning, notifyQueueAbuseToStaff } from '../lib/discord-notify.js';
 
 const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
@@ -32,18 +33,32 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       if (!parsedPrefs.success) {
         return reply.code(400).send({ error: 'BadRequest', message: parsedPrefs.error.message, statusCode: 400 });
       }
-      // 2v2 queueing (captain queues the team) is a separate path — reject it here for now.
-      if (parsedPrefs.data.competitorFormat === 'TWO_V_TWO') {
-        return reply.code(400).send({ error: 'BadRequest', message: '2v2 queue is not available yet', statusCode: 400 });
-      }
-      const prefs = {
-        format: 'ONE_V_ONE' as const,
-        battleTypes: parsedPrefs.data.battleTypes ?? [...ALL_BATTLE_TYPES],
-      };
-
       if (!fastify.redis) {
         return reply.code(503).send({ error: 'ServiceUnavailable', message: 'Queue service unavailable', statusCode: 503 });
       }
+
+      const format: 'ONE_V_ONE' | 'TWO_V_TWO' = parsedPrefs.data.competitorFormat ?? 'ONE_V_ONE';
+
+      // The queued id is the ACTOR: the user for 1v1, the captain's ACTIVE team for 2v2
+      // (team-as-actor — the captain queues the committed duo).
+      let queueId = userId;
+      if (format === 'TWO_V_TWO') {
+        const team = await fastify.prisma.team.findFirst({
+          where: { captain_id: userId, status: 'ACTIVE' },
+          select: { id: true, members: { select: { accepted_at: true } } },
+        });
+        if (!team) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'You must be the captain of an active team to queue for 2v2', statusCode: 400 });
+        }
+        if (team.members.filter((m) => m.accepted_at !== null).length < 2) {
+          return reply.code(400).send({ error: 'BadRequest', message: 'Your team needs two accepted members to queue', statusCode: 400 });
+        }
+        queueId = team.id;
+      }
+      const prefs = {
+        format,
+        battleTypes: parsedPrefs.data.battleTypes ?? [...ALL_BATTLE_TYPES],
+      };
 
       // #14: reject a re-join while the queue-abuse cooldown is still running.
       const cooldownSec = await getQueueTimeoutRemaining(fastify.redis, userId);
@@ -55,7 +70,7 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const pos = await fastify.redis.lpos(QUEUE_KEY, userId);
+      const pos = await fastify.redis.lpos(QUEUE_KEY, queueId);
       if (pos !== null) {
         return reply.code(409).send({ error: 'Conflict', message: 'Already in queue', statusCode: 409 });
       }
@@ -65,7 +80,7 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
           type: 'OPEN_PLAY',
           status: { in: ['ONGOING', 'AWAITING_CONFIRMATION'] },
           deleted_at: null,
-          OR: [{ player1_id: userId }, { player2_id: userId }],
+          OR: [{ player1_id: queueId }, { player2_id: queueId }],
         },
         select: { id: true },
       });
@@ -77,27 +92,27 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       // matchmaking tick so an instant FIFO match — or a fresh DM wave + hold —
       // happens before we reply. If the tick paired this user off, report it.
       const joined = (await fastify.redis.eval(
-        JOIN_SCRIPT, 2, QUEUE_KEY, JOINED_AT_KEY, userId, String(Date.now()),
+        JOIN_SCRIPT, 2, QUEUE_KEY, JOINED_AT_KEY, queueId, String(Date.now()),
       )) as number;
       if (joined !== 1) {
         return reply.code(409).send({ error: 'Conflict', message: 'Already in queue', statusCode: 409 });
       }
 
-      // Record the player's battle-type / team-size selection for preference-aware matching.
-      await fastify.redis.hset(QUEUE_PREFS_KEY, userId, JSON.stringify(prefs));
+      // Record the actor's battle-type / team-size selection for preference-aware matching.
+      await fastify.redis.hset(QUEUE_PREFS_KEY, queueId, JSON.stringify(prefs));
 
       await logQueueActivity(fastify.prisma, 'JOIN', userId);
       await runMatchmakingTick(fastify);
 
       // The tick removes matched players from the queue — if we're gone, we matched.
-      const stillQueued = await fastify.redis.lpos(QUEUE_KEY, userId);
+      const stillQueued = await fastify.redis.lpos(QUEUE_KEY, queueId);
       if (stillQueued === null) {
         const match = await fastify.prisma.match.findFirst({
           where: {
             type: 'OPEN_PLAY',
             status: 'ONGOING',
             deleted_at: null,
-            OR: [{ player1_id: userId }, { player2_id: userId }],
+            OR: [{ player1_id: queueId }, { player2_id: queueId }],
           },
           select: { id: true },
           orderBy: { created_at: 'desc' },
@@ -116,12 +131,25 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user.sub;
+      // The queued id is the user (1v1) or the captain's ACTIVE team (2v2) — clear both.
+      const leaveTeam = fastify.redis
+        ? await fastify.prisma.team.findFirst({ where: { captain_id: userId, status: 'ACTIVE' }, select: { id: true } })
+        : null;
+      const candidates = leaveTeam ? [userId, leaveTeam.id] : [userId];
       // Read the join timestamp before clearing it, to measure the stint (#14).
-      const joinedAtRaw = fastify.redis ? await fastify.redis.hget(JOINED_AT_KEY, userId) : null;
-      const removed = fastify.redis ? await fastify.redis.lrem(QUEUE_KEY, 0, userId) : 0;
+      let joinedAtRaw: string | null = null;
+      let removed = 0;
       if (fastify.redis) {
-        await fastify.redis.hdel(JOINED_AT_KEY, userId);
-        await fastify.redis.hdel(QUEUE_PREFS_KEY, userId);
+        for (const id of candidates) {
+          const ja = await fastify.redis.hget(JOINED_AT_KEY, id);
+          const r = await fastify.redis.lrem(QUEUE_KEY, 0, id);
+          if (r > 0) {
+            removed += r;
+            joinedAtRaw = ja;
+          }
+          await fastify.redis.hdel(JOINED_AT_KEY, id);
+          await fastify.redis.hdel(QUEUE_PREFS_KEY, id);
+        }
       }
       if (removed > 0) {
         await logQueueActivity(fastify.prisma, 'LEAVE', userId);
@@ -163,10 +191,18 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!fastify.redis) return reply.code(200).send({ inQueue: false, position: null, total: 0 });
 
-      const [pos, total] = await Promise.all([
-        fastify.redis.lpos(QUEUE_KEY, userId),
-        fastify.redis.llen(QUEUE_KEY),
-      ]);
+      // Queued id = the user (1v1) or the captain's ACTIVE team (2v2) — check both.
+      const statusTeam = await fastify.prisma.team.findFirst({ where: { captain_id: userId, status: 'ACTIVE' }, select: { id: true } });
+      const candidates = statusTeam ? [userId, statusTeam.id] : [userId];
+      const total = await fastify.redis.llen(QUEUE_KEY);
+      let pos: number | null = null;
+      for (const id of candidates) {
+        const p = await fastify.redis.lpos(QUEUE_KEY, id);
+        if (p !== null) {
+          pos = p;
+          break;
+        }
+      }
       if (pos === null) return reply.code(200).send({ inQueue: false, position: null, total });
       return reply.code(200).send({ inQueue: true, position: pos + 1, total });
     },
@@ -204,12 +240,13 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
 
       const match = await fastify.prisma.match.findFirst({
         where: { id, type: 'OPEN_PLAY', status: { in: ['ONGOING', 'AWAITING_CONFIRMATION'] }, deleted_at: null },
-        select: { id: true, player1_id: true, player2_id: true },
+        select: { id: true, player1_id: true, player2_id: true, competitor_format: true },
       });
       if (!match) {
         return reply.code(404).send({ error: 'NotFound', message: 'Active Open Play match not found', statusCode: 404 });
       }
-      const isPlayer = match.player1_id === userId || match.player2_id === userId;
+      // 2v2: any member of either team may cancel; 1v1: identity against the slot.
+      const isPlayer = await isCompetitorMember(fastify.prisma, userId, match, match.competitor_format === 'TWO_V_TWO');
       const isAdmin = request.user.role === 'ADMIN' || request.user.role === 'MODERATOR';
       if (!isPlayer && !isAdmin) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Not your match', statusCode: 403 });
@@ -227,12 +264,18 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user.sub;
+      // A 2v2 member's active match is keyed by their TEAM id — include member teams.
+      const memberTeams = await fastify.prisma.teamMember.findMany({
+        where: { user_id: userId, team: { status: 'ACTIVE' } },
+        select: { team_id: true },
+      });
+      const ids = [userId, ...memberTeams.map((m) => m.team_id)];
       const match = await fastify.prisma.match.findFirst({
         where: {
           type: 'OPEN_PLAY',
           status: 'ONGOING',
           deleted_at: null,
-          OR: [{ player1_id: userId }, { player2_id: userId }],
+          OR: [{ player1_id: { in: ids } }, { player2_id: { in: ids } }],
         },
         select: { id: true },
         orderBy: { created_at: 'desc' },

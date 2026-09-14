@@ -96,6 +96,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           status: true,
           player1_id: true,
           player2_id: true,
+          competitor_format: true,
           tournament: { select: { host_id: true, counts_for_leaderboard: true, competitor_format: true } },
         },
       });
@@ -121,7 +122,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const isModOrAdmin = user.role === 'MODERATOR' || user.role === 'ADMIN';
       // Competitor slots are opaque: 1v1 → the user themselves; 2v2 → the team's captain
       // acts for the team. A wrong check here lets a non-captain report team results.
-      const isTeam = isTeamFormat(match.tournament?.competitor_format);
+      const isTeam = isTeamFormat(match.tournament?.competitor_format ?? match.competitor_format);
       const captains = isTeam ? await captainMap(fastify.prisma, [match.player1_id, match.player2_id]) : undefined;
       const actsForSlot = (slotId: string | null): boolean => {
         if (!slotId) return false;
@@ -377,8 +378,6 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         scheduled_time: true,
         played_at: true,
         score: true,
-        player1_points: true,
-        player2_points: true,
         counts_for_leaderboard: true,
         tournament: { select: { id: true, slug: true } },
         player1_faction: { select: { id: true, name: true, icon_url: true } },
@@ -438,8 +437,6 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       scheduled_time: match.scheduled_time?.toISOString() ?? null,
       played_at: match.played_at?.toISOString() ?? null,
       score: match.score ?? null,
-      player1_points: match.player1_points ?? null,
-      player2_points: match.player2_points ?? null,
       counts_for_leaderboard: match.counts_for_leaderboard,
       // Raw ID fields — backwards compatible
       player1_id: match.player1_id,
@@ -571,7 +568,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         // Clear withdrawn_player_id too: a restored match is being replayed, so a lingering
         // "opponent withdrew" walkover marker must not survive (it otherwise blocks the picker
         // — e.g. after a withdrawn player was swapped out for a replacement).
-        data: { status: 'PENDING', winner_id: null, result: null, score: null, player1_points: null, player2_points: null, played_at: null, withdrawn_player_id: null },
+        data: { status: 'PENDING', winner_id: null, result: null, score: null, played_at: null, withdrawn_player_id: null },
       });
       if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_restored', actor: 'host', actorId: userId, payload: { matchId } }); }
       return reply.code(200).send({ matchId, status: 'PENDING' });
@@ -596,7 +593,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       }
       await fastify.prisma.match.update({
         where: { id: matchId },
-        data: { status: 'CANCELLED', winner_id: null, result: null, score: null, player1_points: null, player2_points: null, played_at: null },
+        data: { status: 'CANCELLED', winner_id: null, result: null, score: null, played_at: null },
       });
       // A cancelled match's games count for nothing statistically.
       await cascadeGameEligibility(fastify, matchId, false);
@@ -669,8 +666,6 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
             winner_id: match.player2_id ? null : match.winner_id,
             result: null,
             score: null,
-            player1_points: null,
-            player2_points: null,
             player1_faction_id: null,
             player2_faction_id: null,
             played_at: null,

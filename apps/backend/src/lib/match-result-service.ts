@@ -30,21 +30,9 @@ type Io =
   | Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>
   | undefined;
 
-// Default 3/1/0 scoring: PLAYER1_WIN → p1 gets 3, DRAW → both 1, DOUBLE_LOSS → both 0, PLAYER2_WIN → p2 gets 3
-const DEFAULT_POINTS: Record<MatchResultType, { player1: number; player2: number }> = {
-  PLAYER1_WIN: { player1: 3, player2: 0 },
-  PLAYER2_WIN: { player1: 0, player2: 3 },
-  DRAW: { player1: 1, player2: 1 },
-  DOUBLE_LOSS: { player1: 0, player2: 0 },
-};
-
 export interface ResolveMatchResultOpts {
   /** If true, record action as 'result_overridden' in audit log */
   override?: boolean;
-  /** Points to award player1 — if omitted, uses DEFAULT_POINTS */
-  player1_points?: number | null;
-  /** Points to award player2 — if omitted, uses DEFAULT_POINTS */
-  player2_points?: number | null;
   /** Actor user id for audit log */
   actorId?: string;
   /** Reason text stored in audit log (for overrides) */
@@ -134,11 +122,6 @@ export async function resolveMatchResult(
   }
   // DRAW and DOUBLE_LOSS → winnerId stays null
 
-  // Points
-  const defaultPts = DEFAULT_POINTS[result];
-  const p1Points = opts.player1_points ?? defaultPts.player1;
-  const p2Points = opts.player2_points ?? defaultPts.player2;
-
   // Active version — tags the match (for the dynamic leaderboard), gates the
   // LeaderboardEntry update, and drives the post-transaction stats recompute.
   const activeVersion = await prisma.gameVersion.findFirst({
@@ -157,8 +140,6 @@ export async function resolveMatchResult(
         status: 'COMPLETED',
         result,
         winner_id: winnerId,
-        player1_points: p1Points,
-        player2_points: p2Points,
         version_id: activeVersion?.id ?? null,
         played_at: new Date(),
         ...(p1FactionId ? { player1_faction_id: p1FactionId } : {}),
@@ -266,62 +247,8 @@ export async function resolveMatchResult(
       }
     }
 
-    // 3. LeaderboardEntry updates (only when the tournament counts for the leaderboard).
-    // Skip 2v2: slots hold team ids and LeaderboardEntry.user_id FKs to User — teams are
-    // not written to the user board in v1 (team GS is derive-on-read); avoids an FK violation.
-    if ((match.tournament?.counts_for_leaderboard ?? true) && match.tournament?.competitor_format !== 'TWO_V_TWO') {
-      if (activeVersion) {
-        const versionId = activeVersion.id;
-        const players: Array<{
-          userId: string;
-          isWinner: boolean;
-          isDraw: boolean;
-          points: number;
-        }> = [];
-
-        if (match.player1_id) {
-          players.push({
-            userId: match.player1_id,
-            isWinner: winnerId === match.player1_id,
-            isDraw: result === 'DRAW',
-            points: p1Points,
-          });
-        }
-        if (match.player2_id) {
-          players.push({
-            userId: match.player2_id,
-            isWinner: winnerId === match.player2_id,
-            isDraw: result === 'DRAW',
-            points: p2Points,
-          });
-        }
-
-        for (const p of players) {
-          await tx.leaderboardEntry.upsert({
-            where: {
-              user_id_version_id: {
-                user_id: p.userId,
-                version_id: versionId,
-              },
-            },
-            create: {
-              user_id: p.userId,
-              version_id: versionId,
-              games_played: 1,
-              wins: p.isWinner ? 1 : 0,
-              losses: !p.isWinner && !p.isDraw ? 1 : 0,
-              total_points: p.points,
-            },
-            update: {
-              games_played: { increment: 1 },
-              wins: p.isWinner ? { increment: 1 } : undefined,
-              losses: !p.isWinner && !p.isDraw ? { increment: 1 } : undefined,
-              total_points: { increment: p.points },
-            },
-          });
-        }
-      }
-    }
+    // (Legacy LeaderboardEntry points accrual removed — the leaderboard is now GS-derived
+    // live from match/game facts; no per-win "3 points" are written any more.)
 
     // 4. Game-level records — the statistical unit (the match is just a container).
     //    FactionStats/MatchupStats are rebuilt from these rows by recomputeFactionStats()
@@ -396,8 +323,6 @@ export async function resolveMatchResult(
         new_value: {
           result,
           winnerId,
-          player1_points: p1Points,
-          player2_points: p2Points,
           ...(reason ? { reason } : {}),
         },
       },

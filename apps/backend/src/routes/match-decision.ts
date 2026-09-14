@@ -435,6 +435,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           player1_id: true,
           player2_id: true,
           tournament_id: true,
+          competitor_format: true,
           tournament: {
             select: {
               mode: true,
@@ -501,7 +502,9 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(200).send({
-        ...serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? 'BPT', match.player1_id, factionMatrix, match.tournament == null),
+        // Open-Play 2v2 has no tournament → derive the 2v2 blind-pick mode from the match so the
+        // client (is2v2 = tournamentMode === 'BPT_2V2') shows the two-faction pick, not 1v1.
+        ...serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? (match.competitor_format === 'TWO_V_TWO' ? 'BPT_2V2' : 'BPT'), match.player1_id, factionMatrix, match.tournament == null),
         restrictedFactions: match.tournament?.restricted_factions.map((r) => r.faction_id) ?? [],
         factionAllowlist: match.tournament?.faction_allowlist.map((r) => r.faction_id) ?? [],
         freePick,
@@ -533,6 +536,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           round: true,
           phase: true,
           bracket_side: true,
+          competitor_format: true,
           tournament: {
             select: {
               id: true,
@@ -561,7 +565,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       // Authorization — only the two match participants or staff may start a decision flow
       // (prevents a third party triggering the coin flip / map draw). 2v2 → the team captain.
       const actorId = request.user.sub;
-      const { isParticipant } = await resolveActorFlags(fastify.prisma, actorId, match, isTeamFormat(match.tournament?.competitor_format));
+      const { isParticipant } = await resolveActorFlags(fastify.prisma, actorId, match, isTeamFormat(match.tournament?.competitor_format ?? match.competitor_format));
       const isStaff =
         request.user.role === 'HOST' ||
         request.user.role === 'MODERATOR' ||
@@ -966,6 +970,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           player1_id: true,
           player2_id: true,
+          competitor_format: true,
           games: {
             where: { map_decision: { isNot: null }, status: { not: 'COMPLETED' } },
             orderBy: { game_number: 'desc' },
@@ -986,7 +991,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Authorization — only participants or staff may confirm the decision state (2v2 → captain).
       const actorId = request.user.sub;
-      const { isParticipant } = await resolveActorFlags(fastify.prisma, actorId, match, isTeamFormat(match.tournament?.competitor_format));
+      const { isParticipant } = await resolveActorFlags(fastify.prisma, actorId, match, isTeamFormat(match.tournament?.competitor_format ?? match.competitor_format));
       const isStaff =
         request.user.role === 'HOST' ||
         request.user.role === 'MODERATOR' ||
@@ -1049,6 +1054,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           player1_id: true,
           player2_id: true,
+          competitor_format: true,
           games: {
             where: { map_decision: { isNot: null }, status: { not: 'COMPLETED' } },
             orderBy: { game_number: 'desc' },
@@ -1137,7 +1143,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Competitor-format-aware: 2v2 (BPT_2V2) → the CAPTAIN acts for the team and locks BOTH
       // members' factions in one action (captain + teammate). 1v1 → the player themselves.
-      const isTeam = isTeamFormat(match.tournament?.competitor_format);
+      const isTeam = isTeamFormat(match.tournament?.competitor_format ?? match.competitor_format);
       const { isPlayer1, isPlayer2, isParticipant } = await resolveActorFlags(fastify.prisma, userId, match, isTeam);
 
       if (!isParticipant) {

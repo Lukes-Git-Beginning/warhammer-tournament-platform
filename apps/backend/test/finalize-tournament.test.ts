@@ -9,10 +9,6 @@ import {
   computeDoubleElimPlacements,
   finalizeTournament,
 } from '../src/lib/finalize-tournament.js';
-import {
-  getSizeMultiplier,
-  calculateTournamentPoints,
-} from '../src/lib/tournament-utils.js';
 
 // ---------------------------------------------------------------------------
 // placementForRound
@@ -45,40 +41,6 @@ describe('placementForRound', () => {
 
   it('totalRounds=4: round 1 loser → 9', () => {
     expect(placementForRound(1, 4)).toBe(9);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// getSizeMultiplier
-// ---------------------------------------------------------------------------
-
-describe('getSizeMultiplier', () => {
-  it('8 → 0.75', () => expect(getSizeMultiplier(8)).toBe(0.75));
-  it('16 → 0.75', () => expect(getSizeMultiplier(16)).toBe(0.75));
-  it('17 → 1.0', () => expect(getSizeMultiplier(17)).toBe(1.0));
-  it('33 → 1.25', () => expect(getSizeMultiplier(33)).toBe(1.25));
-  it('65 → 1.5', () => expect(getSizeMultiplier(65)).toBe(1.5));
-  it('7 → 0.5', () => expect(getSizeMultiplier(7)).toBe(0.5));
-});
-
-// ---------------------------------------------------------------------------
-// calculateTournamentPoints
-// ---------------------------------------------------------------------------
-
-describe('calculateTournamentPoints', () => {
-  it('placement=1, playerCount=8, isMajor=false → 75', () => {
-    // base=100, mult=0.75 → 75
-    expect(calculateTournamentPoints({ placement: 1, playerCount: 8, isMajor: false })).toBe(75);
-  });
-
-  it('placement=1, playerCount=17, isMajor=true → 150', () => {
-    // base=100, mult=1.0*1.5=1.5 → 150
-    expect(calculateTournamentPoints({ placement: 1, playerCount: 17, isMajor: true })).toBe(150);
-  });
-
-  it('placement=5, playerCount=32, isMajor=false → 20', () => {
-    // base=20 (placement 5 <= 8), mult=1.0 (32 >= 17, < 33) → 20
-    expect(calculateTournamentPoints({ placement: 5, playerCount: 32, isMajor: false })).toBe(20);
   });
 });
 
@@ -308,7 +270,6 @@ afterEach(async () => {
   await prisma.match.deleteMany({ where: { tournament_id: ET } });
   await prisma.tournamentParticipant.deleteMany({ where: { tournament_id: ET } });
   await prisma.tournament.deleteMany({ where: { id: ET } });
-  await prisma.leaderboardEntry.deleteMany({ where: { version_id: ES } });
   await prisma.gameVersion.deleteMany({ where: { id: ES } });
   await prisma.user.deleteMany({ where: { id: { in: [EU1, EU2, EACTOR] } } });
   await prisma.gameVersion.updateMany({ where: { is_active: true }, data: { is_active: false } });

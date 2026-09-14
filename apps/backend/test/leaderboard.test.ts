@@ -125,14 +125,6 @@ async function completedMatch(
 
 async function seedBase() {
   TestVersion = await createTestVersion({ is_active: true });
-
-  await prisma.leaderboardEntry.createMany({
-    data: [
-      { user_id: testUser1.id, version_id: TestVersion.id, total_points: 100, games_played: 10, wins: 8, losses: 2 },
-      { user_id: testUser2.id, version_id: TestVersion.id, total_points: 80, games_played: 8, wins: 6, losses: 2 },
-      { user_id: testUser3.id, version_id: TestVersion.id, total_points: 60, games_played: 6, wins: 4, losses: 2 },
-    ],
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +136,7 @@ describe('GET /api/leaderboard', () => {
     await seedBase();
 
     // winrate mode uses the dynamic MatchGame source (same as rating_model).
-    // seedBase() only seeds LeaderboardEntry rows (no MatchGame records),
+    // seedBase() seeds only a version (no MatchGame records),
     // so the dynamic computation returns 0 qualifying entries.
     const res = await app.inject({
       method: 'GET',
@@ -188,34 +180,6 @@ describe('GET /api/leaderboard', () => {
     const body = res.json<{ entries: unknown[]; total: number; page: number }>();
     expect(body.page).toBe(2);
     expect(Array.isArray(body.entries)).toBe(true);
-  });
-});
-
-describe('GET /api/leaderboard/all-time', () => {
-  it('aggregates entries across versions and returns correct totals', async () => {
-    await seedBase();
-
-    const res = await app.inject({ method: 'GET', url: '/api/leaderboard/all-time' });
-    expect(res.statusCode).toBe(200);
-
-    const body = res.json<{
-      entries: Array<{
-        rank: number;
-        user: { username: string };
-        total_points: number;
-        versions_participated: number;
-      }>;
-      total: number;
-    }>();
-
-    // At least 3 entries from our test version (may include entries from other versions in test DB)
-    expect(body.total).toBeGreaterThanOrEqual(3);
-
-    // Alpha has most points in our seeded data — find her in the response
-    const alphaEntry = body.entries.find((e) => e.user.username === 'Alpha');
-    expect(alphaEntry).toBeDefined();
-    expect(alphaEntry!.total_points).toBe(100);
-    expect(alphaEntry!.versions_participated).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -289,6 +253,65 @@ describe('GET /api/users/:id', () => {
     expect(body.current_version).toBeNull();
   });
 
+});
+
+describe('GET /api/leaderboard/rankings', () => {
+  it('returns 200 with the filter echo and a well-formed entries array', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/leaderboard/rankings?battleType=DOMINATION&competitorFormat=ONE_V_ONE',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      entries: unknown[];
+      total: number;
+      battleType: string;
+      competitorFormat: string;
+      permanenceThreshold: number;
+      cutoff: number;
+    }>();
+    expect(body.battleType).toBe('DOMINATION');
+    expect(body.competitorFormat).toBe('ONE_V_ONE');
+    expect(Array.isArray(body.entries)).toBe(true);
+    expect(typeof body.permanenceThreshold).toBe('number');
+    expect(typeof body.cutoff).toBe('number');
+  });
+
+  it('accepts the 2v2 format and defaults battleType to OVERALL', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/leaderboard/rankings?competitorFormat=TWO_V_TWO' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ competitorFormat: string; battleType: string }>();
+    expect(body.competitorFormat).toBe('TWO_V_TWO');
+    expect(body.battleType).toBe('OVERALL');
+  });
+
+  it('rejects an invalid battleType', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/leaderboard/rankings?battleType=NONSENSE' });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('GET /api/leaderboard/quarterly (filtered)', () => {
+  it('returns 200 with the quarter label, self-scaling gate and filter echo', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/leaderboard/quarterly?battleType=SIEGE&competitorFormat=ONE_V_ONE',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      entries: unknown[];
+      quarter: string;
+      gate: number;
+      capGames: number;
+      battleType: string;
+      competitorFormat: string;
+    }>();
+    expect(body.battleType).toBe('SIEGE');
+    expect(body.competitorFormat).toBe('ONE_V_ONE');
+    expect(typeof body.quarter).toBe('string');
+    expect(typeof body.gate).toBe('number');
+    expect(typeof body.capGames).toBe('number');
+  });
 });
 
 

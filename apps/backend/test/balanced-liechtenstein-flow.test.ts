@@ -40,9 +40,6 @@ const createdUserIds: string[] = [];
 afterEach(async () => {
   for (const id of createdTournamentIds) await cleanupTournament(id);
   if (createdUserIds.length) {
-    // finalizeTournament writes LeaderboardEntry rows on the active version; clear
-    // them (FK to User) before deleting the test users.
-    await prisma.leaderboardEntry.deleteMany({ where: { user_id: { in: createdUserIds } } });
     await cleanupUsers(createdUserIds);
   }
   createdTournamentIds.length = 0;

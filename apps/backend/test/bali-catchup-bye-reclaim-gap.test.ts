@@ -44,7 +44,6 @@ const createdUserIds: string[] = [];
 afterEach(async () => {
   for (const id of createdTournamentIds) await cleanupTournament(id);
   if (createdUserIds.length) {
-    await prisma.leaderboardEntry.deleteMany({ where: { user_id: { in: createdUserIds } } });
     await cleanupUsers(createdUserIds);
   }
   createdTournamentIds.length = 0;

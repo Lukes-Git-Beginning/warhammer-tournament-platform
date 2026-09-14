@@ -1513,8 +1513,6 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
               winner_id: null,
               result: null,
               score: null,
-              player1_points: null,
-              player2_points: null,
               played_at: null,
             },
           });

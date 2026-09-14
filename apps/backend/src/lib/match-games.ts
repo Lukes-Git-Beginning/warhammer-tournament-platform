@@ -14,7 +14,7 @@ export async function ensureMatchGame(
   prisma: PrismaClient,
   matchId: string,
   gameNumber = 1,
-  countsForLeaderboard = true,
+  countsForLeaderboard?: boolean,
 ): Promise<string> {
   const existing = await prisma.matchGame.findUnique({
     where: { match_id_game_number: { match_id: matchId, game_number: gameNumber } },
@@ -22,8 +22,22 @@ export async function ensureMatchGame(
   });
   if (existing) return existing.id;
 
+  // Derive battle_type (+ leaderboard-eligibility) from the match's tournament, or — for an
+  // Open-Play Bo3/Bo5 series with no tournament — inherit it from game 1. Without this, a
+  // Conquest/Siege tournament's games would silently fall back to the DOMINATION default and
+  // corrupt the rating model / faction stats / meta.
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      tournament: { select: { battle_type: true, counts_for_leaderboard: true } },
+      games: { select: { battle_type: true }, orderBy: { game_number: 'asc' }, take: 1 },
+    },
+  });
+  const battleType = match?.tournament?.battle_type ?? match?.games[0]?.battle_type ?? 'DOMINATION';
+  const counts = countsForLeaderboard ?? match?.tournament?.counts_for_leaderboard ?? true;
+
   const created = await prisma.matchGame.create({
-    data: { match_id: matchId, game_number: gameNumber, counts_for_leaderboard: countsForLeaderboard },
+    data: { match_id: matchId, game_number: gameNumber, battle_type: battleType, counts_for_leaderboard: counts },
     select: { id: true },
   });
 
@@ -370,7 +384,11 @@ export async function finalizeGameResult(
     if (!game.match.tournament && game.match.player1_id && game.match.player2_id) {
       const existing = await fastify.prisma.matchMapDecision.findUnique({ where: { game_id: nextGameId } });
       if (!existing) {
-        const maps = await fastify.prisma.map.findMany({ where: { deleted_at: null }, select: { id: true } });
+        const nextGame = await fastify.prisma.matchGame.findUnique({ where: { id: nextGameId }, select: { battle_type: true } });
+        const maps = await fastify.prisma.map.findMany({
+          where: { deleted_at: null, available: true, battle_type: nextGame?.battle_type ?? 'DOMINATION' },
+          select: { id: true },
+        });
         const randomMap = maps.length > 0 ? maps[Math.floor(Math.random() * maps.length)] : null;
         if (randomMap) {
           await fastify.prisma.matchMapDecision.create({

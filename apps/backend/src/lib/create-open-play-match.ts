@@ -12,6 +12,9 @@ export async function createOpenPlayMatch(
   player2Id: string,
   source: 'QUEUE' | 'CHALLENGE' | 'AVAILABILITY' = 'QUEUE',
   battleType: $Enums.BattleType = 'DOMINATION',
+  // 1v1 → player ids are Users; 2v2 → they are Team ids (team-as-actor). Stamped on the match so
+  // the shared play/report flow treats an Open-Play match as 2v2 without any tournament.
+  competitorFormat: $Enums.CompetitorFormat = 'ONE_V_ONE',
 ): Promise<{ matchId: string; mapId: string | null; mapName: string | null }> {
   const maps = await prisma.map.findMany({
     where: { deleted_at: null, available: true, battle_type: battleType },
@@ -33,6 +36,7 @@ export async function createOpenPlayMatch(
         match_number: 0,
         player1_id: player1Id,
         player2_id: player2Id,
+        competitor_format: competitorFormat,
         status: 'ONGOING',
         version_id: activeVersion?.id ?? null,
       },

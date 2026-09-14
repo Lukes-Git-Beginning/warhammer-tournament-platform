@@ -13,7 +13,7 @@ import {
   CalendarTournamentSchema,
   TournamentStatusSchema,
 } from '@rizzotto/types';
-import { notifyTournamentAnnounce } from '../lib/discord-notify.js';
+import { notifyTournamentAnnounce, notifyTournamentAvailability } from '../lib/discord-notify.js';
 import { recordTournamentEvent } from '../lib/tournament-events.js';
 import { resolveParticipants, sendBroadcast } from '../lib/broadcast.js';
 
@@ -1197,6 +1197,10 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         if (fullTournament) {
           notifyTournamentAnnounce(fullTournament).catch((err) => {
             request.log.warn({ err }, 'Discord tournament announce failed (non-fatal)');
+          });
+          // DM users who marked TOURNAMENT availability for this tournament's start slot.
+          notifyTournamentAvailability(fullTournament).catch((err) => {
+            request.log.warn({ err }, 'Discord tournament availability DM failed (non-fatal)');
           });
         }
       }

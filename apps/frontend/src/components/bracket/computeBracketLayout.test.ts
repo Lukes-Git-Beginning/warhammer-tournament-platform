@@ -29,8 +29,6 @@ function makeMatch(
     winnerId: null,
     score: null,
     result: null,
-    player1Points: null,
-    player2Points: null,
     status: 'PENDING',
     nextMatchId,
     loserNextMatchId,

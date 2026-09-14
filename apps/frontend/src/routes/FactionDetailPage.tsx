@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { getFaction, getMatchupHeatmap, getMatchupMatrix, getFactionTopPlayers, getFactionGames, getFactions, type FactionTopPlayer } from '@/lib/api';
+import { getFaction, getMatchupHeatmap, getMatchupMatrix, getFactionTopPlayers, getFactionGames, getFactions, type FactionTopPlayer, type BattleType } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { GameHistoryTable } from '@/components/match/GameHistoryTable';
 import type { FactionDto } from '@rizzotto/types';
@@ -41,6 +41,41 @@ function WinRateBar({ rate }: { rate: number | null }) {
 function SectionHeader({ title }: { title: string }) {
   return (
     <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-4">{title}</h2>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Battle-type selector (mirrors MetaDashboard FilterChip style)
+// ---------------------------------------------------------------------------
+
+const BATTLE_TYPES: { value: BattleType; label: string }[] = [
+  { value: 'DOMINATION', label: 'Domination' },
+  { value: 'CONQUEST', label: 'Conquest' },
+  { value: 'SIEGE', label: 'Siege' },
+];
+
+function BattleTypeChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
+        active
+          ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+          : 'border-stone-700 text-stone-400 hover:border-stone-500 hover:text-stone-200'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -222,10 +257,11 @@ function TopPlayerRow({ player }: { player: FactionTopPlayer }) {
 export function FactionDetailPage() {
   const { id } = useParams({ from: '/factions/$id' });
   const [opponentFactionFilter, setOpponentFactionFilter] = useState<string>('');
+  const [battleType, setBattleType] = useState<BattleType>('DOMINATION');
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['faction', id],
-    queryFn: () => getFaction(id),
+    queryKey: ['faction', id, battleType],
+    queryFn: () => getFaction(id, undefined, battleType),
   });
 
   const { data: matchupData } = useQuery({
@@ -357,6 +393,20 @@ export function FactionDetailPage() {
         <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">{faction.name}</h1>
       </div>
 
+      {/* Battle-type selector */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-stone-500 mr-1">Type</span>
+        {BATTLE_TYPES.map((b) => (
+          <BattleTypeChip
+            key={b.value}
+            active={battleType === b.value}
+            onClick={() => setBattleType(b.value)}
+          >
+            {b.label}
+          </BattleTypeChip>
+        ))}
+      </div>
+
       {/* Stat Cards */}
       {stats ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
@@ -390,7 +440,7 @@ export function FactionDetailPage() {
         </div>
       ) : (
         <div className="rounded-md border border-stone-800 bg-stone-900/40 p-4 text-stone-500 text-sm">
-          No statistics available for this faction yet.
+          No {BATTLE_TYPES.find((b) => b.value === battleType)?.label ?? battleType} statistics available for this faction yet.
         </div>
       )}
 
