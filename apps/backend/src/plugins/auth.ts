@@ -56,6 +56,21 @@ export default fp(
           statusCode: 401,
         });
       }
+      // Sliding session: once a valid token is past the halfway point of its lifetime, re-issue the
+      // cookie so an ACTIVE user is never logged out mid-session — only genuinely idle sessions
+      // lapse. Best-effort: a refresh failure must never break the request.
+      try {
+        const exp = (request.user as unknown as { exp?: number }).exp;
+        if (exp) {
+          const now = Math.floor(Date.now() / 1000);
+          if (exp - now < expiresInSec / 2) {
+            const { sub, username, role } = request.user;
+            fastify.signAuthCookie(reply, { sub, username, role });
+          }
+        }
+      } catch {
+        /* refresh is best-effort */
+      }
     });
 
     fastify.decorate('requireRole', (...roles: Role[]) => async (request, reply) => {

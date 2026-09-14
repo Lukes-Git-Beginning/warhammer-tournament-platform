@@ -1,4 +1,5 @@
 import { storedRefLast } from './referrals';
+import { notifyUnauthorized } from './authEvents';
 import type {
   UserMe,
   BracketResponse,
@@ -295,6 +296,10 @@ function makeApiError(message: string, status: number, errorCode?: string): ApiE
   const err = new Error(message) as ApiError;
   err.status = status;
   if (errorCode) err.errorCode = errorCode;
+  // A 401 from ANY endpoint means the server rejected our session — signal the app once, centrally,
+  // so it can drop the cached login and prompt a re-login instead of sitting in a half-logged-in
+  // limbo. STEAM_REQUIRED etc. are 403 and deliberately do NOT trip this.
+  if (status === 401) notifyUnauthorized();
   return err;
 }
 
