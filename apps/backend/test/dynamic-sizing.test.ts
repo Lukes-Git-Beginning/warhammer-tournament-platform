@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { autoSwissConfig, balancedRounds, computeDynamicSize } from '../src/lib/auto-swiss-service.js';
+import {
+  autoSwissConfig,
+  balancedRounds,
+  computeDynamicSize,
+  downgradePlayoffFormat,
+} from '../src/lib/auto-swiss-service.js';
 
 describe('computeDynamicSize (#40 dynamic re-sizing)', () => {
   it('sizes from the active count when above the current round', () => {
@@ -54,5 +59,44 @@ describe('balancedRounds — BaLi-specific sizing (3 under 8, 4 from 8 up)', () 
     expect(balancedRounds(3)).toBe(2);
     expect(balancedRounds(2)).toBe(1);
     expect(balancedRounds(1)).toBe(1);
+  });
+});
+
+describe('downgradePlayoffFormat — host ceiling, downgrade-only when the seeding pool is too small', () => {
+  it('NEVER resurrects a playoff the host set to NONE (the reported bug: 6 Swiss, no playoffs → Top 4)', () => {
+    // A host who chose NONE keeps NONE no matter how many players finish.
+    expect(downgradePlayoffFormat('NONE', 0)).toBe('NONE');
+    expect(downgradePlayoffFormat('NONE', 4)).toBe('NONE');
+    expect(downgradePlayoffFormat('NONE', 8)).toBe('NONE');
+    expect(downgradePlayoffFormat('NONE', 64)).toBe('NONE');
+  });
+
+  it('NEVER upgrades: a bigger field does not grow the host bracket', () => {
+    expect(downgradePlayoffFormat('TOP4', 8)).toBe('TOP4');
+    expect(downgradePlayoffFormat('TOP4', 16)).toBe('TOP4');
+    expect(downgradePlayoffFormat('TOP2', 100)).toBe('TOP2');
+  });
+
+  it('keeps the host format when the pool exactly fills the bracket (8/4/2)', () => {
+    expect(downgradePlayoffFormat('TOP8', 8)).toBe('TOP8');
+    expect(downgradePlayoffFormat('TOP4', 4)).toBe('TOP4');
+    expect(downgradePlayoffFormat('TOP2', 2)).toBe('TOP2');
+  });
+
+  it('downgrades step-by-step when the final pool is too small to fill the bracket', () => {
+    // TOP8 needs 8; 5-7 left → Top 4; 2-3 left → Top 2; <2 → none.
+    expect(downgradePlayoffFormat('TOP8', 7)).toBe('TOP4');
+    expect(downgradePlayoffFormat('TOP8', 4)).toBe('TOP4');
+    expect(downgradePlayoffFormat('TOP8', 3)).toBe('TOP2');
+    expect(downgradePlayoffFormat('TOP8', 1)).toBe('NONE');
+    // TOP4 needs 4; 2-3 left → Top 2; <2 → none.
+    expect(downgradePlayoffFormat('TOP4', 3)).toBe('TOP2');
+    expect(downgradePlayoffFormat('TOP4', 1)).toBe('NONE');
+    // TOP2 needs 2; <2 → none.
+    expect(downgradePlayoffFormat('TOP2', 1)).toBe('NONE');
+  });
+
+  it('treats null/unknown ceiling as no playoff', () => {
+    expect(downgradePlayoffFormat(null, 8)).toBe('NONE');
   });
 });

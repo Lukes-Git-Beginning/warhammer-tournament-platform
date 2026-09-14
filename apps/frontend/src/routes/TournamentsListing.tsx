@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton.js';
 const PAGE_SIZE = 12;
 
 const FORMAT_LABELS: Record<string, string> = {
-  AUTO_SWISS: 'Auto Swiss',
+  AUTO_SWISS: 'Swiss',
   SINGLE_ELIMINATION: 'Single Elim.',
   DOUBLE_ELIMINATION: 'Double Elim.',
   SWISS: 'Swiss',
@@ -41,6 +41,7 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
   const isLive = tournament.status === 'ONGOING';
   const isCompleted = tournament.status === 'COMPLETED';
   const isDraft = tournament.status === 'DRAFT';
+  const isPrivate = tournament.visibility === 'PRIVATE';
   const startDate = formatInUserTimezone(tournament.start_date, me?.timezone ?? undefined);
 
   return (
@@ -52,7 +53,7 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
     <Card
       variant="banner"
       interactive
-      className={`flex h-full flex-col${isDraft ? ' border-2 border-dashed border-rizzotto-gold-500/40' : ''}`}
+      className={`flex h-full flex-col${isDraft ? ' border-2 border-dashed border-rizzotto-gold-500/40' : ''}${isPrivate ? ' opacity-60 grayscale-[0.4]' : ''}`}
       watermark={<BattleTypeWatermark battleType={tournament.battle_type} />}
     >
       <CardHeader>

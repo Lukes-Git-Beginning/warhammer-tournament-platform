@@ -353,7 +353,7 @@ export async function startMatch(
 /**
  * Deletes test data for given user IDs.
  * Cascades through: TournamentParticipant, TournamentResult,
- * LeaderboardEntry, AuditLog (as actor), Matches (as player/winner), User.
+ * AuditLog (as actor), Matches (as player/winner), User.
  * Idempotent — safe to call multiple times.
  */
 export async function cleanupTestData(userIds: string[]): Promise<void> {

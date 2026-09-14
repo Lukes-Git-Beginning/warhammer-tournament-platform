@@ -168,7 +168,7 @@
             "desc": "A fixed number of rounds, paired each round by record with no rematches. Optional Top-4 / Top-8 playoffs."
           },
           "auto_swiss": {
-            "name": "Auto Swiss",
+            "name": "Swiss",
             "desc": "Self-running Swiss: check-in, round count and playoff size are set automatically from the turnout. All BO1."
           },
           "round_robin": {

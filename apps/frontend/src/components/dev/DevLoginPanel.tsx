@@ -6,6 +6,7 @@ import { useAuthQuery } from '@/lib/auth.js';
 // Fallback list (classic `pnpm db:seed:dummies` accounts) used only if the live query
 // of actually-seeded dummies is empty/unavailable.
 const DUMMY_USERS = [
+  { discordId: 'demo-admin', name: 'SeriesAdmin (ADMIN)' },
   { discordId: 'dummy-01', name: 'Grombrindal' },
   { discordId: 'dummy-02', name: 'Settra' },
   { discordId: 'dummy-03', name: 'Sigvald' },

@@ -3,6 +3,8 @@ import type { Prisma } from '@rizzotto/db';
 import { z } from 'zod';
 import ical from 'ical-generator';
 import { generateSlug, validateStatusTransition, TournamentStatus, canManageTournament } from '../lib/tournament-utils.js';
+import { canManageSeries } from '../lib/series-utils.js';
+import { maybeSendSeriesInvite } from '../lib/series-notify.js';
 import { emitStatusChange } from '../lib/emit.js';
 import { finalizeTournament, unfinalizeTournament } from '../lib/finalize-tournament.js';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
@@ -34,6 +36,21 @@ const ListQuerySchema = z.object({
   date_to: z.string().datetime().optional(),
   battle_type: z.enum(['DOMINATION', 'CONQUEST', 'SIEGE']).optional(),
   competitor_format: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(),
+  // Restrict to tournaments the viewer can MANAGE (own + co-hosted; staff = all). Used by the
+  // series qualifier picker so it only offers tournaments the user is allowed to attach.
+  manageable: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
+  // Exclude tournaments already assigned to a series (as a qualifier or a final) — the series
+  // qualifier picker uses this, since series membership is exclusive.
+  not_in_series: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
+  // When not_in_series=true, allow tournaments that belong to this specific series (by id).
+  // Used by the series editor so that a series' own qualifiers appear in the picker.
+  series_exempt: z.string().uuid().optional(),
 });
 
 // Map decision modes that draw from the shared tournament map pool. Host-preset
@@ -165,7 +182,7 @@ const TWO_V_TWO_MODES = ['SFT_2V2', 'BPT_2V2'] as const;
 
 const CreateTournamentSchema = z.object({
   name: z.string().min(3).max(120),
-  format: z.enum(['SWISS', 'AUTO_SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
+  format: z.enum(['SWISS', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
   mode: z.enum(['ONE_V_ONE', 'THREE_V_THREE', 'BLIND_PICK', 'BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR', 'SFT_2V2', 'BPT_2V2']).optional(),
   set_faction_id: z.string().min(1).nullable().optional(),
   start_date: z.string().datetime(),
@@ -205,6 +222,9 @@ const CreateTournamentSchema = z.object({
   max_band: z.number().int().min(1).max(5).nullable().optional(),
   battle_type: BattleTypeSchema.optional(),
   competitor_format: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(),
+  // Optional: attach the new tournament to a series (as a qualifier) in one step. The
+  // caller must be able to manage the series; validated in the handler.
+  series_id: z.string().uuid().nullable().optional(),
 })
   .superRefine(refineMapPool)
   .superRefine(refineOneVThree)
@@ -267,6 +287,8 @@ const PatchTournamentSchema = z.object({
   max_band: z.number().int().min(1).max(5).nullable().optional(),
   battle_type: BattleTypeSchema.optional(),
   competitor_format: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(),
+  // Attach to / move between / detach (null) a series. Validated in the handler.
+  series_id: z.string().uuid().nullable().optional(),
 })
   .superRefine(refineMapPool)
   .superRefine(refineOneVThree)
@@ -304,7 +326,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         statusCode: 400,
       });
     }
-    const { page, pageSize, status, is_major, date_from, date_to, battle_type, competitor_format } =
+    const { page, pageSize, status, is_major, date_from, date_to, battle_type, competitor_format, manageable, not_in_series, series_exempt } =
       parsed.data;
     const skip = (page - 1) * pageSize;
 
@@ -323,7 +345,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
     const result = await cached(
       fastify.redis,
-      cacheKey('tournaments:list', { page, pageSize, status, is_major, date_from, date_to, battle_type, competitor_format, viewer: viewerKey }),
+      cacheKey('tournaments:list', { page, pageSize, status, is_major, date_from, date_to, battle_type, competitor_format, manageable, not_in_series, series_exempt, viewer: viewerKey }),
       async () => {
         const dateFilter =
           date_from !== undefined || date_to !== undefined
@@ -336,22 +358,38 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
             : {};
         // Everyone sees published PUBLIC tournaments; a signed-in host/co-host also
         // sees their own (any status, incl. DRAFT); staff see everything.
+        // manageable=true narrows to what the viewer can actually manage (own + co-hosted;
+        // staff = all; anonymous = nothing) — used by the series qualifier picker.
+        const ownable = viewerId
+          ? [{ host_id: viewerId }, { co_hosts: { some: { user_id: viewerId } } }]
+          : [];
         const visibility = isStaff
           ? {}
-          : {
-              OR: [
-                { visibility: 'PUBLIC' as const, status: { not: 'DRAFT' as const } },
-                ...(viewerId
-                  ? [{ host_id: viewerId }, { co_hosts: { some: { user_id: viewerId } } }]
-                  : []),
-              ],
-            };
+          : manageable
+            ? { OR: ownable.length ? ownable : [{ id: '00000000-0000-0000-0000-000000000000' }] }
+            : {
+                OR: [
+                  { visibility: 'PUBLIC' as const, status: { not: 'DRAFT' as const } },
+                  ...ownable,
+                ],
+              };
         const where = {
           deleted_at: null,
           ...(status !== undefined ? { status } : {}),
           ...(is_major !== undefined ? { is_major } : {}),
           ...(battle_type !== undefined ? { battle_type } : {}),
           ...(competitor_format !== undefined ? { competitor_format } : {}),
+          // not_in_series=true: exclude tournaments in ANY series (or that are a series final).
+          // series_exempt=<id>: when paired with not_in_series, allow tournaments that belong
+          // to that specific series so the series editor can see its own qualifiers in the picker.
+          ...(not_in_series
+            ? series_exempt
+              ? {
+                  is_series_final: false,
+                  OR: [{ series_id: null }, { series_id: series_exempt }],
+                }
+              : { series_id: null, is_series_final: false }
+            : {}),
           ...dateFilter,
           ...visibility,
         };
@@ -477,16 +515,13 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const isAutoSwiss = data.format === 'AUTO_SWISS';
       const isBalanced = data.format === 'BALANCED_LIECHTENSTEIN';
       // Balanced Liechtenstein auto-sizes only its ROUND COUNT from the check-in count
       // at start (applyBalancedStartConfig), unless the host opts out via auto_sizing=false.
       // Auto-sizing defaults ON for Balanced. The PLAYOFF SIZE is always the host's choice
       // (it drives division formation — homogeneous band-pure vs. few large mixed brackets)
-      // and is stored verbatim. Match format + map decision stay host-configurable (unlike
-      // Auto Swiss, which forces BO1 / RANDOM_PICK_BAN).
+      // and is stored verbatim.
       const balancedAutoSized = isBalanced && (data.auto_sizing ?? true);
-      const autoSized = isAutoSwiss || balancedAutoSized;
 
       const tournament = await fastify.prisma.tournament.create({
         data: {
@@ -515,12 +550,10 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           restrictions: data.restrictions ?? '',
           host_id: request.user.sub,
           // Welle 2
-          rounds_count: autoSized ? undefined : data.rounds_count,
-          // BaLi: the playoff size is a host choice (it drives division formation —
-          // homogeneous vs. merged) and is no longer auto-derived, so store the host's
-          // value verbatim. Auto Swiss still drops it (derived at start). Other formats
-          // keep the host value unless auto-sized.
-          playoff_format: isBalanced ? data.playoff_format : autoSized ? undefined : data.playoff_format,
+          rounds_count: balancedAutoSized ? undefined : data.rounds_count,
+          // The playoff size is always the host's choice (for BaLi it drives division
+          // formation — homogeneous band-pure vs. few large mixed brackets), stored verbatim.
+          playoff_format: data.playoff_format,
           // #37: opt-in auto-sizing / auto-advancement (any format). Balanced
           // defaults auto-sizing ON; every other format defaults OFF.
           auto_sizing: isBalanced ? (data.auto_sizing ?? true) : (data.auto_sizing ?? false),
@@ -530,13 +563,13 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           // 1v3: Swiss defaults to BO2 (two-leg home/away — roles swap between legs,
           // 1–1 = Draw). Elimination playoffs/finals default to BO3 (flip/swap/flip;
           // a bracket needs a decisive winner, so no draw there).
-          swiss_match_format: isAutoSwiss ? 'BO1' : (data.swiss_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO2' : undefined)),
-          playoff_match_format: isAutoSwiss ? 'BO1' : (data.playoff_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO3' : undefined)),
-          finale_match_format: isAutoSwiss ? 'BO1' : (data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' || data.mode === 'ONE_V_THREE' ? 'BO3' : undefined)),
+          swiss_match_format: data.swiss_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO2' : undefined),
+          playoff_match_format: data.playoff_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO3' : undefined),
+          finale_match_format: data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' || data.mode === 'ONE_V_THREE' ? 'BO3' : undefined),
           // Double Elimination bracket reset (default on via schema); reset format null = inherit finale.
           grand_final_reset: data.grand_final_reset ?? undefined,
           grand_final_reset_format: data.grand_final_reset_format ?? undefined,
-          map_decision_mode: isAutoSwiss ? 'RANDOM_PICK_BAN' : data.map_decision_mode,
+          map_decision_mode: data.map_decision_mode,
           map_preset_config: data.map_preset_config != null ? (data.map_preset_config as Prisma.InputJsonValue) : undefined,
           has_third_place_match: data.has_third_place_match ?? false,
           min_band: data.min_band ?? null,
@@ -598,6 +631,22 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           })),
           skipDuplicates: true,
         });
+      }
+
+      // Optionally attach the new tournament to a series (as a qualifier), in series order.
+      if (data.series_id) {
+        if (!(await canManageSeries(fastify.prisma, data.series_id, request.user.sub, request.user.role))) {
+          return reply.code(403).send({ error: 'Forbidden', message: 'You cannot manage that series', statusCode: 403 });
+        }
+        const max = await fastify.prisma.tournament.aggregate({
+          where: { series_id: data.series_id },
+          _max: { series_position: true },
+        });
+        await fastify.prisma.tournament.update({
+          where: { id: tournament.id },
+          data: { series_id: data.series_id, series_position: (max._max.series_position ?? 0) + 1 },
+        });
+        await invalidate(fastify.redis, 'series:*');
       }
 
       await fastify.prisma.auditLog.create({
@@ -815,6 +864,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         created_at: true,
         updated_at: true,
         host: { select: { id: true, username: true, avatar_url: true } },
+        is_series_final: true,
+        series: { select: { id: true, slug: true, name: true } },
         _count: {
           select: { participants: { where: { deleted_at: null } } },
         },
@@ -896,6 +947,9 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           max_band: true,
           battle_type: true,
           competitor_format: true,
+          series_id: true,
+          is_series_final: true,
+          faction_allowlist: { select: { faction_id: true } },
         },
       });
 
@@ -925,7 +979,30 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { status: newStatus, map_pool: newMapPool, faction_pool: newFactionPool, restricted_factions: newRestrictedFactions, ...rest } = parsed.data;
+      const { status: newStatus, map_pool: newMapPool, faction_pool: newFactionPool, restricted_factions: newRestrictedFactions, series_id: newSeriesId, ...rest } = parsed.data;
+
+      // Series membership change (attach / move / detach). Validated up front so a bad request
+      // aborts before any write; applied after the main update below.
+      const seriesChangeRequested = 'series_id' in parsed.data;
+      if (seriesChangeRequested) {
+        if (tournament.is_series_final) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'This tournament is a series final and cannot be reassigned as a qualifier.',
+            statusCode: 422,
+          });
+        }
+        if (newSeriesId) {
+          if (!(await canManageSeries(fastify.prisma, newSeriesId, user.sub, user.role))) {
+            return reply.code(403).send({ error: 'Forbidden', message: 'You cannot manage that series', statusCode: 403 });
+          }
+        } else if (tournament.series_id) {
+          // Detaching from the current series requires managing that series too.
+          if (!(await canManageSeries(fastify.prisma, tournament.series_id, user.sub, user.role))) {
+            return reply.code(403).send({ error: 'Forbidden', message: 'You cannot manage the current series', statusCode: 403 });
+          }
+        }
+      }
 
       // Validate map_pool change: only allowed before tournament starts (DRAFT or ANNOUNCED)
       if (newMapPool !== undefined) {
@@ -982,12 +1059,20 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
             statusCode: 422,
           });
         }
+        // Reject only a genuine CHANGE to the faction pool — resubmitting the SAME pool (e.g. an
+        // edit form that always sends it) is a no-op and must not 422. Compare as unordered sets.
         if (newFactionPool !== undefined) {
-          return reply.code(422).send({
-            error: 'UnprocessableEntity',
-            message: '"faction_pool" can only be changed while the tournament is in draft',
-            statusCode: 422,
-          });
+          const current = new Set(tournament.faction_allowlist.map((fa) => fa.faction_id));
+          const submitted = new Set(newFactionPool);
+          const changed =
+            current.size !== submitted.size || [...submitted].some((id) => !current.has(id));
+          if (changed) {
+            return reply.code(422).send({
+              error: 'UnprocessableEntity',
+              message: '"faction_pool" can only be changed while the tournament is in draft',
+              statusCode: 422,
+            });
+          }
         }
       }
 
@@ -1232,6 +1317,27 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         await Promise.all(invalidations);
       }
 
+      // Apply the series membership change (validated above), only on an actual change.
+      if (seriesChangeRequested) {
+        if (newSeriesId && newSeriesId !== tournament.series_id) {
+          const max = await fastify.prisma.tournament.aggregate({
+            where: { series_id: newSeriesId },
+            _max: { series_position: true },
+          });
+          await fastify.prisma.tournament.update({
+            where: { id: tournament.id },
+            data: { series_id: newSeriesId, series_position: (max._max.series_position ?? 0) + 1 },
+          });
+          await invalidate(fastify.redis, 'series:*');
+        } else if (!newSeriesId && tournament.series_id) {
+          await fastify.prisma.tournament.update({
+            where: { id: tournament.id },
+            data: { series_id: null, series_position: null },
+          });
+          await invalidate(fastify.redis, 'series:*');
+        }
+      }
+
       // Emit socket event on status change
       if (newStatus !== undefined) {
         emitStatusChange(fastify.io, {
@@ -1239,6 +1345,10 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           status: newStatus as TournamentStatusLiteral,
         });
       }
+
+      // Series-qualifier invite: self-gated — fires once when a series qualifier's registration
+      // is open (covers both opening registration and attaching an already-open tournament).
+      void maybeSendSeriesInvite(fastify.prisma, tournament.id);
 
       return updated;
     },

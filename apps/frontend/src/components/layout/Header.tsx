@@ -33,6 +33,13 @@ export function Header() {
         {t('header.tournaments')}
       </Link>
       <Link
+        to="/series"
+        className={NAV_LINK_CLASS}
+        activeProps={NAV_LINK_ACTIVE_PROPS}
+      >
+        Series
+      </Link>
+      <Link
         to="/open-play"
         className={NAV_LINK_CLASS}
         activeProps={NAV_LINK_ACTIVE_PROPS}
@@ -83,6 +90,7 @@ export function Header() {
       {canCreate && (
         <Link
           to="/tournaments/create"
+          search={{ duplicate: undefined }}
           className={NAV_LINK_CLASS}
           activeProps={NAV_LINK_ACTIVE_PROPS}
         >
@@ -104,7 +112,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-rizzotto-iron-700 bg-rizzotto-iron-950/92 backdrop-blur-md">
-      <div className="mx-auto flex max-w-[80rem] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8 xl:px-12">
+      <div className="mx-auto flex max-w-[96rem] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8 xl:px-12">
         {/* Logo lockup */}
         <Link
           to="/"

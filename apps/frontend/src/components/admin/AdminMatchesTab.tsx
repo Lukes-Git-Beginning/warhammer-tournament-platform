@@ -12,7 +12,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 const FORMAT_LABELS: Record<string, string> = {
   SWISS: 'Swiss',
-  AUTO_SWISS: 'Auto Swiss',
+  AUTO_SWISS: 'Swiss',
   SINGLE_ELIMINATION: 'SE',
   DOUBLE_ELIMINATION: 'DE',
   LIECHTENSTEIN: 'RR',

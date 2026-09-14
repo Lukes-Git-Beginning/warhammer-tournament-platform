@@ -4,10 +4,13 @@ import { MusterCallAside } from '@/components/tournament/MusterCallAside';
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, CardContent } from '@/components/ui/card';
 import { useTranslation } from 'react-i18next';
+import { useSearch } from '@tanstack/react-router';
 
 export function CreateTournamentPage() {
   const { data: user, isLoading } = useRequireAuth();
   const { t } = useTranslation();
+  const search = useSearch({ from: '/tournaments/create' });
+  const duplicateSlug = search.duplicate;
 
   if (isLoading) {
     return (
@@ -25,10 +28,12 @@ export function CreateTournamentPage() {
     <PageShell variant="wide">
       <header className="mb-8 max-w-2xl">
         <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
-          {t('tournament.create.title')}
+          {duplicateSlug ? 'Duplicate Tournament' : t('tournament.create.title')}
         </h1>
         <p className="mt-2 text-sm text-rizzotto-stone-400">
-          {t('tournament.create.subtitle')}
+          {duplicateSlug
+            ? 'Settings copied from the original — adjust as needed before creating.'
+            : t('tournament.create.subtitle')}
         </p>
       </header>
 
@@ -41,7 +46,7 @@ export function CreateTournamentPage() {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
         <Card variant="banner">
           <CardContent className="p-6 sm:p-8 lg:p-10">
-            <TournamentCreateForm />
+            <TournamentCreateForm duplicateSlug={duplicateSlug} />
           </CardContent>
         </Card>
 

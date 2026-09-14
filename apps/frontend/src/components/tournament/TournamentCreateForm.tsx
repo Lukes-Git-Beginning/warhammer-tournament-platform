@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { createTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster } from '@/lib/api';
+import { createTournament, createSeries, getTournament, patchTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster, uploadSeriesPoster, listTournaments, listSeries, type ScoringConfig } from '@/lib/api';
 import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
 import { estimateDurationHours, intervalsOverlap, describeClash } from '@/lib/tournamentSchedule';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
@@ -14,6 +14,21 @@ import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { Select } from '@/components/ui/select';
 import { Label, FieldError, FieldHint } from '@/components/ui/label';
 import { MODE_DESCRIPTIONS } from '@/lib/tournamentDescriptions';
+
+// ---------------------------------------------------------------------------
+// Series mode types — used when CreateSeriesPage embeds this form
+// ---------------------------------------------------------------------------
+
+type SeriesModel = 'A' | 'C' | 'NONE';
+
+const DEFAULT_TIEBREAKERS: ScoringConfig['tiebreakers'] = ['points', 'wins', 'games', 'random'];
+
+/** When passed, the form renders series metadata above the poster and uses a
+ *  two-step submit (create final tournament, then create series). */
+export interface SeriesModeConfig {
+  /** Called with the new series slug after both creates succeed. */
+  onSuccess: (seriesSlug: string) => void;
+}
 
 const TournamentCreateSchema = z.object({
   name: z.string().min(3).max(128),
@@ -167,12 +182,53 @@ function nextRoundHour(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`;
 }
 
-export function TournamentCreateForm() {
+export function TournamentCreateForm({
+  duplicateSlug,
+  seriesMode,
+}: {
+  duplicateSlug?: string;
+  seriesMode?: SeriesModeConfig;
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const defaultTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  const [form, setForm] = useState<Partial<FormData>>({
+  // ── Series-mode state ───────────────────────────────────────────────────
+  const [seriesName, setSeriesName] = useState('');
+  const [seriesDescription, setSeriesDescription] = useState('');
+  const [seriesVisibility, setSeriesVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PUBLIC');
+  const [seriesModel, setSeriesModel] = useState<SeriesModel>('A');
+  // Model A
+  const [pointsPerGamePlayed, setPointsPerGamePlayed] = useState(1);
+  const [pointsPerWin, setPointsPerWin] = useState(1);
+  const [finalSize, setFinalSize] = useState(16);
+  // Model C
+  const [topX, setTopX] = useState(2);
+  // Qualifier multi-select
+  const [selectedQualifierIds, setSelectedQualifierIds] = useState<Set<string>>(new Set());
+  // Whether the host has manually touched the tournament name field
+  const finalNameTouched = useRef(false);
+  // Series-mode submit error (after tournament created but series failed)
+  const [seriesSubmitError, setSeriesSubmitError] = useState<string | null>(null);
+  // Series poster (separate from the final tournament's poster)
+  const [seriesPosterFile, setSeriesPosterFile] = useState<File | null>(null);
+
+  // "Load existing final" mode — when set, submit PATCHes the existing tournament
+  // instead of creating a new one.
+  const [existingFinalId, setExistingFinalId] = useState<string | null>(null);
+  const [existingFinalSlug, setExistingFinalSlug] = useState<string | null>(null);
+  const [existingFinalName, setExistingFinalName] = useState<string | null>(null);
+  // The loaded final's current poster, so the picker shows it instead of "no poster set".
+  const [existingFinalPosterUrl, setExistingFinalPosterUrl] = useState<string | null>(null);
+  // The slug currently selected in the picker dropdown (not yet loaded).
+  const [pickerSlug, setPickerSlug] = useState<string>('');
+  const [loadingExistingFinal, setLoadingExistingFinal] = useState(false);
+  const [loadExistingFinalError, setLoadExistingFinalError] = useState<string | null>(null);
+
+  // Normal create path: optional "attach to an existing series" selector.
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
+
+  const defaultForm: Partial<FormData> = {
     format: 'SINGLE_ELIMINATION',
     mode: 'BPT',
     competitor_format: 'ONE_V_ONE',
@@ -199,7 +255,9 @@ export function TournamentCreateForm() {
     map_preset_config: null,
     min_band: null,
     max_band: null,
-  });
+  };
+
+  const [form, setForm] = useState<Partial<FormData>>(defaultForm);
   const [mapSearch, setMapSearch] = useState('');
   const [factionPoolEnabled, setFactionPoolEnabled] = useState(false);
   const [restrictedFactionsEnabled, setRestrictedFactionsEnabled] = useState(false);
@@ -220,15 +278,99 @@ export function TournamentCreateForm() {
   // Default the pool to all maps of the current battle type; reset it when the battle type
   // changes (a stale pool of the old type's maps would be rejected on submit).
   const lastBattleType = useRef<string | null>(null);
+  // Guards the map-pool "default to all maps" effect so duplicate/existing-final prefills
+  // are not overwritten after they set their own pool.
+  const mapPoolInitialized = useRef(false);
+
+  // Duplication: fetch source tournament and prefill the form once.
+  const { data: sourceForDuplicate } = useQuery({
+    queryKey: ['tournament', duplicateSlug],
+    queryFn: () => getTournament(duplicateSlug!),
+    enabled: !!duplicateSlug,
+    retry: false,
+  });
+
+  const duplicatePrefilled = useRef(false);
+  useEffect(() => {
+    if (!sourceForDuplicate || duplicatePrefilled.current) return;
+    duplicatePrefilled.current = true;
+
+    // Compute the start date: original + 7 days if still in the future, else form default.
+    const originalStart = new Date(sourceForDuplicate.start_date);
+    const candidateStart = new Date(originalStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const toLocalDatetime = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const useStart = candidateStart > new Date() ? toLocalDatetime(candidateStart) : nextRoundHour();
+
+    setForm((prev) => ({
+      ...prev,
+      // Identity
+      name: sourceForDuplicate.name,
+      description: sourceForDuplicate.description ?? undefined,
+      // Scheduling
+      start_date: useStart,
+      registration_deadline: useStart,
+      timezone: sourceForDuplicate.timezone,
+      // Format / mode
+      format: sourceForDuplicate.format as FormData['format'],
+      mode: (sourceForDuplicate.mode ?? 'BPT') as FormData['mode'],
+      set_faction_id: sourceForDuplicate.set_faction_id ?? undefined,
+      // Match mechanics
+      rounds_count: sourceForDuplicate.rounds_count ?? prev.rounds_count,
+      playoff_format: (sourceForDuplicate.playoff_format ?? 'NONE') as FormData['playoff_format'],
+      has_third_place_match: sourceForDuplicate.has_third_place_match ?? false,
+      auto_sizing: sourceForDuplicate.auto_sizing ?? false,
+      auto_advance: sourceForDuplicate.auto_advance ?? false,
+      allow_late_join_requests: sourceForDuplicate.allow_late_join_requests ?? false,
+      swiss_match_format: (sourceForDuplicate.swiss_match_format ?? 'BO1') as FormData['swiss_match_format'],
+      playoff_match_format: (sourceForDuplicate.playoff_match_format ?? 'BO1') as FormData['playoff_match_format'],
+      finale_match_format: (sourceForDuplicate.finale_match_format ?? 'BO1') as FormData['finale_match_format'],
+      grand_final_reset: sourceForDuplicate.grand_final_reset ?? true,
+      grand_final_reset_format: (sourceForDuplicate.grand_final_reset_format ?? '') as FormData['grand_final_reset_format'],
+      // Map / factions
+      map_decision_mode: (sourceForDuplicate.map_decision_mode ?? 'RANDOM_PICK_BAN') as FormData['map_decision_mode'],
+      map_pool: sourceForDuplicate.map_pool?.map((m) => m.id) ?? prev.map_pool ?? [],
+      map_preset_config: sourceForDuplicate.map_preset_config ?? null,
+      faction_pool: sourceForDuplicate.faction_allowlist ?? undefined,
+      restricted_factions: sourceForDuplicate.restricted_factions ?? undefined,
+      // Skill gate
+      min_band: sourceForDuplicate.min_band ?? null,
+      max_band: sourceForDuplicate.max_band ?? null,
+      // Rules
+      standard_rules_enabled: sourceForDuplicate.standard_rules_enabled ?? true,
+      rules: sourceForDuplicate.rules ?? undefined,
+      restrictions: sourceForDuplicate.restrictions ?? undefined,
+      // Metadata
+      discord_link: sourceForDuplicate.discord_link ?? prev.discord_link,
+      stream_url: sourceForDuplicate.stream_url ?? undefined,
+    }));
+
+    // Sync the faction pool toggles
+    if ((sourceForDuplicate.faction_allowlist ?? []).length > 0) {
+      setFactionPoolEnabled(true);
+    }
+    if ((sourceForDuplicate.restricted_factions ?? []).length > 0) {
+      setRestrictedFactionsEnabled(true);
+    }
+    // Prevent the map-pool default-all-maps effect from overwriting the prefilled pool
+    mapPoolInitialized.current = true;
+    lastBattleType.current = sourceForDuplicate.battle_type ?? 'DOMINATION';
+  }, [sourceForDuplicate]);
+
   useEffect(() => {
     if (allMaps.length === 0) return;
     const changed = lastBattleType.current !== null && lastBattleType.current !== form.battle_type;
     const firstLoad = lastBattleType.current === null;
     lastBattleType.current = form.battle_type ?? 'DOMINATION';
     if (changed) {
+      // Battle type switched: reset to all maps of the new type.
+      mapPoolInitialized.current = false;
       setForm((prev) => ({ ...prev, map_pool: allMaps.map((m) => m.id) }));
-    } else if (firstLoad) {
+      mapPoolInitialized.current = true;
+    } else if (firstLoad && !mapPoolInitialized.current) {
       setForm((prev) => ((prev.map_pool ?? []).length === 0 ? { ...prev, map_pool: allMaps.map((m) => m.id) } : prev));
+      mapPoolInitialized.current = true;
     }
   }, [allMaps, form.battle_type]);
 
@@ -248,7 +390,8 @@ export function TournamentCreateForm() {
 
   // Existing tournaments (next 7 days) overlaid on the calendar, plus a live clash
   // warning when the chosen start time overlaps one of them.
-  const scheduledTournaments = useCalendarTournaments();
+  // Exclude the loaded existing final from the clash check so it never clashes with itself.
+  const scheduledTournaments = useCalendarTournaments(existingFinalId ?? undefined);
   const startDate = new Date(form.start_date ?? '');
   const ownStart = Number.isNaN(startDate.getTime()) ? null : startDate;
   const ownDurationHours = estimateDurationHours({
@@ -301,12 +444,32 @@ export function TournamentCreateForm() {
 
   const [posterFile, setPosterFile] = useState<File | null>(null);
 
+  // ── Series mode: qualifier list ─────────────────────────────────────────
+  const { data: tournamentsData } = useQuery({
+    queryKey: ['tournaments', 'manageable', 'unassigned', 1, 50],
+    queryFn: () => listTournaments(1, 50, undefined, undefined, { manageable: true, notInSeries: true }),
+    enabled: !!seriesMode,
+    retry: false,
+  });
+  const qualifierCandidates = tournamentsData?.data ?? [];
+
+  // Normal create path: all series the viewer can manage (to offer as "attach to" options).
+  const { data: manageableSeriesData } = useQuery({
+    queryKey: ['series', 'manageable'],
+    queryFn: () => listSeries(1, 100, { manageable: true }),
+    enabled: !seriesMode,
+    staleTime: 30 * 1000,
+  });
+  const manageableSeries = manageableSeriesData?.data ?? [];
+
+  // ── Mutations ────────────────────────────────────────────────────────────
+
+  const seriesMutation = useMutation({ mutationFn: createSeries });
+
   const mutation = useMutation({
     mutationFn: createTournament,
     onSuccess: async (tournament) => {
-      // The poster upload needs an existing tournament (its slug), so it runs
-      // here after creation. A failed upload is non-fatal — the tournament
-      // exists and the host can add the poster later on the edit page.
+      // Upload poster (non-fatal)
       if (posterFile) {
         try {
           await uploadTournamentPoster(tournament.slug, posterFile);
@@ -314,9 +477,160 @@ export function TournamentCreateForm() {
           // swallow — tournament is created, poster is optional
         }
       }
-      await router.navigate({ to: '/tournaments/$slug', params: { slug: tournament.slug } });
+
+      if (seriesMode) {
+        // Two-step: series create uses the new tournament as its final.
+        const scoringConfig = buildScoringConfig();
+        try {
+          const series = await seriesMutation.mutateAsync({
+            name: seriesName.trim(),
+            ...(seriesDescription.trim() ? { description: seriesDescription.trim() } : {}),
+            visibility: seriesVisibility,
+            scoring_config: scoringConfig,
+            ...(selectedQualifierIds.size > 0
+              ? { qualifier_ids: Array.from(selectedQualifierIds) }
+              : {}),
+            final_tournament_id: tournament.id,
+          });
+          // Upload series poster after series is created (non-fatal)
+          if (seriesPosterFile) {
+            try {
+              await uploadSeriesPoster(series.slug, seriesPosterFile);
+            } catch {
+              // swallow — series exists, poster is optional
+            }
+          }
+          seriesMode.onSuccess(series.slug);
+        } catch (err) {
+          // Tournament exists as a locked draft but series failed. Show error.
+          setSeriesSubmitError(
+            `The final tournament was created (slug: ${tournament.slug}) but the series could not be saved: ${(err as Error).message}. You can retry or set the final from the series edit page.`,
+          );
+        }
+      } else {
+        await router.navigate({ to: '/tournaments/$slug', params: { slug: tournament.slug } });
+      }
     },
   });
+
+  /** Build the ScoringConfig from current series state. */
+  function buildScoringConfig(): ScoringConfig {
+    if (seriesModel === 'A') {
+      return {
+        model: 'A',
+        points_per_game_played: pointsPerGamePlayed,
+        points_per_win: pointsPerWin,
+        final_size: finalSize,
+        top_x: 2,
+        tiebreakers: DEFAULT_TIEBREAKERS,
+      };
+    }
+    if (seriesModel === 'C') {
+      return {
+        model: 'C',
+        points_per_game_played: 1,
+        points_per_win: 1,
+        final_size: 16,
+        top_x: topX,
+        tiebreakers: DEFAULT_TIEBREAKERS,
+      };
+    }
+    return {
+      model: 'NONE',
+      points_per_game_played: 1,
+      points_per_win: 1,
+      final_size: 16,
+      top_x: 2,
+      tiebreakers: DEFAULT_TIEBREAKERS,
+    };
+  }
+
+  /** Load an existing tournament into the form (reuses the duplicate prefill mapping). */
+  async function handleLoadExistingFinal() {
+    if (!pickerSlug) return;
+    setLoadingExistingFinal(true);
+    setLoadExistingFinalError(null);
+    try {
+      const t = await getTournament(pickerSlug);
+      // Reuse the same prefill mapping as the duplicate flow.
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const toLocalDatetime = (d: Date) =>
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const startLocal = toLocalDatetime(new Date(t.start_date));
+
+      setForm((prev) => ({
+        ...prev,
+        name: t.name,
+        description: t.description ?? undefined,
+        start_date: startLocal,
+        registration_deadline: t.registration_deadline ? toLocalDatetime(new Date(t.registration_deadline)) : startLocal,
+        timezone: t.timezone,
+        format: t.format as FormData['format'],
+        mode: (t.mode ?? 'BPT') as FormData['mode'],
+        set_faction_id: t.set_faction_id ?? undefined,
+        rounds_count: t.rounds_count ?? prev.rounds_count,
+        playoff_format: (t.playoff_format ?? 'NONE') as FormData['playoff_format'],
+        has_third_place_match: t.has_third_place_match ?? false,
+        auto_sizing: t.auto_sizing ?? false,
+        auto_advance: t.auto_advance ?? false,
+        allow_late_join_requests: t.allow_late_join_requests ?? false,
+        swiss_match_format: (t.swiss_match_format ?? 'BO1') as FormData['swiss_match_format'],
+        playoff_match_format: (t.playoff_match_format ?? 'BO1') as FormData['playoff_match_format'],
+        finale_match_format: (t.finale_match_format ?? 'BO1') as FormData['finale_match_format'],
+        grand_final_reset: t.grand_final_reset ?? true,
+        grand_final_reset_format: (t.grand_final_reset_format ?? '') as FormData['grand_final_reset_format'],
+        map_decision_mode: (t.map_decision_mode ?? 'RANDOM_PICK_BAN') as FormData['map_decision_mode'],
+        map_pool: t.map_pool?.map((m) => m.id) ?? prev.map_pool ?? [],
+        map_preset_config: t.map_preset_config ?? null,
+        faction_pool: t.faction_allowlist ?? undefined,
+        restricted_factions: t.restricted_factions ?? undefined,
+        min_band: t.min_band ?? null,
+        max_band: t.max_band ?? null,
+        standard_rules_enabled: t.standard_rules_enabled ?? true,
+        rules: t.rules ?? undefined,
+        restrictions: t.restrictions ?? undefined,
+        discord_link: t.discord_link ?? prev.discord_link,
+        stream_url: t.stream_url ?? undefined,
+      }));
+
+      if ((t.faction_allowlist ?? []).length > 0) setFactionPoolEnabled(true);
+      if ((t.restricted_factions ?? []).length > 0) setRestrictedFactionsEnabled(true);
+      // Prevent the map-pool default-all-maps effect from overwriting the loaded pool.
+      mapPoolInitialized.current = true;
+      finalNameTouched.current = true;
+
+      setExistingFinalId(t.id);
+      setExistingFinalSlug(t.slug);
+      setExistingFinalName(t.name);
+      setExistingFinalPosterUrl(t.poster_url ?? null);
+    } catch (err) {
+      setLoadExistingFinalError((err as Error).message ?? 'Failed to load tournament.');
+    } finally {
+      setLoadingExistingFinal(false);
+    }
+  }
+
+  function handleClearExistingFinal() {
+    setExistingFinalId(null);
+    setExistingFinalSlug(null);
+    setExistingFinalName(null);
+    setExistingFinalPosterUrl(null);
+    setPickerSlug('');
+    setLoadExistingFinalError(null);
+    // Reset to default form state and re-derive name from series name.
+    setForm(defaultForm);
+    setFactionPoolEnabled(false);
+    setRestrictedFactionsEnabled(false);
+    mapPoolInitialized.current = false;
+    finalNameTouched.current = false;
+    if (allMaps.length > 0) {
+      setForm((prev) => ({ ...prev, map_pool: allMaps.map((m) => m.id) }));
+      mapPoolInitialized.current = true;
+    }
+    if (seriesName.trim()) {
+      setForm((prev) => ({ ...prev, name: `${seriesName.trim()} — Grand Final` }));
+    }
+  }
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
@@ -377,6 +691,45 @@ export function TournamentCreateForm() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSeriesSubmitError(null);
+
+    // ── Series mode: NONE — create only the series (no final tournament) ──
+    if (seriesMode && seriesModel === 'NONE') {
+      if (!seriesName.trim()) return;
+      const scoringConfig = buildScoringConfig();
+      seriesMutation.mutate(
+        {
+          name: seriesName.trim(),
+          ...(seriesDescription.trim() ? { description: seriesDescription.trim() } : {}),
+          visibility: seriesVisibility,
+          scoring_config: scoringConfig,
+          ...(selectedQualifierIds.size > 0
+            ? { qualifier_ids: Array.from(selectedQualifierIds) }
+            : {}),
+        },
+        {
+          onSuccess: async (data) => {
+            // Upload series poster (non-fatal)
+            if (seriesPosterFile) {
+              try {
+                await uploadSeriesPoster(data.slug, seriesPosterFile);
+              } catch {
+                // swallow — series exists, poster is optional
+              }
+            }
+            seriesMode.onSuccess(data.slug);
+          },
+        },
+      );
+      return;
+    }
+
+    // ── Series-mode validation: require a series name ──────────────────────
+    if (seriesMode && !seriesName.trim()) {
+      // Scroll focus to the series name field — no-op here but the label makes it visible.
+      return;
+    }
+
     const result = TournamentCreateSchema.safeParse(form);
     if (!result.success) {
       const fieldErrors: Partial<Record<keyof FormData, string>> = {};
@@ -428,6 +781,67 @@ export function TournamentCreateForm() {
       return Number.isNaN(d.getTime()) ? local : d.toISOString();
     };
 
+    // ── Series mode: attach existing final ────────────────────────────────
+    // When the host loaded an existing tournament via the picker, PATCH it
+    // instead of creating a new one, then createSeries with its id.
+    if (seriesMode && existingFinalId && existingFinalSlug) {
+      // A normal tournament-edit body. Structural fields (format, mode, faction_pool) are sent as
+      // loaded; the backend accepts them when unchanged and only rejects a genuine change once the
+      // tournament has left draft. `rules` must be a string (never null).
+      const patchBody = {
+        ...rest,
+        grand_final_reset_format: rest.grand_final_reset_format || null,
+        start_date: toIsoOrInvalid(start_date),
+        ...(max_participants ? { max_participants: Number(max_participants) } : { max_participants: null }),
+        ...(min_participants ? { min_participants: Number(min_participants) } : { min_participants: null }),
+        discord_link: discord_link || null,
+        stream_url: stream_url || null,
+        registration_deadline: registration_deadline ? toIsoOrInvalid(registration_deadline) : null,
+        description: description || null,
+        rules: rules || '',
+        draft_enabled: draft_enabled ?? false,
+        ...(draft_preset_id ? { draft_preset_id } : {}),
+        map_pool: map_pool ?? [],
+        ...(map_preset_config ? { map_preset_config: map_preset_config as Record<string, string[] | string[][]> } : {}),
+        ...(factionPoolEnabled && (form.faction_pool ?? []).length > 0 && (form.faction_pool ?? []).length < allFactions.length
+          ? { faction_pool: form.faction_pool }
+          : { faction_pool: [] }),
+        ...(restrictedFactionsEnabled && (form.restricted_factions ?? []).length > 0
+          ? { restricted_factions: form.restricted_factions }
+          : { restricted_factions: [] }),
+        ...(rest.mode === 'ONE_V_THREE' && rest.set_faction_id
+          ? { set_faction_id: rest.set_faction_id }
+          : {}),
+      };
+      const slug = existingFinalSlug;
+      const finalId = existingFinalId;
+      void (async () => {
+        try {
+          await patchTournament(slug, patchBody);
+          // Upload a newly picked poster for the final; if none, its existing poster is kept.
+          if (posterFile) {
+            try { await uploadTournamentPoster(slug, posterFile); } catch { /* swallow — non-fatal */ }
+          }
+          const scoringConfig = buildScoringConfig();
+          const series = await seriesMutation.mutateAsync({
+            name: seriesName.trim(),
+            ...(seriesDescription.trim() ? { description: seriesDescription.trim() } : {}),
+            visibility: seriesVisibility,
+            scoring_config: scoringConfig,
+            ...(selectedQualifierIds.size > 0 ? { qualifier_ids: Array.from(selectedQualifierIds) } : {}),
+            final_tournament_id: finalId,
+          });
+          if (seriesPosterFile) {
+            try { await uploadSeriesPoster(series.slug, seriesPosterFile); } catch { /* swallow */ }
+          }
+          seriesMode.onSuccess(series.slug);
+        } catch (err) {
+          setSeriesSubmitError((err as Error).message ?? 'Failed to save series.');
+        }
+      })();
+      return;
+    }
+
     mutation.mutate({
       ...rest,
       // '' (Same as Grand Final) → null so the reset match inherits finale_match_format.
@@ -455,33 +869,330 @@ export function TournamentCreateForm() {
       ...(rest.mode === 'ONE_V_THREE' && rest.set_faction_id
         ? { set_faction_id: rest.set_faction_id }
         : {}),
+      // Normal create path: attach to an existing series if one was chosen.
+      ...(!seriesMode && selectedSeriesId ? { series_id: selectedSeriesId } : {}),
     });
   }
 
   const isBalanced = form.format === 'BALANCED_LIECHTENSTEIN';
 
+  // Auto-derive final tournament name from series name (as long as host hasn't touched it).
+  function handleSeriesNameChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setSeriesName(val);
+    if (!finalNameTouched.current) {
+      setForm((prev) => ({
+        ...prev,
+        name: val.trim() ? `${val.trim()} — Grand Final` : '',
+      }));
+    }
+  }
+
+  const isPending = mutation.isPending || seriesMutation.isPending || loadingExistingFinal;
+
   return (
     <form onSubmit={handleSubmit} className="w-full space-y-6">
-      {mutation.error && (
+      {(mutation.error || seriesMutation.error || seriesSubmitError) && (
         <div className="rounded-md border border-red-800 bg-red-950/50 p-4 text-sm text-red-300">
-          {(mutation.error as Error).message}
+          {seriesSubmitError ??
+            ((mutation.error || seriesMutation.error) as Error | null)?.message}
         </div>
       )}
 
-      {/* Poster at the very top (mirrors the Edit view). */}
-      <PosterPickField file={posterFile} onPick={setPosterFile} />
+      {/* ── Series metadata block (rendered above the poster when in series mode) ── */}
+      {seriesMode && (
+        <fieldset className="space-y-5 rounded-md border border-rizzotto-gold-500/40 bg-rizzotto-gold-500/5 p-5">
+          <legend className="px-1 text-sm font-semibold text-rizzotto-gold-400">Series Details</legend>
+
+          {/* Series name */}
+          <div>
+            <Label htmlFor="sm-series-name" required>
+              Series Name
+            </Label>
+            <Input
+              id="sm-series-name"
+              value={seriesName}
+              onChange={handleSeriesNameChange}
+              placeholder="e.g. Season 3 Championship"
+            />
+            <FieldHint>The series title shown on the series page — separate from the final tournament name below.</FieldHint>
+          </div>
+
+          {/* Series description */}
+          <div>
+            <Label htmlFor="sm-series-desc">Series Description</Label>
+            <MarkdownEditor
+              id="sm-series-desc"
+              name="seriesDescription"
+              value={seriesDescription}
+              onChange={(e) => setSeriesDescription(e.target.value)}
+              rows={4}
+              maxLength={2000}
+              placeholder="Optional description shown on the series page."
+            />
+          </div>
+
+          {/* Visibility */}
+          <div>
+            <Label>Visibility</Label>
+            <div className="mt-1 flex gap-3">
+              {(['PUBLIC', 'PRIVATE'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setSeriesVisibility(v)}
+                  aria-pressed={seriesVisibility === v}
+                  className={`rounded border px-4 py-2 text-sm font-medium transition-colors ${
+                    seriesVisibility === v
+                      ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+                      : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+                  }`}
+                >
+                  {v === 'PUBLIC' ? 'Public' : 'Private'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Scoring model */}
+          <div className="space-y-3">
+            <Label>Scoring Model</Label>
+            <div className="flex flex-wrap gap-3">
+              {([
+                { value: 'A' as const, label: 'Points Race (A)' },
+                { value: 'C' as const, label: 'Per-Qualifier (C)' },
+                { value: 'NONE' as const, label: 'None — just group tournaments' },
+              ] as const).map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setSeriesModel(value)}
+                  aria-pressed={seriesModel === value}
+                  className={`rounded border px-4 py-2 text-sm font-medium transition-colors ${
+                    seriesModel === value
+                      ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+                      : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {seriesModel === 'NONE' && (
+              <p className="text-xs text-rizzotto-stone-500">
+                No scoring or qualification tracking — the series acts as a grouping / schedule for related
+                tournaments. No final tournament will be created.
+              </p>
+            )}
+
+            {seriesModel === 'A' && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <Label htmlFor="sm-ppgp">Points per Game Played</Label>
+                  <input
+                    id="sm-ppgp"
+                    type="number"
+                    min={0}
+                    value={pointsPerGamePlayed}
+                    onChange={(e) => setPointsPerGamePlayed(Number(e.target.value))}
+                    className="w-28 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="sm-ppw">Points per Win</Label>
+                  <input
+                    id="sm-ppw"
+                    type="number"
+                    min={0}
+                    value={pointsPerWin}
+                    onChange={(e) => setPointsPerWin(Number(e.target.value))}
+                    className="w-28 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="sm-fsize">Final Size</Label>
+                  <input
+                    id="sm-fsize"
+                    type="number"
+                    min={2}
+                    value={finalSize}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setFinalSize(n);
+                      // Mirror to max_participants so the final tournament cap matches.
+                      setForm((prev) => ({ ...prev, max_participants: n }));
+                    }}
+                    className="w-28 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
+                  />
+                  <FieldHint>Top N players qualify for the final. Sets the final tournament cap.</FieldHint>
+                </div>
+              </div>
+            )}
+
+            {seriesModel === 'C' && (
+              <div>
+                <Label htmlFor="sm-topx">Top X per Qualifier</Label>
+                <select
+                  id="sm-topx"
+                  value={topX}
+                  onChange={(e) => setTopX(Number(e.target.value))}
+                  className="w-48 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
+                >
+                  <option value={1}>Top 1 (winner)</option>
+                  <option value={2}>Top 2 (finalists)</option>
+                  <option value={3}>Top 3</option>
+                  <option value={4}>Top 4</option>
+                  <option value={8}>Top 8 (full playoff)</option>
+                </select>
+                <FieldHint>
+                  Top X of each qualifier's highest-division playoff qualify. Top 3 needs a
+                  third-place match in the qualifier; 5–7 are not cleanly rankable.
+                </FieldHint>
+              </div>
+            )}
+          </div>
+
+          {/* Qualifier multi-select */}
+          {qualifierCandidates.length > 0 && (
+            <div className="space-y-2">
+              <Label>Attach Qualifying Tournaments (optional)</Label>
+              <p className="text-xs text-rizzotto-stone-500">
+                Optionally link existing tournaments as qualifiers now. You can add more later.
+              </p>
+              <div className="max-h-48 overflow-y-auto rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 divide-y divide-rizzotto-iron-800">
+                {qualifierCandidates.map((qt) => (
+                  <label
+                    key={qt.id}
+                    className="flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-rizzotto-iron-800 transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedQualifierIds.has(qt.id)}
+                      onChange={() => {
+                        setSelectedQualifierIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(qt.id)) next.delete(qt.id);
+                          else next.add(qt.id);
+                          return next;
+                        });
+                      }}
+                      className="accent-rizzotto-gold-500"
+                    />
+                    <span className="text-sm text-rizzotto-stone-200">{qt.name}</span>
+                    <span className="ml-auto text-xs text-rizzotto-stone-500 font-mono">
+                      {qt.status.replace(/_/g, ' ')}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {selectedQualifierIds.size > 0 && (
+                <p className="text-xs text-rizzotto-stone-500">
+                  {selectedQualifierIds.size} tournament{selectedQualifierIds.size !== 1 ? 's' : ''} selected
+                </p>
+              )}
+            </div>
+          )}
+          {/* Series poster — separate from the final tournament's poster */}
+          <PosterPickField
+            file={seriesPosterFile}
+            onPick={setSeriesPosterFile}
+            legend="Series Poster"
+            description="No poster set. Upload a banner image — shown on the series page, distinct from the final tournament poster below."
+          />
+        </fieldset>
+      )}
+
+      {/* Poster at the very top of the tournament section (mirrors the Edit view). */}
+      {/* For NONE model in series mode the entire tournament form is hidden. */}
+      {(!seriesMode || seriesModel !== 'NONE') && (
+        <>
+          {seriesMode && (
+            <div className="space-y-2">
+              {existingFinalName ? (
+                <p className="text-sm font-semibold text-rizzotto-gold-300">
+                  Editing existing tournament:{' '}
+                  <span className="font-normal italic">{existingFinalName}</span>
+                  <button
+                    type="button"
+                    onClick={handleClearExistingFinal}
+                    className="ml-3 text-xs font-normal text-rizzotto-stone-400 hover:text-rizzotto-stone-200 underline underline-offset-2 transition-colors"
+                  >
+                    Use a new final instead
+                  </button>
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-rizzotto-stone-300">
+                    Final Tournament
+                    <span className="ml-2 font-normal text-rizzotto-stone-500 text-xs">
+                      — configure the Grand Final tournament that this series leads up to
+                    </span>
+                  </p>
+
+                  {/* Existing-final picker — only shown for models A and C */}
+                  {(seriesModel === 'A' || seriesModel === 'C') && qualifierCandidates.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 px-4 py-3">
+                      <Label htmlFor="tcf-existing-final" className="shrink-0 whitespace-nowrap">
+                        Use an existing tournament as the Grand Final
+                      </Label>
+                      <select
+                        id="tcf-existing-final"
+                        value={pickerSlug}
+                        onChange={(e) => {
+                          setPickerSlug(e.target.value);
+                          setLoadExistingFinalError(null);
+                        }}
+                        className="min-w-0 flex-1 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-2 text-sm text-rizzotto-stone-100 focus:border-rizzotto-gold-500 focus:outline-none"
+                      >
+                        <option value="">— select a tournament —</option>
+                        {qualifierCandidates.map((qt) => (
+                          <option key={qt.id} value={qt.slug}>
+                            {qt.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        variant="etched"
+                        size="sm"
+                        disabled={!pickerSlug || loadingExistingFinal}
+                        onClick={() => void handleLoadExistingFinal()}
+                      >
+                        {loadingExistingFinal ? 'Loading…' : 'Load'}
+                      </Button>
+                      {loadExistingFinalError && (
+                        <p className="w-full text-xs text-red-400">{loadExistingFinalError}</p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          <PosterPickField file={posterFile} onPick={setPosterFile} existingUrl={existingFinalPosterUrl} />
 
       <div>
         <Label htmlFor="tcf-name" required>
-          {t('tournament.form.name')}
+          {seriesMode ? 'Final Tournament Name' : t('tournament.form.name')}
         </Label>
         <Input
           id="tcf-name"
           name="name"
           value={form.name ?? ''}
-          onChange={handleChange}
-          placeholder={t('tournament.form.name_placeholder')}
+          onChange={(e) => {
+            finalNameTouched.current = true;
+            handleChange(e);
+          }}
+          placeholder={
+            seriesMode
+              ? 'e.g. Season 3 Championship — Grand Final'
+              : t('tournament.form.name_placeholder')
+          }
         />
+        {seriesMode && (
+          <FieldHint>Auto-filled from the series name. Edit freely.</FieldHint>
+        )}
         <FieldError message={errors.name} />
       </div>
 
@@ -520,6 +1231,25 @@ export function TournamentCreateForm() {
           placeholder="https://twitch.tv/…"
         />
       </div>
+
+      {/* Part of a series — normal create path only (seriesMode already embeds this form
+          as the series final, so the selector is irrelevant there). */}
+      {!seriesMode && manageableSeries.length > 0 && (
+        <div>
+          <Label htmlFor="tcf-series">Part of a series (optional)</Label>
+          <Select
+            id="tcf-series"
+            value={selectedSeriesId}
+            onChange={(e) => setSelectedSeriesId(e.target.value)}
+          >
+            <option value="">— None —</option>
+            {manageableSeries.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </Select>
+          <FieldHint>Attach this tournament as a qualifier to one of your series.</FieldHint>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="min-w-0">
@@ -653,7 +1383,7 @@ export function TournamentCreateForm() {
           <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">Automation</legend>
           <p className="text-xs text-rizzotto-stone-500">
             {form.format === 'SWISS'
-              ? 'Turn both on for a fully self-running tournament (what “Auto Swiss” used to be).'
+              ? 'Turn both on for a fully self-running tournament: rounds are sized from the check-in count and advance on their own.'
               : 'Balanced Liechtenstein advances itself — you only choose whether the round count is auto-sized from the check-in count.'}
           </p>
           <label className="flex items-start gap-2 text-sm text-rizzotto-stone-300">
@@ -694,12 +1424,6 @@ export function TournamentCreateForm() {
         </label>
       )}
 
-      {form.format === 'AUTO_SWISS' && (
-        <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">
-          <p className="font-semibold text-rizzotto-gold-400">Auto Swiss — self-running tournament</p>
-          <p>Check-in opens automatically 1 hour before start. Rounds and playoff size are determined by how many players check in (4–7: 3R + Final, 8–15: 5R + Top 4, 16+: 4R + Top 8). Rounds advance automatically when all matches are complete. All matches: BO1 · Map: Random Ban&amp;Pick.</p>
-        </div>
-      )}
 
       {form.format === 'BALANCED_LIECHTENSTEIN' && (
         <div className="rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-4 text-sm text-rizzotto-stone-300 space-y-1">
@@ -766,10 +1490,20 @@ export function TournamentCreateForm() {
             type="number"
             name="max_participants"
             value={form.max_participants ?? ''}
-            onChange={handleChange}
+            onChange={(e) => {
+              handleChange(e);
+              // Two-way sync: keep series Final Size in step when in series mode A.
+              if (seriesMode && seriesModel === 'A') {
+                const n = Number(e.target.value);
+                if (!Number.isNaN(n) && n >= 2) setFinalSize(n);
+              }
+            }}
             min={2}
             placeholder={t('tournament.form.max_participants_placeholder')}
           />
+          {seriesMode && seriesModel === 'A' && (
+            <span className="mt-1 block text-xs text-rizzotto-stone-500">Synced with Final Size above.</span>
+          )}
         </div>
       </div>
 
@@ -924,7 +1658,7 @@ export function TournamentCreateForm() {
               </div>
             </div>
           </>
-        ) : form.format !== 'AUTO_SWISS' && form.format !== 'BALANCED_LIECHTENSTEIN' ? (
+        ) : form.format !== 'BALANCED_LIECHTENSTEIN' ? (
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
@@ -1061,8 +1795,8 @@ export function TournamentCreateForm() {
           Map Pool
         </legend>
 
-        {/* Map decision mode — hidden for AUTO_SWISS (always Random Ban&Pick) */}
-        {form.format !== 'AUTO_SWISS' && <div>
+        {/* Map Decision Mode */}
+        <div>
           <Label>Map Decision Mode</Label>
           <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-2">
             {MAP_DECISION_MODES.map((opt) => {
@@ -1095,7 +1829,7 @@ export function TournamentCreateForm() {
               );
             })}
           </div>
-        </div>}
+        </div>
 
         {/* Preset configuration for HOST_PRESET and HOST_PRESET_PICK_BAN */}
         {(form.map_decision_mode === 'HOST_PRESET' || form.map_decision_mode === 'HOST_PRESET_PICK_BAN') && (() => {
@@ -1502,18 +2236,27 @@ export function TournamentCreateForm() {
           </div>
         )}
       </fieldset>
+        </>
+      )}
 
       <Button
         type="submit"
         variant="forge"
         size="md"
         disabled={
-          mutation.isPending ||
+          isPending ||
+          !!(seriesMode && !seriesName.trim()) ||
           !!(form.draft_enabled && !form.draft_preset_id) ||
-          (usesMapPool && (form.map_pool?.length ?? 0) < minPool)
+          (seriesModel !== 'NONE' && usesMapPool && (form.map_pool?.length ?? 0) < minPool)
         }
       >
-        {mutation.isPending ? t('tournament.form.submitting') : t('tournament.form.submit')}
+        {isPending
+          ? seriesMode
+            ? 'Creating…'
+            : t('tournament.form.submitting')
+          : seriesMode
+            ? 'Create Series'
+            : t('tournament.form.submit')}
       </Button>
     </form>
   );

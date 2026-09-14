@@ -1,4 +1,5 @@
 import { storedRefLast } from './referrals';
+import { notifyUnauthorized } from './authEvents';
 import type {
   UserMe,
   BracketResponse,
@@ -104,6 +105,9 @@ export interface Tournament {
   restricted_factions?: string[];
   min_band?: number | null;
   max_band?: number | null;
+  // Series (detail endpoint only)
+  series?: { id: string; slug: string; name: string } | null;
+  is_series_final?: boolean;
 }
 
 export type MapDecisionMode = 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
@@ -228,6 +232,7 @@ export interface TournamentCreate {
   faction_pool?: string[];
   min_band?: number | null;
   max_band?: number | null;
+  series_id?: string | null;
 }
 
 // Mirror of backend PatchTournamentSchema (apps/backend/src/routes/tournaments.ts).
@@ -250,7 +255,7 @@ export interface TournamentPatchInput {
   draft_preset_id?: string | null;
   // draft-only (backend enforces, frontend disables after DRAFT)
   format?: Tournament['format'];
-  mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR';
+  mode?: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR' | 'SFT_2V2' | 'BPT_2V2';
   set_faction_id?: string | null;
   faction_pool?: string[];
   restricted_factions?: string[];
@@ -274,6 +279,7 @@ export interface TournamentPatchInput {
   counts_for_leaderboard?: boolean;
   min_band?: number | null;
   max_band?: number | null;
+  series_id?: string | null;
 }
 
 export interface TournamentPatchResponse {
@@ -297,6 +303,10 @@ function makeApiError(message: string, status: number, errorCode?: string): ApiE
   const err = new Error(message) as ApiError;
   err.status = status;
   if (errorCode) err.errorCode = errorCode;
+  // A 401 from ANY endpoint means the server rejected our session — signal the app once, centrally,
+  // so it can drop the cached login and prompt a re-login instead of sitting in a half-logged-in
+  // limbo. STEAM_REQUIRED etc. are 403 and deliberately do NOT trip this.
+  if (status === 401) notifyUnauthorized();
   return err;
 }
 
@@ -495,13 +505,22 @@ export function listTournaments(
   pageSize = 20,
   status?: Tournament['status'],
   isMajor?: boolean,
-  filters?: { battleType?: BattleType; competitorFormat?: Tournament['competitor_format'] },
+  opts?: {
+    battleType?: BattleType;
+    competitorFormat?: Tournament['competitor_format'];
+    manageable?: boolean;
+    notInSeries?: boolean;
+    seriesExempt?: string;
+  },
 ): Promise<{ data: Tournament[]; total: number; page: number; pageSize: number }> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (status) params.set('status', status);
   if (isMajor === true) params.set('is_major', 'true');
-  if (filters?.battleType) params.set('battle_type', filters.battleType);
-  if (filters?.competitorFormat) params.set('competitor_format', filters.competitorFormat);
+  if (opts?.battleType) params.set('battle_type', opts.battleType);
+  if (opts?.competitorFormat) params.set('competitor_format', opts.competitorFormat);
+  if (opts?.manageable) params.set('manageable', 'true');
+  if (opts?.notInSeries) params.set('not_in_series', 'true');
+  if (opts?.seriesExempt) params.set('series_exempt', opts.seriesExempt);
   return apiFetch<{ data: Tournament[]; total: number; page: number; pageSize: number }>(
     `/api/tournaments?${params.toString()}`,
   );
@@ -1634,6 +1653,190 @@ export function getStandardRuleset(battleType?: BattleType, competitorFormat?: '
 /** All 6 (battle type × team size) rulesets, defaults filled — for the admin editor. */
 export function getAllStandardRulesets(): Promise<{ rulesets: Record<string, StandardRuleset> }> {
   return apiFetch('/api/meta/standard-rulesets');
+}
+
+// ---------------------------------------------------------------------------
+// Tournament Series
+// ---------------------------------------------------------------------------
+
+export interface ScoringConfig {
+  model: 'A' | 'C' | 'NONE';
+  points_per_game_played: number;
+  points_per_win: number;
+  final_size: number;
+  top_x: number;
+  tiebreakers: ('points' | 'wins' | 'games' | 'random')[];
+}
+
+export interface StandingA {
+  competitorId: string;
+  username: string;
+  avatar_url: string | null;
+  gamesPlayed: number;
+  wins: number;
+  points: number;
+  rank: number;
+  qualified: boolean;
+}
+
+export interface QualifiedC {
+  competitorId: string;
+  username: string;
+  avatar_url: string | null;
+  fromTournamentId: string;
+  position: number;
+  seed: number;
+}
+
+export interface SeriesSummary {
+  id: string;
+  slug: string;
+  name: string;
+  poster_url: string | null;
+  visibility: 'PUBLIC' | 'PRIVATE';
+  scoring_config: ScoringConfig;
+  created_at: string;
+  owner: { id: string; username: string; avatar_url: string | null };
+  final: { slug: string; name: string; status: string } | null;
+  qualifierCount: number;
+}
+
+export interface Series {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  poster_url: string | null;
+  visibility: 'PUBLIC' | 'PRIVATE';
+  scoring_config: ScoringConfig;
+  final_seeded_at: string | null;
+  created_at: string;
+  owner: { id: string; username: string; avatar_url: string | null };
+  final: { id: string; slug: string; name: string; status: string; start_date: string | null } | null;
+  qualifiers: { id: string; slug: string; name: string; status: string; series_position: number; start_date: string | null }[];
+  can_manage: boolean;
+  standings: StandingA[];
+  qualified: QualifiedC[];
+  standings_provisional: boolean;
+  ready_to_seed: boolean;
+  /** Whether the series is paused (no new qualifiers run, standings frozen). */
+  paused: boolean;
+  /** Co-hosts who can manage the series alongside the owner. */
+  co_hosts: { id: string; username: string; avatar_url: string | null }[];
+}
+
+export interface SeriesCreateBody {
+  name: string;
+  description?: string;
+  poster_url?: string;
+  visibility?: 'PUBLIC' | 'PRIVATE';
+  scoring_config: ScoringConfig;
+  qualifier_ids?: string[];
+  final_tournament_id?: string;
+}
+
+export function listSeries(
+  page = 1,
+  pageSize = 20,
+  opts?: { manageable?: boolean },
+): Promise<{ data: SeriesSummary[]; total: number; page: number; pageSize: number }> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (opts?.manageable) params.set('manageable', 'true');
+  return apiFetch(`/api/series?${params.toString()}`);
+}
+
+export function getSeries(slug: string): Promise<Series> {
+  return apiFetch<Series>(`/api/series/${slug}`);
+}
+
+export function createSeries(body: SeriesCreateBody): Promise<{ id: string; slug: string }> {
+  return apiFetch('/api/series', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchSeries(slug: string, body: Partial<SeriesCreateBody>): Promise<{ ok: true }> {
+  return apiFetch(`/api/series/${slug}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function attachToSeries(slug: string, tournamentId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/series/${slug}/attach`, {
+    method: 'POST',
+    body: JSON.stringify({ tournamentId }),
+  });
+}
+
+export function detachFromSeries(slug: string, tournamentId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/series/${slug}/detach`, {
+    method: 'POST',
+    body: JSON.stringify({ tournamentId }),
+  });
+}
+
+export function seedFinal(slug: string): Promise<{ ok: true; seeded: number; finalSlug: string }> {
+  return apiFetch(`/api/series/${slug}/seed-final`, { method: 'POST' });
+}
+
+// ---------------------------------------------------------------------------
+// Series — management (co-hosts, pause, poster, transfer owner)
+// ---------------------------------------------------------------------------
+
+export function transferSeriesOwner(slug: string, newOwnerId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/series/${slug}/transfer-owner`, {
+    method: 'PATCH',
+    body: JSON.stringify({ new_owner_id: newOwnerId }),
+  });
+}
+
+export function getSeriesCoHosts(slug: string): Promise<CoHostUser[]> {
+  return apiFetch(`/api/series/${slug}/co-hosts`);
+}
+
+export function searchSeriesCoHostCandidates(slug: string, q: string): Promise<CoHostUser[]> {
+  return apiFetch(`/api/series/${slug}/co-host-candidates?q=${encodeURIComponent(q)}`);
+}
+
+export function addSeriesCoHost(slug: string, userId: string): Promise<CoHostUser> {
+  return apiFetch(`/api/series/${slug}/co-hosts`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export function removeSeriesCoHost(slug: string, userId: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/series/${slug}/co-hosts/${userId}`, { method: 'DELETE' });
+}
+
+export function pauseSeries(slug: string, paused: boolean): Promise<{ ok: true }> {
+  return apiFetch(`/api/series/${slug}/pause`, {
+    method: 'PATCH',
+    body: JSON.stringify({ paused }),
+  });
+}
+
+export async function uploadSeriesPoster(slug: string, file: File): Promise<{ poster_url: string }> {
+  const formData = new FormData();
+  formData.append('poster', file);
+  const res = await fetch(`/api/series/${slug}/poster`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = (await res.json()) as { error?: string; message?: string };
+      message = body.message ?? body.error ?? message;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+  return res.json() as Promise<{ poster_url: string }>;
 }
 
 // ---------------------------------------------------------------------------

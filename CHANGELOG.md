@@ -5,6 +5,71 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.57.10] — 2026-09-14 — Clearer session expiry with one-click re-login
+### Fixed
+- When your login expired, the site could get stuck half-logged-in — some things kept working while others silently failed — until a hard refresh (Ctrl+F5). An expired session is now detected immediately: the app cleanly returns to logged-out and shows a banner to sign back in with one click.
+### Changed
+- Your login now renews automatically as you use the site: the 7-day timer restarts on every action, so you're never logged out mid-session — only after about a week of not using the site at all.
+
+## [1.57.9] — 2026-09-13 — Fix repeated end-of-event DM (no-playoff Swiss)
+### Fixed
+- An auto-advancing Swiss tournament with **no playoffs** re-sent its "you've played your final round" DM to every player once per minute (until the host finalised) instead of just once. It now fires exactly once. (Regression from the recent "respect no playoffs" change: a no-playoff bracket creates no matches, so the every-minute re-entry guard never tripped.)
+
+## [1.57.8] — 2026-09-12 — Editing a non-draft tournament as a series final
+### Fixed
+- Attaching an existing tournament that has already left draft as a series Grand Final now saves cleanly. The faction pool — like format and mode — is only blocked when it genuinely changes, not merely when it is resubmitted unchanged, so saving with the same pool no longer errors. Empty custom rules/restrictions are accepted, and the tournament no longer reports clashing with itself on the schedule.
+
+## [1.57.6] — 2026-09-12 — Fix using an existing tournament as a series final
+### Fixed
+- Creating a series from an existing tournament as the Grand Final now works end to end: it no longer flags the tournament as clashing with itself on the schedule, the tournament's already-set poster is now shown in the form, and saving no longer fails with a validation error.
+
+## [1.57.5] — 2026-09-12 — Private tiles fade instead of a badge
+### Changed
+- In the tournament overview (listing + homepage), a private tournament is now shown by fading the whole tile — poster included — to a muted grey, instead of a badge and border. Subtler and clearer at a glance for the hosts, moderators and admins who can see them.
+
+## [1.57.4] — 2026-09-12 — Private marker in the overview
+### Changed
+- The subtle **Private** marker now also appears in the tournament overview — the listing and the homepage — as a muted dashed border and a lock badge on private tournaments (distinct from the dashed-gold draft styling), for the hosts, moderators and admins who can see them.
+
+## [1.57.3] — 2026-09-12 — Private tournament marker
+### Added
+- A subtle **Private** marker now appears on private tournaments — on the tournament page and on its card — for the hosts, moderators and admins who can still see them, so it's clear at a glance that an event isn't public. (Series already showed this.)
+
+## [1.57.2] — 2026-09-12 — Series refinements
+### Added
+- When creating a series you can now use an **existing tournament as the Grand Final** instead of always creating a new one — pick it from a dropdown, load it into the form, and adjust it before the series is created.
+### Changed
+- The invite DM for a new series qualifier is now sent when that qualifier's **registration opens** (players are invited exactly when they can sign up), and only once.
+- Series qualifiers are numbered by when they happened (1 = the first/oldest) and shown newest-first.
+- Widened the top navigation bar so the menu has more breathing room.
+
+## [1.57.1] — 2026-09-12 — Series polish
+### Changed
+- The series standings table now spells out its column headers (Points, Games Played, Game Wins) instead of abbreviations.
+- A series' qualifier tournaments are now listed newest-first.
+### Fixed
+- The series description now supports full formatting — headings, lists, links and line breaks — both when editing it and where it is shown on the series page, matching tournament descriptions. Previously it was a single unformatted line.
+
+## [1.57.0] — 2026-09-12 — Tournament Series
+### Added
+- **Tournament Series** — bundle several tournaments into one series with a live standings tracker and an auto-seeded Grand Final. A new **Series** tab lists every public series; each has its own page showing the running standings, who has qualified so far, all the qualifying tournaments, and the Grand Final.
+- Hosts create a series together with its Grand Final in a single step, attach qualifying tournaments, and choose how players qualify:
+  - **Points race** — every game played and every game won earns points across all qualifiers; the top N by points make the final.
+  - **Per-qualifier** — the top finishers of each qualifier go straight through; anyone who already secured a spot is skipped, so the place passes down to the next player.
+  - **Grouping only** — simply collect related tournaments under one page, with no scoring.
+- Qualifiers can be attached from the series page, or directly from a tournament's own create/edit form via a **"Part of a series"** picker — whichever is more convenient.
+- When the qualifiers are done, the host locks the standings and seeds the Grand Final in one click — qualified players are placed into the final in standings order, ready to start.
+- Series can have co-hosts and transferred ownership (just like tournaments), can be paused and reactivated, and carry their own poster.
+- Players receive a Discord DM when they qualify for a Grand Final (with their seed), and an invitation when a new qualifier is added to a series they have been competing in.
+
+## [1.56.2] — 2026-09-12 — Retire the legacy "Auto Swiss" format
+### Changed
+- The old self-running "Auto Swiss" format has been retired. It can no longer be created or selected (a regular Swiss tournament with auto-advance covers the same ground), and it no longer appears as an option on the create or edit forms. Existing and historical tournaments are unaffected and simply display as "Swiss". Internal auto-advance handling is unchanged.
+
+## [1.56.1] — 2026-09-12 — Respect "no playoffs" in auto-advanced Swiss
+### Fixed
+- A Swiss tournament with a fixed playoff setting (including **no playoffs**) could still auto-generate a Top 4 / Top 8 bracket when its rounds advanced automatically. At the end of the Swiss phase the playoff size was re-derived purely from the player count, which never resolves to "none" for four or more players, so a host's "no playoffs" choice (or a deliberately smaller bracket) was overridden. The host's playoff choice is now the ceiling: the only automatic change is a **downgrade** when the final field is too small to fill the chosen bracket (Top 8 → Top 4 → Top 2 → none). It never grows the bracket and never brings back a playoff a host switched off.
+
 ## [1.56.0] — 2026-09-09 — Consistent edit form + referral overview
 ### Fixed
 - The tournament **edit** form now lists its fields in the same order as the **create** form (name, description, links, then format & mode, then schedule, then match mechanics), so moving between creating and editing a tournament no longer feels jumbled.

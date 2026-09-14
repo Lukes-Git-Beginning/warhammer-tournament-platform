@@ -9,9 +9,18 @@ import { useEffect, useRef, useState } from 'react';
 export function PosterPickField({
   file,
   onPick,
+  legend = 'Poster',
+  description = 'No poster set. Upload a banner image — shown on the tournament page and its card.',
+  existingUrl = null,
 }: {
   file: File | null;
   onPick: (file: File | null) => void;
+  /** Field heading (e.g. "Series Poster"). Defaults to the tournament wording. */
+  legend?: string;
+  /** Empty-state helper text shown when no file is picked. */
+  description?: string;
+  /** An already-saved poster to preview when no new file is picked (e.g. editing an existing tournament). */
+  existingUrl?: string | null;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -26,21 +35,22 @@ export function PosterPickField({
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
+  // A freshly picked file wins; otherwise fall back to any already-saved poster.
+  const shownUrl = preview ?? existingUrl;
+
   return (
     <fieldset className="space-y-3 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
       <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
-        Poster <span className="text-rizzotto-stone-600">(optional)</span>
+        {legend} <span className="text-rizzotto-stone-600">(optional)</span>
       </legend>
-      {preview ? (
+      {shownUrl ? (
         <img
-          src={preview}
-          alt="Tournament poster preview"
+          src={shownUrl}
+          alt={`${legend} preview`}
           className="aspect-[10/3] w-full rounded border border-stone-800 object-cover"
         />
       ) : (
-        <p className="text-sm text-rizzotto-stone-500">
-          No poster set. Upload a banner image — shown on the tournament page and its card.
-        </p>
+        <p className="text-sm text-rizzotto-stone-500">{description}</p>
       )}
       <input
         ref={inputRef}
@@ -59,7 +69,7 @@ export function PosterPickField({
           onClick={() => inputRef.current?.click()}
           className="rounded border border-rizzotto-iron-600 px-3 py-1.5 text-sm text-rizzotto-stone-200 transition-colors hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-400"
         >
-          {preview ? 'Replace poster' : 'Upload poster'}
+          {shownUrl ? 'Replace poster' : 'Upload poster'}
         </button>
         {preview && (
           <button

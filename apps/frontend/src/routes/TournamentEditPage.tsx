@@ -15,6 +15,7 @@ import {
   searchCoHostCandidates,
   addTournamentCoHost,
   removeTournamentCoHost,
+  listSeries,
   type Tournament,
   type TournamentPatchInput,
   type MapDecisionMode,
@@ -552,6 +553,16 @@ export function TournamentEditPage() {
   });
   const scheduledTournaments = useCalendarTournaments(tournament?.id);
 
+  // Series selector: series the viewer can manage — loaded only when the tournament is
+  // not a series final (finals cannot be re-assigned).
+  const { data: manageableSeriesData } = useQuery({
+    queryKey: ['series', 'manageable'],
+    queryFn: () => listSeries(1, 100, { manageable: true }),
+    enabled: !tournament?.is_series_final,
+    staleTime: 30 * 1000,
+  });
+  const manageableSeries = manageableSeriesData?.data ?? [];
+
   const [form, setForm] = useState<EditFormData | null>(null);
   const [initialMapIds, setInitialMapIds] = useState<string[]>([]);
   const [initialFactionIds, setInitialFactionIds] = useState<string[]>([]);
@@ -560,6 +571,8 @@ export function TournamentEditPage() {
   const [factionPoolEnabled, setFactionPoolEnabled] = useState(false);
   const [restrictedFactionsEnabled, setRestrictedFactionsEnabled] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; discord_link?: string }>({});
+  // Series selector: '' = no series (None), or a series id.
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
 
   useEffect(() => {
     if (tournament && form === null) {
@@ -572,6 +585,7 @@ export function TournamentEditPage() {
       const restrictedIds = tournament.restricted_factions ?? [];
       setInitialRestrictedIds(restrictedIds);
       if (restrictedIds.length > 0) setRestrictedFactionsEnabled(true);
+      setSelectedSeriesId(tournament.series?.id ?? '');
     }
   }, [tournament, form]);
 
@@ -693,6 +707,16 @@ export function TournamentEditPage() {
     }
 
     const body = buildPatchBody(tournament, form, initialMapIds, initialFactionIds, initialRestrictedIds);
+
+    // Attach/detach series if the selection changed and the tournament is not a final.
+    if (!tournament.is_series_final) {
+      const currentSeriesId = tournament.series?.id ?? '';
+      if (selectedSeriesId !== currentSeriesId) {
+        // selectedSeriesId === '' means detach (send null); otherwise send the chosen id.
+        body.series_id = selectedSeriesId || null;
+      }
+    }
+
     if (Object.keys(body).length === 0) {
       void navigate({ to: '/tournaments/$slug', params: { slug } });
       return;
@@ -730,7 +754,6 @@ export function TournamentEditPage() {
   // ---------------------------------------------------------------------------
 
   const isSwissFamily = form.format === 'SWISS' || form.format === 'ROUND_ROBIN' || form.format === 'LIECHTENSTEIN';
-  const isAutoSwiss = form.format === 'AUTO_SWISS';
   const isBalanced = form.format === 'BALANCED_LIECHTENSTEIN';
   const balancedAutoSized = isBalanced && form.auto_sizing;
 
@@ -854,7 +877,6 @@ export function TournamentEditPage() {
                 </>
               ) : (
                 <Select id="tef-format" name="format" value={form.format} onChange={handleChange}>
-                  <option value="AUTO_SWISS">Auto Swiss — self-running</option>
                   <option value="SINGLE_ELIMINATION">{t('tournament.format.single_elim')}</option>
                   <option value="DOUBLE_ELIMINATION">{t('tournament.format.double_elim')}</option>
                   <option value="SWISS">{t('tournament.format.swiss')}</option>
@@ -887,12 +909,7 @@ export function TournamentEditPage() {
               )}
             </div>
           </div>
-          {isAutoSwiss && (
-            <div className="mt-3 rounded-lg border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 p-3 text-sm text-rizzotto-stone-300">
-              <p className="font-semibold text-rizzotto-gold-400 mb-1">Auto Swiss</p>
-              <p>Match format (BO1), map mode (Random Ban&amp;Pick) and rounds are set automatically at tournament start based on check-in count. Check-in opens 1h before start time.</p>
-            </div>
-          )}
+
 
           {/* ── ONE_V_THREE: Set Faction ─────────────────────────────────── */}
           {form.mode === 'ONE_V_THREE' && (
@@ -1247,7 +1264,7 @@ export function TournamentEditPage() {
                 <p>Players are paired within their own skill division each round. When the group stage ends, each division runs its own playoff bracket (with an optional third-place match, toggled above). The playoff size above controls how divisions are formed — smaller keeps them band-pure, larger merges them into fewer, bigger mixed brackets.</p>
               </div>
             </>
-          ) : !isAutoSwiss ? (
+          ) : (
             <>
               {/* Match / Semis / Grand Final format — mirror the create form (all three editable). */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -1319,7 +1336,7 @@ export function TournamentEditPage() {
                 </label>
               )}
             </>
-          ) : null}
+          )}
         </fieldset>
 
         {/* N3: late-join only applies where pairing grows dynamically — hidden for fixed brackets (SE/DE). */}
@@ -1393,8 +1410,8 @@ export function TournamentEditPage() {
           </legend>
           {ongoingLocked && <LockNote>Locked — tournament is underway</LockNote>}
 
-          {/* Map decision mode — hidden for AUTO_SWISS (always Random Ban&Pick) */}
-          {!isAutoSwiss && <div>
+          {/* Map Decision Mode */}
+          <div>
             <Label>Map Decision Mode</Label>
             <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-2">
               {MAP_DECISION_MODES.map((opt) => {
@@ -1427,7 +1444,7 @@ export function TournamentEditPage() {
                 );
               })}
             </div>
-          </div>}
+          </div>
 
           {/* Preset configuration */}
           {(form.map_decision_mode === 'HOST_PRESET' || form.map_decision_mode === 'HOST_PRESET_PICK_BAN') && (
@@ -1822,6 +1839,32 @@ export function TournamentEditPage() {
               <option value="PRIVATE">Private</option>
             </Select>
           </div>
+
+          {/* Series membership — shown unless this tournament IS a series final (finals cannot
+              be moved between series). */}
+          {tournament.is_series_final ? (
+            <div className="min-w-0 max-w-xs">
+              <Label>Series</Label>
+              <p className="mt-1 text-sm text-rizzotto-stone-400">
+                This is a series final — it cannot be reassigned to another series.
+              </p>
+            </div>
+          ) : (
+            <div className="min-w-0 max-w-xs">
+              <Label htmlFor="tef-series">Part of a series (optional)</Label>
+              <Select
+                id="tef-series"
+                value={selectedSeriesId}
+                onChange={(e) => setSelectedSeriesId(e.target.value)}
+              >
+                <option value="">— None —</option>
+                {manageableSeries.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </Select>
+              <FieldHint>Attach this tournament as a qualifier to one of your series. Choose "— None —" to detach.</FieldHint>
+            </div>
+          )}
 
           <div className="flex flex-col gap-3">
             <label className="flex cursor-pointer items-center gap-3">

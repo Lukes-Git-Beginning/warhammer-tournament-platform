@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import ReactMarkdown from 'react-markdown';
-import DOMPurify from 'dompurify';
+import { SafeMarkdown } from '@/components/ui/SafeMarkdown';
 import {
   addLateJoiner,
   createMatchNode,
@@ -22,6 +21,7 @@ import type { FactionDto } from '@rizzotto/types';
 import { useAuthQuery } from '@/lib/auth';
 import { formatInUserTimezone } from '@/lib/timezone';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { PrivateBadge } from '@/components/ui/PrivateBadge';
 import { FORMAT_DESCRIPTIONS, MODE_DESCRIPTIONS } from '@/lib/tournamentDescriptions';
 import { useLiveBracket } from '@/hooks/useLiveBracket';
 import { sortStandingsByPlayoffResult, getFinalistIds, getSemifinalistIds, getChampionIds, getBalancedTopDivisionPodium } from '@/lib/bracketStandings';
@@ -59,34 +59,6 @@ const STATUS_COLORS: Record<string, string> = {
   COMPLETED: 'bg-stone-600 text-stone-300',
 };
 
-// Sanitize markdown HTML output via DOMPurify
-function SafeMarkdown({ children }: { children: string }) {
-  const clean = DOMPurify.sanitize(children);
-  return (
-    <ReactMarkdown
-      components={{
-        // Override to use sanitized content
-        p: ({ children: c }) => <p className="mb-3">{c}</p>,
-        h2: ({ children: c }) => (
-          <h2 className="font-display text-xl font-semibold mt-5 mb-2 text-rizzotto-gold-500">{c}</h2>
-        ),
-        ul: ({ children: c }) => <ul className="list-disc pl-5 mb-3 space-y-1">{c}</ul>,
-        ol: ({ children: c }) => <ol className="list-decimal pl-5 mb-3 space-y-1">{c}</ol>,
-        code: ({ children: c }) => (
-          <code className="rounded bg-stone-800 px-1 py-0.5 text-sm font-mono">{c}</code>
-        ),
-        blockquote: ({ children: c }) => (
-          <blockquote className="border-l-[3px] border-rizzotto-gold-500 pl-3 my-2 italic text-rizzotto-stone-300">{c}</blockquote>
-        ),
-        a: ({ children: c, href }) => (
-          <a href={href} target="_blank" rel="noopener noreferrer" className="text-rizzotto-gold-400 underline hover:text-rizzotto-gold-300">{c}</a>
-        ),
-      }}
-    >
-      {clean}
-    </ReactMarkdown>
-  );
-}
 
 export function TournamentDetail() {
   const { t } = useTranslation();
@@ -376,6 +348,7 @@ export function TournamentDetail() {
           <span className={`rounded px-2 py-1 text-xs font-medium ${statusColor}`}>
             {tournament.status}
           </span>
+          {tournament.visibility === 'PRIVATE' && <PrivateBadge className="py-1" />}
         </div>
       </div>
 
@@ -387,6 +360,13 @@ export function TournamentDetail() {
             onClick={() => navigate({ to: '/tournaments/$slug/edit', params: { slug } })}
           >
             {t('tournament.detail.edit')}
+          </button>
+          <button
+            type="button"
+            className="rounded border border-stone-700 px-4 py-1.5 text-sm text-stone-300 hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-500 transition-colors"
+            onClick={() => void navigate({ to: '/tournaments/create', search: { duplicate: slug } })}
+          >
+            Duplicate
           </button>
           {tournament.status === 'DRAFT' && (
             <button
@@ -757,7 +737,7 @@ export function TournamentDetail() {
             <div>
               <span className="text-stone-500">Format:</span>{' '}
               <span className="text-stone-200">
-                {({ AUTO_SWISS: 'Auto Swiss', SWISS: 'Swiss', SINGLE_ELIMINATION: 'Single Elimination', DOUBLE_ELIMINATION: 'Double Elimination', ROUND_ROBIN: 'Round Robin', LIECHTENSTEIN: 'Liechtenstein', BALANCED_LIECHTENSTEIN: 'Balanced Liechtenstein' } as Record<string, string>)[tournament.format] ?? tournament.format}
+                {({ AUTO_SWISS: 'Swiss', SWISS: 'Swiss', SINGLE_ELIMINATION: 'Single Elimination', DOUBLE_ELIMINATION: 'Double Elimination', ROUND_ROBIN: 'Round Robin', LIECHTENSTEIN: 'Liechtenstein', BALANCED_LIECHTENSTEIN: 'Balanced Liechtenstein' } as Record<string, string>)[tournament.format] ?? tournament.format}
                 {['SWISS', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN'].includes(tournament.format)
                   ? (tournament.auto_sizing && tournament.status !== 'ONGOING' && tournament.status !== 'COMPLETED'
                       ? ' · Rounds TBD' // #3: auto-sized rounds are only fixed at start — don't show the default

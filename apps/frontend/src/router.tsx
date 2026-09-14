@@ -22,6 +22,9 @@ import { OpenPlayPage } from './routes/OpenPlayPage';
 import { SupportPage } from './routes/SupportPage';
 import { TeamsPage } from './routes/TeamsPage';
 import { TeamProfilePage } from './routes/TeamProfilePage';
+import { SeriesListingPage } from './routes/SeriesListingPage';
+import { SeriesDetailPage } from './routes/SeriesDetailPage';
+import { CreateSeriesPage } from './routes/CreateSeriesPage';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -60,6 +63,9 @@ const createTournamentRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tournaments/create',
   component: CreateTournamentPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    duplicate: typeof search.duplicate === 'string' ? search.duplicate : undefined,
+  }),
 });
 
 const calendarRoute = createRoute({
@@ -206,6 +212,25 @@ const teamProfileRoute = createRoute({
   component: TeamProfilePage,
 });
 
+const seriesListingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/series',
+  component: SeriesListingPage,
+});
+
+// Must be registered BEFORE seriesDetailRoute so '/series/new' isn't captured as a slug.
+const createSeriesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/series/new',
+  component: CreateSeriesPage,
+});
+
+const seriesDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/series/$slug',
+  component: SeriesDetailPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -234,6 +259,9 @@ const routeTree = rootRoute.addChildren([
   supportRoute,
   teamsRoute,
   teamProfileRoute,
+  seriesListingRoute,
+  createSeriesRoute,
+  seriesDetailRoute,
 ]);
 
 export const router = createRouter({ routeTree });

@@ -82,6 +82,58 @@ export function tournamentChampion(
   return standings[0]?.userId ?? null;
 }
 
+/**
+ * The determinable podium (ordered top finishers) of a tournament's HIGHEST-division playoff,
+ * generalising {@link tournamentChampion} with the SAME highest-band-final method. Positions:
+ * 1/2 from the final; 3/4 from that division's third-place match, else both SF losers tie at 3;
+ * QF losers tie at 5. So the determinable qualification cuts are 1, 2, 4 and 8 (whole playoff)
+ * always, and 3 only with a third-place match; 5/6/7 split the tied QF-loser tier and are NOT
+ * derivable. Returns [] when there is no playoff final (caller falls back to standings).
+ */
+export function tournamentPodium(
+  matches: ChampionMatch[],
+  bandByUser: Map<string, number>,
+): { userId: string; position: number }[] {
+  const done = matches.filter((m) => m.status === 'COMPLETED' && m.winner_id);
+  const bandOf = (m: ChampionMatch): number =>
+    Math.max(bandByUser.get(m.player1_id ?? '') ?? 0, bandByUser.get(m.player2_id ?? '') ?? 0);
+  const loserOf = (m: ChampionMatch): string | null =>
+    m.player1_id === m.winner_id ? m.player2_id : m.player1_id;
+
+  const finals = done.filter((m) => m.phase === 'PLAYOFF_FINAL');
+  if (finals.length === 0) return [];
+  // Top division = the final whose finalists carry the highest skill band.
+  let final = finals[0]!;
+  for (const f of finals) if (bandOf(f) > bandOf(final)) final = f;
+  if (!final.winner_id) return [];
+  const topBand = bandOf(final);
+  const sameBand = (m: ChampionMatch): boolean => bandOf(m) === topBand;
+
+  const podium: { userId: string; position: number }[] = [];
+  const placed = new Set<string>();
+  const add = (uid: string | null, position: number): void => {
+    if (uid && !placed.has(uid)) {
+      podium.push({ userId: uid, position });
+      placed.add(uid);
+    }
+  };
+
+  add(final.winner_id, 1);
+  add(loserOf(final), 2);
+  // 3rd/4th: a third-place match ranks them cleanly (3 vs 4); otherwise the two SF losers tie at 3
+  // (so "top 3" is ambiguous without one, but "top 4" takes both regardless).
+  const third = done.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE' && sameBand(m));
+  if (third && third.winner_id) {
+    add(third.winner_id, 3);
+    add(loserOf(third), 4);
+  } else {
+    for (const sf of done.filter((m) => m.phase === 'PLAYOFF_SF' && sameBand(m))) add(loserOf(sf), 3);
+  }
+  // 5th: QF losers (tied) — completes the field so a full "top 8" cut takes the whole playoff.
+  for (const qf of done.filter((m) => m.phase === 'PLAYOFF_QF' && sameBand(m))) add(loserOf(qf), 5);
+  return podium;
+}
+
 const PaginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   // Cap raised to 1000 so the leaderboard page can load every rank in one request

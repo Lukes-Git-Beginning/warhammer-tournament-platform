@@ -3,35 +3,53 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { uploadTournamentPoster } from '@/lib/api';
 
 /**
- * Poster upload control for the tournament edit page. Uses the dedicated multipart
- * endpoint (POST /api/tournaments/:slug/poster) rather than the main form save.
+ * Poster upload control for an edit page. Uses a dedicated multipart endpoint
+ * (POST /api/tournaments/:slug/poster by default; pass uploadFn for series etc.)
+ * rather than the main form save.
  */
-export function PosterUploadField({ slug, posterUrl }: { slug: string; posterUrl?: string | null }) {
+export function PosterUploadField({
+  slug,
+  posterUrl,
+  uploadFn = uploadTournamentPoster,
+  legend = 'Poster',
+  description = 'No poster set. Upload a banner image — shown on the tournament page and its card.',
+  onUploaded,
+}: {
+  slug: string;
+  posterUrl?: string | null;
+  /** Upload endpoint wrapper. Defaults to the tournament poster endpoint. */
+  uploadFn?: (slug: string, file: File) => Promise<{ poster_url: string }>;
+  /** Field heading (e.g. "Series Poster"). */
+  legend?: string;
+  /** Empty-state helper text. */
+  description?: string;
+  /** Called after a successful upload — use to invalidate the owning query. Defaults to invalidating ['tournament', slug]. */
+  onUploaded?: (posterUrl: string) => void;
+}) {
   const qc = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(posterUrl ?? null);
 
   const upload = useMutation({
-    mutationFn: (file: File) => uploadTournamentPoster(slug, file),
+    mutationFn: (file: File) => uploadFn(slug, file),
     onSuccess: (res) => {
       setPreview(res.poster_url);
-      void qc.invalidateQueries({ queryKey: ['tournament', slug] });
+      if (onUploaded) onUploaded(res.poster_url);
+      else void qc.invalidateQueries({ queryKey: ['tournament', slug] });
     },
   });
 
   return (
     <fieldset className="space-y-3 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
-      <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">Poster</legend>
+      <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">{legend}</legend>
       {preview ? (
         <img
           src={preview}
-          alt="Tournament poster"
+          alt={legend}
           className="aspect-[10/3] w-full rounded border border-stone-800 object-cover"
         />
       ) : (
-        <p className="text-sm text-rizzotto-stone-500">
-          No poster set. Upload a banner image — shown on the tournament page and its card.
-        </p>
+        <p className="text-sm text-rizzotto-stone-500">{description}</p>
       )}
       <input
         ref={inputRef}

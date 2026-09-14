@@ -16,7 +16,7 @@ import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestamp
 import { Team2v2Badge, BattleTypeWatermark } from '@/components/tournament/TournamentTypeBadges';
 
 const FORMAT_LABELS: Record<string, string> = {
-  AUTO_SWISS: 'Auto Swiss',
+  AUTO_SWISS: 'Swiss',
   SINGLE_ELIMINATION: 'Single Elim.',
   DOUBLE_ELIMINATION: 'Double Elim.',
   SWISS: 'Swiss',
@@ -38,6 +38,7 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
   const { data: me } = useAuthQuery();
   const isLive = tournament.status === 'ONGOING';
   const isCompleted = tournament.status === 'COMPLETED';
+  const isPrivate = tournament.visibility === 'PRIVATE';
   const startDate = formatInUserTimezone(tournament.start_date, me?.timezone ?? undefined);
 
   return (
@@ -49,7 +50,7 @@ function MusterCard({ tournament }: { tournament: Tournament }) {
     <Card
       variant="banner"
       interactive
-      className="flex h-full flex-col"
+      className={`flex h-full flex-col${isPrivate ? ' opacity-60 grayscale-[0.4]' : ''}`}
       watermark={<BattleTypeWatermark battleType={tournament.battle_type} />}
     >
       <CardHeader>
