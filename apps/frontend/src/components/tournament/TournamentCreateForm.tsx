@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useRouter } from '@tanstack/react-router';
+import { Link, useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { createTournament, createSeries, getTournament, patchTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster, uploadSeriesPoster, listTournaments, listSeries, type ScoringConfig } from '@/lib/api';
@@ -1297,20 +1297,34 @@ export function TournamentCreateForm({
 
       {/* Part of a series — normal create path only (seriesMode already embeds this form
           as the series final, so the selector is irrelevant there). */}
-      {!seriesMode && manageableSeries.length > 0 && (
+      {!seriesMode && (
         <div>
           <Label htmlFor="tcf-series">Part of a series (optional)</Label>
           <Select
             id="tcf-series"
             value={selectedSeriesId}
             onChange={(e) => setSelectedSeriesId(e.target.value)}
+            disabled={manageableSeries.length === 0}
           >
             <option value="">— None —</option>
             {manageableSeries.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </Select>
-          <FieldHint>Attach this tournament as a qualifier to one of your series.</FieldHint>
+          {manageableSeries.length > 0 ? (
+            <FieldHint>Attach this tournament as a qualifier to one of your series.</FieldHint>
+          ) : (
+            <FieldHint>
+              Running a recurring event? Group qualifiers into a grand final —{' '}
+              <Link
+                to="/series/new"
+                className="text-rizzotto-gold-400 underline underline-offset-2 hover:text-rizzotto-gold-300"
+              >
+                create a series
+              </Link>
+              .
+            </FieldHint>
+          )}
         </div>
       )}
 
