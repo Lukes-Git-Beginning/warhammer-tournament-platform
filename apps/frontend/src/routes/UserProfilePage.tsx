@@ -19,7 +19,6 @@ import { CalibrationWizard } from '../components/meta/CalibrationWizard.js';
 import { CalibrationAuditPanel } from '../components/admin/CalibrationAuditPanel.js';
 import { useAuthQuery } from '@/lib/auth.js';
 import { SupporterBadge } from '@/components/supporter/SupporterBadge.js';
-import { SkillHistoryChart } from '@/components/users/SkillHistoryChart.js';
 import { formatInUserTimezone } from '@/lib/timezone.js';
 import { Button } from '@/components/ui/button.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
@@ -418,14 +417,6 @@ export function UserProfilePage() {
       {isOwnProfile && (
         <CalibrationWizard userId={id} open={wizardOpen} onOpenChange={setWizardOpen} />
       )}
-
-      {/* General Skill over time */}
-      <section>
-        <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          General Skill over time
-        </h2>
-        <SkillHistoryChart userId={id} />
-      </section>
 
       {/* Admin: collapsible controls tucked under the skill-standing tile. */}
       {me?.role === 'ADMIN' && (
