@@ -214,12 +214,15 @@ export function rankingsCutoff(cfg: CompetitionConfig, now: Date = new Date()): 
   return Math.min(cfg.hallOfFameMinGames, daysSince(LAUNCH_DATE, now));
 }
 
-/** Quarterly qualifier gate = min(cap, days into the quarter up to now). Self-scaling for the
- *  CURRENT quarter ("sharpens" toward the full cap by quarter end); a fully-elapsed PAST quarter
- *  uses the full cap. */
+/** Quarterly qualifier gate = min(cap, competitive days elapsed in the quarter up to now).
+ *  Self-scaling for the CURRENT quarter ("sharpens" toward the full cap by quarter end); a
+ *  fully-elapsed PAST quarter uses the full cap. The start is clamped to LAUNCH_DATE so the LAUNCH
+ *  quarter (which only had a few weeks of play) doesn't demand a full quarter's worth of games it
+ *  never had time to accrue. */
 export function qualiGate(cfg: CompetitionConfig, window: TimeWindow, now: Date = new Date()): number {
+  const start = new Date(Math.max(window.from.getTime(), LAUNCH_DATE.getTime()));
   const end = new Date(Math.min(now.getTime(), window.to.getTime()));
-  return Math.min(cfg.qualiMinGames, daysSince(window.from, end));
+  return Math.min(cfg.qualiMinGames, Math.max(0, daysSince(start, end)));
 }
 
 export interface LadderStanding {

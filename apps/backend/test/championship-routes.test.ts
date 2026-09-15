@@ -26,7 +26,7 @@ afterAll(async () => {
 
 async function cleanupAll() {
   await prisma.tournament.deleteMany({ where: { host_id: { in: [ADMIN_ID, USER_ID] } } });
-  await prisma.competitiveCycleSnapshot.deleteMany({ where: { period: '2026-Q3' } });
+  await prisma.competitiveCycleSnapshot.deleteMany({ where: { period: '2099-Q1' } });
   await prisma.user.deleteMany({ where: { id: { in: [ADMIN_ID, USER_ID] } } });
 }
 
@@ -62,7 +62,7 @@ function createChampionship(userId: string, role: string) {
     method: 'POST',
     url: '/api/tournaments',
     cookies: { auth_token: token(userId, role) },
-    payload: { ...base, championship_kind: 'QUARTERLY', championship_period: '2026-Q3' },
+    payload: { ...base, championship_kind: 'QUARTERLY', championship_period: '2099-Q1' },
   });
 }
 
@@ -81,7 +81,7 @@ describe('Championship finals routes', () => {
       select: { championship_kind: true, championship_period: true },
     });
     expect(t.championship_kind).toBe('QUARTERLY');
-    expect(t.championship_period).toBe('2026-Q3');
+    expect(t.championship_period).toBe('2099-Q1');
   });
 
   it('rejects the tag without a period', async () => {
@@ -96,7 +96,7 @@ describe('Championship finals routes', () => {
 
   it('quarterly preview lists all three battle types and links the created final', async () => {
     await createChampionship(ADMIN_ID, 'ADMIN');
-    const res = await app.inject({ method: 'GET', url: '/api/championships/quarterly?period=2026-Q3&competitorFormat=ONE_V_ONE' });
+    const res = await app.inject({ method: 'GET', url: '/api/championships/quarterly?period=2099-Q1&competitorFormat=ONE_V_ONE' });
     expect(res.statusCode).toBe(200);
     const body = res.json<{ battleTypes: Array<{ battleType: string; size: number; belowFloor: boolean; tournament: { slug: string } | null }> }>();
     expect(body.battleTypes.map((b) => b.battleType).sort()).toEqual(['CONQUEST', 'DOMINATION', 'SIEGE']);
