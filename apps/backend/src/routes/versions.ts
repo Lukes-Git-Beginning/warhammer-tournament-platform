@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { listQuartersSinceLaunch, loadQuarterOverrides, applyQuarterOverride, parseQuarter } from '../lib/competition.js';
 
 const CreateVersionSchema = z.object({
   name: z.string().min(1).max(120),
@@ -200,6 +201,91 @@ const versionRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       return reply.code(204).send();
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // Quarters — calendar quarters with admin-editable name / boundary overrides.
+  // -------------------------------------------------------------------------
+
+  // GET /api/quarters — public: launch→now quarters, calendar defaults merged with overrides.
+  fastify.get('/api/quarters', async () => {
+    const overrides = await loadQuarterOverrides(fastify.prisma);
+    // Include a couple of upcoming quarters so admins can configure name/boundaries ahead of time.
+    const ahead = new Date();
+    ahead.setUTCMonth(ahead.getUTCMonth() + 6);
+    const data = listQuartersSinceLaunch(ahead).map((base) => {
+      const ov = overrides.get(base.value) ?? null;
+      const eff = applyQuarterOverride(base, ov ?? undefined);
+      return {
+        period: base.value,
+        defaultLabel: base.label,
+        defaultFrom: base.from,
+        defaultTo: base.to,
+        label: eff.label,
+        from: eff.from,
+        to: eff.to,
+        override: ov ? { name: ov.name, start_date: ov.start_date, end_date: ov.end_date } : null,
+      };
+    });
+    return { data };
+  });
+
+  const QuarterPatchSchema = z
+    .object({
+      name: z.string().max(120).nullable().optional(),
+      start_date: z.string().datetime().nullable().optional(),
+      end_date: z.string().datetime().nullable().optional(),
+    })
+    .refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
+
+  // PATCH /api/quarters/:period — MODERATOR or ADMIN: set/clear the override (null = calendar default).
+  fastify.patch(
+    '/api/quarters/:period',
+    { preHandler: [fastify.authenticate, fastify.requireRole('MODERATOR', 'ADMIN')] },
+    async (request, reply) => {
+      const { period } = request.params as { period: string };
+      if (!parseQuarter(period)) {
+        return reply.code(400).send({ error: 'BadRequest', message: `Invalid quarter period "${period}"`, statusCode: 400 });
+      }
+      const parsed = QuarterPatchSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+      }
+      const d = parsed.data;
+      const start = d.start_date !== undefined ? (d.start_date ? new Date(d.start_date) : null) : undefined;
+      const end = d.end_date !== undefined ? (d.end_date ? new Date(d.end_date) : null) : undefined;
+      if (start && end && end.getTime() <= start.getTime()) {
+        return reply.code(400).send({ error: 'BadRequest', message: 'end_date must be after start_date', statusCode: 400 });
+      }
+      const upd: Record<string, unknown> = {};
+      if (d.name !== undefined) upd.name = d.name;
+      if (start !== undefined) upd.start_date = start;
+      if (end !== undefined) upd.end_date = end;
+      const saved = await fastify.prisma.quarterConfig.upsert({
+        where: { period },
+        update: upd,
+        create: {
+          period,
+          name: (upd.name as string | null | undefined) ?? null,
+          start_date: (upd.start_date as Date | null | undefined) ?? null,
+          end_date: (upd.end_date as Date | null | undefined) ?? null,
+        },
+      });
+      await fastify.prisma.auditLog.create({
+        data: {
+          entity_type: 'QuarterConfig',
+          entity_id: period,
+          action: 'update',
+          actor_id: request.user.sub,
+          new_value: {
+            name: d.name ?? null,
+            start_date: d.start_date ?? null,
+            end_date: d.end_date ?? null,
+          },
+        },
+      });
+      return saved;
     },
   );
 };

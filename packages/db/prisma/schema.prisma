@@ -489,6 +489,19 @@ model CompetitiveCycleSnapshot {
   @@index([kind, period, battle_type, competitor_format])
 }
 
+/// Admin override for a calendar quarter (design-competitive-finals-locked): a custom name and/or
+/// shifted boundaries per quarter. Calendar defaults apply wherever a field is null. period = the
+/// canonical "YYYY-Qn" key. Consumed by the Quarterly Qualifier board + the Quarterly Finals
+/// window & label.
+model QuarterConfig {
+  period     String    @id // "2026-Q4"
+  name       String? // custom label; null → default "Q4 2026"
+  start_date DateTime? // boundary override; null → calendar quarter start
+  end_date   DateTime? // boundary override; null → calendar quarter end
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+}
+
 /// A qualifier series: groups several tournaments (qualifiers) whose results feed a single
 /// grand final. The scoring + qualification model (A = cumulative points, C = per-qualifier
 /// top-X) live in scoring_config (JSON), validated by a Zod schema in the backend.

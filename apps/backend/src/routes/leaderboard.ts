@@ -5,7 +5,7 @@ import { computeVersionLeaderboard } from '../lib/leaderboard-service.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
 import { logistic, skillToBand } from '../lib/rating-model.js';
 import { effectiveTiersOf, SUPPORTER_FLAG_SELECT } from '../lib/supporter-service.js';
-import { currentQuarter, currentMonth, loadCompetitionConfig, computeLadderStandings, rankingsCutoff, qualiGate, parseQuarter, quarterValue, listQuartersSinceLaunch, parseMonth, monthValue, listMonthsSinceLaunch } from '../lib/competition.js';
+import { currentQuarter, currentMonth, loadCompetitionConfig, computeLadderStandings, rankingsCutoff, qualiGate, parseQuarter, quarterValue, listQuartersSinceLaunch, parseMonth, monthValue, listMonthsSinceLaunch, loadQuarterOverrides, resolveQuarter, listQuartersResolved } from '../lib/competition.js';
 import { computeGsBoard, type CompetitorFormatFilter } from '../lib/gs-board.js';
 import type { PrismaClient } from '@rizzotto/db';
 import {
@@ -672,14 +672,15 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
       .safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     const { page, pageSize, battleType, competitorFormat, quarter } = parsed.data;
-    const q = quarter ? parseQuarter(quarter) : currentQuarter();
+    const overrides = await loadQuarterOverrides(fastify.prisma);
+    const q = resolveQuarter(quarter ?? quarterValue(currentQuarter()), overrides);
     if (!q) return reply.code(400).send({ error: 'BadRequest', message: 'Invalid quarter', statusCode: 400 });
     const cfg = await loadCompetitionConfig(fastify.prisma);
     const gate = qualiGate(cfg, q);
-    const quarters = listQuartersSinceLaunch().map((p) => ({ value: p.value, label: p.label }));
+    const quarters = listQuartersResolved(overrides).map((p) => ({ value: p.value, label: p.label }));
     return cached(
       fastify.redis,
-      cacheKey('leaderboard:quarterly', { page, pageSize, battleType, competitorFormat, quarter: quarterValue(q), gate }),
+      cacheKey('leaderboard:quarterly', { page, pageSize, battleType, competitorFormat, quarter: q.value, gate, from: q.from.toISOString(), to: q.to.toISOString() }),
       async () => {
         const board = await computeGsBoard(fastify.prisma, fastify.redis, {
           versionId: null,
@@ -706,7 +707,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
             },
           ];
         });
-        return { entries, total, page, pageSize, quarter: q.label, quarterValue: quarterValue(q), quarters, battleType, competitorFormat, gate, capGames: cfg.qualiMinGames };
+        return { entries, total, page, pageSize, quarter: q.label, quarterValue: q.value, quarters, battleType, competitorFormat, gate, capGames: cfg.qualiMinGames };
       },
       { ttlSeconds: 600 },
     );

@@ -115,6 +115,48 @@ export function listMonthsSinceLaunch(now: Date = new Date()): Period[] {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Quarter overrides — admin-editable per-quarter name / boundaries. Calendar defaults apply
+// wherever a field is null. Consumed by the Quarterly Qualifier board + the Quarterly Finals.
+// ---------------------------------------------------------------------------
+
+export interface QuarterOverride {
+  name: string | null;
+  start_date: Date | null;
+  end_date: Date | null;
+}
+
+/** Load all admin quarter overrides, keyed by "YYYY-Qn". */
+export async function loadQuarterOverrides(prisma: PrismaClient): Promise<Map<string, QuarterOverride>> {
+  const rows = await prisma.quarterConfig.findMany({
+    select: { period: true, name: true, start_date: true, end_date: true },
+  });
+  return new Map(rows.map((r) => [r.period, { name: r.name, start_date: r.start_date, end_date: r.end_date }]));
+}
+
+/** Merge a calendar quarter with an admin override (custom name / shifted boundaries; null = keep). */
+export function applyQuarterOverride(base: Period, ov?: QuarterOverride): Period {
+  if (!ov) return base;
+  return {
+    value: base.value,
+    label: ov.name ?? base.label,
+    from: ov.start_date ?? base.from,
+    to: ov.end_date ?? base.to,
+  };
+}
+
+/** Resolve a "YYYY-Qn" period to its window + label, applying an override if present. */
+export function resolveQuarter(period: string, overrides: Map<string, QuarterOverride>): Period | null {
+  const w = parseQuarter(period);
+  if (!w) return null;
+  return applyQuarterOverride({ value: period, label: w.label, from: w.from, to: w.to }, overrides.get(period));
+}
+
+/** Selectable quarters (launch→now, newest first) with overrides applied. */
+export function listQuartersResolved(overrides: Map<string, QuarterOverride>, now: Date = new Date()): Period[] {
+  return listQuartersSinceLaunch(now).map((p) => applyQuarterOverride(p, overrides.get(p.value)));
+}
+
 export interface CompetitionConfig {
   /** Cap for the quarterly qualifier's self-scaling gate = min(this, days into the quarter).
    *  90 ≈ "~1 tournament/week + ladder" — the legitimacy bar for a cash-prize final. */

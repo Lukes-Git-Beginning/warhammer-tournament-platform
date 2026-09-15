@@ -20,9 +20,10 @@ import { captainMap } from './competitors.js';
 import {
   loadCompetitionConfig,
   qualiGate,
-  parseQuarter,
   parseMonth,
   computeLadderStandings,
+  loadQuarterOverrides,
+  resolveQuarter,
 } from './competition.js';
 
 /** Largest power of two ≤ x (x may be fractional). 0 when x < 1. */
@@ -95,7 +96,8 @@ export async function computeQuarterlyFinal(
     now?: Date;
   },
 ): Promise<QuarterlyFinalPreview | null> {
-  const window = parseQuarter(opts.period);
+  const overrides = await loadQuarterOverrides(prisma);
+  const window = resolveQuarter(opts.period, overrides);
   if (!window) return null;
   const now = opts.now ?? new Date();
   const cfg = await loadCompetitionConfig(prisma);
