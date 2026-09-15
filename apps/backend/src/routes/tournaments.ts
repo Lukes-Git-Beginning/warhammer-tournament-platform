@@ -221,6 +221,20 @@ function refineSiege(
   }
 }
 
+/** A championship final (QUARTERLY / MONTHLY_LADDER) must pin its cycle via championship_period. */
+function refineChampionship(
+  data: { championship_kind?: string; championship_period?: string | null },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.championship_kind && data.championship_kind !== 'NONE' && !data.championship_period) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['championship_period'],
+      message: 'A championship final needs a period (e.g. 2026-Q4 or 2026-10).',
+    });
+  }
+}
+
 /** Dedicated 2v2 faction-pick modes — require competitor_format = TWO_V_TWO (team-as-actor). */
 const TWO_V_TWO_MODES = ['SFT_2V2', 'BPT_2V2'] as const;
 
@@ -269,10 +283,14 @@ const CreateTournamentSchema = z.object({
   // Optional: attach the new tournament to a series (as a qualifier) in one step. The
   // caller must be able to manage the series; validated in the handler.
   series_id: z.string().uuid().nullable().optional(),
+  // Recurring competitive final tag (admin-only; design-competitive-finals-locked).
+  championship_kind: z.enum(['NONE', 'QUARTERLY', 'MONTHLY_LADDER']).optional(),
+  championship_period: z.string().min(4).max(16).nullable().optional(),
 })
   .superRefine(refineMapPool)
   .superRefine(refineOneVThree)
   .superRefine(refineSiege)
+  .superRefine(refineChampionship)
   .superRefine((data, ctx) => {
     // 2v2 + Balanced Liechtenstein is supported: teams are banded by their blended GS
     // (resolveTeamGs — members' average prior → the team's own fitted 2v2 GS), and the whole BaLi
@@ -334,10 +352,14 @@ const PatchTournamentSchema = z.object({
   competitor_format: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(),
   // Attach to / move between / detach (null) a series. Validated in the handler.
   series_id: z.string().uuid().nullable().optional(),
+  // Recurring competitive final tag (admin-only; design-competitive-finals-locked).
+  championship_kind: z.enum(['NONE', 'QUARTERLY', 'MONTHLY_LADDER']).optional(),
+  championship_period: z.string().min(4).max(16).nullable().optional(),
 })
   .superRefine(refineMapPool)
   .superRefine(refineOneVThree)
   .superRefine(refineSiege)
+  .superRefine(refineChampionship)
   .refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
 
 // ---------------------------------------------------------------------------
@@ -561,6 +583,14 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // Championship finals are admin-only (set via the Series dropdown for admins/moderators).
+      if (data.championship_kind && data.championship_kind !== 'NONE') {
+        const me = await fastify.prisma.user.findUnique({ where: { id: request.user.sub }, select: { role: true } });
+        if (!me || (me.role !== 'ADMIN' && me.role !== 'MODERATOR')) {
+          return reply.code(403).send({ error: 'Forbidden', message: 'Only admins can create a championship final.', statusCode: 403 });
+        }
+      }
+
       const isBalanced = data.format === 'BALANCED_LIECHTENSTEIN';
       // Balanced Liechtenstein auto-sizes only its ROUND COUNT from the check-in count
       // at start (applyBalancedStartConfig), unless the host opts out via auto_sizing=false.
@@ -627,6 +657,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           max_band: data.max_band ?? null,
           battle_type: data.battle_type ?? 'DOMINATION',
           competitor_format: data.competitor_format ?? 'ONE_V_ONE',
+          championship_kind: data.championship_kind ?? 'NONE',
+          championship_period: data.championship_period ?? null,
         },
         select: {
           id: true,
@@ -647,6 +679,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           map_preset_config: true,
           battle_type: true,
           competitor_format: true,
+          championship_kind: true,
+          championship_period: true,
           created_at: true,
         },
       });
@@ -1206,6 +1240,14 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Build old_value / new_value for audit log (changed fields only)
+      // Championship finals are admin-only (set via the Series dropdown for admins/moderators).
+      if (rest.championship_kind && rest.championship_kind !== 'NONE') {
+        const me = await fastify.prisma.user.findUnique({ where: { id: user.sub }, select: { role: true } });
+        if (!me || (me.role !== 'ADMIN' && me.role !== 'MODERATOR')) {
+          return reply.code(403).send({ error: 'Forbidden', message: 'Only admins can set a championship final.', statusCode: 403 });
+        }
+      }
+
       const changedOld: Record<string, unknown> = {};
       const changedNew: Record<string, unknown> = {};
       const updateData: Record<string, unknown> = {};
