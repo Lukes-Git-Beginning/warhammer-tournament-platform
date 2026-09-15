@@ -316,6 +316,9 @@ export function TournamentCreateForm({
       format: sourceForDuplicate.format as FormData['format'],
       mode: (sourceForDuplicate.mode ?? 'BPT') as FormData['mode'],
       set_faction_id: sourceForDuplicate.set_faction_id ?? undefined,
+      // Battle type / competitor format
+      battle_type: (sourceForDuplicate.battle_type ?? 'DOMINATION') as FormData['battle_type'],
+      competitor_format: (sourceForDuplicate.competitor_format ?? 'ONE_V_ONE') as FormData['competitor_format'],
       // Match mechanics
       rounds_count: sourceForDuplicate.rounds_count ?? prev.rounds_count,
       playoff_format: (sourceForDuplicate.playoff_format ?? 'NONE') as FormData['playoff_format'],
@@ -352,6 +355,22 @@ export function TournamentCreateForm({
     }
     if ((sourceForDuplicate.restricted_factions ?? []).length > 0) {
       setRestrictedFactionsEnabled(true);
+    }
+    // Carry the poster over: fetch the source image and stage it as the new poster
+    // file so the normal upload path attaches an independent copy to the duplicate.
+    if (sourceForDuplicate.poster_url) {
+      const posterUrl = sourceForDuplicate.poster_url;
+      void (async () => {
+        try {
+          const res = await fetch(posterUrl);
+          if (!res.ok) return;
+          const blob = await res.blob();
+          const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+          setPosterFile(new File([blob], `poster.${ext}`, { type: blob.type }));
+        } catch {
+          /* non-fatal — the host can re-pick the poster manually */
+        }
+      })();
     }
     // Prevent the map-pool default-all-maps effect from overwriting the prefilled pool
     mapPoolInitialized.current = true;
