@@ -74,6 +74,17 @@ enum CompetitorFormat {
   TWO_V_TWO
 }
 
+/// Recurring competitive final tag on a Tournament. NONE = a normal tournament. QUARTERLY =
+/// the per-battle-type Quarterly Final (seeded from the quarter's GS board). MONTHLY_LADDER =
+/// the Monthly Ladder Invitational (seeded from the month's ladder activity + a raffle).
+/// The tournament's own battle_type + competitor_format define the QUARTERLY slot's axes;
+/// championship_period pins the cycle ("2026-Q4" / "2026-10"). See design-competitive-finals-locked.
+enum ChampionshipKind {
+  NONE
+  QUARTERLY
+  MONTHLY_LADDER
+}
+
 /// A competitor slot on a Match (player1_id/player2_id/winner_id) is opaque: a User
 /// id for 1v1, a Team id for 2v2. TournamentParticipant.participant_type discriminates
 /// how to resolve it. There is no FK on the slots (a slot may point at User OR Team).
@@ -422,6 +433,11 @@ model Tournament {
   // One-time guard: the "new qualifier in your series" invite DM is sent once, when this
   // qualifier's registration opens — never again on a later re-open.
   series_invite_sent       Boolean         @default(false)
+  // Recurring competitive final tag (design-competitive-finals-locked): NONE for a normal
+  // tournament. QUARTERLY / MONTHLY_LADDER mark a leaderboard-seeded final for a given period;
+  // battle_type + competitor_format are the slot axes, championship_period pins the cycle.
+  championship_kind        ChampionshipKind @default(NONE)
+  championship_period      String?
   created_at               DateTime        @default(now())
   updated_at               DateTime        @updatedAt
   deleted_at               DateTime?
@@ -447,6 +463,30 @@ model Tournament {
   @@index([host_id])
   @@index([start_date])
   @@index([deleted_at])
+  // At most one final per (kind, battle_type, competitor_format, period). NONE tournaments have a
+  // NULL period → NULLs are distinct in Postgres, so normal tournaments stay unconstrained.
+  @@unique([championship_kind, battle_type, competitor_format, championship_period])
+}
+
+/// Frozen qualification for a recurring final (design-competitive-finals-locked): the seeded
+/// top-N as of the moment the admin locked & seeded the final. Immutable — decoupled from the
+/// tournament's live participant list and from later edits/voids of old games, so the Circuit
+/// history stays stable. competitor_id is opaque: a User (1v1) or a Team (2v2); no FK, like
+/// PlayerSkillSnapshot. gs = quarterly seeding skill; points = monthly ladder activity.
+model CompetitiveCycleSnapshot {
+  id                String           @id @default(uuid()) @db.Uuid
+  kind              ChampionshipKind
+  period            String
+  battle_type       BattleType
+  competitor_format CompetitorFormat
+  competitor_id     String           @db.Uuid
+  rank              Int
+  gs                Float?
+  points            Int?
+  created_at        DateTime         @default(now())
+
+  @@unique([kind, period, battle_type, competitor_format, competitor_id])
+  @@index([kind, period, battle_type, competitor_format])
 }
 
 /// A qualifier series: groups several tournaments (qualifiers) whose results feed a single

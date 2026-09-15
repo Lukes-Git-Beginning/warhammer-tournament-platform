@@ -30,6 +30,8 @@ export interface GsBoardEntry {
   band: number;
   /** The competitor's own decisive games (in the fit's window, if any). */
   gamesCount: number;
+  /** Decisive games IN the selected battle type (== gamesCount when battleType is OVERALL). */
+  battleTypeGames: number;
   factionsPlayed: number;
   /** 2v2 only — team estimate still leaning on the members' prior. */
   provisional: boolean;
@@ -58,6 +60,13 @@ export async function computeGsBoard(
     window: opts.window,
     config: { hierarchical: true },
   });
+
+  // Per-(competitor, battle type) decisive game counts, so callers can gate on activity WITHIN a
+  // battle type (the Quarterly Final seeds the field from games actually played in that type).
+  const btGames = new Map<string, number>();
+  for (const e of model.battleTypeOffsets) btGames.set(`${e.playerId}:${e.battleType}`, e.gamesCount);
+  const gamesInView = (competitorId: string, totalGames: number): number =>
+    opts.battleType === 'OVERALL' ? totalGames : (btGames.get(`${competitorId}:${opts.battleType}`) ?? 0);
 
   // The battle-type view = base GS + that battle type's offset. Overall = base GS.
   const skillFor = (competitorId: string, overall: number): number => {
@@ -90,6 +99,7 @@ export async function computeGsBoard(
         stdError: tg.stdError,
         band: skillToBand(gs),
         gamesCount: tg.gamesCount,
+        battleTypeGames: gamesInView(t.id, tg.gamesCount),
         factionsPlayed: 0,
         provisional: tg.provisional,
         memberIds,
@@ -112,6 +122,7 @@ export async function computeGsBoard(
         stdError: e.stdError,
         band: skillToBand(gs),
         gamesCount: e.gamesCount,
+        battleTypeGames: gamesInView(e.playerId, e.gamesCount),
         factionsPlayed: e.factionsPlayed,
         provisional: false,
         memberIds: [],
