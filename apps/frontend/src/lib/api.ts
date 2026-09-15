@@ -797,12 +797,14 @@ export interface QuarterlyEntry {
   generalSkill: number;
   stdError: number;
   band: number;
-  gamesCount: number;
+  gamesCount: number; // games in scope (this battle type, or total for Overall)
+  qualified: boolean; // cleared the activity gate this quarter
   provisional: boolean;
 }
 export interface QuarterlyResponse {
   entries: QuarterlyEntry[];
   total: number;
+  qualifiedCount: number;
   page: number;
   pageSize: number;
   quarter: string;

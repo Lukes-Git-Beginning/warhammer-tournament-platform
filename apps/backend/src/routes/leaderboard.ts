@@ -578,8 +578,16 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
           battleType,
           competitorFormat,
         });
-        // 1v1: self-scaling cutoff. 2v2: show all active teams (folds in the old Teams board).
-        const eligible = competitorFormat === 'ONE_V_ONE' ? board.filter((e) => e.gamesCount >= cutoff) : board;
+        // In-scope games: total for Overall, else games IN the selected battle type — a battle-type
+        // board must not list everyone via the GS fallback, only players who actually played it.
+        const inScope = (e: (typeof board)[number]) => (battleType === 'OVERALL' ? e.gamesCount : e.battleTypeGames);
+        // 1v1: self-scaling cutoff. 2v2: all active teams for Overall, else only teams that played the type.
+        const eligible =
+          competitorFormat === 'ONE_V_ONE'
+            ? board.filter((e) => inScope(e) >= cutoff)
+            : battleType === 'OVERALL'
+              ? board
+              : board.filter((e) => inScope(e) >= 1);
         const total = eligible.length;
         const slice = eligible.slice((page - 1) * pageSize, page * pageSize);
         const display = await resolveBoardDisplay(fastify.prisma, competitorFormat, slice.map((e) => e.competitorId));
@@ -594,8 +602,8 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
               stdError: e.stdError,
               band: e.band,
               winChance: logistic(e.gs),
-              gamesCount: e.gamesCount,
-              permanent: competitorFormat === 'ONE_V_ONE' && e.gamesCount >= permanence,
+              gamesCount: inScope(e),
+              permanent: competitorFormat === 'ONE_V_ONE' && inScope(e) >= permanence,
               provisional: e.provisional,
             },
           ];
@@ -688,9 +696,15 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
           battleType,
           competitorFormat,
         });
-        const eligible = board.filter((e) => e.gamesCount >= gate);
-        const total = eligible.length;
-        const slice = eligible.slice((page - 1) * pageSize, page * pageSize);
+        // In-scope games: total for Overall, else games IN the selected battle type — so a
+        // battle-type board lists only players who actually played it (not everyone via the GS
+        // fallback). Show EVERYONE who played (>=1) with a `qualified` flag; the frontend greys
+        // the sub-gate players + shows a legend, rather than hiding them.
+        const inScope = (e: (typeof board)[number]) => (battleType === 'OVERALL' ? e.gamesCount : e.battleTypeGames);
+        const played = board.filter((e) => inScope(e) >= 1);
+        const qualifiedCount = played.filter((e) => inScope(e) >= gate).length;
+        const total = played.length;
+        const slice = played.slice((page - 1) * pageSize, page * pageSize);
         const display = await resolveBoardDisplay(fastify.prisma, competitorFormat, slice.map((e) => e.competitorId));
         const entries = slice.flatMap((e, i) => {
           const d = display(e.competitorId);
@@ -702,12 +716,13 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
               generalSkill: e.gs,
               stdError: e.stdError,
               band: e.band,
-              gamesCount: e.gamesCount,
+              gamesCount: inScope(e),
+              qualified: inScope(e) >= gate,
               provisional: e.provisional,
             },
           ];
         });
-        return { entries, total, page, pageSize, quarter: q.label, quarterValue: q.value, quarters, battleType, competitorFormat, gate, capGames: cfg.qualiMinGames };
+        return { entries, total, qualifiedCount, page, pageSize, quarter: q.label, quarterValue: q.value, quarters, battleType, competitorFormat, gate, capGames: cfg.qualiMinGames };
       },
       { ttlSeconds: 600 },
     );

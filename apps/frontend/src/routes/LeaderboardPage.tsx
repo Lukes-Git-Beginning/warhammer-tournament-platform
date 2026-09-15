@@ -242,6 +242,7 @@ interface GsEntry {
   band: number;
   gamesCount: number;
   permanent?: boolean; // Rankings only
+  qualified?: boolean; // Quarterly only — false = below the activity gate (greyed)
   provisional: boolean;
 }
 
@@ -306,13 +307,20 @@ function GsTable({
           <tbody className="divide-y divide-stone-800/60">
             {entries.map((entry) => {
               const isFirst = entry.rank === 1;
-              const rowClass = isFirst
-                ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10'
-                : 'hover:bg-stone-800/30';
+              const unqualified = entry.qualified === false;
+              const rowClass = `${
+                isFirst
+                  ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10'
+                  : 'hover:bg-stone-800/30'
+              }${unqualified ? ' opacity-45' : ''}`;
               const bandLabel = `Band ${entry.band}`;
               const pct = winPct(entry.generalSkill);
               return (
-                <tr key={entry.user?.id ?? entry.team?.id ?? entry.rank} className={`transition-colors ${rowClass}`}>
+                <tr
+                  key={entry.user?.id ?? entry.team?.id ?? entry.rank}
+                  className={`transition-colors ${rowClass}`}
+                  title={unqualified ? 'Below this quarter’s activity minimum — not yet qualified' : undefined}
+                >
                   <td className="px-4 py-3">
                     <RankCell rank={entry.rank} />
                   </td>
@@ -711,6 +719,7 @@ function QuarterlyTab() {
       generalSkill: e.generalSkill,
       band: e.band,
       gamesCount: e.gamesCount,
+      qualified: e.qualified,
       provisional: e.provisional,
     }));
 
@@ -745,7 +754,9 @@ function QuarterlyTab() {
         )}
         {data && (
           <span className="text-xs text-stone-500">
-            min. {data.gate} games this quarter &middot; {data.total} qualified
+            <span className="font-medium text-stone-300">{data.qualifiedCount}</span> of {data.total} qualify
+            &middot; needs {data.gate} decisive games this quarter
+            &middot; <span className="opacity-45">greyed</span> = not yet at the minimum
           </span>
         )}
       </div>
