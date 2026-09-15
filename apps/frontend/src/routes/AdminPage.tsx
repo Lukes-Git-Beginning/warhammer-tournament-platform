@@ -29,10 +29,11 @@ import { AnnouncementsTab } from '@/components/admin/AnnouncementsTab.js';
 import { ReferralsTab } from '@/components/admin/ReferralsTab.js';
 import { BroadcastDmTab } from '@/components/admin/BroadcastDmTab.js';
 import { AccessLogTab } from '@/components/admin/AccessLogTab.js';
+import { AdminCompetitionTab } from '@/components/admin/AdminCompetitionTab.js';
 
-type Tab = 'audit' | 'dashboard' | 'users' | 'supporters' | 'presets' | 'stats' | 'settings' | 'announcements' | 'referrals' | 'broadcast' | 'import' | 'matches' | 'all_games' | 'tournament_log' | 'queue' | 'skill_calibration' | 'reports' | 'access_log';
+type Tab = 'audit' | 'dashboard' | 'users' | 'supporters' | 'presets' | 'stats' | 'settings' | 'announcements' | 'referrals' | 'broadcast' | 'import' | 'matches' | 'all_games' | 'tournament_log' | 'queue' | 'skill_calibration' | 'reports' | 'access_log' | 'competition';
 
-const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'announcements', 'referrals', 'broadcast', 'access_log', 'skill_calibration', 'users', 'supporters', 'matches', 'all_games', 'tournament_log', 'queue', 'presets', 'audit', 'import'];
+const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'competition', 'announcements', 'referrals', 'broadcast', 'access_log', 'skill_calibration', 'users', 'supporters', 'matches', 'all_games', 'tournament_log', 'queue', 'presets', 'audit', 'import'];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard: 'admin.tabs.dashboard',
@@ -42,6 +43,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
   presets: 'admin.tabs.presets',
   stats: 'admin.tabs.stats',
   settings: 'admin.tabs.settings',
+  competition: 'admin.tabs.competition',
   announcements: 'admin.tabs.announcements',
   referrals: 'admin.tabs.referrals',
   broadcast: 'admin.tabs.broadcast',
@@ -63,6 +65,7 @@ const STATIC_LABELS: Record<Tab, string> = {
   presets: 'Presets',
   stats: 'Statistics',
   settings: 'Settings',
+  competition: 'Competition',
   announcements: 'Announcements',
   referrals: 'Referrals',
   broadcast: 'Broadcast',
@@ -203,6 +206,7 @@ export function AdminPage() {
         {tab === 'presets' && <PresetLibraryAdmin />}
         {tab === 'stats' && <StatsTab />}
         {tab === 'settings' && <SettingsTab />}
+        {tab === 'competition' && <AdminCompetitionTab />}
         {tab === 'import' && <ImportLogTable />}
         {tab === 'skill_calibration' && <SkillCalibrationTab />}
         {tab === 'reports' && <AdminReportsTab />}

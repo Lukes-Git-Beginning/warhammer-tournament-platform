@@ -866,6 +866,47 @@ export function listVersions(): Promise<{ data: VersionSummary[] }> {
   return apiFetch<{ data: VersionSummary[] }>('/api/versions');
 }
 
+// ── Version admin (create / activate / delete) ───────────────────────────────
+export interface VersionInput {
+  name: string;
+  start_date: string; // ISO
+  end_date: string; // ISO
+  is_active?: boolean;
+  dlc_tag?: string;
+}
+export function createVersion(input: VersionInput): Promise<VersionSummary> {
+  return apiFetch<VersionSummary>('/api/versions', { method: 'POST', body: JSON.stringify(input) });
+}
+export function patchVersion(id: string, input: Partial<VersionInput>): Promise<VersionSummary> {
+  return apiFetch<VersionSummary>(`/api/versions/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+export function deleteVersion(id: string): Promise<void> {
+  return apiFetch<void>(`/api/versions/${id}`, { method: 'DELETE' });
+}
+
+// ── Quarter admin (calendar defaults + name/boundary overrides) ──────────────
+export interface QuarterAdminEntry {
+  period: string; // "2026-Q4"
+  defaultLabel: string; // "Q4 2026"
+  defaultFrom: string;
+  defaultTo: string;
+  label: string; // effective (override name or default)
+  from: string; // effective
+  to: string; // effective
+  override: { name: string | null; start_date: string | null; end_date: string | null } | null;
+}
+export function getQuarters(): Promise<{ data: QuarterAdminEntry[] }> {
+  return apiFetch<{ data: QuarterAdminEntry[] }>('/api/quarters');
+}
+export interface QuarterOverrideInput {
+  name?: string | null; // null clears the custom name
+  start_date?: string | null; // ISO, or null to clear the boundary override
+  end_date?: string | null;
+}
+export function patchQuarter(period: string, input: QuarterOverrideInput): Promise<QuarterAdminEntry['override']> {
+  return apiFetch<QuarterAdminEntry['override']>(`/api/quarters/${period}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
 /** Public feature flags — gates UI like the Champions board / "Majors only" filter / is_major option. */
 export interface FeatureFlags {
   arena: boolean;
