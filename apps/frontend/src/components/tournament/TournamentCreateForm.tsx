@@ -14,6 +14,14 @@ import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { Select } from '@/components/ui/select';
 import { Label, FieldError, FieldHint } from '@/components/ui/label';
 import { MODE_DESCRIPTIONS } from '@/lib/tournamentDescriptions';
+import { useAuthQuery } from '@/lib/auth';
+
+// ---------------------------------------------------------------------------
+// Championship kind — admin-only, determines if this tournament is a Competitive
+// Final (quarterly or monthly ladder).
+// ---------------------------------------------------------------------------
+
+type ChampionshipKind = 'NONE' | 'QUARTERLY' | 'MONTHLY_LADDER';
 
 // ---------------------------------------------------------------------------
 // Series mode types — used when CreateSeriesPage embeds this form
@@ -192,6 +200,14 @@ export function TournamentCreateForm({
   const { t } = useTranslation();
   const router = useRouter();
   const defaultTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  const { data: me } = useAuthQuery();
+  const isAdmin = me?.role === 'ADMIN' || me?.role === 'MODERATOR';
+
+  // ── Championship kind (admin-only) ──────────────────────────────────────
+  const [championshipKind, setChampionshipKind] = useState<ChampionshipKind>('NONE');
+  const [championshipQuarter, setChampionshipQuarter] = useState('');
+  const [championshipMonth, setChampionshipMonth] = useState('');
 
   // ── Series-mode state ───────────────────────────────────────────────────
   const [seriesName, setSeriesName] = useState('');
@@ -901,6 +917,20 @@ export function TournamentCreateForm({
         : {}),
       // Normal create path: attach to an existing series if one was chosen.
       ...(!seriesMode && selectedSeriesId ? { series_id: selectedSeriesId } : {}),
+      // Admin: championship kind tagging.
+      ...(isAdmin && championshipKind !== 'NONE'
+        ? {
+            championship_kind: championshipKind,
+            championship_period:
+              championshipKind === 'QUARTERLY'
+                ? championshipQuarter || null
+                : championshipKind === 'MONTHLY_LADDER'
+                  ? championshipMonth || null
+                  : null,
+            // Lock competitor_format to 1v1 for Monthly Ladder Finals.
+            ...(championshipKind === 'MONTHLY_LADDER' ? { competitor_format: 'ONE_V_ONE' as const } : {}),
+          }
+        : {}),
     });
   }
 
@@ -1282,6 +1312,92 @@ export function TournamentCreateForm({
           </Select>
           <FieldHint>Attach this tournament as a qualifier to one of your series.</FieldHint>
         </div>
+      )}
+
+      {/* ── Admin: Competitive Finals tagging ─────────────────────────── */}
+      {!seriesMode && isAdmin && (
+        <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700/60 bg-rizzotto-iron-900/40 p-4">
+          <legend className="px-1 text-xs font-semibold text-rizzotto-stone-500 uppercase tracking-wide">
+            Competitive Finals (Admin)
+          </legend>
+
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { value: 'NONE' as const, label: 'None' },
+                { value: 'QUARTERLY' as const, label: 'Quarterly Final' },
+                { value: 'MONTHLY_LADDER' as const, label: 'Monthly Ladder Final' },
+              ] as const
+            ).map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setChampionshipKind(value)}
+                aria-pressed={championshipKind === value}
+                className={`rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  championshipKind === value
+                    ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+                    : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {championshipKind === 'QUARTERLY' && (
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="tcf-champ-quarter">Quarter</Label>
+                <Input
+                  id="tcf-champ-quarter"
+                  value={championshipQuarter}
+                  onChange={(e) => setChampionshipQuarter(e.target.value)}
+                  placeholder="e.g. 2026-Q4"
+                />
+                <FieldHint>Format: YYYY-Qn (e.g. 2026-Q4)</FieldHint>
+              </div>
+              <div>
+                <Label htmlFor="tcf-champ-bt">Battle Type</Label>
+                <Select
+                  id="tcf-champ-bt"
+                  name="battle_type"
+                  value={form.battle_type ?? 'DOMINATION'}
+                  onChange={handleChange}
+                >
+                  <option value="DOMINATION">Domination</option>
+                  <option value="CONQUEST">Conquest</option>
+                  <option value="SIEGE">Siege</option>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="tcf-champ-cf">Format</Label>
+                <Select
+                  id="tcf-champ-cf"
+                  name="competitor_format"
+                  value={form.competitor_format ?? 'ONE_V_ONE'}
+                  onChange={handleChange}
+                >
+                  <option value="ONE_V_ONE">1v1</option>
+                  <option value="TWO_V_TWO">2v2</option>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          {championshipKind === 'MONTHLY_LADDER' && (
+            <div>
+              <Label htmlFor="tcf-champ-month">Month</Label>
+              <Input
+                id="tcf-champ-month"
+                value={championshipMonth}
+                onChange={(e) => setChampionshipMonth(e.target.value)}
+                placeholder="e.g. 2026-09"
+              />
+              <FieldHint>Format: YYYY-MM. Competitor format is locked to 1v1.</FieldHint>
+            </div>
+          )}
+        </fieldset>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

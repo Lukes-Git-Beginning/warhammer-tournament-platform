@@ -233,6 +233,9 @@ export interface TournamentCreate {
   min_band?: number | null;
   max_band?: number | null;
   series_id?: string | null;
+  // Recurring competitive final tag (admin-only). QUARTERLY / MONTHLY_LADDER + the cycle period.
+  championship_kind?: 'NONE' | 'QUARTERLY' | 'MONTHLY_LADDER';
+  championship_period?: string | null;
 }
 
 // Mirror of backend PatchTournamentSchema (apps/backend/src/routes/tournaments.ts).
@@ -280,6 +283,8 @@ export interface TournamentPatchInput {
   min_band?: number | null;
   max_band?: number | null;
   series_id?: string | null;
+  championship_kind?: 'NONE' | 'QUARTERLY' | 'MONTHLY_LADDER';
+  championship_period?: string | null;
 }
 
 export interface TournamentPatchResponse {
@@ -668,6 +673,50 @@ export type LeaderboardFormat = 'ONE_V_ONE' | 'TWO_V_TWO';
 
 /** A selectable period (quarter for the Qualifier, month for the Ladder). */
 export interface LeaderboardPeriod { value: string; label: string }
+
+// ── Recurring competitive finals (the leaderboard tile) ──────────────────────
+export interface ChampionshipRef { slug: string; name: string; status: string }
+export interface ChampionshipTile {
+  battleType: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  size: number; // field size, 0 = not enough yet
+  active: number;
+  qualified: number;
+  gate: number;
+  belowFloor: boolean;
+  needMoreActive: number;
+  needMoreQualified: number;
+  tournament: ChampionshipRef | null;
+}
+export interface QuarterlyChampionships {
+  kind: 'QUARTERLY';
+  period: string;
+  competitorFormat: LeaderboardFormat;
+  battleTypes: ChampionshipTile[];
+}
+export interface LadderChampionship {
+  kind: 'MONTHLY_LADDER';
+  period: string;
+  players: number;
+  size: number;
+  tournament: ChampionshipRef | null;
+}
+
+/** Per-battle-type Quarterly Final tiles for a quarter × format (drives the Quarterly board tile). */
+export function getQuarterlyChampionships(period: string, competitorFormat: LeaderboardFormat): Promise<QuarterlyChampionships> {
+  return apiFetch<QuarterlyChampionships>(`/api/championships/quarterly?period=${encodeURIComponent(period)}&competitorFormat=${competitorFormat}`);
+}
+/** The Monthly Ladder Invitational for a month (drives the Ladder board tile). */
+export function getLadderChampionship(period: string): Promise<LadderChampionship> {
+  return apiFetch<LadderChampionship>(`/api/championships/ladder?period=${encodeURIComponent(period)}`);
+}
+/** Admin: freeze the qualification + seed the tagged final, DM the seeds. */
+export function seedChampionship(slug: string): Promise<{ seeded: number; size: number }> {
+  return apiFetch<{ seeded: number; size: number }>(`/api/championships/${slug}/seed`, { method: 'POST' });
+}
+/** Admin: draw the Monthly Ladder Invitational raffle among the invitees. */
+export function drawChampionshipRaffle(slug: string): Promise<{ winnerUserId: string }> {
+  return apiFetch<{ winnerUserId: string }>(`/api/championships/${slug}/raffle`, { method: 'POST' });
+}
 
 /** A 2v2 team on a board (name + member avatars). */
 export interface TeamRef {

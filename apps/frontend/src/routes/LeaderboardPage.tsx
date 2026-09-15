@@ -1,24 +1,29 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
   getMajorWinsLeaderboard,
   getQuarterlyLeaderboard,
   getLadderLeaderboard,
   getRankings,
+  getQuarterlyChampionships,
+  getLadderChampionship,
+  seedChampionship,
   type LeaderboardBattleType,
   type LeaderboardFormat,
   type LeaderboardPeriod,
   type RankingsEntry,
   type QuarterlyEntry,
   type TeamRef,
+  type ChampionshipTile,
 } from '@/lib/api.js';
 import { Select } from '@/components/ui/select.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
 import { SupporterBadge } from '@/components/supporter/SupporterBadge.js';
 import { useMajorsEnabled } from '@/hooks/useFeatureFlags.js';
+import { useAuthQuery } from '@/lib/auth.js';
 
 type Tab = 'rankings' | 'quarterly' | 'ladder' | 'champions';
 
@@ -441,6 +446,212 @@ function RankingsTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Championship Tiles
+// ---------------------------------------------------------------------------
+
+const BATTLE_TYPE_LABELS: Record<'DOMINATION' | 'CONQUEST' | 'SIEGE', string> = {
+  DOMINATION: 'Domination',
+  CONQUEST: 'Conquest',
+  SIEGE: 'Siege',
+};
+
+const SEEABLE_STATUSES = new Set(['DRAFT', 'OPEN_REGISTRATION', 'REGISTRATION_CLOSED']);
+
+/** A single championship tile — quarterly or ladder. */
+function ChampTile({
+  title,
+  tile,
+  isAdmin,
+}: {
+  title: string;
+  tile: ChampionshipTile | { size: number; tournament: { slug: string; name: string; status: string } | null; players?: number };
+  isAdmin: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [seedResult, setSeedResult] = useState<string | null>(null);
+
+  const seedMutation = useMutation({
+    mutationFn: (slug: string) => seedChampionship(slug),
+    onSuccess: (res) => {
+      setSeedResult(`Seeded ${res.seeded} / ${res.size} players.`);
+      void queryClient.invalidateQueries({ queryKey: ['championship'] });
+    },
+    onError: (err: Error) => {
+      setSeedResult(`Error: ${err.message}`);
+    },
+  });
+
+  const { tournament, size } = tile;
+  const players = 'players' in tile ? tile.players : undefined;
+
+  // Determine need counts (only available on ChampionshipTile, not on LadderChampionship)
+  const needMoreActive = 'needMoreActive' in tile ? tile.needMoreActive : 0;
+  const needMoreQualified = 'needMoreQualified' in tile ? tile.needMoreQualified : 0;
+  const gate = 'gate' in tile ? tile.gate : null;
+
+  return (
+    <div className="rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/60 px-4 py-3 flex flex-col gap-1.5">
+      {/* Header */}
+      <div className="flex items-baseline gap-2">
+        <span className="text-sm font-semibold text-rizzotto-stone-200">{title}</span>
+        {size > 0 && (
+          <span className="text-xs text-rizzotto-stone-500">· Top {size}</span>
+        )}
+      </div>
+
+      {/* Body */}
+      {tournament ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/tournaments/$slug"
+            params={{ slug: tournament.slug }}
+            className="text-sm text-rizzotto-gold-400 hover:text-rizzotto-gold-300 underline underline-offset-2 transition-colors"
+          >
+            {tournament.name}
+          </Link>
+          <span className="rounded border border-rizzotto-iron-700 px-1.5 py-0.5 text-[10px] text-rizzotto-stone-500 font-mono uppercase">
+            {tournament.status.replace(/_/g, ' ')}
+          </span>
+          {isAdmin && SEEABLE_STATUSES.has(tournament.status) && (
+            <button
+              type="button"
+              disabled={seedMutation.isPending}
+              onClick={() => {
+                setSeedResult(null);
+                seedMutation.mutate(tournament.slug);
+              }}
+              className="rounded border border-rizzotto-iron-600 bg-rizzotto-iron-800/60 px-2 py-0.5 text-xs text-rizzotto-stone-300 hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-400 transition-colors disabled:opacity-50"
+            >
+              {seedMutation.isPending ? 'Seeding…' : 'Seed from Qualifier'}
+            </button>
+          )}
+        </div>
+      ) : size > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-rizzotto-stone-400">
+            Field ready · Top {size}
+          </span>
+          {isAdmin && (
+            <Link
+              to="/tournaments/create"
+              search={{ duplicate: undefined }}
+              className="rounded border border-rizzotto-iron-600 bg-rizzotto-iron-800/60 px-2 py-0.5 text-xs text-rizzotto-stone-300 hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-400 transition-colors"
+            >
+              + Create Final
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="text-xs text-rizzotto-stone-500">
+          {players !== undefined ? (
+            <span>{players} ladder players — needs a bigger field</span>
+          ) : (
+            <>
+              {needMoreActive > 0 || needMoreQualified > 0 ? (
+                <span>
+                  Needs{needMoreActive > 0 ? ` ${needMoreActive} more active` : ''}
+                  {needMoreActive > 0 && needMoreQualified > 0 ? ' /' : ''}
+                  {needMoreQualified > 0 ? ` ${needMoreQualified} more qualified` : ''}
+                  {gate !== null ? ` (gate: ${gate} games)` : ''}
+                </span>
+              ) : (
+                <span>Not enough activity yet{gate !== null ? ` (gate: ${gate} games)` : ''}</span>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Seed feedback */}
+      {seedResult && (
+        <p className={`text-xs ${seedResult.startsWith('Error') ? 'text-red-400' : 'text-rizzotto-gold-400'}`}>
+          {seedResult}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Championship tile strip for the Quarterly Qualifier board. */
+function QuarterlyChampionshipTiles({
+  period,
+  competitorFormat,
+  battleType,
+  isAdmin,
+}: {
+  period: string;
+  competitorFormat: LeaderboardFormat;
+  battleType: LeaderboardBattleType;
+  isAdmin: boolean;
+}) {
+  const { data } = useQuery({
+    queryKey: ['championship', 'quarterly', period, competitorFormat],
+    queryFn: () => getQuarterlyChampionships(period, competitorFormat),
+    enabled: !!period,
+  });
+
+  if (!data) return null;
+
+  const tiles = data.battleTypes;
+
+  if (battleType !== 'OVERALL') {
+    // Show only the tile matching the selected battle type
+    const tile = tiles.find((t) => t.battleType === battleType);
+    if (!tile) return null;
+    return (
+      <div className="mb-4">
+        <ChampTile
+          title={`${BATTLE_TYPE_LABELS[tile.battleType]} Final`}
+          tile={tile}
+          isAdmin={isAdmin}
+        />
+      </div>
+    );
+  }
+
+  // Show all three side by side
+  return (
+    <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {tiles.map((tile) => (
+        <ChampTile
+          key={tile.battleType}
+          title={`${BATTLE_TYPE_LABELS[tile.battleType]} Final`}
+          tile={tile}
+          isAdmin={isAdmin}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Championship tile for the Ladder board. */
+function LadderChampionshipTile({
+  period,
+  isAdmin,
+}: {
+  period: string;
+  isAdmin: boolean;
+}) {
+  const { data } = useQuery({
+    queryKey: ['championship', 'ladder', period],
+    queryFn: () => getLadderChampionship(period),
+    enabled: !!period,
+  });
+
+  if (!data) return null;
+
+  return (
+    <div className="mb-4">
+      <ChampTile
+        title="Ladder Invitational"
+        tile={{ size: data.size, tournament: data.tournament, players: data.players }}
+        isAdmin={isAdmin}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Quarterly Qualifier Tab
 // ---------------------------------------------------------------------------
 
@@ -450,6 +661,9 @@ function QuarterlyTab() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [selectedQuarter, setSelectedQuarter] = useState<string | undefined>(undefined);
+
+  const { data: me } = useAuthQuery();
+  const isAdmin = me?.role === 'ADMIN' || me?.role === 'MODERATOR';
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['leaderboard-quarterly', battleType, format, selectedQuarter, page],
@@ -498,6 +712,10 @@ function QuarterlyTab() {
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
+  // The active quarter value to use for the championship tile — prefer user selection,
+  // fall back to the current quarter from the leaderboard response.
+  const tileQuarter = selectedQuarter ?? activeQuarterValue;
+
   return (
     <div>
       <FilterBar
@@ -528,6 +746,15 @@ function QuarterlyTab() {
         )}
       </div>
 
+      {tileQuarter && (
+        <QuarterlyChampionshipTiles
+          period={tileQuarter}
+          competitorFormat={format}
+          battleType={battleType}
+          isAdmin={isAdmin}
+        />
+      )}
+
       <LeaderboardSearch value={search} onChange={setSearch} count={entries.length} />
 
       <GsTable
@@ -550,6 +777,9 @@ function LadderTab() {
   const [search, setSearch] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<string | undefined>(undefined);
 
+  const { data: me } = useAuthQuery();
+  const isAdmin = me?.role === 'ADMIN' || me?.role === 'MODERATOR';
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['leaderboard-ladder', selectedMonth],
     queryFn: () => getLadderLeaderboard({ month: selectedMonth, pageSize: PAGE_SIZE }),
@@ -565,6 +795,9 @@ function LadderTab() {
   const entries = (data?.entries ?? []).filter((e) =>
     normalize(e.user.username).includes(normalize(search)),
   );
+
+  const tileMonth = selectedMonth ?? activeMonthValue;
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -586,6 +819,10 @@ function LadderTab() {
           </Select>
         )}
       </div>
+
+      {tileMonth && (
+        <LadderChampionshipTile period={tileMonth} isAdmin={isAdmin} />
+      )}
       <LeaderboardSearch value={search} onChange={setSearch} count={entries.length} />
       {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>}
       {error && (
