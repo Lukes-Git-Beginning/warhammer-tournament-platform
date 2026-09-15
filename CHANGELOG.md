@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [1.57.11] — 2026-09-15 — Series qualifier invites reach every prior registrant
+### Fixed
+- The "new qualifier" invite for a tournament series now reaches everyone who signed up for an earlier qualifier in that series — whether they checked in, joined late, or later dropped. Previously anyone whose registration had been withdrawn or removed was silently left off the invite, even though they'd taken part.
+
 ## [1.57.10] — 2026-09-14 — Clearer session expiry with one-click re-login
 ### Fixed
 - When your login expired, the site could get stuck half-logged-in — some things kept working while others silently failed — until a hard refresh (Ctrl+F5). An expired session is now detected immediately: the app cleanly returns to logged-out and shows a banner to sign back in with one click.

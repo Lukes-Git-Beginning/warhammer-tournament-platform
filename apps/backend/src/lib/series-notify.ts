@@ -123,9 +123,12 @@ export async function notifySeriesNewQualifier(
     });
     if (priorQualifiers.length === 0) return;
 
-    // Distinct players who took part in the prior qualifiers.
+    // Everyone who ever registered for a prior qualifier is invited — checked-in,
+    // late-joined, dropped or removed alike. Deliberately NOT filtered on deleted_at:
+    // signing up for one qualifier earns an invite to the next, regardless of what
+    // happened afterwards.
     const priorParts = await prisma.tournamentParticipant.findMany({
-      where: { tournament_id: { in: priorQualifiers.map((q) => q.id) }, deleted_at: null },
+      where: { tournament_id: { in: priorQualifiers.map((q) => q.id) } },
       select: { user_id: true },
     });
     const candidateIds = [...new Set(priorParts.map((p) => p.user_id))];
