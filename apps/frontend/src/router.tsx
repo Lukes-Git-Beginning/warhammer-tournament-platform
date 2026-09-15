@@ -63,9 +63,30 @@ const createTournamentRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tournaments/create',
   component: CreateTournamentPage,
-  validateSearch: (search: Record<string, unknown>) => ({
-    duplicate: typeof search.duplicate === 'string' ? search.duplicate : undefined,
-  }),
+  // Optional keys → partial search objects are accepted on <Link> (duplicate-only links stay valid).
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): {
+    duplicate?: string;
+    championship?: 'QUARTERLY' | 'MONTHLY_LADDER';
+    battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+    competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
+    period?: string;
+  } => {
+    const out: {
+      duplicate?: string;
+      championship?: 'QUARTERLY' | 'MONTHLY_LADDER';
+      battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+      competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
+      period?: string;
+    } = {};
+    if (typeof search.duplicate === 'string') out.duplicate = search.duplicate;
+    if (search.championship === 'QUARTERLY' || search.championship === 'MONTHLY_LADDER') out.championship = search.championship;
+    if (search.battleType === 'DOMINATION' || search.battleType === 'CONQUEST' || search.battleType === 'SIEGE') out.battleType = search.battleType;
+    if (search.competitorFormat === 'ONE_V_ONE' || search.competitorFormat === 'TWO_V_TWO') out.competitorFormat = search.competitorFormat;
+    if (typeof search.period === 'string') out.period = search.period;
+    return out;
+  },
 });
 
 const calendarRoute = createRoute({

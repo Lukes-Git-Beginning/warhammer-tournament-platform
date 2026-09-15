@@ -193,9 +193,16 @@ function nextRoundHour(): string {
 export function TournamentCreateForm({
   duplicateSlug,
   seriesMode,
+  championshipPrefill,
 }: {
   duplicateSlug?: string;
   seriesMode?: SeriesModeConfig;
+  championshipPrefill?: {
+    kind: 'QUARTERLY' | 'MONTHLY_LADDER';
+    battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+    competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
+    period?: string;
+  };
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -392,6 +399,29 @@ export function TournamentCreateForm({
     mapPoolInitialized.current = true;
     lastBattleType.current = sourceForDuplicate.battle_type ?? 'DOMINATION';
   }, [sourceForDuplicate]);
+
+  // Prefill the championship tag from the leaderboard tile's "+ Create Final" link (admins).
+  // Mirrors the handleChange coercions so the prefilled form is submittable: Siege → points-only
+  // Bo2, 2v2 → a 2v2 mode.
+  const championshipPrefilled = useRef(false);
+  useEffect(() => {
+    if (!championshipPrefill || championshipPrefilled.current) return;
+    championshipPrefilled.current = true;
+    setChampionshipKind(championshipPrefill.kind);
+    if (championshipPrefill.period) {
+      if (championshipPrefill.kind === 'QUARTERLY') setChampionshipQuarter(championshipPrefill.period);
+      else setChampionshipMonth(championshipPrefill.period);
+    }
+    setForm((prev) => ({
+      ...prev,
+      ...(championshipPrefill.battleType ? { battle_type: championshipPrefill.battleType } : {}),
+      ...(championshipPrefill.competitorFormat ? { competitor_format: championshipPrefill.competitorFormat } : {}),
+      ...(championshipPrefill.competitorFormat === 'TWO_V_TWO' ? { mode: 'BPT_2V2' as const } : {}),
+      ...(championshipPrefill.battleType === 'SIEGE'
+        ? { format: 'SWISS' as const, playoff_format: 'NONE' as const, swiss_match_format: 'BO2' as const }
+        : {}),
+    }));
+  }, [championshipPrefill]);
 
   useEffect(() => {
     if (allMaps.length === 0) return;

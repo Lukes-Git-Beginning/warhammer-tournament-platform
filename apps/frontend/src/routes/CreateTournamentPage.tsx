@@ -11,6 +11,15 @@ export function CreateTournamentPage() {
   const { t } = useTranslation();
   const search = useSearch({ from: '/tournaments/create' });
   const duplicateSlug = search.duplicate;
+  // Prefill the championship tag from the leaderboard tile's "+ Create Final" link.
+  const championshipPrefill = search.championship
+    ? {
+        kind: search.championship,
+        battleType: search.battleType,
+        competitorFormat: search.competitorFormat,
+        period: search.period,
+      }
+    : undefined;
 
   if (isLoading) {
     return (
@@ -46,7 +55,7 @@ export function CreateTournamentPage() {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
         <Card variant="banner">
           <CardContent className="p-6 sm:p-8 lg:p-10">
-            <TournamentCreateForm duplicateSlug={duplicateSlug} />
+            <TournamentCreateForm duplicateSlug={duplicateSlug} championshipPrefill={championshipPrefill} />
           </CardContent>
         </Card>
 

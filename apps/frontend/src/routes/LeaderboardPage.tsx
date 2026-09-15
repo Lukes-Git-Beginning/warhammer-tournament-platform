@@ -458,14 +458,24 @@ const BATTLE_TYPE_LABELS: Record<'DOMINATION' | 'CONQUEST' | 'SIEGE', string> = 
 const SEEABLE_STATUSES = new Set(['DRAFT', 'OPEN_REGISTRATION', 'REGISTRATION_CLOSED']);
 
 /** A single championship tile — quarterly or ladder. */
+/** Prefill query for the tile's "+ Create Final" link → the create form's championship block. */
+type CreateFinalSearch = {
+  championship: 'QUARTERLY' | 'MONTHLY_LADDER';
+  battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
+  period: string;
+};
+
 function ChampTile({
   title,
   tile,
   isAdmin,
+  createSearch,
 }: {
   title: string;
   tile: ChampionshipTile | { size: number; tournament: { slug: string; name: string; status: string } | null; players?: number };
   isAdmin: boolean;
+  createSearch: CreateFinalSearch;
 }) {
   const queryClient = useQueryClient();
   const [seedResult, setSeedResult] = useState<string | null>(null);
@@ -544,7 +554,7 @@ function ChampTile({
           {isAdmin && (
             <Link
               to="/tournaments/create"
-              search={{ duplicate: undefined }}
+              search={createSearch}
               className="rounded border border-rizzotto-iron-600 bg-rizzotto-iron-800/60 px-2 py-0.5 text-xs text-rizzotto-stone-300 hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-400 transition-colors"
             >
               + Create Final
@@ -595,6 +605,7 @@ function QuarterlyChampionshipTiles({
           title={`${BATTLE_TYPE_LABELS[tile.battleType]} Final`}
           tile={tile}
           isAdmin={isAdmin}
+          createSearch={{ championship: 'QUARTERLY', battleType: tile.battleType, competitorFormat, period }}
         />
       </div>
     );
@@ -609,6 +620,7 @@ function QuarterlyChampionshipTiles({
           title={`${BATTLE_TYPE_LABELS[tile.battleType]} Final`}
           tile={tile}
           isAdmin={isAdmin}
+          createSearch={{ championship: 'QUARTERLY', battleType: tile.battleType, competitorFormat, period }}
         />
       ))}
     </div>
@@ -637,6 +649,7 @@ function LadderChampionshipTile({
         title="Ladder Invitational"
         tile={{ size: data.size, tournament: data.tournament, players: data.players }}
         isAdmin={isAdmin}
+        createSearch={{ championship: 'MONTHLY_LADDER', period }}
       />
     </div>
   );
