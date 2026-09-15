@@ -118,7 +118,9 @@ describe('Championship finals routes', () => {
   });
 
   it('ladder preview returns an empty field for a quiet month', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/championships/ladder?period=2026-08' });
+    // A month with no Open-Play games — use a far-future period so it stays empty regardless
+    // of ambient demo/dev data in the shared DB (the ladder reads global games, not fixtures).
+    const res = await app.inject({ method: 'GET', url: '/api/championships/ladder?period=2099-01' });
     expect(res.statusCode).toBe(200);
     const body = res.json<{ players: number; size: number; tournament: unknown }>();
     expect(body.players).toBe(0);
