@@ -489,6 +489,16 @@ function ChampTile({
   const needMoreQualified = 'needMoreQualified' in tile ? tile.needMoreQualified : 0;
   const gate = 'gate' in tile ? tile.gate : null;
 
+  // Single status line for the no-final state (field ready vs how far off).
+  const statusText =
+    size > 0
+      ? `Field ready · Top ${size}`
+      : players !== undefined
+        ? `${players} ladder players — needs a bigger field`
+        : needMoreActive > 0 || needMoreQualified > 0
+          ? `Needs${needMoreActive > 0 ? ` ${needMoreActive} more active` : ''}${needMoreActive > 0 && needMoreQualified > 0 ? ' /' : ''}${needMoreQualified > 0 ? ` ${needMoreQualified} more qualified` : ''}${gate !== null ? ` (gate: ${gate} games)` : ''}`
+          : `Not enough activity yet${gate !== null ? ` (gate: ${gate} games)` : ''}`;
+
   return (
     <div className="rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/60 px-4 py-3 flex flex-col gap-1.5">
       {/* Header */}
@@ -526,11 +536,11 @@ function ChampTile({
             </button>
           )}
         </div>
-      ) : size > 0 ? (
+      ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-rizzotto-stone-400">
-            Field ready · Top {size}
-          </span>
+          <span className={`text-xs ${size > 0 ? 'text-rizzotto-stone-400' : 'text-rizzotto-stone-500'}`}>{statusText}</span>
+          {/* Admins can always set up the final from here (even before the field is reached);
+              seeding it will simply refuse until the field is full. */}
           {isAdmin && (
             <Link
               to="/tournaments/create"
@@ -539,25 +549,6 @@ function ChampTile({
             >
               + Create Final
             </Link>
-          )}
-        </div>
-      ) : (
-        <div className="text-xs text-rizzotto-stone-500">
-          {players !== undefined ? (
-            <span>{players} ladder players — needs a bigger field</span>
-          ) : (
-            <>
-              {needMoreActive > 0 || needMoreQualified > 0 ? (
-                <span>
-                  Needs{needMoreActive > 0 ? ` ${needMoreActive} more active` : ''}
-                  {needMoreActive > 0 && needMoreQualified > 0 ? ' /' : ''}
-                  {needMoreQualified > 0 ? ` ${needMoreQualified} more qualified` : ''}
-                  {gate !== null ? ` (gate: ${gate} games)` : ''}
-                </span>
-              ) : (
-                <span>Not enough activity yet{gate !== null ? ` (gate: ${gate} games)` : ''}</span>
-              )}
-            </>
           )}
         </div>
       )}
