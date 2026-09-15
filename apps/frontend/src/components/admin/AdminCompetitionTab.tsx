@@ -94,6 +94,38 @@ function GameVersionsSection() {
     },
   });
 
+  // Inline edit (rename / re-date) of an existing version — one at a time.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', start_date: '', end_date: '', dlc_tag: '' });
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const saveEditMutation = useMutation({
+    mutationFn: (id: string) => {
+      if (!editForm.name.trim()) throw new Error('Name is required.');
+      const patch: { name: string; start_date?: string; end_date?: string; dlc_tag?: string } = {
+        name: editForm.name.trim(),
+      };
+      const s = localToIso(editForm.start_date);
+      const e = localToIso(editForm.end_date);
+      if (s) patch.start_date = s;
+      if (e) patch.end_date = e;
+      patch.dlc_tag = editForm.dlc_tag.trim() || undefined;
+      return patchVersion(id, patch);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'versions'] });
+      setEditingId(null);
+      setEditError(null);
+    },
+    onError: (e) => setEditError(isApiError(e) ? e.message : String(e)),
+  });
+
+  function startEdit(v: VersionSummary) {
+    setEditError(null);
+    setEditForm({ name: v.name, start_date: isoToLocal(v.start_date), end_date: isoToLocal(v.end_date), dlc_tag: '' });
+    setEditingId(v.id);
+  }
+
   function handleDelete(v: VersionSummary) {
     if (!window.confirm(`Delete version "${v.name}"? This cannot be undone.`)) return;
     deleteMutation.mutate(v.id);
@@ -132,42 +164,101 @@ function GameVersionsSection() {
           {versions.map((v) => (
             <div
               key={v.id}
-              className="flex flex-wrap items-center gap-3 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-800/50 px-4 py-3"
+              className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-800/50"
             >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-stone-100">{v.name}</span>
-                  {v.is_active && (
-                    <span className="rounded bg-rizzotto-gold-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rizzotto-gold-400 border border-rizzotto-gold-700">
-                      Active
-                    </span>
-                  )}
+              <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-stone-100">{v.name}</span>
+                    {v.is_active && (
+                      <span className="rounded bg-rizzotto-gold-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rizzotto-gold-400 border border-rizzotto-gold-700">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-stone-500">
+                    {fmtDate(v.start_date)} – {fmtDate(v.end_date)}
+                  </div>
                 </div>
-                <div className="mt-0.5 text-[11px] text-stone-500">
-                  {fmtDate(v.start_date)} – {fmtDate(v.end_date)}
+
+                <div className="flex items-center gap-2">
+                  {!v.is_active && (
+                    <button
+                      type="button"
+                      onClick={() => activateMutation.mutate(v.id)}
+                      disabled={activateMutation.isPending}
+                      className="rounded border border-rizzotto-gold-700 px-2.5 py-1 text-xs text-rizzotto-gold-400 hover:bg-rizzotto-gold-500/10 disabled:opacity-50 transition-colors"
+                    >
+                      Activate
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => (editingId === v.id ? setEditingId(null) : startEdit(v))}
+                    className="rounded border border-rizzotto-iron-600 px-2.5 py-1 text-xs text-stone-300 hover:bg-rizzotto-iron-700/50 transition-colors"
+                  >
+                    {editingId === v.id ? 'Close' : 'Edit'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(v)}
+                    disabled={deleteMutation.isPending}
+                    className="rounded border border-red-800 px-2.5 py-1 text-xs text-red-400 hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                {!v.is_active && (
-                  <button
-                    type="button"
-                    onClick={() => activateMutation.mutate(v.id)}
-                    disabled={activateMutation.isPending}
-                    className="rounded border border-rizzotto-gold-700 px-2.5 py-1 text-xs text-rizzotto-gold-400 hover:bg-rizzotto-gold-500/10 disabled:opacity-50 transition-colors"
-                  >
-                    Activate
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleDelete(v)}
-                  disabled={deleteMutation.isPending}
-                  className="rounded border border-red-800 px-2.5 py-1 text-xs text-red-400 hover:bg-red-900/20 disabled:opacity-50 transition-colors"
-                >
-                  Delete
-                </button>
-              </div>
+              {editingId === v.id && (
+                <div className="grid grid-cols-1 gap-3 border-t border-rizzotto-iron-700 px-4 py-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-xs text-stone-400 sm:col-span-2">
+                    Name *
+                    <input
+                      type="text"
+                      value={editForm.name}
+                      onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                      className="rounded border border-stone-700 bg-stone-900 px-2 py-1.5 text-xs text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-stone-400">
+                    Start
+                    <input
+                      type="datetime-local"
+                      value={editForm.start_date}
+                      onChange={(e) => setEditForm((f) => ({ ...f, start_date: e.target.value }))}
+                      className="rounded border border-stone-700 bg-stone-900 px-2 py-1.5 text-xs text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-stone-400">
+                    End
+                    <input
+                      type="datetime-local"
+                      value={editForm.end_date}
+                      onChange={(e) => setEditForm((f) => ({ ...f, end_date: e.target.value }))}
+                      className="rounded border border-stone-700 bg-stone-900 px-2 py-1.5 text-xs text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
+                    />
+                  </label>
+                  {editError && <p className="text-xs text-red-400 sm:col-span-2">{editError}</p>}
+                  <div className="flex gap-2 sm:col-span-2">
+                    <button
+                      type="button"
+                      onClick={() => saveEditMutation.mutate(v.id)}
+                      disabled={saveEditMutation.isPending}
+                      className="rounded border border-rizzotto-gold-700 px-3 py-1 text-xs text-rizzotto-gold-400 hover:bg-rizzotto-gold-500/10 disabled:opacity-50 transition-colors"
+                    >
+                      {saveEditMutation.isPending ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                      className="rounded border border-rizzotto-iron-600 px-3 py-1 text-xs text-stone-400 hover:text-stone-200 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
