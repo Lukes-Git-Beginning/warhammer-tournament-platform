@@ -704,6 +704,17 @@ export function TournamentCreateForm({
             ? { mode: 'BPT' as const }
             : {}
         : {}),
+      // Siege is points-only + always Bo2 → drop any elimination format/playoffs and force
+      // Bo2 (matches the backend refineSiege rule).
+      ...(name === 'battle_type' && value === 'SIEGE'
+        ? {
+            ...(prev.format === 'SINGLE_ELIMINATION' || prev.format === 'DOUBLE_ELIMINATION'
+              ? { format: 'SWISS' as const }
+              : {}),
+            playoff_format: 'NONE' as const,
+            swiss_match_format: 'BO2' as const,
+          }
+        : {}),
     }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
   }
@@ -894,6 +905,9 @@ export function TournamentCreateForm({
   }
 
   const isBalanced = form.format === 'BALANCED_LIECHTENSTEIN';
+  // Siege is attacker-favoured → always Bo2 (each player attacks once), points-only:
+  // no elimination format, no playoffs. Gate the UI to match the backend refineSiege rule.
+  const isSiege = form.battle_type === 'SIEGE';
 
   // Auto-derive final tournament name from series name (as long as host hasn't touched it).
   function handleSeriesNameChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1315,14 +1329,19 @@ export function TournamentCreateForm({
             onChange={handleChange}
           >
             <optgroup label="── Standard ──">
-              <option value="SINGLE_ELIMINATION">{t('tournament.format.single_elim')}</option>
-              <option value="DOUBLE_ELIMINATION">{t('tournament.format.double_elim')}</option>
+              {!isSiege && <option value="SINGLE_ELIMINATION">{t('tournament.format.single_elim')}</option>}
+              {!isSiege && <option value="DOUBLE_ELIMINATION">{t('tournament.format.double_elim')}</option>}
               <option value="SWISS">{t('tournament.format.swiss')}</option>
               <option value="ROUND_ROBIN">{t('tournament.format.round_robin')}</option>
               <option value="LIECHTENSTEIN">{t('tournament.format.liechtenstein')}</option>
               <option value="BALANCED_LIECHTENSTEIN">{t('tournament.format.balanced_liechtenstein')}</option>
             </optgroup>
           </Select>
+          {isSiege && (
+            <FieldHint>
+              Siege is points-only (no elimination, no playoffs) and always Bo2 — each player attacks once.
+            </FieldHint>
+          )}
         </div>
 
         <div className="min-w-0">
@@ -1578,7 +1597,7 @@ export function TournamentCreateForm({
                 playoff SIZE (which drives division formation: homogeneous vs. merged) — shown
                 even with auto-sizing on, since auto-sizing only controls the round count there.
                 For other formats the block is hidden while auto-sizing is on (#16). */}
-            {(isBalanced || !form.auto_sizing) && (
+            {!isSiege && (isBalanced || !form.auto_sizing) && (
               <>
             {/* Playoff format */}
             <div>
@@ -1642,6 +1661,7 @@ export function TournamentCreateForm({
                   name="swiss_match_format"
                   value={form.swiss_match_format ?? 'BO1'}
                   onChange={handleChange}
+                  disabled={isSiege}
                 >
                   <option value="BO1">Best of 1</option>
                   <option value="BO2">Best of 2 — home &amp; away (1–1 = draw)</option>
@@ -1649,32 +1669,36 @@ export function TournamentCreateForm({
                   <option value="BO5">Best of 5</option>
                 </Select>
               </div>
-              <div>
-                <Label htmlFor="tcf-playoff-fmt">Playoffs Format</Label>
-                <Select
-                  id="tcf-playoff-fmt"
-                  name="playoff_match_format"
-                  value={form.playoff_match_format ?? 'BO1'}
-                  onChange={handleChange}
-                >
-                  <option value="BO1">Best of 1</option>
-                  <option value="BO3">Best of 3</option>
-                  <option value="BO5">Best of 5</option>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="tcf-finale-fmt">Finale Format</Label>
-                <Select
-                  id="tcf-finale-fmt"
-                  name="finale_match_format"
-                  value={form.finale_match_format ?? 'BO1'}
-                  onChange={handleChange}
-                >
-                  <option value="BO1">Best of 1</option>
-                  <option value="BO3">Best of 3</option>
-                  <option value="BO5">Best of 5</option>
-                </Select>
-              </div>
+              {!isSiege && (
+                <>
+                  <div>
+                    <Label htmlFor="tcf-playoff-fmt">Playoffs Format</Label>
+                    <Select
+                      id="tcf-playoff-fmt"
+                      name="playoff_match_format"
+                      value={form.playoff_match_format ?? 'BO1'}
+                      onChange={handleChange}
+                    >
+                      <option value="BO1">Best of 1</option>
+                      <option value="BO3">Best of 3</option>
+                      <option value="BO5">Best of 5</option>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="tcf-finale-fmt">Finale Format</Label>
+                    <Select
+                      id="tcf-finale-fmt"
+                      name="finale_match_format"
+                      value={form.finale_match_format ?? 'BO1'}
+                      onChange={handleChange}
+                    >
+                      <option value="BO1">Best of 1</option>
+                      <option value="BO3">Best of 3</option>
+                      <option value="BO5">Best of 5</option>
+                    </Select>
+                  </div>
+                </>
+              )}
             </div>
           </>
         ) : form.format !== 'BALANCED_LIECHTENSTEIN' ? (

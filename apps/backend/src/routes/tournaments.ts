@@ -177,6 +177,50 @@ function refineOneVThree(
   }
 }
 
+/**
+ * Siege is attacker-favoured on most maps, so a single game is ~a coin-flip. To count
+ * competitively it is ALWAYS Bo2 (each player attacks once → the bias cancels, a 1–1 is a
+ * fair draw). A Siege tournament is therefore points-only: no elimination bracket, no
+ * playoffs — group standings (Swiss / round-robin / Liechtenstein) + the usual tiebreakers
+ * decide it. The create handler coerces playoff_format=NONE + swiss_match_format=BO2.
+ */
+const SIEGE_POINTS_FORMATS = [
+  'SWISS',
+  'ROUND_ROBIN',
+  'DOUBLE_ROUND_ROBIN',
+  'LIECHTENSTEIN',
+  'BALANCED_LIECHTENSTEIN',
+] as const;
+
+function refineSiege(
+  data: { battle_type?: string | null; format?: string; playoff_format?: string; swiss_match_format?: string },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.battle_type !== 'SIEGE') return;
+  if (data.format && !(SIEGE_POINTS_FORMATS as readonly string[]).includes(data.format)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['format'],
+      message:
+        'Siege is decided on points — pick a group format (Swiss, Round Robin, Liechtenstein or Balanced Liechtenstein), not an elimination bracket.',
+    });
+  }
+  if (data.playoff_format && data.playoff_format !== 'NONE') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['playoff_format'],
+      message: 'Siege tournaments have no playoffs — points and the usual tiebreakers decide the standings.',
+    });
+  }
+  if (data.swiss_match_format && data.swiss_match_format !== 'BO2') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['swiss_match_format'],
+      message: 'Siege is always played Bo2 (each player attacks once).',
+    });
+  }
+}
+
 /** Dedicated 2v2 faction-pick modes — require competitor_format = TWO_V_TWO (team-as-actor). */
 const TWO_V_TWO_MODES = ['SFT_2V2', 'BPT_2V2'] as const;
 
@@ -228,6 +272,7 @@ const CreateTournamentSchema = z.object({
 })
   .superRefine(refineMapPool)
   .superRefine(refineOneVThree)
+  .superRefine(refineSiege)
   .superRefine((data, ctx) => {
     // 2v2 + Balanced Liechtenstein is supported: teams are banded by their blended GS
     // (resolveTeamGs — members' average prior → the team's own fitted 2v2 GS), and the whole BaLi
@@ -292,6 +337,7 @@ const PatchTournamentSchema = z.object({
 })
   .superRefine(refineMapPool)
   .superRefine(refineOneVThree)
+  .superRefine(refineSiege)
   .refine((d) => Object.keys(d).length > 0, { message: 'Body must contain at least one field' });
 
 // ---------------------------------------------------------------------------
@@ -553,7 +599,8 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           rounds_count: balancedAutoSized ? undefined : data.rounds_count,
           // The playoff size is always the host's choice (for BaLi it drives division
           // formation — homogeneous band-pure vs. few large mixed brackets), stored verbatim.
-          playoff_format: data.playoff_format,
+          // Siege is points-only → never any playoffs (see refineSiege).
+          playoff_format: data.battle_type === 'SIEGE' ? 'NONE' : data.playoff_format,
           // #37: opt-in auto-sizing / auto-advancement (any format). Balanced
           // defaults auto-sizing ON; every other format defaults OFF.
           auto_sizing: isBalanced ? (data.auto_sizing ?? true) : (data.auto_sizing ?? false),
@@ -563,7 +610,11 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           // 1v3: Swiss defaults to BO2 (two-leg home/away — roles swap between legs,
           // 1–1 = Draw). Elimination playoffs/finals default to BO3 (flip/swap/flip;
           // a bracket needs a decisive winner, so no draw there).
-          swiss_match_format: data.swiss_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO2' : undefined),
+          // Siege is always Bo2 (each player attacks once — see refineSiege); 1v3 also defaults Bo2.
+          swiss_match_format:
+            data.battle_type === 'SIEGE'
+              ? 'BO2'
+              : (data.swiss_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO2' : undefined)),
           playoff_match_format: data.playoff_match_format ?? (data.mode === 'ONE_V_THREE' ? 'BO3' : undefined),
           finale_match_format: data.finale_match_format ?? (data.format === 'DOUBLE_ELIMINATION' || data.mode === 'ONE_V_THREE' ? 'BO3' : undefined),
           // Double Elimination bracket reset (default on via schema); reset format null = inherit finale.
