@@ -59,6 +59,14 @@ const STATUS_COLORS: Record<string, string> = {
   COMPLETED: 'bg-stone-600 text-stone-300',
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Draft',
+  OPEN_REGISTRATION: 'Registration Open',
+  REGISTRATION_CLOSED: 'Registration Closed',
+  ONGOING: 'Ongoing',
+  COMPLETED: 'Completed',
+};
+
 
 export function TournamentDetail() {
   const { t } = useTranslation();
@@ -346,7 +354,7 @@ export function TournamentDetail() {
             </span>
           </InfoTooltip>
           <span className={`rounded px-2 py-1 text-xs font-medium ${statusColor}`}>
-            {tournament.status}
+            {STATUS_LABELS[tournament.status] ?? tournament.status}
           </span>
           {tournament.visibility === 'PRIVATE' && <PrivateBadge className="py-1" />}
         </div>

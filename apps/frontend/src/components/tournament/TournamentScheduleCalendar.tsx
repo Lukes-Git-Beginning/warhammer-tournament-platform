@@ -43,8 +43,8 @@ export interface CalendarTournament {
 
 const STATUS_BLOCK: Record<string, { bg: string; border: string; label: string }> = {
   ONGOING: { bg: 'rgba(244,63,94,0.24)', border: 'rgba(251,113,133,0.9)', label: 'live' },
-  OPEN_REGISTRATION: { bg: 'rgba(251,191,36,0.22)', border: 'rgba(251,191,36,0.9)', label: 'open' },
-  REGISTRATION_CLOSED: { bg: 'rgba(251,191,36,0.16)', border: 'rgba(217,164,65,0.8)', label: 'full' },
+  OPEN_REGISTRATION: { bg: 'rgba(56,189,248,0.30)', border: 'rgba(125,211,252,1)', label: 'open' },
+  REGISTRATION_CLOSED: { bg: 'rgba(37,99,235,0.30)', border: 'rgba(96,165,250,0.95)', label: 'full' },
   DRAFT: { bg: 'rgba(120,113,108,0.20)', border: 'rgba(168,162,158,0.7)', label: 'draft' },
 };
 
