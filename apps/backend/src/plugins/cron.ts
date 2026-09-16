@@ -581,7 +581,27 @@ export default fp(
       { timezone: 'UTC' },
     );
 
-    fastify.decorate('cronTasks', [snapshotTask, playerSkillSnapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask, kofiGoalSyncTask, accessLogPurgeTask]);
+    // -----------------------------------------------------------------------
+    // Bot-message log retention: purge BotMessage rows older than 60 days,
+    // daily at 01:20 UTC (does not collide with accessLogPurgeTask at 01:10).
+    // -----------------------------------------------------------------------
+    const botMessagePurgeTask = cron.schedule(
+      '20 1 * * *',
+      async () => {
+        try {
+          const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+          const { count } = await fastify.prisma.botMessage.deleteMany({
+            where: { created_at: { lt: cutoff } },
+          });
+          if (count > 0) fastify.log.info({ count }, 'Purged old BotMessage rows');
+        } catch (err) {
+          fastify.log.error({ err }, 'BotMessage purge cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    fastify.decorate('cronTasks', [snapshotTask, playerSkillSnapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask, kofiGoalSyncTask, accessLogPurgeTask, botMessagePurgeTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
@@ -600,6 +620,7 @@ export default fp(
       supporterRefreshTask.stop();
       kofiGoalSyncTask.stop();
       accessLogPurgeTask.stop();
+      botMessagePurgeTask.stop();
       clearInterval(matrixInterval);
       clearInterval(matchmakingInterval);
     });

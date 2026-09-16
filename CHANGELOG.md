@@ -5,6 +5,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.0.0] — 2026-09-16 — 2v2, Conquest & Siege, Game Versions, and a rebuilt competitive ladder
+
+### Added
+- **Team play (2v2).** Found a permanent team, invite a partner, and compete as a duo. Teams have their own profile, rating and history and can enter 2v2 tournaments in every format — Balanced Liechtenstein included — plus a dedicated 2v2 Open Play queue.
+- **Two new battle types: Conquest and Siege.** Tournaments and Open Play can now run as Conquest or Siege alongside the classic Domination. Siege is played as a two-game set (each player attacks once) and decided on points rather than a knockout bracket, to keep it fair while attacker/defender balance settles.
+- **Game Versions.** The meta and competitive tracking are now organised by the game's version (currently 8.1) instead of a season, so a new DLC or balance patch can cleanly start a fresh dataset without losing any history.
+- **Rebuilt leaderboards.** Four focused boards — All-Time Skill, Quarterly Qualifier and Ladder (Champions to follow) — each filterable by battle type and by 1v1 / 2v2.
+- **Quarterly Qualifier & Quarterly Final.** Each quarter the skill board doubles as a qualifier; the top players are seeded into a Quarterly Final whose size scales with how active the quarter was. Runs per battle type once there's enough activity.
+- **Monthly Ladder Invitational.** The most active ladder players each month get an invitational tournament with a prize plus a raffle among all invitees.
+- **Skill-over-time chart** on player profiles, tracing your General Skill since launch.
+- **Meta dashboard per game version and battle type,** including 2v2 top-duo stats.
+- **Tournament availability alerts.** Mark yourself available for tournaments in the calendar and you'll get a DM when a matching one opens for registration.
+- **Battle-type artwork** on tournament tiles and ruleset cards.
+
+### Changed
+- The launch season "Season 2026" is now simply version **8.1** — every game, date and standing carries over unchanged; only the name changes, and all games played so far are tagged as Domination / 1v1.
+- Tournaments in the availability calendar now stand out clearly against your availability shading.
+- Duplicating a tournament now also copies its poster.
+
+### Removed
+- The old all-time points leaderboard has been retired in favour of the new skill-based boards.
+
+### Fixed
+- Tournament status now shows a proper label (e.g. "Registration Closed") on the tournament page instead of the raw status code.
+- New-qualifier invites in a tournament series now fire reliably: the invite is no longer marked as sent when the send didn't actually go out, so a later attempt can still deliver it.
+
 ## [1.57.11] — 2026-09-15 — Series qualifier invites reach every prior registrant
 ### Fixed
 - The "new qualifier" invite for a tournament series now reaches everyone who signed up for an earlier qualifier in that series — whether they checked in, joined late, or later dropped. Previously anyone whose registration had been withdrawn or removed was silently left off the invite, even though they'd taken part.

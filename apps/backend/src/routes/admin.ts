@@ -47,6 +47,7 @@ import {
   ANNOUNCEMENT_PUSH_TOKEN_HASH_KEY,
 } from '../lib/announcements.js';
 import { mergeTournamentSources, mergeOverviewSources, type CountedRef } from '../lib/referrals.js';
+import { maybeSendSeriesInvite } from '../lib/series-notify.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -2808,6 +2809,133 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     return { ok: true, count: recipients.length };
   });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/admin/bot-messages — paginated bot-message log (Task 1)
+  // ---------------------------------------------------------------------------
+  fastify.get('/api/admin/bot-messages', async (request, reply) => {
+    const BotMessagesQuerySchema = z.object({
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+      status: z.enum(['SENT', 'FAILED', 'SKIPPED']).optional(),
+      target_id: z.string().optional(),
+      q: z.string().optional(),
+      kind: z.string().optional(),
+      from: z.coerce.date().optional(),
+      to: z.coerce.date().optional(),
+    });
+
+    const parsed = BotMessagesQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const { page, limit, status, target_id, q, kind, from, to } = parsed.data;
+
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    if (target_id) where.target_id = target_id;
+    if (kind) where.kind = kind;
+    if (q) where.content = { contains: q, mode: 'insensitive' };
+    if (from || to) {
+      where.created_at = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) };
+    }
+
+    const [total, rows] = await Promise.all([
+      fastify.prisma.botMessage.count({ where }),
+      fastify.prisma.botMessage.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          target_type: true,
+          target_id: true,
+          kind: true,
+          content: true,
+          status: true,
+          detail: true,
+          created_at: true,
+        },
+      }),
+    ]);
+
+    // Enrich DM rows with the recipient's site username via a batch user lookup.
+    const dmDiscordIds = rows
+      .filter((r) => r.target_type === 'DM')
+      .map((r) => r.target_id);
+
+    const userMap = new Map<string, { id: string; username: string }>();
+    if (dmDiscordIds.length > 0) {
+      const users = await fastify.prisma.user.findMany({
+        where: { discord_id: { in: dmDiscordIds } },
+        select: { id: true, discord_id: true, username: true },
+      });
+      for (const u of users) {
+        if (u.discord_id) userMap.set(u.discord_id, { id: u.id, username: u.username });
+      }
+    }
+
+    return {
+      data: rows.map((r) => ({
+        id: r.id,
+        target_type: r.target_type,
+        target_id: r.target_id,
+        recipient_username: r.target_type === 'DM' ? (userMap.get(r.target_id)?.username ?? null) : null,
+        kind: r.kind,
+        content: r.content,
+        status: r.status,
+        detail: r.detail,
+        created_at: r.created_at,
+      })),
+      total,
+      page,
+      limit,
+    };
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /api/admin/tournaments/:slug/resend-series-invite — re-fire invite (Task 2)
+  // ---------------------------------------------------------------------------
+  fastify.post<{ Params: { slug: string } }>(
+    '/api/admin/tournaments/:slug/resend-series-invite',
+    async (request, reply) => {
+      const { slug } = request.params;
+
+      const tournament = await fastify.prisma.tournament.findFirst({
+        where: { slug, deleted_at: null },
+        select: { id: true, series_id: true, is_series_final: true, status: true, series_invite_sent: true },
+      });
+
+      if (!tournament) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found.', statusCode: 404 });
+      }
+      if (!tournament.series_id || tournament.is_series_final) {
+        return reply.code(400).send({
+          error: 'BadRequest',
+          message: 'This tournament is not a series qualifier — resend only applies to non-final series qualifiers.',
+          statusCode: 400,
+        });
+      }
+      if (tournament.status !== 'OPEN_REGISTRATION') {
+        return reply.code(409).send({
+          error: 'Conflict',
+          message: 'Registration must be open to send the series invite.',
+          statusCode: 409,
+        });
+      }
+
+      // Reset the latch so maybeSendSeriesInvite will fire.
+      await fastify.prisma.tournament.update({
+        where: { id: tournament.id },
+        data: { series_invite_sent: false },
+      });
+
+      await maybeSendSeriesInvite(fastify.prisma, tournament.id);
+
+      return { ok: true };
+    },
+  );
 
 };
 

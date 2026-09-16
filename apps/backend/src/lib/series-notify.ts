@@ -86,9 +86,22 @@ export async function maybeSendSeriesInvite(prisma: PrismaClient, tournamentId: 
       select: { id: true, series_id: true, is_series_final: true, status: true, series_invite_sent: true },
     });
     if (!t || !t.series_id || t.is_series_final || t.status !== 'OPEN_REGISTRATION' || t.series_invite_sent) return;
-    // Latch first so concurrent callers can't double-send.
-    await prisma.tournament.update({ where: { id: t.id }, data: { series_invite_sent: true } });
-    await notifySeriesNewQualifier(prisma, t.series_id, t.id);
+    // Atomically claim the send so concurrent lifecycle hooks (attach + status change)
+    // can't double-fire — only the caller that flips false→true proceeds.
+    const claim = await prisma.tournament.updateMany({
+      where: { id: t.id, series_invite_sent: false },
+      data: { series_invite_sent: true },
+    });
+    if (claim.count === 0) return;
+    try {
+      const { intended } = await notifySeriesNewQualifier(prisma, t.series_id, t.id);
+      console.info(`[series-notify] qualifier ${t.id}: new-qualifier invite dispatched to ${intended} invitee(s)`);
+    } catch (err) {
+      // Never leave the invite latched-but-unsent: a restart or query failure between the
+      // claim and the send would otherwise suppress it forever. Release so a later trigger retries.
+      await prisma.tournament.update({ where: { id: t.id }, data: { series_invite_sent: false } }).catch(() => {});
+      throw err;
+    }
   } catch (err) {
     console.warn('[series-notify] maybeSendSeriesInvite error (non-fatal):', err);
   }
@@ -104,8 +117,8 @@ export async function notifySeriesNewQualifier(
   prisma: PrismaClient,
   seriesId: string,
   newQualifierId: string,
-): Promise<void> {
-  if (!isBotConfigured()) return;
+): Promise<{ intended: number }> {
+  if (!isBotConfigured()) return { intended: 0 };
   try {
     const [series, newQ] = await Promise.all([
       prisma.tournamentSeries.findUnique({ where: { id: seriesId }, select: { name: true } }),
@@ -114,14 +127,14 @@ export async function notifySeriesNewQualifier(
         select: { name: true, slug: true, start_date: true },
       }),
     ]);
-    if (!series || !newQ) return;
+    if (!series || !newQ) return { intended: 0 };
 
     // Prior qualifiers of this series (everything attached except the new one).
     const priorQualifiers = await prisma.tournament.findMany({
       where: { series_id: seriesId, id: { not: newQualifierId }, is_series_final: false, deleted_at: null },
       select: { id: true },
     });
-    if (priorQualifiers.length === 0) return;
+    if (priorQualifiers.length === 0) return { intended: 0 };
 
     // Everyone who ever registered for a prior qualifier is invited — checked-in,
     // late-joined, dropped or removed alike. Deliberately NOT filtered on deleted_at:
@@ -132,7 +145,7 @@ export async function notifySeriesNewQualifier(
       select: { user_id: true },
     });
     const candidateIds = [...new Set(priorParts.map((p) => p.user_id))];
-    if (candidateIds.length === 0) return;
+    if (candidateIds.length === 0) return { intended: 0 };
 
     // Exclude already-qualified (Model C only) + anyone already in the new qualifier.
     const [alreadyQualified, alreadyInNew] = await Promise.all([
@@ -144,7 +157,7 @@ export async function notifySeriesNewQualifier(
     ]);
     const excluded = new Set<string>([...alreadyQualified, ...alreadyInNew.map((p) => p.user_id)]);
     const inviteeIds = candidateIds.filter((id) => !excluded.has(id));
-    if (inviteeIds.length === 0) return;
+    if (inviteeIds.length === 0) return { intended: 0 };
 
     const users = await prisma.user.findMany({
       where: { id: { in: inviteeIds } },
@@ -156,8 +169,12 @@ export async function notifySeriesNewQualifier(
       `**[RizzOtto's Arena] New qualifier — ${series.name}**\n` +
       `A new qualifier, **${newQ.name}**, was just added to the **${series.name}** series — ` +
       `another shot at a Grand Final spot. It starts <t:${startTs}:F>. Sign up: <${qUrl}>`;
+    // Individual DM failures are non-fatal (and now visible in the bot-message log). A
+    // query failure above propagates so the caller can release the send claim and retry.
     await Promise.allSettled(users.map((u) => sendDm(u.discord_id, msg)));
+    return { intended: inviteeIds.length };
   } catch (err) {
     console.warn('[series-notify] notifySeriesNewQualifier error (non-fatal):', err);
+    throw err;
   }
 }

@@ -3294,3 +3294,44 @@ export function getSkillHistory(userId: string): Promise<SkillHistory> {
   return apiFetch<SkillHistory>(`/api/users/${userId}/skill-history`);
 }
 
+// ---------------------------------------------------------------------------
+// Admin: bot-message log
+// ---------------------------------------------------------------------------
+
+export type BotMessageStatus = 'SENT' | 'FAILED' | 'SKIPPED';
+
+export interface BotMessageRow {
+  id: string;
+  target_type: 'DM' | 'CHANNEL';
+  target_id: string;
+  recipient_username: string | null;
+  kind: string | null;
+  content: string;
+  status: BotMessageStatus;
+  detail: string | null;
+  created_at: string;
+}
+
+export function getBotMessages(opts?: {
+  page?: number;
+  limit?: number;
+  status?: BotMessageStatus;
+  target_id?: string;
+  q?: string;
+  kind?: string;
+  from?: string;
+  to?: string;
+}): Promise<{ data: BotMessageRow[]; total: number; page: number; limit: number }> {
+  const params = new URLSearchParams();
+  if (opts?.page)      params.set('page', String(opts.page));
+  if (opts?.limit)     params.set('limit', String(opts.limit));
+  if (opts?.status)    params.set('status', opts.status);
+  if (opts?.target_id) params.set('target_id', opts.target_id);
+  if (opts?.q)         params.set('q', opts.q);
+  if (opts?.kind)      params.set('kind', opts.kind);
+  if (opts?.from)      params.set('from', opts.from);
+  if (opts?.to)        params.set('to', opts.to);
+  const qs = params.toString();
+  return apiFetch(`/api/admin/bot-messages${qs ? `?${qs}` : ''}`);
+}
+

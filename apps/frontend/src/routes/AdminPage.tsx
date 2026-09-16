@@ -30,10 +30,11 @@ import { ReferralsTab } from '@/components/admin/ReferralsTab.js';
 import { BroadcastDmTab } from '@/components/admin/BroadcastDmTab.js';
 import { AccessLogTab } from '@/components/admin/AccessLogTab.js';
 import { AdminCompetitionTab } from '@/components/admin/AdminCompetitionTab.js';
+import { BotMessagesTab } from '@/components/admin/BotMessagesTab.js';
 
-type Tab = 'audit' | 'dashboard' | 'users' | 'supporters' | 'presets' | 'stats' | 'settings' | 'announcements' | 'referrals' | 'broadcast' | 'import' | 'matches' | 'all_games' | 'tournament_log' | 'queue' | 'skill_calibration' | 'reports' | 'access_log' | 'competition';
+type Tab = 'audit' | 'dashboard' | 'users' | 'supporters' | 'presets' | 'stats' | 'settings' | 'announcements' | 'referrals' | 'broadcast' | 'import' | 'matches' | 'all_games' | 'tournament_log' | 'queue' | 'skill_calibration' | 'reports' | 'access_log' | 'competition' | 'bot_messages';
 
-const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'competition', 'announcements', 'referrals', 'broadcast', 'access_log', 'skill_calibration', 'users', 'supporters', 'matches', 'all_games', 'tournament_log', 'queue', 'presets', 'audit', 'import'];
+const ALL_TABS: Tab[] = ['dashboard', 'stats', 'reports', 'settings', 'competition', 'announcements', 'referrals', 'broadcast', 'access_log', 'bot_messages', 'skill_calibration', 'users', 'supporters', 'matches', 'all_games', 'tournament_log', 'queue', 'presets', 'audit', 'import'];
 
 const TAB_LABEL_KEYS: Record<Tab, string> = {
   dashboard: 'admin.tabs.dashboard',
@@ -55,6 +56,7 @@ const TAB_LABEL_KEYS: Record<Tab, string> = {
   skill_calibration: 'admin.tabs.skill_calibration',
   reports: 'admin.tabs.reports',
   access_log: 'admin.tabs.access_log',
+  bot_messages: 'admin.tabs.bot_messages',
 };
 
 const STATIC_LABELS: Record<Tab, string> = {
@@ -77,6 +79,7 @@ const STATIC_LABELS: Record<Tab, string> = {
   skill_calibration: 'Skill Calibration',
   reports: 'Reports',
   access_log: 'Access Log',
+  bot_messages: 'Bot Messages',
 };
 
 function StatsTab() {
@@ -211,6 +214,7 @@ export function AdminPage() {
         {tab === 'skill_calibration' && <SkillCalibrationTab />}
         {tab === 'reports' && <AdminReportsTab />}
         {tab === 'access_log' && <AccessLogTab />}
+        {tab === 'bot_messages' && <BotMessagesTab />}
       </div>
     </PageShell>
   );

@@ -109,6 +109,39 @@ function streamLine(url?: string | null): string {
   return url ? `\n📺 Watch the action live: <${url}>` : '';
 }
 
+// ---------------------------------------------------------------------------
+// Bot message log (model BotMessage). Every message the bot dispatches is recorded
+// at the single HTTP choke-point below; deliberately-suppressed DMs (opt-out / rate
+// cap) are recorded at their drop site in sendDm. `dmChannelToUser` lets the choke-
+// point name the actual recipient — a DM channel id is otherwise opaque.
+// ---------------------------------------------------------------------------
+const dmChannelToUser = new Map<string, string>();
+
+const MESSAGE_POST_PATH = /^\/channels\/(\d+)\/messages$/;
+
+function recordBotMessage(entry: {
+  targetType: 'DM' | 'CHANNEL';
+  targetId: string;
+  content: string;
+  status: 'SENT' | 'FAILED' | 'SKIPPED';
+  detail?: string;
+  kind?: string;
+}): void {
+  // Fire-and-forget: logging must never break (or slow) sending.
+  void prisma.botMessage
+    .create({
+      data: {
+        target_type: entry.targetType,
+        target_id: entry.targetId,
+        content: entry.content.slice(0, 4000),
+        status: entry.status,
+        detail: entry.detail ?? null,
+        kind: entry.kind ?? null,
+      },
+    })
+    .catch(() => {});
+}
+
 async function discordRequest(
   method: string,
   path: string,
@@ -117,7 +150,7 @@ async function discordRequest(
   const token = getToken();
   if (!token) throw new Error('DISCORD_BOT_TOKEN not set');
 
-  return fetch(`${DISCORD_API}${path}`, {
+  const res = await fetch(`${DISCORD_API}${path}`, {
     method,
     headers: {
       Authorization: `Bot ${token}`,
@@ -125,6 +158,26 @@ async function discordRequest(
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+
+  // Log outbound messages (POST to a channel's /messages). Only res.ok/status are
+  // read here, so the caller can still consume the response body.
+  const channelId = method === 'POST' ? MESSAGE_POST_PATH.exec(path)?.[1] : undefined;
+  if (channelId) {
+    const recipientUser = dmChannelToUser.get(channelId);
+    const content =
+      body && typeof body === 'object' && 'content' in body
+        ? String((body as { content?: unknown }).content ?? '')
+        : '';
+    recordBotMessage({
+      targetType: recipientUser ? 'DM' : 'CHANNEL',
+      targetId: recipientUser ?? channelId,
+      content,
+      status: res.ok ? 'SENT' : 'FAILED',
+      detail: res.ok ? undefined : `http_${res.status}`,
+    });
+  }
+
+  return res;
 }
 
 /** True when a bot token is configured, so the caller can fail fast with a clear error. */
@@ -286,6 +339,7 @@ async function openDmChannel(discordUserId: string): Promise<string | null> {
     });
     if (!resp.ok) return null;
     const data = (await resp.json()) as { id: string };
+    dmChannelToUser.set(data.id, discordUserId);
     return data.id;
   } catch {
     return null;
@@ -422,12 +476,18 @@ export async function sendDm(
       where: { discord_id: discordUserId },
       select: { bot_message_policy: true },
     });
-    if (u?.bot_message_policy === 'NO_BOT_MESSAGES') return;
+    if (u?.bot_message_policy === 'NO_BOT_MESSAGES') {
+      recordBotMessage({ targetType: 'DM', targetId: discordUserId, content, status: 'SKIPPED', detail: 'opt_out' });
+      return;
+    }
   } catch {
     // fail-open: a lookup error must not silently drop legitimate notifications
   }
   // Automatic notifications are rate-capped per recipient; an intentional broadcast bypasses.
-  if (!opts?.broadcast && !passesDmCaps(discordUserId)) return;
+  if (!opts?.broadcast && !passesDmCaps(discordUserId)) {
+    recordBotMessage({ targetType: 'DM', targetId: discordUserId, content, status: 'SKIPPED', detail: 'rate_cap' });
+    return;
+  }
   const channelId = await openDmChannel(discordUserId);
   if (!channelId) return;
 
@@ -435,7 +495,10 @@ export async function sendDm(
 }
 
 async function sendDmWithComponents(discordUserId: string, content: string, components: object[]): Promise<void> {
-  if (!passesDmCaps(discordUserId)) return; // always automatic → always capped
+  if (!passesDmCaps(discordUserId)) {
+    recordBotMessage({ targetType: 'DM', targetId: discordUserId, content, status: 'SKIPPED', detail: 'rate_cap' });
+    return; // always automatic → always capped
+  }
   const channelId = await openDmChannel(discordUserId);
   if (!channelId) return;
 
