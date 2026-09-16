@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.1.0] — 2026-09-17
+
+### Added
+- **2v2 Open Play team picker.** Captains of more than one team now choose which team to queue with, instead of the game always picking one for them.
+- **Pause availability.** A one-click toggle on the Availability page temporarily stops you being matched or messaged — without deleting any of your saved time slots. Un-pause to go back.
+
+### Changed
+- **The monthly Ladder now uses the full weighted scoring** instead of a flat three-points-per-win: upset wins are worth more and repeatedly beating the same opponent is capped — the same system the skill leaderboard uses. Only the current month's games score points.
+- **The fundraiser section is now a thank-you.** With 2v2, Conquest and Siege live, the funding banners are replaced by a thank-you and an invitation to keep supporting; Ko-Fis now feed player prize pools.
+
+### Fixed
+- **Faction pages** now filter the matchup win-rate grid by the selected battle type (Domination / Conquest / Siege), not just the header.
+- **Series qualifier lists** are ordered and numbered by the tournament's actual date — newest on top with the highest number, oldest at the bottom as #1.
+
 ## [2.0.1] — 2026-09-16
 
 ### Fixed

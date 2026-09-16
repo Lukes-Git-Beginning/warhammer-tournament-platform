@@ -5,6 +5,7 @@ import {
   joinQueue,
   getMyAvailability,
   setMyAvailability,
+  setAvailabilityPaused,
   getAvailabilityHeatmap,
   getAvailabilityHeatmapNamed,
   getAvailabilityNow,
@@ -207,20 +208,25 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
     enabled: !!me && is2v2,
     staleTime: 60_000,
   });
-  const activeTeamAsCaptain = is2v2
-    ? (teamsData?.teams ?? []).find(
+  // Every team the player can queue as: ACTIVE teams they captain with two members.
+  const eligibleTeams = is2v2
+    ? (teamsData?.teams ?? []).filter(
         (t) => t.status === 'ACTIVE' && t.is_captain && t.members.length >= 2,
       )
-    : null;
+    : [];
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  // Fall back to the first eligible team when none is picked (or the pick is no longer eligible).
+  const effectiveTeamId =
+    eligibleTeams.find((t) => t.id === selectedTeamId)?.id ?? eligibleTeams[0]?.id;
   // Only block when we've actually loaded and confirmed there's no eligible team.
   const teamCheckLoaded = !is2v2 || teamsData !== undefined;
-  const canQueue2v2 = !is2v2 || !!activeTeamAsCaptain;
+  const canQueue2v2 = !is2v2 || eligibleTeams.length > 0;
 
   const join = useMutation({
     mutationFn: () =>
       joinQueue({
         battleTypes,
-        ...(is2v2 ? { competitorFormat: 'TWO_V_TWO' } : {}),
+        ...(is2v2 ? { competitorFormat: 'TWO_V_TWO', teamId: effectiveTeamId } : {}),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['queue-status'] }),
   });
@@ -275,6 +281,24 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
             })}
           </div>
         </div>
+
+        {/* 2v2 team picker — which of your captain teams to queue as. */}
+        {is2v2 && eligibleTeams.length > 0 && (
+          <div>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">Queue as team</p>
+            <select
+              value={effectiveTeamId ?? ''}
+              onChange={(e) => setSelectedTeamId(e.target.value)}
+              className="w-full rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-1.5 text-sm text-rizzotto-stone-200 focus:border-rizzotto-gold-400/70 focus:outline-none"
+            >
+              {eligibleTeams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Battle-type selection — pick one or more; you'll be matched on a shared type. */}
         <div>
@@ -413,6 +437,17 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
     },
   });
 
+  const paused = myData?.paused ?? false;
+  const pauseToggle = useMutation({
+    mutationFn: (next: boolean) => setAvailabilityPaused(next),
+    onSuccess: (data) => {
+      qc.setQueryData<{ slots: AvailabilitySlot[]; paused: boolean }>(
+        ['availability-me', currentUserId],
+        (prev) => (prev ? { ...prev, paused: data.paused } : prev),
+      );
+    },
+  });
+
   const slots = localSlots ?? myData?.slots ?? [];
   const isDirty = localSlots !== null;
 
@@ -472,12 +507,34 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
           ))}
         </div>
 
+        <button
+          type="button"
+          onClick={() => pauseToggle.mutate(!paused)}
+          disabled={pauseToggle.isPending}
+          aria-pressed={paused}
+          className={[
+            'rounded border px-3 py-1 text-xs font-medium transition-colors',
+            paused
+              ? 'border-amber-600/60 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
+              : 'border-stone-700 text-stone-400 hover:text-stone-200',
+          ].join(' ')}
+        >
+          {pauseToggle.isPending ? '…' : paused ? 'Resume availability' : 'Pause availability'}
+        </button>
+
         {isDirty && (
           <Button size="sm" onClick={() => save.mutate(slots)} disabled={save.isPending}>
             {save.isPending ? 'Saving…' : 'Save'}
           </Button>
         )}
       </div>
+
+      {paused && (
+        <p className="rounded border border-amber-800/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-400/90">
+          Your availability is paused. You won&rsquo;t be matched or messaged until you resume; your
+          saved time slots are kept.
+        </p>
+      )}
 
       {view === 'mine' ? (
         <WeekAvailabilityGrid

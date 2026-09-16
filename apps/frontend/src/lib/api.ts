@@ -3077,8 +3077,16 @@ export function getAvailabilityHeatmapNamed(
   return apiFetch<{ slots: NamedHeatmapSlot[] }>(`/api/availability/heatmap/named${qs}`);
 }
 
-export function getMyAvailability(): Promise<{ slots: AvailabilitySlot[] }> {
-  return apiFetch<{ slots: AvailabilitySlot[] }>('/api/availability/me');
+export function getMyAvailability(): Promise<{ slots: AvailabilitySlot[]; paused: boolean }> {
+  return apiFetch<{ slots: AvailabilitySlot[]; paused: boolean }>('/api/availability/me');
+}
+
+/** Toggle "temporarily not matchable" without deleting any calendar slots. */
+export function setAvailabilityPaused(paused: boolean): Promise<{ paused: boolean }> {
+  return apiFetch<{ paused: boolean }>('/api/availability/paused', {
+    method: 'PUT',
+    body: JSON.stringify({ paused }),
+  });
 }
 
 export function setMyAvailability(slots: Omit<AvailabilitySlot, 'id'>[]): Promise<{ slots: AvailabilitySlot[] }> {
@@ -3167,12 +3175,14 @@ export function getPlayerAntiFarming(playerId: string, versionId?: string): Prom
 export function joinQueue(opts?: {
   battleTypes?: BattleType[];
   competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
+  teamId?: string;
 }): Promise<{ matched: boolean; match_id?: string; position?: number }> {
   const body: Record<string, unknown> = {};
   if (opts?.battleTypes?.length) body.battleTypes = opts.battleTypes;
   if (opts?.competitorFormat && opts.competitorFormat !== 'ONE_V_ONE') {
     body.competitorFormat = opts.competitorFormat;
   }
+  if (opts?.teamId) body.teamId = opts.teamId;
   return apiFetch<{ matched: boolean; match_id?: string; position?: number }>('/api/open-play/queue', {
     method: 'POST',
     body: JSON.stringify(body),

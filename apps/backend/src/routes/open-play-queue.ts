@@ -15,6 +15,9 @@ import {
 const QueueJoinSchema = z.object({
   battleTypes: z.array(z.enum(ALL_BATTLE_TYPES)).min(1).optional(),
   competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(),
+  // 2v2: which of the captain's active teams to queue. Omitted → the captain's first active team
+  // (back-compat). Must be an ACTIVE team the requester captains.
+  teamId: z.string().uuid().optional(),
 });
 import { getQueueTimeoutRemaining, recordQueueLeave } from '../lib/queue-penalty.js';
 import { cancelOpenPlayMatch } from '../lib/cancel-open-play-match.js';
@@ -43,12 +46,16 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       // (team-as-actor — the captain queues the committed duo).
       let queueId = userId;
       if (format === 'TWO_V_TWO') {
+        const requestedTeamId = parsedPrefs.data.teamId;
         const team = await fastify.prisma.team.findFirst({
-          where: { captain_id: userId, status: 'ACTIVE' },
+          where: { captain_id: userId, status: 'ACTIVE', ...(requestedTeamId ? { id: requestedTeamId } : {}) },
           select: { id: true, members: { select: { accepted_at: true } } },
         });
         if (!team) {
-          return reply.code(400).send({ error: 'BadRequest', message: 'You must be the captain of an active team to queue for 2v2', statusCode: 400 });
+          const message = requestedTeamId
+            ? 'That team is not an active team you captain'
+            : 'You must be the captain of an active team to queue for 2v2';
+          return reply.code(400).send({ error: 'BadRequest', message, statusCode: 400 });
         }
         if (team.members.filter((m) => m.accepted_at !== null).length < 2) {
           return reply.code(400).send({ error: 'BadRequest', message: 'Your team needs two accepted members to queue', statusCode: 400 });

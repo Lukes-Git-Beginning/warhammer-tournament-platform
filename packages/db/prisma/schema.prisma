@@ -279,6 +279,10 @@ model User {
   // functional notifications; NO_BOT_MESSAGES = the bot never DMs this user at all.
   // Set on the admin user view.
   bot_message_policy  BotMessagePolicy @default(NORMAL)
+  // Availability pause: when true the player is temporarily not matchable — excluded from the
+  // matchmaking DM wave, the "available now" count and the public heatmap — WITHOUT deleting their
+  // calendar slots. Toggled from the Availability page. See routes/availability.ts.
+  availability_paused Boolean          @default(false)
   created_at          DateTime         @default(now())
   updated_at          DateTime         @updatedAt
   deleted_at          DateTime?

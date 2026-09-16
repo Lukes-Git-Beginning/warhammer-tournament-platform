@@ -235,7 +235,7 @@ async function maybeSendDmWave(fastify: FastifyInstance, queueLen: number): Prom
   const hour = now.getUTCHours();
 
   const slots = await prisma.availabilitySlot.findMany({
-    where: { day_of_week: day, hour_utc: hour, context: 'MATCHMAKING' },
+    where: { day_of_week: day, hour_utc: hour, context: 'MATCHMAKING', user: { availability_paused: false } },
     include: { user: { select: { id: true, discord_id: true } } },
   });
   if (slots.length === 0) return;
