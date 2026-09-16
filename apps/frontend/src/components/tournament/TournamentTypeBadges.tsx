@@ -15,20 +15,20 @@ const BATTLE_TYPES = new Set(['DOMINATION', 'CONQUEST', 'SIEGE']);
 const EXTS = ['png', 'svg', 'webp'];
 
 /**
- * A faint, centred battle-type symbol for a tile's background (pass to Card's `watermark` slot).
- * Renders the official image from `/battle-types/<type>.<ext>` (dropped into public/battle-types/);
- * until such a file exists it fails to load and renders nothing. Sits behind the content, so an
- * opaque poster at the top naturally leaves it visible only below.
+ * A faint battle-type symbol for a tile's background (pass to Card's `watermark` slot). Renders the
+ * official image from `/battle-types/<type>.<ext>` (dropped into public/battle-types/); until such a
+ * file exists it fails to load and renders nothing. Anchored to the LOWER half of the tile so it
+ * fills the space beneath the poster and never sits behind it (posters run along the top).
  */
 export function BattleTypeWatermark({ battleType }: { battleType?: string | null }) {
   const [attempt, setAttempt] = useState(0);
   if (!battleType || !BATTLE_TYPES.has(battleType) || attempt >= EXTS.length) return null;
   return (
-    <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden" aria-hidden>
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 top-1/2 flex items-center justify-center overflow-hidden" aria-hidden>
       <img
         src={`/battle-types/${battleType.toLowerCase()}.${EXTS[attempt]}`}
         alt=""
-        className="h-[90%] w-full object-contain opacity-[0.12]"
+        className="h-full w-full object-contain opacity-[0.12]"
         onError={() => setAttempt((a) => a + 1)}
       />
     </div>
