@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { buildApp } from './app.js';
+import { invalidate } from './lib/cache.js';
 import { publishNewChangelogOnBoot } from './lib/changelog-publish.js';
 import { maybeBackfillGsHistoryOnBoot } from './lib/gs-history-backfill.js';
 
@@ -57,6 +58,11 @@ async function main(): Promise<void> {
     // reconstruct it day-by-day from launch in the background (guarded to run exactly once,
     // then the daily snapshot cron takes over). Never blocks or fails startup.
     maybeBackfillGsHistoryOnBoot(app.prisma, app.log);
+    // A deploy restarts the process but Redis survives it, so any leaderboard view cached before the
+    // deploy keeps serving its pre-deploy computation for the rest of its TTL — a board code change
+    // (filters, gating) would otherwise not take effect until the cache expired. Drop the leaderboard
+    // cache once on boot so the first post-deploy request recomputes against the new code.
+    void invalidate(app.redis, 'leaderboard:*');
   } catch (err) {
     app.log.error(err);
     process.exit(1);

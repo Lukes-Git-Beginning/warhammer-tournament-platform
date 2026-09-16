@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.0.1] — 2026-09-16
+
+### Fixed
+- Leaderboard cache is now dropped once on boot, so board changes (filters, gating) take effect immediately after a deploy instead of serving the pre-deploy computation until the cache expired.
+
 ## [2.0.0] — 2026-09-16 — 2v2, Conquest & Siege, Game Versions, and a rebuilt competitive ladder
 
 ### Added
