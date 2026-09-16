@@ -106,6 +106,7 @@ export interface Tournament {
   min_band?: number | null;
   max_band?: number | null;
   // Series (detail endpoint only)
+  series_id?: string | null;
   series?: { id: string; slug: string; name: string } | null;
   is_series_final?: boolean;
 }
@@ -1003,6 +1004,10 @@ export function advancePlayoffs(tournamentId: string): Promise<{ phase: string; 
 
 export function unfinalizeTournament(slug: string): Promise<{ tournamentId: string; status: string; reopened: boolean }> {
   return apiFetch(`/api/tournaments/${slug}/unfinalize`, { method: 'POST' });
+}
+
+export function resendSeriesInvite(slug: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(`/api/admin/tournaments/${slug}/resend-series-invite`, { method: 'POST' });
 }
 
 export function addThirdPlaceMatch(tournamentId: string): Promise<{ repaired: boolean }> {

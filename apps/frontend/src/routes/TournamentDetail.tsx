@@ -15,6 +15,7 @@ import {
   getTournament,
   patchTournament,
   resetBracket,
+  resendSeriesInvite,
   startTournament,
 } from '@/lib/api';
 import type { FactionDto } from '@rizzotto/types';
@@ -165,6 +166,14 @@ export function TournamentDetail() {
       setCreateMatchError(null);
     },
     onError: (err: Error) => setCreateMatchError(err.message),
+  });
+
+  const [resendInviteSent, setResendInviteSent] = useState(false);
+  const resendSeriesInviteMutation = useMutation({
+    mutationFn: () => resendSeriesInvite(slug),
+    onSuccess: () => {
+      setResendInviteSent(true);
+    },
   });
 
   const { data: bracket } = useQuery({
@@ -532,6 +541,33 @@ export function TournamentDetail() {
               {resetBracketMutation.isPending ? 'Resetting…' : 'Reset Bracket'}
             </button>
           )}
+          {/* Admin-only: re-fire the series qualifier invite DM */}
+          {user?.role === 'ADMIN' &&
+            (tournament.series_id ?? tournament.series?.id) &&
+            !tournament.is_series_final &&
+            tournament.status === 'OPEN_REGISTRATION' && (
+              <>
+                <button
+                  type="button"
+                  disabled={resendSeriesInviteMutation.isPending}
+                  className="rounded border border-stone-700 px-4 py-1.5 text-sm text-stone-300 hover:border-rizzotto-gold-500 hover:text-rizzotto-gold-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => {
+                    setResendInviteSent(false);
+                    resendSeriesInviteMutation.mutate();
+                  }}
+                >
+                  {resendSeriesInviteMutation.isPending ? 'Sending…' : 'Re-send series invite'}
+                </button>
+                {resendInviteSent && !resendSeriesInviteMutation.isPending && (
+                  <span className="self-center text-xs text-emerald-400">Invite sent.</span>
+                )}
+                {resendSeriesInviteMutation.isError && (
+                  <span className="self-center text-xs text-rizzotto-danger">
+                    {(resendSeriesInviteMutation.error as Error).message}
+                  </span>
+                )}
+              </>
+            )}
           <button
             type="button"
             disabled={deleteMutation.isPending}
