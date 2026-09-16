@@ -265,8 +265,8 @@ export function FactionDetailPage() {
   });
 
   const { data: matchupData } = useQuery({
-    queryKey: ['meta-matchups'],
-    queryFn: () => getMatchupHeatmap(),
+    queryKey: ['meta-matchups', battleType],
+    queryFn: () => getMatchupHeatmap(undefined, battleType),
     staleTime: 2 * 60 * 1000,
   });
 
