@@ -155,6 +155,12 @@ export async function recomputeFactionStats(
   }));
 
   await prisma.$transaction(async (tx) => {
+    // Serialise concurrent recomputes for the SAME version: this is a full delete+recreate,
+    // so two in-flight rebuilds (e.g. two match results reported at the same moment) would
+    // otherwise race — both delete, then the second's createMany collides with the first's
+    // fresh rows (unique faction_id+season_id+battle_type) → P2002. A transaction-scoped
+    // advisory lock keyed by version makes them run one-after-another (auto-released on commit).
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('recompute_faction_stats'), hashtext(${versionId}))`;
     await tx.factionStats.deleteMany({ where: { version_id: versionId } });
     await tx.matchupStats.deleteMany({ where: { version_id: versionId } });
     if (factionRows.length) await tx.factionStats.createMany({ data: factionRows });
