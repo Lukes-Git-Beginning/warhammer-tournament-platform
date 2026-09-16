@@ -1,20 +1,20 @@
 /**
- * One-time backfill of the timeless General Skill history: for every UTC day from launch to
- * today, fit the hierarchical model over all decisive games up to end-of-day and persist a
- * PlayerSkillSnapshot per user. Idempotent (createMany skipDuplicates) so it is safe to re-run.
+ * One-time backfill of the timeless General Skill history: for every UTC day from the FIRST
+ * eligible game to today, fit the hierarchical model over all decisive games up to end-of-day
+ * and persist a PlayerSkillSnapshot per user. Idempotent (createMany skipDuplicates).
  *
- * This is the SAME reconstruction as scripts/reconstruct-gs-history.ts, extracted so the server
- * can run it once automatically on the first boot after deploy (see maybeBackfillGsHistoryOnBoot).
- * It yields briefly between days so a live backend stays responsive during the batch.
+ * The start is the earliest eligible game (NOT a fixed launch date) on purpose: the live all-time
+ * GS counts every game with no lower bound — pre-launch/beta games included — so the reconstructed
+ * history must span the SAME set, or a chart's latest point wouldn't equal the player's current GS.
+ *
+ * Same reconstruction as scripts/reconstruct-gs-history.ts, extracted so the server can run it once
+ * automatically on the first boot after deploy (see maybeBackfillGsHistoryOnBoot). Yields briefly
+ * between days so a live backend stays responsive during the batch.
  */
 import type { PrismaClient } from '@rizzotto/db';
 import { getRatingModel } from './rating-model-service.js';
-import {
-  GS_HISTORY_LAUNCH_DATE,
-  eachUtcDay,
-  endOfUtcDayExclusive,
-  buildSnapshotRows,
-} from './gs-history.js';
+import { eligibleStatGameWhere } from './stat-eligibility.js';
+import { eachUtcDay, endOfUtcDayExclusive, buildSnapshotRows } from './gs-history.js';
 
 interface Logger {
   info: (obj: unknown, msg?: string) => void;
@@ -27,12 +27,24 @@ export async function backfillGsHistory(prisma: PrismaClient, log?: Logger): Pro
   const users = await prisma.user.findMany({ select: { id: true } });
   const validUserIds = new Set(users.map((u) => u.id));
 
-  const days = eachUtcDay(GS_HISTORY_LAUNCH_DATE, new Date());
+  // First eligible game = the same all-time set the live GS fits over (no launch floor).
+  const first = await prisma.matchGame.findFirst({
+    where: eligibleStatGameWhere(null),
+    orderBy: { played_at: 'asc' },
+    select: { played_at: true },
+  });
+  if (!first?.played_at) {
+    log?.info({ inserted: 0 }, '[gs-history] no eligible games — nothing to reconstruct');
+    return 0;
+  }
+
+  const days = eachUtcDay(first.played_at, new Date());
+  const startDay = days[0]!; // UTC midnight of the earliest eligible game
   let inserted = 0;
   for (const day of days) {
     const model = await getRatingModel(prisma, undefined, {
       versionId: null,
-      window: { from: GS_HISTORY_LAUNCH_DATE, to: endOfUtcDayExclusive(day) },
+      window: { from: startDay, to: endOfUtcDayExclusive(day) },
       config: { hierarchical: true },
     });
     const rows = buildSnapshotRows(model.generalSkills, day, validUserIds, versionId);
@@ -40,11 +52,10 @@ export async function backfillGsHistory(prisma: PrismaClient, log?: Logger): Pro
       const res = await prisma.playerSkillSnapshot.createMany({ data: rows, skipDuplicates: true });
       inserted += res.count;
     }
-    // Yield between days: the per-day fit is CPU-bound, so a small pause keeps the live
-    // backend's event loop responsive during this one-time batch.
+    // The per-day fit is CPU-bound; a small pause keeps the live backend's event loop responsive.
     await new Promise((r) => setTimeout(r, 25));
   }
-  log?.info({ days: days.length, inserted }, '[gs-history] backfill complete');
+  log?.info({ days: days.length, from: startDay.toISOString().slice(0, 10), inserted }, '[gs-history] backfill complete');
   return inserted;
 }
 

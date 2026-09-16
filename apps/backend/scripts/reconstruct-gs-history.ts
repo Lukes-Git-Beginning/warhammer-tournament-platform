@@ -1,37 +1,31 @@
 /**
- * Reconstruct the timeless General Skill day-by-day from launch and persist a PlayerSkillSnapshot
- * per (user, UTC day). "GS on day D" = the hierarchical fit over every decisive game with played_at
- * up to end-of-D. Idempotent (createMany skipDuplicates). Runs against the LOCAL gs-history DB only.
+ * Reconstruct the timeless General Skill day-by-day and persist a PlayerSkillSnapshot per
+ * (user, UTC day). "GS on day D" = the hierarchical fit over every decisive game up to end-of-D,
+ * from the FIRST eligible game (the same all-time set as the live GS — no launch floor). Idempotent.
  *
  *   SANITY=1 → just print the all-time GS top-10 (no writes), to eyeball against prod.
- *   (default) → the full launch→today batch.
+ *   (default) → the full first-game→today batch (shared with the on-boot auto-backfill).
  *
- * Run: DATABASE_URL=<gshistory> pnpm -F @rizzotto/backend exec tsx scripts/reconstruct-gs-history.ts
+ * Run: DATABASE_URL=<db> pnpm -F @rizzotto/backend exec tsx scripts/reconstruct-gs-history.ts
  */
 import { prisma } from '@rizzotto/db';
 import { getRatingModel } from '../src/lib/rating-model-service.js';
-import {
-  GS_HISTORY_LAUNCH_DATE,
-  eachUtcDay,
-  endOfUtcDayExclusive,
-  buildSnapshotRows,
-} from '../src/lib/gs-history.js';
+import { buildSnapshotRows } from '../src/lib/gs-history.js';
+import { backfillGsHistory } from '../src/lib/gs-history-backfill.js';
 
 const SANITY = process.env.SANITY === '1';
 
 async function main(): Promise<void> {
-  const version = await prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
-  const versionId = version?.id ?? null;
-  const users = await prisma.user.findMany({ select: { id: true, username: true } });
-  const validUserIds = new Set(users.map((u) => u.id));
-  const nameById = new Map(users.map((u) => [u.id, u.username]));
-
   if (SANITY) {
+    const version = await prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
+    const users = await prisma.user.findMany({ select: { id: true, username: true } });
+    const validUserIds = new Set(users.map((u) => u.id));
+    const nameById = new Map(users.map((u) => [u.id, u.username]));
     const model = await getRatingModel(prisma, undefined, { versionId: null, config: { hierarchical: true } });
-    const rows = buildSnapshotRows(model.generalSkills, new Date(), validUserIds, versionId)
+    const rows = buildSnapshotRows(model.generalSkills, new Date(), validUserIds, version?.id ?? null)
       .sort((a, b) => b.general_skill - a.general_skill)
       .slice(0, 10);
-    console.log(`=== ALL-TIME GS top 10 (local, ${model.generalSkills.length} players, ${model.totalMatches} obs) ===`);
+    console.log(`=== ALL-TIME GS top 10 (${model.generalSkills.length} players, ${model.totalMatches} obs) ===`);
     for (const r of rows) {
       console.log(
         `GS ${r.general_skill.toFixed(3).padStart(7)}  band ${r.band}  games ${String(r.games_count).padStart(3)}  ${nameById.get(r.user_id)}`,
@@ -41,27 +35,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  const days = eachUtcDay(GS_HISTORY_LAUNCH_DATE, new Date());
-  console.log(`Reconstructing GS for ${days.length} UTC days (launch 2026-06-27 → today)…`);
-  let totalInserted = 0;
-  for (const day of days) {
-    const t0 = Date.now();
-    const model = await getRatingModel(prisma, undefined, {
-      versionId: null,
-      window: { from: GS_HISTORY_LAUNCH_DATE, to: endOfUtcDayExclusive(day) },
-      config: { hierarchical: true },
-    });
-    const rows = buildSnapshotRows(model.generalSkills, day, validUserIds, versionId);
-    if (rows.length > 0) {
-      const res = await prisma.playerSkillSnapshot.createMany({ data: rows, skipDuplicates: true });
-      totalInserted += res.count;
-    }
-    console.log(
-      `${day.toISOString().slice(0, 10)}: ${String(rows.length).padStart(3)} players · ${String(model.totalMatches).padStart(4)} obs · ${((Date.now() - t0) / 1000).toFixed(1)}s`,
-    );
-  }
+  console.log('Reconstructing GS from the first eligible game → today…');
+  const inserted = await backfillGsHistory(prisma, {
+    info: (o, m) => console.log(m ?? '', o),
+    error: (o, m) => console.error(m ?? '', o),
+  });
   const snapCount = await prisma.playerSkillSnapshot.count();
-  console.log(`\nDONE: ${days.length} days · ${totalInserted} rows inserted this run · ${snapCount} snapshots total.`);
+  console.log(`\nDONE: ${inserted} rows inserted this run · ${snapCount} snapshots total.`);
   await prisma.$disconnect();
 }
 
