@@ -25,7 +25,7 @@ import {
   generateBracket,
   reportMatchResult,
   cleanupTestData,
-  ensureActiveSeason,
+  ensureActiveVersion,
 } from './helpers/tournament-fixture.js';
 
 const BACKEND = 'http://localhost:3000';
@@ -68,7 +68,7 @@ test.describe('Tournament Series — Model A end-to-end', () => {
   const seriesIds: string[] = [];
 
   test.beforeAll(async () => {
-    await ensureActiveSeason();
+    await ensureActiveVersion();
   });
 
   test.afterAll(async () => {

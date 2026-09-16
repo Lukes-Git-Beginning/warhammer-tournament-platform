@@ -56,8 +56,9 @@ test.describe('Welle-D: Tournament Create — BPT with Map Pool', () => {
     try {
       await signInRequest(orgCtx, organizer.id, BACKEND);
 
-      // Fetch available maps for the pool
-      const mapsRes = await orgCtx.get(`${BACKEND}/api/maps`);
+      // Fetch available maps for the pool — filtered to the tournament's battle type
+      // (the pool now rejects maps that aren't valid for DOMINATION).
+      const mapsRes = await orgCtx.get(`${BACKEND}/api/maps?battle_type=DOMINATION&available=true`);
       expect(mapsRes.ok()).toBe(true);
       const mapsBody = (await mapsRes.json()) as { data: Array<{ id: string; name: string }> };
       const mapIds = mapsBody.data.slice(0, 5).map((m) => m.id);
@@ -257,9 +258,9 @@ test.describe('Welle-D: Match-Decision-Flow', () => {
     try {
       await signInRequest(orgCtx, organizer.id, BACKEND);
 
-      // Fetch map pool from the master list (seeded via pnpm db:seed, 36 maps).
-      // /decision/start requires at least 3 maps in the tournament pool.
-      const mapsRes = await orgCtx.get(`${BACKEND}/api/maps`);
+      // Fetch map pool from the master list, filtered to the tournament's battle type
+      // (the pool rejects non-DOMINATION maps). /decision/start requires >=3 maps.
+      const mapsRes = await orgCtx.get(`${BACKEND}/api/maps?battle_type=DOMINATION&available=true`);
       expect(mapsRes.ok()).toBe(true);
       const mapsBody = (await mapsRes.json()) as { data: Array<{ id: string }> };
       const mapIds = mapsBody.data.slice(0, 5).map((m) => m.id);

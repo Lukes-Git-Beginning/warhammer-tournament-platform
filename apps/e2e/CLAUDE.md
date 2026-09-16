@@ -45,7 +45,7 @@ Details zu jedem Spec: `.knowledge/testing.md`
 
 - `createTestUsers(n, opts?)` — N User via Prisma direkt erstellen
 - `signInRequest(request, userId)` / `signInBrowser(ctx, userId)` — Auth-Cookie setzen
-- `ensureActiveSeason()` — idempotent, Pflicht in `beforeAll`
+- `ensureActiveVersion()` — idempotent, Pflicht in `beforeAll`
 - `createTournament(request, opts)` → `registerUsers(slug, users)` → `generateBracket(request, slug)`
 - `startMatch(request, matchId)` / `reportMatchResult(request, matchId, opts)`
 - `cleanupTestData(userIds)` — cascade-geordnetes Cleanup aller Test-Entities
@@ -56,7 +56,7 @@ Details zu jedem Spec: `.knowledge/testing.md`
 
 - **Auth:** immer `signInRequest`/`signInBrowser` — nie UI-Login-Flow
 - **Cleanup:** `cleanupTestData(userIds)` im `afterEach`/`afterAll` — kein globales `deleteMany`
-- **Season:** `ensureActiveSeason()` im `beforeAll` wenn Leaderboard/Faction-Stats getestet werden
+- **Season:** `ensureActiveVersion()` im `beforeAll` wenn Leaderboard/Faction-Stats getestet werden
 - **webServer:** lokal `pnpm dev`, CI `pnpm start`/`preview` (pre-built) — `playwright.config.ts` wählt automatisch
 
 ---
