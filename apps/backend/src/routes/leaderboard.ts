@@ -581,10 +581,14 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         // In-scope games: total for Overall, else games IN the selected battle type — a battle-type
         // board must not list everyone via the GS fallback, only players who actually played it.
         const inScope = (e: (typeof board)[number]) => (battleType === 'OVERALL' ? e.gamesCount : e.battleTypeGames);
-        // 1v1: self-scaling cutoff. 2v2: all active teams for Overall, else only teams that played the type.
+        // 1v1: OPEN board — everyone who has played (>= 1 decisive game) is listed, so newcomers
+        // appear immediately. GS shrinkage keeps low-sample players near the mean, and the frontend
+        // marks them `provisional`; a rolling activity threshold (drop the dormant, keep active
+        // newcomers) is a planned follow-up. 2v2: all active teams for Overall, else only teams that
+        // played the type.
         const eligible =
           competitorFormat === 'ONE_V_ONE'
-            ? board.filter((e) => inScope(e) >= cutoff)
+            ? board.filter((e) => inScope(e) >= 1)
             : battleType === 'OVERALL'
               ? board
               : board.filter((e) => inScope(e) >= 1);
