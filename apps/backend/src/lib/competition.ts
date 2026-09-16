@@ -10,6 +10,9 @@
 // ---------------------------------------------------------------------------
 
 import type { PrismaClient } from '@rizzotto/db';
+import type { Redis } from 'ioredis';
+import { getRatingModel } from './rating-model-service.js';
+import { rawPoints, opponentShare, opponentModifier, finalPoints } from './scoring-service.js';
 
 export interface TimeWindow {
   from: Date;
@@ -235,15 +238,20 @@ export interface LadderStanding {
 }
 
 /**
- * Monthly ladder standings from Open-Play games in the window. Points reward activity ×
- * success (the ladder's job is to drive Open-Play activity); reset each month by the caller
- * passing the current-month window. The ladder is INDIVIDUAL: 1v1 slots are user ids; 2v2
- * slots are team ids → resolved to their members so BOTH teammates score the same result.
+ * Monthly ladder standings from Open-Play games in the window, scored with the dynamic weighted
+ * system (the same one the version leaderboard uses): each win is worth
+ *   FinalPoints = RawPoints(ExpectedChanceToWin) × OpponentModifier
+ * so upsets pay more and farming one opponent is capped. ExpectedChanceToWin is drawn from the
+ * ALL-TIME rating fit (stable weighting that doesn't swing on a thin month of games), while only
+ * the window's games contribute points — reset each month by the caller passing the current-month
+ * window. Draws score no points. The ladder is INDIVIDUAL: 1v1 slots are user ids; 2v2 slots are
+ * team ids → the points math treats the team as the actor (slot-level chance + anti-farm share),
+ * then credits BOTH teammates the same result.
  */
 export async function computeLadderStandings(
   prisma: PrismaClient,
+  redis: Redis | undefined,
   window: TimeWindow,
-  cfg: CompetitionConfig,
 ): Promise<LadderStanding[]> {
   const games = await prisma.matchGame.findMany({
     where: {
@@ -257,8 +265,17 @@ export async function computeLadderStandings(
         player2_id: { not: null },
       },
     },
-    select: { winner_id: true, match: { select: { player1_id: true, player2_id: true, competitor_format: true } } },
+    select: {
+      winner_id: true,
+      player1_faction_id: true,
+      player2_faction_id: true,
+      match: { select: { player1_id: true, player2_id: true, competitor_format: true } },
+    },
   });
+
+  // Weighting comes from the ALL-TIME fit (versionId null); only this window's games score points.
+  // Slot ids (user for 1v1, team for 2v2) are the model's entities, so team-vs-team chance works.
+  const model = await getRatingModel(prisma, redis, { versionId: null });
 
   // Resolve any 2v2 team slots → member user ids (both teammates get the individual result).
   const teamIds = new Set<string>();
@@ -283,6 +300,22 @@ export async function computeLadderStandings(
   const usersOf = (slotId: string | null, isTeam: boolean): string[] =>
     !slotId ? [] : isTeam ? (membersByTeam.get(slotId) ?? []) : [slotId];
 
+  // --- Pass 1: slot-level win counts for the anti-farming share (team-as-actor) --------------
+  const slotWins = new Map<string, number>();
+  const winsVsOpponent = new Map<string, Map<string, number>>();
+  for (const g of games) {
+    if (!g.winner_id || !g.match.player1_id || !g.match.player2_id) continue;
+    const winnerSlot = g.winner_id;
+    const loserSlot = winnerSlot === g.match.player1_id ? g.match.player2_id : g.match.player1_id;
+    slotWins.set(winnerSlot, (slotWins.get(winnerSlot) ?? 0) + 1);
+    let inner = winsVsOpponent.get(winnerSlot);
+    if (!inner) {
+      inner = new Map();
+      winsVsOpponent.set(winnerSlot, inner);
+    }
+    inner.set(loserSlot, (inner.get(loserSlot) ?? 0) + 1);
+  }
+
   const byPlayer = new Map<string, LadderStanding>();
   const entry = (id: string): LadderStanding => {
     let e = byPlayer.get(id);
@@ -293,28 +326,54 @@ export async function computeLadderStandings(
     return e;
   };
 
+  // --- Pass 2: dynamic points per win, distributed to the slot's member users ----------------
   for (const g of games) {
+    const p1 = g.match.player1_id;
+    const p2 = g.match.player2_id;
+    if (!p1 || !p2) continue;
     const isTeam = g.match.competitor_format === 'TWO_V_TWO';
-    const side1 = usersOf(g.match.player1_id, isTeam);
-    const side2 = usersOf(g.match.player2_id, isTeam);
-    const isDraw = g.winner_id === null;
-    const side1Won = !isDraw && g.winner_id === g.match.player1_id;
-    const credit = (uid: string, won: boolean) => {
+
+    if (!g.winner_id) {
+      // Draw — no points, but both sides record the game.
+      for (const uid of usersOf(p1, isTeam)) {
+        const e = entry(uid);
+        e.games++;
+        e.draws++;
+      }
+      for (const uid of usersOf(p2, isTeam)) {
+        const e = entry(uid);
+        e.games++;
+        e.draws++;
+      }
+      continue;
+    }
+
+    const winnerIsP1 = g.winner_id === p1;
+    const winnerSlot = winnerIsP1 ? p1 : p2;
+    const loserSlot = winnerIsP1 ? p2 : p1;
+    const winnerFaction = winnerIsP1 ? g.player1_faction_id : g.player2_faction_id;
+    const loserFaction = winnerIsP1 ? g.player2_faction_id : g.player1_faction_id;
+
+    const chance =
+      winnerFaction && loserFaction
+        ? model.expectedChanceToWin(winnerSlot, winnerFaction, loserSlot, loserFaction)
+        : 0.5; // no faction data — neutral weighting
+    const winnerTotal = slotWins.get(winnerSlot) ?? 0;
+    const vs = winsVsOpponent.get(winnerSlot)?.get(loserSlot) ?? 0;
+    const mod = opponentModifier(opponentShare(vs, winnerTotal), winnerTotal);
+    const fp = finalPoints(rawPoints(chance), mod);
+
+    for (const uid of usersOf(winnerSlot, isTeam)) {
       const e = entry(uid);
       e.games++;
-      if (isDraw) {
-        e.draws++;
-        e.points += cfg.ladderDrawPoints;
-      } else if (won) {
-        e.wins++;
-        e.points += cfg.ladderWinPoints;
-      } else {
-        e.losses++;
-        e.points += cfg.ladderLossPoints;
-      }
-    };
-    for (const uid of side1) credit(uid, side1Won);
-    for (const uid of side2) credit(uid, !isDraw && !side1Won);
+      e.wins++;
+      e.points += fp;
+    }
+    for (const uid of usersOf(loserSlot, isTeam)) {
+      const e = entry(uid);
+      e.games++;
+      e.losses++;
+    }
   }
 
   return [...byPlayer.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || a.games - b.games);

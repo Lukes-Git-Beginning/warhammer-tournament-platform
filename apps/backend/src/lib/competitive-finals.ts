@@ -147,12 +147,12 @@ export async function computeQuarterlyFinal(
 /** Preview the Monthly Ladder Invitational (individual, combined across all battle types). */
 export async function computeMonthlyLadderFinal(
   prisma: PrismaClient,
+  redis: Redis | undefined,
   opts: { period: string; now?: Date },
 ): Promise<LadderFinalPreview | null> {
   const window = parseMonth(opts.period);
   if (!window) return null;
-  const cfg = await loadCompetitionConfig(prisma);
-  const standings = await computeLadderStandings(prisma, window, cfg);
+  const standings = await computeLadderStandings(prisma, redis, window);
   const players = standings.length;
   const size = largestPow2AtMost(players / 4); // no floor (Alex 2026-09-15)
   const seeds: FinalSeed[] = standings.slice(0, size).map((s, i) => ({
@@ -197,7 +197,7 @@ export async function seedFinal(
           competitorFormat: opts.competitorFormat,
           now: opts.now,
         })
-      : await computeMonthlyLadderFinal(prisma, { period: opts.period, now: opts.now });
+      : await computeMonthlyLadderFinal(prisma, redis, { period: opts.period, now: opts.now });
   if (!preview) throw new Error('Invalid period');
   if (preview.size === 0 || preview.seeds.length === 0) {
     throw new Error(

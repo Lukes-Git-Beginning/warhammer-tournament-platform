@@ -83,7 +83,7 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('championships:ladder', { period }),
       async () => {
-        const preview = await computeMonthlyLadderFinal(fastify.prisma, { period });
+        const preview = await computeMonthlyLadderFinal(fastify.prisma, fastify.redis, { period });
         const tournament = await fastify.prisma.tournament.findFirst({
           where: { championship_kind: 'MONTHLY_LADDER', championship_period: period, deleted_at: null },
           select: { slug: true, name: true, status: true },

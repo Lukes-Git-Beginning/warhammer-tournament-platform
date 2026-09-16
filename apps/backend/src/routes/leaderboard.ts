@@ -746,13 +746,12 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
     const { page, pageSize, month: monthParam } = parsed.data;
     const month = monthParam ? parseMonth(monthParam) : currentMonth();
     if (!month) return reply.code(400).send({ error: 'BadRequest', message: 'Invalid month', statusCode: 400 });
-    const cfg = await loadCompetitionConfig(fastify.prisma);
     const months = listMonthsSinceLaunch().map((p) => ({ value: p.value, label: p.label }));
     return cached(
       fastify.redis,
       cacheKey('leaderboard:ladder', { page, pageSize, from: month.from.toISOString() }),
       async () => {
-        const standings = await computeLadderStandings(fastify.prisma, month, cfg);
+        const standings = await computeLadderStandings(fastify.prisma, fastify.redis, month);
         const total = standings.length;
         const slice = standings.slice((page - 1) * pageSize, page * pageSize);
         const users = slice.length

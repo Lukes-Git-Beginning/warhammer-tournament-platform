@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
-import { currentMonth, currentQuarter, computeLadderStandings, loadCompetitionConfig } from '../src/lib/competition.js';
+import { currentMonth, currentQuarter, computeLadderStandings } from '../src/lib/competition.js';
 import { createTestUser, cleanupUsers } from './helpers/db-fixtures.js';
 
 let app: FastifyInstance;
@@ -48,7 +48,7 @@ describe('competition time windows', () => {
 });
 
 describe('ladder standings', () => {
-  it('awards monthly Open-Play points (win / loss) from decisive games', async () => {
+  it('awards dynamic upset-weighted monthly Open-Play points from decisive games', async () => {
     const a = await createTestUser({ username: 'LadderA' });
     const b = await createTestUser({ username: 'LadderB' });
     createdUserIds.push(a.id, b.id);
@@ -72,13 +72,14 @@ describe('ladder standings', () => {
       data: { match_id: matchId, game_number: 1, status: 'COMPLETED', winner_id: a.id, played_at: new Date(), counts_for_leaderboard: true },
     });
 
-    const cfg = await loadCompetitionConfig(prisma);
-    const standings = await computeLadderStandings(prisma, currentMonth(), cfg);
+    const standings = await computeLadderStandings(prisma, undefined, currentMonth());
     const sa = standings.find((s) => s.playerId === a.id);
     const sb = standings.find((s) => s.playerId === b.id);
-    expect(sa?.points).toBe(cfg.ladderWinPoints);
+    // Dynamic weighting: no faction data → neutral 0.5 chance → rawPoints(0.5) = 50; a single win is
+    // below the anti-farm threshold so the modifier stays 1. The loser scores no points.
+    expect(sa?.points).toBe(50);
     expect(sa?.wins).toBe(1);
-    expect(sb?.points).toBe(cfg.ladderLossPoints);
+    expect(sb?.points).toBe(0);
     expect(sb?.losses).toBe(1);
   });
 });
