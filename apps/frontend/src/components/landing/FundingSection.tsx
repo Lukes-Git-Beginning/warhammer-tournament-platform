@@ -3,17 +3,15 @@ import { motion, useReducedMotion } from 'motion/react';
 import { Coffee } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { KOFI_URL } from '@/lib/constants';
-import { FundingGoalBar } from '@/components/supporter/FundingGoalBar';
 
 const MODES = ['2v2', 'Conquest', 'Siege'];
 
 /**
- * Funding band — the prominent Ko-Fi call-to-action for the three new battle modes,
- * with a progress bar toward the goal.
+ * Thank-you band — the fundraiser did its job (2v2, Conquest and Siege shipped), so this now thanks
+ * supporters and invites continued Ko-Fis, which flow back to players via prize pools and more.
  *
  * - default: a centered, standalone section (e.g. the support page).
- * - `compact`: a wide, short horizontal band — headline + goal bar left, CTA right —
- *   for the top of a page (e.g. above the landing hero).
+ * - `compact`: a wide, short horizontal band for the top of a page (e.g. above the landing hero).
  */
 export function FundingSection({ compact = false }: { compact?: boolean }) {
   const reduced = useReducedMotion();
@@ -29,7 +27,7 @@ export function FundingSection({ compact = false }: { compact?: boolean }) {
     <Button asChild variant="forge" size="lg">
       <a href={KOFI_URL} target="_blank" rel="noopener noreferrer">
         <Coffee className="size-5" strokeWidth={1.5} aria-hidden="true" />
-        Support on Ko-Fi
+        Buy a Ko-Fi
       </a>
     </Button>
   );
@@ -53,7 +51,7 @@ export function FundingSection({ compact = false }: { compact?: boolean }) {
     </>
   );
 
-  // Compact: wide, short horizontal band — headline + goal bar left, CTA right.
+  // Compact: wide, short horizontal band — thank-you + line left, CTA right.
   if (compact) {
     return (
       <section
@@ -68,9 +66,11 @@ export function FundingSection({ compact = false }: { compact?: boolean }) {
               className="font-display font-bold text-rizzotto-stone-100"
               style={{ fontSize: 'clamp(1.3rem, 2.6vw, 2rem)', lineHeight: 1.15 }}
             >
-              Help build <span className="text-rizzotto-gold-300">2v2, Conquest &amp; Siege</span>
+              <span className="text-rizzotto-gold-300">2v2, Conquest &amp; Siege</span> are live — thanks to you
             </h2>
-            <FundingGoalBar className="mx-auto mt-3 max-w-md lg:mx-0 lg:max-w-xl" />
+            <p className="mx-auto mt-2 max-w-xl text-sm text-rizzotto-stone-300 lg:mx-0">
+              Every Ko-Fi from here goes back to the players, through prize pools and more.
+            </p>
           </motion.div>
           <motion.div {...rise(0.1)} className="flex shrink-0 flex-wrap items-center justify-center gap-3">
             <Button asChild variant="etched" size="md">
@@ -107,7 +107,7 @@ export function FundingSection({ compact = false }: { compact?: boolean }) {
           className="font-display font-bold text-rizzotto-stone-100"
           style={{ fontSize: 'clamp(1.75rem, 4vw, 3rem)', lineHeight: 1.1 }}
         >
-          Help build the next three battle modes
+          Thank you — you built the next three battle modes
         </motion.h2>
 
         <motion.div
@@ -124,18 +124,14 @@ export function FundingSection({ compact = false }: { compact?: boolean }) {
           ))}
         </motion.div>
 
-        {/* Support-page mission + cost statement (Alex's own copy). This full variant renders
-            only on /support; the landing uses the compact variant, which omits this paragraph. */}
+        {/* Thank-you + keep-supporting invite (Alex's voice). This full variant renders only on
+            /support; the landing uses the compact variant. */}
         <motion.p {...rise(0.2)} className="mt-6 max-w-2xl text-rizzotto-stone-300">
-          RizzOtto&rsquo;s Arena has always been free: no ads, no paywalls, built and run by
-          players. Now I want to build the next chapter: three new battle modes (2v2, Conquest and
-          Siege), and keep the servers running. To get all this accomplished in a timely manner, I
-          need some outside dev support, which costs money. Supporters are credited on the site.
+          Thanks to everyone who chipped in, the three new battle modes are now live, and the Arena
+          keeps running the way it always has: no ads, no paywalls, built and run by players. If you
+          want to keep it growing, every Ko-Fi from here goes straight back to the players, through
+          prize pools and more. Supporters are credited on the site.
         </motion.p>
-
-        <motion.div {...rise(0.25)} className="mt-8 w-full max-w-md">
-          <FundingGoalBar />
-        </motion.div>
 
         <motion.div {...rise(0.32)} className="mt-8">
           {cta}
