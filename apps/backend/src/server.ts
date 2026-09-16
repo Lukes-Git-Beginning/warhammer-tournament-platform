@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { buildApp } from './app.js';
 import { publishNewChangelogOnBoot } from './lib/changelog-publish.js';
+import { maybeBackfillGsHistoryOnBoot } from './lib/gs-history-backfill.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -52,6 +53,10 @@ async function main(): Promise<void> {
     // Fire-and-forget: RizzBOTto auto-publishes any CHANGELOG versions added since the last
     // deploy to the Discord changelog channel. Never blocks or fails startup.
     void publishNewChangelogOnBoot(app.prisma, app.log);
+    // Fire-and-forget: on the first boot after deploy the timeless GS history is empty, so
+    // reconstruct it day-by-day from launch in the background (guarded to run exactly once,
+    // then the daily snapshot cron takes over). Never blocks or fails startup.
+    maybeBackfillGsHistoryOnBoot(app.prisma, app.log);
   } catch (err) {
     app.log.error(err);
     process.exit(1);
