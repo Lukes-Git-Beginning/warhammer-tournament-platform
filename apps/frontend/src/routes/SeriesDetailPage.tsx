@@ -898,13 +898,15 @@ export function SeriesDetailPage() {
           <p className="text-sm text-rizzotto-stone-500">No qualifying tournaments attached yet.</p>
         ) : (
           <ul className="space-y-2">
-            {[...series.qualifiers].reverse().map((q, i) => {
+            {[...series.qualifiers]
+              .sort((a, b) => new Date(b.start_date ?? 0).getTime() - new Date(a.start_date ?? 0).getTime())
+              .map((q, i) => {
               const statusColors: Record<string, string> = {
                 ONGOING: 'text-rizzotto-forge-400',
                 COMPLETED: 'text-rizzotto-stone-500',
               };
-              // Chronological number: 1 = oldest/first qualifier, highest = newest.
-              // Derived from rank (not raw series_position) so detach/reattach gaps stay clean.
+              // Order and number by the tournament's actual date, not attach order (series_position):
+              // newest on top with the highest number, oldest at the bottom as #1.
               const num = series.qualifiers.length - i;
               return (
                 <li key={q.id} className="flex items-center justify-between rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900/50 px-4 py-3">
