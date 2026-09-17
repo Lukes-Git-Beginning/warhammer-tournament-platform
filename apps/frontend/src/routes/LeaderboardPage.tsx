@@ -890,7 +890,7 @@ function LadderTab() {
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-rizzotto-gold-400 whitespace-nowrap">
-                    {entry.points}
+                    {Math.round(entry.points)}
                   </td>
                   <td className="px-4 py-3 text-right text-stone-300 whitespace-nowrap">
                     {entry.wins}–{entry.losses}–{entry.draws}

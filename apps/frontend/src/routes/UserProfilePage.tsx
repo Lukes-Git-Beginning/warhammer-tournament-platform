@@ -446,7 +446,7 @@ export function UserProfilePage() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <StatCard
                 label={t('user_profile.stats.points')}
-                value={current_version.total_points.toFixed(1)}
+                value={Math.round(current_version.total_points)}
               />
               <StatCard
                 label={t('user_profile.stats.games')}
@@ -478,7 +478,7 @@ export function UserProfilePage() {
             label={t('user_profile.stats.tournaments')}
             value={all_time.tournaments_played}
           />
-          <StatCard label={t('user_profile.stats.points')} value={all_time.total_points.toFixed(1)} />
+          <StatCard label={t('user_profile.stats.points')} value={Math.round(all_time.total_points)} />
         </div>
       </section>
 
