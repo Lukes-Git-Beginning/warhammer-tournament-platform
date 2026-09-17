@@ -47,7 +47,7 @@ jobs:
         run: |
           ssh -o BatchMode=yes -o ConnectTimeout=15 \
               ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-              'cd /home/deploy/rizzotto && ALLOW_ONGOING=1 bash scripts/deploy.sh'
+              'cd /home/deploy/rizzotto && bash scripts/deploy.sh'
 
       # The frontend is static and served by Cloudflare, so it returns 200 even when the backend
       # is dead — deploy #310 was green while the API was fine, and would have stayed green if it
