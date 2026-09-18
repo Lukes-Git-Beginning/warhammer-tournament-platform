@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.1.1] — 2026-09-18
+
+### Fixed
+- **2v2 tournaments can use Balanced Liechtenstein again.** A leftover guard rejected the combo when opening registration, even though teams are seeded into divisions by their team rating. Creating one already worked; now opening and running it does too.
+- **Siege tournaments** no longer carry a hidden playoff setting chosen before Siege was picked, which could block creation.
+- **Host actions** (publish, reopen and close registration) now show the error when they fail, instead of silently doing nothing.
+- Ladder and profile points are shown as whole numbers instead of long decimals.
+
 ## [2.1.0] — 2026-09-17
 
 ### Added
