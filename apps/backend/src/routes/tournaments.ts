@@ -946,6 +946,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         min_band: true,
         max_band: true,
         battle_type: true,
+        competitor_format: true,
         created_at: true,
         updated_at: true,
         host: { select: { id: true, username: true, avatar_url: true } },
