@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.1.2] — 2026-09-18
+
+### Added
+- **Editing a tournament** now includes battle type, team size (1v1 / 2v2), auto-advance and the admin championship tag. Battle type and team size lock once registration opens (they change the structure), matching how format and mode already behave.
+
+### Fixed
+- **2v2 tournament sign-up** shows the team picker again — the detail view wasn't reporting the team-size setting, so it signed players up individually.
+- **Team win-chance** on the teams list is shown as a whole percent (e.g. 79%) instead of a long raw decimal.
+
 ## [2.1.1] — 2026-09-18
 
 ### Fixed
