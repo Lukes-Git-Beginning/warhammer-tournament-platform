@@ -4,7 +4,6 @@ import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdown';
 import {
-  addLateJoiner,
   createMatchNode,
   deleteTournament,
   dropParticipant,
@@ -32,6 +31,7 @@ import { EliminationStandings } from '@/components/bracket/EliminationStandings'
 import { PageShell } from '@/components/layout/PageShell';
 import { CheckInButton } from '@/components/tournament/CheckInButton';
 import { RegisterButton } from '@/components/tournament/RegisterButton';
+import { AddLateJoinerButton } from '@/components/tournament/AddLateJoinerButton';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton';
 import { ParticipantsList } from '@/components/tournament/ParticipantsList';
 import { HostBroadcastBox } from '@/components/tournament/HostBroadcastBox';
@@ -139,16 +139,6 @@ export function TournamentDetail() {
       void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
       void queryClient.invalidateQueries({ queryKey: ['participant-me', slug] });
     },
-  });
-
-  const lateJoinMutation = useMutation({
-    mutationFn: (userId: string) => addLateJoiner(slug, userId),
-    onSuccess: (data) => {
-      void queryClient.invalidateQueries({ queryKey: ['tournament-participants', slug] });
-      void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
-      alert(`${data.participant.user.username} added as late joiner.`);
-    },
-    onError: (err: Error) => alert(`Error: ${err.message}`),
   });
 
   const [showCreateMatch, setShowCreateMatch] = useState(false);
@@ -514,17 +504,7 @@ export function TournamentDetail() {
           )}
           {/* B21: also available pre-start (REGISTRATION_CLOSED), not just ONGOING. */}
           {(tournament.status === 'ONGOING' || tournament.status === 'REGISTRATION_CLOSED') && (
-            <button
-              type="button"
-              disabled={lateJoinMutation.isPending}
-              onClick={() => {
-                const userId = prompt('Enter the User ID of the player to add (find it in Admin → Users):');
-                if (userId?.trim()) lateJoinMutation.mutate(userId.trim());
-              }}
-              className="rounded border border-rizzotto-gold-500/40 px-3 py-1.5 text-sm text-rizzotto-gold-400 hover:border-rizzotto-gold-400 hover:text-rizzotto-gold-300 transition-colors disabled:opacity-40"
-            >
-              + Add Late Joiner
-            </button>
+            <AddLateJoinerButton slug={slug} />
           )}
           {(tournament.status === 'ONGOING' || tournament.status === 'REGISTRATION_CLOSED') && (
             <button
