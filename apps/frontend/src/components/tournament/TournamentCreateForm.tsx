@@ -489,6 +489,26 @@ export function TournamentCreateForm({
     }
   }, [allFactions, factionPoolEnabled, form.faction_pool]);
 
+  // Siege is points-only (backend refineSiege). Whenever the battle type is Siege — however the form
+  // got there (a value picked before Siege was selected, a later format change that sets a playoff
+  // size like Balanced Liechtenstein, a duplicate/prefill) — force the points-only shape so the
+  // now-hidden playoff/elimination state can't linger and trip the backend guard on submit.
+  useEffect(() => {
+    if (form.battle_type !== 'SIEGE') return;
+    setForm((prev) => {
+      const fixFormat = prev.format === 'SINGLE_ELIMINATION' || prev.format === 'DOUBLE_ELIMINATION';
+      const fixPlayoff = prev.playoff_format !== 'NONE';
+      const fixBo2 = prev.swiss_match_format !== 'BO2';
+      if (!fixFormat && !fixPlayoff && !fixBo2) return prev;
+      return {
+        ...prev,
+        ...(fixFormat ? { format: 'SWISS' as const } : {}),
+        ...(fixPlayoff ? { playoff_format: 'NONE' as const } : {}),
+        ...(fixBo2 ? { swiss_match_format: 'BO2' as const } : {}),
+      };
+    });
+  }, [form.battle_type, form.format, form.playoff_format, form.swiss_match_format]);
+
   // Modes that draw from the shared map pool. Host-preset modes define maps
   // per round instead, so the shared-pool minimum does not apply to them.
   const usesMapPool = !(
