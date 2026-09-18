@@ -1161,20 +1161,13 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      // Team-size (competitor_format) and faction mechanic (mode) must stay consistent, and
-      // 2v2 has no per-team skill bands → incompatible with Balanced Liechtenstein.
+      // Team-size (competitor_format) and faction mechanic (mode) must stay consistent. 2v2 +
+      // Balanced Liechtenstein IS supported — teams are banded by their blended GS and the BaLi
+      // engine keys by the opaque competitor id (team_id ?? user_id); see the create-schema refine.
       {
-        const effFmt = (rest.format ?? tournament.format) as string;
         const effComp = (rest.competitor_format ?? tournament.competitor_format) as string;
         const effMode = (rest.mode ?? tournament.mode) as string;
         const is2v2Mode = (TWO_V_TWO_MODES as readonly string[]).includes(effMode);
-        if (effComp === 'TWO_V_TWO' && effFmt === 'BALANCED_LIECHTENSTEIN') {
-          return reply.code(422).send({
-            error: 'UnprocessableEntity',
-            message: '2v2 is not supported with the Balanced Liechtenstein format',
-            statusCode: 422,
-          });
-        }
         if (effComp === 'TWO_V_TWO' && !is2v2Mode) {
           return reply.code(422).send({
             error: 'UnprocessableEntity',
