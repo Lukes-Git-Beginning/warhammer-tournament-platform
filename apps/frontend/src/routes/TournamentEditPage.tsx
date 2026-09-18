@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -87,7 +87,12 @@ type EditFormData = {
   map_pool: string[];
   map_preset_config: MapPresetConfig | null;
   format: Tournament['format'];
-  mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR';
+  mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR' | 'SFT_2V2' | 'BPT_2V2';
+  battle_type: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  competitor_format: 'ONE_V_ONE' | 'TWO_V_TWO';
+  auto_advance: boolean;
+  championship_kind: 'NONE' | 'QUARTERLY' | 'MONTHLY_LADDER';
+  championship_period: string;
   set_faction_id: string | null;
   faction_pool: string[];
   restricted_factions: string[];
@@ -250,7 +255,12 @@ function buildInitialForm(t: Tournament): EditFormData {
     map_pool: (t.map_pool ?? []).map((m) => m.id),
     map_preset_config: (t.map_preset_config as MapPresetConfig | null) ?? null,
     format: t.format,
-    mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX' || t.mode === 'TWO_D_THREE' || t.mode === 'FREE_PICK' || t.mode === 'ONE_V_THREE' || t.mode === 'FACTION_WAR') ? t.mode : 'BPT',
+    mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX' || t.mode === 'TWO_D_THREE' || t.mode === 'FREE_PICK' || t.mode === 'ONE_V_THREE' || t.mode === 'FACTION_WAR' || t.mode === 'SFT_2V2' || t.mode === 'BPT_2V2') ? t.mode : 'BPT',
+    battle_type: (t.battle_type ?? 'DOMINATION') as 'DOMINATION' | 'CONQUEST' | 'SIEGE',
+    competitor_format: (t.competitor_format ?? 'ONE_V_ONE') as 'ONE_V_ONE' | 'TWO_V_TWO',
+    auto_advance: t.auto_advance ?? false,
+    championship_kind: (((t as unknown as { championship_kind?: string }).championship_kind ?? 'NONE') as 'NONE' | 'QUARTERLY' | 'MONTHLY_LADDER'),
+    championship_period: (t as unknown as { championship_period?: string | null }).championship_period ?? '',
     set_faction_id: (t as unknown as { set_faction_id?: string | null }).set_faction_id ?? null,
     faction_pool: t.faction_allowlist ?? [],
     restricted_factions: t.restricted_factions ?? [],
@@ -337,7 +347,18 @@ function buildPatchBody(
   const origStr = JSON.stringify((current.map_preset_config as MapPresetConfig | null) ?? null);
   if (configStr !== origStr) body.map_preset_config = form.map_preset_config;
 
+  if (form.auto_advance !== (current.auto_advance ?? false)) body.auto_advance = form.auto_advance;
+
+  // Admin-only championship tagging
+  const currentChampKind = ((current as unknown as { championship_kind?: string }).championship_kind ?? 'NONE') as 'NONE' | 'QUARTERLY' | 'MONTHLY_LADDER';
+  const currentChampPeriod = (current as unknown as { championship_period?: string | null }).championship_period ?? '';
+  if (form.championship_kind !== currentChampKind) body.championship_kind = form.championship_kind;
+  const periodNorm = form.championship_period.trim() || null;
+  if (periodNorm !== (currentChampPeriod || null)) body.championship_period = periodNorm;
+
   // Draft-only fields
+  if (form.battle_type !== (current.battle_type ?? 'DOMINATION')) body.battle_type = form.battle_type;
+  if (form.competitor_format !== (current.competitor_format ?? 'ONE_V_ONE')) body.competitor_format = form.competitor_format;
   if (form.format !== current.format) body.format = form.format;
   if (form.mode !== current.mode) body.mode = form.mode;
   if (form.visibility !== (current.visibility ?? 'PUBLIC')) body.visibility = form.visibility;
@@ -538,9 +559,6 @@ export function TournamentEditPage() {
     retry: false,
   });
 
-  const { data: mapsData } = useQuery({ queryKey: ['maps'], queryFn: () => getMaps() });
-  const allMaps = mapsData?.data ?? [];
-
   const { data: factionsData } = useQuery({ queryKey: ['factions'], queryFn: () => getFactions() });
   const allFactions = (factionsData?.data ?? []).map((f) => f.faction).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -574,6 +592,13 @@ export function TournamentEditPage() {
   // Series selector: '' = no series (None), or a series id.
   const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
 
+  // Maps are per battle type — re-fetch when the battle_type changes.
+  const { data: mapsData } = useQuery({
+    queryKey: ['maps', form?.battle_type ?? 'DOMINATION'],
+    queryFn: () => getMaps(form?.battle_type ?? 'DOMINATION'),
+  });
+  const allMaps = mapsData?.data ?? [];
+
   useEffect(() => {
     if (tournament && form === null) {
       setForm(buildInitialForm(tournament));
@@ -588,6 +613,42 @@ export function TournamentEditPage() {
       setSelectedSeriesId(tournament.series?.id ?? '');
     }
   }, [tournament, form]);
+
+  // When battle_type changes, reset the map pool to force re-selection for the new type.
+  // Uses a ref to track the previous value so the first-load seed (from buildInitialForm) is
+  // not treated as a change.
+  const lastBattleType = useRef<string | null>(null);
+  useEffect(() => {
+    if (!form) return;
+    if (lastBattleType.current === null) {
+      // First render after form is seeded — record but don't reset.
+      lastBattleType.current = form.battle_type;
+      return;
+    }
+    if (lastBattleType.current !== form.battle_type) {
+      lastBattleType.current = form.battle_type;
+      setForm((prev) => (prev ? { ...prev, map_pool: [] } : prev));
+    }
+  }, [form?.battle_type]);
+
+  // Siege is points-only (backend refineSiege). Guard the form shape whenever battle_type
+  // is SIEGE — force SWISS format, no playoffs, BO2 — same as TournamentCreateForm.
+  useEffect(() => {
+    if (!form || form.battle_type !== 'SIEGE') return;
+    setForm((prev) => {
+      if (!prev) return prev;
+      const fixFormat = prev.format === 'SINGLE_ELIMINATION' || prev.format === 'DOUBLE_ELIMINATION';
+      const fixPlayoff = prev.playoff_format !== 'NONE';
+      const fixBo2 = prev.swiss_match_format !== 'BO2';
+      if (!fixFormat && !fixPlayoff && !fixBo2) return prev;
+      return {
+        ...prev,
+        ...(fixFormat ? { format: 'SWISS' as const } : {}),
+        ...(fixPlayoff ? { playoff_format: 'NONE' as const } : {}),
+        ...(fixBo2 ? { swiss_match_format: 'BO2' as const } : {}),
+      };
+    });
+  }, [form?.battle_type, form?.format, form?.playoff_format, form?.swiss_match_format]);
 
   const canManage =
     !!user &&
@@ -643,6 +704,7 @@ export function TournamentEditPage() {
 
   const draftLocked = isDraftLocked(tournament.status);
   const ongoingLocked = isOngoingLocked(tournament.status);
+  const isAdmin = user.role === 'ADMIN' || user.role === 'MODERATOR';
 
   const startDate = new Date(form.start_date);
   const ownStart = Number.isNaN(startDate.getTime()) ? null : startDate;
@@ -683,7 +745,22 @@ export function TournamentEditPage() {
           : type === 'number'
             ? value === '' ? '' : Number(value)
             : value;
-    setForm((prev) => (prev ? { ...prev, [name]: v } : prev));
+    setForm((prev) => {
+      if (!prev) return prev;
+      // competitor_format ↔ mode coercion: switching to 2v2 picks a 2v2 mode, switching
+      // back to 1v1 restores a solo mode. Mirrors TournamentCreateForm.handleChange.
+      const competitorFormatCoercion =
+        name === 'competitor_format'
+          ? value === 'TWO_V_TWO'
+            ? prev.mode === 'SFT_2V2' || prev.mode === 'BPT_2V2'
+              ? {}
+              : { mode: 'BPT_2V2' as const }
+            : prev.mode === 'SFT_2V2' || prev.mode === 'BPT_2V2'
+              ? { mode: 'BPT' as const }
+              : {}
+          : {};
+      return { ...prev, [name]: v, ...competitorFormatCoercion };
+    });
     if (name === 'name' || name === 'discord_link') {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
     }
@@ -865,6 +942,44 @@ export function TournamentEditPage() {
           <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">
             Format &amp; Mode
           </legend>
+
+          {/* Battle type + competitor format (draft-locked after DRAFT) */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="min-w-0">
+              <Label htmlFor="tef-battle-type">Battle type</Label>
+              {draftLocked ? (
+                <>
+                  <div className="mt-1 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/40 px-3 py-2 text-sm text-rizzotto-stone-300">
+                    {form.battle_type}
+                  </div>
+                  <LockNote>Locked — registration is open</LockNote>
+                </>
+              ) : (
+                <Select id="tef-battle-type" name="battle_type" value={form.battle_type} onChange={handleChange}>
+                  <option value="DOMINATION">Domination</option>
+                  <option value="CONQUEST">Conquest</option>
+                  <option value="SIEGE">Siege</option>
+                </Select>
+              )}
+            </div>
+            <div className="min-w-0">
+              <Label htmlFor="tef-competitor-format">Team size</Label>
+              {draftLocked ? (
+                <>
+                  <div className="mt-1 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/40 px-3 py-2 text-sm text-rizzotto-stone-300">
+                    {form.competitor_format === 'TWO_V_TWO' ? '2v2 — Teams' : '1v1 — Solo'}
+                  </div>
+                  <LockNote>Locked — registration is open</LockNote>
+                </>
+              ) : (
+                <Select id="tef-competitor-format" name="competitor_format" value={form.competitor_format} onChange={handleChange}>
+                  <option value="ONE_V_ONE">1v1 — Solo</option>
+                  <option value="TWO_V_TWO">2v2 — Teams</option>
+                </Select>
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="min-w-0">
               <Label htmlFor="tef-format" required>{t('tournament.form.format')}</Label>
@@ -897,14 +1012,23 @@ export function TournamentEditPage() {
                 </>
               ) : (
                 <Select id="tef-mode" name="mode" value={form.mode} onChange={handleChange}>
-                  <option value="BPT">BPT — Blind Pick Tournament</option>
-                  <option value="SFT">SFT — Single Faction Tournament</option>
-                  <option value="SLT">SLT — Single List Tournament</option>
-                  <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
-                  <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
-                  <option value="FREE_PICK">Enticity&apos;s Free Pick — SFT/Matrix Hybrid</option>
-                  <option value="ONE_V_THREE">1v3 — Set Faction vs. One of Three Counterpicks</option>
-                  <option value="FACTION_WAR">Faction War — SFT with globally exclusive factions</option>
+                  {form.competitor_format === 'TWO_V_TWO' ? (
+                    <>
+                      <option value="BPT_2V2">BPT — Blind pick, both members</option>
+                      <option value="SFT_2V2">SFT — Single faction per member</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="BPT">BPT — Blind Pick Tournament</option>
+                      <option value="SFT">SFT — Single Faction Tournament</option>
+                      <option value="SLT">SLT — Single List Tournament</option>
+                      <option value="MATRIX">3×3 Matrix — Faction Matrix Pick/Ban</option>
+                      <option value="TWO_D_THREE">2D3 — Draw 3 Factions per Player</option>
+                      <option value="FREE_PICK">Enticity&apos;s Free Pick — SFT/Matrix Hybrid</option>
+                      <option value="ONE_V_THREE">1v3 — Set Faction vs. One of Three Counterpicks</option>
+                      <option value="FACTION_WAR">Faction War — SFT with globally exclusive factions</option>
+                    </>
+                  )}
                 </Select>
               )}
             </div>
@@ -1151,21 +1275,6 @@ export function TournamentEditPage() {
             </>
           ) : isBalanced ? (
             <>
-              <label className="flex items-start gap-2 text-sm text-rizzotto-stone-300">
-                <input
-                  type="checkbox"
-                  name="auto_sizing"
-                  checked={form.auto_sizing}
-                  onChange={handleChange}
-                  disabled={ongoingLocked}
-                  className="mt-0.5 disabled:opacity-50"
-                />
-                <span>
-                  <span className="font-medium text-rizzotto-stone-200">Auto-size round count from check-in</span>
-                  <span className="block text-xs text-rizzotto-stone-500">On: the round count is set automatically (4–7: 3R · 8–15: 5R · 16+: 4R). Off: fix the round count yourself below.</span>
-                </span>
-              </label>
-
               {!balancedAutoSized && (
                 <div>
                   <Label htmlFor="tef-bali-rounds">Balanced Liechtenstein Rounds</Label>
@@ -1338,6 +1447,52 @@ export function TournamentEditPage() {
             </>
           )}
         </fieldset>
+
+        {/* ── Automation (SWISS / BaLi) ─────────────────────────────────── */}
+        {(form.format === 'SWISS' || form.format === 'BALANCED_LIECHTENSTEIN') && (
+          <fieldset className="space-y-2 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
+            <legend className="px-1 text-sm font-semibold text-rizzotto-stone-200">Automation</legend>
+            <p className="text-xs text-rizzotto-stone-500">
+              {form.format === 'SWISS'
+                ? 'Turn both on for a fully self-running tournament: rounds are sized from the check-in count and advance on their own.'
+                : 'Balanced Liechtenstein advances itself — you only choose whether the round count is auto-sized from the check-in count.'}
+            </p>
+            <label className="flex items-start gap-2 text-sm text-rizzotto-stone-300">
+              <input
+                type="checkbox"
+                name="auto_sizing"
+                checked={form.auto_sizing}
+                onChange={handleChange}
+                disabled={ongoingLocked}
+                className="mt-0.5 disabled:opacity-50"
+              />
+              <span>
+                <span className="font-medium text-rizzotto-stone-200">Auto-size from check-in</span>
+                <span className="block text-xs text-rizzotto-stone-500">
+                  {form.format === 'SWISS'
+                    ? 'Set the round count and playoff size automatically from how many players check in (4–7: 3R + Final · 8–15: 5R + Top 4 · 16+: 4R + Top 8), instead of the fixed values above.'
+                    : 'Set the round count automatically from how many players check in (4–7: 3R · 8+: 4R). Turn off to fix the round count yourself.'}
+                </span>
+              </span>
+            </label>
+            {form.format === 'SWISS' && (
+              <label className="flex items-start gap-2 text-sm text-rizzotto-stone-300">
+                <input
+                  type="checkbox"
+                  name="auto_advance"
+                  checked={form.auto_advance}
+                  onChange={handleChange}
+                  disabled={ongoingLocked}
+                  className="mt-0.5 disabled:opacity-50"
+                />
+                <span>
+                  <span className="font-medium text-rizzotto-stone-200">Auto-advance rounds &amp; playoffs</span>
+                  <span className="block text-xs text-rizzotto-stone-500">Advance to the next round and generate the playoffs automatically once every match in a round is complete, instead of the host doing it by hand.</span>
+                </span>
+              </label>
+            )}
+          </fieldset>
+        )}
 
         {/* N3: late-join only applies where pairing grows dynamically — hidden for fixed brackets (SE/DE). */}
         {form.format !== 'SINGLE_ELIMINATION' && form.format !== 'DOUBLE_ELIMINATION' && (
@@ -1786,7 +1941,7 @@ export function TournamentEditPage() {
             <span className="text-sm text-rizzotto-stone-300">Enable standard rules</span>
           </label>
           {form.standard_rules_enabled && (
-            <StandardRulesetCard compact battleType={tournament.battle_type} competitorFormat={tournament.competitor_format} />
+            <StandardRulesetCard compact battleType={form.battle_type} competitorFormat={form.competitor_format} />
           )}
 
           <div>
@@ -1818,6 +1973,67 @@ export function TournamentEditPage() {
           </div>
           {ongoingLocked && <LockNote>Locked — tournament is underway</LockNote>}
         </fieldset>
+
+        {/* ── Competitive Finals (Admin) ────────────────────────────────── */}
+        {isAdmin && (
+          <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700/60 bg-rizzotto-iron-900/40 p-4">
+            <legend className="px-1 text-xs font-semibold text-rizzotto-stone-500 uppercase tracking-wide">
+              Competitive Finals (Admin)
+            </legend>
+
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { value: 'NONE' as const, label: 'None' },
+                  { value: 'QUARTERLY' as const, label: 'Quarterly Final' },
+                  { value: 'MONTHLY_LADDER' as const, label: 'Monthly Ladder Final' },
+                ] as const
+              ).map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setForm((prev) => (prev ? { ...prev, championship_kind: value } : prev))}
+                  aria-pressed={form.championship_kind === value}
+                  className={`rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    form.championship_kind === value
+                      ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+                      : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {form.championship_kind === 'QUARTERLY' && (
+              <div>
+                <Label htmlFor="tef-champ-quarter">Quarter</Label>
+                <Input
+                  id="tef-champ-quarter"
+                  name="championship_period"
+                  value={form.championship_period}
+                  onChange={handleChange}
+                  placeholder="e.g. 2026-Q4"
+                />
+                <FieldHint>Format: YYYY-Qn (e.g. 2026-Q4)</FieldHint>
+              </div>
+            )}
+
+            {form.championship_kind === 'MONTHLY_LADDER' && (
+              <div>
+                <Label htmlFor="tef-champ-month">Month</Label>
+                <Input
+                  id="tef-champ-month"
+                  name="championship_period"
+                  value={form.championship_period}
+                  onChange={handleChange}
+                  placeholder="e.g. 2026-09"
+                />
+                <FieldHint>Format: YYYY-MM. Competitor format is locked to 1v1.</FieldHint>
+              </div>
+            )}
+          </fieldset>
+        )}
 
         {/* ── Settings ──────────────────────────────────────────────────── */}
         <fieldset className="space-y-4 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">

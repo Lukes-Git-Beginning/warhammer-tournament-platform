@@ -286,6 +286,9 @@ export interface TournamentPatchInput {
   series_id?: string | null;
   championship_kind?: 'NONE' | 'QUARTERLY' | 'MONTHLY_LADDER';
   championship_period?: string | null;
+  // draft-only structural axes (backend enforces)
+  battle_type?: BattleType;
+  competitor_format?: 'ONE_V_ONE' | 'TWO_V_TWO';
 }
 
 export interface TournamentPatchResponse {
