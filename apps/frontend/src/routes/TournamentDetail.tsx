@@ -486,6 +486,18 @@ export function TournamentDetail() {
               {(startMutation.error as Error).message}
             </span>
           )}
+          {/* Surface publish / reopen / close-registration failures — otherwise a rejected status
+              change (e.g. an invalid 2v2 + Balanced Liechtenstein config) looks like "nothing happens". */}
+          {publishMutation.isError && (
+            <span className="self-center text-xs text-rizzotto-danger">
+              {(publishMutation.error as Error).message}
+            </span>
+          )}
+          {closeRegistrationMutation.isError && (
+            <span className="self-center text-xs text-rizzotto-danger">
+              {(closeRegistrationMutation.error as Error).message}
+            </span>
+          )}
           {tournament.status === 'ONGOING' && (
             <button
               type="button"
