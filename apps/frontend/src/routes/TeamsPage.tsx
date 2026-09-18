@@ -178,7 +178,7 @@ function DirectoryTeamCard({ t, highlight }: { t: TeamDirectoryEntry; highlight?
           </div>
           {t.gs ? (
             <div className="flex shrink-0 items-center gap-2">
-              <span className="font-display text-sm font-bold text-rizzotto-gold-400">{t.gs.winChance}%</span>
+              <span className="font-display text-sm font-bold text-rizzotto-gold-400">{Math.round(t.gs.winChance * 100)}%</span>
               <BandChip band={t.gs.band} />
               {t.gs.provisional && (
                 <span className="rounded border border-rizzotto-iron-600 px-1 py-0.5 text-[9px] font-display uppercase tracking-wide text-rizzotto-stone-500">
