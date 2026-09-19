@@ -539,6 +539,36 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     expect(updated?.status).toBe('PENDING');
   });
 
+  it('2v2: a host can backfill a late SFT_2V2 team\'s factions (faction_ids)', async () => {
+    const host = await createAdminHost('FacHost');
+    const late = await makeActiveTeam('FacLate');
+    const { id, slug } = await setup2v2Tournament(host.id, 'SFT_2V2');
+    await prisma.tournament.update({ where: { id }, data: { status: 'REGISTRATION_CLOSED' } });
+
+    // Late team enters without pre-set factions.
+    const added = await app.inject({
+      method: 'POST', url: `/api/tournaments/${slug}/add-late`,
+      cookies: cookieFor(host.id, 'ADMIN'), payload: { teamId: late.teamId },
+    });
+    expect(added.statusCode).toBe(201);
+
+    const facs = await prisma.faction.findMany({ take: 2, select: { id: true }, orderBy: { id: 'asc' } });
+    const ids = facs.map((f) => f.id);
+
+    // Host backfills both members' factions via the competitor-aware faction endpoint.
+    const res = await app.inject({
+      method: 'PATCH', url: `/api/tournaments/${slug}/participants/${late.teamId}/faction`,
+      cookies: cookieFor(host.id, 'ADMIN'), payload: { faction_ids: ids },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const p = await prisma.tournamentParticipant.findFirst({
+      where: { tournament_id: id, team_id: late.teamId, deleted_at: null },
+      select: { faction_ids: true },
+    });
+    expect(p?.faction_ids).toEqual(ids);
+  });
+
   it('exposes a public team directory and team profile', async () => {
     const a = await makeActiveTeam('Romeo');
 

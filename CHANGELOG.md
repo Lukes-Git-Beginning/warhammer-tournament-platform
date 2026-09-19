@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.2.1] — 2026-09-19
+
+### Added
+- **Set a 2v2 team's factions from the standings.** In an SFT_2V2 tournament the standings now show a Faction column with both teammates' factions, and the host can set or change them per member — the same inline edit 1v1 SFT already had. This lets a host backfill the factions of a team that was added late.
+
 ## [2.2.0] — 2026-09-19
 
 ### Added

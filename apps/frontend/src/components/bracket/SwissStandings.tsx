@@ -4,7 +4,7 @@ import { useQueryClient, useMutation } from '@tanstack/react-query';
 import type { BracketCompetitor, FactionDto, SwissMeta, SwissStandingEntry } from '@rizzotto/types';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { dropParticipant, undropParticipant, adminCheckIn, setParticipantFaction, type ParticipantStatus } from '@/lib/api';
+import { dropParticipant, undropParticipant, adminCheckIn, setParticipantFaction, setTeamFactions, type ParticipantStatus } from '@/lib/api';
 import { SKILL_BAND_META } from './skillBandMeta.js';
 import { SupporterBadge } from '@/components/supporter/SupporterBadge';
 
@@ -51,6 +51,8 @@ interface SwissStandingsProps {
   factionAllowlist?: string[];
   /** Resolved competitor info — for 2v2, a standings row is a team (name + members). */
   competitors?: Record<string, BracketCompetitor>;
+  /** SFT_2V2: team id → its two member factions (captain first), for the faction cell + host edit. */
+  teamFactionsMap?: Map<string, string[]>;
 }
 
 function Avatar({ url, username }: { url: string | null; username: string }) {
@@ -107,6 +109,7 @@ export function SwissStandings({
   participantStatusMap,
   factionAllowlist,
   competitors,
+  teamFactionsMap,
 }: SwissStandingsProps) {
   const queryClient = useQueryClient();
   const [factionPickTarget, setFactionPickTarget] = useState<string | null>(null);
@@ -149,6 +152,21 @@ export function SwissStandings({
       alert(`Failed to set faction: ${err.message}`);
     },
   });
+  // SFT_2V2: set both team members' factions at once (host backfill for a late-added team).
+  const [teamFactionTarget, setTeamFactionTarget] = useState<{ teamId: string; members: { userId: string; username: string }[] } | null>(null);
+  const [teamFactionDraft, setTeamFactionDraft] = useState<string[]>([]);
+  const setTeamFactionsMutation = useMutation({
+    mutationFn: ({ teamId, factionIds }: { teamId: string; factionIds: string[] }) =>
+      setTeamFactions(tournamentSlug!, teamId, factionIds),
+    onSuccess: () => {
+      setTeamFactionTarget(null);
+      void queryClient.invalidateQueries({ queryKey: ['bracket'] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament-participants'] });
+    },
+    onError: (err: Error) => {
+      alert(`Failed to set team factions: ${err.message}`);
+    },
+  });
 
   const pickerFactions = factionMap
     ? [...factionMap.values()].filter(
@@ -156,7 +174,53 @@ export function SwissStandings({
       ).sort((a, b) => a.name.localeCompare(b.name))
     : [];
 
-  const showFactionColumn = tournamentMode ? FACTION_MODES.has(tournamentMode) : false;
+  // SFT_2V2 host dialog: one faction picker per team member (captain first). Rendered in both the
+  // balanced and flat table return paths (only one executes per render, so it's never duplicated).
+  const teamFactionDialog = (
+    <Dialog open={teamFactionTarget !== null} onOpenChange={(open) => { if (!open) setTeamFactionTarget(null); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Set Team Factions</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 pt-2">
+          {teamFactionTarget?.members.map((m, i) => (
+            <div key={m.userId} className="flex items-center justify-between gap-3">
+              <span className="truncate text-sm text-stone-300">{m.username}</span>
+              <select
+                value={teamFactionDraft[i] ?? ''}
+                onChange={(e) => setTeamFactionDraft((d) => { const n = [...d]; n[i] = e.target.value; return n; })}
+                className="w-44 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+              >
+                <option value="">— select faction —</option>
+                {pickerFactions.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+          <button
+            type="button"
+            disabled={
+              setTeamFactionsMutation.isPending ||
+              !teamFactionTarget ||
+              teamFactionDraft.length !== teamFactionTarget.members.length ||
+              teamFactionDraft.some((x) => !x)
+            }
+            onClick={() => {
+              if (teamFactionTarget) setTeamFactionsMutation.mutate({ teamId: teamFactionTarget.teamId, factionIds: teamFactionDraft });
+            }}
+            className="w-full rounded border border-rizzotto-gold-600/60 px-2 py-1.5 text-xs text-rizzotto-gold-400 hover:border-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 transition-colors disabled:opacity-40"
+          >
+            {setTeamFactionsMutation.isPending ? 'Saving…' : 'Save factions'}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
+  // SFT_2V2 has fixed factions too, but per team member (faction_ids), so it needs its own cell.
+  const isSft2v2 = tournamentMode === 'SFT_2V2';
+  const showFactionColumn = (tournamentMode ? FACTION_MODES.has(tournamentMode) : false) || isSft2v2;
   const is2D3 = tournamentMode === 'TWO_D_THREE';
   const isFreePick = tournamentMode === 'FREE_PICK';
   const colCount = 5 + (showFactionColumn ? 1 : 0) + 2; // # + Player + [Faction] + Score + W/D/L/B + GL + BH + SK
@@ -370,7 +434,45 @@ export function SwissStandings({
                 )}
               </td>
             )}
-            {showFactionColumn && !is2D3 && (
+            {showFactionColumn && !is2D3 && isSft2v2 && (
+              <td className="px-4 py-2">
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const memberFactionIds = (teamFactionsMap?.get(entry.userId) ?? []).filter(Boolean);
+                    return memberFactionIds.length > 0 ? (
+                      <div className="flex items-center gap-1">
+                        {memberFactionIds.map((fid, i) => {
+                          const f = factionMap?.get(fid);
+                          return f ? (
+                            <Link key={`${fid}-${i}`} to="/factions/$id" params={{ id: fid }} className="inline-flex shrink-0 hover:opacity-80 transition-opacity" title={f.name}>
+                              <FactionBadge size="sm" colorHex={f.color_hex} initials={f.initials} name={f.name} iconUrl={f.icon_url} />
+                            </Link>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-stone-600">—</span>
+                    );
+                  })()}
+                  {canManage && tournamentSlug && !isDropped && isTeam && comp?.members && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const members = comp.members!.map((m) => ({ userId: m.userId, username: m.username }));
+                        const current = teamFactionsMap?.get(entry.userId) ?? [];
+                        setTeamFactionTarget({ teamId: entry.userId, members });
+                        setTeamFactionDraft(members.map((_, i) => current[i] ?? ''));
+                      }}
+                      title="Set this team's factions (host)"
+                      className="rounded border border-dashed border-stone-600 px-1.5 py-px text-[10px] text-stone-500 hover:border-rizzotto-gold-500/60 hover:text-rizzotto-gold-400 transition-colors shrink-0"
+                    >
+                      {(teamFactionsMap?.get(entry.userId) ?? []).filter(Boolean).length > 0 ? 'Edit' : 'Set'}
+                    </button>
+                  )}
+                </div>
+              </td>
+            )}
+            {showFactionColumn && !is2D3 && !isSft2v2 && (
               <td className="px-4 py-2">
                 <div className="flex items-center gap-2">
                   {faction && factionId ? (
@@ -536,6 +638,7 @@ export function SwissStandings({
             </div>
           </DialogContent>
         </Dialog>
+        {teamFactionDialog}
       </div>
     );
   }
@@ -593,6 +696,7 @@ export function SwissStandings({
           </div>
         </DialogContent>
       </Dialog>
+      {teamFactionDialog}
     </div>
   );
 }

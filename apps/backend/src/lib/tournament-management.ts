@@ -33,7 +33,11 @@ export const AddLateSchema = z.object({
   teamId: z.string().uuid().optional(),
   faction_id: z.string().min(1).optional(),
 });
-export const SetFactionSchema = z.object({ faction_id: z.string().min(1).nullable() });
+export const SetFactionSchema = z.object({
+  faction_id: z.string().min(1).nullable().optional(),
+  // 2v2 (SFT_2V2): one faction per team member (captain first), stored on the team's faction_ids.
+  faction_ids: z.array(z.string().min(1)).optional(),
+});
 export const CreateMatchSchema = z.object({
   player1Id: z.string().uuid(),
   player2Id: z.string().uuid().optional(), // B18: omit → BYE node
@@ -161,11 +165,16 @@ export async function addLateParticipant(
   return { status: 201, body: { participant } };
 }
 
-/** Set (or change) a participant's faction pick. */
+/**
+ * Set (or change) a competitor's faction pick. `competitorId` is opaque: a user id (1v1) or a
+ * team id (2v2). 1v1 uses `faction_id` (nullable = Free Pick); 2v2 uses `faction_ids` — one faction
+ * per team member (captain first), stored on the team's participant row. Lets a host backfill a
+ * late-added SFT_2V2 team's factions, mirroring the 1v1 SFT inline edit.
+ */
 export async function setParticipantFactionOp(
   prisma: PrismaClient,
   slug: string,
-  userId: string,
+  competitorId: string,
   body: unknown,
 ): Promise<OpResult> {
   const parsed = SetFactionSchema.safeParse(body);
@@ -175,19 +184,51 @@ export async function setParticipantFactionOp(
 
   const tournament = await prisma.tournament.findUnique({
     where: { slug, deleted_at: null },
-    select: { id: true, mode: true, faction_allowlist: { select: { faction_id: true } } },
+    select: { id: true, mode: true, competitor_format: true, faction_allowlist: { select: { faction_id: true } } },
   });
   if (!tournament) return { status: 404, body: { error: 'NotFound', message: 'Tournament not found', statusCode: 404 } };
+  const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
 
-  // #29: null = set the player to "Free Pick" / pick-later (no fixed faction).
-  if (parsed.data.faction_id !== null) {
-    const faction = await prisma.faction.findUnique({ where: { id: parsed.data.faction_id }, select: { id: true } });
-    if (!faction) {
-      return { status: 400, body: { error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" does not exist`, statusCode: 400 } };
+  // Resolve the participant by the opaque competitor id (team for 2v2, else user).
+  const participant = await prisma.tournamentParticipant.findFirst({
+    where: { tournament_id: tournament.id, deleted_at: null, OR: [{ user_id: competitorId }, { team_id: competitorId }] },
+    select: { id: true, user_id: true, team_id: true },
+  });
+  if (!participant) return { status: 404, body: { error: 'NotFound', message: 'Participant not found', statusCode: 404 } };
+
+  // 2v2 team path: one faction per member (captain first), stored on the team's faction_ids.
+  const factionIds = parsed.data.faction_ids;
+  if (factionIds !== undefined) {
+    if (!participant.team_id) {
+      return { status: 400, body: { error: 'BadRequest', message: 'faction_ids is only valid for a team competitor', statusCode: 400 } };
     }
-    const allowlist = tournament.faction_allowlist.map((f) => f.faction_id);
-    if (allowlist.length > 0 && !allowlist.includes(parsed.data.faction_id)) {
-      return { status: 400, body: { error: 'BadRequest', message: `Faction "${parsed.data.faction_id}" is not in the tournament allowlist`, statusCode: 400 } };
+    for (const fid of factionIds) {
+      const faction = await prisma.faction.findUnique({ where: { id: fid }, select: { id: true } });
+      if (!faction) return { status: 400, body: { error: 'BadRequest', message: `Faction "${fid}" does not exist`, statusCode: 400 } };
+      if (allowlist.length > 0 && !allowlist.includes(fid)) {
+        return { status: 400, body: { error: 'BadRequest', message: `Faction "${fid}" is not in the tournament allowlist`, statusCode: 400 } };
+      }
+    }
+    const updated = await prisma.tournamentParticipant.update({
+      where: { id: participant.id },
+      data: { faction_ids: factionIds },
+      select: { id: true, user_id: true, team_id: true, faction_ids: true, status: true },
+    });
+    return { status: 200, body: { participant: updated } };
+  }
+
+  // 1v1 path: a single faction. #29: null = "Free Pick" / pick-later (no fixed faction).
+  if (parsed.data.faction_id === undefined) {
+    return { status: 400, body: { error: 'BadRequest', message: 'faction_id or faction_ids is required', statusCode: 400 } };
+  }
+  const factionId = parsed.data.faction_id;
+  if (factionId !== null) {
+    const faction = await prisma.faction.findUnique({ where: { id: factionId }, select: { id: true } });
+    if (!faction) {
+      return { status: 400, body: { error: 'BadRequest', message: `Faction "${factionId}" does not exist`, statusCode: 400 } };
+    }
+    if (allowlist.length > 0 && !allowlist.includes(factionId)) {
+      return { status: 400, body: { error: 'BadRequest', message: `Faction "${factionId}" is not in the tournament allowlist`, statusCode: 400 } };
     }
     // FACTION_WAR: a faction is globally exclusive — reject if another active player
     // already holds it (the target player is excluded so a re-assign to the same is a no-op).
@@ -195,10 +236,10 @@ export async function setParticipantFactionOp(
       const claimed = await prisma.tournamentParticipant.findFirst({
         where: {
           tournament_id: tournament.id,
-          faction_id: parsed.data.faction_id,
+          faction_id: factionId,
           status: { in: ['REGISTERED', 'CHECKED_IN'] },
           deleted_at: null,
-          NOT: { user_id: userId },
+          NOT: { id: participant.id },
         },
         select: { id: true },
       });
@@ -208,13 +249,13 @@ export async function setParticipantFactionOp(
     }
   }
 
-  const participant = await prisma.tournamentParticipant.update({
-    where: { tournament_id_user_id: { tournament_id: tournament.id, user_id: userId } },
-    data: { faction_id: parsed.data.faction_id },
+  const updated = await prisma.tournamentParticipant.update({
+    where: { id: participant.id },
+    data: { faction_id: factionId },
     select: { id: true, user_id: true, faction_id: true, status: true },
   });
 
-  return { status: 200, body: { participant } };
+  return { status: 200, body: { participant: updated } };
 }
 
 /**

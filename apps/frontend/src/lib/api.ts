@@ -2274,6 +2274,21 @@ export function setParticipantFaction(
   });
 }
 
+/**
+ * 2v2 (SFT_2V2): set a team's per-member factions (captain first). `competitorId` is the team id;
+ * the endpoint resolves it to the team's participant row and stores `faction_ids`.
+ */
+export function setTeamFactions(
+  slug: string,
+  competitorId: string,
+  factionIds: string[],
+): Promise<{ participant: { id: string; team_id: string | null; faction_ids: string[]; status: string } }> {
+  return apiFetch(`/api/tournaments/${slug}/participants/${competitorId}/faction`, {
+    method: 'PATCH',
+    body: JSON.stringify({ faction_ids: factionIds }),
+  });
+}
+
 export function removeParticipant(slug: string, userId: string): Promise<{ ok: true }> {
   return apiFetch(`/api/tournaments/${slug}/participants/${userId}`, { method: 'DELETE' });
 }

@@ -284,6 +284,17 @@ export function TournamentDetail() {
     [participantsData],
   );
 
+  // SFT_2V2: team id → the team's two member factions (captain first), for the standings faction cell.
+  const standingsTeamFactionsMap = useMemo(
+    () =>
+      new Map(
+        (participantsData?.data ?? [])
+          .filter((p): p is typeof p & { team: { id: string } } => !!p.team?.id)
+          .map((p) => [p.team.id, p.faction_ids ?? []]),
+      ),
+    [participantsData],
+  );
+
   const activeDraftMatches = (bracket?.matches ?? []).filter(
     (m) => m.draft_id != null && m.draft_status === 'ONGOING',
   );
@@ -1029,6 +1040,7 @@ export function TournamentDetail() {
                 participantStatusMap={participantStatusMap}
                 factionAllowlist={tournament.faction_allowlist}
                 competitors={bracket.competitors}
+                teamFactionsMap={standingsTeamFactionsMap}
               />
             </section>
           );
