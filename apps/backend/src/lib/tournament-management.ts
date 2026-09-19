@@ -28,7 +28,9 @@ interface OpLogger {
 }
 
 export const AddLateSchema = z.object({
-  userId: z.string().uuid(),
+  // 1v1: the user to add. 2v2: `teamId` is required instead — a late competitor is a whole TEAM.
+  userId: z.string().uuid().optional(),
+  teamId: z.string().uuid().optional(),
   faction_id: z.string().min(1).optional(),
 });
 export const SetFactionSchema = z.object({ faction_id: z.string().min(1).nullable() });
@@ -54,7 +56,7 @@ export async function addLateParticipant(
 
   const tournament = await prisma.tournament.findUnique({
     where: { slug, deleted_at: null },
-    select: { id: true, status: true, format: true, mode: true, faction_allowlist: { select: { faction_id: true } } },
+    select: { id: true, status: true, format: true, mode: true, competitor_format: true, faction_allowlist: { select: { faction_id: true } } },
   });
   if (!tournament) return { status: 404, body: { error: 'NotFound', message: 'Tournament not found', statusCode: 404 } };
   // B21: also allow adding participants in the pre-start phase (registration
@@ -63,11 +65,56 @@ export async function addLateParticipant(
     return { status: 422, body: { error: 'UnprocessableEntity', message: 'Tournament must be ongoing or registration-closed to add a participant', statusCode: 422 } };
   }
 
-  const user = await prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { id: true, username: true } });
+  // 2v2 (team-as-actor): a late competitor is a whole ACTIVE team. Mirror the 2v2 registration path
+  // (participant row is the captain's, with team_id + participant_type TEAM); the CATCHUP_BYE and all
+  // match handling then key on the TEAM id (the opaque competitor id). Factions aren't pre-set here —
+  // a late SFT_2V2 team can have them set afterwards; the bracket simply shows none until then.
+  if (tournament.competitor_format === 'TWO_V_TWO') {
+    const teamId = parsed.data.teamId;
+    if (!teamId) return { status: 400, body: { error: 'BadRequest', message: 'teamId is required for a 2v2 tournament', statusCode: 400 } };
+    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, name: true, status: true, captain_id: true } });
+    if (!team) return { status: 404, body: { error: 'NotFound', message: 'Team not found', statusCode: 404 } };
+    if (team.status !== 'ACTIVE') return { status: 422, body: { error: 'UnprocessableEntity', message: 'Only an ACTIVE (both members accepted) team can be added', statusCode: 422 } };
+
+    const existingTeam = await prisma.tournamentParticipant.findFirst({
+      where: { tournament_id: tournament.id, team_id: teamId, deleted_at: null },
+      select: { status: true },
+    });
+    if (existingTeam) {
+      return { status: 409, body: { error: 'Conflict', message: `${team.name} is already a participant (status: ${existingTeam.status})`, statusCode: 409 } };
+    }
+
+    const teamParticipant = await prisma.tournamentParticipant.create({
+      data: {
+        tournament_id: tournament.id,
+        user_id: team.captain_id,
+        team_id: teamId,
+        participant_type: 'TEAM',
+        status: 'CHECKED_IN',
+      },
+      select: { id: true, status: true, team_id: true, user: { select: { id: true, username: true } } },
+    });
+
+    if (tournament.status === 'ONGOING' && tournament.format !== 'BALANCED_LIECHTENSTEIN') {
+      // Swiss / Auto Swiss: give the late team a CATCHUP_BYE (0 pts) for the current round, keyed on
+      // the TEAM competitor id. (BaLi 2v2 late admission isn't wired — skip rather than misplace it.)
+      try {
+        if (await createLateJoinerBye(prisma, tournament.id, teamId)) emitBracketUpdate(io, tournament.id);
+      } catch (err) {
+        log.warn({ err, slug }, 'Failed to create late-joiner CATCHUP_BYE for team');
+      }
+    }
+
+    return { status: 201, body: { participant: { ...teamParticipant, team: { id: team.id, name: team.name } } } };
+  }
+
+  const userId = parsed.data.userId;
+  if (!userId) return { status: 400, body: { error: 'BadRequest', message: 'userId is required', statusCode: 400 } };
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true } });
   if (!user) return { status: 404, body: { error: 'NotFound', message: 'User not found', statusCode: 404 } };
 
   const existing = await prisma.tournamentParticipant.findUnique({
-    where: { tournament_id_user_id: { tournament_id: tournament.id, user_id: parsed.data.userId } },
+    where: { tournament_id_user_id: { tournament_id: tournament.id, user_id: userId } },
     select: { status: true },
   });
   if (existing) {
@@ -86,7 +133,7 @@ export async function addLateParticipant(
   }
 
   const participant = await prisma.tournamentParticipant.create({
-    data: { tournament_id: tournament.id, user_id: parsed.data.userId, status: 'CHECKED_IN', faction_id: parsed.data.faction_id },
+    data: { tournament_id: tournament.id, user_id: userId, status: 'CHECKED_IN', faction_id: parsed.data.faction_id },
     select: { id: true, status: true, faction_id: true, user: { select: { id: true, username: true } } },
   });
 
@@ -96,14 +143,14 @@ export async function addLateParticipant(
     if (tournament.format === 'BALANCED_LIECHTENSTEIN' && fastify) {
       // BaLi: assign skill band + create CATCHUP_BYE placeholders + trigger pairing tick.
       try {
-        await admitBalancedLateJoiner(fastify, tournament.id, parsed.data.userId);
+        await admitBalancedLateJoiner(fastify, tournament.id, userId);
       } catch (err) {
         log.warn({ err, slug }, 'Failed to admit balanced late joiner');
       }
     } else {
       // Swiss / Auto Swiss: give them a CATCHUP_BYE (0 pts) for the current round.
       try {
-        const bye = await createLateJoinerBye(prisma, tournament.id, parsed.data.userId);
+        const bye = await createLateJoinerBye(prisma, tournament.id, userId);
         if (bye) emitBracketUpdate(io, tournament.id);
       } catch (err) {
         log.warn({ err, slug }, 'Failed to create late-joiner CATCHUP_BYE');

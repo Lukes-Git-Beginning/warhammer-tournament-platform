@@ -7,7 +7,7 @@ import { canManageTournament, guardBalancedManualPairing } from '../lib/tourname
 import { notifyHostsOfMatchReport } from '../lib/discord-notify.js';
 import { runBalancedPairingTick, findNextDivisionSeed } from '../lib/balanced-liechtenstein-service.js';
 import { computeSwissStandings, sortSwissStandings } from '../lib/swiss.js';
-import { resolveCompetitors, captainMap, isTeamFormat, resolveActingUserIds } from '../lib/competitors.js';
+import { resolveCompetitors, captainMap, isTeamFormat, resolveActingUserIds, resolveActorFlags } from '../lib/competitors.js';
 import {
   DEFAULT_BAND,
   formDivisionPools,
@@ -919,12 +919,14 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Only BYE matches can be filled', statusCode: 422 });
       }
 
-      const participant = await fastify.prisma.tournamentParticipant.findUnique({
-        where: { tournament_id_user_id: { tournament_id: match.tournament_id!, user_id: parsed.data.userId } },
+      // The id is an opaque COMPETITOR id: a user id (1v1) or a team id (2v2). Match either so a
+      // 2v2 BYE can be filled with a team (the slot holds the team id, not the captain's user id).
+      const participant = await fastify.prisma.tournamentParticipant.findFirst({
+        where: { tournament_id: match.tournament_id!, deleted_at: null, OR: [{ user_id: parsed.data.userId }, { team_id: parsed.data.userId }] },
         select: { id: true },
       });
       if (!participant) {
-        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'User is not a participant in this tournament', statusCode: 422 });
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'That competitor is not a participant in this tournament', statusCode: 422 });
       }
 
       await fastify.prisma.match.update({
@@ -1068,7 +1070,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
           phase: true,
           withdrawn_player_id: true,
           games: { select: { reported_winner_id: true, winner_id: true } },
-          tournament: { select: { host_id: true, format: true } },
+          tournament: { select: { host_id: true, format: true, competitor_format: true } },
         },
       });
       if (!match || !match.tournament_id) {
@@ -1078,12 +1080,17 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const { role, sub: callerId } = request.user;
       const canManage = await canManageTournament(fastify.prisma, match.tournament_id, callerId, role);
 
-      // The survivor is the player in the match who is NOT the withdrawn one.
+      // The survivor is the competitor slot in the match that is NOT the withdrawn one, and the caller
+      // must act for it. 2v2 (team-as-actor): the caller must be that team's CAPTAIN — slots and the
+      // withdrawn flag hold team ids, so a plain `callerId === player1_id` never matches. resolveActorFlags
+      // resolves captain-for-slot; for 1v1 it's identity.
       const withdrawnId = match.withdrawn_player_id;
+      const isTeam = isTeamFormat(match.tournament?.competitor_format);
+      const actorFlags = await resolveActorFlags(fastify.prisma, callerId, match, isTeam);
       const isSurvivor =
         withdrawnId !== null &&
-        (callerId === match.player1_id || callerId === match.player2_id) &&
-        callerId !== withdrawnId;
+        ((actorFlags.isPlayer1 && match.player1_id !== withdrawnId) ||
+          (actorFlags.isPlayer2 && match.player2_id !== withdrawnId));
 
       if (!isSurvivor && !canManage) {
         return reply.code(403).send({ error: 'Forbidden', message: 'Only the surviving player or a tournament manager can void this match', statusCode: 403 });
@@ -1100,13 +1107,13 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       if (!hasWithdrawnFlag) {
         const p1Status = match.player1_id
           ? await fastify.prisma.tournamentParticipant.findFirst({
-              where: { tournament_id: match.tournament_id, user_id: match.player1_id, deleted_at: null },
+              where: { tournament_id: match.tournament_id, deleted_at: null, OR: [{ user_id: match.player1_id }, { team_id: match.player1_id }] },
               select: { status: true },
             })
           : null;
         const p2Status = match.player2_id
           ? await fastify.prisma.tournamentParticipant.findFirst({
-              where: { tournament_id: match.tournament_id, user_id: match.player2_id, deleted_at: null },
+              where: { tournament_id: match.tournament_id, deleted_at: null, OR: [{ user_id: match.player2_id }, { team_id: match.player2_id }] },
               select: { status: true },
             })
           : null;

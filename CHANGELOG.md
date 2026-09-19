@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.2.0] — 2026-09-19
+
+### Added
+- **Add a late joiner by name.** The host's "Add Late Joiner" now opens a name search instead of asking for a raw player ID. In a 2v2 tournament it searches teams and adds a whole active team.
+
+### Fixed
+- **2v2 tournaments are now treated as teams everywhere a host manages a bracket.** Several tools still handled a 2v2 slot as a single player:
+  - **Factions show up.** The match tile and the bracket nodes now display both teammates' factions in 2v2 (previously the tile showed only one and the bracket none).
+  - **Dropping a team works.** When a team drops, its opponent's open match is now flagged correctly, so the surviving team gets the "did you play, or take the walkover?" prompt — and the team captain can resolve it.
+  - **Swap Player, Create Match and Fill-BYE** now list teams (not individual players) in a 2v2 tournament.
+- **A tournament set to "no playoffs" never grows playoffs on its own.** Auto-sizing at start no longer overrides an explicit "None" playoff choice — it only sets the round count. (This also keeps Siege tournaments playoff-free.)
+
 ## [2.1.2] — 2026-09-18
 
 ### Added

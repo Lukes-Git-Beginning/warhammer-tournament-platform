@@ -2255,11 +2255,11 @@ export function undropParticipant(
 
 export function addLateJoiner(
   slug: string,
-  userId: string,
-): Promise<{ participant: { id: string; status: string; user: { id: string; username: string } } }> {
+  target: { userId?: string; teamId?: string },
+): Promise<{ participant: { id: string; status: string; user?: { id: string; username: string }; team?: { id: string; name: string } } }> {
   return apiFetch(`/api/tournaments/${slug}/add-late`, {
     method: 'POST',
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify(target),
   });
 }
 
@@ -2431,6 +2431,9 @@ export interface GameDto {
   winnerId: string | null;
   player1FactionId: string | null;
   player2FactionId: string | null;
+  /** 2v2: the teammate's faction per side. Null for 1v1. */
+  player1FactionId2: string | null;
+  player2FactionId2: string | null;
   lobbyCode: string | null;
   lobbyPassword: string | null;
   reportedWinnerId: string | null;
@@ -2463,6 +2466,8 @@ export interface GameDto {
     firstLockedAt?: string | null;
     player1FactionId: string | null;
     player2FactionId: string | null;
+    player1FactionId2: string | null;
+    player2FactionId2: string | null;
   } | null;
 }
 

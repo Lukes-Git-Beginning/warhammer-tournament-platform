@@ -431,12 +431,17 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       if (tournament.auto_sizing && tournament.format !== TournamentFormat.BALANCED_LIECHTENSTEIN) {
         const sized = autoSwissConfig(participants.length);
         if (sized) {
+          // The host's playoff_format is the CEILING: auto-sizing may derive the round count, but it
+          // must NEVER resurrect a playoff the host explicitly set to NONE (mirrors the rule in
+          // downgradePlayoffFormat / reapplyDynamicSizing). This is battle-type-agnostic and also
+          // covers Siege, which is forced to NONE at create — so no playoffs are ever generated.
+          const playoffFormat = tournament.playoff_format === 'NONE' ? 'NONE' : sized.playoffFormat;
           await fastify.prisma.tournament.update({
             where: { id: tournament.id },
-            data: { rounds_count: sized.rounds, playoff_format: sized.playoffFormat },
+            data: { rounds_count: sized.rounds, playoff_format: playoffFormat },
           });
           tournament.rounds_count = sized.rounds;
-          tournament.playoff_format = sized.playoffFormat;
+          tournament.playoff_format = playoffFormat;
         }
       }
 

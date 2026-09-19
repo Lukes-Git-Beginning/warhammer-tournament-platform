@@ -10,6 +10,7 @@ import { getPlayerClassification } from '../lib/skill-classification-service.js'
 import { BAND_NAMES } from '../lib/skill-classification.js';
 import { effectiveTiersOf, SUPPORTER_FLAG_SELECT } from '../lib/supporter-service.js';
 import { recordTournamentEvent } from '../lib/tournament-events.js';
+import { captainMap } from '../lib/competitors.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -1378,6 +1379,9 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       // Mark any open unreported group matches of the dropped player so the
       // survivor can decide: played → report normally, not played → void.
       // Format-agnostic: applies to BaLi + Swiss + Auto Swiss group matches.
+      // 2v2: match slots hold the opaque COMPETITOR id (the team), not the captain's user id —
+      // so match/withdrawal handling keys on `competitorId`, not `userId` (team-as-actor).
+      const competitorId = participant.team_id ?? userId;
       try {
         const OPEN_FOR_VOID = ['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED'] as const;
         const openMatches = await fastify.prisma.match.findMany({
@@ -1387,11 +1391,11 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
             status: { in: [...OPEN_FOR_VOID] },
             // No game has a reported or confirmed winner yet.
             games: { none: { reported_winner_id: { not: null } } },
-            // Every open match of the dropped player — group (phase null / SWISS) AND
+            // Every open match of the dropped competitor — group (phase null / SWISS) AND
             // playoff (PLAYOFF_*). Previously this filtered to group phase only, so a
             // playoff-phase drop silently skipped the opponent (no DM, no game-tile banner).
             // Playoff matches resolve as a walkover when the survivor acts (see void-dropped).
-            OR: [{ player1_id: userId }, { player2_id: userId }],
+            OR: [{ player1_id: competitorId }, { player2_id: competitorId }],
           },
           select: {
             id: true,
@@ -1401,12 +1405,12 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         for (const m of openMatches) {
-          const survivorId = m.player1_id === userId ? m.player2_id : m.player1_id;
+          const survivorId = m.player1_id === competitorId ? m.player2_id : m.player1_id;
 
-          // Check if the other player is also WITHDREW.
+          // Check if the other competitor is also WITHDREW (match user OR team id).
           const survivorStatus = survivorId
             ? await fastify.prisma.tournamentParticipant.findFirst({
-                where: { tournament_id: tournament.id, user_id: survivorId, deleted_at: null },
+                where: { tournament_id: tournament.id, deleted_at: null, OR: [{ user_id: survivorId }, { team_id: survivorId }] },
                 select: { status: true },
               })
             : null;
@@ -1418,12 +1422,16 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
               data: { status: 'CANCELLED', winner_id: null },
             });
           } else {
-            // Mark so the UI can show the "opponent withdrew" banner.
+            // Mark so the UI can show the "opponent withdrew" banner. The flag stores the opaque
+            // competitor id (team for 2v2) so it lines up with player1_id/player2_id everywhere.
             await fastify.prisma.match.update({
               where: { id: m.id },
-              data: { withdrawn_player_id: userId },
+              data: { withdrawn_player_id: competitorId },
             });
-            void notifyOpponentOfWithdrawal(m.id, survivorId);
+            // DM the survivor. 2v2: the slot is a team — notify its captain (team-as-actor);
+            // 1v1: the slot IS the user id.
+            const survivorUserId = (await captainMap(fastify.prisma, [survivorId])).get(survivorId) ?? survivorId;
+            void notifyOpponentOfWithdrawal(m.id, survivorUserId);
           }
         }
 

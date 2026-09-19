@@ -146,6 +146,10 @@ export function computeSlotLabels(
 export function SVGBracket({ data, players, factionMap, tournamentMode, format, bandByUser, onMatchClick, projectedDivisions, hasThirdPlaceMatch }: SVGBracketProps) {
   const isSft = tournamentMode === 'SFT';
   const is2d3 = tournamentMode === 'TWO_D_THREE';
+  // 2v2: SFT_2V2 has fixed factions per side (both teammates), BPT_2V2 reveals them after the blind
+  // pick. Either way the node should carry the (up to two) faction icons per side — the BO2/Bo-length
+  // of a Siege must not gate them out. The icons simply render nothing until a faction is known.
+  const is2v2 = tournamentMode === 'SFT_2V2' || tournamentMode === 'BPT_2V2';
 
   // Single source of truth for real + projected-placeholder layout and the overall size (shared
   // with BracketView.fitToWidth). For BaLi this interleaves generated and pending divisions in
@@ -324,7 +328,7 @@ export function SVGBracket({ data, players, factionMap, tournamentMode, format, 
         const f2b = m.player2FactionId2 ? factionMap?.get(m.player2FactionId2) : undefined;
         // Show faction logo for SFT (fixed faction per event), 2D3 (drawn per game at creation),
         // or Bo1 (single game → faction is unambiguous).
-        const showFaction = isSft || is2d3 || m.matchFormat === 'BO1';
+        const showFaction = isSft || is2d3 || is2v2 || m.matchFormat === 'BO1';
         const labels = slotLabels.get(m.matchId);
         const p1Band = m.player1Id ? bandByUser?.get(m.player1Id) : undefined;
         const p2Band = m.player2Id ? bandByUser?.get(m.player2Id) : undefined;

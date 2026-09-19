@@ -698,12 +698,17 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                   Round {byeMatch?.round} · {players.get(byeMatch?.player1Id ?? '')?.name ?? 'TBD'} vs BYE
                 </p>
                 <div className="max-h-64 overflow-y-auto space-y-1">
-                  {participants.map((p) => (
+                  {participants.map((p) => {
+                    // 2v2: a match slot is a TEAM id — fill the BYE with the competitor (team for 2v2,
+                    // else the user), so the slot carries a valid id the backend can resolve.
+                    const competitorId = p.team?.id ?? p.user.id;
+                    const competitorName = p.team?.name ?? p.user.username;
+                    return (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => {
-                        fillByeMatch(byeMatchId, p.user.id)
+                        fillByeMatch(byeMatchId, competitorId)
                           .then(() => {
                             void queryClient.invalidateQueries({ queryKey: ['bracket', slug] });
                             setByeMatchId(null);
@@ -712,9 +717,10 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
                       }}
                       className="w-full rounded border border-rizzotto-iron-700 px-3 py-2 text-left text-sm text-stone-300 hover:border-rizzotto-gold-500/50 hover:text-rizzotto-gold-400 transition-colors"
                     >
-                      {p.user.username}
+                      {competitorName}
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="mt-4 flex items-center justify-between">
                   <button type="button" onClick={() => setByeMatchId(null)} className="text-xs text-stone-600 hover:text-stone-400 transition-colors">Cancel</button>

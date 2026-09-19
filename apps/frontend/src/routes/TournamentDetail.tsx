@@ -504,7 +504,7 @@ export function TournamentDetail() {
           )}
           {/* B21: also available pre-start (REGISTRATION_CLOSED), not just ONGOING. */}
           {(tournament.status === 'ONGOING' || tournament.status === 'REGISTRATION_CLOSED') && (
-            <AddLateJoinerButton slug={slug} />
+            <AddLateJoinerButton slug={slug} competitorFormat={tournament.competitor_format} />
           )}
           {(tournament.status === 'ONGOING' || tournament.status === 'REGISTRATION_CLOSED') && (
             <button
@@ -602,9 +602,11 @@ export function TournamentDetail() {
                   className="w-full rounded border border-stone-700 bg-stone-800 px-2 py-1.5 text-sm text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
                 >
                   <option value="">— select player —</option>
+                  {/* 2v2: a match slot is a TEAM id — offer the competitor (team for 2v2, else user). */}
                   {(participantsData?.data ?? [])
-                    .filter((p) => p.user.id !== createP2Id)
-                    .map((p) => <option key={p.user.id} value={p.user.id}>{p.user.username}</option>)}
+                    .map((p) => ({ id: p.team?.id ?? p.user.id, name: p.team?.name ?? p.user.username }))
+                    .filter((c) => c.id !== createP2Id)
+                    .map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div>
@@ -616,8 +618,9 @@ export function TournamentDetail() {
                 >
                   <option value="">— Bye (no opponent) —</option>
                   {(participantsData?.data ?? [])
-                    .filter((p) => p.user.id !== createP1Id)
-                    .map((p) => <option key={p.user.id} value={p.user.id}>{p.user.username}</option>)}
+                    .map((p) => ({ id: p.team?.id ?? p.user.id, name: p.team?.name ?? p.user.username }))
+                    .filter((c) => c.id !== createP1Id)
+                    .map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 {!createP2Id && (
                   <p className="mt-1 text-xs text-stone-500">Leave empty to create a bye — a free win for Player 1.</p>

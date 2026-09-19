@@ -496,10 +496,13 @@ export function MatchScoreModal({
               >
                 <option value="">With…</option>
                 {participants
-                  .filter((p) => p.user.id !== (swapOldId === player1Id ? player2Id : player1Id))
-                  .filter((p) => p.user.id !== player1Id && p.user.id !== player2Id)
-                  .map((p) => (
-                    <option key={p.user.id} value={p.user.id}>{p.user.username}</option>
+                  // 2v2: a match slot is a TEAM id, and a participant row carries its team — pick the
+                  // competitor id/name (team for 2v2, else the user) so the swap sends a valid slot id.
+                  .map((p) => ({ id: p.team?.id ?? p.user.id, name: p.team?.name ?? p.user.username }))
+                  .filter((c) => c.id !== (swapOldId === player1Id ? player2Id : player1Id))
+                  .filter((c) => c.id !== player1Id && c.id !== player2Id)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
               </select>
               <button

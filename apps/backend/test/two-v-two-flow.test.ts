@@ -432,6 +432,111 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     expect(g?.winner_id).toBe(a.teamId);
     expect([g?.player1_faction_id, g?.player1_faction_id_2]).toEqual(side1);
     expect([g?.player2_faction_id, g?.player2_faction_id_2]).toEqual(side2);
+
+    // The /games endpoint must expose BOTH team factions per side (2v2) so the GameTile can
+    // render the pair — not just the primary faction.
+    const gamesRes = await app.inject({
+      method: 'GET',
+      url: `/api/matches/${matchId}/games`,
+      cookies: cookieFor(a.captain.id),
+    });
+    const serialized = gamesRes.json().games.find((gg) => gg.gameNumber === 1);
+    expect([serialized.player1FactionId, serialized.player1FactionId2]).toEqual(side1);
+    expect([serialized.player2FactionId, serialized.player2FactionId2]).toEqual(side2);
+  });
+
+  // Host-ops team-awareness (regressions from the first live Siege 2v2): a slot is a TEAM id, so
+  // drop/void/fill/late-join must all key on the competitor (team), not the captain's user id.
+  async function start2v2With(host: TestUser, a: ActiveTeam, b: ActiveTeam) {
+    const { id, slug } = await setup2v2Tournament(host.id, 'BPT_2V2');
+    await registerTeam(slug, a.captain.id, a.teamId);
+    await registerTeam(slug, b.captain.id, b.teamId);
+    await prisma.tournament.update({ where: { id }, data: { status: 'REGISTRATION_CLOSED' } });
+    await app.inject({ method: 'POST', url: `/api/tournaments/${id}/start`, cookies: cookieFor(host.id, 'ADMIN') });
+    const bracket = await app.inject({ method: 'GET', url: `/api/tournaments/${slug}/bracket` });
+    const match = bracket.json().matches.find((m: { player1Id: string | null; player2Id: string | null }) => m.player1Id && m.player2Id);
+    return { id, slug, matchId: match.matchId as string };
+  }
+
+  it('a 2v2 team drop flags the open match with the TEAM id (survivor gets the walkover prompt)', async () => {
+    const host = await createAdminHost('DropHost');
+    const a = await makeActiveTeam('DropA');
+    const b = await makeActiveTeam('DropB');
+    const { slug, matchId } = await start2v2With(host, a, b);
+
+    // Drop team A via its captain's user id (the drop endpoint URL takes a user id).
+    const dropped = await app.inject({
+      method: 'POST',
+      url: `/api/tournaments/${slug}/participants/${a.captain.id}/drop`,
+      cookies: cookieFor(host.id, 'ADMIN'),
+    });
+    expect(dropped.statusCode).toBe(200);
+
+    // The flag must be the dropped TEAM id, not the captain's user id — that is what the match slots
+    // hold, so the survivor's "opponent withdrew — did you play?" prompt keys on it correctly.
+    const flagged = await prisma.match.findUnique({ where: { id: matchId }, select: { withdrawn_player_id: true } });
+    expect(flagged?.withdrawn_player_id).toBe(a.teamId);
+    expect(flagged?.withdrawn_player_id).not.toBe(a.captain.id);
+
+    // The surviving team's CAPTAIN (team-as-actor) may void it — a teammate may not.
+    const byMate = await app.inject({ method: 'POST', url: `/api/matches/${matchId}/void-dropped`, cookies: cookieFor(b.partner.id) });
+    expect(byMate.statusCode).toBe(403);
+    const byCaptain = await app.inject({ method: 'POST', url: `/api/matches/${matchId}/void-dropped`, cookies: cookieFor(b.captain.id) });
+    expect(byCaptain.statusCode).toBe(200);
+  });
+
+  it('2v2 add-late enters a whole ACTIVE team (captain row + team_id), and rejects a bare userId', async () => {
+    const host = await createAdminHost('LateHost');
+    const a = await makeActiveTeam('LateA');
+    const b = await makeActiveTeam('LateB');
+    const late = await makeActiveTeam('LateC');
+    const { id, slug } = await setup2v2Tournament(host.id, 'BPT_2V2');
+    await registerTeam(slug, a.captain.id, a.teamId);
+    await registerTeam(slug, b.captain.id, b.teamId);
+    await prisma.tournament.update({ where: { id }, data: { status: 'REGISTRATION_CLOSED' } });
+
+    // A 2v2 late competitor is a TEAM — a bare userId is rejected.
+    const byUser = await app.inject({
+      method: 'POST', url: `/api/tournaments/${slug}/add-late`,
+      cookies: cookieFor(host.id, 'ADMIN'), payload: { userId: late.captain.id },
+    });
+    expect(byUser.statusCode).toBe(400);
+
+    const added = await app.inject({
+      method: 'POST', url: `/api/tournaments/${slug}/add-late`,
+      cookies: cookieFor(host.id, 'ADMIN'), payload: { teamId: late.teamId },
+    });
+    expect(added.statusCode).toBe(201);
+    expect(added.json().participant.team.id).toBe(late.teamId);
+
+    const p = await prisma.tournamentParticipant.findFirst({
+      where: { tournament_id: id, team_id: late.teamId, deleted_at: null },
+      select: { participant_type: true, user_id: true },
+    });
+    expect(p?.participant_type).toBe('TEAM');
+    expect(p?.user_id).toBe(late.captain.id); // the captain's row backs the team competitor
+  });
+
+  it('2v2 fill-bye accepts a team id for the BYE slot', async () => {
+    const host = await createAdminHost('ByeHost');
+    const a = await makeActiveTeam('ByeA');
+    const byeTeam = await makeActiveTeam('ByeC');
+    const { id, slug } = await setup2v2Tournament(host.id, 'BPT_2V2');
+    await registerTeam(slug, a.captain.id, a.teamId);
+    await registerTeam(slug, byeTeam.captain.id, byeTeam.teamId);
+    await prisma.tournament.update({ where: { id }, data: { status: 'REGISTRATION_CLOSED' } });
+
+    const byeMatch = await prisma.match.create({
+      data: { tournament_id: id, round: 1, match_number: 99, player1_id: a.teamId, status: 'BYE', winner_id: a.teamId },
+    });
+    const filled = await app.inject({
+      method: 'PATCH', url: `/api/matches/${byeMatch.id}/fill-bye`,
+      cookies: cookieFor(host.id, 'ADMIN'), payload: { userId: byeTeam.teamId }, // opaque competitor id
+    });
+    expect(filled.statusCode).toBe(200);
+    const updated = await prisma.match.findUnique({ where: { id: byeMatch.id }, select: { player2_id: true, status: true } });
+    expect(updated?.player2_id).toBe(byeTeam.teamId);
+    expect(updated?.status).toBe('PENDING');
   });
 
   it('exposes a public team directory and team profile', async () => {

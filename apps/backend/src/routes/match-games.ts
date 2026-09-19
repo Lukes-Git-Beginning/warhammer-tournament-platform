@@ -36,6 +36,9 @@ function serializeGame(game: {
   winner_id: string | null;
   player1_faction_id: string | null;
   player2_faction_id: string | null;
+  // 2v2: the teammate's faction per side (stamped at report). Null for 1v1.
+  player1_faction_id_2: string | null;
+  player2_faction_id_2: string | null;
   lobby_code: string | null;
   lobby_password: string | null;
   reported_winner_id: string | null;
@@ -61,6 +64,8 @@ function serializeGame(game: {
     revealed_at: Date | null;
     player1_faction_id: string | null;
     player2_faction_id: string | null;
+    player1_faction_id_2: string | null;
+    player2_faction_id_2: string | null;
   } | null;
 }, includeSensitive: boolean) {
   return {
@@ -70,6 +75,8 @@ function serializeGame(game: {
     winnerId: game.winner_id,
     player1FactionId: game.player1_faction_id,
     player2FactionId: game.player2_faction_id,
+    player1FactionId2: game.player1_faction_id_2,
+    player2FactionId2: game.player2_faction_id_2,
     lobbyCode: includeSensitive ? game.lobby_code : null,
     lobbyPassword: includeSensitive ? game.lobby_password : null,
     reportedWinnerId: game.reported_winner_id,
@@ -115,6 +122,12 @@ function serializeGame(game: {
           player2FactionId: game.blind_pick.revealed_at
             ? (game.blind_pick.player2_faction_id ?? null)
             : null,
+          player1FactionId2: game.blind_pick.revealed_at
+            ? (game.blind_pick.player1_faction_id_2 ?? null)
+            : null,
+          player2FactionId2: game.blind_pick.revealed_at
+            ? (game.blind_pick.player2_faction_id_2 ?? null)
+            : null,
         }
       : null,
   };
@@ -127,6 +140,8 @@ const GAME_SELECT = {
   winner_id: true,
   player1_faction_id: true,
   player2_faction_id: true,
+  player1_faction_id_2: true,
+  player2_faction_id_2: true,
   lobby_code: true,
   lobby_password: true,
   reported_winner_id: true,

@@ -60,6 +60,9 @@ interface Props {
   /** Faction IDs from the BracketNode (3-level fallback incl. TournamentParticipant) */
   matchPlayer1FactionId?: string | null;
   matchPlayer2FactionId?: string | null;
+  /** 2v2: the teammate's faction per side, from the BracketNode. Null/omitted for 1v1. */
+  matchPlayer1FactionId2?: string | null;
+  matchPlayer2FactionId2?: string | null;
   /** Whether the current user is a participant in this match (a team member, for 2v2 → sees the tile) */
   isParticipant: boolean;
   /** The competitor slot the viewer belongs to (their team id for 2v2). Falls back to the 1v1
@@ -94,6 +97,8 @@ export function GameTile({
   player2AvatarUrl,
   matchPlayer1FactionId,
   matchPlayer2FactionId,
+  matchPlayer1FactionId2,
+  matchPlayer2FactionId2,
   isParticipant,
   mySideId,
   canInteract,
@@ -195,10 +200,13 @@ export function GameTile({
 
   // Banner visibility: show when the current user is the survivor (a participant whose
   // opponent withdrew) and the game has no result yet.
+  // withdrawnPlayerId is an opaque competitor id (the team for 2v2), matching the match slots.
+  // Compare against the viewer's SIDE id (their team for 2v2, their user id for 1v1) — not the raw
+  // user id, which for a 2v2 member never equals the withdrawn team id.
   const isSurvivor =
     withdrawnPlayerId != null &&
     (isPlayer1 || isPlayer2) &&
-    currentUserId !== withdrawnPlayerId;
+    viewerSideId !== withdrawnPlayerId;
   const gameUnresolved =
     (game.status === 'PENDING' || game.status === 'ONGOING') && !game.reportedWinnerId;
   const showWithdrawnBanner = isSurvivor && gameUnresolved;
@@ -211,6 +219,13 @@ export function GameTile({
     game.player2FactionId ?? game.blindPick?.player2FactionId ?? matchPlayer2FactionId ?? null;
   const p1Faction = p1FactionId ? (factions[p1FactionId] ?? null) : null;
   const p2Faction = p2FactionId ? (factions[p2FactionId] ?? null) : null;
+  // 2v2: the teammate's faction per side — same 3-level fallback (game → blind reveal → BracketNode).
+  const p1FactionId2 =
+    game.player1FactionId2 ?? game.blindPick?.player1FactionId2 ?? matchPlayer1FactionId2 ?? null;
+  const p2FactionId2 =
+    game.player2FactionId2 ?? game.blindPick?.player2FactionId2 ?? matchPlayer2FactionId2 ?? null;
+  const p1Faction2 = p1FactionId2 ? (factions[p1FactionId2] ?? null) : null;
+  const p2Faction2 = p2FactionId2 ? (factions[p2FactionId2] ?? null) : null;
   const myId = isPlayer1 ? player1Id : isPlayer2 ? player2Id : null;
   const opponentId = isPlayer1 ? player2Id : isPlayer2 ? player1Id : null;
 
@@ -220,10 +235,12 @@ export function GameTile({
   const leftName = swap ? player2Name : player1Name;
   const leftAvatarUrl = swap ? player2AvatarUrl : player1AvatarUrl;
   const leftFaction = swap ? p2Faction : p1Faction;
+  const leftFaction2 = swap ? p2Faction2 : p1Faction2;
   const rightId = swap ? player1Id : player2Id;
   const rightName = swap ? player1Name : player2Name;
   const rightAvatarUrl = swap ? player1AvatarUrl : player2AvatarUrl;
   const rightFaction = swap ? p1Faction : p2Faction;
+  const rightFaction2 = swap ? p1Faction2 : p2Faction2;
 
   // Blind pick is required for BPT tournaments and for any match that has a
   // MatchBlindPick row (Open Play matches always get one on creation).
@@ -324,6 +341,7 @@ export function GameTile({
             name={leftName}
             avatarUrl={leftAvatarUrl}
             faction={leftFaction}
+            faction2={leftFaction2}
             isWinner={game.winnerId === leftId}
           />
           <div className="flex-1 flex flex-col items-center gap-2 pt-1 min-w-0">
@@ -376,6 +394,7 @@ export function GameTile({
             name={rightName}
             avatarUrl={rightAvatarUrl}
             faction={rightFaction}
+            faction2={rightFaction2}
             isWinner={game.winnerId === rightId}
           />
         </div>
@@ -408,11 +427,11 @@ export function GameTile({
           {/* Players + factions — shown from the moment the tile appears when the
               factions are already known and not blind (SFT, 2D3). For 2D3 this
               surfaces the per-game roll before map selection, like an SFT faction. */}
-          {!decisionComplete && !needsBlindPick && (p1Faction || p2Faction) && (
+          {!decisionComplete && !needsBlindPick && (p1Faction || p2Faction || p1Faction2 || p2Faction2) && (
             <div className="flex items-start justify-center gap-6">
-              <PlayerInfo name={leftName} avatarUrl={leftAvatarUrl} faction={leftFaction} />
+              <PlayerInfo name={leftName} avatarUrl={leftAvatarUrl} faction={leftFaction} faction2={leftFaction2} />
               <span className="self-center text-xs uppercase tracking-wider text-rizzotto-stone-500">vs</span>
-              <PlayerInfo name={rightName} avatarUrl={rightAvatarUrl} faction={rightFaction} />
+              <PlayerInfo name={rightName} avatarUrl={rightAvatarUrl} faction={rightFaction} faction2={rightFaction2} />
             </div>
           )}
 
@@ -506,7 +525,7 @@ export function GameTile({
             <div className="flex flex-col gap-4">
               {/* Player info + Map (3-column layout) */}
               <div className="flex items-start justify-between gap-3">
-                <PlayerInfo name={leftName} avatarUrl={leftAvatarUrl} faction={leftFaction} />
+                <PlayerInfo name={leftName} avatarUrl={leftAvatarUrl} faction={leftFaction} faction2={leftFaction2} />
                 {pickedMap ? (
                   <div className="flex-1 flex flex-col items-center gap-1 min-w-0">
                     <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider">Battlefield</span>
@@ -532,7 +551,7 @@ export function GameTile({
                 ) : (
                   <div className="flex-1" />
                 )}
-                <PlayerInfo name={rightName} avatarUrl={rightAvatarUrl} faction={rightFaction} />
+                <PlayerInfo name={rightName} avatarUrl={rightAvatarUrl} faction={rightFaction} faction2={rightFaction2} />
               </div>
 
               {/* Lobby code + password */}
@@ -727,13 +746,17 @@ function PlayerInfo({
   name,
   avatarUrl,
   faction,
+  faction2,
   isWinner,
 }: {
   name: string;
   avatarUrl?: string | null;
   faction?: FactionDto | null;
+  /** 2v2: the teammate's faction — rendered below the first as a second badge. */
+  faction2?: FactionDto | null;
   isWinner?: boolean;
 }) {
+  const sideFactions = [faction, faction2].filter((f): f is FactionDto => !!f);
   return (
     <div className="flex flex-col items-center gap-2 w-28 shrink-0">
       {avatarUrl ? (
@@ -759,14 +782,14 @@ function PlayerInfo({
       >
         {name}
       </span>
-      {faction && (
-        <>
+      {sideFactions.map((f) => (
+        <div key={f.id} className="flex flex-col items-center gap-1">
           <FactionBadge
             size="lg"
-            colorHex={faction.color_hex}
-            initials={faction.initials}
-            name={faction.name}
-            iconUrl={faction.icon_url}
+            colorHex={f.color_hex}
+            initials={f.initials}
+            name={f.name}
+            iconUrl={f.icon_url}
           />
           <span
             className={`text-xs text-center w-full leading-tight ${
@@ -774,10 +797,10 @@ function PlayerInfo({
             }`}
             style={{ overflowWrap: 'break-word' }}
           >
-            {faction.name}
+            {f.name}
           </span>
-        </>
-      )}
+        </div>
+      ))}
     </div>
   );
 }
