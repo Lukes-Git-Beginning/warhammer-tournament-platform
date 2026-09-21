@@ -115,7 +115,11 @@ export async function computeGsBoard(
   return model.generalSkills
     .filter((e) => !teamIds.has(e.playerId))
     .map((e) => {
-      const gs = skillFor(e.playerId, e.generalSkill);
+      // OVERALL uses the GAME-WEIGHTED skill (not the raw base GS, which the fit leaves near the
+      // unweighted per-type centroid → a thin new-mode sample wrongly drags it). Per-type views are
+      // unchanged (skillFor → getBattleTypeSkill).
+      const overall = model.getOverallSkill(e.playerId) ?? e.generalSkill;
+      const gs = skillFor(e.playerId, overall);
       return {
         competitorId: e.playerId,
         gs,

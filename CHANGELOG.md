@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.2.2] — 2026-09-22
+
+### Fixed
+- **Overall skill is now weighted by how much you actually play each battle type.** A handful of games in a just-launched mode (Conquest / Siege) could pull your Overall win-vs-average several points toward that tiny sample — even with hundreds of games in your main mode. The Overall boards (Rankings, Hall of Fame, Quarterly, and the legacy skill board) now show the game-weighted average of your per-mode skill, so your main mode dominates your Overall as it should. Per-mode boards are unchanged. This re-numbers Overall standings across the board (mostly small; larger for players split across modes) — it is a correction, not a reset.
+
 ## [2.2.1] — 2026-09-19
 
 ### Added

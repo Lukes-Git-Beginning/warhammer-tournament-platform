@@ -487,9 +487,12 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
           config: { hierarchical: true },
         });
 
+        // Rank + show the GAME-WEIGHTED Overall skill (not the raw base GS, which the fit leaves near
+        // the unweighted per-type centroid → a thin new-mode sample wrongly drags it).
+        const overallOf = (e: (typeof model.generalSkills)[number]) => model.getOverallSkill(e.playerId) ?? e.generalSkill;
         const eligible = model.generalSkills
           .filter((e) => e.gamesCount >= minGames)
-          .sort((a, b) => b.generalSkill - a.generalSkill || b.gamesCount - a.gamesCount);
+          .sort((a, b) => overallOf(b) - overallOf(a) || b.gamesCount - a.gamesCount);
         const total = eligible.length;
         const slice = eligible.slice((page - 1) * pageSize, page * pageSize);
 
@@ -517,14 +520,15 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
           const wins = rec?.wins ?? 0;
           const losses = rec?.losses ?? 0;
           const gamesForRate = rec?.totalGames ?? e.gamesCount;
+          const overall = overallOf(e);
           return [
             {
               rank: (page - 1) * pageSize + i + 1,
               user: { id: user.id, username: user.username, avatar_url: user.avatar_url, tiers: effectiveTiersOf(user) },
-              generalSkill: e.generalSkill,
+              generalSkill: overall,
               stdError: e.stdError,
-              winChance: logistic(e.generalSkill),
-              band: skillToBand(e.generalSkill),
+              winChance: logistic(overall),
+              band: skillToBand(overall),
               gamesCount: e.gamesCount,
               factionsPlayed: e.factionsPlayed,
               wins,
@@ -633,10 +637,13 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
       async () => {
         const model = await getRatingModel(fastify.prisma, fastify.redis, { versionId: null, config: { hierarchical: true } });
         const min = cfg.hallOfFameMinGames;
+        // GAME-WEIGHTED Overall skill (not the raw base GS, which the fit leaves near the unweighted
+        // per-type centroid → a thin new-mode sample wrongly drags it).
+        const overallOf = (e: (typeof model.generalSkills)[number]) => model.getOverallSkill(e.playerId) ?? e.generalSkill;
         const ranked = model.generalSkills.slice().sort((a, b) => {
           const qa = a.gamesCount >= min ? 1 : 0;
           const qb = b.gamesCount >= min ? 1 : 0;
-          return qb - qa || b.generalSkill - a.generalSkill || b.gamesCount - a.gamesCount;
+          return qb - qa || overallOf(b) - overallOf(a) || b.gamesCount - a.gamesCount;
         });
         const total = ranked.length;
         const qualifiedCount = ranked.filter((e) => e.gamesCount >= min).length;
@@ -655,9 +662,9 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
             {
               rank: (page - 1) * pageSize + i + 1,
               user: { id: u.id, username: u.username, avatar_url: u.avatar_url, tiers: effectiveTiersOf(u) },
-              generalSkill: e.generalSkill,
+              generalSkill: overallOf(e),
               stdError: e.stdError,
-              band: skillToBand(e.generalSkill),
+              band: skillToBand(overallOf(e)),
               gamesCount: e.gamesCount,
               qualified: e.gamesCount >= min,
             },

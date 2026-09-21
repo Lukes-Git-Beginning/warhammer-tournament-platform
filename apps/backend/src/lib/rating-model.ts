@@ -199,6 +199,13 @@ export interface RatingModel extends RatingModelData {
   getBattleTypeOffset(playerId: string, battleType: string): number;
   /** GS + battle-type offset ("GS in this battle type"); null if the player has no fitted GS. */
   getBattleTypeSkill(playerId: string, battleType: string): number | null;
+  /**
+   * The GAME-WEIGHTED Overall skill = Σ(gamesInType · perTypeSkill) / Σ games. Use this for the
+   * Overall/Rankings board instead of the raw base GS, which the fit leaves near the UNWEIGHTED
+   * centroid of the per-type skills (so a thin new-mode sample wrongly drags it). Falls back to the
+   * base GS when the player has no per-battle-type games. Null if the player has no fitted GS.
+   */
+  getOverallSkill(playerId: string): number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -369,6 +376,33 @@ export function createRatingModel(data: RatingModelData): RatingModel {
     return e.generalSkill + getBattleTypeOffset(playerId, battleType);
   };
 
+  // Per-(player, battleType) game counts, for the game-weighted Overall (below).
+  const btoGamesByPlayer = new Map<string, { battleType: string; gamesCount: number }[]>();
+  for (const e of data.battleTypeOffsets ?? []) {
+    const arr = btoGamesByPlayer.get(e.playerId) ?? [];
+    arr.push({ battleType: e.battleType, gamesCount: e.gamesCount });
+    btoGamesByPlayer.set(e.playerId, arr);
+  }
+
+  // The GAME-WEIGHTED Overall skill: Σ(gamesInType · perTypeSkill) / Σ games. This is what the
+  // Overall/Rankings board should show — NOT the raw base GS, which the fit leaves as (roughly) the
+  // UNWEIGHTED centroid of the per-type skills. Weighting by games stops a thin new-mode sample
+  // (e.g. 4 Conquest games) from dragging a 400-game player's Overall toward that tiny, noisy
+  // sample. Falls back to the base GS when a player has no per-battle-type games (flat/legacy fits).
+  const getOverallSkill = (playerId: string): number | null => {
+    const e = gs.get(playerId);
+    if (!e) return null;
+    const types = btoGamesByPlayer.get(playerId);
+    if (!types || types.length === 0) return e.generalSkill;
+    let total = 0;
+    let weighted = 0;
+    for (const t of types) {
+      total += t.gamesCount;
+      weighted += t.gamesCount * (e.generalSkill + getBattleTypeOffset(playerId, t.battleType));
+    }
+    return total > 0 ? weighted / total : e.generalSkill;
+  };
+
   return {
     ...data,
     getPlayerFactionSkill,
@@ -378,6 +412,7 @@ export function createRatingModel(data: RatingModelData): RatingModel {
     getPeakFactionSkill,
     getBattleTypeOffset,
     getBattleTypeSkill,
+    getOverallSkill,
   };
 }
 
