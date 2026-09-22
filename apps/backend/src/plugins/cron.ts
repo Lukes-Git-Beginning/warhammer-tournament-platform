@@ -12,6 +12,7 @@ import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 import { notifyChallengeMatchFound, notifyScheduledMatchReminder, notifyReQueuePrompt } from '../lib/discord-notify.js';
 import { runMatchmakingTick } from '../lib/matchmaking-tick.js';
 import { reconcileBalancedTournaments } from '../lib/balanced-liechtenstein-service.js';
+import { reconcileLiechtensteinTournaments } from '../lib/liechtenstein-service.js';
 import { getSupporterRoleConfig, refreshSupporterFromDiscord } from '../lib/supporter-service.js';
 import { syncKofiGoal } from '../lib/kofi-goal-sync.js';
 
@@ -357,6 +358,14 @@ export default fp(
           }
         } catch (err) {
           fastify.log.error({ err }, 'BaLi reconciler cron failed');
+        }
+        try {
+          const count = await reconcileLiechtensteinTournaments(fastify);
+          if (count > 0) {
+            fastify.log.debug({ count }, 'Liechtenstein reconciler ticked ongoing tournaments');
+          }
+        } catch (err) {
+          fastify.log.error({ err }, 'Liechtenstein reconciler cron failed');
         }
       },
       { timezone: 'UTC' },

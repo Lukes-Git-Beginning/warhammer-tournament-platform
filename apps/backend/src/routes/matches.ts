@@ -6,6 +6,7 @@ import { completeMatch } from '../lib/complete-match.js';
 import { canManageTournament, guardBalancedManualPairing } from '../lib/tournament-utils.js';
 import { notifyHostsOfMatchReport } from '../lib/discord-notify.js';
 import { runBalancedPairingTick, findNextDivisionSeed } from '../lib/balanced-liechtenstein-service.js';
+import { runLiechtensteinPairingTick } from '../lib/liechtenstein-service.js';
 import { computeSwissStandings, sortSwissStandings } from '../lib/swiss.js';
 import { resolveCompetitors, captainMap, isTeamFormat, resolveActingUserIds, resolveActorFlags } from '../lib/competitors.js';
 import {
@@ -1041,9 +1042,10 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } }),
       ]);
       if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_forfeited', actor: 'host', actorId: userId, payload: { matchId } }); }
-      // A forfeit completes this match — for Balanced Liechtenstein that may be the final piece
-      // that lets the next round / division playoffs generate. The tick no-ops for other formats.
+      // A forfeit completes this match — for Balanced Liechtenstein / Liechtenstein that may be the
+      // final piece that lets the next round / playoffs generate. Both ticks no-op for other formats.
       void runBalancedPairingTick(fastify, match.tournament_id);
+      void runLiechtensteinPairingTick(fastify, match.tournament_id);
       return reply.code(200).send({ ok: true, winnerId });
     },
   );
@@ -1186,6 +1188,8 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_void_dropped', actor: 'host', actorId: callerId, payload: { matchId } }); }
+      // Liechtenstein: a voided/walkover slot frees the survivor — re-pair them ASAP (no-op for others).
+      if (match.tournament_id) void runLiechtensteinPairingTick(fastify, match.tournament_id);
       emitBracketUpdate(fastify.io, match.tournament_id);
       return reply.code(200).send({ ok: true });
     },
@@ -1214,8 +1218,9 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       ]);
       if (match.tournament_id) { void recordTournamentEvent({ tournamentId: match.tournament_id, type: 'match_no_contest', actor: 'host', actorId: userId, payload: { matchId } }); }
       // NO_CONTEST completes the round for both players (ADVANCING) — re-pair them for the next round.
-      // Same trigger the forfeit / void-dropped / manual-edit paths use; a no-op for non-BaLi formats.
+      // Same trigger the forfeit / void-dropped / manual-edit paths use; a no-op for non-hybrid formats.
       if (match.tournament_id) void runBalancedPairingTick(fastify, match.tournament_id);
+      if (match.tournament_id) void runLiechtensteinPairingTick(fastify, match.tournament_id);
       return reply.code(200).send({ ok: true });
     },
   );

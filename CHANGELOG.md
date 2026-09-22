@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.3.0] — 2026-09-22
+
+### Changed
+- **Liechtenstein is modernised into an ASAP Swiss hybrid.** Instead of a fixed, pre-generated schedule, matches are now created on the fly: the moment you and a suitable opponent are free, you're paired — by Swiss points (equal scores meet, prioritised top-down), with **rematches hard-excluded** (you never face the same opponent twice). This also fixes late joining — a player added mid-tournament gets catch-up byes and slots straight into the next pairing. An optional TOP-N playoff bracket can follow the group phase.
+
 ## [2.2.2] — 2026-09-22
 
 ### Fixed

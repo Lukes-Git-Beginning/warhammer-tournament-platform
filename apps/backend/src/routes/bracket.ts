@@ -4,7 +4,7 @@ import { MatchStatus, TournamentFormat, TournamentMode, TournamentStatus } from 
 import type { BracketResponse, SwissStandingEntry } from '@rizzotto/types';
 import { generateSingleElim, generateDoubleElim, selectStartNotifications } from '../lib/bracket.js';
 import { generateRoundRobin } from '../lib/round-robin.js';
-import { generateLiechtensteinSchedule } from '../lib/liechtenstein.js';
+import { runLiechtensteinPairingTick } from '../lib/liechtenstein-service.js';
 import {
   applyBalancedStartConfig,
   assignSkillBandsForTournament,
@@ -530,20 +530,18 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         case TournamentFormat.LIECHTENSTEIN: {
-          try {
-            bracketMatches = generateLiechtensteinSchedule(
-              tournament.id,
-              participantIds,
-              tournament.rounds_count ?? 5,
-              { factionById },
-            );
-          } catch (err) {
-            return reply.code(400).send({
-              error: 'BadRequest',
-              message: err instanceof Error ? err.message : 'Liechtenstein-Scheduling fehlgeschlagen',
-              statusCode: 400,
+          // Liechtenstein now pairs ASAP (Swiss-score, hard rematch exclusion) — no batch schedule.
+          // Round 1 (and every later match) is created by the pairing tick after ONGOING, below.
+          // Hard rematch exclusion caps the round count at field−1 (can't play more distinct foes).
+          const maxRounds = Math.max(1, participantIds.length - 1);
+          if ((tournament.rounds_count ?? 5) > maxRounds) {
+            await fastify.prisma.tournament.update({
+              where: { id: tournament.id },
+              data: { rounds_count: maxRounds },
             });
+            tournament.rounds_count = maxRounds;
           }
+          bracketMatches = [];
           break;
         }
 
@@ -640,6 +638,12 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         await applyBalancedStartConfig(fastify, tournament.id);
         await assignSkillBandsForTournament(fastify, tournament.id);
         await runBalancedPairingTick(fastify, tournament.id);
+      }
+
+      // Liechtenstein: no batch schedule either — create round 1 via the ASAP pairing tick now
+      // that the tournament is ONGOING.
+      if (tournament.format === TournamentFormat.LIECHTENSTEIN) {
+        await runLiechtensteinPairingTick(fastify, tournament.id);
       }
 
       const responseBody: Record<string, unknown> = {
