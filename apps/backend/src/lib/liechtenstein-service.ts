@@ -2,13 +2,16 @@
 // Liechtenstein ASAP engine (2026-09) — a Swiss/BaLi hybrid.
 //
 // Matches are generated ASAP (like BaLi: a player is paired the moment they + a
-// suitable opponent are free), pairing is by Swiss points (planLiechtensteinPairings),
-// and rematches are HARD-excluded. No skill bands. Each player plays `rounds_count`
-// matches; then optional TOP-N playoffs (host choice), else standings are final.
+// suitable opponent are free), pairing is by Swiss points (planLiechtensteinPairings).
+// Rematches and NO_CONTEST re-pairs are AVOIDED VIA COST (Swiss model), not hard-
+// excluded — so a shrinking field never strands a player; byes are only for a true
+// odd-one-out. No skill bands. Each player plays `rounds_count` matches; then optional
+// TOP-N playoffs (host choice), else standings are final.
 //
-// Unlike BaLi this needs NO PENDING_BYE placeholder / reclaim machinery: a "held"
-// player simply has no open match and is re-considered on the next tick. Only real
-// (scoring) byes and late-join catch-up byes create rows.
+// Like BaLi, a "held" player rests on a provisional PENDING_BYE placeholder that either
+// reclaims into a real match (a partner frees) or crystallises into a scored bye once
+// the field moves past it — this stops the odd-one-out being starved. Late joiners get
+// catch-up byes so they slot into the current round.
 // ---------------------------------------------------------------------------
 
 import { randomUUID } from 'node:crypto';
@@ -125,10 +128,14 @@ export async function runLiechtensteinPairingTick(
     const committed = new Map<string, number>();
     const openMatch = new Set<string>();
     const played = new Map<string, Set<string>>();
+    const noContest = new Map<string, Set<string>>(); // voided-match pairs — avoided harder than a rematch
     const receivedBye = new Set<string>();
     const restingBye = new Map<string, { id: string; round: number }>(); // holder → their PENDING_BYE row
     let maxAdvancedRound = 0;
-    for (const id of activeIds) played.set(id, new Set());
+    for (const id of activeIds) {
+      played.set(id, new Set());
+      noContest.set(id, new Set());
+    }
     for (const m of matches) {
       if (m.status === 'CANCELLED') continue;
       if (m.status === 'PENDING_BYE') {
@@ -143,10 +150,13 @@ export async function runLiechtensteinPairingTick(
         if (m.player1_id) openMatch.add(m.player1_id);
         if (m.player2_id) openMatch.add(m.player2_id);
       }
-      // played = anyone paired with (real 2-player match), any non-cancelled status → hard rematch.
+      // Opponent tracking (soft avoidance, Swiss model). A real match → `played` (P_REMATCH). A
+      // NO_CONTEST is a VOIDED match (technical abort) → `noContest`, avoided even harder (P_NOCONTEST)
+      // but NEVER a hard block, so a shrinking field can't strand a player on a forced bye.
       if (m.player1_id && m.player2_id) {
-        played.get(m.player1_id)?.add(m.player2_id);
-        played.get(m.player2_id)?.add(m.player1_id);
+        const bucket = m.status === 'NO_CONTEST' ? noContest : played;
+        bucket.get(m.player1_id)?.add(m.player2_id);
+        bucket.get(m.player2_id)?.add(m.player1_id);
       }
       if (m.status === 'BYE') {
         const b = m.player1_id ?? m.player2_id;
@@ -189,6 +199,7 @@ export async function runLiechtensteinPairingTick(
         id: p.id,
         score: scoreOf.get(p.id) ?? 0,
         played: played.get(p.id) ?? new Set(),
+        noContest: noContest.get(p.id) ?? new Set(),
         free: !openMatch.has(p.id),
         receivedBye: receivedBye.has(p.id),
       }));

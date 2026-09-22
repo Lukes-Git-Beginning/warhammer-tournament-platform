@@ -4,12 +4,13 @@ import { planLiechtensteinPairings, type LPlayer } from '../src/lib/liechtenstei
 function p(
   id: string,
   score: number,
-  opts: { free?: boolean; played?: string[]; receivedBye?: boolean } = {},
+  opts: { free?: boolean; played?: string[]; noContest?: string[]; receivedBye?: boolean } = {},
 ): LPlayer {
   return {
     id,
     score,
     played: new Set(opts.played ?? []),
+    noContest: new Set(opts.noContest ?? []),
     free: opts.free ?? true,
     receivedBye: opts.receivedBye ?? false,
   };
@@ -65,8 +66,9 @@ describe('Liechtenstein ASAP planner', () => {
     expect(plan.byes).toEqual([]);
   });
 
-  it('hard-excludes rematches — a pair that has played never meets again', () => {
-    // A & B already played; all three free, odd → one pair (A–C or B–C) + one bye. Never A–B.
+  it('avoids a rematch when a fresh pairing exists — the played pair does not meet again', () => {
+    // A & B already played; all three free, odd → one pair + one bye. A fresh pairing (A–C or B–C)
+    // is far cheaper than the A–B rematch, so A–B is avoided; the third player byes.
     const players = [
       p('A', 1, { played: ['B'] }),
       p('B', 1, { played: ['A'] }),
@@ -76,14 +78,44 @@ describe('Liechtenstein ASAP planner', () => {
 
     expect(plan.pairs).toHaveLength(1);
     const [x, y] = plan.pairs[0]!;
-    expect([x, y].sort()).not.toEqual(['A', 'B']); // rematch impossible
+    expect([x, y].sort()).not.toEqual(['A', 'B']); // rematch avoided (a cheaper fresh pairing exists)
     expect([x, y]).toContain('C');
-    expect(plan.byes).toHaveLength(1); // the odd one out (all free) byes
+    expect(plan.byes).toHaveLength(1);
     expect(['A', 'B']).toContain(plan.byes[0]);
   });
 
-  it('byes a genuine dead-end (played everyone available) but holds a player with a future partner', () => {
-    // A has already played B and C → no valid partner at all → bye. B can still meet C (in-progress) → hold.
+  it('re-pairs a rematch as a LAST RESORT rather than stranding a player on a bye', () => {
+    // Two free players who have already played and nobody else left. A hard exclusion would bye both
+    // (stranding); cost-based avoidance re-pairs them instead — a rematch is better than no game.
+    const players = [
+      p('A', 1, { played: ['B'] }),
+      p('B', 1, { played: ['A'] }),
+    ];
+    const plan = planLiechtensteinPairings(players, SEED);
+
+    expect(plan.pairs).toHaveLength(1);
+    expect(plan.pairs[0]!.slice().sort()).toEqual(['A', 'B']); // re-paired, not stranded
+    expect(plan.byes).toEqual([]);
+  });
+
+  it('prefers a rematch over a NO_CONTEST re-pair (no-contest is avoided the most)', () => {
+    // A played B (rematch) AND had a no-contest vs C. Odd trio, one pair + one bye. Pairing A costs
+    // P_REMATCH (vs B) or P_NOCONTEST (vs C); the rematch is cheaper, so if A is paired it is with B.
+    // Equivalently: the plan never pairs the no-contest pair (A–C) while a rematch (A–B) is available.
+    const players = [
+      p('A', 1, { played: ['B'], noContest: ['C'] }),
+      p('B', 1, { played: ['A'] }),
+      p('C', 1, { noContest: ['A'] }),
+    ];
+    const plan = planLiechtensteinPairings(players, SEED);
+
+    expect(plan.pairs).toHaveLength(1);
+    expect(plan.pairs[0]!.slice().sort()).not.toEqual(['A', 'C']); // never the no-contest re-pair here
+  });
+
+  it('holds a player who has played everyone still active (rematch as last resort) rather than bying', () => {
+    // A has played B and C. B is free, C in-progress. With cost-based avoidance A is NOT a dead-end:
+    // a fresh B–C pair is cheapest (B free), so A holds to be picked up next tick, no premature bye.
     const players = [
       p('A', 1, { free: true, played: ['B', 'C'] }),
       p('B', 1, { free: true }),
@@ -91,9 +123,9 @@ describe('Liechtenstein ASAP planner', () => {
     ];
     const plan = planLiechtensteinPairings(players, SEED);
 
-    expect(plan.pairs).toEqual([]);
-    expect(plan.byes).toEqual(['A']);
-    expect(plan.held).toEqual(['B']);
+    expect(plan.pairs).toEqual([]);        // B–C not realised (C in-progress)
+    expect(plan.byes).toEqual([]);         // nobody stranded on a bye
+    expect(plan.held.slice().sort()).toEqual(['A', 'B']);
   });
 
   it('is deterministic for a given seed', () => {

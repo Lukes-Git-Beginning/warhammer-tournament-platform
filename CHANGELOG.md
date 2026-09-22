@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.3.2] — 2026-09-23
+
+### Changed
+- **Liechtenstein avoids rematches by cost now (like Swiss) — no more forced byes.** Rematches, and especially voided NO_CONTEST re-pairs, are strongly avoided but no longer hard-blocked. Previously a hard exclusion could strand a player on a bye once the field shrank (e.g. after withdrawals); now they are only ever put back against a past opponent as an absolute last resort, and a NO_CONTEST pair is avoided even more strongly than a normal rematch. Byes now occur only for a genuine odd-one-out, never because a player "ran out of" fresh opponents.
+
 ## [2.3.1] — 2026-09-22
 
 ### Fixed

@@ -191,6 +191,56 @@ describe('Liechtenstein ASAP engine', () => {
     }
   });
 
+  it('re-pairs a NO_CONTEST pair only as an ABSOLUTE last resort — never stranded on byes (the live bug)', async () => {
+    // A NO_CONTEST is avoided harder than any rematch, but it is still a COST, not a hard block. So
+    // when the field shrinks until the no-contest pair are the only two left owing a round, they are
+    // RE-PAIRED (a real game) rather than both stranded on byes — which is the live bug we hit.
+    const { id } = await makeTournament({ rounds: 3 });
+    const [A, B, C, D] = await addPlayers(id, 4);
+    const mk = (round: number, mn: number, p1: string, p2: string, status: string, winner: string | null) =>
+      prisma.match.create({ data: { tournament_id: id, round, match_number: mn, player1_id: p1, player2_id: p2, status: status as never, winner_id: winner } });
+    await mk(1, 1, A, C, 'COMPLETED', A);
+    await mk(1, 2, B, D, 'COMPLETED', B);
+    await mk(2, 1, A, B, 'NO_CONTEST', null); // A and B's match was a no-contest
+    await mk(2, 2, C, D, 'COMPLETED', C);
+    await prisma.tournamentParticipant.updateMany({ where: { tournament_id: id, user_id: { in: [C, D] } }, data: { status: 'WITHDREW' } });
+
+    await runLiechtensteinPairingTick(app, id);
+
+    const r3 = await prisma.match.findMany({ where: { tournament_id: id, round: { gte: 3 }, deleted_at: null, phase: null }, select: { player1_id: true, player2_id: true, status: true } });
+    const abPair = r3.find((m) => m.player2_id && [m.player1_id, m.player2_id].every((x) => x === A || x === B));
+    expect(abPair).toBeDefined(); // last resort: the pair play, not stranded
+    const byes = await prisma.match.count({ where: { tournament_id: id, status: 'BYE', round: { gte: 3 }, deleted_at: null } });
+    expect(byes).toBe(0);
+  });
+
+  it('after a NO_CONTEST, each player is re-paired against a DIFFERENT valid opponent (large field)', async () => {
+    // The no-contest only excludes the two from each other — both must still be paired against
+    // other, not-yet-played opponents in the next round (never stranded when partners exist).
+    const { id } = await makeTournament({ rounds: 3 });
+    const [A, B, C, D, E, F] = await addPlayers(id, 6);
+    const mk = (round: number, mn: number, p1: string, p2: string, status: string, winner: string | null) =>
+      prisma.match.create({ data: { tournament_id: id, round, match_number: mn, player1_id: p1, player2_id: p2, status: status as never, winner_id: winner } });
+    // R1: A>B, C>D, E>F.
+    await mk(1, 1, A, B, 'COMPLETED', A);
+    await mk(1, 2, C, D, 'COMPLETED', C);
+    await mk(1, 3, E, F, 'COMPLETED', E);
+    // R2: A~C (NO_CONTEST), B-F, D-E — no rematches.
+    await mk(2, 1, A, C, 'NO_CONTEST', null);
+    await mk(2, 2, B, F, 'COMPLETED', B);
+    await mk(2, 3, D, E, 'COMPLETED', D);
+
+    await runLiechtensteinPairingTick(app, id);
+
+    const r3 = await prisma.match.findMany({ where: { tournament_id: id, round: { gte: 3 }, deleted_at: null, phase: null }, select: { player1_id: true, player2_id: true, status: true } });
+    const opponentOf = (x: string) => r3.filter((m) => m.player2_id && (m.player1_id === x || m.player2_id === x)).map((m) => (m.player1_id === x ? m.player2_id : m.player1_id));
+    // A and C are each paired (not byed) against a real, different opponent — never each other.
+    expect(opponentOf(A).length).toBe(1);
+    expect(opponentOf(C).length).toBe(1);
+    expect(opponentOf(A)).not.toContain(C);
+    expect(opponentOf(C)).not.toContain(A);
+  });
+
   it('admits a mid-tournament late joiner with catch-up byes, then pairs them in', async () => {
     const { id } = await makeTournament({ rounds: 3 });
     await addPlayers(id, 4);
