@@ -118,14 +118,24 @@ export async function runLiechtensteinPairingTick(
       return { ...m, status: m.status as MatchStatus, player1_game_wins: p1w, player2_game_wins: p2w };
     });
 
-    // Per-competitor state: committed rounds, whether a match is open, played opponents, has-bye.
+    // Per-competitor state. `committed` = advancing/open REAL rounds — it EXCLUDES a reclaimable
+    // PENDING_BYE (a provisional "resting" marker at round committed+1). A held player rests on a
+    // PENDING_BYE that either reclaims into a real match (a partner frees) or crystallises into a
+    // scoring bye once the field moves past it — this is what stops the odd-one-out being starved.
     const committed = new Map<string, number>();
     const openMatch = new Set<string>();
     const played = new Map<string, Set<string>>();
     const receivedBye = new Set<string>();
+    const restingBye = new Map<string, { id: string; round: number }>(); // holder → their PENDING_BYE row
+    let maxAdvancedRound = 0;
     for (const id of activeIds) played.set(id, new Set());
     for (const m of matches) {
       if (m.status === 'CANCELLED') continue;
+      if (m.status === 'PENDING_BYE') {
+        if (m.player1_id) restingBye.set(m.player1_id, { id: m.id, round: m.round });
+        continue; // provisional rest marker — not a completed round, not an opponent
+      }
+      maxAdvancedRound = Math.max(maxAdvancedRound, m.round);
       for (const pid of [m.player1_id, m.player2_id]) {
         if (pid && activeIds.has(pid)) committed.set(pid, (committed.get(pid) ?? 0) + 1);
       }
@@ -141,6 +151,19 @@ export async function runLiechtensteinPairingTick(
       if (m.status === 'BYE') {
         const b = m.player1_id ?? m.player2_id;
         if (b) receivedBye.add(b);
+      }
+    }
+
+    // Crystallise: a PENDING_BYE the field has moved PAST (a real/scored match exists at a later
+    // round) can no longer be reclaimed → it becomes a scored bye (the holder genuinely sat out).
+    let mutatedByCrystallise = false;
+    for (const [holder, bye] of [...restingBye]) {
+      if (bye.round < maxAdvancedRound) {
+        await fastify.prisma.match.update({ where: { id: bye.id }, data: { status: 'BYE', winner_id: holder } });
+        committed.set(holder, (committed.get(holder) ?? 0) + 1);
+        receivedBye.add(holder);
+        restingBye.delete(holder);
+        mutatedByCrystallise = true;
       }
     }
 
@@ -188,28 +211,61 @@ export async function runLiechtensteinPairingTick(
       player1_id: string; player2_id: string | null; status: MatchStatus; winner_id: string | null; phase: null;
     }> = [];
     const created: Array<{ id: string; round: number; player1_id: string; player2_id: string }> = [];
+    const byesToDelete: string[] = []; // reclaimed PENDING_BYE rows (holder is now getting a real match)
+    const byesToScore: string[] = [];  // PENDING_BYE rows to crystallise → scored BYE (resting player byed)
 
     for (const [a, b] of plan.pairs) {
       const round = roundFor(a, b);
+      // Reclaim: if either player was resting on a PENDING_BYE, remove it — they play a real match now.
+      const ra = restingBye.get(a);
+      if (ra) byesToDelete.push(ra.id);
+      const rb = restingBye.get(b);
+      if (rb) byesToDelete.push(rb.id);
       const id = randomUUID();
       rows.push({ id, tournament_id: tournamentId, round, match_number: takeMatchNo(round), player1_id: a, player2_id: b, status: 'PENDING', winner_id: null, phase: null });
       created.push({ id, round, player1_id: a, player2_id: b });
     }
+    // Held → provisional rest: a PENDING_BYE the player waits on (reclaimed/crystallised on a later
+    // tick). No starvation: they always have a slot that either becomes a match or scores as a bye.
+    for (const holderId of plan.held) {
+      if (restingBye.has(holderId)) continue; // already resting → keep the existing marker
+      const round = roundFor(holderId);
+      rows.push({ id: randomUUID(), tournament_id: tournamentId, round, match_number: takeMatchNo(round), player1_id: holderId, player2_id: null, status: 'PENDING_BYE', winner_id: null, phase: null });
+    }
     for (const byeId of plan.byes) {
-      const round = roundFor(byeId);
-      rows.push({ id: randomUUID(), tournament_id: tournamentId, round, match_number: takeMatchNo(round), player1_id: byeId, player2_id: null, status: 'BYE', winner_id: byeId, phase: null });
+      const existing = restingBye.get(byeId);
+      if (existing) {
+        byesToScore.push(existing.id); // a resting player with no partner left → their rest scores
+      } else {
+        const round = roundFor(byeId);
+        rows.push({ id: randomUUID(), tournament_id: tournamentId, round, match_number: takeMatchNo(round), player1_id: byeId, player2_id: null, status: 'BYE', winner_id: byeId, phase: null });
+      }
+      committed.set(byeId, (committed.get(byeId) ?? 0) + 1);
     }
 
-    let mutated = false;
+    let mutated = mutatedByCrystallise;
+    if (byesToDelete.length > 0) {
+      await fastify.prisma.match.deleteMany({ where: { id: { in: byesToDelete } } });
+      mutated = true;
+    }
+    for (const id of byesToScore) {
+      const holder = [...restingBye].find(([, b]) => b.id === id)?.[0];
+      await fastify.prisma.match.update({ where: { id }, data: { status: 'BYE', winner_id: holder ?? null } });
+      mutated = true;
+    }
     if (rows.length > 0) {
       await fastify.prisma.match.createMany({ data: rows });
       mutated = true;
       void recordTournamentEvent({ tournamentId, type: 'matches_created', actor: 'system', payload: { phase: 'liechtenstein', count: rows.length } });
     }
 
-    // Group phase complete → generate the optional TOP-N playoffs once (idempotent).
+    // Group phase complete → generate the optional TOP-N playoffs once (idempotent). `committed`
+    // excludes a provisional rest (PENDING_BYE), so a resting player has committed < target and
+    // still owes — the tournament isn't finished while anyone rests or has an open match.
     const anyOwes = active.some((p) => (committed.get(p.id) ?? 0) < roundsCount);
-    const anyOpen = matches.some((m) => OPEN_STATUSES.has(m.status)) || rows.some((r) => r.status === 'PENDING');
+    const anyOpen =
+      matches.some((m) => OPEN_STATUSES.has(m.status)) ||
+      rows.some((r) => r.status === 'PENDING' || r.status === 'PENDING_BYE');
     if (!anyOwes && !anyOpen) {
       if (await maybeGenerateLiechtensteinPlayoffs(fastify, tournamentId, standings, scoringRecords, activeIds)) {
         mutated = true;

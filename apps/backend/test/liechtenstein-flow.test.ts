@@ -141,6 +141,56 @@ describe('Liechtenstein ASAP engine', () => {
     expect(finals2).toBe(1);
   });
 
+  it('an ODD field gets byes and never starves a player (staggered completion → PENDING_BYE path)', async () => {
+    const { id } = await makeTournament({ rounds: 3 });
+    const players = await addPlayers(id, 5); // odd
+    await runLiechtensteinPairingTick(app, id);
+
+    // Complete ONE real match at a time + tick — this staggers frees so the odd-one-out is HELD
+    // (PENDING_BYE), exercising the reclaim/crystallise path (the live starvation bug).
+    for (let i = 0; i < 80; i++) {
+      const one = await prisma.match.findFirst({
+        where: { tournament_id: id, status: 'PENDING', phase: null, player2_id: { not: null }, deleted_at: null },
+        select: { id: true, player1_id: true },
+      });
+      if (one) {
+        await prisma.match.update({ where: { id: one.id }, data: { status: 'COMPLETED', winner_id: one.player1_id } });
+        await runLiechtensteinPairingTick(app, id);
+        continue;
+      }
+      // No real match pending — tick to reclaim/crystallise any rest markers, then check convergence.
+      await runLiechtensteinPairingTick(app, id);
+      const remaining = await prisma.match.count({
+        where: { tournament_id: id, deleted_at: null, phase: null, status: { in: ['PENDING', 'PENDING_BYE'] } },
+      });
+      if (remaining === 0) break;
+    }
+
+    // No leftover rest markers, everyone played exactly 3 rounds (no starvation), byes exist, no rematch.
+    const leftoverRest = await prisma.match.count({ where: { tournament_id: id, status: 'PENDING_BYE', deleted_at: null } });
+    expect(leftoverRest).toBe(0);
+    const byes = await prisma.match.count({ where: { tournament_id: id, status: 'BYE', deleted_at: null } });
+    expect(byes).toBeGreaterThanOrEqual(1); // odd field → at least one scored bye
+    const all = await prisma.match.findMany({
+      where: { tournament_id: id, deleted_at: null, phase: null, status: { in: ['COMPLETED', 'BYE'] } },
+      select: { player1_id: true, player2_id: true },
+    });
+    const rounds = new Map<string, number>();
+    const opps = new Map<string, string[]>();
+    for (const m of all) {
+      for (const pid of [m.player1_id, m.player2_id]) if (pid) rounds.set(pid, (rounds.get(pid) ?? 0) + 1);
+      if (m.player1_id && m.player2_id) {
+        (opps.get(m.player1_id) ?? opps.set(m.player1_id, []).get(m.player1_id)!).push(m.player2_id);
+        (opps.get(m.player2_id) ?? opps.set(m.player2_id, []).get(m.player2_id)!).push(m.player1_id);
+      }
+    }
+    for (const pid of players) {
+      expect(rounds.get(pid)).toBe(3); // exactly the target — nobody starved, nobody over-played
+      const o = opps.get(pid) ?? [];
+      expect(new Set(o).size).toBe(o.length); // no repeated opponent (hard rematch exclusion)
+    }
+  });
+
   it('admits a mid-tournament late joiner with catch-up byes, then pairs them in', async () => {
     const { id } = await makeTournament({ rounds: 3 });
     await addPlayers(id, 4);
