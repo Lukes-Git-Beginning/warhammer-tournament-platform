@@ -44,10 +44,15 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Run deploy.sh on production host
+        # ONE-SHOT ALLOW_ONGOING (remove with the next deploy): the host still runs the OLD
+        # hard-gate deploy.sh — the previous v2.3.2 run blocked at that gate and never reached
+        # its git-pull, so the new warning-gate deploy.sh hasn't landed yet. This bypasses the
+        # stale hard gate ONCE so the pull can update deploy.sh. The new deploy.sh ignores
+        # ALLOW_ONGOING entirely, so this flag is vestigial after this deploy.
         run: |
           ssh -o BatchMode=yes -o ConnectTimeout=15 \
               ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-              'cd /home/deploy/rizzotto && bash scripts/deploy.sh'
+              'cd /home/deploy/rizzotto && ALLOW_ONGOING=1 bash scripts/deploy.sh'
 
       # The frontend is static and served by Cloudflare, so it returns 200 even when the backend
       # is dead — deploy #310 was green while the API was fine, and would have stayed green if it
