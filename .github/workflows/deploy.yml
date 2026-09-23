@@ -44,15 +44,10 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Run deploy.sh on production host
-        # ALLOW_ONGOING override: v2.3.1 fixes the live Liechtenstein engine, and the
-        # tournament it repairs is itself ONGOING — the gate's usual "wait until it
-        # finishes" is a deadlock here (a broken tournament can't finish). This fix is
-        # additive-only for Liechtenstein (creates missing byes/pairings, never mutates
-        # played matches), so the override is safe. Restore the strict gate afterwards.
         run: |
           ssh -o BatchMode=yes -o ConnectTimeout=15 \
               ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-              'cd /home/deploy/rizzotto && ALLOW_ONGOING=1 bash scripts/deploy.sh'
+              'cd /home/deploy/rizzotto && bash scripts/deploy.sh'
 
       # The frontend is static and served by Cloudflare, so it returns 200 even when the backend
       # is dead — deploy #310 was green while the API was fine, and would have stayed green if it
