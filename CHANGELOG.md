@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.4.1] — 2026-09-25
+
+### Fixed
+- **The Undead Legions crest now matches the other faction icons.** Its background is transparent like every other crest, so it blends into the page instead of sitting in a solid black box.
+
 ## [2.4.0] — 2026-09-25
 
 ### Added
