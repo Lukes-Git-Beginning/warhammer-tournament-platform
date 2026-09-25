@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 ### Changed
 - **The 5×5 faction layout now covers every faction picker.** The sign-up faction picker and the in-match pick/offer screens also show five across, matching the browse page and the onboarding and draft pickers — so all 25 factions tile evenly everywhere.
 
+### Fixed
+- **The Undead Legions crest now shows its transparent background right away** instead of a stale cached copy lingering.
+
 ## [2.4.1] — 2026-09-25
 
 ### Changed
