@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 ### Added
 - **Player profiles have a version selector for their record.** One stats block (points, games, wins, losses) with a dropdown for each game version — or All-Time — replacing the old fixed "current version" + "all-time" pair. It defaults to All-Time.
+- **Admin › Users shows each member's skill band and filters by it.** New Band column, plus a multi-select band filter. Clicking a bar in the Skill Distribution chart jumps straight to the Users tab pre-filtered to that band.
+- **Admin › Usage chart: pick a time range and chart style.** Month / Quarter / Year / All-Time (granularity scales to stay readable), and a toggle between the line view and a stacked-area view.
 
 ### Changed
 - **Balance stats default to All-Time.** The Meta tab, the Factions tab and each faction page now open on the recency-weighted All-Time view instead of the current version, so they're never empty right after a version launch. The version selector still offers each specific version — and now sits on the left, consistent with the Meta dashboard.
