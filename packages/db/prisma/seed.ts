@@ -62,6 +62,7 @@ const FACTIONS: FactionSeed[] = [
   { id: 'vampire_counts',   name: 'Vampire Counts',    race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#6B0F1A', display_order: 21, icon_url: '/icons/factions/vampire_counts.png' },
   { id: 'vampire_coast',    name: 'Vampire Coast',     race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#1A5276', display_order: 22, icon_url: '/icons/factions/vampire_coast.png' },
   { id: 'tomb_kings',       name: 'Tomb Kings',        race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#C8A800', display_order: 23, icon_url: '/icons/factions/tomb_kings.png' },
+  { id: 'undead_legions',   name: 'Undead Legions',    race: 'Undead',      category: FactionCategory.UNDEAD,      color_hex: '#4B2E5E', display_order: 25, icon_url: '/icons/factions/undead_legions.png' },
   { id: 'wood_elves',       name: 'Wood Elves',        race: 'Wood Elf',    category: FactionCategory.DEFAULT,     color_hex: '#228B22', display_order: 24, icon_url: '/icons/factions/wood_elves.png' },
 ];
 

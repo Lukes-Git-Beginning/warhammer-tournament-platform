@@ -78,7 +78,18 @@ export function verifyReplayMeta(
   // A discrepancy confined to the Chaos-god family is suppressed (unreliable to tell apart).
   if (meta.factions.length >= 1 && expected.factionSlugs.length === 2) {
     const got = meta.factions.length === 1 ? [meta.factions[0]!, meta.factions[0]!] : meta.factions;
-    if (!sameSet(got, expected.factionSlugs) && !diffIsChaosGodOnly(got, expected.factionSlugs)) {
+    // Undead Legions (Host of Nagash) fields a MIXED undead roster, so the coarse whole-file read
+    // (meta.factions) can only see a single undead culture (Tomb Kings / Vampire Counts / Coast). The
+    // per-army tree walk (meta.players) DOES detect the mix → when Undead Legions is expected, accept
+    // that per-army read as an alternative match. Guarded on undead_legions being expected AND the
+    // per-army set equalling the expected set, so it never loosens any other matchup (or the daemon
+    // handling, which relies on the coarse designation read).
+    const playerFactions = meta.players.map((p) => p.faction).filter((f): f is string => !!f);
+    const undeadLegionsMatch =
+      expected.factionSlugs.includes('undead_legions') &&
+      playerFactions.length === 2 &&
+      sameSet(playerFactions, expected.factionSlugs);
+    if (!undeadLegionsMatch && !sameSet(got, expected.factionSlugs) && !diffIsChaosGodOnly(got, expected.factionSlugs)) {
       issues.push({
         type: 'FACTIONS',
         message: `Reported ${expected.factionSlugs.map(titleCase).join(' vs ')} — replay shows ${got.map(titleCase).join(' vs ')}`,

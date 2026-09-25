@@ -2,6 +2,7 @@
 // Mirrors prisma models DraftPreset, Draft, DraftEvent.
 
 import { z } from 'zod';
+import { MAX_FACTIONS } from './api-schemas.js';
 
 // ---------------------------------------------------------------------------
 // Domain types — Preset / Turn / CategoryLimit
@@ -44,7 +45,7 @@ export type DraftVariant = z.infer<typeof DraftVariantSchema>;
 
 export const CategoryLimitSchema = z.object({
   category_name: z.string().min(1).max(64),
-  factions: z.array(z.string().min(1)).min(0).max(24),
+  factions: z.array(z.string().min(1)).min(0).max(MAX_FACTIONS),
   max_picks: z.number().int().nonnegative().nullable(),
   max_bans: z.number().int().nonnegative().nullable(),
 });

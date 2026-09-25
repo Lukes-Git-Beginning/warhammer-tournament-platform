@@ -13,6 +13,7 @@ import {
   BattleTypeSchema,
   CalendarQuerySchema,
   CalendarTournamentSchema,
+  MAX_FACTIONS,
   TournamentStatusSchema,
 } from '@rizzotto/types';
 import { notifyTournamentAnnounce, notifyTournamentAvailability } from '../lib/discord-notify.js';
@@ -273,8 +274,8 @@ const CreateTournamentSchema = z.object({
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).optional(),
   map_pool: z.array(z.string().min(1)).max(36).optional(),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
-  faction_pool: z.array(z.string().min(1)).max(24).optional(),
-  restricted_factions: z.array(z.string().min(1)).max(24).optional(),
+  faction_pool: z.array(z.string().min(1)).max(MAX_FACTIONS).optional(),
+  restricted_factions: z.array(z.string().min(1)).max(MAX_FACTIONS).optional(),
   has_third_place_match: z.boolean().optional(),
   min_band: z.number().int().min(1).max(5).nullable().optional(),
   max_band: z.number().int().min(1).max(5).nullable().optional(),

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  isEsf, readRecordedAt, extractMapTerrain, extractFactions, replayContainsName, extractReplayPlayers, TOKEN_TO_FACTION,
+  isEsf, readRecordedAt, extractMapTerrain, extractFactions, replayContainsName, extractReplayPlayers, TOKEN_TO_FACTION, isUndeadLegionMix,
 } from '../src/lib/replay-parser.js';
 import { mapNameFromTerrain } from '../src/lib/replay-maps.js';
 
@@ -113,5 +113,30 @@ describe('replay-parser', () => {
     const started = Date.now();
     expect(extractReplayPlayers(buf)).toEqual([]); // fail-open, as for any unreadable tree
     expect(Date.now() - started).toBeLessThan(1000);
+  });
+});
+
+describe('Undead Legions mix detection', () => {
+  const tally = (o: Record<string, number>) => new Map(Object.entries(o));
+
+  it('flags an army mixing >=2 undead cultures as Undead Legions', () => {
+    expect(isUndeadLegionMix(tally({ vmp: 6, tmb: 4 }))).toBe(true);       // Vampires + Tomb Kings
+    expect(isUndeadLegionMix(tally({ tmb: 5, cst: 3, vmp: 2 }))).toBe(true); // all three
+    expect(isUndeadLegionMix(tally({ cst: 3, vmp: 9, emp: 1 }))).toBe(true); // + a stray non-undead
+  });
+
+  it('does NOT flag a single-undead-faction army', () => {
+    expect(isUndeadLegionMix(tally({ vmp: 12 }))).toBe(false);            // pure Vampire Counts
+    expect(isUndeadLegionMix(tally({ tmb: 10 }))).toBe(false);            // pure Tomb Kings
+    expect(isUndeadLegionMix(tally({ cst: 8 }))).toBe(false);             // pure Vampire Coast
+  });
+
+  it('ignores a single stray cross-reference of a second undead culture (below the min)', () => {
+    // A pure Vampire Counts army that merely references one Tomb Kings key must not be misread.
+    expect(isUndeadLegionMix(tally({ vmp: 11, tmb: 1 }))).toBe(false);
+  });
+
+  it('does not flag a non-undead army', () => {
+    expect(isUndeadLegionMix(tally({ emp: 10, brt: 1 }))).toBe(false);
   });
 });

@@ -3,6 +3,11 @@
 import { z } from 'zod';
 import { MatchResultTypeSchema } from './match.js';
 
+/** Upper bound for faction-slug input arrays (faction pools, restrictions, preferences, draft
+ *  category lists). A generous ceiling well above the real faction count (25 as of 2026-09) so
+ *  adding a faction never requires touching validation limits; slug validity is enforced elsewhere. */
+export const MAX_FACTIONS = 64;
+
 export const HealthResponseSchema = z.object({
   status: z.literal('ok'),
   timestamp: z.string().datetime(),
@@ -53,7 +58,7 @@ export type UserMe = z.infer<typeof UserMeSchema>;
 
 export const UpdateMeSchema = z.object({
   timezone: z.string().min(1).max(64).optional(),
-  preferred_factions: z.array(z.string()).max(24).optional(),
+  preferred_factions: z.array(z.string()).max(MAX_FACTIONS).optional(),
   reset_onboarding: z.literal(true).optional(),
 });
 export type UpdateMe = z.infer<typeof UpdateMeSchema>;

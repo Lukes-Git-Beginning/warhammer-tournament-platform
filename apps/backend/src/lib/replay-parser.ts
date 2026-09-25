@@ -26,6 +26,21 @@ export const TOKEN_TO_FACTION: Record<string, string> = {
  *  token marks a culture-level designation key. */
 const UNIT_CATEGORIES = new Set(['inf', 'cav', 'mon', 'cha', 'art', 'veh', 'feral', 'mor', 'sub']);
 
+/** The undead cultures Undead Legions (Host of Nagash) draws its mixed roster from — Vampire Counts,
+ *  Vampire Coast and Tomb Kings. No single vanilla faction fields units from more than one of these,
+ *  so an army mixing ≥2 of them is Undead Legions. This is the token-based signature we detect (the
+ *  faction has no distinct culture token of its own — it borrows the three undead rosters). */
+const UNDEAD_LEGION_TOKENS = ['vmp', 'cst', 'tmb'] as const;
+/** Min units of a given undead culture to count it as "genuinely present" (not a stray cross-ref). */
+const UNDEAD_MIX_MIN = 2;
+
+/** True when a per-army unit-token tally is a genuine mix of ≥2 distinct undead cultures → the army
+ *  is Undead Legions rather than any single undead faction. Exported for unit testing. */
+export function isUndeadLegionMix(tokens: Map<string, number>): boolean {
+  const present = UNDEAD_LEGION_TOKENS.filter((t) => (tokens.get(t) ?? 0) >= UNDEAD_MIX_MIN);
+  return present.length >= 2;
+}
+
 export interface ReplayMeta {
   /** Recording time from the ESF header (offset-8 uint32 LE, UTC). */
   recordedAt: Date | null;
@@ -252,7 +267,13 @@ export function extractReplayPlayers(buf: Buffer): ReplayPlayer[] {
       a.tokens.set(m![1]!, (a.tokens.get(m![1]!) ?? 0) + 1);
     }
     const armyFactions = armies
-      .map((a) => { const r = [...a.tokens.entries()].sort((x, y) => y[1] - x[1]); return r.length ? TOKEN_TO_FACTION[r[0]![0]]! : null; })
+      .map((a) => {
+        // Undead Legions borrows from multiple undead rosters → detect the mix before the single-
+        // dominant-token attribution would (mis-)call it Tomb Kings / Vampire Counts / Coast.
+        if (isUndeadLegionMix(a.tokens)) return 'undead_legions';
+        const r = [...a.tokens.entries()].sort((x, y) => y[1] - x[1]);
+        return r.length ? TOKEN_TO_FACTION[r[0]![0]]! : null;
+      })
       .filter((f): f is string => f !== null);
     const distinctNames = [...new Set(names)];
     const out: ReplayPlayer[] = [];

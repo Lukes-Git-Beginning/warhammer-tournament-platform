@@ -107,4 +107,30 @@ describe('verifyReplayMeta', () => {
     const r = verifyReplayMeta(meta({ factions: ['grand_cathay'] }), mirror);
     expect(r.issues.map((i) => i.type)).not.toContain('FACTIONS');
   });
+
+  it('accepts Undead Legions via the per-army read when the coarse read sees only one undead culture', () => {
+    // The mixed roster reads as a single undead culture at file level (here tomb_kings), but the
+    // per-army players detect the mix as undead_legions → the faction check must pass.
+    const ul = { ...base, factionSlugs: ['empire', 'undead_legions'] };
+    const r = verifyReplayMeta(
+      meta({
+        factions: ['empire', 'tomb_kings'],
+        players: [{ name: 'pan_sarin', faction: 'empire' }, { name: 'Martinius | RTK', faction: 'undead_legions' }],
+      }),
+      ul,
+    );
+    expect(r.issues.map((i) => i.type)).not.toContain('FACTIONS');
+  });
+
+  it('still flags when Undead Legions is reported but the per-army read does not confirm it', () => {
+    const ul = { ...base, factionSlugs: ['empire', 'undead_legions'] };
+    const r = verifyReplayMeta(
+      meta({
+        factions: ['empire', 'greenskins'],
+        players: [{ name: 'pan_sarin', faction: 'empire' }, { name: 'Martinius | RTK', faction: 'greenskins' }],
+      }),
+      ul,
+    );
+    expect(r.issues.map((i) => i.type)).toContain('FACTIONS');
+  });
 });
