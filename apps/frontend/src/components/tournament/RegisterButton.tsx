@@ -100,7 +100,7 @@ function FactionSelectGrid({
           </button>
         </div>
       )}
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
       {factions.map((f) => {
         const isSelected = selected.includes(f.id);
         // Restricted factions are nerfed, not banned — keep them pickable; only

@@ -736,7 +736,7 @@ function BlindPickPhase({
             </p>
           )}
 
-          <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-6">
+          <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-5">
             {factions.map(({ faction }) => {
               // Restricted factions are nerfed, not banned — keep them pickable.
               const isRestricted = restrictedFactions.includes(faction.id);
@@ -1162,7 +1162,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
         <BlindPickCountdown firstLockedAt={mx.firstLockedAt} timeoutMs={2 * 60 * 1000} />
       )}
 
-      <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-5">
         {factions.map(({ faction }) => {
           const isSelected = selectedFactions.includes(faction.id);
           // Restricted factions are nerfed, not banned — keep them pickable.
@@ -1308,7 +1308,7 @@ function FreePickMiniPhase({ matchId, decision, currentUserId, factions, rowPlay
           <p className="max-w-sm text-center text-sm text-rizzotto-stone-400">
             Offer 3 factions — your opponent will choose which one you play. ({selected.length}/3)
           </p>
-          <div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+          <div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
             {factions.map(({ faction }) => {
               const isSel = selected.includes(faction.id);
               const banned = factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id);
@@ -1511,7 +1511,7 @@ function OneVThreePhase({ matchId, decision, currentUserId, factions, rowPlayer,
           <p className="max-w-sm text-center text-sm text-rizzotto-stone-400">
             Offer 3 factions — the Runner will choose which one you play. ({selected.length}/3)
           </p>
-          <div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+          <div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
             {factions.map(({ faction }) => {
               const isSel = selected.includes(faction.id);
               const isSetFaction = faction.id === setFactionId;

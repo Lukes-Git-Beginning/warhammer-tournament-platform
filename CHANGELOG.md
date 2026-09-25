@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.4.2] — 2026-09-25
+
+### Changed
+- **The 5×5 faction layout now covers every faction picker.** The sign-up faction picker and the in-match pick/offer screens also show five across, matching the browse page and the onboarding and draft pickers — so all 25 factions tile evenly everywhere.
+
 ## [2.4.1] — 2026-09-25
 
 ### Changed
