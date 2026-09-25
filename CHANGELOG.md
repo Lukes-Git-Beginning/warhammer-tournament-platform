@@ -5,13 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
-## [2.4.5] — 2026-09-25
+## [2.5.0] — 2026-09-25
 
-### Fixed
-- **All-Time meta no longer shows fewer games than a single version.** All-Time game and matchup counts are now raw totals across every version — they can never be lower than a single version's. Only the win rate keeps the version-recency weighting (older, out-of-date balance still counts less), so the numbers add up.
+### Added
+- **Player profiles have a version selector for their record.** One stats block (points, games, wins, losses) with a dropdown for each game version — or All-Time — replacing the old fixed "current version" + "all-time" pair. It defaults to All-Time.
 
 ### Changed
+- **Balance stats default to All-Time.** The Meta tab, the Factions tab and each faction page now open on the recency-weighted All-Time view instead of the current version, so they're never empty right after a version launch. The version selector still offers each specific version — and now sits on the left, consistent with the Meta dashboard.
 - **The required mod shown on tournaments and Open Play now depends on the battle type.** Domination uses the Total Tavern map pack, Conquest uses Loupi's Fruit Rules Unit Caps Mod (a rules-enforcement mod), and Siege requires none.
+
+### Fixed
+- **All-Time meta no longer shows fewer games than a single version.** All-Time game and matchup counts are now raw totals across every version — never lower than a single version's. Only the win rate keeps the version-recency weighting (older, out-of-date balance still counts less), so the numbers add up.
+- **Skill-based views are timeless again.** A player's skill spans every version, so the Underrated Players report, the skill-level distribution and faction proficiency no longer read the near-empty freshly-activated version — they use the all-time model. Activating a new version no longer distorts them.
+- **The 2v2 duo meta's All-Time view aggregates every version** instead of silently showing only the active one.
 
 ## [2.4.4] — 2026-09-25
 
