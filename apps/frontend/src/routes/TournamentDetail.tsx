@@ -37,6 +37,7 @@ import { ParticipantsList } from '@/components/tournament/ParticipantsList';
 import { HostBroadcastBox } from '@/components/tournament/HostBroadcastBox';
 import { LateJoinRequestsPanel } from '@/components/tournament/LateJoinRequestsPanel';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
+import { RequiredModNotice } from '@/components/tournament/RequiredModsNotice';
 import { ArmyListUploader } from '@/components/tournament/ArmyListUploader';
 import { MyMatchSection } from '@/components/match/MyMatchSection';
 import type { ParticipantStatus } from '@/lib/api';
@@ -861,18 +862,9 @@ export function TournamentDetail() {
         </div>
       </div>
 
-      {/* B11: every Arena tournament requires the same map pack — hardcoded notice. */}
-      <div className="mb-8 rounded-md border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 px-4 py-3 text-sm">
-        <span className="text-stone-300">Required mod for all Arena tournaments: </span>
-        <a
-          href="https://steamcommunity.com/sharedfiles/filedetails/?id=2875865414"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-semibold text-rizzotto-gold-400 hover:underline"
-        >
-          Total Tavern Tournament Map Pack ↗
-        </a>
-      </div>
+      {/* Required mod depends on the battle type: Domination (map pack) and Conquest (rules mod)
+          each need their own; Siege needs none (the component renders nothing then). */}
+      <RequiredModNotice battleType={tournament.battle_type} />
 
       {/* Faction allowlist, banned factions and restricted factions */}
       {(() => {

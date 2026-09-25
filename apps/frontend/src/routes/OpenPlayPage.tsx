@@ -31,6 +31,7 @@ import { WeekAvailabilityGrid } from '../components/open-play/WeekAvailabilityGr
 import { AvailabilityHeatmap } from '../components/open-play/AvailabilityHeatmap';
 import { ChallengeCalendar } from '../components/open-play/ChallengeCalendar';
 import { StandardRulesetCard } from '../components/tournament/StandardRulesetCard';
+import { RequiredModsNotice } from '../components/tournament/RequiredModsNotice';
 import { PageBackdrop } from '../components/layout/PageBackdrop';
 
 type Tab = 'queue' | 'availability' | 'challenges';
@@ -115,18 +116,8 @@ export function OpenPlayPage() {
         )}
       </div>
 
-      {/* #11: Open Play uses the same required map pack as the tournaments. */}
-      <div className="rounded-md border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 px-4 py-3 text-sm">
-        <span className="text-stone-300">Required mod for Open Play: </span>
-        <a
-          href="https://steamcommunity.com/sharedfiles/filedetails/?id=2875865414"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-semibold text-rizzotto-gold-400 hover:underline"
-        >
-          Total Tavern Tournament Map Pack ↗
-        </a>
-      </div>
+      {/* Open Play can be any battle type, so list the required mod per type (Siege needs none). */}
+      <RequiredModsNotice />
 
       <QueueStatusCard />
 
