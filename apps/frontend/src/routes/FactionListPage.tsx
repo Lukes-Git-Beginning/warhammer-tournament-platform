@@ -88,11 +88,7 @@ export function FactionListPage() {
           <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
             {t('factions_page.title')}
           </h1>
-          {data?.version && (
-            <p className="mt-1 text-sm text-rizzotto-stone-500">
-              {t('factions_page.version_label', { name: data.version.name })}
-            </p>
-          )}
+          {/* The version selector on the right already shows the current version — no redundant label. */}
         </div>
         <select
           value={versionId ?? ''}

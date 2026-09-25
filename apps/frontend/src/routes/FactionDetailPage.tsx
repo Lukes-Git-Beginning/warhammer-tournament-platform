@@ -399,9 +399,7 @@ export function FactionDetailPage() {
           />
           <div>
             <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">{faction.name}</h1>
-            {data.version && (
-              <p className="mt-0.5 text-sm text-rizzotto-stone-500">{data.version.name}</p>
-            )}
+            {/* The version selector on the right already shows the current version — no redundant label. */}
           </div>
         </div>
         <select
