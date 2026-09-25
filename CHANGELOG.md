@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.4.0] — 2026-09-25
+
+### Added
+- **A 25th faction: Undead Legions** (Host of Nagash). It is available wherever a tournament allows all factions, shows up on the leaderboards and meta, and — because its army mixes several undead rosters — is recognised in uploaded replays by that mix (so replay verification works for it too).
+- **Pick any game version — or "All-Time" — everywhere.** The version selector (which the Meta tab already had) is now also on the Faction tab and each faction's page, and every one of them gains an **All-Time** option. Individual faction pages now also show which version you're looking at.
+
+### Changed
+- **"All-Time" is a recency-weighted amalgam across versions.** Each game counts by 1/k, where k is its version's age (the current version counts fully, the one before at ½, the one before that at ⅓, …) — so older, out-of-date balance fades but never vanishes. Per-version views stay exact and unweighted.
+
+### Fixed
+- **Skill classification now uses the timeless General Skill across game versions** — a new game version no longer resets a player's band to their questionnaire self-rating. (The same reset is fixed for 2v2 team ratings.)
+
 ## [2.3.2] — 2026-09-23
 
 ### Changed
