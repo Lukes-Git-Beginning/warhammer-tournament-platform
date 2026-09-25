@@ -41,15 +41,42 @@ rizzotto.gg {
 		}
 	}
 
-	# Long-lived caching for Vite content-hashed bundles
+	# Static assets are served from disk and 404 on a miss — NEVER via the SPA
+	# fallback. A request for a not-yet-deployed asset must not answer 200 with
+	# index.html, or Cloudflare caches that HTML under the .png/.js URL for 24h
+	# (negative caching → broken image until the TTL expires or a purge). The deploy
+	# also publishes files before any migration can reference them (scripts/deploy.sh);
+	# this handler is the defense-in-depth at the edge.
+	#
+	# NOTE: editing this file does NOT change production on its own. The active
+	# Caddyfile lives on the host and must be updated + `systemctl reload caddy`'d
+	# there; the deploy pipeline does not touch Caddy.
+
+	# Long-lived caching for Vite content-hashed bundles.
 	@assets path /assets/*
-	header @assets Cache-Control "public, max-age=31536000, immutable"
+	handle @assets {
+		root * /home/deploy/rizzotto/apps/frontend/dist
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
 
-	# Faction icons + textures + favicon (stable but not content-hashed)
+	# Faction icons + textures + favicon (stable but not content-hashed).
 	@static path /icons/* /img/* /textures/* /favicon.png /og-image.png
-	header @static Cache-Control "public, max-age=86400"
+	handle @static {
+		root * /home/deploy/rizzotto/apps/frontend/dist
+		header Cache-Control "public, max-age=86400"
+		file_server
+	}
 
-	# SPA fallback: serve static files or index.html for unknown paths.
+	# A missing asset yields a 404 (above); never let that 404 be cached, or a
+	# not-yet-deployed asset stays broken at the edge for the full TTL.
+	handle_errors {
+		header Cache-Control "no-store"
+		respond "{err.status_code} {err.status_text}" {err.status_code}
+	}
+
+	# SPA fallback: real route paths get index.html. Asset paths are handled above
+	# and 404 on a miss, so they never reach this.
 	handle {
 		root * /home/deploy/rizzotto/apps/frontend/dist
 		try_files {path} /index.html

@@ -36,13 +36,19 @@ pnpm install --frozen-lockfile
 echo "=== [3/7] Generating Prisma client ==="
 pnpm db:generate
 
-echo "=== [4/7] Applying database migrations ==="
-pnpm --filter @rizzotto/db exec prisma migrate deploy
-
-echo "=== [5/7] Building shared packages and frontend ==="
+echo "=== [4/7] Building shared packages and frontend ==="
 # @rizzotto/types must be built before frontend can resolve workspace imports.
 pnpm --filter @rizzotto/types build
 VITE_PUBLIC_URL=https://rizzotto.gg pnpm --filter @rizzotto/frontend build
+
+# Migrations run AFTER the frontend is published, never before. A migration that
+# repoints an asset URL (e.g. a faction icon to a new path) must not go live until
+# the new file is already being served — otherwise requests for the not-yet-deployed
+# path fall through Caddy's SPA fallback to index.html (200), and Cloudflare caches
+# that HTML under the .png URL for 24h (negative caching → broken image). Publish the
+# files first, point the database at them second.
+echo "=== [5/7] Applying database migrations ==="
+pnpm --filter @rizzotto/db exec prisma migrate deploy
 
 echo "=== [6/7] Type-checking backend (sanity) ==="
 pnpm --filter @rizzotto/backend typecheck

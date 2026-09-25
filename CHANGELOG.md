@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.4.3] — 2026-09-25
+
+### Fixed
+- **The Undead Legions crest now loads.** A CDN caching quirk had left it as a broken image after its background was made transparent; deploys now publish asset files before the database points at them, and the crest is served from a fresh path, so the transparent icon shows without waiting on a cache to expire.
+
 ## [2.4.2] — 2026-09-25
 
 ### Changed
