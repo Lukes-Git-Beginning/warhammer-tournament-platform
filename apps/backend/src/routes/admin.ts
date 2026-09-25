@@ -1144,50 +1144,85 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // -------------------------------------------------------------------------
-  // GET /api/admin/stats/games-over-time?days=30
-  // Daily game counts split by source: tournament / ladder / challenge. "Ladder" is all
+  // GET /api/admin/stats/games-over-time?range=month|quarter|year|all
+  // Game counts per bucket split by source: tournament / ladder / challenge. "Ladder" is all
   // matchmade Open Play — both the direct QUEUE and AVAILABILITY (availability-calendar)
-  // matchmaking; only a targeted CHALLENGE is its own line. (AVAILABILITY games used to fall
-  // through both filters and vanish from the chart.) Game-level (a Bo3 counts as up to 3).
-  // Returns a continuous daily series so the lines never jump over empty days.
+  // matchmaking; only a targeted CHALLENGE is its own line. Game-level (a Bo3 counts as up to 3).
+  // Bucket granularity scales with the range so long views stay readable: day (month/quarter),
+  // week (year), month (all-time). Returns a continuous series so the lines never jump gaps.
   // -------------------------------------------------------------------------
   fastify.get('/api/admin/stats/games-over-time', async (request) => {
-    const days = Math.min(
-      365,
-      Math.max(1, Math.floor(Number((request.query as { days?: string }).days) || 30)),
-    );
+    const range =
+      (['month', 'quarter', 'year', 'all'] as const).find(
+        (r) => r === (request.query as { range?: string }).range,
+      ) ?? 'month';
     return cached(
       fastify.redis,
-      cacheKey('admin:games-over-time', { days }),
+      cacheKey('admin:games-over-time', { range }),
       async () => {
-        const since = new Date(Date.now() - (days - 1) * 86_400_000);
-        since.setUTCHours(0, 0, 0, 0);
-        const rows = await fastify.prisma.$queryRaw<
-          { day: Date; tournament: bigint; ladder: bigint; challenge: bigint }[]
-        >`
-          SELECT date_trunc('day', mg.played_at)::date AS day,
-            COUNT(*) FILTER (WHERE m.type = 'TOURNAMENT') AS tournament,
-            COUNT(*) FILTER (WHERE m.type = 'OPEN_PLAY' AND m.source IN ('QUEUE', 'AVAILABILITY')) AS ladder,
-            COUNT(*) FILTER (WHERE m.type = 'OPEN_PLAY' AND m.source = 'CHALLENGE') AS challenge
-          FROM "MatchGame" mg
-          JOIN "Match" m ON m.id = mg.match_id
-          WHERE mg.status = 'COMPLETED' AND mg.played_at IS NOT NULL AND mg.played_at >= ${since}
-          GROUP BY day
-          ORDER BY day
-        `;
-        const byDay = new Map(rows.map((r) => [new Date(r.day).toISOString().slice(0, 10), r]));
+        const bucket: 'day' | 'week' | 'month' =
+          range === 'year' ? 'week' : range === 'all' ? 'month' : 'day';
+
+        // Align a date to the start of its bucket (Postgres date_trunc uses Monday weeks / 1st of month).
+        const truncate = (d: Date): Date => {
+          const c = new Date(d);
+          c.setUTCHours(0, 0, 0, 0);
+          if (bucket === 'week') {
+            const dow = (c.getUTCDay() + 6) % 7; // Monday = 0
+            c.setUTCDate(c.getUTCDate() - dow);
+          } else if (bucket === 'month') {
+            c.setUTCDate(1);
+          }
+          return c;
+        };
+
+        let since: Date;
+        if (range === 'all') {
+          const first = await fastify.prisma.matchGame.findFirst({
+            where: { status: 'COMPLETED', played_at: { not: null } },
+            orderBy: { played_at: 'asc' },
+            select: { played_at: true },
+          });
+          since = truncate(first?.played_at ?? new Date());
+        } else {
+          const days = range === 'quarter' ? 90 : range === 'year' ? 365 : 30;
+          since = truncate(new Date(Date.now() - (days - 1) * 86_400_000));
+        }
+
+        // bucket is whitelisted above, so it is safe to inline into date_trunc.
+        const rows = await fastify.prisma.$queryRawUnsafe<
+          { bucket: Date; tournament: bigint; ladder: bigint; challenge: bigint }[]
+        >(
+          `SELECT date_trunc('${bucket}', mg.played_at)::date AS bucket,
+             COUNT(*) FILTER (WHERE m.type = 'TOURNAMENT') AS tournament,
+             COUNT(*) FILTER (WHERE m.type = 'OPEN_PLAY' AND m.source IN ('QUEUE', 'AVAILABILITY')) AS ladder,
+             COUNT(*) FILTER (WHERE m.type = 'OPEN_PLAY' AND m.source = 'CHALLENGE') AS challenge
+           FROM "MatchGame" mg
+           JOIN "Match" m ON m.id = mg.match_id
+           WHERE mg.status = 'COMPLETED' AND mg.played_at IS NOT NULL AND mg.played_at >= $1
+           GROUP BY bucket
+           ORDER BY bucket`,
+          since,
+        );
+        const byBucket = new Map(rows.map((r) => [new Date(r.bucket).toISOString().slice(0, 10), r]));
+
         const series: { day: string; tournament: number; ladder: number; challenge: number }[] = [];
-        for (let i = 0; i < days; i++) {
-          const key = new Date(since.getTime() + i * 86_400_000).toISOString().slice(0, 10);
-          const r = byDay.get(key);
+        const cur = truncate(since);
+        const end = truncate(new Date());
+        while (cur <= end) {
+          const key = cur.toISOString().slice(0, 10);
+          const r = byBucket.get(key);
           series.push({
             day: key,
             tournament: r ? Number(r.tournament) : 0,
             ladder: r ? Number(r.ladder) : 0,
             challenge: r ? Number(r.challenge) : 0,
           });
+          if (bucket === 'day') cur.setUTCDate(cur.getUTCDate() + 1);
+          else if (bucket === 'week') cur.setUTCDate(cur.getUTCDate() + 7);
+          else cur.setUTCMonth(cur.getUTCMonth() + 1);
         }
-        return { data: series };
+        return { data: series, range, bucket };
       },
       { ttlSeconds: 300 },
     );

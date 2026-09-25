@@ -1178,6 +1178,8 @@ export interface AdminUser {
   created_at: string;
   email: string | null;
   timezone: string | null;
+  /** Current timeless gating band (1–5), or null when unclassified (no questionnaire, no games). */
+  band: number | null;
 }
 
 export function getAdminAuditLog(opts?: {
@@ -1536,8 +1538,12 @@ export interface GamesOverTimeEntry {
   challenge: number;
 }
 
-export function getAdminGamesOverTime(days = 30): Promise<{ data: GamesOverTimeEntry[] }> {
-  return apiFetch<{ data: GamesOverTimeEntry[] }>(`/api/admin/stats/games-over-time?days=${days}`);
+export type UsageRange = 'month' | 'quarter' | 'year' | 'all';
+
+export function getAdminGamesOverTime(
+  range: UsageRange = 'month',
+): Promise<{ data: GamesOverTimeEntry[]; range: UsageRange; bucket: 'day' | 'week' | 'month' }> {
+  return apiFetch(`/api/admin/stats/games-over-time?range=${range}`);
 }
 
 
