@@ -60,9 +60,8 @@ export function FactionListPage() {
   const [selectedVersionId, setSelectedVersionId] = useState<string>('');
   const { data: versionsData } = useQuery({ queryKey: ['versions'], queryFn: () => listVersions() });
   const versions = versionsData?.data ?? [];
-  const activeVersion = versions.find((v) => v.is_active);
-  // '' → default to the active version; 'all' → the All-Time amalgam; else the chosen version.
-  const versionId = selectedVersionId || activeVersion?.id;
+  // '' → default to the All-Time amalgam (Alex 2026-09-25); 'all' explicitly, or the chosen version.
+  const versionId = selectedVersionId || 'all';
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['factions', versionId],
@@ -83,18 +82,16 @@ export function FactionListPage() {
 
   return (
     <PageShell variant="wide">
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
-            {t('factions_page.title')}
-          </h1>
-          {/* The version selector on the right already shows the current version — no redundant label. */}
-        </div>
+      <header className="mb-8">
+        <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
+          {t('factions_page.title')}
+        </h1>
+        {/* Version selector on the left, below the title (consistent with the Meta dashboard). */}
         <select
           value={versionId ?? ''}
           onChange={(e) => setSelectedVersionId(e.target.value)}
           aria-label="Version"
-          className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-1.5 text-sm font-medium text-rizzotto-stone-200 transition-colors hover:border-rizzotto-iron-500 focus:border-rizzotto-gold-500 focus:outline-none"
+          className="mt-4 rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-1.5 text-sm font-medium text-rizzotto-stone-200 transition-colors hover:border-rizzotto-iron-500 focus:border-rizzotto-gold-500 focus:outline-none"
         >
           {versions.map((v) => (
             <option key={v.id} value={v.id}>

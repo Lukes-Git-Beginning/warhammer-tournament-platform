@@ -261,9 +261,8 @@ export function FactionDetailPage() {
   const [selectedVersionId, setSelectedVersionId] = useState<string>('');
   const { data: versionsData } = useQuery({ queryKey: ['versions'], queryFn: () => listVersions() });
   const versions = versionsData?.data ?? [];
-  const activeVersion = versions.find((v) => v.is_active);
-  // '' → active version; 'all' → the All-Time amalgam; else the chosen version.
-  const versionId = selectedVersionId || activeVersion?.id;
+  // '' → default to the All-Time amalgam (Alex 2026-09-25); 'all' explicitly, or the chosen version.
+  const versionId = selectedVersionId || 'all';
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['faction', id, versionId, battleType],
@@ -388,20 +387,20 @@ export function FactionDetailPage() {
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 space-y-8">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-5">
-          <FactionBadge
-            colorHex={faction.color_hex}
-            initials={faction.initials}
-            name={faction.name}
-            size="lg"
-            iconUrl={faction.icon_url}
-          />
-          <div>
-            <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">{faction.name}</h1>
-            {/* The version selector on the right already shows the current version — no redundant label. */}
-          </div>
-        </div>
+      <div className="flex items-center gap-5">
+        <FactionBadge
+          colorHex={faction.color_hex}
+          initials={faction.initials}
+          name={faction.name}
+          size="lg"
+          iconUrl={faction.icon_url}
+        />
+        <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">{faction.name}</h1>
+      </div>
+
+      {/* Filters: version + battle type, left-aligned (consistent with the Meta dashboard). */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-stone-500 mr-1">Version</span>
         <select
           value={versionId ?? ''}
           onChange={(e) => setSelectedVersionId(e.target.value)}

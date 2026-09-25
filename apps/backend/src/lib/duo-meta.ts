@@ -23,7 +23,7 @@ export interface DuoStat {
  */
 export async function computeDuoMeta(
   prisma: PrismaClient,
-  versionId: string,
+  versionId: string | null, // null = All-Time (every version); eligibleStatGameWhere omits the filter
   battleType?: $Enums.BattleType,
 ): Promise<DuoStat[]> {
   const base = eligibleStatGameWhere(versionId);

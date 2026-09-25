@@ -230,26 +230,30 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const { versionId } = parsed.data;
     const battleType = parsed.data.battleType ?? 'DOMINATION';
 
-    // Resolve version. NOTE: the 2v2 duo meta has no All-Time decay yet — 'all' falls back to the
-    // active version so the tab stays functional; a weighted duo amalgam is a follow-up.
-    let version;
-    if (versionId && versionId !== 'all') {
-      version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+    // Resolve version. 'all' (All-Time) aggregates 2v2 duos across EVERY version (raw counts and raw
+    // win rate — the 1/k win-rate decay isn't applied to duos yet; a weighted duo amalgam is a
+    // follow-up). A UUID scopes to that version; no param falls back to the active version.
+    const allTime = versionId === 'all';
+    let resolvedVersionId: string | null;
+    if (allTime) {
+      resolvedVersionId = null;
+    } else if (versionId) {
+      const version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
       if (!version) {
         return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
       }
+      resolvedVersionId = version.id;
     } else {
-      version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
+      const version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
       if (!version) {
         return { version_id: null, top_duos_by_winrate: [], top_duos_by_pickrate: [] };
       }
+      resolvedVersionId = version.id;
     }
-
-    const resolvedVersionId = version.id;
 
     return cached(
       fastify.redis,
-      cacheKey('meta:duos', { versionId: resolvedVersionId, battleType }),
+      cacheKey('meta:duos', { versionId: resolvedVersionId ?? 'all', battleType }),
       async () => {
         const [duos, factions] = await Promise.all([
           computeDuoMeta(fastify.prisma, resolvedVersionId, battleType),

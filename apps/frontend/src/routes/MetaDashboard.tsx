@@ -126,11 +126,11 @@ export function MetaDashboard() {
   const [format, setFormat] = useState<Format>('ONE_V_ONE');
   const is2v2 = format === 'TWO_V_TWO';
 
-  // Versions for the selector; default the dropdown to the active version once loaded.
+  // Versions for the selector. Balance stats default to the All-Time amalgam (Alex 2026-09-25);
+  // the dropdown still offers each specific version.
   const { data: versionsData } = useQuery({ queryKey: ['versions'], queryFn: () => listVersions() });
   const versions = versionsData?.data ?? [];
-  const activeVersion = versions.find((v) => v.is_active) ?? versions[0];
-  const versionId = selectedVersionId || activeVersion?.id;
+  const versionId = selectedVersionId || 'all';
 
   const {
     data: overview,
