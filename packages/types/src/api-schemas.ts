@@ -347,6 +347,8 @@ export const FactionDetailResponseSchema = z.object({
   faction: FactionDtoSchema,
   stats: FactionStatsDtoSchema.nullable(),
   trend: z.array(SnapshotTrendEntrySchema),
+  // The resolved version this detail is scoped to (the All-Time amalgam uses a synthetic marker).
+  version: VersionSummarySchema.nullable().optional(),
 });
 export type FactionDetailResponse = z.infer<typeof FactionDetailResponseSchema>;
 

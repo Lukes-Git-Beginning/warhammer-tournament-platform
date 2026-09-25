@@ -4,7 +4,9 @@ import { cached, cacheKey } from '../lib/cache.js';
 import {
   asFactionDto,
   asFactionStatsDto,
+  combineFactionStatsAllTime,
   getFactionsWithStats,
+  getVersionDecayWeights,
 } from '../lib/factions.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
 import { logistic } from '../lib/rating-model.js';
@@ -14,7 +16,8 @@ import { logistic } from '../lib/rating-model.js';
 // ---------------------------------------------------------------------------
 
 const VersionQuerySchema = z.object({
-  versionId: z.string().uuid().optional(),
+  // A version UUID, or 'all' → the 1/k-decayed All-Time amalgam (Alex 2026-09-08).
+  versionId: z.union([z.string().uuid(), z.literal('all')]).optional(),
 });
 
 const FactionDetailQuerySchema = VersionQuerySchema.extend({
@@ -24,6 +27,10 @@ const FactionDetailQuerySchema = VersionQuerySchema.extend({
 const FactionParamSchema = z.object({
   id: z.string().min(1),
 });
+
+/** Synthetic "version" the API returns for the All-Time (versionId='all') amalgam — the frontend
+ *  selector shows the name; dates are empty because it spans every version. */
+const ALL_TIME_VERSION = { id: 'all', name: 'All-Time', start_date: '', end_date: '', is_active: false, dlc_tag: null };
 
 // ---------------------------------------------------------------------------
 // Route Plugin
@@ -43,22 +50,25 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
     const { versionId } = parsed.data;
+    const allTime = versionId === 'all';
 
     // Resolve version. A specific versionId must exist; otherwise fall back to the
     // active version — but NO active version is fine: faction master data (names,
     // icons) is global reference data and must never be gated behind a version.
-    // In that case stats simply come back null.
-    let version;
-    if (versionId) {
-      version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
-      if (!version) {
-        return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
+    // In that case stats simply come back null. 'all' = the All-Time amalgam.
+    let version = null;
+    if (!allTime) {
+      if (versionId) {
+        version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+        if (!version) {
+          return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
+        }
+      } else {
+        version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
       }
-    } else {
-      version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
     }
 
-    const resolvedVersionId = version?.id ?? null;
+    const resolvedVersionId = allTime ? 'all' : (version?.id ?? null);
 
     return cached(
       fastify.redis,
@@ -67,16 +77,18 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
         const data = await getFactionsWithStats(fastify.prisma, resolvedVersionId);
         return {
           data,
-          version: version
-            ? {
-                id: version.id,
-                name: version.name,
-                start_date: version.start_date.toISOString(),
-                end_date: version.end_date.toISOString(),
-                is_active: version.is_active,
-                dlc_tag: version.dlc_tag ?? null,
-              }
-            : null,
+          version: allTime
+            ? ALL_TIME_VERSION
+            : version
+              ? {
+                  id: version.id,
+                  name: version.name,
+                  start_date: version.start_date.toISOString(),
+                  end_date: version.end_date.toISOString(),
+                  is_active: version.is_active,
+                  dlc_tag: version.dlc_tag ?? null,
+                }
+              : null,
         };
       },
       { ttlSeconds: 60 },
@@ -107,21 +119,24 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { id } = paramParsed.data;
     const { versionId, battleType } = queryParsed.data;
+    const allTime = versionId === 'all';
 
     // Resolve version. As with the list endpoint, NO active version is fine: the
     // faction's master data is global reference data. Only stats + trend are
-    // version-scoped and simply come back null/empty without one.
-    let version;
-    if (versionId) {
-      version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
-      if (!version) {
-        return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
+    // version-scoped and simply come back null/empty without one. 'all' = All-Time.
+    let version = null;
+    if (!allTime) {
+      if (versionId) {
+        version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+        if (!version) {
+          return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
+        }
+      } else {
+        version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
       }
-    } else {
-      version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
     }
 
-    const resolvedVersionId = version?.id ?? null;
+    const resolvedVersionId = allTime ? 'all' : (version?.id ?? null);
 
     // Check faction existence before caching
     const faction = await fastify.prisma.faction.findUnique({ where: { id } });
@@ -133,21 +148,33 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('factions:detail', { id, versionId: resolvedVersionId ?? 'none', battleType }),
       async () => {
-        const stats = resolvedVersionId
-          ? await fastify.prisma.factionStats.findUnique({
-              where: {
-                faction_id_version_id_battle_type: {
-                  faction_id: id,
-                  version_id: resolvedVersionId,
-                  battle_type: battleType,
-                },
+        let statsDto = null;
+        if (allTime) {
+          // All-Time: combine this faction's per-version FactionStats with the 1/k decay.
+          const [weights, allStats] = await Promise.all([
+            getVersionDecayWeights(fastify.prisma),
+            fastify.prisma.factionStats.findMany({ where: { faction_id: id, battle_type: battleType } }),
+          ]);
+          const perVersion = allStats
+            .map((s) => ({ stats: asFactionStatsDto(s), weight: weights.get(s.version_id) ?? 0 }))
+            .filter((x) => x.weight > 0);
+          statsDto = combineFactionStatsAllTime(perVersion);
+        } else if (resolvedVersionId) {
+          const stats = await fastify.prisma.factionStats.findUnique({
+            where: {
+              faction_id_version_id_battle_type: {
+                faction_id: id,
+                version_id: resolvedVersionId,
+                battle_type: battleType,
               },
-            })
-          : null;
+            },
+          });
+          statsDto = stats ? asFactionStatsDto(stats) : null;
+        }
 
-        // 30-day snapshot trend — version-scoped, empty without a version.
+        // 30-day snapshot trend — a single-version window; empty for All-Time (spans all versions).
         let trend: { date: string; matches_played: number; win_rate: number | null }[] = [];
-        if (resolvedVersionId) {
+        if (!allTime && resolvedVersionId) {
           const thirtyDaysAgo = new Date();
           thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -170,8 +197,20 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
 
         return {
           faction: asFactionDto(faction),
-          stats: stats ? asFactionStatsDto(stats) : null,
+          stats: statsDto,
           trend,
+          version: allTime
+            ? ALL_TIME_VERSION
+            : version
+              ? {
+                  id: version.id,
+                  name: version.name,
+                  start_date: version.start_date.toISOString(),
+                  end_date: version.end_date.toISOString(),
+                  is_active: version.is_active,
+                  dlc_tag: version.dlc_tag ?? null,
+                }
+              : null,
         };
       },
       { ttlSeconds: 60 },

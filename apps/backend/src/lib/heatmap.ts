@@ -1,6 +1,7 @@
 import type { PrismaClient, $Enums } from '@rizzotto/db';
 import type { MatchupCell } from '@rizzotto/types';
 import { eligibleStatGameWhere } from './stat-eligibility.js';
+import { getVersionDecayWeights } from './factions.js';
 
 // ---------------------------------------------------------------------------
 // getMatchupMatrix
@@ -29,12 +30,16 @@ import { eligibleStatGameWhere } from './stat-eligibility.js';
  */
 export async function getMatchupMatrix(
   prisma: PrismaClient,
-  versionId: string,
+  versionId: string, // a version UUID, or 'all' for the 1/k-decayed All-Time amalgam
   battleType?: $Enums.BattleType, // omitted = all battle types (aggregate overview)
 ): Promise<MatchupCell[]> {
+  // "All time": span every version (eligible set with no version filter) and weight each game by
+  // 1/k (its version's reverse-chronological rank) — older versions devalued, never dropped.
+  const allTime = versionId === 'all';
+  const weights = allTime ? await getVersionDecayWeights(prisma) : null;
   // Same canonical game set as the rating model (loadVersionObservations) so the two
   // heatmaps' sample sizes agree — see stat-eligibility.ts.
-  const base = eligibleStatGameWhere(versionId);
+  const base = eligibleStatGameWhere(allTime ? null : versionId);
   const games = await prisma.matchGame.findMany({
     where: {
       ...base,
@@ -45,7 +50,7 @@ export async function getMatchupMatrix(
       winner_id: true,
       player1_faction_id: true,
       player2_faction_id: true,
-      match: { select: { player1_id: true, player2_id: true } },
+      match: { select: { player1_id: true, player2_id: true, version_id: true } },
     },
   });
 
@@ -58,6 +63,9 @@ export async function getMatchupMatrix(
     const p2f = g.player2_faction_id;
     if (!p1f || !p2f) continue; // a matchup needs both factions known
     if (p1f === p2f) continue; // mirror — no faction-vs-faction winrate is defined
+
+    const w = allTime ? (weights!.get(g.match.version_id ?? '') ?? 0) : 1;
+    if (w === 0) continue; // a version with no decay weight (shouldn't happen) contributes nothing
 
     const isDraw = g.winner_id === null;
     let winnerFaction: string | null = null;
@@ -73,23 +81,25 @@ export async function getMatchupMatrix(
       m = { aWins: 0, bWins: 0, draws: 0 };
       matchupAgg.set(key, m);
     }
-    if (isDraw) m.draws++;
-    else if (winnerFaction === aId) m.aWins++;
-    else m.bWins++;
+    if (isDraw) m.draws += w;
+    else if (winnerFaction === aId) m.aWins += w;
+    else m.bWins += w;
   }
 
   return [...matchupAgg.entries()]
     .map(([key, m]) => {
       const [faction_a_id, faction_b_id] = key.split('|') as [string, string];
-      const total = m.aWins + m.bWins + m.draws;
+      // winrate from the un-rounded weighted sums; the displayed counts are rounded (All-Time weights
+      // make them fractional). For a single version the weights are all 1, so this is a no-op.
+      const totalRaw = m.aWins + m.bWins + m.draws;
       return {
         faction_a_id,
         faction_b_id,
-        faction_a_wins: m.aWins,
-        faction_b_wins: m.bWins,
-        draws: m.draws,
-        total,
-        winrate_a: total > 0 ? m.aWins / total : null,
+        faction_a_wins: Math.round(m.aWins),
+        faction_b_wins: Math.round(m.bWins),
+        draws: Math.round(m.draws),
+        total: Math.round(totalRaw),
+        winrate_a: totalRaw > 0 ? m.aWins / totalRaw : null,
       };
     })
     .sort((x, y) =>

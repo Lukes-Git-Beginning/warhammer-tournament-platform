@@ -217,6 +217,7 @@ export function MetaDashboard() {
                     {v.is_active ? ' (active)' : ''}
                   </option>
                 ))}
+                <option value="all">All-Time</option>
               </select>
             </div>
 

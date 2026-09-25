@@ -27,7 +27,9 @@ async function resolveVersionId(
   fastify: FastifyInstance,
   versionId: string | undefined,
 ): Promise<{ id: string } | { error: { code: number; message: string } }> {
-  if (versionId) {
+  // 'all' (All-Time) has no decay in the RATING-MODEL views yet → fall back to the active version so
+  // the model matchup matrix / proficiency stay functional when the meta tab is in All-Time mode.
+  if (versionId && versionId !== 'all') {
     const version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
     if (!version) return { error: { code: 404, message: 'Version not found' } };
     return { id: version.id };
@@ -37,7 +39,7 @@ async function resolveVersionId(
   return { id: active.id };
 }
 
-const VersionQuerySchema = z.object({ versionId: z.string().uuid().optional() });
+const VersionQuerySchema = z.object({ versionId: z.union([z.string().uuid(), z.literal('all')]).optional() });
 const AntiFarmingQuerySchema = VersionQuerySchema.extend({
   playerId: z.string().uuid(),
   opponentId: z.string().uuid(),

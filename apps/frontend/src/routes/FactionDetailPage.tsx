@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { getFaction, getMatchupHeatmap, getMatchupMatrix, getFactionTopPlayers, getFactionGames, getFactions, type FactionTopPlayer, type BattleType } from '@/lib/api';
+import { getFaction, getMatchupHeatmap, getMatchupMatrix, getFactionTopPlayers, getFactionGames, getFactions, listVersions, type FactionTopPlayer, type BattleType } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { GameHistoryTable } from '@/components/match/GameHistoryTable';
 import type { FactionDto } from '@rizzotto/types';
@@ -258,22 +258,28 @@ export function FactionDetailPage() {
   const { id } = useParams({ from: '/factions/$id' });
   const [opponentFactionFilter, setOpponentFactionFilter] = useState<string>('');
   const [battleType, setBattleType] = useState<BattleType>('DOMINATION');
+  const [selectedVersionId, setSelectedVersionId] = useState<string>('');
+  const { data: versionsData } = useQuery({ queryKey: ['versions'], queryFn: () => listVersions() });
+  const versions = versionsData?.data ?? [];
+  const activeVersion = versions.find((v) => v.is_active);
+  // '' → active version; 'all' → the All-Time amalgam; else the chosen version.
+  const versionId = selectedVersionId || activeVersion?.id;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['faction', id, battleType],
-    queryFn: () => getFaction(id, undefined, battleType),
+    queryKey: ['faction', id, versionId, battleType],
+    queryFn: () => getFaction(id, versionId, battleType),
   });
 
   const { data: matchupData } = useQuery({
-    queryKey: ['meta-matchups', battleType],
-    queryFn: () => getMatchupHeatmap(undefined, battleType),
+    queryKey: ['meta-matchups', versionId, battleType],
+    queryFn: () => getMatchupHeatmap(versionId, battleType),
     staleTime: 2 * 60 * 1000,
   });
 
   // #13 — model-adjusted matchup favourability + per-faction "general strength" (skill-removed).
   const { data: modelMatrix } = useQuery({
-    queryKey: ['matchup-matrix'],
-    queryFn: () => getMatchupMatrix(),
+    queryKey: ['matchup-matrix', versionId],
+    queryFn: () => getMatchupMatrix(versionId),
     staleTime: 2 * 60 * 1000,
   });
 
@@ -382,15 +388,36 @@ export function FactionDetailPage() {
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 space-y-8">
       {/* Header */}
-      <div className="flex items-center gap-5">
-        <FactionBadge
-          colorHex={faction.color_hex}
-          initials={faction.initials}
-          name={faction.name}
-          size="lg"
-          iconUrl={faction.icon_url}
-        />
-        <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">{faction.name}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-5">
+          <FactionBadge
+            colorHex={faction.color_hex}
+            initials={faction.initials}
+            name={faction.name}
+            size="lg"
+            iconUrl={faction.icon_url}
+          />
+          <div>
+            <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">{faction.name}</h1>
+            {data.version && (
+              <p className="mt-0.5 text-sm text-rizzotto-stone-500">{data.version.name}</p>
+            )}
+          </div>
+        </div>
+        <select
+          value={versionId ?? ''}
+          onChange={(e) => setSelectedVersionId(e.target.value)}
+          aria-label="Version"
+          className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-1.5 text-sm font-medium text-rizzotto-stone-200 transition-colors hover:border-rizzotto-iron-500 focus:border-rizzotto-gold-500 focus:outline-none"
+        >
+          {versions.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+              {v.is_active ? ' (active)' : ''}
+            </option>
+          ))}
+          <option value="all">All-Time</option>
+        </select>
       </div>
 
       {/* Battle-type selector */}

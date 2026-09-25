@@ -16,9 +16,14 @@ const BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'SIEGE'] as const;
 // Meta views are sliced by version × battle type. `battleType` defaults to DOMINATION
 // (the standard) when omitted so the dashboard has a sensible first render.
 const VersionQuerySchema = z.object({
-  versionId: z.string().uuid().optional(),
+  // A version UUID, or the literal 'all' → the 1/k-decayed All-Time amalgam (Alex 2026-09-08).
+  versionId: z.union([z.string().uuid(), z.literal('all')]).optional(),
   battleType: z.enum(BATTLE_TYPES).optional(),
 });
+
+/** Synthetic "version" returned for the All-Time (versionId='all') amalgam — spans every version,
+ *  so it has no dates; the frontend selector just shows the name. */
+const ALL_TIME_VERSION = { id: 'all', name: 'All-Time', start_date: '', end_date: '', is_active: false, dlc_tag: null };
 
 // ---------------------------------------------------------------------------
 // Route Plugin
@@ -40,27 +45,30 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const { versionId } = parsed.data;
     const battleType = parsed.data.battleType ?? 'DOMINATION';
 
-    // Resolve version
-    let version;
-    if (versionId) {
-      version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
-      if (!version) {
-        return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
-      }
-    } else {
-      version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
-      if (!version) {
-        return {
-          version: null,
-          top_factions_by_winrate: [],
-          top_factions_by_pickrate: [],
-          total_games: 0,
-          faction_diversity: 0,
-        };
+    // Resolve version. 'all' = the 1/k-decayed All-Time amalgam (spans every version).
+    const allTime = versionId === 'all';
+    let version = null;
+    if (!allTime) {
+      if (versionId) {
+        version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+        if (!version) {
+          return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
+        }
+      } else {
+        version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
+        if (!version) {
+          return {
+            version: null,
+            top_factions_by_winrate: [],
+            top_factions_by_pickrate: [],
+            total_games: 0,
+            faction_diversity: 0,
+          };
+        }
       }
     }
 
-    const resolvedVersionId = version.id;
+    const resolvedVersionId = allTime ? 'all' : version!.id;
 
     return cached(
       fastify.redis,
@@ -73,7 +81,9 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         // is intentionally NOT filtered — a real game stays counted even if its container was
         // later cancelled.
         const overviewMatchWhere = {
-          version_id: resolvedVersionId,
+          // All-Time counts games across every version (total_games is a raw count, not a decayed
+          // stat — the decay lives in the per-faction win/pick numbers via getFactionsWithStats).
+          ...(allTime ? {} : { version_id: resolvedVersionId }),
           player1_id: { not: null },
           player2_id: { not: null },
           counts_for_leaderboard: true,
@@ -126,14 +136,16 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         const top_factions_by_pickrate = byPickrate.slice(0, 5);
 
         return {
-          version: {
-            id: version!.id,
-            name: version!.name,
-            start_date: version!.start_date.toISOString(),
-            end_date: version!.end_date.toISOString(),
-            is_active: version!.is_active,
-            dlc_tag: version!.dlc_tag ?? null,
-          },
+          version: allTime
+            ? ALL_TIME_VERSION
+            : {
+                id: version!.id,
+                name: version!.name,
+                start_date: version!.start_date.toISOString(),
+                end_date: version!.end_date.toISOString(),
+                is_active: version!.is_active,
+                dlc_tag: version!.dlc_tag ?? null,
+              },
           top_factions_by_winrate,
           top_factions_by_pickrate,
           total_games,
@@ -161,25 +173,29 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const { versionId } = parsed.data;
     const battleType = parsed.data.battleType ?? 'DOMINATION';
 
-    // Resolve version
-    let version;
-    if (versionId) {
-      version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
-      if (!version) {
-        return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
-      }
-    } else {
-      version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
-      if (!version) {
-        return {
-          version_id: null,
-          cells: [],
-          factions: [],
-        };
+    // Resolve version. 'all' = the 1/k-decayed All-Time matchup amalgam (getMatchupMatrix weights
+    // each game by its version's decay).
+    const allTime = versionId === 'all';
+    let version = null;
+    if (!allTime) {
+      if (versionId) {
+        version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
+        if (!version) {
+          return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
+        }
+      } else {
+        version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
+        if (!version) {
+          return {
+            version_id: null,
+            cells: [],
+            factions: [],
+          };
+        }
       }
     }
 
-    const resolvedVersionId = version.id;
+    const resolvedVersionId = allTime ? 'all' : version!.id;
 
     return cached(
       fastify.redis,
@@ -214,9 +230,10 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const { versionId } = parsed.data;
     const battleType = parsed.data.battleType ?? 'DOMINATION';
 
-    // Resolve version
+    // Resolve version. NOTE: the 2v2 duo meta has no All-Time decay yet — 'all' falls back to the
+    // active version so the tab stays functional; a weighted duo amalgam is a follow-up.
     let version;
-    if (versionId) {
+    if (versionId && versionId !== 'all') {
       version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
       if (!version) {
         return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
@@ -274,7 +291,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       opponentFactionId: z.string().optional(),
       playerId: z.string().uuid().optional(),
       competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(), // team-size filter (meta tab)
-      versionId: z.string().uuid().optional(),                          // version filter (meta tab)
+      versionId: z.union([z.string().uuid(), z.literal('all')]).optional(), // version filter (meta tab); 'all' = All-Time
       battleType: z.enum(BATTLE_TYPES).optional(),                      // battle-type filter (meta tab)
       // Admin "All Games" search (all optional, AND-combined, case-insensitive substrings):
       q: z.string().trim().optional(),            // player-name words (each must match a player)
@@ -369,8 +386,8 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         player1_id: { not: null },
         player2_id: { not: null },
         counts_for_leaderboard: true,
-        // versionId — meta-tab version selector.
-        ...(gamesVersionId ? { version_id: gamesVersionId } : {}),
+        // versionId — meta-tab version selector; 'all' = All-Time (no version filter).
+        ...(gamesVersionId && gamesVersionId !== 'all' ? { version_id: gamesVersionId } : {}),
         ...(tournamentSlug ? { tournament: { slug: tournamentSlug, deleted_at: null } } : { deleted_at: null }),
         ...(playerId ? { OR: [{ player1_id: playerId }, { player2_id: playerId }] } : {}),
         // q:<words> — each word matches at least one of the two players; plus the team-size filter.

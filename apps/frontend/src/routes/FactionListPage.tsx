@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getFactions, getMatchupMatrix } from '@/lib/api';
+import { getFactions, getMatchupMatrix, listVersions } from '@/lib/api';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { FactionBarChart, FactionPopularitySegmentedChart } from '@/components/meta/FactionPopularityChart';
 import { PageShell } from '@/components/layout/PageShell';
@@ -56,14 +57,21 @@ function FactionCard({ entry, strength }: { entry: FactionWithStatsDto; strength
 
 export function FactionListPage() {
   const { t } = useTranslation();
+  const [selectedVersionId, setSelectedVersionId] = useState<string>('');
+  const { data: versionsData } = useQuery({ queryKey: ['versions'], queryFn: () => listVersions() });
+  const versions = versionsData?.data ?? [];
+  const activeVersion = versions.find((v) => v.is_active);
+  // '' → default to the active version; 'all' → the All-Time amalgam; else the chosen version.
+  const versionId = selectedVersionId || activeVersion?.id;
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['factions'],
-    queryFn: () => getFactions(),
+    queryKey: ['factions', versionId],
+    queryFn: () => getFactions(versionId),
   });
   // Model Strength lives in the matchup-matrix payload (#13), same query the detail page uses.
   const { data: modelMatrix } = useQuery({
-    queryKey: ['matchup-matrix'],
-    queryFn: () => getMatchupMatrix(),
+    queryKey: ['matchup-matrix', versionId],
+    queryFn: () => getMatchupMatrix(versionId),
     staleTime: 2 * 60 * 1000,
   });
 
@@ -75,15 +83,31 @@ export function FactionListPage() {
 
   return (
     <PageShell variant="wide">
-      <header className="mb-8">
-        <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
-          {t('factions_page.title')}
-        </h1>
-        {data?.version && (
-          <p className="mt-1 text-sm text-rizzotto-stone-500">
-            {t('factions_page.version_label', { name: data.version.name })}
-          </p>
-        )}
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-bold text-rizzotto-gold-500">
+            {t('factions_page.title')}
+          </h1>
+          {data?.version && (
+            <p className="mt-1 text-sm text-rizzotto-stone-500">
+              {t('factions_page.version_label', { name: data.version.name })}
+            </p>
+          )}
+        </div>
+        <select
+          value={versionId ?? ''}
+          onChange={(e) => setSelectedVersionId(e.target.value)}
+          aria-label="Version"
+          className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-1.5 text-sm font-medium text-rizzotto-stone-200 transition-colors hover:border-rizzotto-iron-500 focus:border-rizzotto-gold-500 focus:outline-none"
+        >
+          {versions.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+              {v.is_active ? ' (active)' : ''}
+            </option>
+          ))}
+          <option value="all">All-Time</option>
+        </select>
       </header>
 
       {isLoading && (
