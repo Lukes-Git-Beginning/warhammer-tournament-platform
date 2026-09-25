@@ -150,31 +150,36 @@ export async function getVersionDecayWeights(prisma: PrismaClient): Promise<Map<
   return weights;
 }
 
-/** Combine one faction's per-version stats into a single 1/k-weighted All-Time stat block.
- *  Counts are weighted sums (rounded for display); win_rate is derived from the un-rounded
- *  weighted wins/matches. Returns null when the faction has no games in any version. */
+/** Combine one faction's per-version stats into a single All-Time stat block.
+ *  Counts (matches/wins/losses/draws/picks/bans) are RAW sums across versions — All-Time must never
+ *  show fewer games than a single version. Only win_rate applies the 1/k version decay, derived from
+ *  the weighted wins/matches so older, out-of-date balance fades. Returns null when the faction has
+ *  no games in any version. */
 export function combineFactionStatsAllTime(
   perVersion: Array<{ stats: FactionStatsDto; weight: number }>,
 ): FactionStatsDto | null {
   if (perVersion.length === 0) return null;
   let m = 0, w = 0, l = 0, d = 0, pc = 0, bc = 0;
+  let wWeighted = 0, mWeighted = 0;
   for (const { stats, weight } of perVersion) {
-    m += stats.matches_played * weight;
-    w += stats.wins * weight;
-    l += stats.losses * weight;
-    d += stats.draws * weight;
-    pc += stats.pick_count * weight;
-    bc += stats.ban_count * weight;
+    m += stats.matches_played;
+    w += stats.wins;
+    l += stats.losses;
+    d += stats.draws;
+    pc += stats.pick_count;
+    bc += stats.ban_count;
+    wWeighted += stats.wins * weight;
+    mWeighted += stats.matches_played * weight;
   }
   if (m <= 0) return null;
   return {
-    matches_played: Math.round(m),
-    wins: Math.round(w),
-    losses: Math.round(l),
-    draws: Math.round(d),
-    win_rate: w / m,
-    pick_count: Math.round(pc),
-    ban_count: Math.round(bc),
+    matches_played: m,
+    wins: w,
+    losses: l,
+    draws: d,
+    win_rate: mWeighted > 0 ? wWeighted / mWeighted : null,
+    pick_count: pc,
+    ban_count: bc,
   };
 }
 

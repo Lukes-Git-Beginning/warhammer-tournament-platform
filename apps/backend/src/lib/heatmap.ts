@@ -54,8 +54,12 @@ export async function getMatchupMatrix(
     },
   });
 
-  // Keyed by `${aId}|${bId}` with aId <= bId (string sort).
-  type Agg = { aWins: number; bWins: number; draws: number };
+  // Keyed by `${aId}|${bId}` with aId <= bId (string sort). Raw counts are the true game tallies
+  // (displayed); the weighted sums apply the 1/k version decay and feed only the win rate.
+  type Agg = {
+    aWins: number; bWins: number; draws: number; // raw
+    aWinsW: number; bWinsW: number; drawsW: number; // 1/k-weighted (All-Time win rate)
+  };
   const matchupAgg = new Map<string, Agg>();
 
   for (const g of games) {
@@ -78,28 +82,30 @@ export async function getMatchupMatrix(
     const key = `${aId}|${bId}`;
     let m = matchupAgg.get(key);
     if (!m) {
-      m = { aWins: 0, bWins: 0, draws: 0 };
+      m = { aWins: 0, bWins: 0, draws: 0, aWinsW: 0, bWinsW: 0, drawsW: 0 };
       matchupAgg.set(key, m);
     }
-    if (isDraw) m.draws += w;
-    else if (winnerFaction === aId) m.aWins += w;
-    else m.bWins += w;
+    if (isDraw) { m.draws += 1; m.drawsW += w; }
+    else if (winnerFaction === aId) { m.aWins += 1; m.aWinsW += w; }
+    else { m.bWins += 1; m.bWinsW += w; }
   }
 
   return [...matchupAgg.entries()]
     .map(([key, m]) => {
       const [faction_a_id, faction_b_id] = key.split('|') as [string, string];
-      // winrate from the un-rounded weighted sums; the displayed counts are rounded (All-Time weights
-      // make them fractional). For a single version the weights are all 1, so this is a no-op.
+      // Counts are RAW game tallies — All-Time must never show fewer games than a single version.
+      // The win rate uses the 1/k-weighted sums (for a single version the weights are all 1, so it
+      // equals the raw rate); All-Time then devalues older, out-of-date balance.
       const totalRaw = m.aWins + m.bWins + m.draws;
+      const totalW = m.aWinsW + m.bWinsW + m.drawsW;
       return {
         faction_a_id,
         faction_b_id,
-        faction_a_wins: Math.round(m.aWins),
-        faction_b_wins: Math.round(m.bWins),
-        draws: Math.round(m.draws),
-        total: Math.round(totalRaw),
-        winrate_a: totalRaw > 0 ? m.aWins / totalRaw : null,
+        faction_a_wins: m.aWins,
+        faction_b_wins: m.bWins,
+        draws: m.draws,
+        total: totalRaw,
+        winrate_a: totalW > 0 ? m.aWinsW / totalW : null,
       };
     })
     .sort((x, y) =>

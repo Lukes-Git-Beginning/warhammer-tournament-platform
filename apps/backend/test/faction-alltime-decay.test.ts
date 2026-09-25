@@ -12,21 +12,22 @@ const stat = (matches: number, wins: number): FactionStatsDto => ({
   ban_count: 0,
 });
 
-describe('combineFactionStatsAllTime (1/k version decay)', () => {
+describe('combineFactionStatsAllTime (raw counts, 1/k-weighted win rate)', () => {
   it('returns null when the faction has no games in any version', () => {
     expect(combineFactionStatsAllTime([])).toBeNull();
     expect(combineFactionStatsAllTime([{ stats: stat(0, 0), weight: 1 }])).toBeNull();
   });
 
-  it('weights each version by 1/k on the RAW counts, then derives win_rate from the weighted sums', () => {
+  it('sums RAW counts across versions (never fewer than one version) but weights only the win_rate', () => {
     // newest (weight 1/1): 10 games, 8 wins. previous (weight 1/2): 10 games, 2 wins.
-    // weighted matches = 10 + 5 = 15; weighted wins = 8 + 1 = 9; win_rate = 9/15 = 0.6.
+    // Counts are raw: matches = 20, wins = 10. win_rate uses the weighted sums:
+    // weighted matches = 10 + 5 = 15; weighted wins = 8 + 1 = 9 → 9/15 = 0.6.
     const c = combineFactionStatsAllTime([
       { stats: stat(10, 8), weight: 1 },
       { stats: stat(10, 2), weight: 1 / 2 },
     ])!;
-    expect(c.matches_played).toBe(15);
-    expect(c.wins).toBe(9);
+    expect(c.matches_played).toBe(20);
+    expect(c.wins).toBe(10);
     expect(c.win_rate).toBeCloseTo(0.6, 6);
   });
 
