@@ -151,7 +151,7 @@ describe('GET /api/meta/matchups — live aggregation', () => {
     const body = res.json<{ version_id: string; cells: unknown[]; factions: unknown[] }>();
     expect(body.version_id).toBe(S1);
     expect(body.cells).toHaveLength(0);
-    expect(body.factions).toHaveLength(24);
+    expect(body.factions).toHaveLength(25);
   });
 
   it('5. returns correct aggregated cell via HTTP route', async () => {

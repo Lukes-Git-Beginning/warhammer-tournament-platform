@@ -121,7 +121,7 @@ function gql(query: string, variables?: Record<string, unknown>) {
 // ---------------------------------------------------------------------------
 
 describe('GraphQL — factions query', () => {
-  it('1. returns 24 factions with valid colorHex and initials', async () => {
+  it('1. returns 25 factions with valid colorHex and initials', async () => {
     await seedVersion();
 
     const res = await gql(`
@@ -176,7 +176,7 @@ describe('GraphQL — factions query', () => {
     const { factions } = body.data;
     expect(factions.version.id).toBe(S1);
     expect(factions.version.isActive).toBe(true);
-    expect(factions.data).toHaveLength(24);
+    expect(factions.data).toHaveLength(25);
 
     // All factions must have a non-empty colorHex (#RRGGBB) and 2- or 3-char initials
     for (const item of factions.data) {
@@ -265,7 +265,7 @@ describe('GraphQL — factions query', () => {
 // ---------------------------------------------------------------------------
 
 describe('GraphQL — matchupHeatmap query', () => {
-  it('2. returns empty cells and 24 factions when no MatchupStats exist', async () => {
+  it('2. returns empty cells and 25 factions when no MatchupStats exist', async () => {
     await seedVersion();
 
     const res = await gql(`
@@ -309,7 +309,7 @@ describe('GraphQL — matchupHeatmap query', () => {
     expect(body.errors).toBeUndefined();
     const heatmap = body.data.matchupHeatmap;
     expect(heatmap.versionId).toBe(S1);
-    expect(heatmap.factions).toHaveLength(24);
+    expect(heatmap.factions).toHaveLength(25);
     expect(heatmap.cells).toHaveLength(0);
   });
 
@@ -361,7 +361,7 @@ describe('GraphQL — matchupHeatmap query', () => {
     expect(body.errors).toBeUndefined();
     const { cells, factions } = body.data.matchupHeatmap;
     expect(cells).toHaveLength(1);
-    expect(factions).toHaveLength(24);
+    expect(factions).toHaveLength(25);
 
     const cell = cells[0]!;
     expect(cell.factionAId).toBe('bretonnia');
@@ -437,9 +437,9 @@ describe('GraphQL — metaOverview query', () => {
     expect(typeof overview.totalMatches).toBe('number');
     expect(overview.totalMatches).toBeGreaterThanOrEqual(0);
 
-    // factionDiversity: coverage (3/24) × Pielou's J over played factions.
-    // 3 played out of 24, near-even → ~0.138.
-    expect(overview.factionDiversity).toBeCloseTo(0.120, 2);
+    // factionDiversity: coverage (3/25) × Pielou's J over played factions.
+    // 3 played out of 25, near-even → ~0.115.
+    expect(overview.factionDiversity).toBeCloseTo(0.115, 2);
 
     // All three have ≥10 matches → eligible for winrate top
     // dwarfs 8/10=0.80 is highest → should be first

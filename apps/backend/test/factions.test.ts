@@ -94,7 +94,7 @@ async function seedFactionStats() {
 // ---------------------------------------------------------------------------
 
 describe('GET /api/factions', () => {
-  it('1. returns 24 factions with stats: null when no FactionStats exist', async () => {
+  it('1. returns 25 factions with stats: null when no FactionStats exist', async () => {
     await seedVersion();
 
     const res = await app.inject({ method: 'GET', url: `/api/factions?versionId=${S1}` });
@@ -106,7 +106,7 @@ describe('GET /api/factions', () => {
     }>();
 
     expect(body.version.id).toBe(S1);
-    expect(body.data).toHaveLength(24);
+    expect(body.data).toHaveLength(25);
 
     // All stats should be null since no FactionStats were seeded
     for (const item of body.data) {
@@ -318,9 +318,9 @@ describe('GET /api/meta/overview', () => {
     expect(typeof body.total_games).toBe('number');
     expect(body.total_games).toBeGreaterThanOrEqual(0);
 
-    // faction_diversity: coverage (5/24) × Pielou's J over played factions.
-    // 5 played out of 24, near-even → ~0.204.
-    expect(body.faction_diversity).toBeCloseTo(0.204, 2);
+    // faction_diversity: coverage (5/25) × Pielou's J over played factions.
+    // 5 played out of 25, near-even → ~0.196.
+    expect(body.faction_diversity).toBeCloseTo(0.196, 2);
   });
 
   it('6. filters top_by_winrate to min 10 matches', async () => {
@@ -357,7 +357,7 @@ describe('GET /api/meta/overview', () => {
 // ---------------------------------------------------------------------------
 
 describe('GET /api/meta/matchups', () => {
-  it('returns stub response with version_id, empty cells, and all 24 factions', async () => {
+  it('returns stub response with version_id, empty cells, and all 25 factions', async () => {
     await seedVersion();
 
     const res = await app.inject({ method: 'GET', url: `/api/meta/matchups?versionId=${S1}` });
@@ -372,7 +372,7 @@ describe('GET /api/meta/matchups', () => {
     expect(body.version_id).toBe(S1);
     expect(Array.isArray(body.cells)).toBe(true);
     expect(body.cells).toHaveLength(0); // no MatchupStats seeded
-    expect(body.factions).toHaveLength(24);
+    expect(body.factions).toHaveLength(25);
   });
 
   it('returns cells when MatchupStats exist', async () => {
