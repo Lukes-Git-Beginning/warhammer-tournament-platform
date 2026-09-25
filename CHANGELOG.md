@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 ## [2.4.1] — 2026-09-25
 
+### Changed
+- **Faction grids now show five across, so all 25 factions tile evenly as a 5×5.** With the 25th faction added, the old six-wide layout left one crest stranded alone on a fifth row (6×4+1). This applies to the faction browse page and the onboarding and draft faction pickers.
+
 ### Fixed
 - **The Undead Legions crest now matches the other faction icons.** Its background is transparent like every other crest, so it blends into the page instead of sitting in a solid black box.
 

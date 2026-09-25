@@ -23,7 +23,7 @@ export function FactionPickerGrid({
 
   if (isLoading || !data) {
     return (
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
         {Array.from({ length: 12 }).map((_, i) => (
           <Skeleton key={i} className="h-24 w-full rounded-sm" />
         ))}
@@ -46,7 +46,7 @@ export function FactionPickerGrid({
 
   return (
     <div>
-      <div className="grid max-h-[52vh] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid max-h-[52vh] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4 lg:grid-cols-5">
         {factions.map((f) => {
           const active = selected.includes(f.id);
           const disabled = !active && selected.length >= maxSelections;

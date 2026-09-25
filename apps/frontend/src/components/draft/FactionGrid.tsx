@@ -76,7 +76,7 @@ export function FactionGrid({
     currentTurn !== null && ['pick', 'ban', 'snipe', 'steal'].includes(currentTurn.action);
 
   return (
-    <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+    <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
       {allFactions.map((f) => {
         const status = getFactionStatus(f.id);
         const isInteractive = isActionTurn && status === 'available';
