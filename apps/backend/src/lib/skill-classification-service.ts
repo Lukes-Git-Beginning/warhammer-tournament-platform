@@ -102,16 +102,20 @@ async function loadAnswers(
 export async function getPlayerClassification(
   prisma: PrismaClient,
   redis: Redis | undefined,
-  versionId: string,
+  _versionId: string, // deprecated: classification is timeless; kept for signature stability
   playerId: string,
 ): Promise<PlayerClassification> {
   const answers = await loadAnswers(prisma, playerId);
   const questions = await loadCalibrationQuestions(prisma);
   const qFloor = questionnaireFloor(answers, questions);
 
-  // Always use the hierarchical model for the general skill (see file header).
+  // General Skill is TIMELESS by design: it spans all versions. The per-version meta
+  // lives in the model's MatchupEffect (keyed by versionId|battleType), NOT in which
+  // games feed the GS fit — an all-time fit already scores each game against its own
+  // version's favourability. Scoping the fit to the active version reset every player
+  // to their questionnaire floor on each new version. Always fit all-time.
   const model = await getRatingModel(prisma, redis, {
-    versionId,
+    versionId: null,
     config: { hierarchical: true },
   });
   const gs = model.getGeneralSkill(playerId);

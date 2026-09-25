@@ -113,10 +113,12 @@ export async function assignSkillBandsForTournament(
   });
 
   // 2v2: teams have no questionnaire — band each team by its blended GS (members' average prior
-  // + the team's own fitted 2v2 GS). Fit the active-version model once (cached), like the players.
+  // + the team's own fitted 2v2 GS). Team GS, like individual GS, is TIMELESS (spans all versions,
+  // per-version meta lives in MatchupEffect) — fit all-time so a new game version doesn't reset a
+  // team to its members' prior. Fitted once (cached), like the players.
   const teamModel =
     isTeam && version
-      ? await getRatingModel(fastify.prisma, fastify.redis, { versionId: version.id, config: { hierarchical: true } })
+      ? await getRatingModel(fastify.prisma, fastify.redis, { versionId: null, config: { hierarchical: true } })
       : null;
 
   for (const p of participants) {
