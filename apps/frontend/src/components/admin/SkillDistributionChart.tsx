@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart,
@@ -10,20 +9,16 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { getAdminSkillDistribution, listVersions } from '@/lib/api.js';
+import { getAdminSkillDistribution } from '@/lib/api.js';
 
 const COLOR_Q = '#d4a853'; // with questionnaire — gold
 const COLOR_DATA = '#78716c'; // games only — stone
 
 export function SkillDistributionChart() {
-  const [selectedVersion, setselectedVersion] = useState<string | undefined>(undefined);
-
-  const { data: versionsData } = useQuery({ queryKey: ['versions'], queryFn: listVersions });
-  const versions = versionsData?.data ?? [];
-
+  // Skill is timeless — the band distribution spans all versions, so there is no version selector.
   const { data, isLoading, error } = useQuery({
-    queryKey: ['admin-skill-distribution', selectedVersion],
-    queryFn: () => getAdminSkillDistribution(selectedVersion),
+    queryKey: ['admin-skill-distribution'],
+    queryFn: () => getAdminSkillDistribution(),
   });
 
   const chartData = (data?.distribution ?? []).map((d) => ({
@@ -41,24 +36,6 @@ export function SkillDistributionChart() {
       <p className="mb-4 text-xs text-stone-500">
         Players per band, split by whether they filled in the questionnaire or are rated from games alone.
       </p>
-
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-stone-400">Version</label>
-          <select
-            className="rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
-            value={selectedVersion ?? ''}
-            onChange={(e) => setselectedVersion(e.target.value || undefined)}
-          >
-            <option value="">Active version</option>
-            {versions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
 
       {isLoading && <div className="py-8 text-center text-stone-400 text-sm">Loading…</div>}
       {error && (

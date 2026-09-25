@@ -165,7 +165,7 @@ export function StatsDashboard() {
 
       <div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-          Top 5 Factions (this version)
+          Top 5 Factions (all-time)
         </h2>
         <div className="overflow-x-auto rounded-md border border-stone-800">
           <table className="min-w-full text-sm">

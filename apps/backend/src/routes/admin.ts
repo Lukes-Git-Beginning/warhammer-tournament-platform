@@ -415,21 +415,28 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           fastify.prisma.scheduledMatchup.count({ where: { status: 'ACCEPTED', match_id: null } }),
         ]);
 
-        let topFactions: Array<{ faction_id: string; name: string; matches_played: number; wins: number }> = [];
-        if (activeVersion) {
-          const top = await fastify.prisma.factionStats.findMany({
-            where: { version_id: activeVersion.id },
-            orderBy: { matches_played: 'desc' },
-            take: 5,
-            include: { faction: { select: { id: true, name: true } } },
-          });
-          topFactions = top.map((f) => ({
-            faction_id: f.faction_id,
-            name: f.faction.name,
-            matches_played: f.matches_played,
-            wins: f.wins,
-          }));
-        }
+        // Top factions ALL-TIME (Alex 2026-09-25): most-played across every version and battle type,
+        // not just the freshly-activated version (which would be near-empty right after a launch).
+        const topAgg = await fastify.prisma.factionStats.groupBy({
+          by: ['faction_id'],
+          _sum: { matches_played: true, wins: true },
+          orderBy: { _sum: { matches_played: 'desc' } },
+          take: 5,
+        });
+        const topNames = new Map(
+          (
+            await fastify.prisma.faction.findMany({
+              where: { id: { in: topAgg.map((t) => t.faction_id) } },
+              select: { id: true, name: true },
+            })
+          ).map((f) => [f.id, f.name]),
+        );
+        const topFactions = topAgg.map((t) => ({
+          faction_id: t.faction_id,
+          name: topNames.get(t.faction_id) ?? t.faction_id,
+          matches_played: t._sum.matches_played ?? 0,
+          wins: t._sum.wins ?? 0,
+        }));
 
         return {
           activeUsers,
@@ -818,30 +825,16 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // cached once per version, then each player's gating band is a pure in-memory blend
   // of their questionnaire floor and (if any) their fitted general skill. Players with
   // neither a questionnaire nor fitted data are counted as "unclassified".
-  fastify.get('/api/admin/stats/skill-distribution', async (request, reply) => {
-    const parsed = z.object({ version: z.string().uuid().optional() }).safeParse(request.query);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
-    }
-
-    let resolvedVersionId: string | null = null;
-    if (parsed.data.version) {
-      const s = await fastify.prisma.gameVersion.findUnique({ where: { id: parsed.data.version }, select: { id: true } });
-      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
-      resolvedVersionId = s.id;
-    } else {
-      const s = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
-      resolvedVersionId = s?.id ?? null;
-    }
-
+  fastify.get('/api/admin/stats/skill-distribution', async (_request, reply) => {
+    void reply;
+    // Skill is TIMELESS — a player's band spans every version, so the distribution is version-
+    // independent (fitted from the all-time model). Not scoped to the active version.
     return cached(
       fastify.redis,
-      cacheKey('admin:skill-distribution', { versionId: resolvedVersionId }),
+      cacheKey('admin:skill-distribution', { scope: 'all-time' }),
       async () => {
         const [model, users, questions] = await Promise.all([
-          resolvedVersionId
-            ? getRatingModel(fastify.prisma, fastify.redis, { versionId: resolvedVersionId, config: { hierarchical: true } })
-            : Promise.resolve(null),
+          getRatingModel(fastify.prisma, fastify.redis, { versionId: null, config: { hierarchical: true } }),
           fastify.prisma.user.findMany({ where: { deleted_at: null }, select: { id: true, calibration_answers: true } }),
           loadCalibrationQuestions(fastify.prisma),
         ]);
@@ -855,7 +848,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         for (const u of users) {
           const answers = (u.calibration_answers as Record<string, string> | null) ?? {};
           const hasQ = Object.keys(answers).length > 0;
-          const gs = model ? model.getGeneralSkill(u.id) : null;
+          const gs = model.getGeneralSkill(u.id);
           if (!hasQ && !gs) {
             unclassified++;
             continue;
@@ -867,7 +860,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         return {
-          versionId: resolvedVersionId,
+          versionId: null,
           total: users.length,
           unclassified,
           distribution: [1, 2, 3, 4, 5].map((band) => ({
@@ -998,26 +991,14 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // their QUESTIONNAIRE-based rating (potentially stronger than they claimed). Sorted
   // by the gap, descending; NO threshold — the admin judges. Needs BOTH signals to
   // compare, so players lacking a questionnaire or lacking fitted data are omitted.
-  fastify.get('/api/admin/reports/underrated', async (request, reply) => {
-    const parsed = z.object({ version: z.string().uuid().optional() }).safeParse(request.query);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
-    }
-
-    let resolvedVersionId: string | null;
-    if (parsed.data.version) {
-      const s = await fastify.prisma.gameVersion.findUnique({ where: { id: parsed.data.version }, select: { id: true } });
-      if (!s) return reply.code(404).send({ error: 'NotFound', message: 'Version not found', statusCode: 404 });
-      resolvedVersionId = s.id;
-    } else {
-      const s = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
-      resolvedVersionId = s?.id ?? null;
-    }
-
+  fastify.get('/api/admin/reports/underrated', async (_request, reply) => {
+    void reply;
+    // Skill is TIMELESS: compare each player's questionnaire claim against their ALL-TIME General
+    // Skill, never the active version's fit. A version-scoped fit resets/thins on a freshly-activated
+    // version and would drop or mis-rate players — the same bug the timeless getPlayerClassification
+    // fix addressed. The version is intentionally not a parameter here.
     const [model, users, questions] = await Promise.all([
-      resolvedVersionId
-        ? getRatingModel(fastify.prisma, fastify.redis, { versionId: resolvedVersionId, config: { hierarchical: true } })
-        : Promise.resolve(null),
+      getRatingModel(fastify.prisma, fastify.redis, { versionId: null, config: { hierarchical: true } }),
       fastify.prisma.user.findMany({
         where: { deleted_at: null },
         select: { id: true, username: true, calibration_answers: true },
@@ -1029,7 +1010,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     for (const u of users) {
       const answers = (u.calibration_answers as Record<string, string> | null) ?? {};
       if (Object.keys(answers).length === 0) continue; // need a self-claim to compare against
-      const gs = model ? model.getGeneralSkill(u.id) : null;
+      const gs = model.getGeneralSkill(u.id);
       if (!gs) continue; // need fitted data to compare
       const qFloor = questionnaireFloor(answers, questions);
       const qSkill = bandToLogOdds(qFloor);
@@ -1053,7 +1034,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
     players.sort((a, b) => b.delta - a.delta);
-    return { versionId: resolvedVersionId, players };
+    return { versionId: null, players };
   });
 
   fastify.get('/api/admin/stats/faction-winrates', async (request, reply) => {

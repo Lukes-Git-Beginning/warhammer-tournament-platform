@@ -272,7 +272,7 @@ export interface PlayerFactionProficiencyEntry {
 export async function playerFactionProficiency(
   prisma: PrismaClient,
   redis: Redis | undefined,
-  versionId: string,
+  versionId: string | null, // null = timeless (all versions); proficiency is a skill measure
   playerId: string,
 ): Promise<PlayerFactionProficiencyEntry[]> {
   const model = await getRatingModel(prisma, redis, { versionId });
@@ -285,7 +285,8 @@ export async function playerFactionProficiency(
       winner_id: { not: null },
       counts_for_leaderboard: true,
       match: {
-        version_id: versionId,
+        // null versionId = lifetime proficiency across every version (skill is timeless).
+        ...(versionId ? { version_id: versionId } : {}),
         deleted_at: null,
         OR: [{ player1_id: playerId }, { player2_id: playerId }],
       },
