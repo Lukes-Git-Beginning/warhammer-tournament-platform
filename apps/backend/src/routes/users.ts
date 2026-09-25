@@ -644,6 +644,38 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     };
   });
 
+  // GET /api/users/:id/version-stats?versionId=<uuid|all> — points/games/wins/losses for one version,
+  // or All-Time (summed across all versions) by default. Powers the profile's selectable stats block
+  // (Alex 2026-09-25); that block defaults to All-Time.
+  fastify.get('/api/users/:id/version-stats', async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const q = z
+      .object({ versionId: z.union([z.string().uuid(), z.literal('all')]).optional() })
+      .safeParse(request.query);
+    if (!q.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: q.error.message, statusCode: 400 });
+    }
+    const versionId = q.data.versionId;
+    if (!versionId || versionId === 'all') {
+      const all = await getPlayerAllTimeStats(fastify.prisma, fastify.redis, id);
+      return {
+        versionId: 'all',
+        total_points: all.total_points,
+        games_played: all.games_played,
+        wins: all.wins,
+        losses: all.losses,
+      };
+    }
+    const s = await getPlayerVersionStats(fastify.prisma, fastify.redis, versionId, id);
+    return {
+      versionId,
+      total_points: s.total_points,
+      games_played: s.games_played,
+      wins: s.wins,
+      losses: s.losses,
+    };
+  });
+
   // GET /api/users/:id — public
   fastify.get('/api/users/:id', async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);

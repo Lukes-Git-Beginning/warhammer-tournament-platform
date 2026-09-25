@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import {
   getUserProfile,
   getUserGames,
+  getUserVersionStats,
+  listVersions,
   getPlayerAntiFarming,
   getAdminUserQueuePenalty,
   liftAdminUserQueueCooldown,
@@ -354,6 +356,9 @@ export function UserProfilePage() {
   const { data: me } = useAuthQuery();
   const isOwnProfile = me?.id === id;
   const [wizardOpen, setWizardOpen] = useState(false);
+  // Per-version stats block: defaults to All-Time (Alex 2026-09-25); 'all' reuses the profile's
+  // all_time totals, a specific version is fetched on demand.
+  const [statsVersion, setStatsVersion] = useState<string>('all');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['user-profile', id],
@@ -364,6 +369,13 @@ export function UserProfilePage() {
   const { data: gamesData } = useQuery({
     queryKey: ['user-games', id],
     queryFn: () => getUserGames(id, 1, 20),
+  });
+
+  const { data: versionsData } = useQuery({ queryKey: ['versions'], queryFn: listVersions });
+  const { data: verStats } = useQuery({
+    queryKey: ['user-version-stats', id, statsVersion],
+    queryFn: () => getUserVersionStats(id, statsVersion),
+    enabled: statsVersion !== 'all',
   });
 
   if (isLoading) {
@@ -435,51 +447,58 @@ export function UserProfilePage() {
         </div>
       )}
 
-      {/* Aktuelle Version */}
+      {/* Record — selectable by version, defaults to All-Time (Alex 2026-09-25). One block replaces
+          the old "current version" + "all-time" pair; the selector covers both. */}
       <section>
-        <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          {t('user_profile.current_version')}
-        </h2>
-        {current_version ? (
-          <div>
-            <p className="text-sm text-stone-400 mb-3">{current_version.version.name}</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <StatCard
-                label={t('user_profile.stats.points')}
-                value={Math.round(current_version.total_points)}
-              />
-              <StatCard
-                label={t('user_profile.stats.games')}
-                value={current_version.games_played}
-              />
-              <StatCard label={t('user_profile.stats.wins')} value={current_version.wins} />
-              <StatCard label={t('user_profile.stats.losses')} value={current_version.losses} />
-            </div>
-          </div>
-        ) : (
-          <EmptyState
-            variant="compact"
-            title={t('user_profile.empties.version.title')}
-            body={t('user_profile.empties.version.body')}
-          />
-        )}
-      </section>
-
-      {/* All-Time */}
-      <section>
-        <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          {t('user_profile.all_time')}
-        </h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <StatCard label={t('user_profile.stats.games')} value={all_time.games_played} />
-          <StatCard label={t('user_profile.stats.wins')} value={all_time.wins} />
-          <StatCard label={t('user_profile.stats.losses')} value={all_time.losses} />
-          <StatCard
-            label={t('user_profile.stats.tournaments')}
-            value={all_time.tournaments_played}
-          />
-          <StatCard label={t('user_profile.stats.points')} value={Math.round(all_time.total_points)} />
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500">
+            {statsVersion === 'all'
+              ? t('user_profile.all_time')
+              : versionsData?.data.find((v) => v.id === statsVersion)?.name ?? ''}
+          </h2>
+          <select
+            value={statsVersion}
+            onChange={(e) => setStatsVersion(e.target.value)}
+            aria-label="Version"
+            className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-1.5 text-sm font-medium text-rizzotto-stone-200 transition-colors hover:border-rizzotto-iron-500 focus:border-rizzotto-gold-500 focus:outline-none"
+          >
+            <option value="all">All-Time</option>
+            {(versionsData?.data ?? []).map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+                {v.is_active ? ' (active)' : ''}
+              </option>
+            ))}
+          </select>
         </div>
+        {(() => {
+          const isAll = statsVersion === 'all';
+          const s = isAll
+            ? {
+                total_points: all_time.total_points,
+                games_played: all_time.games_played,
+                wins: all_time.wins,
+                losses: all_time.losses,
+              }
+            : verStats;
+          if (!s) {
+            return <p className="py-4 text-sm text-stone-500">{t('common.loading')}</p>;
+          }
+          return (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <StatCard label={t('user_profile.stats.points')} value={Math.round(s.total_points)} />
+              <StatCard label={t('user_profile.stats.games')} value={s.games_played} />
+              <StatCard label={t('user_profile.stats.wins')} value={s.wins} />
+              <StatCard label={t('user_profile.stats.losses')} value={s.losses} />
+              {isAll && (
+                <StatCard
+                  label={t('user_profile.stats.tournaments')}
+                  value={all_time.tournaments_played}
+                />
+              )}
+            </div>
+          );
+        })()}
       </section>
 
       {/* Statistics Section (neue Cards) */}

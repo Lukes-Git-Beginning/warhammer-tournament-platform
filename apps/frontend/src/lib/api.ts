@@ -868,6 +868,20 @@ export function getUserProfile(id: string): Promise<UserProfileResponse> {
   return apiFetch<UserProfileResponse>(`/api/users/${id}`);
 }
 
+export interface UserVersionStats {
+  versionId: string;
+  total_points: number;
+  games_played: number;
+  wins: number;
+  losses: number;
+}
+
+/** Player totals for one version, or All-Time (versionId 'all', the default). */
+export function getUserVersionStats(id: string, versionId: string): Promise<UserVersionStats> {
+  const q = versionId ? `?versionId=${encodeURIComponent(versionId)}` : '';
+  return apiFetch<UserVersionStats>(`/api/users/${id}/version-stats${q}`);
+}
+
 export function listVersions(): Promise<{ data: VersionSummary[] }> {
   return apiFetch<{ data: VersionSummary[] }>('/api/versions');
 }
