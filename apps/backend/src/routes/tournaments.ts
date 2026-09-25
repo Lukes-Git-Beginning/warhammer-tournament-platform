@@ -1146,20 +1146,28 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
             statusCode: 422,
           });
         }
-        // Reject only a genuine CHANGE to the faction pool — resubmitting the SAME pool (e.g. an
-        // edit form that always sends it) is a no-op and must not 422. Compare as unordered sets.
-        if (newFactionPool !== undefined) {
-          const current = new Set(tournament.faction_allowlist.map((fa) => fa.faction_id));
-          const submitted = new Set(newFactionPool);
-          const changed =
-            current.size !== submitted.size || [...submitted].some((id) => !current.has(id));
-          if (changed) {
-            return reply.code(422).send({
-              error: 'UnprocessableEntity',
-              message: '"faction_pool" can only be changed while the tournament is in draft',
-              statusCode: 422,
-            });
-          }
+      }
+
+      // The faction pool (allowlist) gates which factions can be PICKED at registration, so a host
+      // may still adjust it — e.g. ban a faction that was added after setup — right up until the
+      // tournament starts. It only becomes immutable once matches exist (ONGOING) or the event is
+      // COMPLETED. Note: existing picks are NOT retro-validated — banning a faction blocks new picks
+      // but does not change a pick already made. Reject only a genuine CHANGE (unordered-set compare)
+      // so re-submitting the same pool is a no-op.
+      if (
+        newFactionPool !== undefined &&
+        (tournament.status === 'ONGOING' || tournament.status === 'COMPLETED')
+      ) {
+        const current = new Set(tournament.faction_allowlist.map((fa) => fa.faction_id));
+        const submitted = new Set(newFactionPool);
+        const changed =
+          current.size !== submitted.size || [...submitted].some((id) => !current.has(id));
+        if (changed) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: '"faction_pool" can only be changed before the tournament starts',
+            statusCode: 422,
+          });
         }
       }
 

@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.4.4] — 2026-09-25
+
+### Changed
+- **Hosts can adjust a tournament's faction pool until it starts, not only while it's a draft.** You can now ban or re-allow a faction any time before the first match — e.g. to ban a faction that was added after the event was set up. Once the tournament is under way, the pool stays locked. (Banning blocks new picks; a faction a registered player has already picked isn't changed automatically.)
+
 ## [2.4.3] — 2026-09-25
 
 ### Fixed

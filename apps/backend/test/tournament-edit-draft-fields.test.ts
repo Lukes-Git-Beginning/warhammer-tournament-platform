@@ -102,4 +102,32 @@ describe('PATCH /api/tournaments/:slug — draft-only fields past DRAFT', () => 
     const body = res.json<{ message: string }>();
     expect(body.message).toContain('mode');
   });
+
+  it('3. faction_pool CAN be changed while still OPEN_REGISTRATION (e.g. to ban a faction) → 200', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/tournaments/${SLUG}`,
+      headers: { cookie: cookieFor(HOST_ID, 'HOST') },
+      payload: { faction_pool: ['empire', 'bretonnia'] },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const rows = await prisma.tournamentFactionAllowlist.findMany({
+      where: { tournament_id: TOURNAMENT_ID },
+      select: { faction_id: true },
+    });
+    expect(new Set(rows.map((r) => r.faction_id))).toEqual(new Set(['empire', 'bretonnia']));
+  });
+
+  it('4. faction_pool change is rejected once the tournament is ONGOING → 422', async () => {
+    await prisma.tournament.update({ where: { id: TOURNAMENT_ID }, data: { status: 'ONGOING' } });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/tournaments/${SLUG}`,
+      headers: { cookie: cookieFor(HOST_ID, 'HOST') },
+      payload: { faction_pool: ['empire'] },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ message: string }>().message).toContain('faction_pool');
+  });
 });
