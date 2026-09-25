@@ -197,7 +197,7 @@ export function AdminPage() {
       <div>
         {tab === 'dashboard' && <StatsDashboard />}
         {tab === 'audit' && <AuditLogTable />}
-        {tab === 'users' && <UserBanTab />}
+        {tab === 'users' && <UserBanTab initialBands={search.bands} />}
         {tab === 'supporters' && <AdminSupportersTab />}
         {tab === 'matches' && <AdminMatchesTab />}
         {tab === 'all_games' && <AdminAllGamesTab />}

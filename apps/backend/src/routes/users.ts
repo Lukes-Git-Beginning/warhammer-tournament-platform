@@ -11,6 +11,9 @@ import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { getPlayerVersionStats, getPlayerAllTimeStats } from '../lib/leaderboard-service.js';
 import { effectiveTiersOf } from '../lib/supporter-service.js';
 import { resolveCompetitors } from '../lib/competitors.js';
+import { getRatingModel } from '../lib/rating-model-service.js';
+import { loadCalibrationQuestions } from '../lib/skill-classification-service.js';
+import { questionnaireFloor, classify } from '../lib/skill-classification.js';
 
 const meSelect = {
   id: true,
@@ -314,6 +317,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
             bot_message_policy: true,
             created_at: true,
             deleted_at: true,
+            calibration_answers: true,
             steam_link: { select: { steam_id: true } },
           },
           orderBy,
@@ -326,6 +330,21 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           },
         }),
       ]);
+
+      // Current (timeless) skill band per user — the same gating band the Skill Distribution chart
+      // buckets by, so its bars can deep-link into a band filter here. One all-time model fit (cached).
+      const [model, questions] = await Promise.all([
+        getRatingModel(fastify.prisma, fastify.redis, { versionId: null, config: { hierarchical: true } }),
+        loadCalibrationQuestions(fastify.prisma),
+      ]);
+      const bandOf = (calibrationAnswers: unknown, userId: string): number | null => {
+        const answers = (calibrationAnswers as Record<string, string> | null) ?? {};
+        const hasQuestionnaire = Object.keys(answers).length > 0;
+        const gs = model.getGeneralSkill(userId);
+        if (!hasQuestionnaire && !gs) return null; // unclassified — no questionnaire, no games
+        const qFloor = questionnaireFloor(answers, questions);
+        return classify(qFloor, { generalSkill: gs?.skill ?? null, stdError: gs?.se ?? null }).gatingBand;
+      };
 
       return {
         users: users.map((u) => ({
@@ -340,6 +359,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
           bot_message_policy: u.bot_message_policy,
           created_at: u.created_at.toISOString(),
           is_banned: u.deleted_at !== null,
+          band: bandOf(u.calibration_answers, u.id),
         })),
         total,
         page,

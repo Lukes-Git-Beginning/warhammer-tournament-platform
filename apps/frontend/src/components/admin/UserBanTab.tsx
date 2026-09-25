@@ -1,9 +1,29 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { searchUsers, updateUserRole, resetUserSteam, deleteUser, type AdminUser } from '@/lib/api';
 import { UserBanModal } from './UserBanModal';
 import { UserEditModal } from './UserEditModal';
+
+// Skill bands (1–5) — same labels the Skill Distribution chart uses.
+const BAND_LABELS: Record<number, string> = {
+  1: 'New',
+  2: 'Beginner',
+  3: 'Intermediate',
+  4: 'Advanced',
+  5: 'Top',
+};
+
+/** Parse a comma-separated band deep-link (e.g. "3,4") into a set of valid band numbers. */
+function parseBands(raw: string | undefined): Set<number> {
+  if (!raw) return new Set();
+  return new Set(
+    raw
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 5),
+  );
+}
 
 // A deleted (anonymized) account carries a tombstone discord_id.
 function isDeletedUser(u: AdminUser): boolean {
@@ -190,7 +210,7 @@ function CopyIdButton({ id }: { id: string }) {
   );
 }
 
-export function UserBanTab() {
+export function UserBanTab({ initialBands }: { initialBands?: string }) {
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
@@ -198,6 +218,21 @@ export function UserBanTab() {
   const [deleteTargetUser, setDeleteTargetUser] = useState<AdminUser | null>(null);
   const [sortBy, setSortBy] = useState<SortCol>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [bandFilter, setBandFilter] = useState<Set<number>>(() => parseBands(initialBands));
+
+  // Apply a deep-linked band filter (e.g. a click on a Skill Distribution bar) when it changes.
+  useEffect(() => {
+    setBandFilter(parseBands(initialBands));
+  }, [initialBands]);
+
+  function toggleBand(b: number) {
+    setBandFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(b)) next.delete(b);
+      else next.add(b);
+      return next;
+    });
+  }
 
   function handleSort(col: SortCol) {
     if (col === sortBy) {
@@ -214,10 +249,12 @@ export function UserBanTab() {
   });
 
   const users = data?.users ?? [];
+  const shown =
+    bandFilter.size === 0 ? users : users.filter((u) => u.band != null && bandFilter.has(u.band));
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <input
           id="user-search"
           type="text"
@@ -226,9 +263,41 @@ export function UserBanTab() {
           placeholder="Search by username or Discord ID…"
           className="w-full max-w-sm rounded border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm text-stone-200 placeholder:text-stone-500 focus:border-rizzotto-gold-500 focus:outline-none"
         />
-        {data && (
-          <span className="text-xs text-rizzotto-stone-400">{data.total ?? users.length} members</span>
-        )}
+        {/* Skill-band filter — multi-select; deep-linkable from the Skill Distribution bars. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-stone-500">Band:</span>
+          {[1, 2, 3, 4, 5].map((b) => {
+            const active = bandFilter.has(b);
+            return (
+              <button
+                key={b}
+                type="button"
+                onClick={() => toggleBand(b)}
+                className={`rounded border px-2 py-0.5 text-xs font-medium transition-colors ${
+                  active
+                    ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/15 text-rizzotto-gold-300'
+                    : 'border-stone-700 text-stone-400 hover:border-stone-500 hover:text-stone-200'
+                }`}
+              >
+                {b} {BAND_LABELS[b]}
+              </button>
+            );
+          })}
+          {bandFilter.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setBandFilter(new Set())}
+              className="ml-1 text-xs text-stone-500 hover:text-rizzotto-gold-400"
+            >
+              clear
+            </button>
+          )}
+        </div>
+        <span className="text-xs text-rizzotto-stone-400">
+          {bandFilter.size === 0
+            ? `${data?.total ?? users.length} members`
+            : `${shown.length} of ${users.length} shown`}
+        </span>
       </div>
 
       {isLoading && <div className="py-8 text-center text-rizzotto-stone-400 text-sm">Loading…</div>}
@@ -251,13 +320,14 @@ export function UserBanTab() {
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Email</th>
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Timezone</th>
                 <SortTh col="role" label="Role" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                <th className="px-4 py-3 text-left font-medium text-stone-400 whitespace-nowrap">Band</th>
                 <SortTh col="created_at" label="Joined" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                 <SortTh col="is_banned" label="Status" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-800/60">
-              {users.map((user) => (
+              {shown.map((user) => (
                 <tr key={user.id} className="hover:bg-stone-800/30 transition-colors">
                   <td className="px-4 py-3">
                     <Link
@@ -294,6 +364,15 @@ export function UserBanTab() {
                   </td>
                   <td className="px-4 py-3">
                     <RoleSelect user={user} />
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {user.band != null ? (
+                      <span className="text-xs text-stone-300">
+                        <span className="text-stone-500">{user.band}</span> {BAND_LABELS[user.band]}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-stone-600">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-stone-500 text-xs">
                     {new Date(user.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -351,9 +430,9 @@ export function UserBanTab() {
                   </td>
                 </tr>
               ))}
-              {users.length === 0 && (
+              {shown.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-stone-500">No members found.</td>
+                  <td colSpan={11} className="px-4 py-8 text-center text-stone-500">No members found.</td>
                 </tr>
               )}
             </tbody>
