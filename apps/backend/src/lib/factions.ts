@@ -132,6 +132,53 @@ export function asFactionStatsDto(stats: NonNullable<PrismaFactionStats>): Facti
 }
 
 // ---------------------------------------------------------------------------
+// All-Time version decay (Alex, 2026-09-08): the "All time" view weights each game
+// by 1/k, k = the version's reverse-chronological rank (newest 1/1, next 1/2, …).
+// Older versions are devalued but never dropped; single-version views stay unweighted.
+// The weight is applied to the RAW counts (matches/wins/…), then rates are derived
+// from the weighted sums — so a version with more games still contributes more.
+// ---------------------------------------------------------------------------
+
+/** Per-version decay weight 1/k, newest first. Map<versionId, weight>. */
+export async function getVersionDecayWeights(prisma: PrismaClient): Promise<Map<string, number>> {
+  const versions = await prisma.gameVersion.findMany({
+    orderBy: { start_date: 'desc' },
+    select: { id: true },
+  });
+  const weights = new Map<string, number>();
+  versions.forEach((v, i) => weights.set(v.id, 1 / (i + 1)));
+  return weights;
+}
+
+/** Combine one faction's per-version stats into a single 1/k-weighted All-Time stat block.
+ *  Counts are weighted sums (rounded for display); win_rate is derived from the un-rounded
+ *  weighted wins/matches. Returns null when the faction has no games in any version. */
+export function combineFactionStatsAllTime(
+  perVersion: Array<{ stats: FactionStatsDto; weight: number }>,
+): FactionStatsDto | null {
+  if (perVersion.length === 0) return null;
+  let m = 0, w = 0, l = 0, d = 0, pc = 0, bc = 0;
+  for (const { stats, weight } of perVersion) {
+    m += stats.matches_played * weight;
+    w += stats.wins * weight;
+    l += stats.losses * weight;
+    d += stats.draws * weight;
+    pc += stats.pick_count * weight;
+    bc += stats.ban_count * weight;
+  }
+  if (m <= 0) return null;
+  return {
+    matches_played: Math.round(m),
+    wins: Math.round(w),
+    losses: Math.round(l),
+    draws: Math.round(d),
+    win_rate: w / m,
+    pick_count: Math.round(pc),
+    ban_count: Math.round(bc),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // getFactionsWithStats
 // ---------------------------------------------------------------------------
 
@@ -148,6 +195,53 @@ export async function getFactionsWithStats(
   if (!versionId) {
     const factions = await prisma.faction.findMany({ orderBy: { display_order: 'asc' } });
     return factions.map((f) => ({ faction: asFactionDto(f), stats: null }));
+  }
+
+  // "All time": weighted amalgam over every version (1/k by reverse-chronological rank). Combine the
+  // precomputed per-version FactionStats; top player is the all-versions leader (unweighted games).
+  if (versionId === 'all') {
+    const [weights, factions, allStats, topPlayers] = await Promise.all([
+      getVersionDecayWeights(prisma),
+      prisma.faction.findMany({ orderBy: { display_order: 'asc' } }),
+      prisma.factionStats.findMany({ where: { battle_type: battleType } }),
+      prisma.$queryRaw<{ faction_id: string; username: string; games: number }[]>`
+        WITH sides AS (
+          SELECT mg.player1_faction_id AS faction_id, m.player1_id AS player_id
+          FROM "MatchGame" mg JOIN "Match" m ON m.id = mg.match_id
+          WHERE mg.status = 'COMPLETED' AND m.deleted_at IS NULL
+            AND mg.player1_faction_id IS NOT NULL AND m.player1_id IS NOT NULL
+          UNION ALL
+          SELECT mg.player2_faction_id, m.player2_id
+          FROM "MatchGame" mg JOIN "Match" m ON m.id = mg.match_id
+          WHERE mg.status = 'COMPLETED' AND m.deleted_at IS NULL
+            AND mg.player2_faction_id IS NOT NULL AND m.player2_id IS NOT NULL
+        ),
+        counts AS (
+          SELECT faction_id, player_id, COUNT(*)::int AS games,
+            ROW_NUMBER() OVER (PARTITION BY faction_id ORDER BY COUNT(*) DESC, player_id) AS rn
+          FROM sides GROUP BY faction_id, player_id
+        )
+        SELECT c.faction_id, c.games, u.username
+        FROM counts c JOIN "User" u ON u.id = c.player_id
+        WHERE c.rn = 1
+      `,
+    ]);
+    const topByFaction = new Map(topPlayers.map((t) => [t.faction_id, { username: t.username, games: t.games }]));
+    const byFaction = new Map<string, Array<{ stats: FactionStatsDto; weight: number }>>();
+    for (const s of allStats) {
+      const weight = weights.get(s.version_id) ?? 0;
+      if (weight === 0) continue;
+      const list = byFaction.get(s.faction_id) ?? [];
+      list.push({ stats: asFactionStatsDto(s), weight });
+      byFaction.set(s.faction_id, list);
+    }
+    return factions.map((f) => {
+      const combined = combineFactionStatsAllTime(byFaction.get(f.id) ?? []);
+      return {
+        faction: asFactionDto(f),
+        stats: combined ? { ...combined, top_player: topByFaction.get(f.id) ?? null } : null,
+      };
+    });
   }
 
   const [factions, topPlayers] = await Promise.all([
