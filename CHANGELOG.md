@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.7.0] — 2026-09-27
+
+### Added
+- **The home-page leaderboard now shows the real standings.** It lists the top 10 of the current quarter's Overall board (1v1) — and only players who have cleared this quarter's activity bar — instead of an unrelated legacy ranking. "View full leaderboard" opens the same board.
+- **Missed check-in? You can now ask to join a running tournament.** If you signed up but did not check in before the start and the host allows late joins, your tournament page shows a "Request to join" button that notifies the host automatically — instead of leaving you to work out that you had to DM them.
+
+### Removed
+- **The "Your Factions" block is gone from the home page.**
+
 ## [2.6.0] — 2026-09-26
 
 ### Added
