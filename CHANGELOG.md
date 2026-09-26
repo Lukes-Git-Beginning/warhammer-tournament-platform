@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.6.0] — 2026-09-26
+
+### Added
+- **Profiles: filter and page through your full history.** The games list is paginated (25/page, every game available — no cap) with filters for result (win / loss / draw), battle type, your faction, opponent faction, and source (tournament / ladder / challenge). Recent tournaments are paginated too (10/page, all of them).
+
+### Changed
+- **The profile version selector moved to the top and scopes more.** It now filters your Record, your Win/Loss and your Faction Proficiency (default All-Time). Your skill standing and its graph stay all-time — your canonical rating doesn't change per version — and are labelled as such.
+- **Usage-over-time chart stacking order:** Challenge at the bottom, then Ladder, with Tournament on top.
+
 ## [2.5.0] — 2026-09-25
 
 ### Added
