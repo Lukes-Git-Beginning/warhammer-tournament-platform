@@ -94,9 +94,10 @@ export function UsageOverTimeChart() {
               <YAxis allowDecimals={false} tick={{ fill: '#9ca3af', fontSize: 11 }} width={32} />
               <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Area type="monotone" dataKey="tournament" name="Tournament" stackId="1" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.5} strokeWidth={2} />
-              <Area type="monotone" dataKey="ladder" name="Ladder" stackId="1" stroke="#d4a853" fill="#d4a853" fillOpacity={0.5} strokeWidth={2} />
+              {/* Declaration order = bottom→top of the stack: Challenge, Ladder, Tournament. */}
               <Area type="monotone" dataKey="challenge" name="Challenge" stackId="1" stroke="#a78bfa" fill="#a78bfa" fillOpacity={0.5} strokeWidth={2} />
+              <Area type="monotone" dataKey="ladder" name="Ladder" stackId="1" stroke="#d4a853" fill="#d4a853" fillOpacity={0.5} strokeWidth={2} />
+              <Area type="monotone" dataKey="tournament" name="Tournament" stackId="1" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.5} strokeWidth={2} />
             </AreaChart>
           ) : (
             <LineChart data={series} margin={{ left: 4, right: 16, top: 4 }}>
@@ -105,9 +106,10 @@ export function UsageOverTimeChart() {
               <YAxis allowDecimals={false} tick={{ fill: '#9ca3af', fontSize: 11 }} width={32} />
               <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="tournament" name="Tournament" stroke="#38bdf8" dot={false} strokeWidth={2} />
-              <Line type="monotone" dataKey="ladder" name="Ladder" stroke="#d4a853" dot={false} strokeWidth={2} />
+              {/* Match the stacked order so the legend is consistent: Challenge, Ladder, Tournament. */}
               <Line type="monotone" dataKey="challenge" name="Challenge" stroke="#a78bfa" dot={false} strokeWidth={2} />
+              <Line type="monotone" dataKey="ladder" name="Ladder" stroke="#d4a853" dot={false} strokeWidth={2} />
+              <Line type="monotone" dataKey="tournament" name="Tournament" stroke="#38bdf8" dot={false} strokeWidth={2} />
             </LineChart>
           )}
         </ResponsiveContainer>
