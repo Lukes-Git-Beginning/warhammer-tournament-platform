@@ -323,9 +323,12 @@ export interface RegisterButtonProps {
   isLoggedIn: boolean;
   /** Required for BALANCED_LIECHTENSTEIN band selection. */
   userId?: string;
+  /** REGISTERED player who missed check-in and was left out of the running bracket (1v1). When
+   *  the host allows late joins, they may re-request a spot through the normal sign-up flow. */
+  isLeftOut?: boolean;
 }
 
-export function RegisterButton({ tournament, participantStatus, isLoggedIn, userId }: RegisterButtonProps) {
+export function RegisterButton({ tournament, participantStatus, isLoggedIn, userId, isLeftOut }: RegisterButtonProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
@@ -388,6 +391,9 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
   // Late-join: after start, when the host enabled it, the same sign-up flow submits
   // a join REQUEST (pending host approval) instead of entering directly.
   const lateJoinMode = tournament.status === 'ONGOING' && !!tournament.allow_late_join_requests;
+  // A left-out registered player (missed check-in) re-entering via the late-join request flow:
+  // treat them like a fresh requester (skip the "you're registered" box + the full-tournament wall).
+  const canRejoin = lateJoinMode && !!isLeftOut;
   const register = useMutation({
     mutationFn: (opts?: { requested_band?: number }) => {
       const factionOpts =
@@ -438,7 +444,9 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
   // Late-join (tournament already running): existing participants need no CTA; a
   // pending requester sees a note; everyone else falls through to the request flow.
   if (lateJoinMode) {
-    if (participantStatus === 'REGISTERED' || participantStatus === 'CHECKED_IN' || participantStatus === 'DISQUALIFIED') {
+    // A left-out registered player (canRejoin) falls through to the request flow; everyone else
+    // already in the tournament needs no CTA.
+    if ((participantStatus === 'REGISTERED' && !canRejoin) || participantStatus === 'CHECKED_IN' || participantStatus === 'DISQUALIFIED') {
       return null;
     }
     if (participantStatus === 'JOIN_REQUESTED') {
@@ -450,7 +458,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
     }
   }
 
-  if (participantStatus === 'REGISTERED' || participantStatus === 'CHECKED_IN') {
+  if (!canRejoin && (participantStatus === 'REGISTERED' || participantStatus === 'CHECKED_IN')) {
     return (
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 rounded-md border border-rizzotto-success/40 bg-rizzotto-success/10 px-4 py-2.5">
@@ -498,7 +506,9 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
     );
   }
 
-  const isFull = tournament.max_participants != null && (tournament.participantCount ?? 0) >= tournament.max_participants;
+  // A left-out registered player is already counted in participantCount, so the "full" wall
+  // shouldn't block their re-request.
+  const isFull = !canRejoin && tournament.max_participants != null && (tournament.participantCount ?? 0) >= tournament.max_participants;
   if (isFull) {
     return (
       <div className="flex items-center gap-2 rounded-md border border-rizzotto-iron-600 bg-rizzotto-iron-900 px-4 py-2.5">
@@ -713,6 +723,11 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
       {isReRegister && (
         <p className="mb-2 text-xs text-rizzotto-stone-400">
           You&apos;ve withdrawn — you can sign up again (e.g. to change your faction choice).
+        </p>
+      )}
+      {canRejoin && (
+        <p className="mb-2 text-xs text-rizzotto-stone-400">
+          You didn&apos;t check in before the start, so you&apos;re not in the bracket. Request to join and the host will be notified.
         </p>
       )}
       <div className="flex items-center gap-3">

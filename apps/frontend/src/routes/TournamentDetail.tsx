@@ -330,6 +330,22 @@ export function TournamentDetail() {
   // Derive participant status from the /participants/me endpoint
   const participantStatus: ParticipantStatus | null = participantData?.status ?? null;
 
+  // A player who registered but never checked in can be left OUT of the bracket at start (only
+  // checked-in players are seeded when anyone checked in) — such a player is REGISTERED yet holds
+  // no match. Offer them the late-join request flow (host-approved re-entry) instead of a
+  // meaningless "drop" button. Late-join requests aren't wired for teams, so scope this to 1v1.
+  const isInBracket =
+    !!user && (bracket?.matches ?? []).some((m) => m.player1Id === user.id || m.player2Id === user.id);
+  const registeredLeftOut =
+    tournament.competitor_format !== 'TWO_V_TWO' &&
+    tournament.status === 'ONGOING' &&
+    participantStatus === 'REGISTERED' &&
+    !isInBracket;
+  // Only offer the re-request button (and replace the self-drop with it) when the host actually
+  // accepts late joins; otherwise leave the existing UI untouched — no regression for tournaments
+  // that don't allow re-entry.
+  const canRequestRejoin = registeredLeftOut && !!tournament.allow_late_join_requests;
+
   // Derive current opponent from the active bracket match where user is a player
   const currentMatchOpponentId: string | undefined = (() => {
     if (!user || !bracket) return undefined;
@@ -676,6 +692,7 @@ export function TournamentDetail() {
             participantStatus={participantStatus}
             isLoggedIn={!!user}
             userId={user?.id}
+            isLeftOut={canRequestRejoin}
           />
         </section>
       )}
@@ -690,7 +707,9 @@ export function TournamentDetail() {
       )}
 
       {/* ─── Self-Drop (active participants during ONGOING) ─── */}
-      {user && tournament.status === 'ONGOING' &&
+      {/* Left-out registered players who can re-request (no bracket match + late-join on) get the
+          request button instead of a meaningless drop. */}
+      {user && tournament.status === 'ONGOING' && !canRequestRejoin &&
         (participantStatus === 'REGISTERED' || participantStatus === 'CHECKED_IN') && (
         <section className="mb-6">
           {(() => {

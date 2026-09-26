@@ -503,11 +503,27 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const existing = await fastify.prisma.tournamentParticipant.findFirst({
         where: { tournament_id: tournament.id, user_id: request.user.sub },
-        select: { id: true, status: true },
+        select: { id: true, status: true, team_id: true },
       });
-      // Already actively in — a re-request (JOIN_REQUESTED) or prior WITHDREW is fine.
+      // Already actively in — a re-request (JOIN_REQUESTED) or prior WITHDREW is fine. A player
+      // who registered on time but missed check-in and was left OUT of the bracket at start (only
+      // checked-in players are seeded) is REGISTERED yet has no match — let them re-request a spot
+      // via the same host-approval flow. But a REGISTERED competitor who is actually PLAYING (e.g.
+      // a tournament where nobody checked in, so all REGISTERED were admitted) must not be able to
+      // demote themselves out of the running bracket — block them if they hold a match.
       if (existing && existing.status !== 'WITHDREW' && existing.status !== 'JOIN_REQUESTED') {
-        return reply.code(409).send({ error: 'Conflict', message: 'You are already part of this tournament', statusCode: 409 });
+        let blocked = true;
+        if (existing.status === 'REGISTERED') {
+          const competitorId = existing.team_id ?? request.user.sub; // opaque match slot id (user for 1v1, team for 2v2)
+          const playing = await fastify.prisma.match.findFirst({
+            where: { tournament_id: tournament.id, OR: [{ player1_id: competitorId }, { player2_id: competitorId }] },
+            select: { id: true },
+          });
+          blocked = playing !== null;
+        }
+        if (blocked) {
+          return reply.code(409).send({ error: 'Conflict', message: 'You are already part of this tournament', statusCode: 409 });
+        }
       }
 
       const participant = existing
