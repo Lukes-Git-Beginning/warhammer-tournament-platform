@@ -687,10 +687,15 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         battleType: z.enum(['OVERALL', 'DOMINATION', 'CONQUEST', 'SIEGE']).default('OVERALL'),
         competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).default('ONE_V_ONE'),
         quarter: z.string().optional(), // "YYYY-Qn"; default = current quarter
+        // Restrict to competitors that cleared this quarter's activity gate (e.g. landing-page teaser).
+        qualifiedOnly: z
+          .string()
+          .optional()
+          .transform((v) => v === 'true' || v === '1'),
       })
       .safeParse(request.query);
     if (!parsed.success) return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
-    const { page, pageSize, battleType, competitorFormat, quarter } = parsed.data;
+    const { page, pageSize, battleType, competitorFormat, quarter, qualifiedOnly } = parsed.data;
     const overrides = await loadQuarterOverrides(fastify.prisma);
     const q = resolveQuarter(quarter ?? quarterValue(currentQuarter()), overrides);
     if (!q) return reply.code(400).send({ error: 'BadRequest', message: 'Invalid quarter', statusCode: 400 });
@@ -699,7 +704,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
     const quarters = listQuartersResolved(overrides).map((p) => ({ value: p.value, label: p.label }));
     return cached(
       fastify.redis,
-      cacheKey('leaderboard:quarterly', { page, pageSize, battleType, competitorFormat, quarter: q.value, gate, from: q.from.toISOString(), to: q.to.toISOString() }),
+      cacheKey('leaderboard:quarterly', { page, pageSize, battleType, competitorFormat, quarter: q.value, gate, qualifiedOnly, from: q.from.toISOString(), to: q.to.toISOString() }),
       async () => {
         const board = await computeGsBoard(fastify.prisma, fastify.redis, {
           versionId: null,
@@ -714,8 +719,11 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         const inScope = (e: (typeof board)[number]) => (battleType === 'OVERALL' ? e.gamesCount : e.battleTypeGames);
         const played = board.filter((e) => inScope(e) >= 1);
         const qualifiedCount = played.filter((e) => inScope(e) >= gate).length;
-        const total = played.length;
-        const slice = played.slice((page - 1) * pageSize, page * pageSize);
+        // `qualifiedOnly` (landing-page teaser) keeps only gate-clearers and renumbers ranks
+        // 1..N among them; the default board shows everyone who played, flagged via `qualified`.
+        const source = qualifiedOnly ? played.filter((e) => inScope(e) >= gate) : played;
+        const total = source.length;
+        const slice = source.slice((page - 1) * pageSize, page * pageSize);
         const display = await resolveBoardDisplay(fastify.prisma, competitorFormat, slice.map((e) => e.competitorId));
         const entries = slice.flatMap((e, i) => {
           const d = display(e.competitorId);

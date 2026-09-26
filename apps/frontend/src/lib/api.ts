@@ -825,6 +825,8 @@ export function getQuarterlyLeaderboard(opts?: {
   quarter?: string;
   page?: number;
   pageSize?: number;
+  /** Return only competitors that cleared this quarter's activity gate (e.g. landing-page teaser). */
+  qualifiedOnly?: boolean;
 }): Promise<QuarterlyResponse> {
   const params = new URLSearchParams();
   if (opts?.battleType) params.set('battleType', opts.battleType);
@@ -832,6 +834,7 @@ export function getQuarterlyLeaderboard(opts?: {
   if (opts?.quarter) params.set('quarter', opts.quarter);
   if (opts?.page) params.set('page', String(opts.page));
   if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
+  if (opts?.qualifiedOnly) params.set('qualifiedOnly', 'true');
   const qs = params.toString();
   return apiFetch<QuarterlyResponse>(`/api/leaderboard/quarterly${qs ? `?${qs}` : ''}`);
 }

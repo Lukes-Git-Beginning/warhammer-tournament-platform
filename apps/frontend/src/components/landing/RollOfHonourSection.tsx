@@ -9,25 +9,36 @@ import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getLeaderboard } from '@/lib/api';
+import { getQuarterlyLeaderboard } from '@/lib/api';
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
+// GS → win% vs the average active player (logistic), matching the Rankings/Quarterly board.
+const winPct = (gs: number) => Math.round((1 / (1 + Math.exp(-gs))) * 100);
+
 /**
  * Section 4 — Roll of Honour.
- * Top-10 marshals by dynamic weighted version standing (final points, Alex-Spec).
- * Uses getLeaderboard() and degrades to empty / loading states gracefully.
+ * Top-10 of the current-quarter Overall qualifier board (1v1), showing only players who have
+ * cleared this quarter's activity gate. Uses getQuarterlyLeaderboard({ qualifiedOnly: true }) and
+ * degrades to empty / loading states gracefully.
  */
 export function RollOfHonourSection() {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['leaderboard', 'landing-top-10'],
-    queryFn: () => getLeaderboard({ page: 1, pageSize: 10 }),
+    queryKey: ['leaderboard', 'quarterly', 'landing-top-10'],
+    queryFn: () =>
+      getQuarterlyLeaderboard({
+        battleType: 'OVERALL',
+        competitorFormat: 'ONE_V_ONE',
+        qualifiedOnly: true,
+        pageSize: 10,
+      }),
     retry: false,
   });
 
-  const entries = data?.entries ?? [];
+  // 1v1 Overall Quarterly board → entries always carry `user`; keep only those, top 10.
+  const entries = (data?.entries ?? []).filter((e) => e.user).slice(0, 10);
   const hasEntries = entries.length > 0;
 
   return (
@@ -88,39 +99,46 @@ export function RollOfHonourSection() {
                 }}
                 className="divide-y divide-rizzotto-iron-700"
               >
-                {entries.slice(0, 10).map((entry, idx) => (
-                  <motion.li
-                    key={entry.playerId}
-                    variants={{
-                      hidden: reduced ? { opacity: 0 } : { opacity: 0, y: 10 },
-                      visible: {
-                        opacity: 1,
-                        y: 0,
-                        transition: { duration: 0.32, ease: [0.4, 0, 0.2, 1] },
-                      },
-                    }}
-                    className="group grid grid-cols-[2.5rem_2.5rem_1fr_auto] items-center gap-4 px-5 py-3 transition-colors hover:bg-rizzotto-iron-800/70"
-                  >
-                    <span
-                      className="font-display text-xl font-semibold tabular-nums text-rizzotto-bronze group-hover:text-rizzotto-gold-400"
-                      aria-label={`Rank ${idx + 1}`}
+                {entries.map((entry, idx) => {
+                  const u = entry.user;
+                  if (!u) return null;
+                  return (
+                    <motion.li
+                      key={u.id}
+                      variants={{
+                        hidden: reduced ? { opacity: 0 } : { opacity: 0, y: 10 },
+                        visible: {
+                          opacity: 1,
+                          y: 0,
+                          transition: { duration: 0.32, ease: [0.4, 0, 0.2, 1] },
+                        },
+                      }}
+                      className="group grid grid-cols-[2.5rem_2.5rem_1fr_auto] items-center gap-4 px-5 py-3 transition-colors hover:bg-rizzotto-iron-800/70"
                     >
-                      {ROMAN[idx] ?? idx + 1}
-                    </span>
-                    <Link to="/users/$id" params={{ id: entry.playerId }} className="hover:opacity-80 transition-opacity">
-                      <Avatar goldRim={idx < 3} className="size-10">
-                        {entry.avatarUrl && <AvatarImage src={entry.avatarUrl} alt="" />}
-                        <AvatarFallback>{entry.displayName[0]?.toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                    </Link>
-                    <Link to="/users/$id" params={{ id: entry.playerId }} className="truncate font-medium text-rizzotto-stone-100 group-hover:text-rizzotto-gold-300 hover:text-rizzotto-gold-400 transition-colors">
-                      {entry.displayName}
-                    </Link>
-                    <span className="font-mono tabular-nums text-rizzotto-gold-400">
-                      {Math.round(entry.totalFinalPoints)}
-                    </span>
-                  </motion.li>
-                ))}
+                      <span
+                        className="font-display text-xl font-semibold tabular-nums text-rizzotto-bronze group-hover:text-rizzotto-gold-400"
+                        aria-label={`Rank ${idx + 1}`}
+                      >
+                        {ROMAN[idx] ?? idx + 1}
+                      </span>
+                      <Link to="/users/$id" params={{ id: u.id }} className="hover:opacity-80 transition-opacity">
+                        <Avatar goldRim={idx < 3} className="size-10">
+                          {u.avatar_url && <AvatarImage src={u.avatar_url} alt="" />}
+                          <AvatarFallback>{u.username[0]?.toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                      </Link>
+                      <Link to="/users/$id" params={{ id: u.id }} className="truncate font-medium text-rizzotto-stone-100 group-hover:text-rizzotto-gold-300 hover:text-rizzotto-gold-400 transition-colors">
+                        {u.username}
+                      </Link>
+                      <span
+                        className="font-mono tabular-nums text-rizzotto-gold-400"
+                        title={`GS ${entry.generalSkill.toFixed(2)} · Band ${entry.band}`}
+                      >
+                        {winPct(entry.generalSkill)}%
+                      </span>
+                    </motion.li>
+                  );
+                })}
               </motion.ol>
             )}
 

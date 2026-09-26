@@ -312,6 +312,32 @@ describe('GET /api/leaderboard/quarterly (filtered)', () => {
     expect(typeof body.gate).toBe('number');
     expect(typeof body.capGames).toBe('number');
   });
+
+  it('qualifiedOnly=true returns only gate-clearers, capped to the qualified count', async () => {
+    const full = await app.inject({
+      method: 'GET',
+      url: '/api/leaderboard/quarterly?battleType=OVERALL&competitorFormat=ONE_V_ONE&pageSize=1000',
+    });
+    const filtered = await app.inject({
+      method: 'GET',
+      url: '/api/leaderboard/quarterly?battleType=OVERALL&competitorFormat=ONE_V_ONE&pageSize=1000&qualifiedOnly=true',
+    });
+    expect(full.statusCode).toBe(200);
+    expect(filtered.statusCode).toBe(200);
+    type Body = {
+      entries: { qualified: boolean }[];
+      total: number;
+      qualifiedCount: number;
+    };
+    const fullBody = full.json<Body>();
+    const fBody = filtered.json<Body>();
+    // Every returned entry cleared the gate; total collapses to the qualified count.
+    expect(fBody.entries.every((e) => e.qualified === true)).toBe(true);
+    expect(fBody.total).toBe(fullBody.qualifiedCount);
+    // qualifiedCount is an invariant regardless of the filter.
+    expect(fBody.qualifiedCount).toBe(fullBody.qualifiedCount);
+    expect(fBody.total).toBeLessThanOrEqual(fullBody.total);
+  });
 });
 
 
