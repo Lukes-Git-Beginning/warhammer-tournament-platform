@@ -1,16 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import {
   getUserProfile,
   getUserGames,
+  getUserTournaments,
   getUserVersionStats,
+  getFactions,
   listVersions,
   getPlayerAntiFarming,
   getAdminUserQueuePenalty,
   liftAdminUserQueueCooldown,
   type AntiFarmingOpponent,
+  type UserGamesFilters,
 } from '@/lib/api.js';
 import { patchMePreferences } from '@/lib/onboarding.js';
 import type { UserMe } from '@rizzotto/types';
@@ -188,16 +191,180 @@ interface StatsSectionProps {
   wins: number;
   losses: number;
   gamesPlayed: number;
+  versionId?: string; // undefined = All-Time; scopes the faction proficiency view
 }
 
-function StatsSection({ userId, wins, losses, gamesPlayed }: StatsSectionProps) {
+function StatsSection({ userId, wins, losses, gamesPlayed, versionId }: StatsSectionProps) {
   const winRate = gamesPlayed > 0 ? wins / gamesPlayed : 0;
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_2fr]">
       <WinLossCard wins={wins} losses={losses} winRate={winRate} />
-      <PlayerFactionProficiencyCard userId={userId} />
+      <PlayerFactionProficiencyCard userId={userId} versionId={versionId} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Recent tournaments / games — paginated, all entries available (no time cap).
+// ---------------------------------------------------------------------------
+
+function Pager({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+  const btn =
+    'rounded border border-stone-700 px-3 py-1 text-stone-300 transition-colors hover:bg-stone-800 disabled:opacity-40 disabled:hover:bg-transparent';
+  return (
+    <div className="mt-3 flex items-center justify-center gap-4 text-sm">
+      <button type="button" disabled={page <= 1} onClick={() => onChange(page - 1)} className={btn}>
+        ← Prev
+      </button>
+      <span className="text-stone-500">{page} / {totalPages}</span>
+      <button type="button" disabled={page >= totalPages} onClick={() => onChange(page + 1)} className={btn}>
+        Next →
+      </button>
+    </div>
+  );
+}
+
+function RecentTournamentsSection({ userId }: { userId: string }) {
+  const { t } = useTranslation();
+  const [page, setPage] = useState(1);
+  const { data } = useQuery({
+    queryKey: ['user-tournaments', userId, page],
+    queryFn: () => getUserTournaments(userId, page, 10),
+  });
+  const results = data?.results ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / 10));
+
+  return (
+    <section>
+      <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
+        {t('user_profile.recent_tournaments')}
+      </h2>
+      {total === 0 ? (
+        <EmptyState
+          variant="compact"
+          title={t('user_profile.empties.tournaments.title')}
+          body={t('user_profile.empties.tournaments.body')}
+        />
+      ) : (
+        <>
+          <div className="overflow-x-auto rounded-md border border-stone-800">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-stone-800 bg-stone-900/60">
+                  <th className="px-4 py-3 text-left font-medium text-stone-400">{t('user_profile.stats.tournaments')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone-400">Placement</th>
+                  <th className="px-4 py-3 text-right font-medium text-stone-400">{t('common.date')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-800/60">
+                {results.map((r, i) => (
+                  <tr key={i} className="hover:bg-stone-800/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <Link
+                        to="/tournaments/$slug"
+                        params={{ slug: r.tournament.slug }}
+                        className="text-stone-200 hover:text-rizzotto-gold-500 transition-colors"
+                      >
+                        {r.tournament.name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-stone-400">
+                      {r.placement != null ? `#${r.placement}` : <span className="text-stone-600">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right text-stone-500">{formatInUserTimezone(r.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pager page={page} totalPages={totalPages} onChange={setPage} />
+        </>
+      )}
+    </section>
+  );
+}
+
+const GAME_SELECT_CLASS =
+  'rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none';
+
+function RecentGamesSection({ userId }: { userId: string }) {
+  const [page, setPage] = useState(1);
+  const [result, setResult] = useState('');
+  const [battleType, setBattleType] = useState('');
+  const [ownFactionId, setOwnFactionId] = useState('');
+  const [oppFactionId, setOppFactionId] = useState('');
+  const [source, setSource] = useState('');
+
+  // Any filter change resets to page 1.
+  useEffect(() => {
+    setPage(1);
+  }, [result, battleType, ownFactionId, oppFactionId, source]);
+
+  const { data: factionsData } = useQuery({ queryKey: ['factions'], queryFn: () => getFactions() });
+  const factions = (factionsData?.data ?? []).map((x) => x.faction);
+
+  const filters: UserGamesFilters = {
+    result: (result || undefined) as UserGamesFilters['result'],
+    battleType: (battleType || undefined) as UserGamesFilters['battleType'],
+    ownFactionId: ownFactionId || undefined,
+    oppFactionId: oppFactionId || undefined,
+    source: (source || undefined) as UserGamesFilters['source'],
+  };
+  const { data } = useQuery({
+    queryKey: ['user-games', userId, page, filters],
+    queryFn: () => getUserGames(userId, page, 25, filters),
+  });
+  const games = data?.games ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / 25));
+
+  return (
+    <section>
+      <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">Recent Games</h2>
+      <div className="mb-3 flex flex-wrap gap-2">
+        <select value={result} onChange={(e) => setResult(e.target.value)} aria-label="Result" className={GAME_SELECT_CLASS}>
+          <option value="">All results</option>
+          <option value="win">Wins</option>
+          <option value="loss">Losses</option>
+          <option value="draw">Draws</option>
+        </select>
+        <select value={battleType} onChange={(e) => setBattleType(e.target.value)} aria-label="Battle type" className={GAME_SELECT_CLASS}>
+          <option value="">All battle types</option>
+          <option value="DOMINATION">Domination</option>
+          <option value="CONQUEST">Conquest</option>
+          <option value="SIEGE">Siege</option>
+        </select>
+        <select value={ownFactionId} onChange={(e) => setOwnFactionId(e.target.value)} aria-label="Your faction" className={GAME_SELECT_CLASS}>
+          <option value="">Any faction</option>
+          {factions.map((f) => (
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+        <select value={oppFactionId} onChange={(e) => setOppFactionId(e.target.value)} aria-label="Opponent faction" className={GAME_SELECT_CLASS}>
+          <option value="">Any opponent</option>
+          {factions.map((f) => (
+            <option key={f.id} value={f.id}>vs {f.name}</option>
+          ))}
+        </select>
+        <select value={source} onChange={(e) => setSource(e.target.value)} aria-label="Source" className={GAME_SELECT_CLASS}>
+          <option value="">All sources</option>
+          <option value="tournament">Tournament</option>
+          <option value="ladder">Ladder</option>
+          <option value="challenge">Challenge</option>
+        </select>
+      </div>
+      {total === 0 ? (
+        <EmptyState variant="compact" title="No games" body="No games match these filters." />
+      ) : (
+        <>
+          <GameHistoryTable games={games} showTournament />
+          <Pager page={page} totalPages={totalPages} onChange={setPage} />
+        </>
+      )}
+    </section>
   );
 }
 
@@ -366,11 +533,6 @@ export function UserProfilePage() {
     retry: false,
   });
 
-  const { data: gamesData } = useQuery({
-    queryKey: ['user-games', id],
-    queryFn: () => getUserGames(id, 1, 20),
-  });
-
   const { data: versionsData } = useQuery({ queryKey: ['versions'], queryFn: listVersions });
   const { data: verStats } = useQuery({
     queryKey: ['user-version-stats', id, statsVersion],
@@ -396,12 +558,29 @@ export function UserProfilePage() {
     );
   }
 
-  const { user, current_version, all_time, recent_results } = data;
+  const { user, all_time } = data;
 
   const joinedDate = formatInUserTimezone(user.created_at, undefined, { showTime: false });
 
   const roleLabel = t(`user_profile.roles.${user.role}`, { defaultValue: user.role });
   const roleColor = ROLE_COLORS[user.role] ?? 'bg-stone-700 text-stone-300';
+
+  // Version scope for the stats blocks (Record, Win/Loss, Faction Proficiency). 'all' → All-Time
+  // (reuse the profile's all_time totals); a specific version → the on-demand version-stats fetch.
+  const statsVersionId = statsVersion === 'all' ? undefined : statsVersion;
+  const shownStats =
+    statsVersion === 'all'
+      ? {
+          total_points: all_time.total_points,
+          games_played: all_time.games_played,
+          wins: all_time.wins,
+          losses: all_time.losses,
+        }
+      : verStats;
+  const scopeName =
+    statsVersion === 'all'
+      ? t('user_profile.all_time')
+      : versionsData?.data.find((v) => v.id === statsVersion)?.name ?? '';
 
   return (
     <PageShell variant="wide" className="space-y-8">
@@ -420,12 +599,37 @@ export function UserProfilePage() {
         </div>
       </div>
 
-      {/* Skill standing */}
-      <PlayerLevelScale
-        userId={id}
-        isOwnProfile={isOwnProfile}
-        onCalibrate={() => setWizardOpen(true)}
-      />
+      {/* Stats version scope (top) — applies to Record, Win/Loss and Faction Proficiency below.
+          The skill standing stays all-time (canonical rating) and is labelled as such. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">Stats version</span>
+        <select
+          value={statsVersion}
+          onChange={(e) => setStatsVersion(e.target.value)}
+          aria-label="Stats version"
+          className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-1.5 text-sm font-medium text-rizzotto-stone-200 transition-colors hover:border-rizzotto-iron-500 focus:border-rizzotto-gold-500 focus:outline-none"
+        >
+          <option value="all">All-Time</option>
+          {(versionsData?.data ?? []).map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+              {v.is_active ? ' (active)' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Skill standing — always all-time (canonical rating; the stats-version selector does NOT affect it). */}
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+          Skill standing · all-time
+        </p>
+        <PlayerLevelScale
+          userId={id}
+          isOwnProfile={isOwnProfile}
+          onCalibrate={() => setWizardOpen(true)}
+        />
+      </div>
       {isOwnProfile && (
         <CalibrationWizard userId={id} open={wizardOpen} onOpenChange={setWizardOpen} />
       )}
@@ -447,66 +651,34 @@ export function UserProfilePage() {
         </div>
       )}
 
-      {/* Record — selectable by version, defaults to All-Time (Alex 2026-09-25). One block replaces
-          the old "current version" + "all-time" pair; the selector covers both. */}
+      {/* Record — scoped by the Stats-version selector at the top; defaults to All-Time. */}
       <section>
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500">
-            {statsVersion === 'all'
-              ? t('user_profile.all_time')
-              : versionsData?.data.find((v) => v.id === statsVersion)?.name ?? ''}
-          </h2>
-          <select
-            value={statsVersion}
-            onChange={(e) => setStatsVersion(e.target.value)}
-            aria-label="Version"
-            className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-1.5 text-sm font-medium text-rizzotto-stone-200 transition-colors hover:border-rizzotto-iron-500 focus:border-rizzotto-gold-500 focus:outline-none"
-          >
-            <option value="all">All-Time</option>
-            {(versionsData?.data ?? []).map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-                {v.is_active ? ' (active)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-        {(() => {
-          const isAll = statsVersion === 'all';
-          const s = isAll
-            ? {
-                total_points: all_time.total_points,
-                games_played: all_time.games_played,
-                wins: all_time.wins,
-                losses: all_time.losses,
-              }
-            : verStats;
-          if (!s) {
-            return <p className="py-4 text-sm text-stone-500">{t('common.loading')}</p>;
-          }
-          return (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <StatCard label={t('user_profile.stats.points')} value={Math.round(s.total_points)} />
-              <StatCard label={t('user_profile.stats.games')} value={s.games_played} />
-              <StatCard label={t('user_profile.stats.wins')} value={s.wins} />
-              <StatCard label={t('user_profile.stats.losses')} value={s.losses} />
-              {isAll && (
-                <StatCard
-                  label={t('user_profile.stats.tournaments')}
-                  value={all_time.tournaments_played}
-                />
-              )}
-            </div>
-          );
-        })()}
+        <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">{scopeName}</h2>
+        {!shownStats ? (
+          <p className="py-4 text-sm text-stone-500">{t('common.loading')}</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <StatCard label={t('user_profile.stats.points')} value={Math.round(shownStats.total_points)} />
+            <StatCard label={t('user_profile.stats.games')} value={shownStats.games_played} />
+            <StatCard label={t('user_profile.stats.wins')} value={shownStats.wins} />
+            <StatCard label={t('user_profile.stats.losses')} value={shownStats.losses} />
+            {statsVersion === 'all' && (
+              <StatCard label={t('user_profile.stats.tournaments')} value={all_time.tournaments_played} />
+            )}
+          </div>
+        )}
       </section>
 
-      {/* Statistics Section (neue Cards) */}
+      {/* Statistics Section — Win/Loss + Faction Proficiency, scoped by the same version selector. */}
       <section>
-        <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          Statistics
-        </h2>
-        <StatsSection userId={id} wins={all_time.wins} losses={all_time.losses} gamesPlayed={all_time.games_played} />
+        <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">Statistics</h2>
+        <StatsSection
+          userId={id}
+          wins={shownStats?.wins ?? 0}
+          losses={shownStats?.losses ?? 0}
+          gamesPlayed={shownStats?.games_played ?? 0}
+          versionId={statsVersionId}
+        />
       </section>
 
       {/* Anti-Farming (admin only) */}
@@ -514,72 +686,14 @@ export function UserProfilePage() {
         <AntiFarmingSection playerId={id} />
       )}
 
-      {/* Recent Tournaments */}
-      <section>
-        <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          {t('user_profile.recent_tournaments')}
-        </h2>
-        {recent_results.length === 0 ? (
-          <EmptyState
-            variant="compact"
-            title={t('user_profile.empties.tournaments.title')}
-            body={t('user_profile.empties.tournaments.body')}
-          />
-        ) : (
-          <div className="overflow-x-auto rounded-md border border-stone-800">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-stone-800 bg-stone-900/60">
-                  <th className="px-4 py-3 text-left font-medium text-stone-400">
-                    {t('user_profile.stats.tournaments')}
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-stone-400">
-                    {t('common.date')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-800/60">
-                {recent_results.map((r, i) => (
-                  <tr key={i} className="hover:bg-stone-800/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <Link
-                        to="/tournaments/$slug"
-                        params={{ slug: r.tournament.slug }}
-                        className="text-stone-200 hover:text-rizzotto-gold-500 transition-colors"
-                      >
-                        {r.tournament.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-right text-stone-500">
-                      {formatInUserTimezone(r.created_at)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      {/* Recent Tournaments — paginated (10/page), all available. */}
+      <RecentTournamentsSection userId={id} />
 
       {/* Timezone (own profile only) */}
       {isOwnProfile && me && <TimezoneSection user={me} />}
 
-
-      {/* Recent Games */}
-      <section>
-        <h2 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-3">
-          Recent Games
-        </h2>
-        {gamesData && gamesData.games.length === 0 ? (
-          <EmptyState
-            variant="compact"
-            title={t('user_profile.empties.matches.title')}
-            body={t('user_profile.empties.matches.body')}
-          />
-        ) : (
-          <GameHistoryTable games={gamesData?.games ?? []} showTournament />
-        )}
-      </section>
+      {/* Recent Games — paginated (25/page) + filters, all available. */}
+      <RecentGamesSection userId={id} />
     </PageShell>
   );
 }

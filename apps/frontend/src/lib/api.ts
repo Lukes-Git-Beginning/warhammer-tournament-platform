@@ -3049,8 +3049,42 @@ export function getFactionGames(factionId: string, page = 1, limit = 30, opponen
   return apiFetch<{ games: GameHistoryEntry[]; total: number }>(`/api/meta/games?${params.toString()}`);
 }
 
-export function getUserGames(userId: string, page = 1, limit = 20): Promise<{ games: GameHistoryEntry[]; total: number }> {
-  return apiFetch<{ games: GameHistoryEntry[]; total: number }>(`/api/meta/games?playerId=${encodeURIComponent(userId)}&page=${page}&limit=${limit}`);
+export interface UserGamesFilters {
+  result?: 'win' | 'loss' | 'draw';
+  battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  ownFactionId?: string;
+  oppFactionId?: string;
+  source?: 'tournament' | 'ladder' | 'challenge';
+}
+
+export function getUserGames(
+  userId: string,
+  page = 1,
+  limit = 20,
+  filters?: UserGamesFilters,
+): Promise<{ games: GameHistoryEntry[]; total: number }> {
+  const p = new URLSearchParams({ playerId: userId, page: String(page), limit: String(limit) });
+  if (filters?.result) p.set('result', filters.result);
+  if (filters?.battleType) p.set('battleType', filters.battleType);
+  if (filters?.ownFactionId) p.set('ownFactionId', filters.ownFactionId);
+  if (filters?.oppFactionId) p.set('oppFactionId', filters.oppFactionId);
+  if (filters?.source) p.set('source', filters.source);
+  return apiFetch<{ games: GameHistoryEntry[]; total: number }>(`/api/meta/games?${p.toString()}`);
+}
+
+export interface RecentTournamentEntry {
+  tournament: { slug: string; name: string; start_date: string };
+  version_name: string | null;
+  placement: number | null;
+  created_at: string;
+}
+
+export function getUserTournaments(
+  userId: string,
+  page = 1,
+  limit = 10,
+): Promise<{ results: RecentTournamentEntry[]; total: number; page: number; limit: number }> {
+  return apiFetch(`/api/users/${encodeURIComponent(userId)}/tournaments?page=${page}&limit=${limit}`);
 }
 
 export type FactionTopPlayer = {
