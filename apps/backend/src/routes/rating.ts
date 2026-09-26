@@ -120,18 +120,24 @@ const ratingRoutes: FastifyPluginAsync = async (fastify) => {
   // -------------------------------------------------------------------------
   // #5 — GET /api/players/:id/faction-proficiency?versionId=
   // -------------------------------------------------------------------------
-  fastify.get('/api/players/:id/faction-proficiency', async (request, _reply) => {
+  fastify.get('/api/players/:id/faction-proficiency', async (request, reply) => {
     const { id } = request.params as { id: string };
-    // Faction proficiency is a SKILL measure (player GS + faction offset, both timeless in the model)
-    // over the player's lifetime games — TIMELESS, not scoped to the active version. The version
-    // param is ignored. See policy-version-defaults.
+    const parsed = VersionQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    // Faction proficiency is offered as a version-filterable VIEW on the profile (default All-Time).
+    // The canonical matchmaking/gating band stays timeless elsewhere (getPlayerClassification); this
+    // is just a per-version lens on the player's games + fitted skill. 'all'/omitted = All-Time (null).
+    const raw = parsed.data.versionId;
+    const scoped = raw && raw !== 'all' ? raw : null;
     return cached(
       fastify.redis,
-      cacheKey('leaderboard:proficiency', { scope: 'all-time', playerId: id }),
+      cacheKey('leaderboard:proficiency', { scope: scoped ?? 'all', playerId: id }),
       async () => ({
         playerId: id,
-        versionId: null,
-        entries: await playerFactionProficiency(fastify.prisma, fastify.redis, null, id),
+        versionId: scoped,
+        entries: await playerFactionProficiency(fastify.prisma, fastify.redis, scoped, id),
       }),
       { ttlSeconds: 60 },
     );

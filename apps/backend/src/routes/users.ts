@@ -696,6 +696,65 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     };
   });
 
+  // GET /api/users/:id/tournaments?page=&limit= — paginated participation history (every tournament
+  // the user took part in), newest first. Same row shape as the profile's recent_results.
+  fastify.get('/api/users/:id/tournaments', async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const q = z
+      .object({
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(50).default(10),
+      })
+      .safeParse(request.query);
+    if (!q.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: q.error.message, statusCode: 400 });
+    }
+    const { page, limit } = q.data;
+    const where = { user_id: id, deleted_at: null };
+    const [rows, total] = await Promise.all([
+      fastify.prisma.tournamentParticipant.findMany({
+        where,
+        orderBy: { registered_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          registered_at: true,
+          tournament: {
+            select: {
+              slug: true,
+              name: true,
+              start_date: true,
+              results: {
+                where: { user_id: id },
+                select: { placement: true, created_at: true, version: { select: { name: true } } },
+                take: 1,
+              },
+            },
+          },
+        },
+      }),
+      fastify.prisma.tournamentParticipant.count({ where }),
+    ]);
+    return {
+      results: rows.map((p) => {
+        const result = p.tournament.results[0] ?? null;
+        return {
+          tournament: {
+            slug: p.tournament.slug,
+            name: p.tournament.name,
+            start_date: p.tournament.start_date.toISOString(),
+          },
+          version_name: result?.version?.name ?? null,
+          placement: result?.placement ?? null,
+          created_at: result?.created_at.toISOString() ?? p.registered_at.toISOString(),
+        };
+      }),
+      total,
+      page,
+      limit,
+    };
+  });
+
   // GET /api/users/:id — public
   fastify.get('/api/users/:id', async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);

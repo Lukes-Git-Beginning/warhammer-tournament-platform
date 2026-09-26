@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import type { Prisma } from '@rizzotto/db';
 import { z } from 'zod';
 import { cached, cacheKey } from '../lib/cache.js';
 import { asFactionDto, getFactionsWithStats } from '../lib/factions.js';
@@ -297,6 +298,11 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(), // team-size filter (meta tab)
       versionId: z.union([z.string().uuid(), z.literal('all')]).optional(), // version filter (meta tab); 'all' = All-Time
       battleType: z.enum(BATTLE_TYPES).optional(),                      // battle-type filter (meta tab)
+      // Player-relative filters for the profile games list (all require playerId to be meaningful):
+      result: z.enum(['win', 'loss', 'draw']).optional(),              // outcome for playerId
+      ownFactionId: z.string().optional(),                             // faction on the player's side
+      oppFactionId: z.string().optional(),                             // faction on the opponent's side
+      source: z.enum(['tournament', 'ladder', 'challenge']).optional(), // where the game came from
       // Admin "All Games" search (all optional, AND-combined, case-insensitive substrings):
       q: z.string().trim().optional(),            // player-name words (each must match a player)
       winner: z.string().trim().optional(),       // winner's username
@@ -312,6 +318,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
     const { page, limit, tournamentSlug, factionId, opponentFactionId, playerId, competitorFormat } = parsed.data;
     const { versionId: gamesVersionId, battleType: gamesBattleType } = parsed.data;
     const { q, winner, map: mapQ, faction: factionQ, tournament: tournamentQ } = parsed.data;
+    const { result, ownFactionId, oppFactionId, source } = parsed.data;
     const skip = (page - 1) * limit;
     const ci = (contains: string) => ({ contains, mode: 'insensitive' as const });
 
@@ -355,7 +362,16 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         : competitorFormat === 'ONE_V_ONE'
           ? [{ NOT: { tournament: { competitor_format: 'TWO_V_TWO' as const } } }]
           : [];
-    const matchAnd = [...playerNameAnd, ...competitorFormatCond];
+    // source — where the game came from: tournament / ladder (matchmade Open Play) / challenge.
+    const sourceCond =
+      source === 'tournament'
+        ? [{ type: 'TOURNAMENT' as const }]
+        : source === 'ladder'
+          ? [{ type: 'OPEN_PLAY' as const, source: { in: ['QUEUE', 'AVAILABILITY'] as ('QUEUE' | 'AVAILABILITY')[] } }]
+          : source === 'challenge'
+            ? [{ type: 'OPEN_PLAY' as const, source: 'CHALLENGE' as const }]
+            : [];
+    const matchAnd = [...playerNameAnd, ...competitorFormatCond, ...sourceCond];
 
     // Faction filter at the game level — games are the statistical unit and now always
     // carry their own factions (no participant/match fallback). When both factionId and
@@ -371,13 +387,38 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
         ? { OR: [{ player1_faction_id: factionId }, { player2_faction_id: factionId }] }
         : {};
 
+    // Player-relative game-level filters (need playerId). Collected in an AND array so they don't
+    // collide on the single `OR` / `winner_id` keys used by the admin-search filters.
+    const gameAnd: Prisma.MatchGameWhereInput[] = [];
+    if (Object.keys(gameFactionFilter).length) gameAnd.push(gameFactionFilter);
+    if (playerId) {
+      if (result === 'win') gameAnd.push({ winner_id: playerId });
+      else if (result === 'draw') gameAnd.push({ winner_id: null });
+      else if (result === 'loss') gameAnd.push({ winner_id: { not: null } }, { NOT: { winner_id: playerId } });
+      if (ownFactionId)
+        gameAnd.push({
+          OR: [
+            { player1_faction_id: ownFactionId, match: { player1_id: playerId } },
+            { player2_faction_id: ownFactionId, match: { player2_id: playerId } },
+          ],
+        });
+      if (oppFactionId)
+        gameAnd.push({
+          OR: [
+            { player2_faction_id: oppFactionId, match: { player1_id: playerId } },
+            { player1_faction_id: oppFactionId, match: { player2_id: playerId } },
+          ],
+        });
+    }
+
     // Source set: COMPLETED games on real, non-voided, non-deleted matches. Draws count
     // (no winner_id filter); admin-voided matches (counts_for_leaderboard = false) are
     // excluded. The match's lifecycle status is intentionally not filtered — a real game
     // stays listed even if its container was later cancelled.
     const gameWhere = {
       status: 'COMPLETED' as const,
-      ...gameFactionFilter,
+      // gameFactionFilter (meta-tab) + player-relative result/own/opp-faction filters (profile).
+      ...(gameAnd.length ? { AND: gameAnd } : {}),
       // battleType — meta-tab battle-type selector (per-game column).
       ...(gamesBattleType ? { battle_type: gamesBattleType } : {}),
       // faction:<text> — either side's faction slug contains the text.
