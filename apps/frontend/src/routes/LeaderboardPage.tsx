@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
+import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import {
   getMajorWinsLeaderboard,
   getQuarterlyLeaderboard,
@@ -15,9 +16,12 @@ import {
   type LeaderboardPeriod,
   type RankingsEntry,
   type QuarterlyEntry,
+  type LadderEntry,
+  type MajorWinsEntry,
   type TeamRef,
   type ChampionshipTile,
 } from '@/lib/api.js';
+import { cn } from '@/lib/utils.js';
 import { Select } from '@/components/ui/select.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { EmptyState } from '@/components/ui/empty-state.js';
@@ -45,6 +49,95 @@ function winPct(gs: number): number {
 const TABLE_WRAP =
   'overflow-x-auto rounded-md border border-rizzotto-iron-700/70 bg-rizzotto-iron-900/50 bg-stone-wall-texture bg-[length:512px_512px] bg-blend-soft-light backdrop-blur-sm';
 const THEAD_ROW = 'border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60';
+
+// ---------------------------------------------------------------------------
+// Client-side column sorting (shared by every board)
+//
+// Boards load their whole set in one page (PAGE_SIZE = 1000), so sorting the
+// loaded rows IS sorting the full dataset — no server round-trip needed. The
+// `rank` column stays the canonical standing rank (assigned server-side); we
+// only reorder the displayed rows, so sorting by Games shows "who plays most,
+// and where they sit in the ranking". Ties fall back to rank for stability.
+// ---------------------------------------------------------------------------
+
+type SortDir = 'asc' | 'desc';
+
+/** Sort `rows` by a chosen numeric accessor. `rankKey` is the canonical order + the tiebreaker. */
+function useTableSort<T>(
+  rows: T[],
+  accessors: Record<string, (row: T) => number>,
+  rankKey: string,
+): { sorted: T[]; sortKey: string; sortDir: SortDir; onSort: (key: string, defaultDir: SortDir) => void } {
+  const [sortKey, setSortKey] = useState(rankKey);
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const sorted = useMemo(() => {
+    const acc = accessors[sortKey];
+    if (!acc) return rows;
+    const rankAcc = accessors[rankKey] ?? acc;
+    const mult = sortDir === 'asc' ? 1 : -1;
+    return [...rows].sort((a, b) => mult * (acc(a) - acc(b)) || rankAcc(a) - rankAcc(b));
+  }, [rows, accessors, sortKey, sortDir, rankKey]);
+  const onSort = (key: string, defaultDir: SortDir) => {
+    if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKey(key);
+      setSortDir(defaultDir);
+    }
+  };
+  return { sorted, sortKey, sortDir, onSort };
+}
+
+function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <ChevronsUpDown className="size-3 text-stone-600" aria-hidden />;
+  return dir === 'asc' ? (
+    <ChevronUp className="size-3 text-rizzotto-gold-400" aria-hidden />
+  ) : (
+    <ChevronDown className="size-3 text-rizzotto-gold-400" aria-hidden />
+  );
+}
+
+/** A clickable, sortable column header. `defaultDir` is the direction applied on first click. */
+function SortableTh({
+  label,
+  sortKey,
+  activeKey,
+  dir,
+  onSort,
+  defaultDir = 'desc',
+  align = 'right',
+  title,
+}: {
+  label: string;
+  sortKey: string;
+  activeKey: string;
+  dir: SortDir;
+  onSort: (key: string, defaultDir: SortDir) => void;
+  defaultDir?: SortDir;
+  align?: 'left' | 'right';
+  title?: string;
+}) {
+  const active = activeKey === sortKey;
+  return (
+    <th
+      className={cn('px-4 py-3 font-medium text-stone-400', align === 'right' ? 'text-right' : 'text-left')}
+      aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey, defaultDir)}
+        title={title}
+        className={cn(
+          'inline-flex w-full select-none items-center gap-1 transition-colors hover:text-stone-200',
+          active && 'text-stone-200',
+          align === 'right' ? 'justify-end' : 'justify-start',
+        )}
+      >
+        {label}
+        <SortArrow active={active} dir={dir} />
+      </button>
+    </th>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -246,6 +339,12 @@ interface GsEntry {
   provisional: boolean;
 }
 
+const GS_SORT: Record<string, (e: GsEntry) => number> = {
+  rank: (e) => e.rank,
+  gs: (e) => e.generalSkill,
+  games: (e) => e.gamesCount,
+};
+
 function GsTable({
   entries,
   isLoading,
@@ -262,6 +361,7 @@ function GsTable({
   onPageChange: (p: number) => void;
 }) {
   const { t } = useTranslation();
+  const { sorted, sortKey, sortDir, onSort } = useTableSort(entries, GS_SORT, 'rank');
 
   if (isLoading) {
     return <div className="py-8 text-center text-stone-400 text-sm">{t('common.loading')}</div>;
@@ -293,19 +393,22 @@ function GsTable({
         <table className="min-w-full text-sm">
           <thead>
             <tr className={THEAD_ROW}>
-              <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
+              <SortableTh label="Rank" sortKey="rank" activeKey={sortKey} dir={sortDir} onSort={onSort} defaultDir="asc" align="left" />
               <th className="px-4 py-3 text-left font-medium text-stone-400">Competitor</th>
-              <th
-                className="px-4 py-3 text-right font-medium text-stone-400"
+              <SortableTh
+                label="GS"
+                sortKey="gs"
+                activeKey={sortKey}
+                dir={sortDir}
+                onSort={onSort}
+                defaultDir="desc"
                 title="Win% vs the average active player (from General Skill)"
-              >
-                GS
-              </th>
-              <th className="px-4 py-3 text-right font-medium text-stone-400">Games</th>
+              />
+              <SortableTh label="Games" sortKey="games" activeKey={sortKey} dir={sortDir} onSort={onSort} defaultDir="desc" />
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-800/60">
-            {entries.map((entry) => {
+            {sorted.map((entry) => {
               const isFirst = entry.rank === 1;
               const unqualified = entry.qualified === false;
               const rowClass = `${
@@ -788,6 +891,12 @@ function QuarterlyTab() {
 // Ladder Tab — monthly Open Play points (unchanged content)
 // ---------------------------------------------------------------------------
 
+const LADDER_SORT: Record<string, (e: LadderEntry) => number> = {
+  rank: (e) => e.rank,
+  points: (e) => e.points,
+  games: (e) => e.games,
+};
+
 function LadderTab() {
   const [search, setSearch] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<string | undefined>(undefined);
@@ -810,6 +919,7 @@ function LadderTab() {
   const entries = (data?.entries ?? []).filter((e) =>
     normalize(e.user.username).includes(normalize(search)),
   );
+  const { sorted, sortKey, sortDir, onSort } = useTableSort(entries, LADDER_SORT, 'rank');
 
   const tileMonth = selectedMonth ?? activeMonthValue;
 
@@ -858,15 +968,15 @@ function LadderTab() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className={THEAD_ROW}>
-                <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
+                <SortableTh label="Rank" sortKey="rank" activeKey={sortKey} dir={sortDir} onSort={onSort} defaultDir="asc" align="left" />
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
-                <th className="px-4 py-3 text-right font-medium text-stone-400">Points</th>
+                <SortableTh label="Points" sortKey="points" activeKey={sortKey} dir={sortDir} onSort={onSort} defaultDir="desc" />
                 <th className="px-4 py-3 text-right font-medium text-stone-400">W–L–D</th>
-                <th className="px-4 py-3 text-right font-medium text-stone-400">Games</th>
+                <SortableTh label="Games" sortKey="games" activeKey={sortKey} dir={sortDir} onSort={onSort} defaultDir="desc" />
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-800/60">
-              {entries.map((entry) => (
+              {sorted.map((entry) => (
                 <tr
                   key={entry.user.id}
                   className={`transition-colors ${entry.rank === 1 ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10' : 'hover:bg-stone-800/30'}`}
@@ -912,6 +1022,12 @@ function LadderTab() {
 // Champions Tab — major-tournament wins (renamed from Majors)
 // ---------------------------------------------------------------------------
 
+const CHAMP_SORT: Record<string, (e: MajorWinsEntry) => number> = {
+  rank: (e) => e.rank,
+  wins: (e) => e.wins,
+  gameWins: (e) => e.majorGameWins,
+};
+
 function ChampionsTab() {
   const [search, setSearch] = useState('');
   const { data, isLoading, error } = useQuery({
@@ -922,6 +1038,7 @@ function ChampionsTab() {
   const entries = (data?.entries ?? []).filter((e) =>
     normalize(e.user.username).includes(normalize(search)),
   );
+  const { sorted, sortKey, sortDir, onSort } = useTableSort(entries, CHAMP_SORT, 'rank');
 
   return (
     <div>
@@ -950,20 +1067,23 @@ function ChampionsTab() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-rizzotto-iron-800/80 bg-rizzotto-iron-900/60">
-                <th className="px-4 py-3 text-left font-medium text-stone-400">Rank</th>
+                <SortableTh label="Rank" sortKey="rank" activeKey={sortKey} dir={sortDir} onSort={onSort} defaultDir="asc" align="left" />
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Player</th>
-                <th className="px-4 py-3 text-right font-medium text-stone-400">Major Wins</th>
-                <th
-                  className="px-4 py-3 text-right font-medium text-stone-400"
+                <SortableTh label="Major Wins" sortKey="wins" activeKey={sortKey} dir={sortDir} onSort={onSort} defaultDir="desc" />
+                <SortableTh
+                  label="Game Wins"
+                  sortKey="gameWins"
+                  activeKey={sortKey}
+                  dir={sortDir}
+                  onSort={onSort}
+                  defaultDir="desc"
                   title="Tiebreaker — total game wins across all majors"
-                >
-                  Game Wins
-                </th>
+                />
                 <th className="px-4 py-3 text-left font-medium text-stone-400">Titles</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-800/60">
-              {entries.map((entry) => {
+              {sorted.map((entry) => {
                 const isFirst = entry.rank === 1;
                 const rowClass = isFirst
                   ? 'bg-rizzotto-gold-500/5 hover:bg-rizzotto-gold-500/10'
