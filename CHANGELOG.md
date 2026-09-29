@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.8.0] — 2026-09-29
+
+### Added
+- **Sort any leaderboard by clicking a column header.** Every board still defaults to rank order, but you can now sort by Games (and the other numeric columns — GS, Points, Major Wins) on the All-Time Skill, Quarterly, Ladder and Champions boards. The rank column keeps showing each competitor's true standing while the rows reorder.
+
+### Fixed
+- **Swiss no longer strands players next to a bye.** When someone joins or returns to a Swiss tournament mid-round, or is left without an opponent because their opponent dropped, they are now automatically paired against a player waiting on a bye instead of both sitting idle. A regular check keeps the current round consistent, so a missed pairing self-heals within a minute.
+
 ## [2.7.0] — 2026-09-27
 
 ### Added
