@@ -13,6 +13,7 @@ import { notifyChallengeMatchFound, notifyScheduledMatchReminder, notifyReQueueP
 import { runMatchmakingTick } from '../lib/matchmaking-tick.js';
 import { reconcileBalancedTournaments } from '../lib/balanced-liechtenstein-service.js';
 import { reconcileLiechtensteinTournaments } from '../lib/liechtenstein-service.js';
+import { reconcileSwissTournaments } from '../lib/tournament-utils.js';
 import { getSupporterRoleConfig, refreshSupporterFromDiscord } from '../lib/supporter-service.js';
 import { syncKofiGoal } from '../lib/kofi-goal-sync.js';
 
@@ -366,6 +367,16 @@ export default fp(
           }
         } catch (err) {
           fastify.log.error({ err }, 'Liechtenstein reconciler cron failed');
+        }
+        // Swiss / Auto-Swiss bye reconciler: pair any stranded player (late join, undrop, mid-round
+        // drop, missed trigger) against another idle player instead of leaving two idle next to a bye.
+        try {
+          const count = await reconcileSwissTournaments(fastify);
+          if (count > 0) {
+            fastify.log.debug({ count }, 'Swiss bye reconciler paired stranded players');
+          }
+        } catch (err) {
+          fastify.log.error({ err }, 'Swiss bye reconciler cron failed');
         }
       },
       { timezone: 'UTC' },

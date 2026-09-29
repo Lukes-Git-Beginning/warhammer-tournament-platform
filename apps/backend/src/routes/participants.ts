@@ -1440,6 +1440,8 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           } else {
             // Mark so the UI can show the "opponent withdrew" banner. The flag stores the opaque
             // competitor id (team for 2v2) so it lines up with player1_id/player2_id everywhere.
+            // (A Swiss survivor stranded next to an open bye is re-paired by the Swiss bye reconciler
+            // cron, not here — see reconcileSwissByes.)
             await fastify.prisma.match.update({
               where: { id: m.id },
               data: { withdrawn_player_id: competitorId },

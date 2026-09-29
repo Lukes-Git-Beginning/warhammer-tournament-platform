@@ -19,6 +19,7 @@ import {
 import { getAlreadyQualifiedForQualifier } from './series-qualification.js';
 import { resolveFactionWarFairness } from './matchmaking-service.js';
 import { resolveCompetitorId } from './competitors.js';
+import { reconcileSwissByes } from './tournament-utils.js';
 import {
   notifyRoundPairings,
   notifyMatchesCreated,
@@ -280,6 +281,12 @@ export async function advanceAutoSwissRound(
     },
   });
   if (!tournament?.rounds_count) return;
+
+  // Reconcile any stranded players (late join, drop-orphan, missed trigger) into the current round
+  // BEFORE judging whether it is complete — otherwise the round could be advanced with two players
+  // idle next to a bye. Idempotent no-op when nothing is stranded; closes the advance-vs-reconciler
+  // race for AUTO_SWISS / auto-advance (manual SWISS never auto-advances, so its cron tick suffices).
+  await reconcileSwissByes(prisma, tournamentId).catch(() => {});
 
   const allMatches = await prisma.match.findMany({
     where: { tournament_id: tournamentId, deleted_at: null },
