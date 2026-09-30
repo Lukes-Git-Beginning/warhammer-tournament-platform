@@ -100,18 +100,20 @@ const ratingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
-    const resolved = await resolveVersionId(fastify, parsed.data.versionId);
-    if ('error' in resolved) {
-      return reply.code(resolved.error.code).send({ error: 'NotFound', message: resolved.error.message, statusCode: resolved.error.code });
-    }
+    // 'all' / omitted → the timeless all-games model (All-Time); a specific version → that version.
+    // Mirrors the faction-proficiency endpoint below. (The old resolveVersionId fell 'all' back to the
+    // ACTIVE version, so the model matchup matrix + faction "model strength" showed the current version
+    // regardless of the selector — the timeless model is the correct All-Time view, with full samples.)
+    const raw = parsed.data.versionId;
+    const scoped = raw && raw !== 'all' ? raw : null;
 
     return cached(
       fastify.redis,
-      cacheKey('factions:matchup-matrix', { versionId: resolved.id }),
+      cacheKey('factions:matchup-matrix', { versionId: scoped ?? 'all' }),
       async () => ({
-        versionId: resolved.id,
-        entries: await factionMatchupMatrix(fastify.prisma, fastify.redis, resolved.id),
-        factionStrengths: await factionStrengths(fastify.prisma, fastify.redis, resolved.id),
+        versionId: scoped,
+        entries: await factionMatchupMatrix(fastify.prisma, fastify.redis, scoped),
+        factionStrengths: await factionStrengths(fastify.prisma, fastify.redis, scoped),
       }),
       { ttlSeconds: 60 },
     );

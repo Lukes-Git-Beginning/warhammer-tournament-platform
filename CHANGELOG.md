@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.11.1] — 2026-09-30
+
+### Fixed
+- **Faction "Model Strength" now follows the version selector.** On a faction's page the Model Strength (and the model matchup matrix) were stuck on the current version whenever "All-Time" was selected. All-Time now aggregates games across every version, and picking a specific version shows that version's model.
+
 ## [2.11.0] — 2026-09-30
 
 ### Added

@@ -208,7 +208,7 @@ export interface FactionMatchupMatrixEntry {
 export async function factionMatchupMatrix(
   prisma: PrismaClient,
   redis: Redis | undefined,
-  versionId: string,
+  versionId: string | null, // null = timeless (all versions / All-Time)
 ): Promise<FactionMatchupMatrixEntry[]> {
   const model = await getRatingModel(prisma, redis, { versionId });
   return model.matchupEffects.map((e) => ({
@@ -236,7 +236,7 @@ export interface FactionStrengthEntry {
 export async function factionStrengths(
   prisma: PrismaClient,
   redis: Redis | undefined,
-  versionId: string,
+  versionId: string | null, // null = timeless (all versions / All-Time)
 ): Promise<FactionStrengthEntry[]> {
   const model = await getRatingModel(prisma, redis, { versionId });
   const byFaction = new Map<string, { sum: number; count: number }>();
