@@ -14,7 +14,12 @@ declare module '@tanstack/react-router' {
 import { reportGameResult, startMatchDecision, voidDroppedMatch, assertReplayCorrect, type ReplayIssue } from '@/lib/api';
 import type { GameDto, MapDto } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { LobbyCodeField } from './LobbyCodeField';
+
+// Where TWW3 writes battle replays, shown on the "Attach Replay" upload as a hint.
+const REPLAY_LOCATION_HINT =
+  'Replays are saved to %APPDATA%\\The Creative Assembly\\Warhammer3\\replays (your hidden AppData\\Roaming folder). Auto-saved replays are kept there too.';
 
 /** Side-by-side "Site says / Replay says" for a replay mismatch — the actionable FACTIONS/MAP fields
  *  are shown as a compare so a player (or host) can see exactly what differs and pick the truth. The
@@ -612,6 +617,9 @@ export function GameTile({
                         >
                           {replayFile ? `✓ ${replayFile.name}` : 'Attach Replay (required)'}
                         </button>
+                        <InfoTooltip text={REPLAY_LOCATION_HINT}>
+                          <span className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-gold-400" aria-label="Where to find your replay">ⓘ</span>
+                        </InfoTooltip>
                       </div>
                       {replayError && (
                         <p className="text-xs text-red-400">{replayError}</p>
@@ -905,6 +913,9 @@ function ProvisionalPanel({
             >
               {confirmFile ? `✓ ${confirmFile.name}` : 'Attach replay (optional)'}
             </button>
+            <InfoTooltip text={REPLAY_LOCATION_HINT}>
+              <span className="text-xs text-rizzotto-stone-500 hover:text-rizzotto-gold-400" aria-label="Where to find your replay">ⓘ</span>
+            </InfoTooltip>
           </div>
         </div>
       )}
