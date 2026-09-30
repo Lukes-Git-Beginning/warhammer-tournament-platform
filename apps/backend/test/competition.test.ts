@@ -33,17 +33,24 @@ afterEach(async () => {
   createdUserIds.length = 0;
 });
 
-describe('competition time windows', () => {
-  it('currentQuarter returns the enclosing calendar quarter (UTC)', () => {
+describe('competition time windows (Europe/Berlin boundaries)', () => {
+  it('currentQuarter encloses the calendar quarter at Berlin midnight', () => {
     const q = currentQuarter(new Date('2026-05-15T12:00:00Z'));
-    expect(q.from.toISOString()).toBe('2026-04-01T00:00:00.000Z');
-    expect(q.to.toISOString()).toBe('2026-07-01T00:00:00.000Z');
+    expect(q.from.toISOString()).toBe('2026-03-31T22:00:00.000Z'); // Apr 1 00:00 CEST
+    expect(q.to.toISOString()).toBe('2026-06-30T22:00:00.000Z'); // Jul 1 00:00 CEST
     expect(q.label).toBe('Q2 2026');
   });
-  it('currentMonth returns the enclosing calendar month (UTC)', () => {
-    const m = currentMonth(new Date('2026-11-30T23:00:00Z'));
-    expect(m.from.toISOString()).toBe('2026-11-01T00:00:00.000Z');
-    expect(m.to.toISOString()).toBe('2026-12-01T00:00:00.000Z');
+  it('rolls the quarter and month at Berlin midnight, not UTC midnight', () => {
+    // 2026-09-30T22:30Z is already 2026-10-01 00:30 in Berlin (CEST) → Q4 / October.
+    const at = new Date('2026-09-30T22:30:00Z');
+    const q = currentQuarter(at);
+    expect(q.label).toBe('Q4 2026');
+    expect(q.from.toISOString()).toBe('2026-09-30T22:00:00.000Z'); // Oct 1 00:00 CEST
+    expect(q.to.toISOString()).toBe('2026-12-31T23:00:00.000Z'); // Jan 1 2027 00:00 CET
+    const m = currentMonth(at);
+    expect(m.label).toBe('October 2026');
+    expect(m.from.toISOString()).toBe('2026-09-30T22:00:00.000Z');
+    expect(m.to.toISOString()).toBe('2026-10-31T23:00:00.000Z'); // Nov 1 00:00 CET
   });
 });
 

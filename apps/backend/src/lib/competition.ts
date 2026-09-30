@@ -20,27 +20,61 @@ export interface TimeWindow {
   label: string;
 }
 
-/** Current calendar quarter [from, to) in UTC. */
-export function currentQuarter(now: Date = new Date()): TimeWindow {
-  const y = now.getUTCFullYear();
-  const q = Math.floor(now.getUTCMonth() / 3); // 0..3
-  return {
-    from: new Date(Date.UTC(y, q * 3, 1)),
-    to: new Date(Date.UTC(y, q * 3 + 3, 1)),
-    label: `Q${q + 1} ${y}`,
-  };
+// ---------------------------------------------------------------------------
+// Quarter/month boundaries are anchored to the community timezone (Europe/Berlin), so a quarter or
+// month begins at LOCAL midnight (CET/CEST), not UTC midnight — otherwise a new quarter/month rolls
+// over at 01:00/02:00 local and the "quarter starts" look off by an hour (Alex 2026-10-01). Quarter
+// and month starts are always on the 1st, never a DST-transition day, so a single offset correction
+// is exact.
+// ---------------------------------------------------------------------------
+export const COMPETITION_TZ = 'Europe/Berlin';
+
+/** Calendar fields (year, 0-based month, day) of an instant in the competition timezone. */
+function tzParts(d: Date): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: COMPETITION_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const get = (t: string): number => Number(parts.find((p) => p.type === t)?.value);
+  return { year: get('year'), month: get('month') - 1, day: get('day') };
 }
 
-/** Current calendar month [from, to) in UTC. */
+/** The UTC instant of local (Europe/Berlin) midnight for the given calendar date. */
+function tzMidnight(year: number, month: number, day = 1): Date {
+  const guess = Date.UTC(year, month, day, 0, 0, 0);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: COMPETITION_TZ,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(guess));
+  const get = (t: string): number => Number(parts.find((p) => p.type === t)?.value);
+  // The zone's wall-clock reading of `guess`, interpreted as if it were UTC, differs from `guess`
+  // by exactly the zone's offset at that instant → subtract it to land on local midnight.
+  const asIfUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'));
+  return new Date(guess - (asIfUtc - guess));
+}
+
+/** Human label for a calendar month, e.g. "October 2026". */
+function monthLabel(year: number, month: number): string {
+  return new Date(Date.UTC(year, month, 15)).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+/** Current quarter [from, to) — Europe/Berlin calendar, boundaries at local midnight. */
+export function currentQuarter(now: Date = new Date()): TimeWindow {
+  return quarterOf(now);
+}
+
+/** Current month [from, to) — Europe/Berlin calendar, boundaries at local midnight. */
 export function currentMonth(now: Date = new Date()): TimeWindow {
-  const y = now.getUTCFullYear();
-  const m = now.getUTCMonth();
-  const from = new Date(Date.UTC(y, m, 1));
-  return {
-    from,
-    to: new Date(Date.UTC(y, m + 1, 1)),
-    label: from.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
-  };
+  const { year, month } = tzParts(now);
+  return { from: tzMidnight(year, month, 1), to: tzMidnight(year, month + 1, 1), label: monthLabel(year, month) };
 }
 
 /** Site launch — game counts (and the Rankings self-scaling cutoff) count from here. */
@@ -64,35 +98,36 @@ export interface Period {
   to: Date;
 }
 
-/** Calendar quarter containing `d` (UTC). */
+/** Calendar quarter containing `d` — Europe/Berlin. */
 export function quarterOf(d: Date): TimeWindow {
-  const y = d.getUTCFullYear();
-  const q = Math.floor(d.getUTCMonth() / 3);
-  return { from: new Date(Date.UTC(y, q * 3, 1)), to: new Date(Date.UTC(y, q * 3 + 3, 1)), label: `Q${q + 1} ${y}` };
+  const { year, month } = tzParts(d);
+  const q = Math.floor(month / 3);
+  return { from: tzMidnight(year, q * 3, 1), to: tzMidnight(year, q * 3 + 3, 1), label: `Q${q + 1} ${year}` };
 }
 export function quarterValue(w: TimeWindow): string {
-  return `${w.from.getUTCFullYear()}-Q${Math.floor(w.from.getUTCMonth() / 3) + 1}`;
+  const { year, month } = tzParts(w.from);
+  return `${year}-Q${Math.floor(month / 3) + 1}`;
 }
-/** Parse "YYYY-Qn" → that quarter's window, or null if malformed. */
+/** Parse "YYYY-Qn" → that quarter's window (Europe/Berlin), or null if malformed. */
 export function parseQuarter(value: string): TimeWindow | null {
   const m = /^(\d{4})-Q([1-4])$/.exec(value);
   if (!m) return null;
   const y = Number(m[1]);
   const q = Number(m[2]) - 1;
-  return { from: new Date(Date.UTC(y, q * 3, 1)), to: new Date(Date.UTC(y, q * 3 + 3, 1)), label: `Q${q + 1} ${y}` };
+  return { from: tzMidnight(y, q * 3, 1), to: tzMidnight(y, q * 3 + 3, 1), label: `Q${q + 1} ${y}` };
 }
 export function monthValue(w: TimeWindow): string {
-  return `${w.from.getUTCFullYear()}-${String(w.from.getUTCMonth() + 1).padStart(2, '0')}`;
+  const { year, month } = tzParts(w.from);
+  return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
-/** Parse "YYYY-MM" → that month's window, or null. */
+/** Parse "YYYY-MM" → that month's window (Europe/Berlin), or null. */
 export function parseMonth(value: string): TimeWindow | null {
   const m = /^(\d{4})-(\d{2})$/.exec(value);
   if (!m) return null;
   const y = Number(m[1]);
   const mo = Number(m[2]) - 1;
   if (mo < 0 || mo > 11) return null;
-  const from = new Date(Date.UTC(y, mo, 1));
-  return { from, to: new Date(Date.UTC(y, mo + 1, 1)), label: from.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }) };
+  return { from: tzMidnight(y, mo, 1), to: tzMidnight(y, mo + 1, 1), label: monthLabel(y, mo) };
 }
 
 /** Selectable quarters from the launch quarter to the current one (most recent first). */

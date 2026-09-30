@@ -13,20 +13,20 @@ describe('resolveQuarter — calendar default + overrides', () => {
   it('no override → the calendar quarter', () => {
     const q = resolveQuarter('2026-Q4', new Map());
     expect(q?.label).toBe('Q4 2026');
-    expect(q?.from.toISOString()).toBe('2026-10-01T00:00:00.000Z');
-    expect(q?.to.toISOString()).toBe('2027-01-01T00:00:00.000Z');
+    expect(q?.from.toISOString()).toBe('2026-09-30T22:00:00.000Z'); // Oct 1 00:00 CEST
+    expect(q?.to.toISOString()).toBe('2026-12-31T23:00:00.000Z'); // Jan 1 2027 00:00 CET
   });
   it('custom name only shifts the label, not the boundaries', () => {
     const q = resolveQuarter('2026-Q4', new Map([['2026-Q4', { name: 'Winter Clash', start_date: null, end_date: null }]]));
     expect(q?.label).toBe('Winter Clash');
-    expect(q?.from.toISOString()).toBe('2026-10-01T00:00:00.000Z');
+    expect(q?.from.toISOString()).toBe('2026-09-30T22:00:00.000Z'); // Oct 1 00:00 CEST
   });
   it('boundary override shifts the window, keeps the default label', () => {
     const start = new Date('2026-10-05T00:00:00.000Z');
     const q = resolveQuarter('2026-Q4', new Map([['2026-Q4', { name: null, start_date: start, end_date: null }]]));
     expect(q?.label).toBe('Q4 2026');
-    expect(q?.from.toISOString()).toBe('2026-10-05T00:00:00.000Z');
-    expect(q?.to.toISOString()).toBe('2027-01-01T00:00:00.000Z');
+    expect(q?.from.toISOString()).toBe('2026-10-05T00:00:00.000Z'); // explicit override kept verbatim
+    expect(q?.to.toISOString()).toBe('2026-12-31T23:00:00.000Z'); // default end = Jan 1 2027 00:00 CET
   });
   it('invalid period → null', () => {
     expect(resolveQuarter('not-a-quarter', new Map())).toBeNull();

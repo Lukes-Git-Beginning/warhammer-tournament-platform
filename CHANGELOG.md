@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.11.4] — 2026-10-01
+
+### Fixed
+- **Quarters and months now begin at local midnight (CET/CEST), not UTC.** New quarters and months, and the leaderboards that track them, roll over at 00:00 Central European time instead of 01:00/02:00. The Quarterly Qualifier and Monthly Ladder switch to the new period exactly when the calendar does.
+
 ## [2.11.3] — 2026-10-01
 
 ### Fixed
