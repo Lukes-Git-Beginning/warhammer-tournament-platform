@@ -776,12 +776,13 @@ function QuarterlyTab() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [selectedQuarter, setSelectedQuarter] = useState<string | undefined>(undefined);
+  const [qualifiedOnly, setQualifiedOnly] = useState(false);
 
   const { data: me } = useAuthQuery();
   const isAdmin = me?.role === 'ADMIN' || me?.role === 'MODERATOR';
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['leaderboard-quarterly', battleType, format, selectedQuarter, page],
+    queryKey: ['leaderboard-quarterly', battleType, format, selectedQuarter, page, qualifiedOnly],
     queryFn: () =>
       getQuarterlyLeaderboard({
         battleType,
@@ -789,6 +790,7 @@ function QuarterlyTab() {
         quarter: selectedQuarter,
         page,
         pageSize: PAGE_SIZE,
+        qualifiedOnly,
       }),
   });
 
@@ -803,6 +805,10 @@ function QuarterlyTab() {
   const handleQuarter = (value: string) => {
     setPage(1);
     setSelectedQuarter(value || undefined);
+  };
+  const handleQualifiedOnly = () => {
+    setPage(1);
+    setQualifiedOnly((v) => !v);
   };
 
   // Periods from first response; keep them stable during re-fetches.
@@ -855,11 +861,32 @@ function QuarterlyTab() {
             ))}
           </Select>
         )}
+        <button
+          type="button"
+          onClick={handleQualifiedOnly}
+          aria-pressed={qualifiedOnly}
+          className={`rounded border px-3 py-1.5 text-xs font-medium transition-colors ${
+            qualifiedOnly
+              ? 'border-emerald-500 bg-emerald-900/40 text-emerald-200'
+              : 'border-stone-700 text-stone-300 hover:bg-stone-800/60'
+          }`}
+        >
+          {qualifiedOnly ? '✓ Qualified only' : 'Qualified only'}
+        </button>
         {data && (
           <span className="text-xs text-stone-500">
-            <span className="font-medium text-stone-300">{data.qualifiedCount}</span> of {data.total} qualify
-            &middot; needs {data.gate} decisive games this quarter
-            &middot; <span className="opacity-45">greyed</span> = not yet at the minimum
+            {qualifiedOnly ? (
+              <>
+                Showing the <span className="font-medium text-stone-300">{data.total}</span> qualified players
+                &middot; ranked among the qualified &middot; needs {data.gate} decisive games this quarter
+              </>
+            ) : (
+              <>
+                <span className="font-medium text-stone-300">{data.qualifiedCount}</span> of {data.total} qualify
+                &middot; needs {data.gate} decisive games this quarter
+                &middot; <span className="opacity-45">greyed</span> = not yet at the minimum
+              </>
+            )}
           </span>
         )}
       </div>

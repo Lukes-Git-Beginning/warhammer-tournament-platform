@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.11.0] — 2026-09-30
+
+### Added
+- **Filter the Quarterly board to qualified players only.** A "Qualified only" toggle on the Quarterly Qualifier leaderboard hides everyone who has not cleared the quarter's activity gate and renumbers the rank column to rank only the qualified, so rank 1 is the top qualified player.
+
 ## [2.10.1] — 2026-09-30
 
 ### Fixed
