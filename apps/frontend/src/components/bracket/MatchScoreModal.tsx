@@ -240,33 +240,44 @@ export function MatchScoreModal({
   const maxGames = maxGamesForFormat(matchFormat);
   type GameRow = { gameNumber: number; mapId: string; p1FactionId: string; p2FactionId: string; winnerId: string };
   const [gameRows, setGameRows] = useState<GameRow[]>([]);
-  const [gamesSeeded, setGamesSeeded] = useState(false);
+  // Host edits mark the form dirty; until then we keep re-seeding from fresh (polled) data so the
+  // modal reflects live progress — revealed blind-picks, played maps, per-game winners — without the
+  // host waiting for the result to be reported or having to re-open the modal.
+  const [dirty, setDirty] = useState(false);
   const { data: matchGamesData } = useQuery({
     queryKey: ['match-games', matchId],
     queryFn: () => getMatchGames(matchId),
     enabled: perGame,
+    refetchInterval: perGame && isPending ? 15000 : false,
   });
   useEffect(() => {
-    if (!perGame || gamesSeeded || !matchGamesData) return;
+    if (!perGame || dirty || !matchGamesData) return;
     const rows: GameRow[] = (matchGamesData.games ?? [])
       .filter((g) => g.id !== null) // skip the virtual placeholder game
       .map((g) => ({
         gameNumber: g.gameNumber,
         mapId: g.decision?.pickedMapId ?? '',
-        p1FactionId: g.player1FactionId ?? '',
-        p2FactionId: g.player2FactionId ?? '',
+        // Show revealed blind-picks (BPT/BPT_2V2) live, before the result is reported — the raw
+        // MatchGame faction is only written when the game is finalized, so fall back to the pick.
+        p1FactionId: g.player1FactionId ?? g.blindPick?.player1FactionId ?? '',
+        p2FactionId: g.player2FactionId ?? g.blindPick?.player2FactionId ?? '',
         winnerId: g.winnerId ?? '',
       }));
     setGameRows(rows.length > 0 ? rows : [{ gameNumber: 1, mapId: '', p1FactionId: '', p2FactionId: '', winnerId: '' }]);
-    setGamesSeeded(true);
-  }, [perGame, gamesSeeded, matchGamesData]);
+  }, [perGame, dirty, matchGamesData]);
 
-  const updateRow = (idx: number, patch: Partial<GameRow>) =>
+  const updateRow = (idx: number, patch: Partial<GameRow>) => {
+    setDirty(true);
     setGameRows((rows) => rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
-  const addRow = () =>
+  };
+  const addRow = () => {
+    setDirty(true);
     setGameRows((rows) => (rows.length >= maxGames ? rows : [...rows, { gameNumber: rows.length + 1, mapId: '', p1FactionId: '', p2FactionId: '', winnerId: '' }]));
-  const removeRow = (idx: number) =>
+  };
+  const removeRow = (idx: number) => {
+    setDirty(true);
     setGameRows((rows) => rows.filter((_, i) => i !== idx).map((r, i) => ({ ...r, gameNumber: i + 1 })));
+  };
 
   const perGameTally = gameRows.reduce(
     (acc, r) => {

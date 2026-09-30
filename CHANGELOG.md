@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.11.2] — 2026-09-30
+
+### Fixed
+- **Hosts see picked factions live during a match.** In the host match view, blind-pick factions now appear as soon as they are revealed, and the per-game detail refreshes while it is open, instead of only showing up once the result is reported — so a host can follow how far along a match is.
+
 ## [2.11.1] — 2026-09-30
 
 ### Fixed
