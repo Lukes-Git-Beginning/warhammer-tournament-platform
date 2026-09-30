@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.11.5] — 2026-10-01
+
+### Fixed
+- **The active-match indicator now takes you to the match.** Clicking it for a tournament match scrolls straight to your match on the tournament page; for an Open Play or challenge match it opens that match directly instead of the general Open Play page.
+- **Paging the tournament archive no longer jumps to the top.** Moving between pages keeps your scroll position.
+
+### Added
+- **The replay upload shows where to find your file.** An info hint on the "Attach Replay" button points to the TWW3 replay folder and notes that auto-saved replays live there too.
+
+### Changed
+- **Clearer wording on the profile skill standing** about what the chart shows versus what the level label includes.
+
 ## [2.11.4] — 2026-10-01
 
 ### Fixed
