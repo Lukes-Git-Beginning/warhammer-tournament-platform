@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.11.3] — 2026-10-01
+
+### Fixed
+- **Clearer numbers in the championship final field.** A competitor's General Skill now shows as a win-% vs the average player (matching the leaderboard) instead of a raw rating, and Monthly Ladder points show as whole numbers instead of long decimals.
+
 ## [2.11.2] — 2026-09-30
 
 ### Fixed

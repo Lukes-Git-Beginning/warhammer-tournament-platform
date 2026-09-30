@@ -9,6 +9,7 @@ import {
   type ChampionshipFieldEntry,
   type ChampionshipFieldView,
 } from '../../lib/api';
+import { winChance } from '../meta/skillBands';
 
 /**
  * The championship final's phase-aware field panel (monthly ladder invite/RSVP flow):
@@ -171,8 +172,12 @@ function FieldRow({ entry, phase }: { entry: ChampionshipFieldEntry; phase: Cham
       <Link to="/users/$id" params={{ id: entry.userId }} className="flex-1 truncate text-sm text-rizzotto-stone-100 hover:underline">
         {entry.username}
       </Link>
-      {entry.points != null && <span className="text-xs tabular-nums text-rizzotto-stone-400">{entry.points} pts</span>}
-      {entry.gs != null && entry.points == null && <span className="text-xs tabular-nums text-rizzotto-stone-400">GS {entry.gs.toFixed(2)}</span>}
+      {entry.points != null && <span className="text-xs tabular-nums text-rizzotto-stone-400">{Math.round(entry.points)} pts</span>}
+      {entry.gs != null && entry.points == null && (
+        <span className="text-xs tabular-nums text-rizzotto-stone-400" title="Win% vs the average player (from General Skill)">
+          {Math.round(winChance(entry.gs))}% vs avg
+        </span>
+      )}
       <RowBadge entry={entry} phase={phase} />
     </li>
   );
