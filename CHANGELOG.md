@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.9.1] — 2026-09-30
+
+### Changed
+- **Monthly Ladder Invitational invites are now bounded.** The availability round invites the field plus an equal-size reserve buffer (twice the field size), instead of everyone on the ladder — so only realistic contenders are asked to confirm.
+
 ## [2.9.0] — 2026-09-30
 
 ### Added

@@ -59,6 +59,14 @@ export function confirmedFieldSize(plannedSize: number, availableCount: number):
   return availableCount >= plannedSize ? plannedSize : largestPow2AtMost(availableCount);
 }
 
+/** The availability round invites the field plus an equal-size reserve buffer — 2× the field —
+ *  not the whole ranking (a player far below the cut has no realistic shot and shouldn't be DM'd,
+ *  Alex 2026-09-30). Only these ranks can be promoted if finalists decline. */
+export const INVITE_POOL_MULTIPLIER = 2;
+export function invitePoolSize(fieldSize: number): number {
+  return Math.max(0, fieldSize) * INVITE_POOL_MULTIPLIER;
+}
+
 export type QuarterlyBattleType = Exclude<BattleTypeFilter, 'OVERALL'>;
 
 export interface FinalSeed {
@@ -416,13 +424,15 @@ export async function openAvailabilityRound(
   }
   const fieldSize = plannedFieldSize(opts.kind, ranking.length);
   if (fieldSize === 0) throw new Error('Not enough players to seat a field yet.');
+  // Invite only the field + an equal reserve buffer (2× the field), not the whole ranking.
+  const pool = ranking.slice(0, invitePoolSize(fieldSize));
   const deadlineHours = opts.deadlineHours ?? 24;
   const deadline = new Date(now.getTime() + deadlineHours * 3_600_000);
 
   await prisma.$transaction(async (tx) => {
     await tx.championshipInvite.deleteMany({ where: { tournament_id: opts.tournamentId } });
     await tx.championshipInvite.createMany({
-      data: ranking.map((r) => ({
+      data: pool.map((r) => ({
         tournament_id: opts.tournamentId,
         competitor_id: r.competitorId,
         user_id: r.userId,
@@ -435,7 +445,7 @@ export async function openAvailabilityRound(
     });
   });
 
-  return { invited: ranking.length, fieldSize, deadline, invites: ranking.map((r) => ({ userId: r.userId, rank: r.rank })) };
+  return { invited: pool.length, fieldSize, deadline, invites: pool.map((r) => ({ userId: r.userId, rank: r.rank })) };
 }
 
 /** Record a competitor's RSVP for the availability round. Returns the new value, or null if the
@@ -474,10 +484,7 @@ export async function seedFromConfirmed(
     orderBy: { rank: 'asc' },
   });
   if (invites.length === 0) throw new Error('No availability round has been opened for this final.');
-  const plannedSize = plannedFieldSize(opts.kind, invites.length);
   const available = invites.filter((i) => i.rsvp === 'AVAILABLE');
-  const finalSize = confirmedFieldSize(plannedSize, available.length);
-  if (finalSize === 0) throw new Error('Nobody has confirmed availability yet — no field to seed.');
 
   const ranking = await computeFullRanking(prisma, redis, {
     kind: opts.kind,
@@ -486,6 +493,12 @@ export async function seedFromConfirmed(
     competitorFormat: opts.competitorFormat,
     now: opts.now,
   });
+  // Field size N is derived from the FULL pool: invites are only the top 2N, so counting them would
+  // undersize the field. The cycle is closed, so the recomputed ranking is deterministic.
+  const plannedSize = plannedFieldSize(opts.kind, ranking.length);
+  const finalSize = confirmedFieldSize(plannedSize, available.length);
+  if (finalSize === 0) throw new Error('Nobody has confirmed availability yet — no field to seed.');
+
   const byCompetitor = new Map(ranking.map((r) => [r.competitorId, r]));
   const chosen = available.slice(0, finalSize);
   const seeds: FinalSeed[] = chosen.map((inv, i) => {

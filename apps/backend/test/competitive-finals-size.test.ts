@@ -8,6 +8,7 @@ import {
   quarterlyFinalSize,
   confirmedFieldSize,
   plannedFieldSize,
+  invitePoolSize,
   pickRaffleWinner,
 } from '../src/lib/competitive-finals.js';
 
@@ -75,6 +76,18 @@ describe('confirmedFieldSize — shrink to fit the confirmed', () => {
   it('is 0 when nobody confirmed or there is no planned field', () => {
     expect(confirmedFieldSize(8, 0)).toBe(0);
     expect(confirmedFieldSize(0, 5)).toBe(0);
+  });
+});
+
+describe('invitePoolSize — field + equal reserve buffer (2×)', () => {
+  it('invites twice the field size', () => {
+    expect(invitePoolSize(8)).toBe(16);
+    expect(invitePoolSize(4)).toBe(8);
+    expect(invitePoolSize(16)).toBe(32);
+  });
+  it('is 0 for no field', () => {
+    expect(invitePoolSize(0)).toBe(0);
+    expect(invitePoolSize(-3)).toBe(0);
   });
 });
 
