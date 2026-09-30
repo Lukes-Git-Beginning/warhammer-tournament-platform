@@ -85,6 +85,15 @@ enum ChampionshipKind {
   MONTHLY_LADDER
 }
 
+/// RSVP state for a championship availability round (monthly ladder invite/RSVP flow):
+/// PENDING = invited, no response yet (treated as unavailable at seed); AVAILABLE = confirmed
+/// (checked in); DECLINED = actively opted out (frees the slot for the next in line).
+enum RsvpStatus {
+  PENDING
+  AVAILABLE
+  DECLINED
+}
+
 /// A competitor slot on a Match (player1_id/player2_id/winner_id) is opaque: a User
 /// id for 1v1, a Team id for 2v2. TournamentParticipant.participant_type discriminates
 /// how to resolve it. There is no FK on the slots (a slot may point at User OR Team).
@@ -442,6 +451,11 @@ model Tournament {
   // battle_type + competitor_format are the slot axes, championship_period pins the cycle.
   championship_kind        ChampionshipKind @default(NONE)
   championship_period      String?
+  // Availability round (monthly ladder invite/RSVP flow): at cycle close the admin opens the
+  // round; invitees get until rsvp_deadline to confirm (check in → AVAILABLE) or decline. Seeding
+  // then takes the top-N of AVAILABLE invitees. Both null for a normal tournament / unopened final.
+  availability_opened_at   DateTime?
+  rsvp_deadline            DateTime?
   created_at               DateTime        @default(now())
   updated_at               DateTime        @updatedAt
   deleted_at               DateTime?
@@ -462,6 +476,7 @@ model Tournament {
   referral_hits         ReferralHit[]
   series                TournamentSeries?            @relation("SeriesQualifier", fields: [series_id], references: [id])
   series_as_final       TournamentSeries?            @relation("SeriesFinal")
+  championship_invites  ChampionshipInvite[]
 
   @@index([status])
   @@index([host_id])
@@ -491,6 +506,30 @@ model CompetitiveCycleSnapshot {
 
   @@unique([kind, period, battle_type, competitor_format, competitor_id])
   @@index([kind, period, battle_type, competitor_format])
+}
+
+/// Availability-round invite for a recurring final (monthly ladder invite/RSVP flow). At cycle
+/// close the admin opens the round: every qualified competitor (the full frozen ranking) gets an
+/// invite carrying its rank; each confirms availability by checking in (AVAILABLE) or declines
+/// (DECLINED); no response stays PENDING and counts as unavailable at seed. Seeding then takes the
+/// top-N by rank among AVAILABLE. competitor_id is opaque (User 1v1 / Team 2v2); user_id is the
+/// actor who RSVPs (the captain for 2v2). Cleared/rewritten if the round is re-opened.
+model ChampionshipInvite {
+  id            String     @id @default(uuid()) @db.Uuid
+  tournament_id String     @db.Uuid
+  competitor_id String     @db.Uuid
+  user_id       String     @db.Uuid
+  rank          Int
+  rsvp          RsvpStatus @default(PENDING)
+  rsvp_at       DateTime?
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+
+  @@unique([tournament_id, competitor_id])
+  @@unique([tournament_id, user_id])
+  @@index([tournament_id, rsvp])
 }
 
 /// Admin override for a calendar quarter (design-competitive-finals-locked): a custom name and/or

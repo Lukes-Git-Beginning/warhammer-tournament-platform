@@ -259,6 +259,8 @@
       "publish_confirm": "Open registration for \"{{name}}\"? Players will be able to sign up immediately.",
       "close_registration": "Close registration",
       "close_registration_confirm": "Close registration for \"{{name}}\"? No more players will be able to sign up.",
+      "run_closed": "Run with closed registration",
+      "run_closed_confirm": "Publish \"{{name}}\" with registration closed? It becomes public but nobody can sign up (for invitationals and seeded finals). No announcement or availability DMs go out.",
       "start_tournament": "Start tournament",
       "start_tournament_pending": "Starting…",
       "start_tournament_confirm": "Start \"{{name}}\" now? The bracket will be generated — participant changes are no longer possible afterwards.",

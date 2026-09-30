@@ -45,6 +45,51 @@ export async function notifyChampionshipSeeded(
   }
 }
 
+/**
+ * The availability round just opened: DM every invitee with their rank, differentiated by whether
+ * they'd currently make the cut. Everyone is asked to confirm availability (check in) or decline by
+ * the deadline; no response counts as unavailable at seed. Ordered by rank.
+ */
+export async function notifyAvailabilityInvites(
+  prisma: PrismaClient,
+  tournamentId: string,
+  invites: Array<{ userId: string; rank: number }>,
+  fieldSize: number,
+  deadline: Date,
+): Promise<void> {
+  if (!isBotConfigured()) return;
+  try {
+    const t = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { name: true, slug: true },
+    });
+    if (!t) return;
+    const url = `${baseUrl()}/tournaments/${t.slug}`;
+    const deadlineTs = Math.floor(deadline.getTime() / 1000);
+    const users = await prisma.user.findMany({
+      where: { id: { in: invites.map((i) => i.userId) } },
+      select: { id: true, discord_id: true },
+    });
+    const discById = new Map(users.map((u) => [u.id, u.discord_id]));
+    const dms = invites.map((inv) => {
+      const disc = discById.get(inv.userId);
+      if (!disc) return Promise.resolve();
+      const inCut = inv.rank <= fieldSize;
+      const msg = inCut
+        ? `**[RizzOtto's Arena] You're in the running — ${t.name}** 🏆\n` +
+          `The cycle's closed and you'd currently make the cut for **${t.name}** — it's a Top ${fieldSize} and you're ranked **#${inv.rank}**. ` +
+          `Confirm you can play by checking in before <t:${deadlineTs}:F> (<t:${deadlineTs}:R>), or decline to free your spot: <${url}>`
+        : `**[RizzOtto's Arena] You're in the seed pool — ${t.name}**\n` +
+          `The cycle's closed. It's a Top ${fieldSize} and you're ranked **#${inv.rank}**, so you're in the seed pool — if players above you can't make it, you're next in line. ` +
+          `Let us know you're available by checking in before <t:${deadlineTs}:F> (<t:${deadlineTs}:R>): <${url}>`;
+      return sendDm(disc, msg);
+    });
+    await Promise.allSettled(dms);
+  } catch (err) {
+    console.warn('[championship-notify] notifyAvailabilityInvites error (non-fatal):', err);
+  }
+}
+
 /** The Monthly Ladder Invitational raffle was drawn: DM the winner (skill decides the tournament
  *  prize, luck decides the raffle prize — every invitee had an equal shot). */
 export async function notifyRaffleWinner(

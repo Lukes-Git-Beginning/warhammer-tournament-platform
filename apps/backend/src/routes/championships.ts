@@ -10,11 +10,20 @@ import {
   computeQuarterlyFinal,
   computeMonthlyLadderFinal,
   seedFinal,
+  seedFromConfirmed,
+  openAvailabilityRound,
+  setInviteRsvp,
+  computeFieldView,
   pickRaffleWinner,
   type QuarterlyBattleType,
   type QuarterlyFinalPreview,
+  type ChampKind,
 } from '../lib/competitive-finals.js';
-import { notifyChampionshipSeeded, notifyRaffleWinner } from '../lib/championship-notify.js';
+import {
+  notifyChampionshipSeeded,
+  notifyRaffleWinner,
+  notifyAvailabilityInvites,
+} from '../lib/championship-notify.js';
 
 const QUARTERLY_BATTLE_TYPES: QuarterlyBattleType[] = ['DOMINATION', 'CONQUEST', 'SIEGE'];
 
@@ -126,9 +135,23 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(409).send({ error: 'Conflict', message: 'Seed the final before it starts.', statusCode: 409 });
       }
       try {
+        const inviteCount = await fastify.prisma.championshipInvite.count({ where: { tournament_id: t.id } });
+        if (inviteCount > 0) {
+          // Availability-round path: seed from the confirmed (AVAILABLE) invitees, top-N by rank.
+          const result = await seedFromConfirmed(fastify.prisma, fastify.redis, {
+            tournamentId: t.id,
+            kind: t.championship_kind as ChampKind,
+            period: t.championship_period,
+            battleType: t.battle_type as QuarterlyBattleType,
+            competitorFormat: t.competitor_format,
+          });
+          void notifyChampionshipSeeded(fastify.prisma, t.id, result.seededUserIds);
+          return { seeded: result.seededUserIds.length, size: result.size, available: result.available, plannedSize: result.plannedSize };
+        }
+        // Direct path (no availability round): freeze the top-N straight to the field.
         const result = await seedFinal(fastify.prisma, fastify.redis, {
           tournamentId: t.id,
-          kind: t.championship_kind,
+          kind: t.championship_kind as ChampKind,
           period: t.championship_period,
           battleType: t.battle_type as QuarterlyBattleType,
           competitorFormat: t.competitor_format,
@@ -140,6 +163,132 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   );
+
+  // POST /api/championships/:slug/open-availability — admin: open the availability round. Freezes the
+  // full ranking as invites, sets a 24h RSVP deadline, and DMs every invitee (differentiated by cut).
+  fastify.post(
+    '/api/championships/:slug/open-availability',
+    { preHandler: [fastify.authenticate, fastify.requireRole('MODERATOR', 'ADMIN')] },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      const q = z
+        .object({
+          reopen: z.coerce.boolean().optional(),
+          deadlineHours: z.coerce.number().int().min(1).max(336).optional(),
+        })
+        .safeParse(request.query);
+      const reopen = q.success ? q.data.reopen : false;
+      const deadlineHours = q.success ? q.data.deadlineHours : undefined;
+      const t = await fastify.prisma.tournament.findUnique({
+        where: { slug },
+        select: {
+          id: true,
+          championship_kind: true,
+          championship_period: true,
+          battle_type: true,
+          competitor_format: true,
+          status: true,
+          availability_opened_at: true,
+        },
+      });
+      if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (t.championship_kind === 'NONE' || !t.championship_period) {
+        return reply.code(400).send({ error: 'BadRequest', message: 'This tournament is not tagged as a championship final.', statusCode: 400 });
+      }
+      if (t.status === 'ONGOING' || t.status === 'COMPLETED') {
+        return reply.code(409).send({ error: 'Conflict', message: 'Open the availability round before the final starts.', statusCode: 409 });
+      }
+      const seededCount = await fastify.prisma.tournamentParticipant.count({ where: { tournament_id: t.id, deleted_at: null } });
+      if (seededCount > 0) {
+        return reply.code(409).send({ error: 'Conflict', message: 'This final is already seeded.', statusCode: 409 });
+      }
+      if (t.availability_opened_at && !reopen) {
+        return reply.code(409).send({ error: 'Conflict', message: 'The availability round is already open. Pass reopen=true to re-freeze the ranking (this resets everyone\'s RSVP).', statusCode: 409 });
+      }
+      try {
+        const result = await openAvailabilityRound(fastify.prisma, fastify.redis, {
+          tournamentId: t.id,
+          kind: t.championship_kind as ChampKind,
+          period: t.championship_period,
+          battleType: t.battle_type as QuarterlyBattleType,
+          competitorFormat: t.competitor_format,
+          deadlineHours,
+        });
+        void notifyAvailabilityInvites(fastify.prisma, t.id, result.invites, result.fieldSize, result.deadline);
+        return { invited: result.invited, fieldSize: result.fieldSize, deadline: result.deadline.toISOString() };
+      } catch (err) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: (err as Error).message, statusCode: 422 });
+      }
+    },
+  );
+
+  // POST /api/championships/:slug/rsvp — an invitee confirms (available) or declines the final.
+  fastify.post(
+    '/api/championships/:slug/rsvp',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      const body = z.object({ available: z.boolean() }).safeParse(request.body);
+      if (!body.success) return reply.code(400).send({ error: 'BadRequest', message: 'available (boolean) is required', statusCode: 400 });
+      const t = await fastify.prisma.tournament.findUnique({
+        where: { slug },
+        select: { id: true, championship_kind: true, status: true, availability_opened_at: true },
+      });
+      if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      if (t.championship_kind === 'NONE') {
+        return reply.code(400).send({ error: 'BadRequest', message: 'This tournament is not a championship final.', statusCode: 400 });
+      }
+      if (!t.availability_opened_at) {
+        return reply.code(409).send({ error: 'Conflict', message: 'The availability round is not open yet.', statusCode: 409 });
+      }
+      if (t.status === 'ONGOING' || t.status === 'COMPLETED') {
+        return reply.code(409).send({ error: 'Conflict', message: 'The final has already started.', statusCode: 409 });
+      }
+      const rsvp = await setInviteRsvp(fastify.prisma, { tournamentId: t.id, userId: request.user.sub, available: body.data.available });
+      if (!rsvp) return reply.code(403).send({ error: 'Forbidden', message: 'You are not an invitee of this final.', statusCode: 403 });
+      return { rsvp };
+    },
+  );
+
+  // GET /api/championships/:slug/field — the phase-aware field view (preview / availability / seeded).
+  // Public; if the caller is logged in, includes their own invitee/RSVP state.
+  fastify.get('/api/championships/:slug/field', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    let viewerUserId: string | undefined;
+    try {
+      await request.jwtVerify();
+      viewerUserId = request.user?.sub;
+    } catch {
+      /* anonymous */
+    }
+    const t = await fastify.prisma.tournament.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        championship_kind: true,
+        championship_period: true,
+        battle_type: true,
+        competitor_format: true,
+        availability_opened_at: true,
+        rsvp_deadline: true,
+      },
+    });
+    if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+    const view = await computeFieldView(fastify.prisma, fastify.redis, {
+      tournament: {
+        id: t.id,
+        championship_kind: t.championship_kind as ChampKind | 'NONE',
+        championship_period: t.championship_period,
+        battle_type: t.battle_type,
+        competitor_format: t.competitor_format,
+        availability_opened_at: t.availability_opened_at,
+        rsvp_deadline: t.rsvp_deadline,
+      },
+      viewerUserId,
+    });
+    if (!view) return reply.code(400).send({ error: 'BadRequest', message: 'This tournament is not a championship final.', statusCode: 400 });
+    return view;
+  });
 
   // POST /api/championships/:slug/raffle — admin: draw the ladder raffle among the invitees.
   fastify.post(

@@ -34,6 +34,7 @@ import { RegisterButton } from '@/components/tournament/RegisterButton';
 import { AddLateJoinerButton } from '@/components/tournament/AddLateJoinerButton';
 import { DiscordTimestampButton } from '@/components/tournament/DiscordTimestampButton';
 import { ParticipantsList } from '@/components/tournament/ParticipantsList';
+import { ChampionshipFieldPanel } from '@/components/tournament/ChampionshipFieldPanel';
 import { HostBroadcastBox } from '@/components/tournament/HostBroadcastBox';
 import { LateJoinRequestsPanel } from '@/components/tournament/LateJoinRequestsPanel';
 import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard';
@@ -403,22 +404,41 @@ export function TournamentDetail() {
           >
             Duplicate
           </button>
+          {tournament.status === 'DRAFT' &&
+            (!tournament.championship_kind || tournament.championship_kind === 'NONE') && (
+              <button
+                type="button"
+                disabled={publishMutation.isPending}
+                className="rounded border border-rizzotto-gold-500 px-4 py-1.5 text-sm text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => {
+                  if (
+                    confirm(
+                      t('tournament.detail.publish_confirm', { name: tournament.name }),
+                    )
+                  ) {
+                    publishMutation.mutate();
+                  }
+                }}
+              >
+                {t('tournament.detail.publish')}
+              </button>
+            )}
           {tournament.status === 'DRAFT' && (
             <button
               type="button"
-              disabled={publishMutation.isPending}
+              disabled={closeRegistrationMutation.isPending}
               className="rounded border border-rizzotto-gold-500 px-4 py-1.5 text-sm text-rizzotto-gold-500 hover:bg-rizzotto-gold-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => {
                 if (
                   confirm(
-                    t('tournament.detail.publish_confirm', { name: tournament.name }),
+                    t('tournament.detail.run_closed_confirm', { name: tournament.name }),
                   )
                 ) {
-                  publishMutation.mutate();
+                  closeRegistrationMutation.mutate();
                 }
               }}
             >
-              {t('tournament.detail.publish')}
+              {t('tournament.detail.run_closed')}
             </button>
           )}
           {tournament.status === 'OPEN_REGISTRATION' && (
@@ -1020,8 +1040,31 @@ export function TournamentDetail() {
         <LateJoinRequestsPanel slug={tournament.slug} />
       )}
 
+      {/* ─── Championship final field (live preview / availability round / seeded), pre-start ─── */}
+      {tournament.championship_kind &&
+        tournament.championship_kind !== 'NONE' &&
+        tournament.status !== 'ONGOING' &&
+        tournament.status !== 'COMPLETED' && (
+          <section className="mb-4">
+            <ChampionshipFieldPanel
+              slug={tournament.slug}
+              isAdmin={user?.role === 'ADMIN' || user?.role === 'MODERATOR'}
+              isLoggedIn={!!user}
+            />
+          </section>
+        )}
+
       {/* ─── Participants or Standings ─── */}
       {tournament.status !== 'DRAFT' && (() => {
+        // A pre-start championship final shows the dedicated field panel above instead of the
+        // (empty, pre-seed) participant list — avoid rendering both.
+        const isChampionshipPreStart =
+          !!tournament.championship_kind &&
+          tournament.championship_kind !== 'NONE' &&
+          tournament.status !== 'ONGOING' &&
+          tournament.status !== 'COMPLETED';
+        if (isChampionshipPreStart) return null;
+
         const swiss = bracket?.swiss;
         const hasStandings = swiss && swiss.standings.length > 0;
         const isElim =

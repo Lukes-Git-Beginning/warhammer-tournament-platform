@@ -109,6 +109,12 @@ export interface Tournament {
   series_id?: string | null;
   series?: { id: string; slug: string; name: string } | null;
   is_series_final?: boolean;
+  // Recurring competitive final (detail endpoint only). QUARTERLY / MONTHLY_LADDER + the cycle
+  // period; the availability round's open time + RSVP deadline once the admin opens it.
+  championship_kind?: 'NONE' | 'QUARTERLY' | 'MONTHLY_LADDER';
+  championship_period?: string | null;
+  availability_opened_at?: string | null;
+  rsvp_deadline?: string | null;
 }
 
 export type MapDecisionMode = 'RANDOM' | 'PICK_BAN' | 'RANDOM_NO_REPEAT' | 'HOST_PRESET' | 'HOST_PRESET_PICK_BAN' | 'RANDOM_PICK_BAN';
@@ -713,13 +719,58 @@ export function getQuarterlyChampionships(period: string, competitorFormat: Lead
 export function getLadderChampionship(period: string): Promise<LadderChampionship> {
   return apiFetch<LadderChampionship>(`/api/championships/ladder?period=${encodeURIComponent(period)}`);
 }
-/** Admin: freeze the qualification + seed the tagged final, DM the seeds. */
-export function seedChampionship(slug: string): Promise<{ seeded: number; size: number }> {
-  return apiFetch<{ seeded: number; size: number }>(`/api/championships/${slug}/seed`, { method: 'POST' });
+/** Admin: seed the tagged final + DM the seeds. If an availability round is open, seeds from the
+ *  confirmed (AVAILABLE) invitees; otherwise freezes the top-N directly. */
+export function seedChampionship(slug: string): Promise<{ seeded: number; size: number; available?: number; plannedSize?: number }> {
+  return apiFetch<{ seeded: number; size: number; available?: number; plannedSize?: number }>(`/api/championships/${slug}/seed`, { method: 'POST' });
 }
 /** Admin: draw the Monthly Ladder Invitational raffle among the invitees. */
 export function drawChampionshipRaffle(slug: string): Promise<{ winnerUserId: string }> {
   return apiFetch<{ winnerUserId: string }>(`/api/championships/${slug}/raffle`, { method: 'POST' });
+}
+
+// ── Championship availability round (invite / RSVP / live field) ──────────────
+export type ChampionshipFieldPhase = 'PREVIEW' | 'AVAILABILITY' | 'SEEDED';
+export type RsvpValue = 'PENDING' | 'AVAILABLE' | 'DECLINED';
+export interface ChampionshipFieldEntry {
+  rank: number;
+  userId: string;
+  competitorId: string;
+  username: string;
+  avatarUrl: string | null;
+  points?: number | null;
+  gs?: number | null;
+  rsvp?: RsvpValue; // availability phase only
+  status?: string; // seeded phase only
+  inField: boolean;
+}
+export interface ChampionshipFieldView {
+  phase: ChampionshipFieldPhase;
+  kind: 'QUARTERLY' | 'MONTHLY_LADDER';
+  period: string;
+  fieldSize: number;
+  cutRank: number;
+  deadline: string | null;
+  entries: ChampionshipFieldEntry[];
+  viewerIsInvitee: boolean;
+  viewerRsvp: RsvpValue | null;
+}
+
+/** The phase-aware field view for a final's tournament page (preview / availability / seeded). */
+export function getChampionshipField(slug: string): Promise<ChampionshipFieldView> {
+  return apiFetch<ChampionshipFieldView>(`/api/championships/${slug}/field`);
+}
+/** Admin: open the availability round — invite the full ranking + DM everyone, set the RSVP deadline. */
+export function openChampionshipAvailability(slug: string, opts?: { deadlineHours?: number; reopen?: boolean }): Promise<{ invited: number; fieldSize: number; deadline: string }> {
+  const q = new URLSearchParams();
+  if (opts?.deadlineHours) q.set('deadlineHours', String(opts.deadlineHours));
+  if (opts?.reopen) q.set('reopen', 'true');
+  const qs = q.toString();
+  return apiFetch(`/api/championships/${slug}/open-availability${qs ? `?${qs}` : ''}`, { method: 'POST' });
+}
+/** An invitee confirms (available) or declines the final during the availability round. */
+export function rsvpChampionship(slug: string, available: boolean): Promise<{ rsvp: RsvpValue }> {
+  return apiFetch<{ rsvp: RsvpValue }>(`/api/championships/${slug}/rsvp`, { method: 'POST', body: JSON.stringify({ available }) });
 }
 
 /** A 2v2 team on a board (name + member avatars). */

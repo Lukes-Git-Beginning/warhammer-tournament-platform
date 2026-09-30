@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import {
   largestPow2AtMost,
   quarterlyFinalSize,
+  confirmedFieldSize,
+  plannedFieldSize,
   pickRaffleWinner,
 } from '../src/lib/competitive-finals.js';
 
@@ -43,6 +45,36 @@ describe('quarterlyFinalSize — doubling tiers + hard Top-16 floor', () => {
     expect(quarterlyFinalSize(200, 100)).toBe(32);
     // Community ceiling binds: 300 active → pow2(75)=64, but only 64 qualified → pow2(32)=32.
     expect(quarterlyFinalSize(300, 64)).toBe(32);
+  });
+});
+
+describe('plannedFieldSize', () => {
+  it('ladder = largest pow2 ≤ players/4, no floor', () => {
+    expect(plannedFieldSize('MONTHLY_LADDER', 46)).toBe(8); // 11.5 → 8
+    expect(plannedFieldSize('MONTHLY_LADDER', 32)).toBe(8);
+    expect(plannedFieldSize('MONTHLY_LADDER', 16)).toBe(4);
+    expect(plannedFieldSize('MONTHLY_LADDER', 8)).toBe(2);
+    expect(plannedFieldSize('MONTHLY_LADDER', 0)).toBe(0);
+  });
+  it('quarterly delegates to the floored size formula', () => {
+    expect(plannedFieldSize('QUARTERLY', 32, 64)).toBe(16); // 64 active, 32 qualified
+    expect(plannedFieldSize('QUARTERLY', 27, 228)).toBe(0); // below the Top-16 floor
+  });
+});
+
+describe('confirmedFieldSize — shrink to fit the confirmed', () => {
+  it('keeps the planned size when enough confirm', () => {
+    expect(confirmedFieldSize(8, 8)).toBe(8);
+    expect(confirmedFieldSize(8, 12)).toBe(8);
+  });
+  it('shrinks to the next power of two below the confirmed count', () => {
+    expect(confirmedFieldSize(8, 5)).toBe(4); // only 5 available → Top 4
+    expect(confirmedFieldSize(8, 3)).toBe(2);
+    expect(confirmedFieldSize(16, 9)).toBe(8);
+  });
+  it('is 0 when nobody confirmed or there is no planned field', () => {
+    expect(confirmedFieldSize(8, 0)).toBe(0);
+    expect(confirmedFieldSize(0, 5)).toBe(0);
   });
 });
 

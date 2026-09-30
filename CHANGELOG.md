@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.9.0] — 2026-09-30
+
+### Added
+- **Monthly Ladder Invitational: confirm your spot before the field is set.** When the month closes, everyone on the ladder is invited and asked to confirm availability by checking in (or to decline) within a set window. The field is then seeded from the players who confirmed, in ranking order — so a place never goes to someone who can't play. Players just below the line are told they're in the seed pool and move up if someone above them drops out. The tournament page shows the current field live even before the round opens.
+- **Hosts can publish a tournament with registration closed.** A new "Run with closed registration" action publishes an event so it is publicly visible but not open for sign-ups — for invitationals and seeded finals — without the public announcement and availability DMs that opening registration would otherwise send.
+
 ## [2.8.0] — 2026-09-29
 
 ### Added

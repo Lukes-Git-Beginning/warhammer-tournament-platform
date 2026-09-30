@@ -74,11 +74,14 @@ export function generateSlug(name: string): string {
 /**
  * Allowed status transitions for a tournament.
  * DRAFT → OPEN_REGISTRATION → REGISTRATION_CLOSED → ONGOING → COMPLETED.
+ * DRAFT → REGISTRATION_CLOSED is also allowed: publish an invitational / seeded final directly with
+ * registration closed, skipping the OPEN_REGISTRATION phase (and its public announce + availability
+ * DMs, which would be misleading when nobody can actually sign up).
  * The only permitted backwards step is REGISTRATION_CLOSED → OPEN_REGISTRATION ("reopen
  * registration" — safe pre-start: no matches exist yet), so a host can undo an accidental close.
  */
 const ALLOWED_TRANSITIONS: Record<TournamentStatus, TournamentStatus[]> = {
-  [TournamentStatus.DRAFT]: [TournamentStatus.OPEN_REGISTRATION],
+  [TournamentStatus.DRAFT]: [TournamentStatus.OPEN_REGISTRATION, TournamentStatus.REGISTRATION_CLOSED],
   [TournamentStatus.OPEN_REGISTRATION]: [TournamentStatus.REGISTRATION_CLOSED],
   [TournamentStatus.REGISTRATION_CLOSED]: [TournamentStatus.ONGOING, TournamentStatus.OPEN_REGISTRATION],
   [TournamentStatus.ONGOING]: [TournamentStatus.COMPLETED],

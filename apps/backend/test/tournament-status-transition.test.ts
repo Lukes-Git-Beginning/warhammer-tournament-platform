@@ -18,6 +18,10 @@ describe('validateStatusTransition', () => {
     expect(validateStatusTransition(TournamentStatus.REGISTRATION_CLOSED, TournamentStatus.OPEN_REGISTRATION)).toBe(true);
   });
 
+  it('allows publishing straight to closed registration (invitationals / seeded finals)', () => {
+    expect(validateStatusTransition(TournamentStatus.DRAFT, TournamentStatus.REGISTRATION_CLOSED)).toBe(true);
+  });
+
   it('still blocks every other backwards / illegal transition', () => {
     expect(validateStatusTransition(TournamentStatus.ONGOING, TournamentStatus.REGISTRATION_CLOSED)).toBe(false);
     expect(validateStatusTransition(TournamentStatus.OPEN_REGISTRATION, TournamentStatus.DRAFT)).toBe(false);

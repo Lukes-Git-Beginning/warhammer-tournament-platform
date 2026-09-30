@@ -25,8 +25,9 @@ afterAll(async () => {
 });
 
 async function cleanupAll() {
+  // ChampionshipInvite rows cascade when the tournament is deleted (onDelete: Cascade).
   await prisma.tournament.deleteMany({ where: { host_id: { in: [ADMIN_ID, USER_ID] } } });
-  await prisma.competitiveCycleSnapshot.deleteMany({ where: { period: '2099-Q1' } });
+  await prisma.competitiveCycleSnapshot.deleteMany({ where: { period: { in: ['2099-Q1', '2099-01'] } } });
   await prisma.user.deleteMany({ where: { id: { in: [ADMIN_ID, USER_ID] } } });
 }
 
@@ -63,6 +64,15 @@ function createChampionship(userId: string, role: string) {
     url: '/api/tournaments',
     cookies: { auth_token: token(userId, role) },
     payload: { ...base, championship_kind: 'QUARTERLY', championship_period: '2099-Q1' },
+  });
+}
+
+function createLadderFinal(userId: string, role: string) {
+  return app.inject({
+    method: 'POST',
+    url: '/api/tournaments',
+    cookies: { auth_token: token(userId, role) },
+    payload: { ...base, name: 'Monthly Ladder Invitational', championship_kind: 'MONTHLY_LADDER', championship_period: '2099-01' },
   });
 }
 
@@ -115,6 +125,50 @@ describe('Championship finals routes', () => {
       cookies: { auth_token: token(ADMIN_ID, 'ADMIN') },
     });
     expect(res.statusCode).toBe(422);
+  });
+
+  it('open-availability requires an admin/moderator', async () => {
+    const create = await createLadderFinal(ADMIN_ID, 'ADMIN');
+    const { slug } = create.json<{ slug: string }>();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/championships/${slug}/open-availability`,
+      cookies: { auth_token: token(USER_ID, 'USER') },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('open-availability returns 422 for an empty cycle (nobody to invite)', async () => {
+    const create = await createLadderFinal(ADMIN_ID, 'ADMIN');
+    const { slug } = create.json<{ slug: string }>();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/championships/${slug}/open-availability`,
+      cookies: { auth_token: token(ADMIN_ID, 'ADMIN') },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+
+  it('rsvp is 409 before the availability round is opened', async () => {
+    const create = await createLadderFinal(ADMIN_ID, 'ADMIN');
+    const { slug } = create.json<{ slug: string }>();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/championships/${slug}/rsvp`,
+      cookies: { auth_token: token(USER_ID, 'USER') },
+      payload: { available: true },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('field view is PREVIEW with an empty list for a quiet ladder cycle', async () => {
+    const create = await createLadderFinal(ADMIN_ID, 'ADMIN');
+    const { slug } = create.json<{ slug: string }>();
+    const res = await app.inject({ method: 'GET', url: `/api/championships/${slug}/field` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ phase: string; entries: unknown[] }>();
+    expect(body.phase).toBe('PREVIEW');
+    expect(body.entries).toEqual([]);
   });
 
   it('ladder preview returns an empty field for a quiet month', async () => {
