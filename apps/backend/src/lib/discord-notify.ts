@@ -142,7 +142,73 @@ function recordBotMessage(entry: {
     .catch(() => {});
 }
 
-async function discordRequest(
+// ---------------------------------------------------------------------------
+// Outbound rate-limit compliance (DM 429 incident, 2026-09-30). Every Discord
+// HTTP call funnels through discordRequest(), so the fix lives here — no change
+// to the ~15 bulk senders (they keep their Promise.allSettled(map(...)) form):
+//   (1) a global in-process queue spaces consecutive requests by DISCORD_MIN_GAP_MS
+//       so a burst of DMs can't blow past Discord's ~50 req/s global limit;
+//   (2) 429 responses are honoured (retry_after) and retried with a bounded budget;
+//       a `global` 429 pauses the WHOLE queue (a global limit hits every route).
+//   Transient 5xx / network errors get a small bounded backoff too.
+// ---------------------------------------------------------------------------
+
+/** Minimum gap between consecutive Discord requests (≈22 req/s at 45ms, safely under ~50/s). */
+const DISCORD_MIN_GAP_MS = Number(process.env.DISCORD_MIN_GAP_MS ?? 45);
+/** Retry budget for a rate-limited (429) or transient (5xx / network) request. */
+export const DISCORD_MAX_RETRIES = Number(process.env.DISCORD_MAX_RETRIES ?? 5);
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, Math.max(0, ms)));
+/** Jitter so retries from a burst don't re-synchronise into a fresh spike. */
+const jitter = (): number => 100 + Math.floor(Math.random() * 150);
+const backoff = (attempt: number): number => Math.min(500 * 2 ** attempt, 4000);
+
+// Serialised queue: each request waits its turn, then a min-gap is applied before the next runs.
+// `globalPauseUntil` blocks the whole queue after a `global: true` 429.
+let queueTail: Promise<unknown> = Promise.resolve();
+let globalPauseUntil = 0;
+
+function enqueue<T>(work: () => Promise<T>): Promise<T> {
+  const run: Promise<T> = queueTail.then(async () => {
+    const wait = globalPauseUntil - Date.now();
+    if (wait > 0) await sleep(wait);
+    try {
+      return await work();
+    } finally {
+      await sleep(DISCORD_MIN_GAP_MS);
+    }
+  });
+  // Keep the chain alive regardless of any single request's fate.
+  queueTail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+/** Read a 429's retry delay: prefer the JSON body's `retry_after` (seconds, float), fall back to
+ *  the Retry-After header (also seconds). `global` (body flag or the global scope header) means the
+ *  bot's global limit is exhausted. Reads a CLONE, so a 429 we ultimately return to the caller keeps
+ *  its body intact. */
+async function read429Delay(res: Response): Promise<{ delayMs: number; global: boolean }> {
+  let retryAfterSec = 0;
+  let global = false;
+  try {
+    const data = (await res.clone().json()) as { retry_after?: unknown; global?: unknown };
+    if (typeof data.retry_after === 'number') retryAfterSec = data.retry_after;
+    if (data.global === true) global = true;
+  } catch {
+    /* non-JSON body → fall back to the header */
+  }
+  if (retryAfterSec === 0) {
+    const header = res.headers.get('retry-after');
+    if (header) retryAfterSec = Number(header) || 0;
+  }
+  if (res.headers.get('x-ratelimit-scope') === 'global') global = true;
+  return { delayMs: Math.max(0, retryAfterSec * 1000), global };
+}
+
+export async function discordRequest(
   method: string,
   path: string,
   body?: unknown,
@@ -150,19 +216,44 @@ async function discordRequest(
   const token = getToken();
   if (!token) throw new Error('DISCORD_BOT_TOKEN not set');
 
-  const res = await fetch(`${DISCORD_API}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bot ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const doFetch = (): Promise<Response> =>
+    fetch(`${DISCORD_API}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bot ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
 
-  // Log outbound messages (POST to a channel's /messages). Only res.ok/status are
-  // read here, so the caller can still consume the response body.
+  let res: Response | undefined;
+  for (let attempt = 0; ; attempt++) {
+    const last = attempt >= DISCORD_MAX_RETRIES;
+    try {
+      res = await enqueue(doFetch);
+    } catch (err) {
+      // Network/transport error: bounded retry, then rethrow (callers handle via allSettled).
+      if (last) throw err;
+      await sleep(backoff(attempt) + jitter());
+      continue;
+    }
+    if (last) break;
+    if (res.status === 429) {
+      const { delayMs, global } = await read429Delay(res);
+      if (global) globalPauseUntil = Math.max(globalPauseUntil, Date.now() + delayMs);
+      await sleep(delayMs + jitter());
+      continue;
+    }
+    if (res.status >= 500) {
+      await sleep(backoff(attempt) + jitter());
+      continue;
+    }
+    break; // 2xx, or a non-retryable 4xx (403/400/…) — NEVER retried (avoids invalid-request bans)
+  }
+
+  // Log the FINAL outcome: a 429 that later succeeds logs SENT; only an exhausted one logs FAILED.
   const channelId = method === 'POST' ? MESSAGE_POST_PATH.exec(path)?.[1] : undefined;
-  if (channelId) {
+  if (channelId && res) {
     const recipientUser = dmChannelToUser.get(channelId);
     const content =
       body && typeof body === 'object' && 'content' in body
@@ -177,7 +268,7 @@ async function discordRequest(
     });
   }
 
-  return res;
+  return res as Response;
 }
 
 /** True when a bot token is configured, so the caller can fail fast with a clear error. */

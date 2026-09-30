@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.10.1] — 2026-09-30
+
+### Fixed
+- **Tournament DMs to large fields are no longer dropped.** Notifications to big rosters (qualifier invites, round pairings, reminders) are now paced and automatically retried, so they keep sending instead of failing when Discord rate-limits a burst.
+
 ## [2.10.0] — 2026-09-30
 
 ### Added
