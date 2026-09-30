@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.10.0] — 2026-09-30
+
+### Added
+- **Quarterly Finals now use the same availability round as the Monthly Ladder Invitational.** When a quarter closes, every qualified player is invited to confirm availability (check in) or decline before the field is seeded — from those who confirm, in ranking order. A Quarterly Final keeps its hard Top-16 floor: if fewer than 16 confirm, it is cancelled rather than run smaller. (For the ladder the invite list stays the field plus a reserve buffer; for the quarter, everyone who cleared the activity gate is invited.)
+
 ## [2.9.1] — 2026-09-30
 
 ### Changed

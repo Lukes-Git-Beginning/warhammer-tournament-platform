@@ -77,6 +77,13 @@ describe('confirmedFieldSize — shrink to fit the confirmed', () => {
     expect(confirmedFieldSize(8, 0)).toBe(0);
     expect(confirmedFieldSize(0, 5)).toBe(0);
   });
+  it('honours a hard floor (quarterly Top-16): shrinks down to it, cancels below it', () => {
+    expect(confirmedFieldSize(16, 20, 16)).toBe(16); // enough confirm
+    expect(confirmedFieldSize(16, 16, 16)).toBe(16);
+    expect(confirmedFieldSize(16, 12, 16)).toBe(0); // pow2≤12 = 8 < floor 16 → cancel
+    expect(confirmedFieldSize(32, 20, 16)).toBe(16); // planned Top 32, 20 confirm → shrink to the floor
+    expect(confirmedFieldSize(32, 40, 16)).toBe(32); // enough for the full field
+  });
 });
 
 describe('invitePoolSize — field + equal reserve buffer (2×)', () => {

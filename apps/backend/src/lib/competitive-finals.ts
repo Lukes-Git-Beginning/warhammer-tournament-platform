@@ -51,12 +51,15 @@ export function quarterlyFinalSize(active: number, qualified: number): number {
 /**
  * Final field size once availability is known (availability-round seed). If at least `plannedSize`
  * competitors confirmed, the field is the full planned size; otherwise it shrinks to the largest
- * power of two that fits the confirmed count. The ladder has no floor, so a thin field just runs
- * smaller (e.g. planned Top 8 but only 5 confirm → Top 4). Returns 0 if nobody confirmed.
+ * power of two that fits the confirmed count. `floor` is a hard minimum: if the result would fall
+ * below it, return 0 (the final can't run and is cancelled). The **ladder** passes floor 0 (no
+ * floor — a thin field just runs smaller, e.g. planned Top 8 but only 5 confirm → Top 4); the
+ * **quarterly** passes `QUARTERLY_FLOOR` (16), so fewer than 16 confirmed → cancel (Alex 2026-09-30).
  */
-export function confirmedFieldSize(plannedSize: number, availableCount: number): number {
+export function confirmedFieldSize(plannedSize: number, availableCount: number, floor = 0): number {
   if (plannedSize <= 0 || availableCount <= 0) return 0;
-  return availableCount >= plannedSize ? plannedSize : largestPow2AtMost(availableCount);
+  const s = availableCount >= plannedSize ? plannedSize : largestPow2AtMost(availableCount);
+  return s >= floor ? s : 0;
 }
 
 /** The availability round invites the field plus an equal-size reserve buffer — 2× the field —
@@ -348,25 +351,35 @@ export function plannedFieldSize(kind: ChampKind, poolSize: number, activeForQua
   return quarterlyFinalSize(activeForQuarterly ?? poolSize, poolSize);
 }
 
+export interface FullRanking {
+  ranking: RankedCompetitor[];
+  /** Planned field size N for this cycle, computed correctly per kind. Ladder: pow2 ≤ players/4.
+   *  Quarterly: quarterlyFinalSize(active, qualified) using the REAL active count (competitors with
+   *  ≥1 game in the battle type), NOT the qualified pool size. 0 when there is no field yet. */
+  fieldSize: number;
+}
+
 /**
- * The FULL ranking of the pool (everyone eligible to be invited), ranked. Ladder: the whole month's
- * standings (individual → competitorId === userId). Quarterly: everyone past the activity gate in
- * the battle type. Used to invite the whole field and to enrich seeds with points/gs.
+ * The FULL ranking of the pool (everyone eligible to be invited), ranked, plus the planned field
+ * size. Ladder: the whole month's standings (individual → competitorId === userId). Quarterly:
+ * everyone past the activity gate in the battle type. Used to invite the pool and to enrich seeds
+ * with points/gs; the field size drives the cut, the invite cap and the seed.
  */
 export async function computeFullRanking(
   prisma: PrismaClient,
   redis: Redis | undefined,
   opts: { kind: ChampKind; period: string; battleType?: QuarterlyBattleType; competitorFormat: CompetitorFormatFilter; now?: Date },
-): Promise<RankedCompetitor[]> {
+): Promise<FullRanking> {
   if (opts.kind === 'MONTHLY_LADDER') {
     const window = parseMonth(opts.period);
-    if (!window) return [];
+    if (!window) return { ranking: [], fieldSize: 0 };
     const standings = await computeLadderStandings(prisma, redis, window);
-    return standings.map((s, i) => ({ competitorId: s.playerId, userId: s.playerId, rank: i + 1, points: s.points }));
+    const ranking = standings.map((s, i) => ({ competitorId: s.playerId, userId: s.playerId, rank: i + 1, points: s.points }));
+    return { ranking, fieldSize: plannedFieldSize('MONTHLY_LADDER', ranking.length) };
   }
   const overrides = await loadQuarterOverrides(prisma);
   const window = resolveQuarter(opts.period, overrides);
-  if (!window) return [];
+  if (!window) return { ranking: [], fieldSize: 0 };
   const now = opts.now ?? new Date();
   const cfg = await loadCompetitionConfig(prisma);
   const gate = qualiGate(cfg, window, now);
@@ -376,14 +389,18 @@ export async function computeFullRanking(
     battleType: opts.battleType ?? 'DOMINATION',
     competitorFormat: opts.competitorFormat,
   });
+  // active = everyone who actually played the battle type; qualified = those past the gate. The size
+  // formula needs BOTH (the qualified count alone mis-tiers, and would even fall under the floor).
+  const active = board.filter((e) => e.battleTypeGames >= 1).length;
   const qualified = board.filter((e) => e.battleTypeGames >= gate);
   const isTeam = opts.competitorFormat === 'TWO_V_TWO';
   const captains = isTeam ? await captainMap(prisma, qualified.map((e) => e.competitorId)) : new Map<string, string>();
-  return qualified.flatMap((e, i) => {
+  const ranking = qualified.flatMap((e, i) => {
     const userId = isTeam ? captains.get(e.competitorId) : e.competitorId;
     if (!userId) return [];
     return [{ competitorId: e.competitorId, userId, rank: i + 1, gs: e.gs, ...(e.memberIds.length ? { memberIds: e.memberIds } : {}) }];
   });
+  return { ranking, fieldSize: quarterlyFinalSize(active, qualified.length) };
 }
 
 export interface OpenRoundResult {
@@ -412,7 +429,7 @@ export async function openAvailabilityRound(
   },
 ): Promise<OpenRoundResult> {
   const now = opts.now ?? new Date();
-  const ranking = await computeFullRanking(prisma, redis, {
+  const { ranking, fieldSize } = await computeFullRanking(prisma, redis, {
     kind: opts.kind,
     period: opts.period,
     battleType: opts.battleType,
@@ -422,10 +439,11 @@ export async function openAvailabilityRound(
   if (ranking.length === 0) {
     throw new Error(opts.kind === 'MONTHLY_LADDER' ? 'No ladder players this cycle — nobody to invite.' : 'No qualified players yet — nobody to invite.');
   }
-  const fieldSize = plannedFieldSize(opts.kind, ranking.length);
   if (fieldSize === 0) throw new Error('Not enough players to seat a field yet.');
-  // Invite only the field + an equal reserve buffer (2× the field), not the whole ranking.
-  const pool = ranking.slice(0, invitePoolSize(fieldSize));
+  // Invite pool per kind: the LADDER is gateless, so cap at the field + an equal reserve buffer
+  // (2× the field). The QUARTERLY 90-game gate already bounds the pool and clearing it earns the
+  // seed-pool spot, so invite ALL qualified — no cap (Alex 2026-09-30).
+  const pool = opts.kind === 'MONTHLY_LADDER' ? ranking.slice(0, invitePoolSize(fieldSize)) : ranking;
   const deadlineHours = opts.deadlineHours ?? 24;
   const deadline = new Date(now.getTime() + deadlineHours * 3_600_000);
 
@@ -486,18 +504,24 @@ export async function seedFromConfirmed(
   if (invites.length === 0) throw new Error('No availability round has been opened for this final.');
   const available = invites.filter((i) => i.rsvp === 'AVAILABLE');
 
-  const ranking = await computeFullRanking(prisma, redis, {
+  // Field size N comes from the FULL pool (invites may be capped, e.g. the ladder's top 2N). The
+  // cycle is closed, so the recomputed ranking + size are deterministic.
+  const { ranking, fieldSize: plannedSize } = await computeFullRanking(prisma, redis, {
     kind: opts.kind,
     period: opts.period,
     battleType: opts.battleType,
     competitorFormat: opts.competitorFormat,
     now: opts.now,
   });
-  // Field size N is derived from the FULL pool: invites are only the top 2N, so counting them would
-  // undersize the field. The cycle is closed, so the recomputed ranking is deterministic.
-  const plannedSize = plannedFieldSize(opts.kind, ranking.length);
-  const finalSize = confirmedFieldSize(plannedSize, available.length);
-  if (finalSize === 0) throw new Error('Nobody has confirmed availability yet — no field to seed.');
+  const floor = opts.kind === 'QUARTERLY' ? QUARTERLY_FLOOR : 0;
+  const finalSize = confirmedFieldSize(plannedSize, available.length, floor);
+  if (finalSize === 0) {
+    throw new Error(
+      opts.kind === 'QUARTERLY'
+        ? `Fewer than the Top-${QUARTERLY_FLOOR} floor confirmed availability — the Quarterly Final can't run and should be cancelled.`
+        : 'Nobody has confirmed availability yet — no field to seed.',
+    );
+  }
 
   const byCompetitor = new Map(ranking.map((r) => [r.competitorId, r]));
   const chosen = available.slice(0, finalSize);
@@ -606,8 +630,8 @@ export async function computeFieldView(
     return { phase: 'SEEDED', kind, period, fieldSize: entries.filter((e) => e.inField).length, cutRank: entries.length, deadline: t.rsvp_deadline?.toISOString() ?? null, entries, viewerIsInvitee: false, viewerRsvp: null };
   }
 
-  const ranking = await computeFullRanking(prisma, redis, { kind, period, battleType, competitorFormat, now: opts.now });
-  const plannedSize = plannedFieldSize(kind, ranking.length);
+  const { ranking, fieldSize: plannedSize } = await computeFullRanking(prisma, redis, { kind, period, battleType, competitorFormat, now: opts.now });
+  const floor = kind === 'QUARTERLY' ? QUARTERLY_FLOOR : 0;
 
   // AVAILABILITY — round open, not sealed yet.
   if (t.availability_opened_at) {
@@ -615,7 +639,7 @@ export async function computeFieldView(
     const rankInfo = new Map(ranking.map((r) => [r.competitorId, r]));
     const umap = await resolveUsers(invites.map((i) => i.user_id));
     const availableSorted = invites.filter((i) => i.rsvp === 'AVAILABLE'); // rank asc
-    const finalSize = confirmedFieldSize(plannedSize, availableSorted.length);
+    const finalSize = confirmedFieldSize(plannedSize, availableSorted.length, floor);
     const inFieldIds = new Set(availableSorted.slice(0, finalSize).map((i) => i.competitor_id));
     const entries: FieldEntry[] = invites.map((inv) => {
       const u = umap.get(inv.user_id);

@@ -39,9 +39,14 @@ Options:
   32 qualified and the round is live, a no-show cascade shouldn't nuke the event — the committed
   players deserve a final.
 
-Implementation for (C): a `kind`-aware `confirmedFieldSize` — for QUARTERLY, clamp the shrink at a
-`QUARTERLY_MIN_SEEDED` floor (8) and return 0 (→ 422 "not enough confirmed, final cancelled") below it.
-**Alex to confirm A / B / C and the minimum.**
+**DECIDED (Alex 2026-09-30): (A) strict cancel.** The Top-16 floor holds on the RSVP side too — no
+Top-8 fallback. The floor gates whether the final is offered at all (≥64 active & ≥32 qualified, as
+now); once opened, if fewer than 16 confirm availability, the final is **cancelled**, not shrunk below
+16. A larger community field (Top 32/64) may still shrink DOWN TO the Top-16 floor if turnout is thin,
+but never below.
+Implementation: a `kind`-aware confirmed-field-size for QUARTERLY:
+`s = min(plannedN, largestPow2AtMost(available)); return s >= 16 ? s : 0` (0 → seed 422s / the admin
+cancels the final). The ladder keeps the current floor-less `confirmedFieldSize`.
 
 ## Decision 2 — up to 6 finals per cycle (battle_type × format)
 
@@ -55,11 +60,10 @@ tournament detail `ChampionshipFieldPanel` (already built) rather than the tile.
 
 ## Decision 3 — 2v2 RSVP semantics
 
-For a 2v2 final the invite's `user_id` is the **captain** (set by `computeFullRanking`/`captainMap`).
-So `/rsvp` already accepts only the captain's confirm/decline. Decide: is captain-only RSVP right, or
-should any team member be able to confirm the team? Recommend **captain-only** (the captain is the
-registrant/actor everywhere else). The seed then writes the team participant via `writeSeededField`
-(already handles `participant_type=TEAM`). No code change if captain-only.
+**DECIDED (Alex 2026-09-30): captain-only.** For a 2v2 final the invite's `user_id` is the **captain**
+(set by `computeFullRanking`/`captainMap`), so `/rsvp` already accepts only the captain's confirm/decline
+and the seed writes the team participant via `writeSeededField` (`participant_type=TEAM`). **No code
+change needed** — the captain is the registrant/actor everywhere else, and this is how it already works.
 
 ## Decision 4 — Siege finals are points-based, not a bracket
 
@@ -86,8 +90,10 @@ window is wanted for a major.
 
 ## Concrete change list (when built)
 
-1. `confirmedFieldSize` → make `kind`-aware with a `QUARTERLY_MIN_SEEDED` floor (Decision 1). Add unit
-   tests mirroring the ladder shrink tests.
+1. Confirmed-field-size → `kind`-aware: QUARTERLY uses the strict Top-16 floor (`min(N, pow2≤available)`,
+   0 below 16 = cancel); the ladder keeps the floor-less `confirmedFieldSize`. Add unit tests.
+   (Superseded/expanded by the "Remaining before quarterly can ship" list below — see it for the full,
+   current set incl. the kind-aware invite pool: quarterly invites ALL qualified, NOT 2N-capped.)
 2. `seedFromConfirmed` already computes `plannedSize` via `plannedFieldSize(kind, …)` — for QUARTERLY it
    uses `quarterlyFinalSize`, which needs `active` (not just the qualified pool size). Pass the true
    `active` count through (openAvailabilityRound/seedFromConfirmed currently derive plannedSize from the
@@ -99,9 +105,24 @@ window is wanted for a major.
 4. Optional per-kind invite DM copy.
 5. Tests: quarterly floor/shrink, 2v2 captain RSVP, a Siege points-final seed.
 
-## Open questions for Alex
+## Resolved (Alex 2026-09-30)
 
-- Decision 1: cancel / shrink / shrink-with-min (recommended C, min Top 8)?
-- Should the availability round for quarterly also be admin-two-click, or auto-open at quarter close
-  (the ladder is two-click, no cron — recommend keeping that for consistency)?
-- 2v2: captain-only RSVP (recommended) or any member?
+- Decision 1 → **strict cancel** at the Top-16 floor (no Top-8 fallback).
+- Decision 3 → **captain-only** RSVP (already how it works, no code change).
+- Invite pool → **kind-aware**: ladder = 2× the field (`invitePoolSize`, gateless so it needs a cap;
+  shipped v2.9.1). **Quarterly = ALL qualified** (Alex 2026-09-30): the 90-game gate already bounds the
+  pool (~27-40, never hundreds) and clearing it earns the seed-pool spot, so NO 2N cap for quarterly —
+  if 40 clear the gate for a Top 16, all 40 are invited (not 32).
+- Round trigger → **admin two-click** (no cron), same as the ladder.
+
+## Remaining before quarterly can ship (all backend, small)
+
+1. `kind`-aware confirmed-field-size with the strict Top-16 floor (Decision 1): quarterly =
+   `min(N, pow2≤available)`, 0 below 16 (cancel); ladder keeps the floor-less version.
+2. Thread the true `active` count into `quarterlyFinalSize` (the one real gap — currently the qualified
+   count is passed as `active`, which mis-tiers Top-16/32 and would even return 0).
+3. **Kind-aware invite pool** in `openAvailabilityRound`: ladder slices to `invitePoolSize(fieldSize)`;
+   **quarterly invites the full (gated) ranking — no cap** (Alex 2026-09-30).
+4. Unit tests: quarterly floor (cancel < 16), `active`-tiering, quarterly-invites-all; plus a Siege
+   points-final seed.
+5. (Optional) per-kind invite DM copy (quarterly = "Top-N major", no raffle mention).
