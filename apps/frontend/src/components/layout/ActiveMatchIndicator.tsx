@@ -22,12 +22,24 @@ import { cn } from '@/lib/utils';
 //  - On CLICK: navigates to the first hidden item's destination.
 // ---------------------------------------------------------------------------
 
-function itemDestination(item: { kind: string; tournamentSlug: string | null }): string {
+// Deep-link target for an active match: a tournament match scrolls to the #my-match
+// widget on the tournament page; an open-play / challenge match goes straight to its
+// own match page (previously both just dumped the user on the tournament / open-play page).
+type ActiveItem = { kind: string; tournamentSlug: string | null; matchId: string };
+
+function hrefOf(item: ActiveItem): string {
   if (item.kind === 'tournament' && item.tournamentSlug) {
-    return `/tournaments/${item.tournamentSlug}`;
+    return `/tournaments/${item.tournamentSlug}#my-match`;
   }
-  // open_play and challenge both send to Open Play
-  return '/open-play';
+  return `/matches/${item.matchId}`;
+}
+
+function goToItem(navigate: ReturnType<typeof useNavigate>, item: ActiveItem): void {
+  if (item.kind === 'tournament' && item.tournamentSlug) {
+    void navigate({ to: '/tournaments/$slug', params: { slug: item.tournamentSlug }, hash: 'my-match' });
+  } else {
+    void navigate({ to: '/matches/$matchId', params: { matchId: item.matchId } });
+  }
 }
 
 export function ActiveMatchIndicator() {
@@ -53,7 +65,7 @@ export function ActiveMatchIndicator() {
 
   function handleClick() {
     if (!firstHidden) return;
-    void navigate({ to: itemDestination(firstHidden) as '/' });
+    goToItem(navigate, firstHidden);
   }
 
   return (
@@ -107,15 +119,14 @@ export function ActiveMatchIndicator() {
         </div>
         <ul className="flex flex-col divide-y divide-rizzotto-iron-800 max-h-72 overflow-y-auto">
           {items.map((item) => {
-            const dest = itemDestination(item);
             const isHidden = !visibleSet.has(item.matchId);
             return (
               <li key={item.matchId}>
                 <a
-                  href={dest}
+                  href={hrefOf(item)}
                   onClick={(e) => {
                     e.preventDefault();
-                    void navigate({ to: dest as '/' });
+                    goToItem(navigate, item);
                   }}
                   className={cn(
                     'flex items-start gap-2 px-3 py-2 text-sm hover:bg-rizzotto-iron-800 transition-colors',

@@ -82,7 +82,7 @@ export function PlayerLevelScale({
       <SkillHistoryChart userId={userId} />
       {data.hasQuestionnaire && (
         <p className="mt-2 text-[11px] text-stone-500">
-          The graph tracks your games only; your level above also blends in your questionnaire.
+          The chart shows your match results only. The level above also factors in your calibration questionnaire.
         </p>
       )}
       {isOwnProfile && !data.hasQuestionnaire && (

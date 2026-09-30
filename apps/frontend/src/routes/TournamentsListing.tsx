@@ -200,7 +200,10 @@ export function TournamentsListing() {
   const updateSearch = (patch: Partial<typeof search>) =>
     void navigate({ search: (prev) => ({ ...prev, ...patch }) });
 
-  const setPage = (p: number) => updateSearch({ page: p });
+  // Paging keeps the scroll position (the archive list is far down the page); a scroll-to-top
+  // on every "next page" is jarring. Filter changes below still reset scroll (new result set).
+  const setPage = (p: number) =>
+    void navigate({ search: (prev) => ({ ...prev, page: p }), resetScroll: false });
   const toggleMajor = () => updateSearch({ page: 1, major: majorOnly ? undefined : true });
   const setBattleType = (bt: typeof battleType) => updateSearch({ page: 1, battle_type: bt });
   const setCompetitorFormat = (cf: typeof competitorFormat) =>

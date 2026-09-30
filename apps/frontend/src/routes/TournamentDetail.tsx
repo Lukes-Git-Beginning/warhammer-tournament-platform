@@ -1131,7 +1131,7 @@ export function TournamentDetail() {
 
       {/* ─── My Match (GameTiles) — only shown to participants during ongoing ─── */}
       {user && tournament.status === 'ONGOING' && bracket && participantsData && (
-        <div id="my-match">
+        <div id="my-match" className="scroll-mt-20">
         <MyMatchSection
           currentUserId={user.id}
           matches={bracket.matches}
