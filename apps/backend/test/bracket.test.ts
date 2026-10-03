@@ -208,6 +208,63 @@ describe('generateSingleElim', () => {
   });
 });
 
+// Regression: ladder-grand-finals-september-2026 (SE, 16 players) was set to Bo3 semis + Bo3
+// final but played everything Bo1 — SE matches carry no phase, so the phase-derived format
+// always fell back to the regular match format. The formats are now stamped per match.
+describe('generateSingleElim — semis/final formats', () => {
+  const formats = { semisFormat: 'BO3', finalFormat: 'BO5' } as const;
+
+  it('16 players: final gets the final format, the two semis the semis format, the rest none', () => {
+    const matches = generateSingleElim(TOURNAMENT_ID, fakeIds(16), formats);
+    const final = matches.find((m) => m.next_match_id === null)!;
+    const semis = matches.filter((m) => m.next_match_id === final.id);
+
+    expect(final.round).toBe(4);
+    expect(final.match_format).toBe('BO5');
+    expect(semis).toHaveLength(2);
+    for (const sf of semis) {
+      expect(sf.round).toBe(3);
+      expect(sf.match_format).toBe('BO3');
+    }
+    const rest = matches.filter((m) => m !== final && !semis.includes(m));
+    expect(rest).toHaveLength(12);
+    for (const m of rest) expect(m.match_format ?? null).toBeNull();
+  });
+
+  it('SE matches stay phase-less (the frontend identifies an SE bracket by phase=null)', () => {
+    const matches = generateSingleElim(TOURNAMENT_ID, fakeIds(8), formats);
+    for (const m of matches) expect(m.phase ?? null).toBeNull();
+  });
+
+  it('third-place match: tagged PLAYOFF_THIRD_PLACE without an override, final/semis keep theirs', () => {
+    const matches = generateSingleElim(TOURNAMENT_ID, fakeIds(8), { ...formats, hasThirdPlace: true });
+    const tp = matches.find((m) => m.phase === 'PLAYOFF_THIRD_PLACE')!;
+    const final = matches.find((m) => m.next_match_id === null && m.phase !== 'PLAYOFF_THIRD_PLACE')!;
+
+    expect(tp.match_format ?? null).toBeNull(); // resolves to the Semis format via its phase
+    expect(final.match_format).toBe('BO5');
+    expect(matches.filter((m) => m.match_format === 'BO3')).toHaveLength(2);
+  });
+
+  it('non-pow2 field (6 players): semis/final found by structure, not by round number', () => {
+    const matches = generateSingleElim(TOURNAMENT_ID, fakeIds(6), formats);
+    const final = matches.find((m) => m.next_match_id === null)!;
+    expect(final.match_format).toBe('BO5');
+    expect(matches.filter((m) => m.next_match_id === final.id && m.match_format === 'BO3')).toHaveLength(2);
+  });
+
+  it('2 players: the single match is the final', () => {
+    const matches = generateSingleElim(TOURNAMENT_ID, fakeIds(2), formats);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]!.match_format).toBe('BO5');
+  });
+
+  it('no formats passed: no overrides (unchanged behaviour for callers that do not opt in)', () => {
+    const matches = generateSingleElim(TOURNAMENT_ID, fakeIds(8));
+    for (const m of matches) expect(m.match_format ?? null).toBeNull();
+  });
+});
+
 describe('selectStartNotifications — double-bye follow-ups', () => {
   it('10-player DE: a round-2 match is pre-filled by two byes (the Skulltaker situation)', () => {
     // 10 players in a 16-slot bracket → 6 round-1 byes, and the standard seed order

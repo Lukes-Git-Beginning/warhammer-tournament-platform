@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.11.6] — 2026-10-04
+
+### Fixed
+- **Single Elimination brackets now play the Semis and Grand Final formats you set.** Previously every Single Elimination match was played in the regular match format, even when Bo3 or Bo5 was chosen for the Semis and the Grand Final. The two semifinals and the final now use those formats, and a third-place match follows the Semis format. Applies to brackets started after this update.
+
 ## [2.11.5] — 2026-10-01
 
 ### Fixed

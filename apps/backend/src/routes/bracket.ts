@@ -87,6 +87,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           loser_next_match_id: true,
           bracket_side: true,
           phase: true,
+          match_format: true,
           withdrawn_player_id: true,
           player1_faction_id: true,
           player2_faction_id: true,
@@ -166,11 +167,13 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           nextMatchId: m.next_match_id,
           loserNextMatchId: m.loser_next_match_id,
           bracketSide: m.bracket_side,
-          matchFormat: m.phase === 'PLAYOFF_FINAL'
-            ? tournament.finale_match_format
-            : m.phase?.startsWith('PLAYOFF')
-              ? tournament.playoff_match_format
-              : tournament.swiss_match_format,
+          // A per-match override wins (SE semis/final, DE bracket reset), mirroring resolveMatchFormat.
+          matchFormat: m.match_format
+            ?? (m.phase === 'PLAYOFF_FINAL'
+              ? tournament.finale_match_format
+              : m.phase?.startsWith('PLAYOFF')
+                ? tournament.playoff_match_format
+                : tournament.swiss_match_format),
           // SFT: TournamentParticipant.faction_id is the committed faction — always authoritative.
           // 2D3: the faction is drawn onto each MatchGame at creation, so surface it on the node
           // as soon as it's rolled (before the game is reported), like SFT/2FT. Other modes:
@@ -365,6 +368,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           playoff_format: true,
           auto_sizing: true,
           has_third_place_match: true,
+          playoff_match_format: true,
+          finale_match_format: true,
           grand_final_reset: true,
           grand_final_reset_format: true,
           start_date: true,
@@ -463,6 +468,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
         bracket_side?: 'WINNERS' | 'LOSERS' | 'GRAND_FINAL' | null;
         winner_id: string | null;
         phase?: string | null;
+        match_format?: import('@rizzotto/db').MatchFormat | null;
       }>;
 
       switch (tournament.format) {
@@ -479,6 +485,8 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           );
           bracketMatches = generateSingleElim(tournament.id, seeded, {
             hasThirdPlace: tournament.has_third_place_match,
+            semisFormat: tournament.playoff_match_format,
+            finalFormat: tournament.finale_match_format,
           });
           break;
         }

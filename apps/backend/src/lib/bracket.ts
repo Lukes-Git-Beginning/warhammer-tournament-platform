@@ -14,13 +14,16 @@ export interface BracketMatchInput {
   winner_id: string | null;
   loser_next_match_id?: string | null;
   phase?: string | null;
+  /**
+   * Per-match format override; wins over the phase-derived format (resolveMatchFormat).
+   * Used for the DE bracket-reset final and the SE semis/final (SE matches carry no phase).
+   */
+  match_format?: MatchFormat | null;
 }
 
 export interface DEBracketMatchInput extends BracketMatchInput {
   loser_next_match_id: string | null;
   bracket_side: BracketSide;
-  /** Per-match format override (the DE bracket-reset final may differ from the Grand Final). */
-  match_format?: MatchFormat | null;
 }
 
 /**
@@ -34,12 +37,17 @@ export interface DEBracketMatchInput extends BracketMatchInput {
  *   - BYE winners propagate immediately; rounds are processed ascending so
  *     cascades resolve in a single sweep.
  *
+ * Semis/Final format: SE matches deliberately carry no phase (the frontend and finalize logic
+ * identify an SE bracket by phase=null), so the host's Semis and Grand Final formats are stamped
+ * as a per-match `match_format` on the two matches feeding the final and on the final itself.
+ * The third-place match keeps its PLAYOFF_THIRD_PLACE phase and so plays the Semis format.
+ *
  * Returns matches sorted by (round, match_number).
  */
 export function generateSingleElim(
   tournamentId: string,
   participantIds: string[],
-  opts?: { hasThirdPlace?: boolean },
+  opts?: { hasThirdPlace?: boolean; semisFormat?: MatchFormat | null; finalFormat?: MatchFormat | null },
 ): BracketMatchInput[] {
   const libMatches = SingleElimination(participantIds, 1, false, true);
 
@@ -117,6 +125,15 @@ export function generateSingleElim(
 
   const result = Array.from(outputMap.values());
   result.sort((a, b) => a.round - b.round || a.match_number - b.match_number);
+
+  // The Final is the only match with no next pointer; the Semis are the matches feeding it.
+  const final = result.find((m) => m.next_match_id === null);
+  if (final) {
+    if (opts?.finalFormat) final.match_format = opts.finalFormat;
+    if (opts?.semisFormat) {
+      for (const m of result) if (m.next_match_id === final.id) m.match_format = opts.semisFormat;
+    }
+  }
 
   if (opts?.hasThirdPlace) {
     // Find the Final (only match with next_match_id === null in the last round)
