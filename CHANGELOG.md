@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 ### Added
 - **Hosts can answer a championship invite on a player's behalf.** During the availability round of a Ladder Invitational or Quarterly Final, the host can mark an invited player as available or not playing (for example when they said so in Discord), so the field fills without waiting for the deadline. These show as "(host)", can be undone, the player gets a DM about it, and they can still change it themselves until the field is seeded.
 - **Hosts added to a championship final can run it.** A host or co-host that staff put on a Ladder Invitational or Quarterly Final can now open the availability round, seed the field and draw the raffle, just like staff.
+- **Three more Domination maps:** Otsuchi Castle, Blasphemous Snowfield and Excavation Site are now in the Domination pool.
+
+### Changed
+- **Domination map images are now hosted on rizzotto.gg** instead of an external image host, so they load faster and can't disappear.
 
 ## [2.11.6] — 2026-10-04
 

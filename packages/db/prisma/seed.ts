@@ -240,8 +240,9 @@ interface MapSeedEntry {
   battle_type?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
 }
 
-// The curated active pool (the original 36) — matched to the sheet by a normalised name so
-// slug/spelling drift (e.g. "Labor" vs "Labour", a "The" prefix) still lines up.
+// The curated active pool (the original 36 + Otsuchi Castle, Blasphemous Snowfield, Excavation Site
+// from 2026-10, mirrored on prod by migration 20261005120000) — matched to the sheet by a normalised
+// name so slug/spelling drift (e.g. "Labor" vs "Labour", a "The" prefix) still lines up.
 const CANONICAL_MAP_NAMES = [
   'Altar of the Champion', 'Aracknarock Lair', 'Battle for Itza', 'Blazing Ramparts',
   'Bleakspire Labor Camp', 'Bordeleaux Landing', 'Bray Valley', 'Celestial Lake',
@@ -252,6 +253,7 @@ const CANONICAL_MAP_NAMES = [
   'Lost Temple of Sotek', 'Norscan Rise', 'Proving Grounds', 'Putrefying Carcass',
   'Rapturous Expanse', "Rifts at World's Edge", 'Road to Talabheim', "Skjalandir's Cave",
   "The Changer's Madhouse", 'The Blood Grove', 'Whirling Maelstrom',
+  'Otsuchi Castle', 'Blasphemous Snowfield', 'Excavation Site',
 ];
 
 const normMapKey = (n: string): string =>
