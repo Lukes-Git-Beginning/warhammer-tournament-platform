@@ -1048,7 +1048,7 @@ export function TournamentDetail() {
           <section className="mb-4">
             <ChampionshipFieldPanel
               slug={tournament.slug}
-              isAdmin={user?.role === 'ADMIN' || user?.role === 'MODERATOR'}
+              canManage={canManage}
               isLoggedIn={!!user}
             />
           </section>

@@ -514,14 +514,17 @@ model CompetitiveCycleSnapshot {
 /// (DECLINED); no response stays PENDING and counts as unavailable at seed. Seeding then takes the
 /// top-N by rank among AVAILABLE. competitor_id is opaque (User 1v1 / Team 2v2); user_id is the
 /// actor who RSVPs (the captain for 2v2). Cleared/rewritten if the round is re-opened.
+/// rsvp_by_manager: the current rsvp was set by a host/co-host/staff on the invitee's behalf (e.g.
+/// declining a player who said in Discord they won't play); the invitee's own RSVP clears it.
 model ChampionshipInvite {
-  id            String     @id @default(uuid()) @db.Uuid
-  tournament_id String     @db.Uuid
-  competitor_id String     @db.Uuid
-  user_id       String     @db.Uuid
-  rank          Int
-  rsvp          RsvpStatus @default(PENDING)
-  rsvp_at       DateTime?
+  id              String     @id @default(uuid()) @db.Uuid
+  tournament_id   String     @db.Uuid
+  competitor_id   String     @db.Uuid
+  user_id         String     @db.Uuid
+  rank            Int
+  rsvp            RsvpStatus @default(PENDING)
+  rsvp_at         DateTime?
+  rsvp_by_manager Boolean    @default(false)
   created_at    DateTime   @default(now())
   updated_at    DateTime   @updatedAt
 

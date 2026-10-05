@@ -114,3 +114,32 @@ export async function notifyRaffleWinner(
     console.warn('[championship-notify] notifyRaffleWinner error (non-fatal):', err);
   }
 }
+
+/** A host/staff member set an invitee's availability on their behalf: tell them, with a way to
+ *  correct it (their own answer overrides). Not sent for an undo back to pending. */
+export async function notifyRsvpSetByManager(
+  prisma: PrismaClient,
+  tournamentId: string,
+  userId: string,
+  rsvp: 'AVAILABLE' | 'DECLINED',
+): Promise<void> {
+  if (!isBotConfigured()) return;
+  try {
+    const [t, user] = await Promise.all([
+      prisma.tournament.findUnique({ where: { id: tournamentId }, select: { name: true, slug: true } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { discord_id: true } }),
+    ]);
+    if (!t || !user?.discord_id) return;
+    const url = `${baseUrl()}/tournaments/${t.slug}`;
+    const msg = rsvp === 'DECLINED'
+      ? `**[RizzOtto's Arena] Marked as not playing — ${t.name}**\n` +
+        `The host marked you as unavailable for **${t.name}**, so your spot goes to the next player in line. ` +
+        `If that's wrong, confirm you can play before the field is locked: <${url}>`
+      : `**[RizzOtto's Arena] Marked as available — ${t.name}**\n` +
+        `The host confirmed you as available for **${t.name}**. ` +
+        `If you can't play after all, decline before the field is locked so the next player can take your spot: <${url}>`;
+    await sendDm(user.discord_id, msg);
+  } catch (err) {
+    console.warn('[championship-notify] notifyRsvpSetByManager error (non-fatal):', err);
+  }
+}

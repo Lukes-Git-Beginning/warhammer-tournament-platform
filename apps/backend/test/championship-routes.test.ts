@@ -11,6 +11,9 @@ import { prisma } from '@rizzotto/db';
 
 const ADMIN_ID = 'cf1a0000-0000-0000-0000-000000000001';
 const USER_ID = 'cf1a0000-0000-0000-0000-000000000002';
+const HOST_ID = 'cf1a0000-0000-0000-0000-000000000003';
+const INVITEE_ID = 'cf1a0000-0000-0000-0000-000000000004';
+const ALL_IDS = [ADMIN_ID, USER_ID, HOST_ID, INVITEE_ID];
 
 let app: FastifyInstance;
 
@@ -26,9 +29,10 @@ afterAll(async () => {
 
 async function cleanupAll() {
   // ChampionshipInvite rows cascade when the tournament is deleted (onDelete: Cascade).
-  await prisma.tournament.deleteMany({ where: { host_id: { in: [ADMIN_ID, USER_ID] } } });
+  await prisma.tournament.deleteMany({ where: { host_id: { in: ALL_IDS } } });
+  await prisma.auditLog.deleteMany({ where: { actor_id: { in: ALL_IDS } } });
   await prisma.competitiveCycleSnapshot.deleteMany({ where: { period: { in: ['2099-Q1', '2099-01'] } } });
-  await prisma.user.deleteMany({ where: { id: { in: [ADMIN_ID, USER_ID] } } });
+  await prisma.user.deleteMany({ where: { id: { in: ALL_IDS } } });
 }
 
 beforeEach(async () => {
@@ -37,6 +41,8 @@ beforeEach(async () => {
     data: [
       { id: ADMIN_ID, discord_id: 'champ_admin', username: 'ChampAdmin', email: null, role: 'ADMIN' },
       { id: USER_ID, discord_id: 'champ_user', username: 'ChampUser', email: null, role: 'USER' },
+      { id: HOST_ID, discord_id: 'champ_host', username: 'ChampHost', email: null, role: 'HOST' },
+      { id: INVITEE_ID, discord_id: 'champ_invitee', username: 'ChampInvitee', email: null, role: 'USER' },
     ],
   });
 });
@@ -180,5 +186,144 @@ describe('Championship finals routes', () => {
     expect(body.players).toBe(0);
     expect(body.size).toBe(0);
     expect(body.tournament).toBeNull();
+  });
+});
+
+describe('Championship invites — host declines on an invitee\'s behalf', () => {
+  /** A ladder final hosted by HOST_ID with the availability round open and INVITEE_ID invited (PENDING). */
+  async function openRoundWithInvitee(): Promise<{ slug: string; tournamentId: string }> {
+    const create = await createLadderFinal(ADMIN_ID, 'ADMIN');
+    const { id, slug } = create.json<{ id: string; slug: string }>();
+    await prisma.tournament.update({
+      where: { id },
+      data: { host_id: HOST_ID, availability_opened_at: new Date(), rsvp_deadline: new Date(Date.now() + 86_400_000) },
+    });
+    await prisma.championshipInvite.create({
+      data: { tournament_id: id, competitor_id: INVITEE_ID, user_id: INVITEE_ID, rank: 1 },
+    });
+    return { slug, tournamentId: id };
+  }
+
+  function managerRsvp(slug: string, actor: [string, string], rsvp: string) {
+    return app.inject({
+      method: 'POST',
+      url: `/api/championships/${slug}/invites/${INVITEE_ID}/rsvp`,
+      cookies: { auth_token: token(actor[0], actor[1]) },
+      payload: { rsvp },
+    });
+  }
+
+  const invite = (tournamentId: string) =>
+    prisma.championshipInvite.findUniqueOrThrow({
+      where: { tournament_id_user_id: { tournament_id: tournamentId, user_id: INVITEE_ID } },
+    });
+
+  it('the host can decline an invitee: flagged as manager-set, audit-logged, shown on the field', async () => {
+    const { slug, tournamentId } = await openRoundWithInvitee();
+    const res = await managerRsvp(slug, [HOST_ID, 'HOST'], 'DECLINED');
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ rsvp: string }>().rsvp).toBe('DECLINED');
+
+    const row = await invite(tournamentId);
+    expect(row.rsvp).toBe('DECLINED');
+    expect(row.rsvp_by_manager).toBe(true);
+
+    const log = await prisma.auditLog.findFirst({ where: { entity_type: 'ChampionshipInvite', entity_id: row.id } });
+    expect(log?.actor_id).toBe(HOST_ID);
+    expect(log?.action).toBe('rsvp_declined_by_manager');
+
+    const field = await app.inject({ method: 'GET', url: `/api/championships/${slug}/field` });
+    const entry = field.json<{ entries: { userId: string; rsvp: string; rsvpByManager: boolean }[] }>()
+      .entries.find((e) => e.userId === INVITEE_ID);
+    expect(entry).toMatchObject({ rsvp: 'DECLINED', rsvpByManager: true });
+  });
+
+  it('undo resets a manager decline back to PENDING', async () => {
+    const { slug, tournamentId } = await openRoundWithInvitee();
+    await managerRsvp(slug, [HOST_ID, 'HOST'], 'DECLINED');
+    const res = await managerRsvp(slug, [HOST_ID, 'HOST'], 'PENDING');
+    expect(res.statusCode).toBe(200);
+    const row = await invite(tournamentId);
+    expect(row.rsvp).toBe('PENDING');
+    expect(row.rsvp_by_manager).toBe(false);
+    expect(row.rsvp_at).toBeNull();
+  });
+
+  it('the invitee\'s own answer overrides a manager decline and clears the flag', async () => {
+    const { slug, tournamentId } = await openRoundWithInvitee();
+    await managerRsvp(slug, [HOST_ID, 'HOST'], 'DECLINED');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/championships/${slug}/rsvp`,
+      cookies: { auth_token: token(INVITEE_ID, 'USER') },
+      payload: { available: true },
+    });
+    expect(res.statusCode).toBe(200);
+    const row = await invite(tournamentId);
+    expect(row.rsvp).toBe('AVAILABLE');
+    expect(row.rsvp_by_manager).toBe(false);
+  });
+
+  it('staff (admin) may decline too; an unrelated user may not', async () => {
+    const { slug } = await openRoundWithInvitee();
+    expect((await managerRsvp(slug, [USER_ID, 'USER'], 'DECLINED')).statusCode).toBe(403);
+    expect((await managerRsvp(slug, [ADMIN_ID, 'ADMIN'], 'DECLINED')).statusCode).toBe(200);
+  });
+
+  it('the host can also mark an invitee AVAILABLE on their behalf (flagged as host-set)', async () => {
+    const { slug, tournamentId } = await openRoundWithInvitee();
+    const res = await managerRsvp(slug, [HOST_ID, 'HOST'], 'AVAILABLE');
+    expect(res.statusCode).toBe(200);
+    const row = await invite(tournamentId);
+    expect(row.rsvp).toBe('AVAILABLE');
+    expect(row.rsvp_by_manager).toBe(true);
+    expect((await managerRsvp(slug, [HOST_ID, 'HOST'], 'MAYBE')).statusCode).toBe(400);
+  });
+
+  it('a host put on the final may run it (open round / seed get past the permission check)', async () => {
+    const create = await createLadderFinal(ADMIN_ID, 'ADMIN');
+    const { id, slug } = create.json<{ id: string; slug: string }>();
+    await prisma.tournament.update({ where: { id }, data: { host_id: HOST_ID } });
+    // Quiet far-future cycle → nobody to invite / seed: 422, i.e. authorised but nothing to do.
+    const open = await app.inject({
+      method: 'POST',
+      url: `/api/championships/${slug}/open-availability`,
+      cookies: { auth_token: token(HOST_ID, 'HOST') },
+    });
+    expect(open.statusCode).toBe(422);
+    const seed = await app.inject({
+      method: 'POST',
+      url: `/api/championships/${slug}/seed`,
+      cookies: { auth_token: token(HOST_ID, 'HOST') },
+    });
+    expect(seed.statusCode).toBe(422);
+    // …while a host of some OTHER tournament is still refused.
+    const outsider = await app.inject({
+      method: 'POST',
+      url: `/api/championships/${slug}/seed`,
+      cookies: { auth_token: token(USER_ID, 'HOST') },
+    });
+    expect(outsider.statusCode).toBe(403);
+  });
+
+  it('is 409 before the round opens and once the final is seeded; 404 for a non-invitee', async () => {
+    // One final per period (unique tag), so check "not open yet" on it before opening the round.
+    const { slug, tournamentId } = await openRoundWithInvitee();
+    await prisma.tournament.update({ where: { id: tournamentId }, data: { availability_opened_at: null } });
+    expect((await managerRsvp(slug, [ADMIN_ID, 'ADMIN'], 'DECLINED')).statusCode).toBe(409);
+    await prisma.tournament.update({ where: { id: tournamentId }, data: { availability_opened_at: new Date() } });
+
+    const stranger = await app.inject({
+      method: 'POST',
+      url: `/api/championships/${slug}/invites/${USER_ID}/rsvp`,
+      cookies: { auth_token: token(HOST_ID, 'HOST') },
+      payload: { rsvp: 'DECLINED' },
+    });
+    expect(stranger.statusCode).toBe(404);
+
+    await prisma.tournamentParticipant.create({
+      data: { tournament_id: tournamentId, user_id: INVITEE_ID, status: 'CHECKED_IN' },
+    });
+    expect((await managerRsvp(slug, [HOST_ID, 'HOST'], 'DECLINED')).statusCode).toBe(409);
   });
 });

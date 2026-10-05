@@ -6,6 +6,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { cached, cacheKey } from '../lib/cache.js';
+import { canManageTournament } from '../lib/tournament-utils.js';
 import {
   computeQuarterlyFinal,
   computeMonthlyLadderFinal,
@@ -13,6 +14,7 @@ import {
   seedFromConfirmed,
   openAvailabilityRound,
   setInviteRsvp,
+  setInviteRsvpByManager,
   computeFieldView,
   pickRaffleWinner,
   type QuarterlyBattleType,
@@ -23,6 +25,7 @@ import {
   notifyChampionshipSeeded,
   notifyRaffleWinner,
   notifyAvailabilityInvites,
+  notifyRsvpSetByManager,
 } from '../lib/championship-notify.js';
 
 const QUARTERLY_BATTLE_TYPES: QuarterlyBattleType[] = ['DOMINATION', 'CONQUEST', 'SIEGE'];
@@ -109,11 +112,21 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
     );
   });
 
-  // POST /api/championships/:slug/seed — admin: freeze the qualification + seed the tagged final,
-  // then DM each seeded competitor. Idempotent (re-seed before start is safe).
+  // Finals are created by staff (the championship tag is admin-only on create), so "manager" here is
+  // staff plus any host/co-host staff put on that final — they run it with the same controls.
+  const forbidUnlessManager = async (
+    request: { user: { sub: string; role: string } },
+    tournamentId: string,
+  ): Promise<{ error: string; message: string; statusCode: number } | null> =>
+    (await canManageTournament(fastify.prisma, tournamentId, request.user.sub, request.user.role))
+      ? null
+      : { error: 'Forbidden', message: 'Only staff or a host of this final can do this.', statusCode: 403 };
+
+  // POST /api/championships/:slug/seed — staff/host of the final: freeze the qualification + seed the
+  // tagged final, then DM each seeded competitor. Idempotent (re-seed before start is safe).
   fastify.post(
     '/api/championships/:slug/seed',
-    { preHandler: [fastify.authenticate, fastify.requireRole('MODERATOR', 'ADMIN')] },
+    { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { slug } = request.params as { slug: string };
       const t = await fastify.prisma.tournament.findUnique({
@@ -128,6 +141,8 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
       if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      const forbidden = await forbidUnlessManager(request, t.id);
+      if (forbidden) return reply.code(403).send(forbidden);
       if (t.championship_kind === 'NONE' || !t.championship_period) {
         return reply.code(400).send({ error: 'BadRequest', message: 'This tournament is not tagged as a championship final.', statusCode: 400 });
       }
@@ -164,11 +179,12 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // POST /api/championships/:slug/open-availability — admin: open the availability round. Freezes the
-  // full ranking as invites, sets a 24h RSVP deadline, and DMs every invitee (differentiated by cut).
+  // POST /api/championships/:slug/open-availability — staff/host of the final: open the availability
+  // round. Freezes the full ranking as invites, sets a 24h RSVP deadline, and DMs every invitee
+  // (differentiated by cut).
   fastify.post(
     '/api/championships/:slug/open-availability',
-    { preHandler: [fastify.authenticate, fastify.requireRole('MODERATOR', 'ADMIN')] },
+    { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { slug } = request.params as { slug: string };
       const q = z
@@ -192,6 +208,8 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
       if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      const forbidden = await forbidUnlessManager(request, t.id);
+      if (forbidden) return reply.code(403).send(forbidden);
       if (t.championship_kind === 'NONE' || !t.championship_period) {
         return reply.code(400).send({ error: 'BadRequest', message: 'This tournament is not tagged as a championship final.', statusCode: 400 });
       }
@@ -250,6 +268,49 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // POST /api/championships/:slug/invites/:competitorId/rsvp — staff/host of the final: set an
+  // invitee's availability on their behalf (they answered in Discord), or reset it to pending. The
+  // invitee is DM'd with a way to correct it; their own answer afterwards overrides this.
+  fastify.post(
+    '/api/championships/:slug/invites/:competitorId/rsvp',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const params = z.object({ slug: z.string(), competitorId: z.string().uuid() }).safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ error: 'BadRequest', message: 'Invalid invite id', statusCode: 400 });
+      const body = z.object({ rsvp: z.enum(['AVAILABLE', 'DECLINED', 'PENDING']) }).safeParse(request.body);
+      if (!body.success) return reply.code(400).send({ error: 'BadRequest', message: 'rsvp must be AVAILABLE, DECLINED or PENDING', statusCode: 400 });
+      const t = await fastify.prisma.tournament.findUnique({
+        where: { slug: params.data.slug },
+        select: { id: true, championship_kind: true, status: true, availability_opened_at: true },
+      });
+      if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      const forbidden = await forbidUnlessManager(request, t.id);
+      if (forbidden) return reply.code(403).send(forbidden);
+      if (t.championship_kind === 'NONE') {
+        return reply.code(400).send({ error: 'BadRequest', message: 'This tournament is not a championship final.', statusCode: 400 });
+      }
+      if (!t.availability_opened_at) {
+        return reply.code(409).send({ error: 'Conflict', message: 'The availability round is not open yet.', statusCode: 409 });
+      }
+      if (t.status === 'ONGOING' || t.status === 'COMPLETED') {
+        return reply.code(409).send({ error: 'Conflict', message: 'The final has already started.', statusCode: 409 });
+      }
+      const seededCount = await fastify.prisma.tournamentParticipant.count({ where: { tournament_id: t.id, deleted_at: null } });
+      if (seededCount > 0) {
+        return reply.code(409).send({ error: 'Conflict', message: 'This final is already seeded.', statusCode: 409 });
+      }
+      const result = await setInviteRsvpByManager(fastify.prisma, {
+        tournamentId: t.id,
+        competitorId: params.data.competitorId,
+        rsvp: body.data.rsvp,
+        actorId: request.user.sub,
+      });
+      if (!result) return reply.code(404).send({ error: 'NotFound', message: 'No such invitee in this final.', statusCode: 404 });
+      if (result.rsvp !== 'PENDING') void notifyRsvpSetByManager(fastify.prisma, t.id, result.userId, result.rsvp);
+      return { rsvp: result.rsvp };
+    },
+  );
+
   // GET /api/championships/:slug/field — the phase-aware field view (preview / availability / seeded).
   // Public; if the caller is logged in, includes their own invitee/RSVP state.
   fastify.get('/api/championships/:slug/field', async (request, reply) => {
@@ -293,7 +354,7 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/championships/:slug/raffle — admin: draw the ladder raffle among the invitees.
   fastify.post(
     '/api/championships/:slug/raffle',
-    { preHandler: [fastify.authenticate, fastify.requireRole('MODERATOR', 'ADMIN')] },
+    { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { slug } = request.params as { slug: string };
       const t = await fastify.prisma.tournament.findUnique({
@@ -301,6 +362,8 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
         select: { id: true, championship_kind: true },
       });
       if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      const forbidden = await forbidUnlessManager(request, t.id);
+      if (forbidden) return reply.code(403).send(forbidden);
       if (t.championship_kind !== 'MONTHLY_LADDER') {
         return reply.code(400).send({ error: 'BadRequest', message: 'The raffle is only for the Monthly Ladder Invitational.', statusCode: 400 });
       }

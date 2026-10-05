@@ -6,8 +6,10 @@ import {
   openChampionshipAvailability,
   rsvpChampionship,
   seedChampionship,
+  setChampionshipInviteRsvp,
   type ChampionshipFieldEntry,
   type ChampionshipFieldView,
+  type RsvpValue,
 } from '../../lib/api';
 import { winChance } from '../meta/skillBands';
 
@@ -15,17 +17,19 @@ import { winChance } from '../meta/skillBands';
  * The championship final's phase-aware field panel (monthly ladder invite/RSVP flow):
  *   PREVIEW      — the live top-N as of now (updates while the cycle is still running).
  *   AVAILABILITY — the full frozen ranking with each invitee's RSVP; invitees confirm/decline,
- *                  admins seed from the confirmed.
+ *                  hosts/staff can decline on an invitee's behalf, admins seed from the confirmed.
  *   SEEDED       — the sealed field.
  * Polls every 20s so the live preview + others' RSVPs stay current without a socket push.
  */
 export function ChampionshipFieldPanel({
   slug,
-  isAdmin,
+  canManage,
   isLoggedIn,
 }: {
   slug: string;
-  isAdmin: boolean;
+  /** Staff, or a host/co-host staff put on this final: opens the round, sets RSVPs on an
+   *  invitee's behalf, seeds. */
+  canManage: boolean;
   isLoggedIn: boolean;
 }) {
   const qc = useQueryClient();
@@ -59,13 +63,54 @@ export function ChampionshipFieldPanel({
     onSuccess: (r) => { setError(null); setNotice(`Seeded ${r.seeded} player${r.seeded === 1 ? '' : 's'}${r.plannedSize && r.seeded < r.plannedSize ? ` (planned Top ${r.plannedSize}, shrunk to fit)` : ''}.`); invalidate(); },
     onError: (e: Error) => setError(e.message),
   });
+  const managerRsvpMut = useMutation({
+    mutationFn: (v: { competitorId: string; rsvp: RsvpValue }) =>
+      setChampionshipInviteRsvp(slug, v.competitorId, v.rsvp),
+    onSuccess: () => { setError(null); invalidate(); },
+    onError: (e: Error) => setError(e.message),
+  });
 
   if (isLoading || !data) return null;
 
   const isLadder = data.kind === 'MONTHLY_LADDER';
   const title = isLadder ? 'Monthly Ladder Invitational' : 'Quarterly Final';
   const availableCount = data.entries.filter((e) => e.rsvp === 'AVAILABLE').length;
-  const busy = rsvpMut.isPending || openMut.isPending || seedMut.isPending;
+  const busy = rsvpMut.isPending || openMut.isPending || seedMut.isPending || managerRsvpMut.isPending;
+
+  const setFor = (e: ChampionshipFieldEntry, rsvp: 'AVAILABLE' | 'DECLINED') => {
+    const msg = rsvp === 'DECLINED'
+      ? `Mark ${e.username} as NOT playing? Their spot goes to the next confirmed player.`
+      : `Mark ${e.username} as available to play?`;
+    if (window.confirm(`${msg} They get a DM about it and can still change it themselves until the field is seeded.`)) {
+      managerRsvpMut.mutate({ competitorId: e.competitorId, rsvp });
+    }
+  };
+  const resetFor = (e: ChampionshipFieldEntry) =>
+    managerRsvpMut.mutate({ competitorId: e.competitorId, rsvp: 'PENDING' });
+  const showManagerControls = canManage && data.phase === 'AVAILABILITY';
+  const linkCls = 'text-xs underline disabled:opacity-50';
+  const managerActionFor = (e: ChampionshipFieldEntry): ReactNode => (
+    <span className="flex gap-2">
+      {e.rsvp !== 'AVAILABLE' && (
+        <button type="button" disabled={busy} onClick={() => setFor(e, 'AVAILABLE')} title="They told you they can play"
+          className={`${linkCls} text-emerald-300/80 hover:text-emerald-200`}>
+          Available
+        </button>
+      )}
+      {e.rsvp !== 'DECLINED' && (
+        <button type="button" disabled={busy} onClick={() => setFor(e, 'DECLINED')} title="They told you they won't play"
+          className={`${linkCls} text-red-300/80 hover:text-red-200`}>
+          Decline
+        </button>
+      )}
+      {e.rsvpByManager && (
+        <button type="button" disabled={busy} onClick={() => resetFor(e)} title="Back to no response"
+          className={`${linkCls} text-rizzotto-stone-400 hover:text-rizzotto-stone-200`}>
+          Undo
+        </button>
+      )}
+    </span>
+  );
 
   return (
     <section className="rounded-lg border border-rizzotto-iron-700 bg-rizzotto-iron-900/40 p-4">
@@ -112,8 +157,8 @@ export function ChampionshipFieldPanel({
         </div>
       )}
 
-      {/* Admin controls */}
-      {isAdmin && (
+      {/* Manager controls (staff, or a host/co-host of this final) */}
+      {canManage && (
         <div className="mb-3 flex flex-wrap gap-2">
           {data.phase === 'PREVIEW' && (
             <button
@@ -140,7 +185,12 @@ export function ChampionshipFieldPanel({
 
       <ol className="divide-y divide-rizzotto-iron-700/70">
         {data.entries.map((e) => (
-          <FieldRow key={e.competitorId} entry={e} phase={data.phase} />
+          <FieldRow
+            key={e.competitorId}
+            entry={e}
+            phase={data.phase}
+            managerAction={showManagerControls ? managerActionFor(e) : null}
+          />
         ))}
         {data.entries.length === 0 && (
           <li className="py-3 text-sm text-rizzotto-stone-400">
@@ -159,7 +209,15 @@ export function ChampionshipFieldPanel({
   );
 }
 
-function FieldRow({ entry, phase }: { entry: ChampionshipFieldEntry; phase: ChampionshipFieldView['phase'] }) {
+function FieldRow({
+  entry,
+  phase,
+  managerAction,
+}: {
+  entry: ChampionshipFieldEntry;
+  phase: ChampionshipFieldView['phase'];
+  managerAction?: ReactNode;
+}) {
   const dimmed = phase === 'AVAILABILITY' && !entry.inField;
   return (
     <li className={`flex items-center gap-3 py-2 ${dimmed ? 'opacity-60' : ''}`}>
@@ -179,6 +237,7 @@ function FieldRow({ entry, phase }: { entry: ChampionshipFieldEntry; phase: Cham
         </span>
       )}
       <RowBadge entry={entry} phase={phase} />
+      {managerAction}
     </li>
   );
 }
@@ -189,8 +248,16 @@ function RowBadge({ entry, phase }: { entry: ChampionshipFieldEntry; phase: Cham
     return <Badge tone="green">seeded #{entry.rank}</Badge>;
   }
   if (phase === 'AVAILABILITY') {
-    if (entry.rsvp === 'AVAILABLE') return <Badge tone={entry.inField ? 'green' : 'stone'}>{entry.inField ? '✓ in' : '✓ reserve'}</Badge>;
-    if (entry.rsvp === 'DECLINED') return <Badge tone="red">declined</Badge>;
+    const byHost = entry.rsvpByManager ? ' (host)' : '';
+    const hostTitle = entry.rsvpByManager ? 'Set by the host on their behalf' : undefined;
+    if (entry.rsvp === 'AVAILABLE') {
+      return (
+        <span title={hostTitle}>
+          <Badge tone={entry.inField ? 'green' : 'stone'}>{entry.inField ? '✓ in' : '✓ reserve'}{byHost}</Badge>
+        </span>
+      );
+    }
+    if (entry.rsvp === 'DECLINED') return <span title={hostTitle}><Badge tone="red">declined{byHost}</Badge></span>;
     return <Badge tone="amber">pending</Badge>;
   }
   return <Badge tone="green">in</Badge>;

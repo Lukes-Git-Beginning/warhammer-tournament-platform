@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.12.0] — 2026-10-04
+
+### Added
+- **Hosts can answer a championship invite on a player's behalf.** During the availability round of a Ladder Invitational or Quarterly Final, the host can mark an invited player as available or not playing (for example when they said so in Discord), so the field fills without waiting for the deadline. These show as "(host)", can be undone, the player gets a DM about it, and they can still change it themselves until the field is seeded.
+- **Hosts added to a championship final can run it.** A host or co-host that staff put on a Ladder Invitational or Quarterly Final can now open the availability round, seed the field and draw the raffle, just like staff.
+
 ## [2.11.6] — 2026-10-04
 
 ### Fixed

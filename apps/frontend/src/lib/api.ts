@@ -741,6 +741,7 @@ export interface ChampionshipFieldEntry {
   points?: number | null;
   gs?: number | null;
   rsvp?: RsvpValue; // availability phase only
+  rsvpByManager?: boolean; // availability phase only: set by a host/staff on their behalf
   status?: string; // seeded phase only
   inField: boolean;
 }
@@ -771,6 +772,10 @@ export function openChampionshipAvailability(slug: string, opts?: { deadlineHour
 /** An invitee confirms (available) or declines the final during the availability round. */
 export function rsvpChampionship(slug: string, available: boolean): Promise<{ rsvp: RsvpValue }> {
   return apiFetch<{ rsvp: RsvpValue }>(`/api/championships/${slug}/rsvp`, { method: 'POST', body: JSON.stringify({ available }) });
+}
+/** Staff / host of the final: set an invitee's RSVP on their behalf (DM'd), or reset it to pending. */
+export function setChampionshipInviteRsvp(slug: string, competitorId: string, rsvp: RsvpValue): Promise<{ rsvp: RsvpValue }> {
+  return apiFetch<{ rsvp: RsvpValue }>(`/api/championships/${slug}/invites/${competitorId}/rsvp`, { method: 'POST', body: JSON.stringify({ rsvp }) });
 }
 
 /** A 2v2 team on a board (name + member avatars). */

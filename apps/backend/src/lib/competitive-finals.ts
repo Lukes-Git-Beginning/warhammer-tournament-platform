@@ -477,8 +477,46 @@ export async function setInviteRsvp(
   });
   if (!invite) return null;
   const rsvp: RsvpValue = opts.available ? 'AVAILABLE' : 'DECLINED';
-  await prisma.championshipInvite.update({ where: { id: invite.id }, data: { rsvp, rsvp_at: new Date() } });
+  // The invitee's own answer always wins over one a manager set on their behalf.
+  await prisma.championshipInvite.update({
+    where: { id: invite.id },
+    data: { rsvp, rsvp_at: new Date(), rsvp_by_manager: false },
+  });
   return rsvp;
+}
+
+/**
+ * A host/co-host/staff member sets an invitee's availability on their behalf (a player who answered
+ * in Discord and won't come to the site), or resets it back to PENDING. Flags the invite as
+ * manager-set (shown on the field as "(host)") and audit-logs the actor; the invitee's own answer
+ * later overrides it. Returns null if there is no such invite, else the new value + the invitee to DM.
+ */
+export async function setInviteRsvpByManager(
+  prisma: PrismaClient,
+  opts: { tournamentId: string; competitorId: string; rsvp: RsvpValue; actorId: string },
+): Promise<{ rsvp: RsvpValue; userId: string } | null> {
+  const invite = await prisma.championshipInvite.findUnique({
+    where: { tournament_id_competitor_id: { tournament_id: opts.tournamentId, competitor_id: opts.competitorId } },
+  });
+  if (!invite) return null;
+  const answered = opts.rsvp !== 'PENDING';
+  await prisma.$transaction([
+    prisma.championshipInvite.update({
+      where: { id: invite.id },
+      data: { rsvp: opts.rsvp, rsvp_at: answered ? new Date() : null, rsvp_by_manager: answered },
+    }),
+    prisma.auditLog.create({
+      data: {
+        entity_type: 'ChampionshipInvite',
+        entity_id: invite.id,
+        action: `rsvp_${opts.rsvp.toLowerCase()}_by_manager`,
+        actor_id: opts.actorId,
+        old_value: { rsvp: invite.rsvp, rsvp_by_manager: invite.rsvp_by_manager },
+        new_value: { rsvp: opts.rsvp, rsvp_by_manager: answered },
+      },
+    }),
+  ]);
+  return { rsvp: opts.rsvp, userId: invite.user_id };
 }
 
 export interface ConfirmedSeedResult extends SeedResult {
@@ -555,6 +593,7 @@ export interface FieldEntry {
   points?: number | null;
   gs?: number | null;
   rsvp?: RsvpValue; // availability phase only
+  rsvpByManager?: boolean; // availability phase only: rsvp was set by a host/staff on their behalf
   status?: string; // seeded phase only (participant status)
   inField: boolean; // preview: within top-N; availability: within top-N of AVAILABLE; seeded: is in the field
 }
@@ -653,6 +692,7 @@ export async function computeFieldView(
         points: ri?.points ?? null,
         gs: ri?.gs ?? null,
         rsvp: inv.rsvp as RsvpValue,
+        rsvpByManager: inv.rsvp_by_manager,
         inField: inFieldIds.has(inv.competitor_id),
       };
     });
