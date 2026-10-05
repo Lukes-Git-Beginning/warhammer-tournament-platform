@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 ### Changed
 - **Domination map images are now hosted on rizzotto.gg** instead of an external image host, so they load faster and can't disappear.
+- **The usage-over-time chart opens in the stacked view** by default.
 
 ## [2.11.6] — 2026-10-04
 

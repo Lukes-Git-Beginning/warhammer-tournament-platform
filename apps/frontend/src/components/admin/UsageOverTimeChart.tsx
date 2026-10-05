@@ -31,7 +31,7 @@ const TOOLTIP_STYLE = {
 /** Games per bucket split by source: tournament / ladder (queue) / challenge. Game-level. */
 export function UsageOverTimeChart() {
   const [range, setRange] = useState<UsageRange>('month');
-  const [mode, setMode] = useState<'line' | 'stacked'>('line');
+  const [mode, setMode] = useState<'line' | 'stacked'>('stacked');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-games-over-time', range],
