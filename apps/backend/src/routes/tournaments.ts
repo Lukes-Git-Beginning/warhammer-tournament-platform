@@ -14,6 +14,7 @@ import {
   CalendarQuerySchema,
   CalendarTournamentSchema,
   MAX_FACTIONS,
+  MAX_MAP_POOL,
   TournamentStatusSchema,
 } from '@rizzotto/types';
 import { notifyTournamentAnnounce, notifyTournamentAvailability } from '../lib/discord-notify.js';
@@ -272,7 +273,7 @@ const CreateTournamentSchema = z.object({
   grand_final_reset: z.boolean().optional(),
   grand_final_reset_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).nullable().optional(),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).optional(),
-  map_pool: z.array(z.string().min(1)).max(36).optional(),
+  map_pool: z.array(z.string().min(1)).max(MAX_MAP_POOL).optional(),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   faction_pool: z.array(z.string().min(1)).max(MAX_FACTIONS).optional(),
   restricted_factions: z.array(z.string().min(1)).max(MAX_FACTIONS).optional(),
@@ -336,7 +337,7 @@ const PatchTournamentSchema = z.object({
   grand_final_reset: z.boolean().optional(),
   grand_final_reset_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).nullable().optional(),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).optional(),
-  map_pool: z.array(z.string().min(1)).max(36).optional(),
+  map_pool: z.array(z.string().min(1)).max(MAX_MAP_POOL).optional(),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   is_major: z.boolean().optional(),
   // Fields added for full edit-form support

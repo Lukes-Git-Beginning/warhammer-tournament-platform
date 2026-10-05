@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
+import { MAX_MAP_POOL } from '@rizzotto/types';
 import { createTournament, createSeries, getTournament, patchTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster, uploadSeriesPoster, listTournaments, listSeries, type ScoringConfig } from '@/lib/api';
 import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
 import { estimateDurationHours, intervalsOverlap, describeClash } from '@/lib/tournamentSchedule';
@@ -71,7 +72,7 @@ const TournamentCreateSchema = z.object({
   grand_final_reset: z.boolean().default(true),
   grand_final_reset_format: z.enum(['', 'BO1', 'BO3', 'BO5']).default(''),
   map_decision_mode: z.enum(['RANDOM', 'PICK_BAN', 'RANDOM_NO_REPEAT', 'HOST_PRESET', 'HOST_PRESET_PICK_BAN', 'RANDOM_PICK_BAN']).default('RANDOM_PICK_BAN'),
-  map_pool: z.array(z.string()).max(36).default([]),
+  map_pool: z.array(z.string()).max(MAX_MAP_POOL).default([]),
   map_preset_config: z.record(z.string(), z.unknown()).nullable().optional(),
   faction_pool: z.array(z.string()).optional(),
   restricted_factions: z.array(z.string()).optional(),

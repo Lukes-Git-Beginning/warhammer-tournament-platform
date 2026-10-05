@@ -8,6 +8,11 @@ import { MatchResultTypeSchema } from './match.js';
  *  adding a faction never requires touching validation limits; slug validity is enforced elsewhere. */
 export const MAX_FACTIONS = 64;
 
+/** Upper bound for a tournament's map pool (map ids). A generous ceiling above the full map set
+ *  (147 maps across all battle types as of 2026-10; a pool is one battle type) so enabling more
+ *  maps never trips validation — it was a hard 36 until the Domination pool grew past it. */
+export const MAX_MAP_POOL = 200;
+
 export const HealthResponseSchema = z.object({
   status: z.literal('ok'),
   timestamp: z.string().datetime(),

@@ -231,6 +231,23 @@ describe('PATCH /api/tournaments/:slug — map pool filtered by effective battle
     expect(patchRes.statusCode).toBe(422);
     expect(patchRes.json<{ message: string }>().message).toMatch(/battle type DOMINATION/i);
   });
+
+  // Regression (2026-10-05): map_pool was capped at 36 (.max(36)); once the Domination pool grew to
+  // 39 available maps, saving a tournament with every map selected failed with a raw zod "too_big".
+  it('accepts a pool larger than the old 36-map cap', async () => {
+    const createRes = await createTournamentViaHttp({ battle_type: 'DOMINATION' });
+    expect(createRes.statusCode).toBe(201);
+    const { slug } = createRes.json<{ slug: string }>();
+
+    const ids = await Promise.all(Array.from({ length: 40 }, () => createMap({ battleType: 'DOMINATION' })));
+    const patchRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/tournaments/${slug}`,
+      headers: { cookie: adminCookie() },
+      payload: { map_pool: ids },
+    });
+    expect(patchRes.statusCode).toBe(200);
+  });
 });
 
 // ---------------------------------------------------------------------------

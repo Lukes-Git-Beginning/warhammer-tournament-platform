@@ -188,7 +188,7 @@ export async function createTournament(
     rounds_count?: number;
     /**
      * Array of map IDs (backend-validated cuid strings).
-     * Must match existing Map records in the DB (min 3, max 36).
+     * Must match existing Map records in the DB (min 3, max MAX_MAP_POOL).
      * Required for tournaments that use /decision/start (map-pick flow).
      */
     map_pool?: string[];
