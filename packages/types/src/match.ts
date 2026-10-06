@@ -41,6 +41,9 @@ export const OverrideMatchResultSchema = z.object({
   map_id: z.string().min(1).optional(),
   player1FactionId: z.string().min(1).optional(),
   player2FactionId: z.string().min(1).optional(),
+  // 2v2: the teammate's faction per side (positional: player1FactionId = captain, *2 = teammate).
+  player1FactionId2: z.string().min(1).optional(),
+  player2FactionId2: z.string().min(1).optional(),
   // Per-game detail for non-Bo1 matches: each played game's map, factions and winner
   // (winnerId null = a draw for that game). When present, these game rows are written
   // instead of collapsing the whole match onto a single game. The match-level result
@@ -52,6 +55,9 @@ export const OverrideMatchResultSchema = z.object({
         mapId: z.string().nullable().optional(),
         player1FactionId: z.string().nullable().optional(),
         player2FactionId: z.string().nullable().optional(),
+        // 2v2 only: the teammates' factions for this game.
+        player1FactionId2: z.string().nullable().optional(),
+        player2FactionId2: z.string().nullable().optional(),
         winnerId: z.string().nullable().optional(),
       }),
     )
@@ -161,6 +167,9 @@ export const MatchDetailDtoSchema = z.object({
   winner_id: z.string().uuid().nullable(),
   player1_faction_id: z.string().nullable(),
   player2_faction_id: z.string().nullable(),
+  // 2v2: the teammate's faction per side (null for 1v1)
+  player1_faction_id_2: z.string().nullable().optional(),
+  player2_faction_id_2: z.string().nullable().optional(),
   counts_for_leaderboard: z.boolean(),
   /** Server-computed: viewer may manage this match's tournament (host, co-host, mod, admin). */
   can_manage: z.boolean().optional(),
@@ -170,6 +179,9 @@ export const MatchDetailDtoSchema = z.object({
   winner: MatchPlayerRefSchema.nullable(),
   player1_faction: MatchFactionRefSchema.nullable(),
   player2_faction: MatchFactionRefSchema.nullable(),
+  // 2v2: the teammate's faction per side, same shape as the captain's (null for 1v1)
+  player1_faction_2: MatchFactionRefSchema.nullable().optional(),
+  player2_faction_2: MatchFactionRefSchema.nullable().optional(),
 });
 export type MatchDetailDto = z.infer<typeof MatchDetailDtoSchema>;
 

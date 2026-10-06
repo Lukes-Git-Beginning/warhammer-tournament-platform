@@ -289,7 +289,7 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { result, player1_score, player2_score, reason, map_id, player1FactionId, player2FactionId, games } = parsed.data;
+      const { result, player1_score, player2_score, reason, map_id, player1FactionId, player2FactionId, player1FactionId2, player2FactionId2, games } = parsed.data;
 
       // Load match
       const match = await fastify.prisma.match.findFirst({
@@ -346,6 +346,8 @@ const matchReportsRoutes: FastifyPluginAsync = async (fastify) => {
           override: true,
           player1FactionId: player1FactionId ?? undefined,
           player2FactionId: player2FactionId ?? undefined,
+          player1FactionId2: player1FactionId2 ?? undefined,
+          player2FactionId2: player2FactionId2 ?? undefined,
           games: games ?? undefined,
           actorId: user.sub,
           reason,

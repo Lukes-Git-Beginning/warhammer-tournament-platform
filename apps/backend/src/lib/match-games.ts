@@ -275,6 +275,9 @@ export async function finalizeGameResult(
     // Open Play: factions come from the blind pick
     p1FactionId = game.blind_pick.player1_faction_id ?? null;
     p2FactionId = game.blind_pick.player2_faction_id ?? null;
+    // Open Play 2v2: the teammate's faction rides along in the same blind pick (NULL for 1v1).
+    p1Faction2 = game.blind_pick.player1_faction_id_2 ?? null;
+    p2Faction2 = game.blind_pick.player2_faction_id_2 ?? null;
   } else {
     p1FactionId = game.match.player1_faction_id ?? null;
     p2FactionId = game.match.player2_faction_id ?? null;
@@ -287,7 +290,10 @@ export async function finalizeGameResult(
   const isRestrictedGame =
     restrictedIds.size > 0 &&
     ((p1FactionId !== null && restrictedIds.has(p1FactionId)) ||
-      (p2FactionId !== null && restrictedIds.has(p2FactionId)));
+      (p2FactionId !== null && restrictedIds.has(p2FactionId)) ||
+      // 2v2: the teammate's faction counts too (restrictions apply per player).
+      (p1Faction2 !== null && restrictedIds.has(p1Faction2)) ||
+      (p2Faction2 !== null && restrictedIds.has(p2Faction2)));
 
   // Finalize game row
   await fastify.prisma.matchGame.update({
@@ -371,6 +377,8 @@ export async function finalizeGameResult(
       winnerId: matchWinner,
       player1FactionId: p1FactionId,
       player2FactionId: p2FactionId,
+      player1FactionId2: p1Faction2,
+      player2FactionId2: p2Faction2,
       actorId: matchWinner ?? game.reported_winner_id ?? game.match.player1_id!,
       skipStats: true, // stats already written per-game above
     });

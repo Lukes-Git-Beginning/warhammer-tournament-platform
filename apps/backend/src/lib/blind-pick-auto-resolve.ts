@@ -40,7 +40,7 @@ async function autoResolveTournamentBlindPicks(fastify: FastifyInstance, cutoff:
         select: {
           id: true,
           map_decision: { select: { picked_map_id: true } },
-          match: { select: { id: true, tournament: { select: { faction_allowlist: { select: { faction_id: true } } } } } },
+          match: { select: { id: true, competitor_format: true, tournament: { select: { faction_allowlist: { select: { faction_id: true } } } } } },
         },
       },
     },
@@ -62,12 +62,33 @@ async function autoResolveTournamentBlindPicks(fastify: FastifyInstance, cutoff:
     const randomFaction = pool[Math.floor(Math.random() * pool.length)] ?? allowed[0];
     if (!randomFaction) continue;
 
+    // 2v2: the timed-out team also needs a teammate faction (positional _2). It must differ from
+    // the team's own captain faction; like the captain it also avoids mirroring the locked side's
+    // pair where the pool allows.
+    const isTeam = pick.game.match.competitor_format === 'TWO_V_TWO';
+    const p1Missing = !pick.player1_locked_at;
+    const lockedPair = p1Missing
+      ? [pick.player2_faction_id, pick.player2_faction_id_2]
+      : [pick.player1_faction_id, pick.player1_faction_id_2];
+    const teammatePool = allowed.filter((f) => f.id !== randomFaction.id);
+    const teammatePreferred = teammatePool.filter((f) => !lockedPair.includes(f.id));
+    const teammateFaction = isTeam
+      ? (teammatePreferred[Math.floor(Math.random() * teammatePreferred.length)] ??
+        teammatePool[Math.floor(Math.random() * teammatePool.length)] ??
+        null)
+      : null;
+
     try {
       const updated = await fastify.prisma.matchBlindPick.update({
         where: { game_id: pick.game_id },
         data: {
           player1_faction_id: pick.player1_faction_id ?? randomFaction.id,
           player2_faction_id: pick.player2_faction_id ?? randomFaction.id,
+          ...(isTeam && teammateFaction
+            ? p1Missing
+              ? { player1_faction_id_2: pick.player1_faction_id_2 ?? teammateFaction.id }
+              : { player2_faction_id_2: pick.player2_faction_id_2 ?? teammateFaction.id }
+            : {}),
           player1_locked_at: pick.player1_locked_at ?? now,
           player2_locked_at: pick.player2_locked_at ?? now,
           revealed_at: now,

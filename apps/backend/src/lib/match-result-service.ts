@@ -40,6 +40,9 @@ export interface ResolveMatchResultOpts {
   /** Faction overrides — written to the match and latched onto TournamentParticipant if not set */
   player1FactionId?: string;
   player2FactionId?: string;
+  /** 2v2: the teammate's faction per side. When omitted, any stored teammate faction is kept. */
+  player1FactionId2?: string;
+  player2FactionId2?: string;
   /**
    * Per-game detail for a multi-game (non-Bo1) match. When provided, these game rows are
    * written verbatim (map / factions / winner, winnerId null = a per-game draw) instead of
@@ -52,6 +55,9 @@ export interface ResolveMatchResultOpts {
     mapId?: string | null;
     player1FactionId?: string | null;
     player2FactionId?: string | null;
+    /** 2v2: teammate factions. undefined = keep the stored value; null = clear it. */
+    player1FactionId2?: string | null;
+    player2FactionId2?: string | null;
     winnerId?: string | null;
   }>;
 }
@@ -144,6 +150,8 @@ export async function resolveMatchResult(
         played_at: new Date(),
         ...(p1FactionId ? { player1_faction_id: p1FactionId } : {}),
         ...(p2FactionId ? { player2_faction_id: p2FactionId } : {}),
+        ...(opts.player1FactionId2 ? { player1_faction_id_2: opts.player1FactionId2 } : {}),
+        ...(opts.player2FactionId2 ? { player2_faction_id_2: opts.player2FactionId2 } : {}),
       },
     });
 
@@ -263,12 +271,23 @@ export async function resolveMatchResult(
       for (const g of opts.games) {
         const gp1 = g.player1FactionId ?? null;
         const gp2 = g.player2FactionId ?? null;
-        const isRestricted = restricted.size > 0 && ((gp1 !== null && restricted.has(gp1)) || (gp2 !== null && restricted.has(gp2)));
+        // 2v2 teammate factions: undefined keeps the stored value (so re-saving a game from a UI
+        // that doesn't send them can't wipe them); a value or explicit null overwrites.
+        const gp1b = g.player1FactionId2;
+        const gp2b = g.player2FactionId2;
+        const isRestricted =
+          restricted.size > 0 &&
+          ((gp1 !== null && restricted.has(gp1)) ||
+            (gp2 !== null && restricted.has(gp2)) ||
+            (!!gp1b && restricted.has(gp1b)) ||
+            (!!gp2b && restricted.has(gp2b)));
         const gameData = {
           status: 'COMPLETED' as const,
           winner_id: g.winnerId ?? null,
           player1_faction_id: gp1,
           player2_faction_id: gp2,
+          ...(gp1b !== undefined ? { player1_faction_id_2: gp1b } : {}),
+          ...(gp2b !== undefined ? { player2_faction_id_2: gp2b } : {}),
           played_at: new Date(),
           counts_for_leaderboard: tournamentCounts && !isRestricted,
         };
@@ -303,6 +322,8 @@ export async function resolveMatchResult(
         winner_id: winnerId,
         player1_faction_id: p1FactionId,
         player2_faction_id: p2FactionId,
+        ...(opts.player1FactionId2 ? { player1_faction_id_2: opts.player1FactionId2 } : {}),
+        ...(opts.player2FactionId2 ? { player2_faction_id_2: opts.player2FactionId2 } : {}),
         played_at: new Date(),
         counts_for_leaderboard: match.tournament?.counts_for_leaderboard ?? true,
       };

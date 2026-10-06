@@ -412,6 +412,20 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Slots are opaque competitor ids (User 1v1 / Team 2v2). Resolve to a uniform shape;
     // `type` + `members` are additive so 1v1 consumers keep reading id/username/avatar_url.
+    // 2v2: resolve the teammate factions (no Prisma relation for the _2 columns) into the same
+    // shape as the captain's `player*_faction`.
+    const factions2Ids = [match.player1_faction_id_2, match.player2_faction_id_2].filter((x): x is string => !!x);
+    const factions2 = factions2Ids.length
+      ? await fastify.prisma.faction.findMany({
+          where: { id: { in: factions2Ids } },
+          select: { id: true, name: true, icon_url: true },
+        })
+      : [];
+    const faction2Dto = (fid: string | null) => {
+      const f = fid ? factions2.find((x) => x.id === fid) : undefined;
+      return f ? { id: f.id, name: f.name, icon_url: f.icon_url ?? null } : null;
+    };
+
     const competitorMap = await resolveCompetitors(fastify.prisma, [
       match.player1_id,
       match.player2_id,
@@ -466,6 +480,8 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
             icon_url: match.player2_faction.icon_url ?? null,
           }
         : null,
+      player1_faction_2: faction2Dto(match.player1_faction_id_2),
+      player2_faction_2: faction2Dto(match.player2_faction_id_2),
     });
   });
 

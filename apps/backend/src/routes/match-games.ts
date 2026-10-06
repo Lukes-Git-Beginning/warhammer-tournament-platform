@@ -430,6 +430,9 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
   const EditGameSchema = z.object({
     player1FactionId: z.string().nullable().optional(),
     player2FactionId: z.string().nullable().optional(),
+    // 2v2 only: the teammates' factions (positional; rejected on 1v1 matches).
+    player1FactionId2: z.string().nullable().optional(),
+    player2FactionId2: z.string().nullable().optional(),
     pickedMapId: z.string().nullable().optional(),
     winnerId: z.string().nullable().optional(),
     // "Official" flag (internally counts_for_leaderboard): drives every statistic, not just
@@ -457,6 +460,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           player1_id: true,
           player2_id: true,
           winner_id: true,
+          competitor_format: true,
           tournament: {
             select: {
               counts_for_leaderboard: true,
@@ -466,7 +470,16 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
             },
           },
           games: {
-            select: { id: true, game_number: true, winner_id: true, player1_faction_id: true, player2_faction_id: true, status: true },
+            select: {
+              id: true,
+              game_number: true,
+              winner_id: true,
+              player1_faction_id: true,
+              player2_faction_id: true,
+              player1_faction_id_2: true,
+              player2_faction_id_2: true,
+              status: true,
+            },
           },
         },
       });
@@ -490,18 +503,30 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       const newP2F = body.player2FactionId !== undefined ? body.player2FactionId : game.player2_faction_id;
       const newWinner = body.winnerId !== undefined ? body.winnerId : game.winner_id;
 
+      // Teammate factions only exist on 2v2 matches.
+      const sentTeammate = body.player1FactionId2 !== undefined || body.player2FactionId2 !== undefined;
+      if (sentTeammate && match.competitor_format !== 'TWO_V_TWO') {
+        return reply.code(400).send({
+          error: 'BadRequest',
+          message: 'Teammate factions can only be set on 2v2 matches',
+          statusCode: 400,
+        });
+      }
+      const newP1F2 = body.player1FactionId2 !== undefined ? body.player1FactionId2 : game.player1_faction_id_2;
+      const newP2F2 = body.player2FactionId2 !== undefined ? body.player2FactionId2 : game.player2_faction_id_2;
+
       if (newWinner !== null && newWinner !== match.player1_id && newWinner !== match.player2_id) {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Winner must be one of the two players', statusCode: 422 });
       }
 
       // Factions must be in the allowlist (empty = all allowed) and must exist.
       const allowlist = new Set(match.tournament?.faction_allowlist.map((f) => f.faction_id) ?? []);
-      for (const fid of [newP1F, newP2F]) {
-        if (fid !== null && allowlist.size > 0 && !allowlist.has(fid)) {
+      for (const fid of [newP1F, newP2F, newP1F2, newP2F2]) {
+        if (fid && allowlist.size > 0 && !allowlist.has(fid)) {
           return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Faction is not allowed in this tournament', statusCode: 422 });
         }
       }
-      for (const fid of [body.player1FactionId, body.player2FactionId]) {
+      for (const fid of [body.player1FactionId, body.player2FactionId, body.player1FactionId2, body.player2FactionId2]) {
         if (fid) {
           const exists = await fastify.prisma.faction.findUnique({ where: { id: fid }, select: { id: true } });
           if (!exists) return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Unknown faction', statusCode: 422 });
@@ -541,7 +566,11 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
       // Restricted faction → the game does not count for the leaderboard.
       const restricted = new Set(match.tournament?.restricted_factions.map((r) => r.faction_id) ?? []);
       const isRestricted =
-        restricted.size > 0 && ((newP1F !== null && restricted.has(newP1F)) || (newP2F !== null && restricted.has(newP2F)));
+        restricted.size > 0 &&
+        ((newP1F !== null && restricted.has(newP1F)) ||
+          (newP2F !== null && restricted.has(newP2F)) ||
+          (!!newP1F2 && restricted.has(newP1F2)) ||
+          (!!newP2F2 && restricted.has(newP2F2)));
       const gameCounts =
         body.countsForLeaderboard !== undefined
           ? body.countsForLeaderboard
@@ -552,6 +581,8 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         data: {
           player1_faction_id: newP1F,
           player2_faction_id: newP2F,
+          ...(body.player1FactionId2 !== undefined ? { player1_faction_id_2: body.player1FactionId2 } : {}),
+          ...(body.player2FactionId2 !== undefined ? { player2_faction_id_2: body.player2FactionId2 } : {}),
           winner_id: newWinner,
           counts_for_leaderboard: gameCounts,
         },
@@ -594,6 +625,7 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
           new_value: {
             player1_faction_id: newP1F,
             player2_faction_id: newP2F,
+            ...(sentTeammate ? { player1_faction_id_2: newP1F2, player2_faction_id_2: newP2F2 } : {}),
             winner_id: newWinner,
             picked_map_id: body.pickedMapId ?? null,
           },

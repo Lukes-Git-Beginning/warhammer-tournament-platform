@@ -137,6 +137,9 @@ export interface CompleteMatchOpts {
   winnerId: string | null;
   player1FactionId?: string | null;
   player2FactionId?: string | null;
+  /** 2v2: the teammate's faction per side (positional; NULL for 1v1). */
+  player1FactionId2?: string | null;
+  player2FactionId2?: string | null;
   actorId: string;
   score?: string | null;
   /** Skip FactionStats/MatchupStats writes — set true when stats are written per-game upstream */
@@ -204,8 +207,9 @@ export async function completeMatch(
   // them at registration (participant.faction_ids: [captain, teammate]); stamp both from the teams.
   let effP1Faction = player1FactionId;
   let effP2Faction = player2FactionId;
-  let effP1Faction2: string | null = null;
-  let effP2Faction2: string | null = null;
+  let effP1Faction2: string | null = opts.player1FactionId2 ?? null;
+  let effP2Faction2: string | null = opts.player2FactionId2 ?? null;
+  const isOpenPlay2v2 = !match.tournament_id && match.competitor_format === 'TWO_V_TWO';
   if (match.tournament?.mode === 'SFT_2V2' && match.player1_id && match.player2_id) {
     const teamParts = await fastify.prisma.tournamentParticipant.findMany({
       where: { tournament_id: match.tournament_id ?? undefined, team_id: { in: [match.player1_id, match.player2_id] }, deleted_at: null },
@@ -236,6 +240,25 @@ export async function completeMatch(
       effP1Faction2 = bp.player1_faction_id_2 ?? null;
       effP2Faction = bp.player2_faction_id ?? player2FactionId;
       effP2Faction2 = bp.player2_faction_id_2 ?? null;
+    }
+  } else if (isOpenPlay2v2 && match.player1_id && match.player2_id && !(effP1Faction2 && effP2Faction2)) {
+    // Open Play 2v2 (no tournament): the teammates' factions come from the game-1 revealed blind
+    // pick (positional: _2 = teammate) unless the caller already supplied them.
+    const g = await fastify.prisma.matchGame.findFirst({
+      where: { match_id: matchId },
+      orderBy: { game_number: 'asc' },
+      select: {
+        blind_pick: {
+          select: { player1_faction_id: true, player1_faction_id_2: true, player2_faction_id: true, player2_faction_id_2: true, revealed_at: true },
+        },
+      },
+    });
+    const bp = g?.blind_pick;
+    if (bp?.revealed_at) {
+      effP1Faction = effP1Faction ?? bp.player1_faction_id;
+      effP2Faction = effP2Faction ?? bp.player2_faction_id;
+      effP1Faction2 = effP1Faction2 ?? bp.player1_faction_id_2 ?? null;
+      effP2Faction2 = effP2Faction2 ?? bp.player2_faction_id_2 ?? null;
     }
   }
 
@@ -316,7 +339,12 @@ export async function completeMatch(
       if (existingGames === 0) {
         await tx.matchGame.create({ data: { match_id: matchId, game_number: 1, ...gameData } });
       } else {
-        await tx.matchGame.updateMany({ where: { match_id: matchId, game_number: 1 }, data: gameData });
+        // Never overwrite a stored teammate faction with null (only stamp when we resolved one).
+        const { player1_faction_id_2: gp1b, player2_faction_id_2: gp2b, ...rest } = gameData;
+        await tx.matchGame.updateMany({
+          where: { match_id: matchId, game_number: 1 },
+          data: { ...rest, ...(gp1b ? { player1_faction_id_2: gp1b } : {}), ...(gp2b ? { player2_faction_id_2: gp2b } : {}) },
+        });
       }
     }
 
