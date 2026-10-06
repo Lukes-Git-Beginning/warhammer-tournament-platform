@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { getAdminStats, getAdminOpenPlayQueue, getAdminOpenPlayActiveMatches, getAdminScheduledMatchups, type AdminStats } from '@/lib/api';
+import { getAdminStats, getAdminOpenPlayQueue, getAdminOpenPlayActiveMatches, getAdminScheduledMatchups, type AdminStats, type BattleType } from '@/lib/api';
+
+const QUEUE_BATTLE_TYPE_LABEL: Record<BattleType, string> = { DOMINATION: 'Domination', CONQUEST: 'Conquest', SIEGE: 'Siege' };
 
 interface KpiCardProps {
   label: string;
@@ -92,9 +94,17 @@ export function StatsDashboard() {
           ) : (
             <ol className="space-y-1">
               {queueData.members.map((m, i) => (
-                <li key={m.id} className="flex items-center gap-2 text-sm text-stone-300">
+                <li key={m.id} className="flex flex-wrap items-center gap-2 text-sm text-stone-300">
                   <span className="text-xs text-stone-600 w-4 text-right">{i + 1}.</span>
-                  {m.username}
+                  <span>{m.username}</span>
+                  {m.format === 'TWO_V_TWO' && (
+                    <span className="rounded bg-sky-900/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">2v2</span>
+                  )}
+                  {m.battleTypes.map((bt) => (
+                    <span key={bt} className="rounded bg-stone-800 px-1.5 py-0.5 text-[10px] font-medium text-stone-400">
+                      {QUEUE_BATTLE_TYPE_LABEL[bt]}
+                    </span>
+                  ))}
                 </li>
               ))}
             </ol>

@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.13.0] — 2026-10-06
+
+### Added
+- **The admin Open Play queue shows what each player is queuing for.** Every entry lists its battle types (Domination, Conquest, Siege) and is marked when it is a 2v2 team.
+
+### Fixed
+- **2v2 teams now appear in the admin Open Play queue list.** A team waiting in the queue was counted but not listed.
+
 ## [2.12.1] — 2026-10-05
 
 ### Fixed

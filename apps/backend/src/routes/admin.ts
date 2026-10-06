@@ -13,6 +13,7 @@ import { guardBalancedManualPairing } from '../lib/tournament-utils.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { auditReplays } from '../lib/audit-replays.js';
 import { resolveCompetitors } from '../lib/competitors.js';
+import { QUEUE_KEY, QUEUE_PREFS_KEY, parseQueuePrefs } from '../lib/matchmaking-tick.js';
 import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM, OPPONENT_SHARE_WARN } from '../lib/scoring-service.js';
 import { getNonGuildMemberIds, isGuildLookupConfigured, isBotConfigured, purgeRecentBotMessages } from '../lib/discord-notify.js';
 import {
@@ -2253,17 +2254,29 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(r.status).send(r.body);
   });
 
-  // GET /api/admin/open-play/queue — who is currently in the Open Play queue
+  // GET /api/admin/open-play/queue — who is currently in the Open Play queue, with what each entry
+  // queued for (battle types + 1v1/2v2). Queue ids are actors: a user for 1v1, a team for 2v2.
   fastify.get('/api/admin/open-play/queue', { preHandler: fastify.authenticate }, async (_request, reply) => {
-    const QUEUE_KEY = 'rizzotto:queue:open_play';
-    const userIds = fastify.redis ? await fastify.redis.lrange(QUEUE_KEY, 0, -1) : [];
-    if (userIds.length === 0) return reply.code(200).send({ members: [] });
-    const users = await fastify.prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, username: true, avatar_url: true },
+    const ids = fastify.redis ? await fastify.redis.lrange(QUEUE_KEY, 0, -1) : [];
+    if (ids.length === 0 || !fastify.redis) return reply.code(200).send({ members: [] });
+    const [competitors, prefsRaw] = await Promise.all([
+      resolveCompetitors(fastify.prisma, ids),
+      fastify.redis.hmget(QUEUE_PREFS_KEY, ...ids),
+    ]);
+    const members = ids.flatMap((id, i) => {
+      const c = competitors.get(id);
+      if (!c) return [];
+      const prefs = parseQueuePrefs(prefsRaw[i]);
+      return [{
+        id,
+        username: c.username,
+        avatar_url: c.avatar_url,
+        isTeam: c.type === 'TEAM',
+        format: prefs.format,
+        battleTypes: prefs.battleTypes,
+      }];
     });
-    const byId = new Map(users.map((u) => [u.id, u]));
-    return reply.code(200).send({ members: userIds.map((id) => byId.get(id)).filter(Boolean) });
+    return reply.code(200).send({ members });
   });
 
   // GET /api/admin/open-play/active-matches — active Open Play matches with player info

@@ -3346,9 +3346,12 @@ export function cancelOpenPlayMatch(matchId: string): Promise<{ ok: true }> {
 }
 
 export interface AdminOpenPlayMember {
-  id: string;
-  username: string;
+  id: string; // queue actor: user (1v1) or team (2v2)
+  username: string; // team name for a team
   avatar_url: string | null;
+  isTeam: boolean;
+  format: 'ONE_V_ONE' | 'TWO_V_TWO';
+  battleTypes: BattleType[]; // what this entry queued for
 }
 
 export interface AdminOpenPlayMatch {
