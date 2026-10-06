@@ -699,8 +699,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
     const overrides = await loadQuarterOverrides(fastify.prisma);
     const q = resolveQuarter(quarter ?? quarterValue(currentQuarter()), overrides);
     if (!q) return reply.code(400).send({ error: 'BadRequest', message: 'Invalid quarter', statusCode: 400 });
-    const cfg = await loadCompetitionConfig(fastify.prisma);
-    const gate = qualiGate(cfg, q);
+    const gate = qualiGate(q);
     const quarters = listQuartersResolved(overrides).map((p) => ({ value: p.value, label: p.label }));
     return cached(
       fastify.redis,
@@ -741,7 +740,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
             },
           ];
         });
-        return { entries, total, qualifiedCount, page, pageSize, quarter: q.label, quarterValue: q.value, quarters, battleType, competitorFormat, gate, capGames: cfg.qualiMinGames };
+        return { entries, total, qualifiedCount, page, pageSize, quarter: q.label, quarterValue: q.value, quarters, battleType, competitorFormat, gate };
       },
       { ttlSeconds: 600 },
     );

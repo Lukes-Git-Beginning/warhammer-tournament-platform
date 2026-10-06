@@ -873,7 +873,6 @@ export interface QuarterlyResponse {
   battleType: LeaderboardBattleType;
   competitorFormat: LeaderboardFormat;
   gate: number;
-  capGames: number;
 }
 export function getQuarterlyLeaderboard(opts?: {
   battleType?: LeaderboardBattleType;

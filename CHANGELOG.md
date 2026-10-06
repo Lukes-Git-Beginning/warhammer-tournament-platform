@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.14.0] — 2026-10-06
+
+### Changed
+- **The Quarterly Qualifier asks for one game per day of the quarter, with no cap.** The bar rises by one game for every day of the quarter that has passed, all the way to the end of the quarter (it used to stop at 90).
+
+### Fixed
+- **Q4 2026 now ends exactly at midnight like every other quarter.**
+
 ## [2.13.1] — 2026-10-06
 
 ### Changed

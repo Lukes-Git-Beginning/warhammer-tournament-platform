@@ -196,9 +196,6 @@ export function listQuartersResolved(overrides: Map<string, QuarterOverride>, no
 }
 
 export interface CompetitionConfig {
-  /** Cap for the quarterly qualifier's self-scaling gate = min(this, days into the quarter).
-   *  90 ≈ "~1 tournament/week + ladder" — the legitimacy bar for a cash-prize final. */
-  qualiMinGames: number;
   /** "Permanence" threshold: reaching it lists a player forever on Rankings (HoF badge), immune
    *  to the self-scaling cutoff. Starts generous (50) and is raised over time toward ~250. */
   hallOfFameMinGames: number;
@@ -209,7 +206,6 @@ export interface CompetitionConfig {
 }
 
 const DEFAULT_COMPETITION_CONFIG: CompetitionConfig = {
-  qualiMinGames: 90,
   hallOfFameMinGames: 50,
   ladderWinPoints: 3,
   ladderDrawPoints: 1,
@@ -222,7 +218,6 @@ export async function loadCompetitionConfig(prisma: PrismaClient): Promise<Compe
     where: {
       key: {
         in: [
-          'quali_min_games',
           'hall_of_fame_min_games',
           'ladder_win_points',
           'ladder_draw_points',
@@ -238,7 +233,6 @@ export async function loadCompetitionConfig(prisma: PrismaClient): Promise<Compe
     return Number.isFinite(n) ? n : def;
   };
   return {
-    qualiMinGames: num('quali_min_games', DEFAULT_COMPETITION_CONFIG.qualiMinGames),
     hallOfFameMinGames: num('hall_of_fame_min_games', DEFAULT_COMPETITION_CONFIG.hallOfFameMinGames),
     ladderWinPoints: num('ladder_win_points', DEFAULT_COMPETITION_CONFIG.ladderWinPoints),
     ladderDrawPoints: num('ladder_draw_points', DEFAULT_COMPETITION_CONFIG.ladderDrawPoints),
@@ -252,15 +246,15 @@ export function rankingsCutoff(cfg: CompetitionConfig, now: Date = new Date()): 
   return Math.min(cfg.hallOfFameMinGames, daysSince(LAUNCH_DATE, now));
 }
 
-/** Quarterly qualifier gate = min(cap, competitive days elapsed in the quarter up to now).
- *  Self-scaling for the CURRENT quarter ("sharpens" toward the full cap by quarter end); a
- *  fully-elapsed PAST quarter uses the full cap. The start is clamped to LAUNCH_DATE so the LAUNCH
- *  quarter (which only had a few weeks of play) doesn't demand a full quarter's worth of games it
- *  never had time to accrue. */
-export function qualiGate(cfg: CompetitionConfig, window: TimeWindow, now: Date = new Date()): number {
+/** Quarterly qualifier gate = one game per competitive day elapsed in the quarter up to now — no
+ *  cap and no floor (Alex, 2026-10-06; it used to be min(90, days)). Self-scaling for the CURRENT
+ *  quarter; a fully-elapsed PAST quarter demands one per day of the whole quarter. The start is
+ *  clamped to LAUNCH_DATE so the LAUNCH quarter (only a few weeks of play) doesn't demand a full
+ *  quarter's worth of games it never had time to accrue. */
+export function qualiGate(window: TimeWindow, now: Date = new Date()): number {
   const start = new Date(Math.max(window.from.getTime(), LAUNCH_DATE.getTime()));
   const end = new Date(Math.min(now.getTime(), window.to.getTime()));
-  return Math.min(cfg.qualiMinGames, Math.max(0, daysSince(start, end)));
+  return daysSince(start, end);
 }
 
 export interface LadderStanding {

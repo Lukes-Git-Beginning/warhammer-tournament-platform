@@ -302,7 +302,6 @@ describe('GET /api/leaderboard/quarterly (filtered)', () => {
       entries: unknown[];
       quarter: string;
       gate: number;
-      capGames: number;
       battleType: string;
       competitorFormat: string;
     }>();
@@ -310,7 +309,6 @@ describe('GET /api/leaderboard/quarterly (filtered)', () => {
     expect(body.competitorFormat).toBe('ONE_V_ONE');
     expect(typeof body.quarter).toBe('string');
     expect(typeof body.gate).toBe('number');
-    expect(typeof body.capGames).toBe('number');
   });
 
   it('qualifiedOnly=true returns only gate-clearers, capped to the qualified count', async () => {

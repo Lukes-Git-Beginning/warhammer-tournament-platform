@@ -18,7 +18,6 @@ import type { Redis } from 'ioredis';
 import { computeGsBoard, type BattleTypeFilter, type CompetitorFormatFilter } from './gs-board.js';
 import { captainMap } from './competitors.js';
 import {
-  loadCompetitionConfig,
   qualiGate,
   parseMonth,
   computeLadderStandings,
@@ -122,8 +121,7 @@ export async function computeQuarterlyFinal(
   const window = resolveQuarter(opts.period, overrides);
   if (!window) return null;
   const now = opts.now ?? new Date();
-  const cfg = await loadCompetitionConfig(prisma);
-  const gate = qualiGate(cfg, window, now);
+  const gate = qualiGate(window, now);
 
   const board = await computeGsBoard(prisma, redis, {
     versionId: null, // GS is timeless; the window scopes the quarter
@@ -381,8 +379,7 @@ export async function computeFullRanking(
   const window = resolveQuarter(opts.period, overrides);
   if (!window) return { ranking: [], fieldSize: 0 };
   const now = opts.now ?? new Date();
-  const cfg = await loadCompetitionConfig(prisma);
-  const gate = qualiGate(cfg, window, now);
+  const gate = qualiGate(window, now);
   const board = await computeGsBoard(prisma, redis, {
     versionId: null,
     window: { from: window.from, to: window.to },
@@ -441,7 +438,7 @@ export async function openAvailabilityRound(
   }
   if (fieldSize === 0) throw new Error('Not enough players to seat a field yet.');
   // Invite pool per kind: the LADDER is gateless, so cap at the field + an equal reserve buffer
-  // (2× the field). The QUARTERLY 90-game gate already bounds the pool and clearing it earns the
+  // (2× the field). The QUARTERLY one-game-per-day gate already bounds the pool and clearing it earns the
   // seed-pool spot, so invite ALL qualified — no cap (Alex 2026-09-30).
   const pool = opts.kind === 'MONTHLY_LADDER' ? ranking.slice(0, invitePoolSize(fieldSize)) : ranking;
   const deadlineHours = opts.deadlineHours ?? 24;
