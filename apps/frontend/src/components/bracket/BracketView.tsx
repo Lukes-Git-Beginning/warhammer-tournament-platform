@@ -661,6 +661,12 @@ export function BracketView({ slug, tournamentId, canManage = false, hideStandin
               initialMapId={selectedMatch.pickedMapId ?? undefined}
               initialP1FactionId={selectedMatch.player1FactionId ?? undefined}
               initialP2FactionId={selectedMatch.player2FactionId ?? undefined}
+              isTeam={
+                (selectedMatch.player1Id ? data.competitors?.[selectedMatch.player1Id]?.type === 'TEAM' : false) ||
+                (selectedMatch.player2Id ? data.competitors?.[selectedMatch.player2Id]?.type === 'TEAM' : false)
+              }
+              initialP1FactionId2={selectedMatch.player1FactionId2 ?? undefined}
+              initialP2FactionId2={selectedMatch.player2FactionId2 ?? undefined}
               player1Name={
                 selectedMatch.player1Id ? players.get(selectedMatch.player1Id)?.name : undefined
               }

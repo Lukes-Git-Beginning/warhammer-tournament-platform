@@ -30,6 +30,10 @@ interface MatchScoreModalProps {
   initialMapId?: string;
   initialP1FactionId?: string;
   initialP2FactionId?: string;
+  /** 2v2: both sides are teams — shows (and sends) the teammate faction fields. */
+  isTeam?: boolean;
+  initialP1FactionId2?: string;
+  initialP2FactionId2?: string;
   canManage?: boolean;
   onClose: () => void;
 }
@@ -84,6 +88,9 @@ export function MatchScoreModal({
   initialMapId,
   initialP1FactionId,
   initialP2FactionId,
+  isTeam = false,
+  initialP1FactionId2,
+  initialP2FactionId2,
   canManage = false,
   onClose,
 }: MatchScoreModalProps) {
@@ -210,6 +217,9 @@ export function MatchScoreModal({
   const [mapId, setMapId] = useState(initialMapId ?? '');
   const [p1FactionId, setP1FactionId] = useState(initialP1FactionId ?? '');
   const [p2FactionId, setP2FactionId] = useState(initialP2FactionId ?? '');
+  // 2v2: the teammates' factions (positional second faction per side).
+  const [p1FactionId2, setP1FactionId2] = useState(initialP1FactionId2 ?? '');
+  const [p2FactionId2, setP2FactionId2] = useState(initialP2FactionId2 ?? '');
 
   // Tournament matches use the tournament's map pool; Open Play / Ladder matches have no
   // tournament, so fall back to the global map list — otherwise the override modal shows no
@@ -232,13 +242,30 @@ export function MatchScoreModal({
 
   const p1FactionChanged = p1FactionId !== (initialP1FactionId ?? '');
   const p2FactionChanged = p2FactionId !== (initialP2FactionId ?? '');
+  const p1Faction2Changed = p1FactionId2 !== (initialP1FactionId2 ?? '');
+  const p2Faction2Changed = p2FactionId2 !== (initialP2FactionId2 ?? '');
+  // Teammate faction fields for the override/report payloads (2v2 only; omitted for 1v1).
+  const teamFactionFields = isTeam
+    ? { player1FactionId2: p1FactionId2 || undefined, player2FactionId2: p2FactionId2 || undefined }
+    : {};
 
   // ── Per-game (non-Bo1): edit each played game's map / factions / winner. Covers both
   // an override on a completed/disputed match AND entering the result on a PENDING one
   // (e.g. after a Cancel → Restore), so a restored multi-game match keeps its per-game rows.
   const perGame = !isBo1 && (isOverride || isPending);
   const maxGames = maxGamesForFormat(matchFormat);
-  type GameRow = { gameNumber: number; mapId: string; p1FactionId: string; p2FactionId: string; winnerId: string };
+  type GameRow = {
+    gameNumber: number;
+    mapId: string;
+    p1FactionId: string;
+    p2FactionId: string;
+    p1FactionId2: string;
+    p2FactionId2: string;
+    winnerId: string;
+  };
+  const emptyRow = (gameNumber: number): GameRow => ({
+    gameNumber, mapId: '', p1FactionId: '', p2FactionId: '', p1FactionId2: '', p2FactionId2: '', winnerId: '',
+  });
   const [gameRows, setGameRows] = useState<GameRow[]>([]);
   // Host edits mark the form dirty; until then we keep re-seeding from fresh (polled) data so the
   // modal reflects live progress — revealed blind-picks, played maps, per-game winners — without the
@@ -261,9 +288,11 @@ export function MatchScoreModal({
         // MatchGame faction is only written when the game is finalized, so fall back to the pick.
         p1FactionId: g.player1FactionId ?? g.blindPick?.player1FactionId ?? '',
         p2FactionId: g.player2FactionId ?? g.blindPick?.player2FactionId ?? '',
+        p1FactionId2: g.player1FactionId2 ?? g.blindPick?.player1FactionId2 ?? '',
+        p2FactionId2: g.player2FactionId2 ?? g.blindPick?.player2FactionId2 ?? '',
         winnerId: g.winnerId ?? '',
       }));
-    setGameRows(rows.length > 0 ? rows : [{ gameNumber: 1, mapId: '', p1FactionId: '', p2FactionId: '', winnerId: '' }]);
+    setGameRows(rows.length > 0 ? rows : [emptyRow(1)]);
   }, [perGame, dirty, matchGamesData]);
 
   const updateRow = (idx: number, patch: Partial<GameRow>) => {
@@ -272,7 +301,7 @@ export function MatchScoreModal({
   };
   const addRow = () => {
     setDirty(true);
-    setGameRows((rows) => (rows.length >= maxGames ? rows : [...rows, { gameNumber: rows.length + 1, mapId: '', p1FactionId: '', p2FactionId: '', winnerId: '' }]));
+    setGameRows((rows) => (rows.length >= maxGames ? rows : [...rows, emptyRow(rows.length + 1)]));
   };
   const removeRow = (idx: number) => {
     setDirty(true);
@@ -296,6 +325,7 @@ export function MatchScoreModal({
       mapId: r.mapId || null,
       player1FactionId: r.p1FactionId || null,
       player2FactionId: r.p2FactionId || null,
+      ...(isTeam ? { player1FactionId2: r.p1FactionId2 || null, player2FactionId2: r.p2FactionId2 || null } : {}),
       winnerId: r.winnerId === DRAW ? null : r.winnerId || null,
     }));
 
@@ -327,6 +357,7 @@ export function MatchScoreModal({
           map_id: mapId || undefined,
           player1FactionId: p1FactionId || undefined,
           player2FactionId: p2FactionId || undefined,
+        ...teamFactionFields,
           games: perGame ? overrideGames() : undefined,
         });
       }
@@ -343,6 +374,7 @@ export function MatchScoreModal({
           map_id: mapId || undefined,
           player1FactionId: p1FactionId || undefined,
           player2FactionId: p2FactionId || undefined,
+        ...teamFactionFields,
           games: perGame ? overrideGames() : undefined,
         });
       }
@@ -355,6 +387,7 @@ export function MatchScoreModal({
         map_id: mapId || undefined,
         player1FactionId: p1FactionId || undefined,
         player2FactionId: p2FactionId || undefined,
+        ...teamFactionFields,
       });
     },
     onSuccess: () => {
@@ -712,6 +745,26 @@ export function MatchScoreModal({
                       {factions.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
                     </select>
                   </div>
+                  {isTeam && (
+                    <div className="flex gap-2">
+                      <select
+                        value={row.p1FactionId2}
+                        onChange={(e) => updateRow(idx, { p1FactionId2: e.target.value })}
+                        className="flex-1 min-w-0 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+                      >
+                        <option value="">{player1Name ?? 'P1'} teammate faction</option>
+                        {factions.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                      </select>
+                      <select
+                        value={row.p2FactionId2}
+                        onChange={(e) => updateRow(idx, { p2FactionId2: e.target.value })}
+                        className="flex-1 min-w-0 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:outline-none focus:border-rizzotto-gold-500"
+                      >
+                        <option value="">{player2Name ?? 'P2'} teammate faction</option>
+                        {factions.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <select
                     value={row.winnerId}
                     onChange={(e) => updateRow(idx, { winnerId: e.target.value })}
@@ -774,7 +827,13 @@ export function MatchScoreModal({
             <div className="space-y-2">
               {[
                 { label: player1Name ?? 'Player 1', value: p1FactionId, onChange: setP1FactionId, changed: p1FactionChanged },
+                ...(isTeam
+                  ? [{ label: `${player1Name ?? 'Player 1'} (mate)`, value: p1FactionId2, onChange: setP1FactionId2, changed: p1Faction2Changed }]
+                  : []),
                 { label: player2Name ?? 'Player 2', value: p2FactionId, onChange: setP2FactionId, changed: p2FactionChanged },
+                ...(isTeam
+                  ? [{ label: `${player2Name ?? 'Player 2'} (mate)`, value: p2FactionId2, onChange: setP2FactionId2, changed: p2Faction2Changed }]
+                  : []),
               ].map(({ label, value, onChange, changed }) => (
                 <div key={label} className="flex items-center gap-2">
                   <span className="w-24 truncate text-xs text-stone-400">{label}</span>

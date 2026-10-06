@@ -120,6 +120,7 @@ export function GameHistoryTable({ games, showTournament = false, showBattleType
                 </td>
                 <td className="px-3 py-2">
                   <FactionChip factionId={g.player1FactionId} factionMap={factionMap} />
+                  {g.player1FactionId2 && <FactionChip factionId={g.player1FactionId2} factionMap={factionMap} />}
                 </td>
                 <td className={`px-3 py-2 font-medium ${p2Won ? 'text-rizzotto-gold-400' : 'text-stone-300'}`}>
                   {g.player2 ? (
@@ -131,6 +132,7 @@ export function GameHistoryTable({ games, showTournament = false, showBattleType
                 </td>
                 <td className="px-3 py-2">
                   <FactionChip factionId={g.player2FactionId} factionMap={factionMap} />
+                  {g.player2FactionId2 && <FactionChip factionId={g.player2FactionId2} factionMap={factionMap} />}
                 </td>
                 <td className="px-3 py-2 text-stone-400 text-xs">
                   {g.mapName ?? '—'}

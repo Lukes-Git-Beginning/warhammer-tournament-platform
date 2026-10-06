@@ -214,6 +214,9 @@ export interface GameHistoryEntry {
   winnerId: string | null;
   player1FactionId: string | null;
   player2FactionId: string | null;
+  /** 2v2: the teammate's faction per side (null/omitted for 1v1) */
+  player1FactionId2?: string | null;
+  player2FactionId2?: string | null;
   battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
   mapName: string | null;
   replayUrl: string | null;

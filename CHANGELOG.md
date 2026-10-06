@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 ## [2.14.0] — 2026-10-06
 
+### Added
+- **2v2 matches now record and show both players' factions on each team.** The match page, the game history lists and the bracket match details display the captain's and the teammate's faction side by side.
+- **Hosts and admins can set the teammate factions** when entering or correcting a 2v2 result or game.
+
 ### Changed
 - **The Quarterly Qualifier asks for one game per day of the quarter, with no cap.** The bar rises by one game for every day of the quarter that has passed, all the way to the end of the quarter (it used to stop at 90).
 - **Days, months and quarters on the site now follow German time (CET/CEST).** Daily statistics, the qualifier's day count and other "per day" figures roll over at midnight German time instead of 1 or 2 in the morning. Times you see on the site stay in your own timezone.
@@ -15,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 ### Fixed
 - **Q4 2026 now ends exactly at midnight like every other quarter.**
+- **Open Play 2v2 games now keep the teammate's faction.** Previously only the captain's faction was saved after the game.
+- **If a team runs out of time in a 2v2 blind pick, both of its players now get a faction.** The teammate used to be left without one.
+- **Result corrections no longer erase a teammate's faction.**
+- **Past Open Play 2v2 games were repaired** so their teammate factions show up as well.
 
 ## [2.13.1] — 2026-10-06
 

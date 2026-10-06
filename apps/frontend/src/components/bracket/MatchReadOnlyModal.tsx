@@ -92,6 +92,7 @@ export function MatchReadOnlyModal({ match, slug, players, factionMap, onClose }
   const renderSide = (
     playerId: string | null,
     factionId: string | null,
+    factionId2?: string | null, // 2v2: the teammate's faction
   ) => {
     const info = playerId ? players.get(playerId) : undefined;
     const isWinner = !!match.winnerId && match.winnerId === playerId;
@@ -110,7 +111,10 @@ export function MatchReadOnlyModal({ match, slug, players, factionMap, onClose }
           ) : (
             <span className="block truncate text-sm font-semibold text-rizzotto-stone-500">TBD</span>
           )}
-          <FactionChip faction={factionId ? factionMap.get(factionId) : undefined} />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+            <FactionChip faction={factionId ? factionMap.get(factionId) : undefined} />
+            {factionId2 && <FactionChip faction={factionMap.get(factionId2)} />}
+          </div>
         </div>
         {isWinner && (
           <span className="shrink-0 text-xs font-bold uppercase tracking-wider text-rizzotto-gold-400">Win</span>
@@ -136,11 +140,11 @@ export function MatchReadOnlyModal({ match, slug, players, factionMap, onClose }
         </div>
 
         <div className="divide-y divide-rizzotto-iron-700/60 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-950/40 px-3">
-          {renderSide(match.player1Id, match.player1FactionId)}
+          {renderSide(match.player1Id, match.player1FactionId, match.player1FactionId2)}
           <div className="flex items-center justify-center py-1">
             <span className="font-display text-lg font-bold tabular-nums text-rizzotto-stone-300">{score}</span>
           </div>
-          {renderSide(match.player2Id, match.player2FactionId)}
+          {renderSide(match.player2Id, match.player2FactionId, match.player2FactionId2)}
         </div>
 
         {pickedMap && (

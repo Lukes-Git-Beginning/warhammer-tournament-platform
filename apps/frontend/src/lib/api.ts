@@ -1117,6 +1117,9 @@ export interface OverrideGameInput {
   mapId?: string | null;
   player1FactionId?: string | null;
   player2FactionId?: string | null;
+  /** 2v2: teammate factions (undefined = keep the stored value, null = clear) */
+  player1FactionId2?: string | null;
+  player2FactionId2?: string | null;
   /** null = a draw for that game */
   winnerId?: string | null;
 }
@@ -1131,6 +1134,9 @@ export function overrideMatchResult(
     map_id?: string;
     player1FactionId?: string;
     player2FactionId?: string;
+    /** 2v2: the teammate's faction per side. */
+    player1FactionId2?: string;
+    player2FactionId2?: string;
     /** Per-game detail for non-Bo1 matches (map / factions / winner per game). */
     games?: OverrideGameInput[];
   },

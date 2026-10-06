@@ -371,6 +371,26 @@ export function MatchDetailPage() {
   const isPrivileged = !!match.can_manage;
   const canReport = !!(user && (isPlayer1 || isPlayer2 || isPrivileged));
 
+  // 2v2: a slot is a Team id, so the viewer is never `user.id === player*_id`. Resolve the team
+  // slot the viewer belongs to (same rule as MyMatchSection.resolveViewerSide): any member sees
+  // the tile, only the captain (or staff) may act. 1v1 / non-members keep the old behaviour.
+  let mySideId: string | null = null;
+  let isMyTeamCaptain = false;
+  if (user) {
+    for (const [slotId, ref] of [
+      [match.player1_id, match.player1],
+      [match.player2_id, match.player2],
+    ] as const) {
+      if (!slotId || ref?.type !== 'TEAM') continue;
+      const mine = ref.members?.find((m) => m.user_id === user.id);
+      if (mine) {
+        mySideId = slotId;
+        isMyTeamCaptain = mine.is_captain;
+        break;
+      }
+    }
+  }
+
   // Hosts/admins can also resolve a DISPUTED match (the dual-submit flow is stuck) and EDIT a
   // COMPLETED one to correct a wrong result; regular players only report ONGOING/PENDING.
   const reportable =
@@ -501,6 +521,7 @@ export function MatchDetailPage() {
           )}
 
           <FactionChip faction={match.player1_faction} />
+          {match.player1_faction_2 && <FactionChip faction={match.player1_faction_2} />}
 
         </div>
 
@@ -564,6 +585,7 @@ export function MatchDetailPage() {
           )}
 
           <FactionChip faction={match.player2_faction} />
+          {match.player2_faction_2 && <FactionChip faction={match.player2_faction_2} />}
 
         </div>
       </div>
@@ -612,7 +634,13 @@ export function MatchDetailPage() {
               player2Name={match.player2?.username ?? 'Player 2'}
               player1AvatarUrl={match.player1?.avatar_url ?? null}
               player2AvatarUrl={match.player2?.avatar_url ?? null}
-              isParticipant={canReport}
+              matchPlayer1FactionId={match.player1_faction_id}
+              matchPlayer2FactionId={match.player2_faction_id}
+              matchPlayer1FactionId2={match.player1_faction_id_2 ?? null}
+              matchPlayer2FactionId2={match.player2_faction_id_2 ?? null}
+              isParticipant={canReport || mySideId !== null}
+              mySideId={mySideId}
+              canInteract={mySideId !== null ? isMyTeamCaptain || isPrivileged : canReport}
               maps={maps}
               factions={factions}
               isOpenPlay={isOpenPlay}
@@ -882,6 +910,9 @@ export function MatchDetailPage() {
           initialWinnerId={match.winner_id}
           initialP1FactionId={match.player1_faction_id ?? undefined}
           initialP2FactionId={match.player2_faction_id ?? undefined}
+          isTeam={match.player1?.type === 'TEAM' || match.player2?.type === 'TEAM'}
+          initialP1FactionId2={match.player1_faction_id_2 ?? undefined}
+          initialP2FactionId2={match.player2_faction_id_2 ?? undefined}
           onClose={() => {
             setShowScoreModal(false);
             // Ensure match detail is fresh after result is reported.
