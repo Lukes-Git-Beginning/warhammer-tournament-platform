@@ -1,3 +1,4 @@
+import { SITE_TZ } from '@/lib/site-time';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -474,7 +475,7 @@ export function AnnouncementsTab() {
                   >
                     <span className="text-sm text-stone-200">{t.name}</span>
                     <span className="text-xs text-stone-500">
-                      {new Date(t.start_date).toLocaleDateString()} · {t.status.replace(/_/g, ' ').toLowerCase()}
+                      {new Date(t.start_date).toLocaleDateString(undefined, { timeZone: SITE_TZ })} · {t.status.replace(/_/g, ' ').toLowerCase()}
                     </span>
                   </button>
                 </li>
@@ -527,7 +528,7 @@ export function AnnouncementsTab() {
                 {draft ? (
                   <div className="flex flex-col gap-4">
                     <p className="text-xs text-stone-500">
-                      Pushed {new Date(draft.generatedAt).toLocaleString()} · {draft.results.length} destination
+                      Pushed {new Date(draft.generatedAt).toLocaleString(undefined, { timeZone: SITE_TZ })} · {draft.results.length} destination
                       {draft.results.length === 1 ? '' : 's'}
                     </p>
                     {draft.results.map((r) => (

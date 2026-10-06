@@ -1,3 +1,4 @@
+import { SITE_TZ } from '@/lib/site-time';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAccessLog, adminSearchUsers, type AccessEventType } from '@/lib/api';
@@ -126,7 +127,7 @@ export function AccessLogTab() {
                 return (
                   <tr key={e.id} className="text-stone-300">
                     <td className="whitespace-nowrap px-3 py-1.5 text-stone-400">
-                      {new Date(e.created_at).toLocaleString('en-GB', {
+                      {new Date(e.created_at).toLocaleString('en-GB', { timeZone: SITE_TZ,
                         day: '2-digit',
                         month: 'short',
                         hour: '2-digit',

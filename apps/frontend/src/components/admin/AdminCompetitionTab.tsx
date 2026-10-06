@@ -11,28 +11,25 @@ import {
   type QuarterAdminEntry,
   type ApiError,
 } from '@/lib/api.js';
+import { formatSiteDateTime, isoToSiteInput, siteInputToIso } from '@/lib/site-time';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
+// Admin dates are shown and entered in German time (site time), whatever machine the admin is on.
+// The old isoToLocal sliced the UTC ISO string into the input while localToIso read it back as
+// browser-local, so every save shifted the time by the UTC offset.
 function fmtDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
+  return formatSiteDateTime(iso) || iso;
 }
 
-/** datetime-local value (YYYY-MM-DDTHH:MM) → ISO string, or null if empty */
+/** datetime-local value (German wall clock) → ISO string, or null if empty */
 function localToIso(local: string): string | null {
-  if (!local.trim()) return null;
-  return new Date(local).toISOString();
+  return siteInputToIso(local.trim());
 }
 
-/** ISO string → datetime-local value (YYYY-MM-DDTHH:MM) for input */
+/** ISO string → datetime-local value (German wall clock) for input */
 function isoToLocal(iso: string | null | undefined): string {
-  if (!iso) return '';
-  // datetime-local needs "YYYY-MM-DDTHH:MM"
-  return iso.slice(0, 16);
+  return isoToSiteInput(iso);
 }
 
 function isApiError(e: unknown): e is ApiError {

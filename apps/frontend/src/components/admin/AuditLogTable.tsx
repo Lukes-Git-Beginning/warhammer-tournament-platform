@@ -1,12 +1,12 @@
+import { formatSiteDateTime } from '@/lib/site-time';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAdminAuditLog, type AuditLogEntry } from '@/lib/api';
-import { formatInUserTimezone } from '@/lib/timezone';
 
 const PAGE_SIZE = 20;
 
 function formatDate(iso: string): string {
-  return formatInUserTimezone(iso);
+  return formatSiteDateTime(iso);
 }
 
 function truncate(str: string, maxLen = 12): string {

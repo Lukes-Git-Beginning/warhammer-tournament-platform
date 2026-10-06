@@ -1,3 +1,4 @@
+import { formatSiteDateTime } from '@/lib/site-time';
 import { Fragment, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -13,7 +14,6 @@ const ISSUE_LABELS: Record<GameAuditIssue, string> = {
   sft_mismatch: 'SFT mismatch',
   official_but_void: 'Void but official',
 };
-import { formatInUserTimezone } from '@/lib/timezone';
 
 const PAGE_SIZE = 50;
 const selectClass =
@@ -275,7 +275,7 @@ export function AdminAllGamesTab() {
                         </td>
                       )}
                       <td className="px-3 py-2 text-stone-500 text-xs whitespace-nowrap">
-                        {g.playedAt ? formatInUserTimezone(g.playedAt) : '—'}
+                        {g.playedAt ? formatSiteDateTime(g.playedAt) : '—'}
                       </td>
                       <td className="px-3 py-2 text-xs">
                         {g.tournament ? (

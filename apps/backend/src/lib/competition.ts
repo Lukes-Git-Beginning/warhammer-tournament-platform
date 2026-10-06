@@ -13,6 +13,7 @@ import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { getRatingModel } from './rating-model-service.js';
 import { rawPoints, opponentShare, opponentModifier, finalPoints } from './scoring-service.js';
+import { SITE_TZ, siteParts, siteMidnight, siteDaysBetween } from './site-time.js';
 
 export interface TimeWindow {
   from: Date;
@@ -20,46 +21,11 @@ export interface TimeWindow {
   label: string;
 }
 
-// ---------------------------------------------------------------------------
-// Quarter/month boundaries are anchored to the community timezone (Europe/Berlin), so a quarter or
-// month begins at LOCAL midnight (CET/CEST), not UTC midnight — otherwise a new quarter/month rolls
-// over at 01:00/02:00 local and the "quarter starts" look off by an hour (Alex 2026-10-01). Quarter
-// and month starts are always on the 1st, never a DST-transition day, so a single offset correction
-// is exact.
-// ---------------------------------------------------------------------------
-export const COMPETITION_TZ = 'Europe/Berlin';
-
-/** Calendar fields (year, 0-based month, day) of an instant in the competition timezone. */
-function tzParts(d: Date): { year: number; month: number; day: number } {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: COMPETITION_TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(d);
-  const get = (t: string): number => Number(parts.find((p) => p.type === t)?.value);
-  return { year: get('year'), month: get('month') - 1, day: get('day') };
-}
-
-/** The UTC instant of local (Europe/Berlin) midnight for the given calendar date. */
-function tzMidnight(year: number, month: number, day = 1): Date {
-  const guess = Date.UTC(year, month, day, 0, 0, 0);
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: COMPETITION_TZ,
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).formatToParts(new Date(guess));
-  const get = (t: string): number => Number(parts.find((p) => p.type === t)?.value);
-  // The zone's wall-clock reading of `guess`, interpreted as if it were UTC, differs from `guess`
-  // by exactly the zone's offset at that instant → subtract it to land on local midnight.
-  const asIfUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'));
-  return new Date(guess - (asIfUtc - guess));
-}
+// Quarter/month boundaries are anchored to site time (Europe/Berlin), so a quarter or month begins
+// at LOCAL midnight (CET/CEST), not UTC midnight (Alex 2026-10-01). Helpers live in site-time.ts.
+export const COMPETITION_TZ = SITE_TZ;
+const tzParts = siteParts;
+const tzMidnight = siteMidnight;
 
 /** Human label for a calendar month, e.g. "October 2026". */
 function monthLabel(year: number, month: number): string {
@@ -77,12 +43,14 @@ export function currentMonth(now: Date = new Date()): TimeWindow {
   return { from: tzMidnight(year, month, 1), to: tzMidnight(year, month + 1, 1), label: monthLabel(year, month) };
 }
 
-/** Site launch — game counts (and the Rankings self-scaling cutoff) count from here. */
-export const LAUNCH_DATE = new Date('2026-06-27T00:00:00.000Z');
+/** Site launch (27 Jun 2026, 00:00 German time) — game counts and the Rankings self-scaling cutoff
+ *  count from here. */
+export const LAUNCH_DATE = siteMidnight(2026, 5, 27);
 
-/** Whole days from `from` until `now` (never negative). */
+/** German-time calendar days from `from` until `now` (midnights crossed, never negative) — so a
+ *  "per day" count ticks over at local midnight, not at 01:00/02:00 (UTC). */
 export function daysSince(from: Date, now: Date = new Date()): number {
-  return Math.max(0, Math.floor((now.getTime() - from.getTime()) / 86_400_000));
+  return siteDaysBetween(from, now);
 }
 
 // ---------------------------------------------------------------------------

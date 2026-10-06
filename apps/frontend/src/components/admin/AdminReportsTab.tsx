@@ -1,3 +1,4 @@
+import { SITE_TZ } from '@/lib/site-time';
 import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -10,7 +11,7 @@ import {
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString(undefined, { timeZone: SITE_TZ, year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function UserRow({

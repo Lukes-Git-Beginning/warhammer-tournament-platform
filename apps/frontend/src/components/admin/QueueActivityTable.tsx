@@ -1,7 +1,7 @@
+import { formatSiteDateTime } from '@/lib/site-time';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAdminQueueActivity, type QueueActivityEntry, type QueueActivityEvent } from '@/lib/api';
-import { formatInUserTimezone } from '@/lib/timezone';
 
 const PAGE_SIZE = 20;
 
@@ -42,7 +42,7 @@ const SOURCE_STYLES: Record<'QUEUE' | 'AVAILABILITY' | 'CHALLENGE', string> = {
 };
 
 function formatDate(iso: string): string {
-  return formatInUserTimezone(iso);
+  return formatSiteDateTime(iso);
 }
 
 function PlayerCell({

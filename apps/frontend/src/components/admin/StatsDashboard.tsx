@@ -1,3 +1,4 @@
+import { SITE_TZ } from '@/lib/site-time';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { getAdminStats, getAdminOpenPlayQueue, getAdminOpenPlayActiveMatches, getAdminScheduledMatchups, type AdminStats, type BattleType } from '@/lib/api';
@@ -161,7 +162,7 @@ export function StatsDashboard() {
                       {c.proposer.username} <span className="text-stone-600">vs</span> {c.accepted_by?.username ?? '?'}
                     </span>
                     <p className="text-[10px] text-stone-600 mt-0.5">
-                      {new Date(c.proposed_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(c.proposed_at).toLocaleString(undefined, { timeZone: SITE_TZ, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       {c.format !== 'BO1' && <span className="ml-1">{c.format}</span>}
                     </p>
                   </div>

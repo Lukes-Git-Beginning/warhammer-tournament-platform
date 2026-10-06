@@ -1,4 +1,5 @@
 import type { FactionStats, PrismaClient } from '@rizzotto/db';
+import { siteDayAsDate } from './site-time.js';
 
 /**
  * Takes a daily snapshot of all FactionStats for the currently active version.
@@ -33,9 +34,8 @@ export async function takeFactionsSnapshot(
     return 0;
   }
 
-  // 4. Today's date (UTC, midnight — Postgres DATE type)
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  // 4. Today's date in site time (German calendar day, stored as a Postgres DATE)
+  const today = siteDayAsDate(new Date());
 
   // 5. Create snapshot rows, skipping duplicates (idempotent)
   const result = await prisma.factionStatsSnapshot.createMany({

@@ -10,12 +10,11 @@ import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { getRatingModel } from './rating-model-service.js';
 import { skillToBand } from './rating-model.js';
+import { siteDayAsDate } from './site-time.js';
 
-/** UTC date-only (midnight) for the snapshot day. */
+/** The snapshot day: today's German calendar date (stored as a Postgres DATE). */
 function utcToday(): Date {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
+  return siteDayAsDate(new Date());
 }
 
 /**

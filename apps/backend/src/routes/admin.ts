@@ -14,6 +14,7 @@ import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { auditReplays } from '../lib/audit-replays.js';
 import { resolveCompetitors } from '../lib/competitors.js';
 import { QUEUE_KEY, QUEUE_PREFS_KEY, parseQueuePrefs } from '../lib/matchmaking-tick.js';
+import { SITE_TZ, siteDayAsDate, siteMidnight, addSiteDays } from '../lib/site-time.js';
 import { opponentShare, opponentModifier, MIN_WINS_FOR_ANTI_FARM, OPPONENT_SHARE_WARN } from '../lib/scoring-service.js';
 import { getNonGuildMemberIds, isGuildLookupConfigured, isBotConfigured, purgeRecentBotMessages } from '../lib/discord-notify.js';
 import {
@@ -1164,10 +1165,12 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         const bucket: 'day' | 'week' | 'month' =
           range === 'year' ? 'week' : range === 'all' ? 'month' : 'day';
 
-        // Align a date to the start of its bucket (Postgres date_trunc uses Monday weeks / 1st of month).
-        const truncate = (d: Date): Date => {
-          const c = new Date(d);
-          c.setUTCHours(0, 0, 0, 0);
+        // Buckets are GERMAN calendar days/weeks/months (site time), not UTC: a game at 00:30 CET
+        // counts for that day. Calendar dates are carried as UTC-midnight Dates (pure calendar
+        // arithmetic); `truncate` aligns one to its bucket start (Monday weeks / 1st of month,
+        // matching Postgres date_trunc).
+        const truncate = (cal: Date): Date => {
+          const c = new Date(cal);
           if (bucket === 'week') {
             const dow = (c.getUTCDay() + 6) % 7; // Monday = 0
             c.setUTCDate(c.getUTCDate() - dow);
@@ -1184,17 +1187,19 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
             orderBy: { played_at: 'asc' },
             select: { played_at: true },
           });
-          since = truncate(first?.played_at ?? new Date());
+          since = truncate(siteDayAsDate(first?.played_at ?? new Date()));
         } else {
           const days = range === 'quarter' ? 90 : range === 'year' ? 365 : 30;
-          since = truncate(new Date(Date.now() - (days - 1) * 86_400_000));
+          since = truncate(siteDayAsDate(addSiteDays(new Date(), -(days - 1))));
         }
+        // The instant the first bucket starts: German midnight of that calendar date.
+        const sinceInstant = siteMidnight(since.getUTCFullYear(), since.getUTCMonth(), since.getUTCDate());
 
         // bucket is whitelisted above, so it is safe to inline into date_trunc.
         const rows = await fastify.prisma.$queryRawUnsafe<
           { bucket: Date; tournament: bigint; ladder: bigint; challenge: bigint }[]
         >(
-          `SELECT date_trunc('${bucket}', mg.played_at)::date AS bucket,
+          `SELECT date_trunc('${bucket}', (mg.played_at AT TIME ZONE 'UTC') AT TIME ZONE '${SITE_TZ}')::date AS bucket,
              COUNT(*) FILTER (WHERE m.type = 'TOURNAMENT') AS tournament,
              COUNT(*) FILTER (WHERE m.type = 'OPEN_PLAY' AND m.source IN ('QUEUE', 'AVAILABILITY')) AS ladder,
              COUNT(*) FILTER (WHERE m.type = 'OPEN_PLAY' AND m.source = 'CHALLENGE') AS challenge
@@ -1203,13 +1208,13 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
            WHERE mg.status = 'COMPLETED' AND mg.played_at IS NOT NULL AND mg.played_at >= $1
            GROUP BY bucket
            ORDER BY bucket`,
-          since,
+          sinceInstant,
         );
         const byBucket = new Map(rows.map((r) => [new Date(r.bucket).toISOString().slice(0, 10), r]));
 
         const series: { day: string; tournament: number; ladder: number; challenge: number }[] = [];
         const cur = truncate(since);
-        const end = truncate(new Date());
+        const end = truncate(siteDayAsDate(new Date()));
         while (cur <= end) {
           const key = cur.toISOString().slice(0, 10);
           const r = byBucket.get(key);

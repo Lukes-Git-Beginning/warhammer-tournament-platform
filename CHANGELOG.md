@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 ### Changed
 - **The Quarterly Qualifier asks for one game per day of the quarter, with no cap.** The bar rises by one game for every day of the quarter that has passed, all the way to the end of the quarter (it used to stop at 90).
+- **Days, months and quarters on the site now follow German time (CET/CEST).** Daily statistics, the qualifier's day count and other "per day" figures roll over at midnight German time instead of 1 or 2 in the morning. Times you see on the site stay in your own timezone.
+- **Challenge times in your active matches list are shown in your own timezone** instead of UTC.
+- **Snoozing queue pings "for the rest of today" now lasts until midnight in your own timezone.**
 
 ### Fixed
 - **Q4 2026 now ends exactly at midnight like every other quarter.**

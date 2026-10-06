@@ -1,3 +1,4 @@
+import { SITE_TZ } from '@/lib/site-time';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAdminConfig, putAdminConfig } from '@/lib/api.js';
@@ -91,7 +92,7 @@ export function FeatureFlagsPanel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-config', CONFIG_KEY] });
       setPendingKey(null);
-      setLastSaved(new Date().toLocaleTimeString());
+      setLastSaved(new Date().toLocaleTimeString(undefined, { timeZone: SITE_TZ }));
     },
     onError: () => setPendingKey(null),
   });

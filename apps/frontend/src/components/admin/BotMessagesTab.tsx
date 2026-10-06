@@ -1,3 +1,4 @@
+import { SITE_TZ } from '@/lib/site-time';
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getBotMessages, type BotMessageStatus } from '@/lib/api';
@@ -131,7 +132,7 @@ export function BotMessagesTab() {
                       className="cursor-pointer text-stone-300 hover:bg-stone-800/40 transition-colors"
                     >
                       <td className="whitespace-nowrap px-3 py-1.5 text-stone-400">
-                        {new Date(row.created_at).toLocaleString('en-GB', {
+                        {new Date(row.created_at).toLocaleString('en-GB', { timeZone: SITE_TZ,
                           day: '2-digit',
                           month: 'short',
                           hour: '2-digit',

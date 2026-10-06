@@ -1,3 +1,4 @@
+import { SITE_TZ } from '@/lib/site-time';
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -209,7 +210,7 @@ export function AdminMatchesTab() {
                       </td>
                       <td className="px-3 py-2 text-xs text-stone-500 whitespace-nowrap">
                         {(() => {
-                          const when = new Date(m.playedAt ?? m.createdAt).toLocaleString('en-GB', {
+                          const when = new Date(m.playedAt ?? m.createdAt).toLocaleString('en-GB', { timeZone: SITE_TZ,
                             day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
                           });
                           // No play time on CANCELLED/BYE rows — fall back to the created time, dimmed.

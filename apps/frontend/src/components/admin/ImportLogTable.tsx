@@ -1,13 +1,13 @@
+import { formatSiteDateTime } from '@/lib/site-time';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ImportLogEntry, ImportLogListResponse } from '@rizzotto/types';
 import { apiFetch } from '@/lib/api.js';
-import { formatInUserTimezone } from '@/lib/timezone.js';
 
 const PAGE_SIZE = 20;
 
 function formatDate(iso: string): string {
-  return formatInUserTimezone(iso);
+  return formatSiteDateTime(iso);
 }
 
 type StatusVariant = 'success' | 'partial' | 'error' | 'unknown';

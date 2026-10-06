@@ -1,3 +1,4 @@
+import { SITE_TZ } from '@/lib/site-time';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -375,7 +376,7 @@ export function UserBanTab({ initialBands }: { initialBands?: string }) {
                     )}
                   </td>
                   <td className="px-4 py-3 text-stone-500 text-xs">
-                    {new Date(user.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {new Date(user.created_at).toLocaleDateString('en-GB', { timeZone: SITE_TZ, day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
                   <td className="px-4 py-3">
                     {isDeletedUser(user) ? (

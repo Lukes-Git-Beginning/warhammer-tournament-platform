@@ -23,6 +23,8 @@ export interface ActiveMatchItem {
   opponentName: string | null;
   tournamentSlug: string | null;
   label: string;
+  /** Challenges: the agreed start (ISO). Formatted client-side in the viewer's timezone. */
+  scheduledAt?: string;
 }
 
 const TOURNAMENT_ACTIVE: MatchStatus[] = ['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION'];
@@ -128,22 +130,15 @@ const activeMatchesRoutes: FastifyPluginAsync = async (fastify) => {
 
       for (const c of challenges) {
         const proposerName = c.proposer?.username ?? null;
-        const scheduledAt = c.proposed_at.toLocaleDateString('en-GB', {
-          day: '2-digit',
-          month: 'short',
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: 'UTC',
-        });
         items.push({
           matchId: c.id,
           kind: 'challenge',
           status: 'ACCEPTED',
           opponentName: proposerName,
           tournamentSlug: null,
-          label: proposerName
-            ? `Challenge from ${proposerName} · ${scheduledAt} UTC`
-            : `Scheduled matchup · ${scheduledAt} UTC`,
+          // The time is formatted client-side in the viewer's own timezone (was hard-coded UTC).
+          label: proposerName ? `Challenge from ${proposerName}` : 'Scheduled matchup',
+          scheduledAt: c.proposed_at.toISOString(),
         });
       }
 

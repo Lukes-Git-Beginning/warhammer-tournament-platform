@@ -16,6 +16,7 @@ import { reconcileLiechtensteinTournaments } from '../lib/liechtenstein-service.
 import { reconcileSwissTournaments } from '../lib/tournament-utils.js';
 import { getSupporterRoleConfig, refreshSupporterFromDiscord } from '../lib/supporter-service.js';
 import { syncKofiGoal } from '../lib/kofi-goal-sync.js';
+import { SITE_TZ } from '../lib/site-time.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -72,7 +73,7 @@ export default fp(
     alreadyRemindedMatchups.forEach(({ entity_id }) => remindedMatchupIds.add(entity_id));
 
     // -----------------------------------------------------------------------
-    // Daily faction stats snapshot — 00:05 UTC
+    // Daily faction stats snapshot — 00:05 German time (snapshot day = German calendar day)
     // -----------------------------------------------------------------------
     const snapshotTask = cron.schedule(
       '5 0 * * *',
@@ -85,11 +86,11 @@ export default fp(
           fastify.log.error({ err }, 'Faction snapshot failed');
         }
       },
-      { timezone: 'UTC' },
+      { timezone: SITE_TZ },
     );
 
     // -----------------------------------------------------------------------
-    // Daily player skill snapshot (timeless GS) — 00:10 UTC
+    // Daily player skill snapshot (timeless GS) — 00:10 German time
     // GS is derive-on-read + not historically reconstructable, so snapshot it daily
     // (design doc §3). Runs after the faction snapshot; a cheap single createMany.
     // -----------------------------------------------------------------------
@@ -104,7 +105,7 @@ export default fp(
           fastify.log.error({ err }, 'Player skill snapshot failed');
         }
       },
-      { timezone: 'UTC' },
+      { timezone: SITE_TZ },
     );
 
     // -----------------------------------------------------------------------
@@ -560,7 +561,7 @@ export default fp(
           fastify.log.error({ err }, 'Supporter refresh cron failed');
         }
       },
-      { timezone: 'UTC' },
+      { timezone: SITE_TZ },
     );
 
     // -----------------------------------------------------------------------
@@ -584,7 +585,7 @@ export default fp(
     // Run once on boot so the bar is accurate right after a deploy (fire-and-forget).
     void syncKofiGoal(fastify.prisma, fastify.log).catch(() => {});
 
-    // Access log retention: purge AccessEvent rows older than 90 days, daily at 01:10 UTC.
+    // Access log retention: purge AccessEvent rows older than 90 days, daily at 01:10 German time.
     const accessLogPurgeTask = cron.schedule(
       '10 1 * * *',
       async () => {
@@ -598,12 +599,12 @@ export default fp(
           fastify.log.error({ err }, 'AccessEvent purge cron failed');
         }
       },
-      { timezone: 'UTC' },
+      { timezone: SITE_TZ },
     );
 
     // -----------------------------------------------------------------------
     // Bot-message log retention: purge BotMessage rows older than 60 days,
-    // daily at 01:20 UTC (does not collide with accessLogPurgeTask at 01:10).
+    // daily at 01:20 German time (does not collide with accessLogPurgeTask at 01:10).
     // -----------------------------------------------------------------------
     const botMessagePurgeTask = cron.schedule(
       '20 1 * * *',
@@ -618,7 +619,7 @@ export default fp(
           fastify.log.error({ err }, 'BotMessage purge cron failed');
         }
       },
-      { timezone: 'UTC' },
+      { timezone: SITE_TZ },
     );
 
     fastify.decorate('cronTasks', [snapshotTask, playerSkillSnapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask, kofiGoalSyncTask, accessLogPurgeTask, botMessagePurgeTask]);

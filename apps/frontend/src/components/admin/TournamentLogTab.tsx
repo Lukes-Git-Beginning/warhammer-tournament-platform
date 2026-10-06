@@ -1,7 +1,7 @@
+import { formatSiteDateTime } from '@/lib/site-time';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { listTournaments, getTournamentEvents, type Tournament, type TournamentEventDto } from '@/lib/api';
-import { formatInUserTimezone } from '@/lib/timezone';
 
 /** Snake_case event type → a readable label, e.g. 'playoff_division_generated' → 'Playoff division generated'. */
 function humanizeType(t: string): string {
@@ -27,7 +27,7 @@ function EventRow({ e }: { e: TournamentEventDto }) {
   return (
     <li className="flex flex-col gap-0.5 border-b border-stone-800/60 py-2 sm:flex-row sm:items-baseline sm:gap-3">
       <span className="shrink-0 whitespace-nowrap font-mono text-xs text-stone-500 sm:w-44">
-        {formatInUserTimezone(e.createdAt)}
+        {formatSiteDateTime(e.createdAt)}
       </span>
       <span className="flex-1 leading-relaxed">
         <span className="mr-2 rounded bg-stone-800 px-2 py-0.5 text-xs font-medium text-rizzotto-gold-500">

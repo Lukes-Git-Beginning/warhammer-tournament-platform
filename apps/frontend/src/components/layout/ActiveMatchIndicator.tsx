@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Swords } from 'lucide-react';
 import { getMyActiveMatches } from '@/lib/api';
 import { useAuthQuery } from '@/lib/auth';
+import { formatInUserTimezone } from '@/lib/timezone';
 import { useVisibleMatchIds } from '@/contexts/ActiveMatchVisibility';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -143,6 +144,7 @@ export function ActiveMatchIndicator() {
                   <div className="flex flex-col gap-0.5 min-w-0">
                     <span className="truncate text-rizzotto-stone-200 leading-tight">
                       {item.label}
+                      {item.scheduledAt && ` · ${formatInUserTimezone(item.scheduledAt, user?.timezone ?? undefined)}`}
                     </span>
                     <span className="text-xs text-rizzotto-stone-500 uppercase tracking-wider">
                       {item.status}

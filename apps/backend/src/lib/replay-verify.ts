@@ -8,6 +8,7 @@
 
 import { parseReplayMeta } from './replay-parser.js';
 import { mapNameFromTerrain } from './replay-maps.js';
+import { formatSiteTime } from './site-time.js';
 
 /** How far BEFORE the match was generated a replay may have been recorded (clock skew grace).
  *  Recorded meaningfully earlier than this ⇒ a recycled/old replay. */
@@ -114,7 +115,7 @@ export function verifyReplayMeta(
   if (meta.recordedAt && meta.recordedAt.getTime() < expected.matchCreatedAt.getTime() - RECYCLE_GRACE_MS) {
     issues.push({
       type: 'RECORDED_TIME',
-      message: `Replay was recorded ${meta.recordedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC — before this match was created`,
+      message: `Replay was recorded ${formatSiteTime(meta.recordedAt)} — before this match was created`,
     });
   }
 

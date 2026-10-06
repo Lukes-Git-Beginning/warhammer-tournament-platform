@@ -3422,6 +3422,8 @@ export interface ActiveMatchItem {
   opponentName: string | null;
   tournamentSlug: string | null;
   label: string;
+  /** Challenges: the agreed start (ISO), shown in the viewer's timezone. */
+  scheduledAt?: string;
 }
 
 export function getMyActiveMatches(): Promise<{ items: ActiveMatchItem[] }> {

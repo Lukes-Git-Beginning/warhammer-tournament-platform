@@ -6,6 +6,7 @@ import {
 } from '../lib/discord-notify.js';
 import { createOpenPlayMatch } from '../lib/create-open-play-match.js';
 import { logQueueActivity } from '../lib/queue-activity.js';
+import { nextMidnightIn } from '../lib/site-time.js';
 import {
   QUEUE_KEY,
   JOINED_AT_KEY,
@@ -204,7 +205,7 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
 
         const user = await fastify.prisma.user.findFirst({
           where: { discord_id: discordId, deleted_at: null },
-          select: { id: true },
+          select: { id: true, timezone: true },
         });
         if (!user) return reply.code(200).send(ephemeral('You need to log in at rizzotto.gg first.'));
 
@@ -213,9 +214,9 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
         if (duration === '1h') { ttl = 3600; label = '1 hour'; }
         else if (duration === '4h') { ttl = 4 * 3600; label = '4 hours'; }
         else {
+          // "Today" ends at midnight in the USER's own timezone (site time if unknown), not UTC.
           const now = new Date();
-          const midnight = new Date(now);
-          midnight.setUTCHours(24, 0, 0, 0);
+          const midnight = nextMidnightIn(user.timezone, now);
           ttl = Math.max(60, Math.floor((midnight.getTime() - now.getTime()) / 1000));
           label = 'the rest of today';
         }

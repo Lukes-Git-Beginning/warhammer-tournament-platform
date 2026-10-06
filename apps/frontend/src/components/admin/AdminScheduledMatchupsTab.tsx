@@ -1,8 +1,8 @@
+import { formatSiteDateTime } from '@/lib/site-time';
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAdminScheduledMatchups, adminCancelScheduledMatchup, type AdminScheduledMatchup } from '@/lib/api';
-import { formatInUserTimezone } from '@/lib/timezone';
 
 type StatusFilter = 'ALL' | 'OPEN' | 'ACCEPTED' | 'EXPIRED' | 'CANCELLED';
 
@@ -106,10 +106,10 @@ export function AdminScheduledMatchupsTab() {
                 <td className="px-4 py-2"><PlayerCell player={m.accepted_by} /></td>
                 <td className="px-4 py-2 text-xs font-mono text-stone-400">{m.format}</td>
                 <td className="px-4 py-2 text-xs text-stone-400 whitespace-nowrap">
-                  {formatInUserTimezone(m.proposed_at, 'dd MMM yyyy HH:mm')}
+                  {formatSiteDateTime(m.proposed_at)}
                 </td>
                 <td className="px-4 py-2 text-xs text-stone-500 whitespace-nowrap">
-                  {formatInUserTimezone(m.expires_at, 'dd MMM HH:mm')}
+                  {formatSiteDateTime(m.expires_at)}
                 </td>
                 <td className="px-4 py-2">
                   <span className={`inline-block rounded border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wider ${STATUS_BADGE[m.status]}`}>

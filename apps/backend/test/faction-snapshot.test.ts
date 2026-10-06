@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { siteDayAsDate } from '../src/lib/site-time.js';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@rizzotto/db';
 import { takeFactionsSnapshot } from '../src/lib/faction-snapshot.js';
@@ -96,9 +97,8 @@ describe('takeFactionsSnapshot', () => {
     const count1 = await takeFactionsSnapshot(prisma, { versionId: TestVersion.id });
     expect(count1).toBe(3);
 
-    // Verify all 3 rows exist with today's UTC date
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    // Verify all 3 rows exist with today's GERMAN calendar date (site time, not UTC)
+    const today = siteDayAsDate(new Date());
 
     const snapshots = await prisma.factionStatsSnapshot.findMany({
       where: { version_id: TestVersion.id },
@@ -107,7 +107,7 @@ describe('takeFactionsSnapshot', () => {
 
     expect(snapshots).toHaveLength(3);
 
-    // Verify snapshot_date matches today (UTC midnight)
+    // Verify snapshot_date matches today (German calendar day, stored as a DATE)
     for (const snap of snapshots) {
       const snapDate = new Date(snap.snapshot_date);
       snapDate.setUTCHours(0, 0, 0, 0);
