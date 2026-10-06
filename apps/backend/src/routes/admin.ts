@@ -2289,6 +2289,9 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         created_at: true,
         player1_id: true,
         player2_id: true,
+        competitor_format: true,
+        // An Open Play match is one battle type, stamped on its games (create-open-play-match).
+        games: { select: { battle_type: true }, orderBy: { game_number: 'asc' }, take: 1 },
       },
       orderBy: { created_at: 'desc' },
     });
@@ -2305,6 +2308,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           status: m.status,
           player1: p1 ? { id: p1.id, name: p1.username } : null,
           player2: p2 ? { id: p2.id, name: p2.username } : null,
+          format: m.competitor_format,
+          battleType: m.games[0]?.battle_type ?? null,
           createdAt: m.created_at,
         };
       }),

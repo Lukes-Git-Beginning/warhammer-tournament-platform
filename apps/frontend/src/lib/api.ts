@@ -3359,6 +3359,8 @@ export interface AdminOpenPlayMatch {
   status: string;
   player1: { id: string; name: string } | null;
   player2: { id: string; name: string } | null;
+  format: 'ONE_V_ONE' | 'TWO_V_TWO';
+  battleType: BattleType | null;
   createdAt: string;
 }
 

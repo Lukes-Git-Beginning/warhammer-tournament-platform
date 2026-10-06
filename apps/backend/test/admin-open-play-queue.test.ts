@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { prisma } from '@rizzotto/db';
 import { QUEUE_KEY, QUEUE_PREFS_KEY } from '../src/lib/matchmaking-tick.js';
+import { createOpenPlayMatch } from '../src/lib/create-open-play-match.js';
 
 const ADMIN_ID = 'a91a0000-0000-0000-0000-000000000001';
 const P1_ID = 'a91a0000-0000-0000-0000-000000000002';
@@ -37,6 +38,7 @@ afterAll(async () => {
 });
 
 async function cleanup() {
+  await prisma.match.deleteMany({ where: { type: 'OPEN_PLAY', player1_id: { in: [...USER_IDS, TEAM_ID] } } });
   await prisma.team.deleteMany({ where: { id: TEAM_ID } });
   await prisma.user.deleteMany({ where: { id: { in: USER_IDS } } });
   await app.redis.del(QUEUE_KEY, QUEUE_PREFS_KEY);
@@ -101,5 +103,22 @@ describe('GET /api/admin/open-play/queue', () => {
     const res = await getQueue();
     expect(res.statusCode).toBe(200);
     expect(res.json<{ members: unknown[] }>().members).toEqual([]);
+  });
+});
+
+describe('GET /api/admin/open-play/active-matches', () => {
+  it('carries each match\'s battle type and 1v1/2v2 format', async () => {
+    const { matchId: siegeId } = await createOpenPlayMatch(prisma, P1_ID, P2_ID, 'QUEUE', 'SIEGE');
+    const { matchId: duoId } = await createOpenPlayMatch(prisma, TEAM_ID, P2_ID, 'QUEUE', 'CONQUEST', 'TWO_V_TWO');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/admin/open-play/active-matches',
+      cookies: { auth_token: app.jwt.sign({ sub: ADMIN_ID, username: 'QueueAdmin', role: 'ADMIN' }) },
+    });
+    expect(res.statusCode).toBe(200);
+    const { matches } = res.json<{ matches: Array<{ id: string; format: string; battleType: string | null }> }>();
+    expect(matches.find((m) => m.id === siegeId)).toMatchObject({ format: 'ONE_V_ONE', battleType: 'SIEGE' });
+    expect(matches.find((m) => m.id === duoId)).toMatchObject({ format: 'TWO_V_TWO', battleType: 'CONQUEST' });
   });
 });

@@ -2,7 +2,20 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { getAdminStats, getAdminOpenPlayQueue, getAdminOpenPlayActiveMatches, getAdminScheduledMatchups, type AdminStats, type BattleType } from '@/lib/api';
 
-const QUEUE_BATTLE_TYPE_LABEL: Record<BattleType, string> = { DOMINATION: 'Domination', CONQUEST: 'Conquest', SIEGE: 'Siege' };
+const BATTLE_TYPE_LABEL: Record<BattleType, string> = { DOMINATION: 'Domination', CONQUEST: 'Conquest', SIEGE: 'Siege' };
+
+/** Open Play flags shared by the Queue and Active Matches panels. */
+function BattleTypeChip({ battleType }: { battleType: BattleType }) {
+  return (
+    <span className="rounded bg-stone-800 px-1.5 py-0.5 text-[10px] font-medium text-stone-400">
+      {BATTLE_TYPE_LABEL[battleType]}
+    </span>
+  );
+}
+
+function TwoVTwoTag() {
+  return <span className="rounded bg-sky-900/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">2v2</span>;
+}
 
 interface KpiCardProps {
   label: string;
@@ -97,14 +110,8 @@ export function StatsDashboard() {
                 <li key={m.id} className="flex flex-wrap items-center gap-2 text-sm text-stone-300">
                   <span className="text-xs text-stone-600 w-4 text-right">{i + 1}.</span>
                   <span>{m.username}</span>
-                  {m.format === 'TWO_V_TWO' && (
-                    <span className="rounded bg-sky-900/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">2v2</span>
-                  )}
-                  {m.battleTypes.map((bt) => (
-                    <span key={bt} className="rounded bg-stone-800 px-1.5 py-0.5 text-[10px] font-medium text-stone-400">
-                      {QUEUE_BATTLE_TYPE_LABEL[bt]}
-                    </span>
-                  ))}
+                  {m.format === 'TWO_V_TWO' && <TwoVTwoTag />}
+                  {m.battleTypes.map((bt) => <BattleTypeChip key={bt} battleType={bt} />)}
                 </li>
               ))}
             </ol>
@@ -120,8 +127,12 @@ export function StatsDashboard() {
             <ul className="space-y-1.5">
               {matchesData.matches.map((m) => (
                 <li key={m.id} className="flex items-center justify-between gap-2 text-sm">
-                  <span className="text-stone-300">
-                    {m.player1?.name ?? '?'} <span className="text-stone-600">vs</span> {m.player2?.name ?? '?'}
+                  <span className="flex flex-wrap items-center gap-2 text-stone-300">
+                    <span>
+                      {m.player1?.name ?? '?'} <span className="text-stone-600">vs</span> {m.player2?.name ?? '?'}
+                    </span>
+                    {m.format === 'TWO_V_TWO' && <TwoVTwoTag />}
+                    {m.battleType && <BattleTypeChip battleType={m.battleType} />}
                   </span>
                   <Link
                     to="/matches/$matchId"
