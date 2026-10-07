@@ -746,6 +746,7 @@ export interface ChampionshipFieldEntry {
   rsvpByManager?: boolean; // availability phase only: set by a host/staff on their behalf
   status?: string; // seeded phase only
   inField: boolean;
+  reserve?: boolean; // seeded phase only: AVAILABLE but outside the field, can be promoted before the start
 }
 export interface ChampionshipFieldView {
   phase: ChampionshipFieldPhase;
@@ -757,6 +758,8 @@ export interface ChampionshipFieldView {
   entries: ChampionshipFieldEntry[];
   viewerIsInvitee: boolean;
   viewerRsvp: RsvpValue | null;
+  /** Seeded phase only: field slots freed by a drop that no reserve has taken yet. */
+  freeSlots?: number;
 }
 
 /** The phase-aware field view for a final's tournament page (preview / availability / seeded). */
@@ -778,6 +781,18 @@ export function rsvpChampionship(slug: string, available: boolean): Promise<{ rs
 /** Staff / host of the final: set an invitee's RSVP on their behalf (DM'd), or reset it to pending. */
 export function setChampionshipInviteRsvp(slug: string, competitorId: string, rsvp: RsvpValue): Promise<{ rsvp: RsvpValue }> {
   return apiFetch<{ rsvp: RsvpValue }>(`/api/championships/${slug}/invites/${competitorId}/rsvp`, { method: 'POST', body: JSON.stringify({ rsvp }) });
+}
+
+/**
+ * Staff / host of the final, after seeding and before the start: replace a finalist with the next
+ * reserve (`dropCompetitorId`), and/or promote a chosen reserve (`promoteCompetitorId`) into a slot
+ * freed by an earlier drop.
+ */
+export function promoteChampionshipReserve(
+  slug: string,
+  body: { dropCompetitorId?: string; promoteCompetitorId?: string },
+): Promise<{ promoted: { competitorId: string; userId: string; seed: number }; dropped: { competitorId: string; userId: string } | null }> {
+  return apiFetch(`/api/championships/${slug}/promote-reserve`, { method: 'POST', body: JSON.stringify(body) });
 }
 
 /** A 2v2 team on a board (name + member avatars). */

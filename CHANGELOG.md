@@ -7,8 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 ## [2.17.0] — 2026-10-07
 
+### Added
+- **Finals now keep a reserve list.** After the field of a Monthly Ladder Invitational or Quarterly Final is set, everyone who confirmed their availability but just missed the cut stays listed as a reserve, in rank order.
+- **If a finalist cancels before the final starts, the hosts can bring in the next reserve.** The new player takes their place in the field, gets a message with their seed, and the seeds are re-assigned by rank so the strongest players still meet last.
+- **Players who dropped out of a final stay visible in the field list** as "dropped" instead of disappearing.
+- **Hosts get a heads-up when a finalist drops and a reserve is waiting.**
+
 ### Changed
 - **Open Play now follows the Standard Ruleset's banned factions.** A banned faction is greyed out in the faction pick and cannot be chosen in Open Play matches. Undead Legions is banned in Open Play. Tournaments are unaffected: hosts still decide whether to use the Standard Rules and which factions to exclude.
+
+### Fixed
+- **A finalist who dropped out can no longer slip back into the field** when the field is set again. Once a final is seeded, changes go through the reserve list.
 
 ## [2.16.0] — 2026-10-07
 

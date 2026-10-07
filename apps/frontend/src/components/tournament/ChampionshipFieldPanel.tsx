@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import {
   getChampionshipField,
   openChampionshipAvailability,
+  promoteChampionshipReserve,
   rsvpChampionship,
   seedChampionship,
   setChampionshipInviteRsvp,
@@ -70,12 +71,26 @@ export function ChampionshipFieldPanel({
     onError: (e: Error) => setError(e.message),
   });
 
+  const promoteMut = useMutation({
+    mutationFn: (v: { dropCompetitorId?: string; promoteCompetitorId?: string; label: string }) =>
+      promoteChampionshipReserve(slug, { dropCompetitorId: v.dropCompetitorId, promoteCompetitorId: v.promoteCompetitorId }),
+    onSuccess: (r, v) => {
+      setError(null);
+      setNotice(`${v.label} (seeded #${r.promoted.seed}). The field was re-seeded by rank and they got a DM.`);
+      invalidate();
+    },
+    onError: (e: Error) => { setNotice(null); setError(e.message); },
+  });
+
   if (isLoading || !data) return null;
 
   const isLadder = data.kind === 'MONTHLY_LADDER';
   const title = isLadder ? 'Monthly Ladder Invitational' : 'Quarterly Final';
   const availableCount = data.entries.filter((e) => e.rsvp === 'AVAILABLE').length;
-  const busy = rsvpMut.isPending || openMut.isPending || seedMut.isPending || managerRsvpMut.isPending;
+  const busy = rsvpMut.isPending || openMut.isPending || seedMut.isPending || managerRsvpMut.isPending || promoteMut.isPending;
+  const reserveEntries = data.entries.filter((e) => e.reserve);
+  const nextReserve = reserveEntries[0];
+  const freeSlots = data.freeSlots ?? 0;
 
   const setFor = (e: ChampionshipFieldEntry, rsvp: 'AVAILABLE' | 'DECLINED') => {
     const msg = rsvp === 'DECLINED'
@@ -88,7 +103,44 @@ export function ChampionshipFieldPanel({
   const resetFor = (e: ChampionshipFieldEntry) =>
     managerRsvpMut.mutate({ competitorId: e.competitorId, rsvp: 'PENDING' });
   const showManagerControls = canManage && data.phase === 'AVAILABILITY';
+  const showReserveControls = canManage && data.phase === 'SEEDED';
   const linkCls = 'text-xs underline disabled:opacity-50';
+
+  // Seeded phase: "Replace" swaps a finalist for the best-ranked reserve in one step (the common
+  // case: someone cancels). "Promote" fills a slot an earlier drop left open, so it is only enabled
+  // while a slot is free. Both re-seed the field by rank.
+  const replaceWithReserve = (e: ChampionshipFieldEntry) => {
+    if (!nextReserve) return;
+    if (window.confirm(`Replace ${e.username} with ${nextReserve.username} (next reserve, rank ${nextReserve.rank})? ${e.username} is removed from the field, ${nextReserve.username} gets a DM, and seeds are re-assigned by rank.`)) {
+      promoteMut.mutate({ dropCompetitorId: e.competitorId, label: `${nextReserve.username} replaced ${e.username}` });
+    }
+  };
+  const promoteReserve = (e: ChampionshipFieldEntry) => {
+    if (window.confirm(`Promote ${e.username} (reserve, rank ${e.rank}) into the open slot? They get a DM and seeds are re-assigned by rank.`)) {
+      promoteMut.mutate({ promoteCompetitorId: e.competitorId, label: `${e.username} promoted` });
+    }
+  };
+  const reserveActionFor = (e: ChampionshipFieldEntry): ReactNode => {
+    if (e.reserve) {
+      return (
+        <button type="button" disabled={busy || freeSlots === 0} onClick={() => promoteReserve(e)}
+          title={freeSlots === 0 ? 'The field is full. Replace a finalist first.' : 'Move this reserve into the open slot'}
+          className={`${linkCls} text-emerald-300/80 hover:text-emerald-200`}>
+          Promote
+        </button>
+      );
+    }
+    if (e.inField && nextReserve) {
+      return (
+        <button type="button" disabled={busy} onClick={() => replaceWithReserve(e)}
+          title="Remove this player and bring in the next reserve"
+          className={`${linkCls} text-red-300/80 hover:text-red-200`}>
+          Replace with next reserve
+        </button>
+      );
+    }
+    return null;
+  };
   const managerActionFor = (e: ChampionshipFieldEntry): ReactNode => (
     <span className="flex gap-2">
       {e.rsvp !== 'AVAILABLE' && (
@@ -183,14 +235,30 @@ export function ChampionshipFieldPanel({
         </div>
       )}
 
+      {showReserveControls && freeSlots > 0 && (
+        <p className="mb-3 rounded bg-amber-900/30 px-3 py-2 text-sm text-amber-200">
+          {freeSlots} field slot{freeSlots === 1 ? ' is' : 's are'} open after a drop.{' '}
+          {nextReserve ? 'Promote a reserve below.' : 'There is no reserve left to fill it.'}
+        </p>
+      )}
+      {showReserveControls && freeSlots === 0 && !nextReserve && (
+        <p className="mb-3 text-xs text-rizzotto-stone-400">No reserve left. A dropped player can't be replaced.</p>
+      )}
+
       <ol className="divide-y divide-rizzotto-iron-700/70">
-        {data.entries.map((e) => (
-          <FieldRow
-            key={e.competitorId}
-            entry={e}
-            phase={data.phase}
-            managerAction={showManagerControls ? managerActionFor(e) : null}
-          />
+        {data.entries.map((e, i) => (
+          <Fragment key={e.competitorId}>
+            {e.reserve && !data.entries[i - 1]?.reserve && (
+              <li className="pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-rizzotto-stone-400">
+                Reserve (next in line, by rank)
+              </li>
+            )}
+            <FieldRow
+              entry={e}
+              phase={data.phase}
+              managerAction={showManagerControls ? managerActionFor(e) : showReserveControls ? reserveActionFor(e) : null}
+            />
+          </Fragment>
         ))}
         {data.entries.length === 0 && (
           <li className="py-3 text-sm text-rizzotto-stone-400">
@@ -218,9 +286,10 @@ function FieldRow({
   phase: ChampionshipFieldView['phase'];
   managerAction?: ReactNode;
 }) {
-  const dimmed = phase === 'AVAILABILITY' && !entry.inField;
+  const dropped = phase === 'SEEDED' && entry.status === 'WITHDREW';
+  const dimmed = (phase === 'AVAILABILITY' && !entry.inField) || dropped || (phase === 'SEEDED' && !!entry.reserve);
   return (
-    <li className={`flex items-center gap-3 py-2 ${dimmed ? 'opacity-60' : ''}`}>
+    <li className={`flex items-center gap-3 py-2 ${dimmed ? 'opacity-60' : ''} ${dropped ? 'line-through' : ''}`}>
       <span className="w-6 text-right text-sm tabular-nums text-rizzotto-stone-400">{entry.rank}</span>
       {entry.avatarUrl ? (
         <img src={entry.avatarUrl} alt="" className="h-7 w-7 rounded-full" />
@@ -244,6 +313,8 @@ function FieldRow({
 
 function RowBadge({ entry, phase }: { entry: ChampionshipFieldEntry; phase: ChampionshipFieldView['phase'] }) {
   if (phase === 'SEEDED') {
+    if (entry.reserve) return <Badge tone="stone">reserve</Badge>;
+    if (entry.status === 'WITHDREW') return <span className="no-underline"><Badge tone="red">dropped</Badge></span>;
     if (entry.status === 'DISQUALIFIED') return <Badge tone="red">DQ</Badge>;
     return <Badge tone="green">seeded #{entry.rank}</Badge>;
   }
