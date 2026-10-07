@@ -5,6 +5,18 @@ import { resolveCompetitors } from './competitors.js';
 import { notifyAvailabilityPing, notifyMatchFoundWithButtons } from './discord-notify.js';
 import { logQueueActivity } from './queue-activity.js';
 import { slotsActiveAtWhere } from './availability-time.js';
+import {
+  parseQueuePrefs,
+  findCompatiblePair,
+  buildOffers,
+  type QueueCompetitorFormat,
+  type QueueEntry,
+  type QueueOffer,
+} from './queue-matching.js';
+import { getStoredQueuePrefsMany, resolveStoredActor, toQueuePrefs } from './queue-prefs.js';
+
+// The pure matching rules live in queue-matching.ts; re-exported so existing imports keep working.
+export * from './queue-matching.js';
 
 // -- Redis keys --------------------------------------------------------------
 // Queue is a plain FIFO list; joined_at tracks real time-in-queue (used by the
@@ -14,59 +26,6 @@ export const JOINED_AT_KEY = 'rizzotto:queue:open_play:joined_at';
 // Per-queuer preferences (battle types the player will accept + team size). A single FIFO
 // queue still runs "as always"; the tick only pairs two queuers whose preferences overlap.
 export const QUEUE_PREFS_KEY = 'rizzotto:queue:open_play:prefs';
-
-export const ALL_BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'SIEGE'] as const;
-export type QueueBattleType = (typeof ALL_BATTLE_TYPES)[number];
-export type QueueCompetitorFormat = 'ONE_V_ONE' | 'TWO_V_TWO';
-
-export interface QueuePrefs {
-  format: QueueCompetitorFormat;
-  battleTypes: QueueBattleType[];
-}
-
-export interface QueueEntry {
-  id: string;
-  prefs: QueuePrefs;
-}
-
-/** Parse a stored prefs value; a missing/invalid one defaults to 1v1 across all battle types
- *  (so legacy joins — Discord buttons, availability — still match anyone). */
-export function parseQueuePrefs(raw: string | null | undefined): QueuePrefs {
-  if (raw) {
-    try {
-      const p = JSON.parse(raw) as { format?: unknown; battleTypes?: unknown };
-      const format: QueueCompetitorFormat = p.format === 'TWO_V_TWO' ? 'TWO_V_TWO' : 'ONE_V_ONE';
-      const battleTypes = Array.isArray(p.battleTypes)
-        ? (p.battleTypes.filter((b): b is QueueBattleType =>
-            (ALL_BATTLE_TYPES as readonly string[]).includes(b as string)) as QueueBattleType[])
-        : [];
-      if (battleTypes.length > 0) return { format, battleTypes };
-    } catch {
-      /* fall through to default */
-    }
-  }
-  return { format: 'ONE_V_ONE', battleTypes: [...ALL_BATTLE_TYPES] };
-}
-
-/**
- * FIFO-fair compatible pairing: the oldest queuer is matched with the earliest later queuer
- * of the same team size whose battle-type selection overlaps. The chosen battle type is the
- * oldest queuer's first preference that the partner also accepts. Pure — unit-testable.
- */
-export function findCompatiblePair(
-  entries: QueueEntry[],
-): { a: string; b: string; battleType: QueueBattleType; format: QueueCompetitorFormat } | null {
-  for (let i = 0; i < entries.length; i++) {
-    for (let j = i + 1; j < entries.length; j++) {
-      const A = entries[i]!;
-      const B = entries[j]!;
-      if (A.prefs.format !== B.prefs.format) continue;
-      const battleType = A.prefs.battleTypes.find((bt) => B.prefs.battleTypes.includes(bt));
-      if (battleType) return { a: A.id, b: B.id, battleType, format: A.prefs.format };
-    }
-  }
-  return null;
-}
 
 // Wait-cycle matchmaking state (see runMatchmakingTick).
 const HOLD_KEY = 'rizzotto:mm:hold';           // global 60s hold after a DM wave
@@ -207,7 +166,7 @@ export async function runMatchmakingTick(fastify: FastifyInstance): Promise<void
 
     const rateLimited = await redis.exists(RATELIMIT_KEY);
     if (!rateLimited) {
-      await maybeSendDmWave(fastify, queueLen);
+      await maybeSendDmWave(fastify);
     }
 
     const holdActive = await redis.exists(HOLD_KEY);
@@ -227,7 +186,7 @@ export async function runMatchmakingTick(fastify: FastifyInstance): Promise<void
  * a slow or failed DM can never delay the hold or leak a duplicate wave; the DMs
  * themselves are best-effort (fire-and-forget).
  */
-async function maybeSendDmWave(fastify: FastifyInstance, queueLen: number): Promise<void> {
+async function maybeSendDmWave(fastify: FastifyInstance): Promise<void> {
   const redis = fastify.redis!;
   const prisma = fastify.prisma;
 
@@ -317,14 +276,33 @@ async function maybeSendDmWave(fastify: FastifyInstance, queueLen: number): Prom
   const eligible = selectEligibleRecipients(candidates, { queued, contacted, snoozed, inActiveMatch });
   if (eligible.length === 0) return;
 
-  await redis.sadd(CONTACTED_KEY, ...eligible.map((e) => e.id));
+  // Only ping players for whom at least one waiting queue entry actually fits THEIR saved queue
+  // settings (battle type, series length except Siege, team size). Each DM lists those offers.
+  const queueIds = queuedMembers;
+  const waitingPrefsRaw = queueIds.length > 0 ? await redis.hmget(QUEUE_PREFS_KEY, ...queueIds) : [];
+  const waiting: QueueEntry[] = queueIds.map((id, i) => ({ id, prefs: parseQueuePrefs(waitingPrefsRaw[i]) }));
+  const storedByUser = await getStoredQueuePrefsMany(prisma, eligible.map((e) => e.id));
+
+  const targets: { id: string; discordId: string; offers: QueueOffer[]; matching: number }[] = [];
+  for (const e of eligible) {
+    const stored = storedByUser.get(e.id)!;
+    // 2v2 only for a captain of a valid active team; otherwise the 1v1 fallback (as on join).
+    const actor = await resolveStoredActor(prisma, e.id, stored);
+    const prefs = toQueuePrefs(stored, actor.format);
+    const offers = buildOffers(prefs, waiting);
+    if (offers.length === 0) continue;
+    const matching = waiting.filter((w) => buildOffers(prefs, [w]).length > 0).length;
+    targets.push({ id: e.id, discordId: e.discord_id!, offers, matching });
+  }
+  if (targets.length === 0) return;
+
+  await redis.sadd(CONTACTED_KEY, ...targets.map((t) => t.id));
   await redis.expire(CONTACTED_KEY, CONTACTED_TTL);
   await redis.set(RATELIMIT_KEY, '1', 'EX', RATELIMIT_TTL);
   await redis.set(HOLD_KEY, '1', 'EX', HOLD_TTL);
 
-  const recipients = eligible.map((e) => e.discord_id!);
   setImmediate(() =>
-    void Promise.allSettled(recipients.map((discordId) => notifyAvailabilityPing(discordId, queueLen))),
+    void Promise.allSettled(targets.map((t) => notifyAvailabilityPing(t.discordId, t.matching, t.offers))),
   );
 }
 
@@ -346,7 +324,7 @@ async function drainQueue(fastify: FastifyInstance): Promise<void> {
     const entries: QueueEntry[] = ids.map((id, i) => ({ id, prefs: parseQueuePrefs(prefsRaw[i]) }));
     const pair = findCompatiblePair(entries);
     if (!pair) break; // no compatible pair right now
-    const { a: p1Id, b: p2Id, battleType, format } = pair;
+    const { a: p1Id, b: p2Id, battleType, format, matchFormat } = pair;
 
     // Claim both before the (slower) match creation so a parallel drain can't double-book them.
     await redis.lrem(QUEUE_KEY, 1, p1Id);
@@ -355,7 +333,7 @@ async function drainQueue(fastify: FastifyInstance): Promise<void> {
     let matchId: string;
     let mapName: string | null;
     try {
-      ({ matchId, mapName } = await createOpenPlayMatch(prisma, p1Id, p2Id, 'QUEUE', battleType, format));
+      ({ matchId, mapName } = await createOpenPlayMatch(prisma, p1Id, p2Id, 'QUEUE', battleType, format, matchFormat));
     } catch (err) {
       // Requeue front-first so nobody is dropped, then stop this drain.
       await redis.lpush(QUEUE_KEY, p2Id, p1Id);
@@ -370,7 +348,7 @@ async function drainQueue(fastify: FastifyInstance): Promise<void> {
 }
 
 /** Best-effort post-match side effects: DM both players and log the activity. */
-async function announceMatch(
+export async function announceMatch(
   fastify: FastifyInstance,
   matchId: string,
   mapName: string | null,

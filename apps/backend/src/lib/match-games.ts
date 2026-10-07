@@ -345,12 +345,17 @@ export async function finalizeGameResult(
   if (game.match.tournament) {
     format = resolveMatchFormat(game.match.tournament, game.match.phase ?? null, game.match.match_format);
   } else {
-    // Open Play: format comes from the ScheduledMatchup (queue matches default to BO1)
-    const matchup = await fastify.prisma.scheduledMatchup.findUnique({
-      where: { match_id: game.match_id },
-      select: { format: true },
-    });
-    format = (matchup?.format ?? 'BO1') as 'BO1' | 'BO2' | 'BO3' | 'BO5';
+    // Open Play: a queue match carries its series length on Match.match_format (Bo1/Bo3, Siege Bo2);
+    // otherwise it comes from the ScheduledMatchup (challenges), defaulting to BO1.
+    if (game.match.match_format) {
+      format = game.match.match_format as 'BO1' | 'BO2' | 'BO3' | 'BO5';
+    } else {
+      const matchup = await fastify.prisma.scheduledMatchup.findUnique({
+        where: { match_id: game.match_id },
+        select: { format: true },
+      });
+      format = (matchup?.format ?? 'BO1') as 'BO1' | 'BO2' | 'BO3' | 'BO5';
+    }
   }
   const winsNeeded = format === 'BO5' ? 3 : format === 'BO3' || format === 'BO2' ? 2 : 1;
   const maxGames = format === 'BO5' ? 5 : format === 'BO3' ? 3 : format === 'BO2' ? 2 : 1;

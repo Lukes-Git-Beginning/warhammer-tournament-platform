@@ -8,6 +8,7 @@
 import { prisma } from '@rizzotto/db';
 import { resolveCompetitors } from './competitors.js';
 import { slotsActiveAtWhere } from './availability-time.js';
+import { encodeOffer, offerBullet, offerLabel, type QueueOffer } from './queue-matching.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
@@ -1554,22 +1555,49 @@ export async function notifyOpponentOfWithdrawal(matchId: string, survivorUserId
 export async function notifyAvailabilityPing(
   discordUserId: string,
   queueSize: number,
+  offers?: QueueOffer[],
 ): Promise<void> {
   const token = getToken();
   if (!token) return;
   try {
     const ch = await openDmChannel(discordUserId);
     if (!ch) return;
+    const snoozeRow = actionRow([
+      button('Snooze 1h',    `av_snooze:1h:${discordUserId}`,    BTN_SECONDARY),
+      button('Snooze 4h',    `av_snooze:4h:${discordUserId}`,    BTN_SECONDARY),
+      button('Snooze Today', `av_snooze:today:${discordUserId}`, BTN_SECONDARY),
+    ]);
+
+    if (offers && offers.length > 0) {
+      // Offers fitting the recipient's saved queue settings; one green button each. Discord allows
+      // 5 buttons per row and 25 in total — offers are already de-duplicated (at most 5 for 1v1).
+      const capped = offers.slice(0, 20);
+      const rows: object[] = [];
+      for (let i = 0; i < capped.length; i += 5) {
+        rows.push(
+          actionRow(
+            capped
+              .slice(i, i + 5)
+              .map((o) => button(`Join: ${offerLabel(o)}`, `av_offer:${discordUserId}:${encodeOffer(o)}`, BTN_SUCCESS)),
+          ),
+        );
+      }
+      const waitingWord = queueSize === 1 ? 'player is' : 'players are';
+      await discordRequest('POST', `/channels/${ch}/messages`, {
+        content:
+          `**${queueSize}** matching ${waitingWord} waiting in the Open Play queue right now — it's a great time to play! 🎮\n` +
+          `Available matches:\n${capped.map((o) => `• ${offerBullet(o)}`).join('\n')}`,
+        components: [...rows.slice(0, 4), snoozeRow],
+      });
+      return;
+    }
+
     const playerWord = queueSize === 1 ? 'player is' : 'players are';
     await discordRequest('POST', `/channels/${ch}/messages`, {
       content: `**${queueSize}** ${playerWord} in the Open Play queue right now — it's a great time to play! 🎮`,
       components: [
-        actionRow([
-          button('Match Now',    `av_join:${discordUserId}`,         BTN_SUCCESS),
-          button('Snooze 1h',    `av_snooze:1h:${discordUserId}`,    BTN_SECONDARY),
-          button('Snooze 4h',    `av_snooze:4h:${discordUserId}`,    BTN_SECONDARY),
-          button('Snooze Today', `av_snooze:today:${discordUserId}`, BTN_SECONDARY),
-        ]),
+        actionRow([button('Match Now', `av_join:${discordUserId}`, BTN_SUCCESS)]),
+        snoozeRow,
       ],
     });
   } catch (err) {

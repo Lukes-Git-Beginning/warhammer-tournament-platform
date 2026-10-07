@@ -12,8 +12,13 @@ import {
   JOINED_AT_KEY,
   JOIN_SCRIPT,
   POP_OLDEST_SCRIPT,
+  QUEUE_PREFS_KEY,
   runMatchmakingTick,
 } from '../lib/matchmaking-tick.js';
+import { decodeOffer } from '../lib/queue-matching.js';
+import { getStoredQueuePrefs, resolveStoredActor, toQueuePrefs } from '../lib/queue-prefs.js';
+import { claimQueueOffer } from '../lib/queue-offer.js';
+import { resolveCompetitors } from '../lib/competitors.js';
 
 const PING = 1;
 const MESSAGE_COMPONENT = 3;
@@ -48,6 +53,21 @@ function ephemeral(content: string) {
   return { type: CHANNEL_MESSAGE_WITH_SOURCE, data: { content, flags: 64 } };
 }
 
+// Discord's deferred-response pattern: acknowledge within 3s (type 5), then PATCH @original.
+function makeDeferredPatch(appId: string, iToken: string) {
+  return async (content: string, components?: object[]) => {
+    try {
+      await fetch(`https://discord.com/api/v10/webhooks/${appId}/${iToken}/messages/@original`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(components ? { content, components } : { content }),
+      });
+    } catch (err) {
+      console.error('[discord-interactions] patch deferred error:', err);
+    }
+  };
+}
+
 // Join the Open Play queue from a Discord interaction (Queue Again / opt-in),
 // run one synchronous matchmaking tick, and report whether a match was found.
 // Caller must have verified fastify.redis is present.
@@ -56,32 +76,37 @@ async function joinQueueViaDiscord(
   userId: string,
 ): Promise<ReturnType<typeof ephemeral>> {
   const redis = fastify.redis!;
+  // Join with the player's STORED queue settings (battle types, Bo1/Bo3, 1v1/2v2 + team). A stored
+  // 2v2 team that is no longer valid falls back to 1v1 for this join only.
+  const stored = await getStoredQueuePrefs(fastify.prisma, userId);
+  const actor = await resolveStoredActor(fastify.prisma, userId, stored);
+  const queueId = actor.queueId;
+
   const joined = (await redis.eval(
-    JOIN_SCRIPT, 2, QUEUE_KEY, JOINED_AT_KEY, userId, String(Date.now()),
+    JOIN_SCRIPT, 2, QUEUE_KEY, JOINED_AT_KEY, queueId, String(Date.now()),
   )) as number;
   if (joined !== 1) return ephemeral("You're already in the queue.");
+  await redis.hset(QUEUE_PREFS_KEY, queueId, JSON.stringify(toQueuePrefs(stored, actor.format)));
 
   await logQueueActivity(fastify.prisma, 'JOIN', userId);
   await runMatchmakingTick(fastify);
 
   // The tick removes matched players from the queue — if we're gone, we matched.
-  const stillQueued = await redis.lpos(QUEUE_KEY, userId);
+  const stillQueued = await redis.lpos(QUEUE_KEY, queueId);
   if (stillQueued === null) {
     const match = await fastify.prisma.match.findFirst({
       where: {
         type: 'OPEN_PLAY',
         status: 'ONGOING',
         deleted_at: null,
-        OR: [{ player1_id: userId }, { player2_id: userId }],
+        OR: [{ player1_id: queueId }, { player2_id: queueId }],
       },
       select: { id: true, player1_id: true, player2_id: true },
       orderBy: { created_at: 'desc' },
     });
     if (match) {
-      const opponentId = match.player1_id === userId ? match.player2_id : match.player1_id;
-      const opponent = opponentId
-        ? await fastify.prisma.user.findUnique({ where: { id: opponentId }, select: { username: true } })
-        : null;
+      const opponentId = match.player1_id === queueId ? match.player2_id : match.player1_id;
+      const opponent = opponentId ? (await resolveCompetitors(fastify.prisma, [opponentId])).get(opponentId) : null;
       const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${match.id}`;
       return ephemeral(`Match found! vs **${opponent?.username ?? 'opponent'}** → ${matchUrl}`);
     }
@@ -234,18 +259,7 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
         if (!actorDiscordId || actorDiscordId !== discordId) return reply.code(200).send(ephemeral('This button is not for you.'));
         if (!fastify.redis) return reply.code(200).send(ephemeral('Queue service is temporarily unavailable.'));
 
-        const { token: iToken, application_id: appId } = interaction;
-        const patchDeferred = async (content: string, components?: object[]) => {
-          try {
-            await fetch(`https://discord.com/api/v10/webhooks/${appId}/${iToken}/messages/@original`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(components ? { content, components } : { content }),
-            });
-          } catch (err) {
-            console.error('[discord-interactions] patch deferred error:', err);
-          }
-        };
+        const patchDeferred = makeDeferredPatch(interaction.application_id, interaction.token);
 
         // Kick off background work before replying so state is captured in the closure.
         const redis = fastify.redis;
@@ -317,6 +331,42 @@ const discordInteractionsRoutes: FastifyPluginAsync = async (fastify) => {
         })());
 
         // Acknowledge immediately — Discord's 3s window is never an issue with this pattern.
+        return reply.code(200).send({ type: 5, data: { flags: 64 } });
+      }
+
+      // av_offer:<actorDiscordId>:<battle type letter>:<format digit>:<team size> — "Join: Conquest
+      // 1v1 Bo1" from the availability DM. Pairs the clicker with a waiting entry that fits exactly
+      // that offer. Never joins the queue and never changes the stored queue settings; if the offer
+      // is gone the player just gets the "nobody in the queue" message and nothing stays behind.
+      if (action === 'av_offer') {
+        const [, actorDiscordId, ...offerParts] = parts;
+        if (!actorDiscordId || actorDiscordId !== discordId) return reply.code(200).send(ephemeral('This button is not for you.'));
+        if (!fastify.redis) return reply.code(200).send(ephemeral('Queue service is temporarily unavailable.'));
+        const offer = decodeOffer(offerParts);
+        if (!offer) return reply.code(200).send(ephemeral('Invalid button.'));
+
+        const patchDeferred = makeDeferredPatch(interaction.application_id, interaction.token);
+        setImmediate(() => void (async () => {
+          try {
+            const user = await fastify.prisma.user.findFirst({
+              where: { discord_id: discordId, deleted_at: null },
+              select: { id: true },
+            });
+            if (!user) { await patchDeferred('You need to log in at rizzotto.gg first.'); return; }
+            const result = await claimQueueOffer(fastify, user.id, offer);
+            if (result.status === 'matched') {
+              const matchUrl = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/matches/${result.matchId}`;
+              await patchDeferred(`Match found! vs **${result.opponentName}** → ${matchUrl}`);
+            } else if (result.status === 'blocked') {
+              await patchDeferred(result.message);
+            } else {
+              await patchDeferred("Nobody's in the queue right now.");
+            }
+          } catch (err) {
+            console.error('[discord-interactions] av_offer error:', err);
+            await patchDeferred('Something went wrong. Please join the queue on rizzotto.gg directly.');
+          }
+        })());
         return reply.code(200).send({ type: 5, data: { flags: 64 } });
       }
 

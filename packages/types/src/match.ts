@@ -171,6 +171,8 @@ export const MatchDetailDtoSchema = z.object({
   player1_faction_id_2: z.string().nullable().optional(),
   player2_faction_id_2: z.string().nullable().optional(),
   counts_for_leaderboard: z.boolean(),
+  // Series length when set explicitly (Open Play queue: Bo1/Bo3, Siege Bo2); null = derived elsewhere.
+  match_format: z.enum(['BO1', 'BO2', 'BO3', 'BO5']).nullable().optional(),
   /** Server-computed: viewer may manage this match's tournament (host, co-host, mod, admin). */
   can_manage: z.boolean().optional(),
   // Enriched relations

@@ -7,17 +7,38 @@ import {
   JOIN_SCRIPT,
   QUEUE_PREFS_KEY,
   ALL_BATTLE_TYPES,
+  ALL_QUEUE_MATCH_FORMATS,
   runMatchmakingTick,
 } from '../lib/matchmaking-tick.js';
+import {
+  findQueueableTeam,
+  getStoredQueuePrefs,
+  resolveStoredActor,
+  saveQueuePrefs,
+  type StoredQueuePrefs,
+} from '../lib/queue-prefs.js';
 
-// Queue join preferences: which battle types the player will accept (multi-select) + team size.
-// For 2v2 the CAPTAIN queues on behalf of their ACTIVE team (team-as-actor, committed duo).
+// Queue join preferences: battle types (multi-select), series lengths (Bo1/Bo3 multi-select) and
+// team size. For 2v2 the CAPTAIN queues on behalf of their ACTIVE team (team-as-actor, committed
+// duo). Every omitted field falls back to the player's STORED settings (UserQueuePref).
 const QueueJoinSchema = z.object({
   battleTypes: z.array(z.enum(ALL_BATTLE_TYPES)).min(1).optional(),
+  matchFormats: z.array(z.enum(ALL_QUEUE_MATCH_FORMATS)).min(1).optional(),
   competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(),
-  // 2v2: which of the captain's active teams to queue. Omitted → the captain's first active team
-  // (back-compat). Must be an ACTIVE team the requester captains.
+  // 2v2: which of the captain's active teams to queue. Omitted → the stored/first valid team.
+  // Must be an ACTIVE team the requester captains.
   teamId: z.string().uuid().optional(),
+  // true = the Open Play page's selection becomes the player's stored settings. Never set by the
+  // Discord availability offers, which join with a one-off restriction.
+  save: z.boolean().optional(),
+});
+
+// PUT body for the stored settings (all four are always sent by the Open Play page).
+const QueuePrefsSchema = z.object({
+  battleTypes: z.array(z.enum(ALL_BATTLE_TYPES)).min(1),
+  matchFormats: z.array(z.enum(ALL_QUEUE_MATCH_FORMATS)).min(1),
+  competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']),
+  teamId: z.string().uuid().nullable(),
 });
 import { getQueueTimeoutRemaining, recordQueueLeave } from '../lib/queue-penalty.js';
 import { cancelOpenPlayMatch } from '../lib/cancel-open-play-match.js';
@@ -41,31 +62,45 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(503).send({ error: 'ServiceUnavailable', message: 'Queue service unavailable', statusCode: 503 });
       }
 
-      const format: 'ONE_V_ONE' | 'TWO_V_TWO' = parsedPrefs.data.competitorFormat ?? 'ONE_V_ONE';
+      // Settings = the request body where given, else the player's stored settings.
+      const body = parsedPrefs.data;
+      const stored = await getStoredQueuePrefs(fastify.prisma, userId);
+      const effective: StoredQueuePrefs = {
+        battleTypes: body.battleTypes ?? stored.battleTypes,
+        matchFormats: body.matchFormats ?? stored.matchFormats,
+        competitorFormat: body.competitorFormat ?? stored.competitorFormat,
+        teamId: body.teamId ?? (body.competitorFormat === 'TWO_V_TWO' ? null : stored.teamId),
+      };
 
       // The queued id is the ACTOR: the user for 1v1, the captain's ACTIVE team for 2v2
       // (team-as-actor — the captain queues the committed duo).
       let queueId = userId;
-      if (format === 'TWO_V_TWO') {
-        const requestedTeamId = parsedPrefs.data.teamId;
-        const team = await fastify.prisma.team.findFirst({
-          where: { captain_id: userId, status: 'ACTIVE', ...(requestedTeamId ? { id: requestedTeamId } : {}) },
-          select: { id: true, members: { select: { accepted_at: true } } },
-        });
-        if (!team) {
-          const message = requestedTeamId
-            ? 'That team is not an active team you captain'
-            : 'You must be the captain of an active team to queue for 2v2';
+      let format: 'ONE_V_ONE' | 'TWO_V_TWO' = 'ONE_V_ONE';
+      let fellBackTo1v1 = false;
+      if (body.competitorFormat === 'TWO_V_TWO') {
+        // Explicit 2v2 request: an invalid team is an error the player has to see.
+        const teamId = await findQueueableTeam(fastify.prisma, userId, body.teamId);
+        if (!teamId) {
+          const message = body.teamId
+            ? 'That team is not an active team you captain with two accepted members'
+            : 'You must be the captain of an active team with two accepted members to queue for 2v2';
           return reply.code(400).send({ error: 'BadRequest', message, statusCode: 400 });
         }
-        if (team.members.filter((m) => m.accepted_at !== null).length < 2) {
-          return reply.code(400).send({ error: 'BadRequest', message: 'Your team needs two accepted members to queue', statusCode: 400 });
-        }
-        queueId = team.id;
+        queueId = teamId;
+        format = 'TWO_V_TWO';
+        effective.teamId = teamId;
+      } else if (effective.competitorFormat === 'TWO_V_TWO') {
+        // 2v2 came from the stored settings: if the team is no longer valid, play 1v1 this time
+        // (the stored preference is left untouched).
+        const actor = await resolveStoredActor(fastify.prisma, userId, effective);
+        queueId = actor.queueId;
+        format = actor.format;
+        fellBackTo1v1 = actor.fellBackTo1v1;
       }
       const prefs = {
         format,
-        battleTypes: parsedPrefs.data.battleTypes ?? [...ALL_BATTLE_TYPES],
+        battleTypes: effective.battleTypes,
+        matchFormats: effective.matchFormats,
       };
 
       // #14: reject a re-join while the queue-abuse cooldown is still running.
@@ -109,6 +144,9 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       // Record the actor's battle-type / team-size selection for preference-aware matching.
       await fastify.redis.hset(QUEUE_PREFS_KEY, queueId, JSON.stringify(prefs));
 
+      // Open Play page: this selection becomes the player's stored settings.
+      if (body.save) await saveQueuePrefs(fastify.prisma, userId, effective);
+
       await logQueueActivity(fastify.prisma, 'JOIN', userId);
       await runMatchmakingTick(fastify);
 
@@ -125,11 +163,41 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
           select: { id: true },
           orderBy: { created_at: 'desc' },
         });
-        if (match) return reply.code(200).send({ matched: true, match_id: match.id });
+        if (match) return reply.code(200).send({ matched: true, match_id: match.id, fellBackTo1v1 });
       }
 
       const position = await fastify.redis.llen(QUEUE_KEY);
-      return reply.code(200).send({ matched: false, position });
+      return reply.code(200).send({ matched: false, position, fellBackTo1v1 });
+    },
+  );
+
+  // GET /api/open-play/queue/prefs — the player's stored queue settings (defaults for new players).
+  fastify.get(
+    '/api/open-play/queue/prefs',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      return reply.code(200).send(await getStoredQueuePrefs(fastify.prisma, request.user.sub));
+    },
+  );
+
+  // PUT /api/open-play/queue/prefs — replace the stored settings. They apply to every way into the
+  // queue (Open Play page, "Queue again", landing page, Discord buttons) until changed again.
+  fastify.put(
+    '/api/open-play/queue/prefs',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const parsed = QueuePrefsSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+      }
+      const prefs: StoredQueuePrefs = {
+        battleTypes: [...new Set(parsed.data.battleTypes)],
+        matchFormats: [...new Set(parsed.data.matchFormats)],
+        competitorFormat: parsed.data.competitorFormat,
+        teamId: parsed.data.teamId,
+      };
+      await saveQueuePrefs(fastify.prisma, request.user.sub, prefs);
+      return reply.code(200).send(prefs);
     },
   );
 

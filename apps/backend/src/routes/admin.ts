@@ -2280,6 +2280,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         isTeam: c.type === 'TEAM',
         format: prefs.format,
         battleTypes: prefs.battleTypes,
+        matchFormats: prefs.matchFormats,
       }];
     });
     return reply.code(200).send({ members });

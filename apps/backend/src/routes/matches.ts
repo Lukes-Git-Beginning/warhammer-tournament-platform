@@ -379,6 +379,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         scheduled_time: true,
         played_at: true,
         score: true,
+        match_format: true,
         counts_for_leaderboard: true,
         tournament: { select: { id: true, slug: true } },
         player1_faction: { select: { id: true, name: true, icon_url: true } },
@@ -452,6 +453,8 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       scheduled_time: match.scheduled_time?.toISOString() ?? null,
       played_at: match.played_at?.toISOString() ?? null,
       score: match.score ?? null,
+      // Series length when set explicitly (Open Play queue: Bo1/Bo3, Siege Bo2); null = derived elsewhere.
+      match_format: match.match_format ?? null,
       counts_for_leaderboard: match.counts_for_leaderboard,
       // Raw ID fields — backwards compatible
       player1_id: match.player1_id,

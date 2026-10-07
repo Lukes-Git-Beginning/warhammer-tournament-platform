@@ -259,7 +259,7 @@ describe('runMatchmakingTick', () => {
 
     await runMatchmakingTick(fastify);
 
-    expect(notifyAvailabilityPing).toHaveBeenCalledWith(u.discord_id, expect.any(Number));
+    expect(notifyAvailabilityPing).toHaveBeenCalledWith(u.discord_id, expect.any(Number), expect.any(Array));
     expect(await redis.exists(HOLD_KEY)).toBe(1);
     expect(await redis.exists(RATELIMIT_KEY)).toBe(1);
     expect(await redis.sismember(CONTACTED_KEY, u.id)).toBe(1);
@@ -275,7 +275,7 @@ describe('runMatchmakingTick', () => {
 
     await runMatchmakingTick(fastify);
 
-    expect(notifyAvailabilityPing).not.toHaveBeenCalledWith(u.discord_id, expect.any(Number));
+    expect(notifyAvailabilityPing).not.toHaveBeenCalledWith(u.discord_id, expect.any(Number), expect.any(Array));
   });
 
   // A user with MATCHMAKING availability for the current hour on their own clock
