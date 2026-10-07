@@ -2612,20 +2612,25 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/api/admin/scheduled-matchups', async (request, reply) => {
     const parsed = z.object({
       status: z.enum(['OPEN', 'ACCEPTED', 'EXPIRED', 'CANCELLED']).optional(),
+      // upcoming=true: accepted challenges whose match hasn't been created yet (soonest first) —
+      // the same set the dashboard's "Scheduled (Accepted)" KPI counts. Accepted challenges keep
+      // status ACCEPTED after they're played, so status alone also lists long-finished ones.
+      upcoming: z.enum(['true', 'false']).optional(),
       page: z.coerce.number().int().min(1).default(1),
     }).safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
     const { status, page } = parsed.data;
+    const upcoming = parsed.data.upcoming === 'true';
     const PAGE_SIZE = 30;
     const skip = (page - 1) * PAGE_SIZE;
 
-    const where = status ? { status } : {};
+    const where = upcoming ? { status: 'ACCEPTED' as const, match_id: null } : status ? { status } : {};
     const [matchups, total] = await Promise.all([
       fastify.prisma.scheduledMatchup.findMany({
         where,
-        orderBy: { created_at: 'desc' },
+        orderBy: upcoming ? { proposed_at: 'asc' } : { created_at: 'desc' },
         skip,
         take: PAGE_SIZE,
         select: {

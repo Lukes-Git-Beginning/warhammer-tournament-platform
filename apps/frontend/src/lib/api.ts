@@ -3307,10 +3307,13 @@ export type AdminScheduledMatchup = {
 
 export function getAdminScheduledMatchups(params?: {
   status?: 'OPEN' | 'ACCEPTED' | 'EXPIRED' | 'CANCELLED';
+  /** Accepted challenges not yet started (soonest first) — matches the dashboard KPI. */
+  upcoming?: boolean;
   page?: number;
 }): Promise<{ matchups: AdminScheduledMatchup[]; total: number; page: number }> {
   const q = new URLSearchParams();
   if (params?.status) q.set('status', params.status);
+  if (params?.upcoming) q.set('upcoming', 'true');
   if (params?.page) q.set('page', String(params.page));
   const qs = q.toString();
   return apiFetch(`/api/admin/scheduled-matchups${qs ? `?${qs}` : ''}`);

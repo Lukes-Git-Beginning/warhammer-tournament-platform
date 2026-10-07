@@ -14,6 +14,17 @@ function BattleTypeChip({ battleType }: { battleType: BattleType }) {
   );
 }
 
+/** A competitor name that opens its profile: a team page for 2v2, else the user profile. */
+function ProfileLink({ id, name, isTeam }: { id: string | null | undefined; name: string; isTeam?: boolean }) {
+  if (!id) return <>{name}</>;
+  const cls = 'hover:text-rizzotto-gold-400 hover:underline';
+  return isTeam ? (
+    <Link to="/teams/$id" params={{ id }} className={cls}>{name}</Link>
+  ) : (
+    <Link to="/users/$id" params={{ id }} className={cls}>{name}</Link>
+  );
+}
+
 function TwoVTwoTag() {
   return <span className="rounded bg-sky-900/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">2v2</span>;
 }
@@ -65,7 +76,7 @@ export function StatsDashboard() {
 
   const { data: challengesData } = useQuery({
     queryKey: ['admin-scheduled-matchups', 'ACCEPTED'],
-    queryFn: () => getAdminScheduledMatchups({ status: 'ACCEPTED' }),
+    queryFn: () => getAdminScheduledMatchups({ upcoming: true }),
     refetchInterval: 30_000,
   });
 
@@ -110,7 +121,7 @@ export function StatsDashboard() {
               {queueData.members.map((m, i) => (
                 <li key={m.id} className="flex flex-wrap items-center gap-2 text-sm text-stone-300">
                   <span className="text-xs text-stone-600 w-4 text-right">{i + 1}.</span>
-                  <span>{m.username}</span>
+                  <span><ProfileLink id={m.id} name={m.username} isTeam={m.isTeam} /></span>
                   {m.format === 'TWO_V_TWO' && <TwoVTwoTag />}
                   {m.battleTypes.map((bt) => <BattleTypeChip key={bt} battleType={bt} />)}
                 </li>
@@ -130,7 +141,9 @@ export function StatsDashboard() {
                 <li key={m.id} className="flex items-center justify-between gap-2 text-sm">
                   <span className="flex flex-wrap items-center gap-2 text-stone-300">
                     <span>
-                      {m.player1?.name ?? '?'} <span className="text-stone-600">vs</span> {m.player2?.name ?? '?'}
+                      <ProfileLink id={m.player1?.id} name={m.player1?.name ?? '?'} isTeam={m.format === 'TWO_V_TWO'} />{' '}
+                      <span className="text-stone-600">vs</span>{' '}
+                      <ProfileLink id={m.player2?.id} name={m.player2?.name ?? '?'} isTeam={m.format === 'TWO_V_TWO'} />
                     </span>
                     {m.format === 'TWO_V_TWO' && <TwoVTwoTag />}
                     {m.battleType && <BattleTypeChip battleType={m.battleType} />}
@@ -159,7 +172,9 @@ export function StatsDashboard() {
                 <li key={c.id} className="flex items-start justify-between gap-2 text-sm">
                   <div>
                     <span className="text-stone-300">
-                      {c.proposer.username} <span className="text-stone-600">vs</span> {c.accepted_by?.username ?? '?'}
+                      <ProfileLink id={c.proposer.id} name={c.proposer.username} />{' '}
+                      <span className="text-stone-600">vs</span>{' '}
+                      <ProfileLink id={c.accepted_by?.id} name={c.accepted_by?.username ?? '?'} />
                     </span>
                     <p className="text-[10px] text-stone-600 mt-0.5">
                       {new Date(c.proposed_at).toLocaleString(undefined, { timeZone: SITE_TZ, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
