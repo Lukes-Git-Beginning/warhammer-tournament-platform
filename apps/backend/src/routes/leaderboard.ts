@@ -7,6 +7,7 @@ import { logistic, skillToBand } from '../lib/rating-model.js';
 import { effectiveTiersOf, SUPPORTER_FLAG_SELECT } from '../lib/supporter-service.js';
 import { currentQuarter, currentMonth, loadCompetitionConfig, computeLadderStandings, rankingsCutoff, qualiGate, parseQuarter, quarterValue, listQuartersSinceLaunch, parseMonth, monthValue, listMonthsSinceLaunch, loadQuarterOverrides, resolveQuarter, listQuartersResolved } from '../lib/competition.js';
 import { computeGsBoard, type CompetitorFormatFilter } from '../lib/gs-board.js';
+import { PROVISIONAL_MIN_GAMES } from '../lib/skill-classification-service.js';
 import type { PrismaClient } from '@rizzotto/db';
 import {
   computeSwissStandings,
@@ -585,17 +586,19 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         // In-scope games: total for Overall, else games IN the selected battle type — a battle-type
         // board must not list everyone via the GS fallback, only players who actually played it.
         const inScope = (e: (typeof board)[number]) => (battleType === 'OVERALL' ? e.gamesCount : e.battleTypeGames);
-        // 1v1: OPEN board — everyone who has played (>= 1 decisive game) is listed, so newcomers
-        // appear immediately. GS shrinkage keeps low-sample players near the mean, and the frontend
-        // marks them `provisional`; a rolling activity threshold (drop the dormant, keep active
-        // newcomers) is a planned follow-up. 2v2: all active teams for Overall, else only teams that
-        // played the type.
+        // Overall, 1v1: OPEN board — everyone who has played (>= 1 decisive game) is listed, so
+        // newcomers appear immediately. GS shrinkage keeps low-sample players near the mean, and the
+        // frontend marks them `provisional`; a rolling activity threshold (drop the dormant, keep
+        // active newcomers) is a planned follow-up. 2v2 Overall: all active teams.
+        // A battle-type view: only from PROVISIONAL_MIN_GAMES games IN that type (Alex 2026-10-08) —
+        // the per-type skill carries no Overall blend, so a 1-game value would rank absurdly; the
+        // same threshold at which the profile stops marking the type "provisional".
         const eligible =
-          competitorFormat === 'ONE_V_ONE'
-            ? board.filter((e) => inScope(e) >= 1)
-            : battleType === 'OVERALL'
-              ? board
-              : board.filter((e) => inScope(e) >= 1);
+          battleType !== 'OVERALL'
+            ? board.filter((e) => inScope(e) >= PROVISIONAL_MIN_GAMES)
+            : competitorFormat === 'ONE_V_ONE'
+              ? board.filter((e) => inScope(e) >= 1)
+              : board;
         const total = eligible.length;
         const slice = eligible.slice((page - 1) * pageSize, page * pageSize);
         const display = await resolveBoardDisplay(fastify.prisma, competitorFormat, slice.map((e) => e.competitorId));
@@ -716,7 +719,10 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         // fallback). Show EVERYONE who played (>=1) with a `qualified` flag; the frontend greys
         // the sub-gate players + shows a legend, rather than hiding them.
         const inScope = (e: (typeof board)[number]) => (battleType === 'OVERALL' ? e.gamesCount : e.battleTypeGames);
-        const played = board.filter((e) => inScope(e) >= 1);
+        // A battle-type view lists from PROVISIONAL_MIN_GAMES games in that type (as the Rankings
+        // board) — but never hides a qualified player (early in a quarter the gate is below 5).
+        const minListed = battleType === 'OVERALL' ? 1 : Math.max(1, Math.min(PROVISIONAL_MIN_GAMES, gate));
+        const played = board.filter((e) => inScope(e) >= minListed);
         const qualifiedCount = played.filter((e) => inScope(e) >= gate).length;
         // `qualifiedOnly` (landing-page teaser) keeps only gate-clearers and renumbers ranks
         // 1..N among them; the default board shows everyone who played, flagged via `qualified`.
