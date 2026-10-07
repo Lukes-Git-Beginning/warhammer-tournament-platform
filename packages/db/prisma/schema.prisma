@@ -1419,15 +1419,15 @@ model AdminConfig {
 model AvailabilitySlot {
   id          String              @id @default(uuid()) @db.Uuid
   user_id     String              @db.Uuid
-  day_of_week Int // 0=Mon..6=Sun
-  hour_utc    Int // 0..23
+  day_of_week Int // 0=Mon..6=Sun, in the user's LOCAL time (User.timezone, fallback Europe/Berlin)
+  hour_local  Int // 0..23 local wall-clock hour; UTC is derived per concrete week (DST-correct)
   context     AvailabilityContext
   created_at  DateTime            @default(now())
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@unique([user_id, day_of_week, hour_utc, context])
-  @@index([day_of_week, hour_utc, context])
+  @@unique([user_id, day_of_week, hour_local, context])
+  @@index([day_of_week, hour_local, context])
 }
 
 model ScheduledMatchup {

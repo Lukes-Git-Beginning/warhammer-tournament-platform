@@ -4,6 +4,7 @@ import { createOpenPlayMatch } from './create-open-play-match.js';
 import { resolveCompetitors } from './competitors.js';
 import { notifyAvailabilityPing, notifyMatchFoundWithButtons } from './discord-notify.js';
 import { logQueueActivity } from './queue-activity.js';
+import { slotsActiveAtWhere } from './availability-time.js';
 
 // -- Redis keys --------------------------------------------------------------
 // Queue is a plain FIFO list; joined_at tracks real time-in-queue (used by the
@@ -230,12 +231,13 @@ async function maybeSendDmWave(fastify: FastifyInstance, queueLen: number): Prom
   const redis = fastify.redis!;
   const prisma = fastify.prisma;
 
+  // Slots are local time: each player counts as available when THEIR own clock is in a marked hour.
   const now = new Date();
-  const day = (now.getUTCDay() + 6) % 7; // 0=Mon..6=Sun
-  const hour = now.getUTCHours();
+  const activeWhere = await slotsActiveAtWhere(prisma, now);
+  if (!activeWhere) return;
 
   const slots = await prisma.availabilitySlot.findMany({
-    where: { day_of_week: day, hour_utc: hour, context: 'MATCHMAKING', user: { availability_paused: false } },
+    where: { AND: [activeWhere, { context: 'MATCHMAKING', user: { availability_paused: false } }] },
     include: { user: { select: { id: true, discord_id: true } } },
   });
   if (slots.length === 0) return;

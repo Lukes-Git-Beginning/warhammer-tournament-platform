@@ -25,6 +25,7 @@ import { Redis } from 'ioredis';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@rizzotto/db';
+import { localSlotNow } from '../src/lib/availability-time.js';
 import { createTestUser, cleanupUsers } from './helpers/db-fixtures.js';
 import type { TestUser } from './helpers/db-fixtures.js';
 
@@ -277,13 +278,12 @@ describe('runMatchmakingTick', () => {
     expect(notifyAvailabilityPing).not.toHaveBeenCalledWith(u.discord_id, expect.any(Number));
   });
 
-  // A user with MATCHMAKING availability for the current UTC hour.
+  // A user with MATCHMAKING availability for the current hour on their own clock
+  // (test users have no timezone → site time, Europe/Berlin).
   async function addCurrentHourSlot(userId: string): Promise<void> {
-    const now = new Date();
-    const day = (now.getUTCDay() + 6) % 7;
-    const hour = now.getUTCHours();
+    const local = localSlotNow(new Date(), null);
     await prisma.availabilitySlot.create({
-      data: { user_id: userId, day_of_week: day, hour_utc: hour, context: 'MATCHMAKING' },
+      data: { user_id: userId, day_of_week: local.day_of_week, hour_local: local.hour, context: 'MATCHMAKING' },
     });
   }
 });

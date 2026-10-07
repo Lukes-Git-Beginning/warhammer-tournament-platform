@@ -7,6 +7,7 @@
 
 import { prisma } from '@rizzotto/db';
 import { resolveCompetitors } from './competitors.js';
+import { slotsActiveAtWhere } from './availability-time.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
@@ -852,7 +853,7 @@ export async function notifyTournamentAnnounce(tournament: TournamentForNotify):
 
 /**
  * DM users who marked TOURNAMENT availability for the tournament's start slot (its day-of-week +
- * UTC hour) when it opens for registration — the tournament counterpart to the Open-Play
+ * hour on the user's own clock) when it opens for registration — the tournament counterpart to the Open-Play
  * availability ping. Automatic → per-recipient DM caps + the NO_BOT_MESSAGES opt-out apply
  * (via sendDm). Best-effort; a single DM per opened tournament per available user.
  */
@@ -861,12 +862,14 @@ export async function notifyTournamentAvailability(tournament: TournamentForNoti
   if (!token) return;
   try {
     const start = tournament.start_date;
-    const dayOfWeek = (start.getUTCDay() + 6) % 7; // 0=Mon..6=Sun — matches AvailabilitySlot
-    const hourUtc = start.getUTCHours();
-    const slots = await prisma.availabilitySlot.findMany({
-      where: { context: 'TOURNAMENT', day_of_week: dayOfWeek, hour_utc: hourUtc },
-      select: { user: { select: { discord_id: true } } },
-    });
+    // Slots are local time: match each user's own wall clock at the tournament's start instant.
+    const activeWhere = await slotsActiveAtWhere(prisma, start);
+    const slots = activeWhere
+      ? await prisma.availabilitySlot.findMany({
+          where: { AND: [activeWhere, { context: 'TOURNAMENT' }] },
+          select: { user: { select: { discord_id: true } } },
+        })
+      : [];
     const recipients = slots
       .map((s) => s.user?.discord_id)
       .filter((id): id is string => !!id);

@@ -21,6 +21,7 @@ const QueueJoinSchema = z.object({
 });
 import { getQueueTimeoutRemaining, recordQueueLeave } from '../lib/queue-penalty.js';
 import { cancelOpenPlayMatch } from '../lib/cancel-open-play-match.js';
+import { slotsActiveAtWhere } from '../lib/availability-time.js';
 import { isCompetitorMember } from '../lib/competitors.js';
 import { notifyQueueTimeout, notifyQueueWarning, notifyQueueAbuseToStaff } from '../lib/discord-notify.js';
 
@@ -217,16 +218,16 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /api/open-play/queue/count — public live-activity counts for the landing page.
   // No auth, no user-specific fields: just the queue size and how many players have
-  // MATCHMAKING availability for the current UTC hour.
+  // MATCHMAKING availability for the current hour on their own clock (paused players excluded).
   fastify.get('/api/open-play/queue/count', async (_request, reply) => {
-    const now = new Date();
-    const day = (now.getUTCDay() + 6) % 7; // 0=Mon..6=Sun
-    const hour = now.getUTCHours();
+    const activeWhere = await slotsActiveAtWhere(fastify.prisma, new Date());
     const [queue, availableNow, playingMatches] = await Promise.all([
       fastify.redis ? fastify.redis.llen(QUEUE_KEY) : Promise.resolve(0),
-      fastify.prisma.availabilitySlot.count({
-        where: { day_of_week: day, hour_utc: hour, context: 'MATCHMAKING' },
-      }),
+      activeWhere
+        ? fastify.prisma.availabilitySlot.count({
+            where: { AND: [activeWhere, { context: 'MATCHMAKING', user: { availability_paused: false } }] },
+          })
+        : Promise.resolve(0),
       // #7: how many are currently playing an Open Play match (2 players per ongoing match).
       fastify.prisma.match.count({
         where: { type: 'OPEN_PLAY', status: 'ONGOING', deleted_at: null },

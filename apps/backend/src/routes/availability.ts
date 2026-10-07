@@ -3,16 +3,31 @@ import { z } from 'zod';
 import { Prisma } from '@rizzotto/db';
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
 import { runMatchmakingTick } from '../lib/matchmaking-tick.js';
+import {
+  isValidZone,
+  localSlotNow,
+  projectSlotToUtcCell,
+  slotsActiveAtWhere,
+} from '../lib/availability-time.js';
 
+// Slots are LOCAL time (weekday + hour in the user's own timezone) so they survive DST changes.
 const SlotSchema = z.object({
   day_of_week: z.number().int().min(0).max(6),
-  hour_utc: z.number().int().min(0).max(23),
+  hour: z.number().int().min(0).max(23),
   context: z.enum(['TOURNAMENT', 'MATCHMAKING']),
 });
 
 const BulkUpsertSchema = z.object({
   slots: z.array(SlotSchema).max(7 * 24 * 2), // max 7 days × 24h × 2 contexts
+  // Browser timezone (IANA). Stored on the user only when they have none yet.
+  timezone: z.string().max(64).optional(),
 });
+
+/** Add `count` to a UTC raster cell in a keyed map. */
+function addToCell(map: Map<string, number>, cell: { day_of_week: number; hour_utc: number }, count: number): void {
+  const key = `${cell.day_of_week}:${cell.hour_utc}`;
+  map.set(key, (map.get(key) ?? 0) + count);
+}
 
 const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/availability/heatmap?context=TOURNAMENT|MATCHMAKING — public, anonymous aggregate.
@@ -28,20 +43,28 @@ const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       cacheKey('availability:heatmap', { context: context ?? 'all' }),
       async () => {
+        // Slots are local time per user: project each (zone, weekday, hour) bucket onto the UTC
+        // raster for the CURRENT week (DST-correct), then aggregate. One user lives in one zone,
+        // so summing per-zone distinct counts never double-counts.
         const rows = await fastify.prisma.$queryRaw<
-          { day_of_week: number; hour_utc: number; count: bigint }[]
+          { timezone: string | null; day_of_week: number; hour_local: number; count: bigint }[]
         >`
-          SELECT s.day_of_week, s.hour_utc, COUNT(DISTINCT s.user_id)::int AS count
+          SELECT u.timezone, s.day_of_week, s.hour_local, COUNT(DISTINCT s.user_id)::int AS count
           FROM "AvailabilitySlot" s
           JOIN "User" u ON u.id = s.user_id
           WHERE u.availability_paused = false ${contextFilter}
-          GROUP BY s.day_of_week, s.hour_utc
+          GROUP BY u.timezone, s.day_of_week, s.hour_local
         `;
-        return rows.map((r) => ({
-          day_of_week: r.day_of_week,
-          hour_utc: r.hour_utc,
-          count: Number(r.count),
-        }));
+        const now = new Date();
+        const cells = new Map<string, number>();
+        for (const r of rows) {
+          const cell = projectSlotToUtcCell({ day_of_week: r.day_of_week, hour: r.hour_local }, r.timezone, now);
+          addToCell(cells, cell, Number(r.count));
+        }
+        return [...cells.entries()].map(([key, count]) => {
+          const [day, hour] = key.split(':').map(Number);
+          return { day_of_week: day, hour_utc: hour, count };
+        });
       },
       { ttlSeconds: 300 },
     );
@@ -64,11 +87,14 @@ const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
           user: { availability_paused: false },
           ...(q.data.context ? { context: q.data.context } : {}),
         },
-        select: { day_of_week: true, hour_utc: true, user: { select: { username: true } } },
+        select: { day_of_week: true, hour_local: true, user: { select: { username: true, timezone: true } } },
       });
+      // Local slots → UTC raster cells of the current week (same projection as the public heatmap).
+      const now = new Date();
       const byCell = new Map<string, string[]>();
       for (const r of rows) {
-        const key = `${r.day_of_week}:${r.hour_utc}`;
+        const cell = projectSlotToUtcCell({ day_of_week: r.day_of_week, hour: r.hour_local }, r.user.timezone, now);
+        const key = `${cell.day_of_week}:${cell.hour_utc}`;
         const arr = byCell.get(key);
         if (arr) arr.push(r.user.username);
         else byCell.set(key, [r.user.username]);
@@ -81,14 +107,18 @@ const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // GET /api/availability/now — public, returns MATCHMAKING slot count for current UTC hour
+  // GET /api/availability/now — public, returns the MATCHMAKING slot count that is "on" right now,
+  // each player judged by their own local wall clock. day_of_week/hour_utc echo the current UTC cell.
   fastify.get('/api/availability/now', async (_request, reply) => {
     const now = new Date();
     const day = (now.getUTCDay() + 6) % 7; // 0=Mon..6=Sun
     const hour = now.getUTCHours();
-    const count = await fastify.prisma.availabilitySlot.count({
-      where: { day_of_week: day, hour_utc: hour, context: 'MATCHMAKING', user: { availability_paused: false } },
-    });
+    const activeWhere = await slotsActiveAtWhere(fastify.prisma, now);
+    const count = activeWhere
+      ? await fastify.prisma.availabilitySlot.count({
+          where: { AND: [activeWhere, { context: 'MATCHMAKING', user: { availability_paused: false } }] },
+        })
+      : 0;
     return reply.code(200).send({ count, day_of_week: day, hour_utc: hour });
   });
 
@@ -98,15 +128,16 @@ const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: fastify.authenticate },
     async (request, reply) => {
       const userId = request.user.sub;
-      const [user, slots] = await Promise.all([
-        fastify.prisma.user.findUnique({ where: { id: userId }, select: { availability_paused: true } }),
+      const [user, rows] = await Promise.all([
+        fastify.prisma.user.findUnique({ where: { id: userId }, select: { availability_paused: true, timezone: true } }),
         fastify.prisma.availabilitySlot.findMany({
           where: { user_id: userId },
-          select: { id: true, day_of_week: true, hour_utc: true, context: true, created_at: true },
-          orderBy: [{ day_of_week: 'asc' }, { hour_utc: 'asc' }],
+          select: { id: true, day_of_week: true, hour_local: true, context: true, created_at: true },
+          orderBy: [{ day_of_week: 'asc' }, { hour_local: 'asc' }],
         }),
       ]);
-      return reply.code(200).send({ slots, paused: user?.availability_paused ?? false });
+      const slots = rows.map(({ hour_local, ...r }) => ({ ...r, hour: hour_local }));
+      return reply.code(200).send({ slots, paused: user?.availability_paused ?? false, timezone: user?.timezone ?? null });
     },
   );
 
@@ -140,13 +171,22 @@ const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
       }
 
+      // Remember the browser zone when the user has none yet (never overwrite an explicit choice).
+      const browserZone = isValidZone(parsed.data.timezone) ? parsed.data.timezone : null;
+      const current = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
+      let zone = current?.timezone ?? null;
+      if (!zone && browserZone) {
+        await fastify.prisma.user.update({ where: { id: userId }, data: { timezone: browserZone } });
+        zone = browserZone;
+      }
+
       await fastify.prisma.$transaction([
         fastify.prisma.availabilitySlot.deleteMany({ where: { user_id: userId } }),
         fastify.prisma.availabilitySlot.createMany({
           data: parsed.data.slots.map((s) => ({
             user_id: userId,
             day_of_week: s.day_of_week,
-            hour_utc: s.hour_utc,
+            hour_local: s.hour,
             context: s.context,
           })),
         }),
@@ -154,24 +194,23 @@ const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (fastify.redis) await invalidate(fastify.redis, 'availability:heatmap*');
 
-      // If the user just added MATCHMAKING availability for the current UTC hour,
+      // If the user just added MATCHMAKING availability for the current hour on THEIR clock,
       // they may now be an eligible recipient for a waiting queue — nudge the tick.
-      const now = new Date();
-      const day = (now.getUTCDay() + 6) % 7; // 0=Mon..6=Sun
-      const hour = now.getUTCHours();
+      const local = localSlotNow(new Date(), zone);
       const addedCurrentHour = parsed.data.slots.some(
-        (s) => s.context === 'MATCHMAKING' && s.day_of_week === day && s.hour_utc === hour,
+        (s) => s.context === 'MATCHMAKING' && s.day_of_week === local.day_of_week && s.hour === local.hour,
       );
       if (addedCurrentHour && fastify.redis) {
         setImmediate(() => void runMatchmakingTick(fastify));
       }
 
-      const slots = await fastify.prisma.availabilitySlot.findMany({
+      const rows = await fastify.prisma.availabilitySlot.findMany({
         where: { user_id: userId },
-        select: { id: true, day_of_week: true, hour_utc: true, context: true },
-        orderBy: [{ day_of_week: 'asc' }, { hour_utc: 'asc' }],
+        select: { id: true, day_of_week: true, hour_local: true, context: true },
+        orderBy: [{ day_of_week: 'asc' }, { hour_local: 'asc' }],
       });
-      return reply.code(200).send({ slots });
+      const slots = rows.map(({ hour_local, ...r }) => ({ ...r, hour: hour_local }));
+      return reply.code(200).send({ slots, timezone: zone });
     },
   );
 };
