@@ -1,6 +1,7 @@
 import { Fragment, useRef, useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { MatchFormat, HeatmapSlot, ScheduledMatchup } from '../../lib/api';
+import { getBrowserZone, utcCellToLocal } from '../../lib/availability-grid';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 
 const FORMAT_DURATION_H: Record<MatchFormat, number> = { BO1: 0.5, BO2: 1.0, BO3: 1.5, BO5: 2.5 };
@@ -108,14 +109,6 @@ interface ChallengeCalendarProps {
   onCancel?: (id: string) => void;
 }
 
-// Local-time bucket for a UTC (weekday, hour) slot. day: Mon=0 … Sun=6.
-function utcToLocal(dayUtc: number, hourUtc: number, offset: number): { day: number; hour: number } {
-  const total = dayUtc * 24 + hourUtc + offset;
-  const day = ((Math.floor(total / 24) % 7) + 7) % 7;
-  const hour = ((total % 24) + 24) % 24;
-  return { day, hour };
-}
-
 export function ChallengeCalendar({
   format,
   slots,
@@ -129,19 +122,20 @@ export function ChallengeCalendar({
   const scrollRef = useRef<HTMLDivElement>(null);
   const durationRows = FORMAT_ROWS[format];
 
-  // Slots are stored in UTC (day_of_week + hour_utc). Convert to the viewer's
-  // local weekday+hour so the heat lines up with the (local) day columns and
-  // hour rows — previously it keyed on raw hour_utc and ignored the weekday.
-  const offset = -new Date().getTimezoneOffset() / 60;
+  // The heatmap arrives as a UTC raster (day_of_week + hour_utc). Convert each cell to the
+  // browser's local weekday+hour (the day columns here are browser-local dates), per concrete
+  // instant so daylight saving is applied correctly.
+  const zone = getBrowserZone();
   const heatLookup = useMemo(() => {
     const m = new Map<string, number>();
+    const now = new Date();
     for (const s of slots) {
-      const { day, hour } = utcToLocal(s.day_of_week, s.hour_utc, offset);
+      const { day, hour } = utcCellToLocal(s.day_of_week, s.hour_utc, zone, now);
       const key = `${day}:${hour}`;
       m.set(key, (m.get(key) ?? 0) + s.count);
     }
     return m;
-  }, [slots, offset]);
+  }, [slots, zone]);
   const heatMax = Math.max(0, ...heatLookup.values());
 
   const days = useMemo<Date[]>(() => {

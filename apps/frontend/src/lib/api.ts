@@ -3173,10 +3173,11 @@ export function getFactionTopPlayers(factionId: string): Promise<{ players: Fact
 export type AvailabilityContext = 'TOURNAMENT' | 'MATCHMAKING';
 export type MatchFormat = 'BO1' | 'BO2' | 'BO3' | 'BO5';
 
+/** A weekly slot in the player's LOCAL time: weekday 0=Mon..6=Sun + hour 0..23 in their own timezone. */
 export interface AvailabilitySlot {
   id?: string;
   day_of_week: number;
-  hour_utc: number;
+  hour: number;
   context: AvailabilityContext;
 }
 
@@ -3218,8 +3219,8 @@ export function getAvailabilityHeatmapNamed(
   return apiFetch<{ slots: NamedHeatmapSlot[] }>(`/api/availability/heatmap/named${qs}`);
 }
 
-export function getMyAvailability(): Promise<{ slots: AvailabilitySlot[]; paused: boolean }> {
-  return apiFetch<{ slots: AvailabilitySlot[]; paused: boolean }>('/api/availability/me');
+export function getMyAvailability(): Promise<{ slots: AvailabilitySlot[]; paused: boolean; timezone: string | null }> {
+  return apiFetch<{ slots: AvailabilitySlot[]; paused: boolean; timezone: string | null }>('/api/availability/me');
 }
 
 /** Toggle "temporarily not matchable" without deleting any calendar slots. */
@@ -3230,10 +3231,14 @@ export function setAvailabilityPaused(paused: boolean): Promise<{ paused: boolea
   });
 }
 
-export function setMyAvailability(slots: Omit<AvailabilitySlot, 'id'>[]): Promise<{ slots: AvailabilitySlot[] }> {
-  return apiFetch<{ slots: AvailabilitySlot[] }>('/api/availability/slots', {
+export function setMyAvailability(
+  slots: Omit<AvailabilitySlot, 'id'>[],
+  timezone?: string,
+): Promise<{ slots: AvailabilitySlot[]; timezone: string | null }> {
+  return apiFetch<{ slots: AvailabilitySlot[]; timezone: string | null }>('/api/availability/slots', {
     method: 'PUT',
-    body: JSON.stringify({ slots }),
+    // The browser zone is sent along; the server only stores it when the user has none yet.
+    body: JSON.stringify({ slots, timezone }),
   });
 }
 

@@ -7,9 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 ## [2.15.0] — 2026-10-07
 
+### Changed
+- **Your availability now stays at the same local time when the clocks change.** If you marked Tuesday 20:00 in summer, you are still available Tuesday 20:00 in winter, and the same goes for every player in their own timezone.
+- **The availability grid shows your own timezone** instead of a UTC offset, and the community heatmaps follow the clock change correctly.
+
 ### Fixed
 - **Faction statistics no longer count 2v2 Open Play games as 1v1 games.** The faction win rates, matchup heatmap and meta overview now only use 1v1 games, as intended, and 2v2 Open Play games now show up in the 2v2 duo statistics and the 2v2 game filter.
 - **The top player shown for each faction is always a player, never a 2v2 team.**
+- **The "available now" count on the Open Play page and the landing page respects paused availability.** Players who paused their availability are no longer counted.
 
 ## [2.14.0] — 2026-10-06
 

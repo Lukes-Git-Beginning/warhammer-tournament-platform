@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 import type { HeatmapSlot, NamedHeatmapSlot } from '../../lib/api';
-import { getUtcOffsetHours } from '../../lib/timezone';
+import { localCellAt, resolveDisplayZone, utcCellToLocal } from '../../lib/availability-grid';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DISPLAY_HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -16,12 +16,6 @@ function intensityColor(count: number, max: number, hue: number): string {
   return `hsl(${hue},${saturation.toFixed(0)}%,${lightness.toFixed(0)}%)`;
 }
 
-function utcToLocal(dayUtc: number, hourUtc: number, offset: number): { day: number; hour: number } {
-  const total = dayUtc * 24 + hourUtc + offset;
-  const day  = ((Math.floor(total / 24) % 7) + 7) % 7;
-  const hour = ((total % 24) + 24) % 24;
-  return { day, hour };
-}
 
 interface AvailabilityHeatmapProps {
   slots: HeatmapSlot[];
@@ -34,16 +28,16 @@ interface AvailabilityHeatmapProps {
 
 export function AvailabilityHeatmap({ slots, userTimezone, hue = 38, namedSlots }: AvailabilityHeatmapProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const offset = userTimezone ? getUtcOffsetHours(userTimezone) : 0;
-
-  // Current local day/hour for the "now" marker
+  // Display zone: user.timezone, else the browser's. The API sends a UTC raster; each cell is
+  // converted for the concrete current week, so daylight saving is applied correctly.
+  const zone = resolveDisplayZone(userTimezone);
   const now = new Date();
-  const nowCell = utcToLocal((now.getUTCDay() + 6) % 7, now.getUTCHours(), offset);
+  const nowCell = localCellAt(now, zone);
 
   // Aggregate into local-time buckets
   const lookup = new Map<string, number>();
   for (const s of slots) {
-    const { day, hour } = utcToLocal(s.day_of_week, s.hour_utc, offset);
+    const { day, hour } = utcCellToLocal(s.day_of_week, s.hour_utc, zone, now);
     const key = `${day}:${hour}`;
     lookup.set(key, (lookup.get(key) ?? 0) + s.count);
   }
@@ -53,7 +47,7 @@ export function AvailabilityHeatmap({ slots, userTimezone, hue = 38, namedSlots 
   const namesLookup = new Map<string, string[]>();
   if (namedSlots) {
     for (const s of namedSlots) {
-      const { day, hour } = utcToLocal(s.day_of_week, s.hour_utc, offset);
+      const { day, hour } = utcCellToLocal(s.day_of_week, s.hour_utc, zone, now);
       const key = `${day}:${hour}`;
       const arr = namesLookup.get(key);
       if (arr) arr.push(...s.names);

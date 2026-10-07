@@ -319,6 +319,7 @@ Das Seed-Script liegt bei `packages/db/prisma/seed.ts` und wird via `tsx` ausgef
 | `20260703110000_add_balanced_liechtenstein_format` | `BALANCED_LIECHTENSTEIN` zu `TournamentFormat`-Enum |
 | `20260607173753_add_third_place_match` | `Tournament.has_third_place_match Boolean @default(false)` + `PLAYOFF_THIRD_PLACE` zu `MatchPhase` |
 | `20260608000000_match_game_counts_for_leaderboard` | `MatchGame.counts_for_leaderboard Boolean @default(true)` + Backfill aus Tournament via Match-JOIN |
+| `20261007090000_availability_slots_local_time` | **AvailabilitySlot = lokale Zeit** — `hour_utc` → `hour_local` (Indizes umbenannt); `day_of_week` + `hour_local` sind Wochentag/Stunde in `User.timezone` (Fallback `Europe/Berlin`), UTC wird erst beim Lesen pro Woche/Zone berechnet (`apps/backend/src/lib/availability-time.ts`) → Slots bleiben bei Zeitumstellung auf derselben Uhrzeit. Datenmigration: Bestandsslots = UTC + gerundeter Offset der User-Zone zu `created_at` (wie die alte UI), ungültige/fehlende Zone → Berlin, Dubletten per `DISTINCT ON`. API: `/availability/me` + `PUT /slots` nutzen `hour` (lokal) + optional `timezone` (setzt `User.timezone` nur wenn leer); Heatmap-Endpoints liefern weiter ein UTC-Raster (`hour_utc`), projiziert für die aktuelle Woche |
 
 Migrations-Lock unter `packages/db/prisma/migrations/migration_lock.toml`.
 

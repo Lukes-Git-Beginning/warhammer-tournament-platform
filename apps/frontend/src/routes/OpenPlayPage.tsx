@@ -23,6 +23,7 @@ import {
   type MatchFormat,
   type BattleType,
 } from '../lib/api';
+import { getBrowserZone } from '../lib/availability-grid';
 import { Select } from '../components/ui/select';
 import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
@@ -420,10 +421,15 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
   const save = useMutation({
     mutationFn: (slots: AvailabilitySlot[]) =>
       setMyAvailability(
-        slots.map(({ day_of_week, hour_utc, context }) => ({ day_of_week, hour_utc, context })),
+        slots.map(({ day_of_week, hour, context }) => ({ day_of_week, hour, context })),
+        getBrowserZone(),
       ),
     onSuccess: (data) => {
-      qc.setQueryData(['availability-me', currentUserId], data);
+      // Keep the pause flag: the save response only carries slots + timezone.
+      qc.setQueryData<{ slots: AvailabilitySlot[]; paused: boolean; timezone: string | null }>(
+        ['availability-me', currentUserId],
+        (prev) => ({ ...data, paused: prev?.paused ?? false }),
+      );
       setLocalSlots(null);
     },
   });

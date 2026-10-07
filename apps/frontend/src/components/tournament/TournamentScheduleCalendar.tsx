@@ -2,6 +2,7 @@ import { Fragment, useRef, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { listTournaments, type HeatmapSlot, type Tournament } from '../../lib/api';
 import { tournamentDurationHours } from '../../lib/tournamentSchedule';
+import { getBrowserZone, utcCellToLocal } from '../../lib/availability-grid';
 
 // Date-based scheduling calendar for the tournament create/edit forms — today + the
 // next 6 days, mirroring the Open Play ChallengeCalendar. It shows community
@@ -18,14 +19,6 @@ function heatmapBg(count: number, max: number): string {
   if (max === 0 || count === 0) return 'hsl(20,3%,13%)';
   const r = Math.min(count / max, 1);
   return `hsl(38,${(8 + 62 * r).toFixed(0)}%,${(13 + 45 * r).toFixed(0)}%)`;
-}
-
-// Local-time bucket for a UTC (weekday, hour) slot. day: Mon=0 … Sun=6.
-function utcToLocal(dayUtc: number, hourUtc: number, offset: number): { day: number; hour: number } {
-  const total = dayUtc * 24 + hourUtc + offset;
-  const day = ((Math.floor(total / 24) % 7) + 7) % 7;
-  const hour = ((total % 24) + 24) % 24;
-  return { day, hour };
 }
 
 function sameLocalDate(a: Date, b: Date): boolean {
@@ -107,15 +100,18 @@ export function TournamentScheduleCalendar({
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const offset = -new Date().getTimezoneOffset() / 60;
+  // UTC raster -> browser-local weekday+hour (the day columns are browser-local dates), per
+  // concrete instant so daylight saving is applied correctly.
+  const zone = getBrowserZone();
   const heatLookup = useMemo(() => {
     const m = new Map<string, number>();
+    const now = new Date();
     for (const s of slots) {
-      const { day, hour } = utcToLocal(s.day_of_week, s.hour_utc, offset);
+      const { day, hour } = utcCellToLocal(s.day_of_week, s.hour_utc, zone, now);
       m.set(`${day}:${hour}`, (m.get(`${day}:${hour}`) ?? 0) + s.count);
     }
     return m;
-  }, [slots, offset]);
+  }, [slots, zone]);
   const heatMax = Math.max(0, ...heatLookup.values());
 
   const days = useMemo<Date[]>(() => {
