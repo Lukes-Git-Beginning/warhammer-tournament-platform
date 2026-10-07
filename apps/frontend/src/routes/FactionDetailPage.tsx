@@ -181,10 +181,10 @@ function MatchupGrid({ rows, factionMap, onSelectOpponent }: { rows: MatchupRow[
               {row.isMirror && (
                 <span className="text-[9px] uppercase tracking-wider text-stone-600 border border-stone-700 rounded px-1 shrink-0">Mirror</span>
               )}
-              {onSelectOpponent && !row.isMirror && (
+              {onSelectOpponent && (
                 <button
                   type="button"
-                  title={`Filter replays: vs ${faction?.name ?? row.factionId}`}
+                  title={`Filter replays: ${row.isMirror ? `${faction?.name ?? row.factionId} mirrors` : `vs ${faction?.name ?? row.factionId}`}`}
                   onClick={() => onSelectOpponent(row.factionId)}
                   className="shrink-0 text-[9px] text-stone-600 hover:text-rizzotto-gold-400 transition-colors opacity-0 group-hover:opacity-100"
                 >
@@ -521,11 +521,11 @@ export function FactionDetailPage() {
               className="rounded border border-stone-700 bg-stone-800 px-2 py-1 text-xs text-stone-300 focus:outline-none focus:ring-1 focus:ring-rizzotto-gold-400"
             >
               <option value="">All opponents</option>
+              {/* This faction itself is listed too → filters for mirror games. */}
               {[...factionMap.values()]
-                .filter((f) => f.id !== id)
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
+                  <option key={f.id} value={f.id}>{f.id === id ? `${f.name} (mirror)` : f.name}</option>
                 ))}
             </select>
             {opponentFactionFilter && (
@@ -541,7 +541,9 @@ export function FactionDetailPage() {
         </div>
         {(gamesData?.games.length ?? 0) === 0 ? (
           <p className="text-sm text-stone-600">
-            {opponentFactionFilter
+            {opponentFactionFilter === id
+              ? 'No mirror games recorded yet.'
+              : opponentFactionFilter
               ? `No games vs ${factionMap.get(opponentFactionFilter)?.name ?? opponentFactionFilter} recorded yet.`
               : 'No games recorded for this faction yet.'}
           </p>
