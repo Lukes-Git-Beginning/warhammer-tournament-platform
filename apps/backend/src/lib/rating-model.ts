@@ -209,8 +209,9 @@ export interface RatingModel extends RatingModelData {
   /**
    * A player's skill estimate in one scope — what classification (gating, BaLi divisions), the
    * profile and the GS-history snapshots read. 'OVERALL' = game-weighted (as getOverallSkill); a
-   * battle type = the overall level plus that type's deviation, shrunk by the games played in it
-   * (w = n/(n+BATTLE_TYPE_PRIOR_GAMES)) — a type never played = the overall level. SE: summed
+   * battle type = the overall level plus that type's deviation, weighted by the games played in it
+   * (w = min(1, n/BATTLE_TYPE_FULL_WEIGHT_GAMES)) — a type never played = the overall level, from
+   * BATTLE_TYPE_FULL_WEIGHT_GAMES games on it is that type's data alone. SE: summed
    * parameter variances (Fisher diagonal, no covariance), as for faction skills. `gamesCount` =
    * decisive games IN that scope. Null if the player has no fitted GS.
    * (The Rankings/Quarterly boards keep the raw GS + offset view via getBattleTypeSkill.)
@@ -219,10 +220,11 @@ export interface RatingModel extends RatingModelData {
 }
 
 /**
- * Prior strength (in games) of a player's per-battle-type deviation around their overall level:
- * at this many games in a type, the type's own evidence and the overall level weigh equally.
+ * Games in a battle type from which that type's skill is judged on its own data alone (Alex,
+ * 2026-10-08). Below it, a linear ramp: the overall level fills in the rest (n/20 type data,
+ * 1 − n/20 overall), so one early result can't swing a band.
  */
-export const BATTLE_TYPE_PRIOR_GAMES = 10;
+export const BATTLE_TYPE_FULL_WEIGHT_GAMES = 20;
 
 /** A scoped skill estimate (see RatingModel.getSkillEstimate). */
 export interface SkillEstimate {
@@ -450,17 +452,16 @@ export function createRatingModel(data: RatingModelData): RatingModel {
     }
     if (scope === 'OVERALL') return overall;
 
-    // A battle type: shrink its deviation from the player's OVERALL level by the games played in it,
-    // skill = overall + w·(GS + BTO − overall), w = n/(n + BATTLE_TYPE_PRIOR_GAMES). The fit's own
-    // prior pulls the raw per-type view toward the BASE GS — which a single game in a second type
-    // already drags far (prod 2026-10: 219 Domination + 1 Conquest game → raw Conquest 78% vs
-    // Overall 93%). Shrinking toward the overall level instead means: a type you never played =
-    // your overall level; each game in it moves you toward your real level there.
+    // A battle type: linear ramp from the player's OVERALL level to that type's own data,
+    // skill = overall + w·(GS + BTO − overall), w = min(1, n / BATTLE_TYPE_FULL_WEIGHT_GAMES).
+    // From 20 games in the type it is the type's data alone. Below that the overall level fills in:
+    // the raw per-type view of a thin sample is far too volatile (the fit's own prior pulls it toward
+    // the BASE GS — prod 2026-10: 219 Domination + 1 Conquest game → raw Conquest 78% vs Overall 93%).
     const t = btoEntry.get(`${playerId}:${scope}`);
     if (!t || t.gamesCount <= 0) return { skill: overall.skill, se: overall.se, gamesCount: 0 };
     const raw = e.generalSkill + t.offset;
     const rawVar = gsVar + t.stdError * t.stdError;
-    const w = t.gamesCount / (t.gamesCount + BATTLE_TYPE_PRIOR_GAMES);
+    const w = Math.min(1, t.gamesCount / BATTLE_TYPE_FULL_WEIGHT_GAMES);
     return {
       skill: overall.skill + w * (raw - overall.skill),
       se: Math.sqrt((1 - w) * (1 - w) * overall.se * overall.se + w * w * rawVar),

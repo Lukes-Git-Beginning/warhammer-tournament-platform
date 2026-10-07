@@ -76,6 +76,25 @@ describe('getSkillEstimate — scoped skill', () => {
     expect(overall).toBeGreaterThan(conq);
   });
 
+  it('linear ramp: n/20 type data below 20 games, the type data alone from 20 games on', () => {
+    const at = (conquestGames: number) => {
+      const m = fitRatingModel(
+        [...record('P', 70, 30, 'DOMINATION'), ...record('P', Math.floor(conquestGames / 4), conquestGames - Math.floor(conquestGames / 4), 'CONQUEST')],
+        { hierarchical: true },
+      );
+      const overall = m.getSkillEstimate('P', 'OVERALL')!.skill;
+      const raw = m.getBattleTypeSkill('P', 'CONQUEST')!;
+      const est = m.getSkillEstimate('P', 'CONQUEST')!.skill;
+      return { overall, raw, est };
+    };
+    const ten = at(10); // halfway
+    expect(ten.est).toBeCloseTo(ten.overall + 0.5 * (ten.raw - ten.overall), 10);
+    const twenty = at(20); // full weight
+    expect(twenty.est).toBeCloseTo(twenty.raw, 10);
+    const forty = at(40); // stays full weight
+    expect(forty.est).toBeCloseTo(forty.raw, 10);
+  });
+
   it('null for a player without a fitted GS', () => {
     expect(mazeModel().getSkillEstimate('nobody', 'OVERALL')).toBeNull();
   });

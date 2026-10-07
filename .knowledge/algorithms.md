@@ -40,7 +40,7 @@ RawPoints(Sieger)    = 100 · (1 − ExpectedChanceToWin)         // kein Cap/Fl
 
 Einstufung (Gating, BaLi-Divisionen), Profil und GS-History lesen **`model.getSkillEstimate(player, scope)`**, nie die rohe Basis-GS:
 - `OVERALL` = spielgewichtet (`getOverallSkill`: Σ gamesₜ·(GS+BTOₜ) / Σ games). Die rohe Basis-GS liegt nahe dem *ungewichteten* Zentrum der Typ-Skills → ein einziges Conquest-Spiel zog Maze (219 Domination-Spiele) von 93 % auf 85 %.
-- Battle Type t = `overall + w·(GS+BTOₜ − overall)`, `w = n/(n + BATTLE_TYPE_PRIOR_GAMES)` (10). Nie gespielter Typ = Overall-Niveau; jedes Spiel im Typ zieht Richtung echtem Typ-Niveau. (Der eigene Prior des Fits zieht zur Basis-GS — zu volatil.)
+- Battle Type t = `overall + w·(GS+BTOₜ − overall)`, `w = min(1, n/BATTLE_TYPE_FULL_WEIGHT_GAMES)` (20, linear; Alex 2026-10-08). Nie gespielter Typ = Overall-Niveau; ab 20 Spielen im Typ zählen nur noch dessen Daten. (Der rohe Typ-Wert bei wenigen Spielen ist zu volatil — der eigene Prior des Fits zieht zur Basis-GS.)
 - SE: Varianzen der summierten Parameter addieren (Fisher-Diagonale), wie bei Faction-Skills.
 - Gating/BaLi: Scope = `Tournament.battle_type` (`scopeForBattleType`). Gating nur bei der Anmeldung → Bestandsschutz für bereits Angemeldete.
 - Fragebogen-Floor pro Typ: nur Fragen dieses Typs + allgemeine (`CalibrationQuestion.battleTypes`, leer = allgemein). Kein Transfer zwischen Typen.

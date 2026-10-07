@@ -4,9 +4,11 @@ Status: **BUILT on `feat/battle-type-skill` (2026-10-08), NOT deployed.** BE 115
 green, profile verified locally (Playwright screenshots).
 
 Deviations from the draft below, decided while building:
-- **Per-type skill is shrunk toward the OVERALL level**, not taken raw: `overall + w·(GS+BTO − overall)`,
-  `w = n/(n+10)`. The fit's own prior pulls the raw per-type view toward the *base* GS, which one game in
-  a new type already drags (Maze: raw Conquest 78% after 1 game vs 93% overall). Rankings/Quarterly
+- **Per-type skill ramps linearly from the OVERALL level to the type's own data**:
+  `overall + w·(GS+BTO − overall)`, `w = min(1, n/20)` — from 20 games in a type only that type's data
+  counts (Alex, 2026-10-08; first built as `n/(n+10)`, which never let go of Overall). Below that, Overall
+  fills in because the raw per-type view of a thin sample is too volatile (Maze: raw Conquest 78% after
+  1 game vs 93% overall). Rankings/Quarterly
   boards keep the raw `getBattleTypeSkill` (finals seeding depends on them) — aligning them is a follow-up.
 - **Open Play matchmaking** uses no band/GS (only faction fairness) → nothing to scope there.
 - Per-type SE = summed variances (Fisher diagonal), same convention as faction skills.
