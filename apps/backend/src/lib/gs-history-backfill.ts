@@ -59,17 +59,47 @@ export async function backfillGsHistory(prisma: PrismaClient, log?: Logger): Pro
   return inserted;
 }
 
+/** How often a deferred backfill re-checks for ongoing tournaments. */
+const ONGOING_RECHECK_MS = 10 * 60 * 1000;
+
 /**
- * Guarded, fire-and-forget: on the first boot where the snapshot table is empty, kick off the
- * backfill in the background (never blocks boot, never throws). Once rows exist it is a no-op, so
- * it runs exactly once per environment (the daily snapshot cron takes over from there).
+ * True when the snapshot history doesn't reach back to the first eligible game — empty table, or
+ * only the daily cron's recent rows (e.g. the cron ran while a deferred backfill was still waiting).
+ */
+async function historyIncomplete(prisma: PrismaClient): Promise<boolean> {
+  const [earliest, first] = await Promise.all([
+    prisma.playerSkillSnapshot.findFirst({ orderBy: { snapshot_date: 'asc' }, select: { snapshot_date: true } }),
+    prisma.matchGame.findFirst({
+      where: eligibleStatGameWhere(null),
+      orderBy: { played_at: 'asc' },
+      select: { played_at: true },
+    }),
+  ]);
+  if (!first?.played_at) return false; // no games → nothing to reconstruct
+  if (!earliest) return true;
+  // Allow one day of slack (UTC vs site-day boundaries).
+  return earliest.snapshot_date.getTime() > first.played_at.getTime() + 24 * 60 * 60 * 1000;
+}
+
+/**
+ * Guarded, fire-and-forget: on boot, if the snapshot history is missing (empty table — e.g. after
+ * the per-battle-type migration cleared it), rebuild it in the background (never blocks boot,
+ * never throws). Each day's fit is CPU-bound and stalls the event loop for a moment, so while any
+ * tournament is ONGOING the rebuild WAITS (re-checked every 10 min) — a live tournament must not
+ * lag. Once the history is complete it is a no-op; the daily snapshot cron takes over.
  */
 export function maybeBackfillGsHistoryOnBoot(prisma: PrismaClient, log: Logger): void {
   void (async () => {
     try {
-      const existing = await prisma.playerSkillSnapshot.count();
-      if (existing > 0) return; // already populated — never re-run
-      log.info({}, '[gs-history] snapshot table empty — starting one-time backfill in the background');
+      if (!(await historyIncomplete(prisma))) return; // already populated — never re-run
+      for (;;) {
+        const ongoing = await prisma.tournament.count({ where: { status: 'ONGOING', deleted_at: null } });
+        if (ongoing === 0) break;
+        log.info({ ongoing }, '[gs-history] history missing — backfill deferred while tournaments are ONGOING');
+        await new Promise((r) => setTimeout(r, ONGOING_RECHECK_MS).unref?.());
+      }
+      if (!(await historyIncomplete(prisma))) return; // another instance filled it meanwhile
+      log.info({}, '[gs-history] snapshot history missing — starting one-time backfill in the background');
       const inserted = await backfillGsHistory(prisma, log);
       log.info({ inserted }, '[gs-history] one-time backfill finished');
     } catch (err) {
