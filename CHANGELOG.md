@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.19.0] — 2026-10-08
+
+### Added
+- **Your skill level is now set per battle type.** How good you are in Conquest is judged on your Conquest games, Siege on your Siege games, and so on. A Conquest tournament's skill limits and Balanced Liechtenstein divisions now use your level in Conquest, not your overall level. If you are already registered for a tournament, nothing changes for you there.
+- **The skill questionnaire now asks about every battle type.** Domination, Conquest and Siege each have their own questions, plus a few general ones. If you answered the questionnaire before, you will see a short note on your profile asking you to answer the new Conquest and Siege questions. Before you register for a skill-limited tournament of a battle type you haven't answered yet, you will be asked to answer its questions.
+- **Your profile can be switched by battle type.** Overall plus every battle type you have played. It opens on the battle type you play most, and it switches your skill level, the skill chart, your record, your faction proficiency, your tournaments and your games. The selected version and battle type are part of the page link, so you can share a specific view.
+- **New levels are marked as provisional.** With fewer than 5 games in a battle type, your level there is labelled "provisional" and that part of the chart is dashed.
+- **Faction pages: filter the replays for mirror matches.** The mirror row has its own "replays" link, and the faction itself now appears in the opponent filter.
+
+### Changed
+- **The battle-type views of the rankings list players from 5 games in that battle type.** The Overall view still lists everyone from their first game, and the quarterly rankings never hide a qualified player.
+- **Faction proficiency per battle type is calculated from that battle type's games alone**, so it can genuinely differ between Domination, Conquest and Siege.
+- **Points are shown under Overall only.** In a single battle type your profile shows games, wins and losses.
+
+### Fixed
+- **Your overall skill level on your profile now matches the rankings.** A few games in a second battle type could pull the profile value well below the rankings value.
+- **The skill chart's history has been rebuilt** to match. Right after this update the chart can be empty for a while.
+
 ## [2.18.0] — 2026-10-07
 
 ### Added
