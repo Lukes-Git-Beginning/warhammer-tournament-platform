@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRequireAuth, useAuthQuery } from '../lib/auth';
 import {
   joinQueue,
+  getQueuePrefs,
+  saveQueuePrefs,
   getMyAvailability,
   setMyAvailability,
   setAvailabilityPaused,
@@ -22,7 +24,15 @@ import {
   type HeatmapSlot,
   type MatchFormat,
   type BattleType,
+  type QueueMatchFormat,
+  type QueuePrefs,
 } from '../lib/api';
+import {
+  DEFAULT_QUEUE_PREFS,
+  NARROW_SELECTION_HINT,
+  isNarrowQueueSelection,
+  toggleAtLeastOne,
+} from '../lib/queue-prefs';
 import { getBrowserZone } from '../lib/availability-grid';
 import { Select } from '../components/ui/select';
 import { Button } from '../components/ui/button';
@@ -176,21 +186,50 @@ const OP_BATTLE_TYPES: { value: BattleType; label: string }[] = [
   { value: 'SIEGE', label: 'Siege' },
 ];
 
+const OP_FORMATS: { value: QueueMatchFormat; label: string }[] = [
+  { value: 'BO1', label: 'Bo1' },
+  { value: 'BO3', label: 'Bo3' },
+];
+
 function QueueTab({ userTimezone }: { userTimezone?: string }) {
   const qc = useQueryClient();
   const { data: me } = useAuthQuery();
   const isStaff = me?.role === 'ADMIN' || me?.role === 'MODERATOR';
 
+  // The queue settings are stored per player and used by every way into the queue (this page,
+  // "Queue again", the landing page, the Discord buttons). The page starts from the stored values
+  // and saves every change right away, so a change counts even if the player never joins here.
+  const { data: storedPrefs } = useQuery({
+    queryKey: ['queue-prefs'],
+    queryFn: getQueuePrefs,
+    enabled: !!me,
+    staleTime: 60_000,
+  });
+  const prefsReady = !!storedPrefs;
+  const prefs: QueuePrefs = storedPrefs ?? DEFAULT_QUEUE_PREFS;
+  const savePrefs = useMutation({
+    mutationFn: saveQueuePrefs,
+    // On failure, drop the optimistic value and show what is really stored.
+    onError: () => void qc.invalidateQueries({ queryKey: ['queue-prefs'] }),
+  });
+  const updatePrefs = (patch: Partial<QueuePrefs>) => {
+    const next: QueuePrefs = { ...prefs, ...patch };
+    qc.setQueryData(['queue-prefs'], next);
+    savePrefs.mutate(next);
+  };
+
   // Which battle types the player will accept (multi-select; at least one). The queue matches
   // two players whose selections overlap and draws that battle type's map pool.
-  const [battleTypes, setBattleTypes] = useState<BattleType[]>(['DOMINATION', 'CONQUEST', 'SIEGE']);
-  const toggleBt = (bt: BattleType) =>
-    setBattleTypes((prev) =>
-      prev.includes(bt) ? (prev.length > 1 ? prev.filter((x) => x !== bt) : prev) : [...prev, bt],
-    );
+  const battleTypes = prefs.battleTypes;
+  const toggleBt = (bt: BattleType) => updatePrefs({ battleTypes: toggleAtLeastOne(battleTypes, bt) });
+
+  // Bo1 / Bo3 (multi-select; at least one). Both shared -> Bo1. Siege ignores this: always Bo2.
+  const matchFormats = prefs.matchFormats;
+  const toggleFormat = (f: QueueMatchFormat) => updatePrefs({ matchFormats: toggleAtLeastOne(matchFormats, f) });
+  const narrowSelection = isNarrowQueueSelection(battleTypes, matchFormats);
 
   // 1v1 / 2v2 team-size selection.
-  const [competitorFormat, setCompetitorFormat] = useState<'ONE_V_ONE' | 'TWO_V_TWO'>('ONE_V_ONE');
+  const competitorFormat = prefs.competitorFormat;
   const is2v2 = competitorFormat === 'TWO_V_TWO';
 
   // Eligibility check for 2v2: the user must be captain of an ACTIVE team with 2 members.
@@ -206,10 +245,9 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
         (t) => t.status === 'ACTIVE' && t.is_captain && t.members.length >= 2,
       )
     : [];
-  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
-  // Fall back to the first eligible team when none is picked (or the pick is no longer eligible).
+  // Fall back to the first eligible team when none is stored (or the stored one is no longer eligible).
   const effectiveTeamId =
-    eligibleTeams.find((t) => t.id === selectedTeamId)?.id ?? eligibleTeams[0]?.id;
+    eligibleTeams.find((t) => t.id === prefs.teamId)?.id ?? eligibleTeams[0]?.id;
   // Only block when we've actually loaded and confirmed there's no eligible team.
   const teamCheckLoaded = !is2v2 || teamsData !== undefined;
   const canQueue2v2 = !is2v2 || eligibleTeams.length > 0;
@@ -218,7 +256,10 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
     mutationFn: () =>
       joinQueue({
         battleTypes,
-        ...(is2v2 ? { competitorFormat: 'TWO_V_TWO', teamId: effectiveTeamId } : {}),
+        matchFormats,
+        competitorFormat,
+        ...(is2v2 ? { teamId: effectiveTeamId } : {}),
+        save: true,
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['queue-status'] }),
   });
@@ -259,7 +300,8 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
                 <button
                   key={fmt}
                   type="button"
-                  onClick={() => setCompetitorFormat(fmt)}
+                  onClick={() => updatePrefs({ competitorFormat: fmt })}
+                  disabled={!prefsReady}
                   aria-pressed={active}
                   className={`rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
                     active
@@ -280,7 +322,7 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">Queue as team</p>
             <select
               value={effectiveTeamId ?? ''}
-              onChange={(e) => setSelectedTeamId(e.target.value)}
+              onChange={(e) => updatePrefs({ teamId: e.target.value })}
               className="w-full rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900 px-3 py-1.5 text-sm text-rizzotto-stone-200 focus:border-rizzotto-gold-400/70 focus:outline-none"
             >
               {eligibleTeams.map((t) => (
@@ -303,6 +345,7 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
                   key={b.value}
                   type="button"
                   onClick={() => toggleBt(b.value)}
+                  disabled={!prefsReady}
                   aria-pressed={active}
                   className={`rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
                     active
@@ -316,6 +359,39 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
             })}
           </div>
         </div>
+
+        {/* Series length — Bo1 / Bo3, pick one or both. Both shared -> Bo1. Siege is always Bo2. */}
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">Match format</p>
+          <div className="flex flex-wrap items-center gap-2">
+            {OP_FORMATS.map((f) => {
+              const active = matchFormats.includes(f.value);
+              return (
+                <button
+                  key={f.value}
+                  type="button"
+                  onClick={() => toggleFormat(f.value)}
+                  disabled={!prefsReady}
+                  aria-pressed={active}
+                  className={`rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    active
+                      ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+                      : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+            <span className="text-xs text-stone-500">Siege is always Bo2</span>
+          </div>
+        </div>
+
+        {narrowSelection && (
+          <p role="status" className="text-xs text-red-400">
+            {NARROW_SELECTION_HINT}
+          </p>
+        )}
 
         {/* 2v2 eligibility hint — shown while the check is loading or when ineligible. */}
         {is2v2 && teamCheckLoaded && !canQueue2v2 && (

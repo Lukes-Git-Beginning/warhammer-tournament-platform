@@ -3343,18 +3343,44 @@ export function getPlayerAntiFarming(playerId: string, versionId?: string): Prom
   return apiFetch(`/api/admin/users/${playerId}/anti-farming${q}`);
 }
 
+/** Series lengths a player can ask for in the Open Play queue (Siege is always Bo2). */
+export type QueueMatchFormat = 'BO1' | 'BO3';
+
+/** A player's stored Open Play queue settings. They apply to every way into the queue. */
+export interface QueuePrefs {
+  battleTypes: BattleType[];
+  matchFormats: QueueMatchFormat[];
+  competitorFormat: 'ONE_V_ONE' | 'TWO_V_TWO';
+  teamId: string | null;
+}
+
+export function getQueuePrefs(): Promise<QueuePrefs> {
+  return apiFetch<QueuePrefs>('/api/open-play/queue/prefs');
+}
+
+export function saveQueuePrefs(prefs: QueuePrefs): Promise<QueuePrefs> {
+  return apiFetch<QueuePrefs>('/api/open-play/queue/prefs', { method: 'PUT', body: JSON.stringify(prefs) });
+}
+
+/**
+ * Join the queue. Without options the player's stored settings are used (landing page, "Queue
+ * again"). The Open Play page passes its selection with `save: true` so it also becomes the
+ * stored default.
+ */
 export function joinQueue(opts?: {
   battleTypes?: BattleType[];
+  matchFormats?: QueueMatchFormat[];
   competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
   teamId?: string;
-}): Promise<{ matched: boolean; match_id?: string; position?: number }> {
+  save?: boolean;
+}): Promise<{ matched: boolean; match_id?: string; position?: number; fellBackTo1v1?: boolean }> {
   const body: Record<string, unknown> = {};
   if (opts?.battleTypes?.length) body.battleTypes = opts.battleTypes;
-  if (opts?.competitorFormat && opts.competitorFormat !== 'ONE_V_ONE') {
-    body.competitorFormat = opts.competitorFormat;
-  }
+  if (opts?.matchFormats?.length) body.matchFormats = opts.matchFormats;
+  if (opts?.competitorFormat) body.competitorFormat = opts.competitorFormat;
   if (opts?.teamId) body.teamId = opts.teamId;
-  return apiFetch<{ matched: boolean; match_id?: string; position?: number }>('/api/open-play/queue', {
+  if (opts?.save) body.save = true;
+  return apiFetch<{ matched: boolean; match_id?: string; position?: number; fellBackTo1v1?: boolean }>('/api/open-play/queue', {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -3387,6 +3413,7 @@ export interface AdminOpenPlayMember {
   isTeam: boolean;
   format: 'ONE_V_ONE' | 'TWO_V_TWO';
   battleTypes: BattleType[]; // what this entry queued for
+  matchFormats: QueueMatchFormat[]; // Bo1/Bo3 it accepts (Siege ignores this: always Bo2)
 }
 
 export interface AdminOpenPlayMatch {

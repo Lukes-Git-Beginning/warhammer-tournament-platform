@@ -1,7 +1,7 @@
 import { SITE_TZ } from '@/lib/site-time';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { getAdminStats, getAdminOpenPlayQueue, getAdminOpenPlayActiveMatches, getAdminScheduledMatchups, type AdminStats, type BattleType } from '@/lib/api';
+import { getAdminStats, getAdminOpenPlayQueue, getAdminOpenPlayActiveMatches, getAdminScheduledMatchups, type AdminStats, type BattleType, type QueueMatchFormat } from '@/lib/api';
 
 const BATTLE_TYPE_LABEL: Record<BattleType, string> = { DOMINATION: 'Domination', CONQUEST: 'Conquest', SIEGE: 'Siege' };
 
@@ -11,6 +11,18 @@ function BattleTypeChip({ battleType }: { battleType: BattleType }) {
     <span className="rounded bg-stone-800 px-1.5 py-0.5 text-[10px] font-medium text-stone-400">
       {BATTLE_TYPE_LABEL[battleType]}
     </span>
+  );
+}
+
+/** Series length(s) a queue entry accepts; a Siege-only entry always plays Bo2. */
+function queueFormatLabels(battleTypes: BattleType[], matchFormats: QueueMatchFormat[] | undefined): string[] {
+  if (battleTypes.length === 1 && battleTypes[0] === 'SIEGE') return ['Bo2'];
+  return (matchFormats ?? []).map((f) => (f === 'BO3' ? 'Bo3' : 'Bo1'));
+}
+
+function FormatChip({ label }: { label: string }) {
+  return (
+    <span className="rounded bg-stone-800 px-1.5 py-0.5 text-[10px] font-medium text-stone-400">{label}</span>
   );
 }
 
@@ -124,6 +136,7 @@ export function StatsDashboard() {
                   <span><ProfileLink id={m.id} name={m.username} isTeam={m.isTeam} /></span>
                   {m.format === 'TWO_V_TWO' && <TwoVTwoTag />}
                   {m.battleTypes.map((bt) => <BattleTypeChip key={bt} battleType={bt} />)}
+                  {queueFormatLabels(m.battleTypes, m.matchFormats).map((f) => <FormatChip key={f} label={f} />)}
                 </li>
               ))}
             </ol>
