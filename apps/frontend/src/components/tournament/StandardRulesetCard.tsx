@@ -9,7 +9,7 @@
  * Host customisations still go into the "Custom Rules" / "Custom Restrictions" fields.
  */
 import { useQuery } from '@tanstack/react-query';
-import { getStandardRuleset, type BattleType, type StandardRuleset } from '@/lib/api.js';
+import { getFactions, getStandardRuleset, type BattleType, type StandardRuleset } from '@/lib/api.js';
 
 const BATTLE_TYPE_LABEL: Record<string, string> = {
   DOMINATION: 'Domination',
@@ -19,7 +19,7 @@ const BATTLE_TYPE_LABEL: Record<string, string> = {
 
 export const STANDARD_RULESET: StandardRuleset = {
   settings: ['Default Funds', 'Ultra Unit Scale', '1500 Tickets', 'Unit Caps On'],
-  banned_factions: [],
+  banned_factions: ['undead_legions'],
   banned: ['Masque of Slaanesh', 'Dreadmaw'],
   banned_abilities: [],
   conduct: [
@@ -60,6 +60,15 @@ export function StandardRulesetCard({
     enabled: !ruleset,
   });
   const rs = ruleset ?? data ?? STANDARD_RULESET;
+  // Banned factions are stored as faction ids — show their names (raw entry as a fallback).
+  const { data: factionList } = useQuery({
+    queryKey: ['factions'],
+    queryFn: () => getFactions(),
+    staleTime: 60 * 60_000,
+    enabled: (rs.banned_factions?.length ?? 0) > 0,
+  });
+  const factionName = new Map((factionList?.data ?? []).map((d) => [d.faction.id, d.faction.name]));
+  const bannedFactionNames = (rs.banned_factions ?? []).map((id) => factionName.get(id) ?? id);
   const title = battleType ? `Standard ${BATTLE_TYPE_LABEL[battleType] ?? battleType} Ruleset` : 'Standard Ruleset';
 
   return (
@@ -88,7 +97,7 @@ export function StandardRulesetCard({
         <div className="space-y-1.5">
           <Row label="Settings" items={rs.settings} />
           {/* Each ban category is shown only when something in it is banned. */}
-          {(rs.banned_factions?.length ?? 0) > 0 && <Row label="Banned Factions" items={rs.banned_factions!} />}
+          {bannedFactionNames.length > 0 && <Row label="Banned Factions" items={bannedFactionNames} />}
           {rs.banned.length > 0 && <Row label="Banned Units" items={rs.banned} />}
           {(rs.banned_abilities?.length ?? 0) > 0 && (
             <Row label="Banned Spells / Items / Abilities" items={rs.banned_abilities!} />

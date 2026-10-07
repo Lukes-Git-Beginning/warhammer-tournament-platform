@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getAllStandardRulesets, putAdminConfig, type StandardRuleset } from '@/lib/api.js';
+import { getAllStandardRulesets, getFactions, putAdminConfig, type StandardRuleset } from '@/lib/api.js';
 import { StandardRulesetCard, STANDARD_RULESET } from '@/components/tournament/StandardRulesetCard.js';
 
 const CONFIG_KEY = 'standard_ruleset';
@@ -28,6 +28,41 @@ function Field({ label, hint, value, onChange }: { label: string; hint: string; 
         onChange={(e) => onChange(e.target.value)}
         className="w-full resize-y rounded border border-stone-700 bg-stone-900 px-3 py-2 font-mono text-xs text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none"
       />
+    </div>
+  );
+}
+
+/**
+ * Banned factions are picked from the faction list (stored as faction ids) rather than typed: in
+ * Open Play the Standard Ruleset is binding, so a typo must not silently fail to ban. A legacy
+ * free-text entry that matches no faction id is still shown (and can be removed).
+ */
+function FactionBanPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const { data } = useQuery({ queryKey: ['factions'], queryFn: () => getFactions(), staleTime: 60 * 60_000 });
+  const factions = data?.data.map((d) => d.faction) ?? [];
+  const known = new Set(factions.map((f) => f.id));
+  const legacy = value.filter((v) => !known.has(v));
+  const toggle = (id: string) => onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
+  return (
+    <div className="flex-1">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80">Banned Factions</p>
+      <p className="mb-1 text-xs text-stone-500">
+        Binding in Open Play (cannot be picked there); informational for tournaments. Hidden when none.
+      </p>
+      <div className="grid max-h-48 grid-cols-2 gap-x-3 gap-y-1 overflow-y-auto rounded border border-stone-700 bg-stone-900 px-3 py-2 sm:grid-cols-3">
+        {factions.map((f) => (
+          <label key={f.id} className="flex items-center gap-1.5 text-xs text-stone-300">
+            <input type="checkbox" checked={value.includes(f.id)} onChange={() => toggle(f.id)} />
+            {f.name}
+          </label>
+        ))}
+        {legacy.map((v) => (
+          <label key={v} className="flex items-center gap-1.5 text-xs text-amber-300" title="Not a known faction id (old free-text entry)">
+            <input type="checkbox" checked onChange={() => onChange(value.filter((x) => x !== v))} />
+            {v}
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
@@ -102,7 +137,13 @@ export function StandardRulesetEditor() {
           <div className="flex flex-col gap-6 lg:flex-row">
             <div className="flex flex-1 flex-col gap-4">
               <Field label="Settings" hint="Game settings (e.g. 1500 Tickets)" value={arrayToLines(current.settings)} onChange={setField('settings')} />
-              <Field label="Banned Factions" hint="Factions banned from play (hidden when empty)" value={list(current.banned_factions)} onChange={setField('banned_factions')} />
+              <FactionBanPicker
+                value={current.banned_factions ?? []}
+                onChange={(ids) => {
+                  setSaved(false);
+                  setMap((prev) => ({ ...prev, [selected]: { ...(prev[selected] ?? STANDARD_RULESET), banned_factions: ids } }));
+                }}
+              />
               <Field label="Banned Units" hint="Units banned from play (hidden when empty)" value={list(current.banned)} onChange={setField('banned')} />
               <Field label="Banned Spells / Items / Abilities" hint="Spells, items and abilities banned from play (hidden when empty)" value={list(current.banned_abilities)} onChange={setField('banned_abilities')} />
               <Field label="Conduct" hint="Timing + conduct rules" value={arrayToLines(current.conduct)} onChange={setField('conduct')} />

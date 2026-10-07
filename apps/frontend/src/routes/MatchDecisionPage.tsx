@@ -526,6 +526,8 @@ interface BlindPickPhaseProps {
   pickedMapImageUrl?: string | null;
   restrictedFactions?: string[];
   factionAllowlist?: string[];
+  /** Open Play: factions banned by the Standard Ruleset — shown but not pickable. */
+  bannedFactions?: string[];
   /** Whether the viewer may act (1v1 player / 2v2 captain). Teammates/spectators are read-only. */
   canAct?: boolean;
 }
@@ -539,6 +541,7 @@ function BlindPickPhase({
   pickedMapImageUrl,
   restrictedFactions = [],
   factionAllowlist = [],
+  bannedFactions = [],
   canAct = true,
 }: BlindPickPhaseProps) {
   const queryClient = useQueryClient();
@@ -740,14 +743,17 @@ function BlindPickPhase({
             {factions.map(({ faction }) => {
               // Restricted factions are nerfed, not banned — keep them pickable.
               const isRestricted = restrictedFactions.includes(faction.id);
-              const isDisabled = factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id);
+              const isBanned = bannedFactions.includes(faction.id);
+              const isDisabled = isBanned || (factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id));
               return (
               <button
                 key={faction.id}
                 type="button"
                 disabled={isDisabled}
                 title={
-                  isDisabled
+                  isBanned
+                    ? 'Banned in Open Play by the Standard Ruleset'
+                    : isDisabled
                     ? 'Not permitted in this tournament'
                     : isRestricted
                       ? 'Restricted (nerfed) — does not count toward the leaderboard'
@@ -2159,6 +2165,7 @@ export function MatchDecisionPage() {
                 pickedMapImageUrl={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.image_url ?? null}
                 restrictedFactions={decision.restrictedFactions ?? []}
                 factionAllowlist={decision.factionAllowlist ?? []}
+                bannedFactions={decision.bannedFactions ?? []}
                 canAct={viewerCanAct}
               />
             </motion.div>

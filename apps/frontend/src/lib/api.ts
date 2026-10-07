@@ -165,6 +165,8 @@ export interface MatchDecisionState {
   matchPlayer1Id?: string | null;
   restrictedFactions?: string[];
   factionAllowlist?: string[];
+  /** Open Play only: factions banned by the Standard Ruleset (not pickable). [] in tournaments. */
+  bannedFactions?: string[];
   // FREE_PICK: each player's registration choice — a fixed faction id, or null
   // for pick-later. Drives the per-match sub-flow (both fixed → play; both
   // pick-later → 3×3 matrix; mixed → mini-pick).

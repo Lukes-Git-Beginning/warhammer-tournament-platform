@@ -24,6 +24,6 @@ describe('StandardRulesetSchema', () => {
     });
     expect(parsed.banned_factions).toEqual(['Kislev']);
     expect(parsed.banned_abilities).toEqual(['Masque of Slaanesh']);
-    expect(DEFAULT_STANDARD_RULESET).toMatchObject({ banned_factions: [], banned_abilities: [] });
+    expect(DEFAULT_STANDARD_RULESET).toMatchObject({ banned_factions: ['undead_legions'], banned_abilities: [] });
   });
 });

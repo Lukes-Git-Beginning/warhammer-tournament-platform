@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { openPlayBannedFactionIds } from '../lib/standard-ruleset.js';
 import type { PrismaClient } from '@rizzotto/db';
 import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
@@ -447,7 +448,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           games: {
             where: { map_decision: { isNot: null } },
             orderBy: { game_number: 'desc' },
-            select: { map_decision: true, blind_pick: true, faction_matrix: true },
+            select: { map_decision: true, blind_pick: true, faction_matrix: true, battle_type: true },
             take: 1,
           },
         },
@@ -507,6 +508,13 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
         ...serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? (match.competitor_format === 'TWO_V_TWO' ? 'BPT_2V2' : 'BPT'), match.player1_id, factionMatrix, match.tournament == null),
         restrictedFactions: match.tournament?.restricted_factions.map((r) => r.faction_id) ?? [],
         factionAllowlist: match.tournament?.faction_allowlist.map((r) => r.faction_id) ?? [],
+        // Open Play is bound by the Standard Ruleset: its banned factions can't be picked (the
+        // client greys them out; the lock endpoint enforces). Always [] for a tournament match.
+        bannedFactions: await openPlayBannedFactionIds({
+          tournament_id: match.tournament_id,
+          competitor_format: match.competitor_format,
+          battle_type: game.battle_type,
+        }),
         freePick,
         oneVThree,
       });
@@ -1054,12 +1062,14 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           id: true,
           player1_id: true,
           player2_id: true,
+          tournament_id: true,
           competitor_format: true,
           games: {
             where: { map_decision: { isNot: null }, status: { not: 'COMPLETED' } },
             orderBy: { game_number: 'desc' },
             select: {
               id: true,
+              battle_type: true,
               map_decision: { select: { picked_map_id: true } },
               blind_pick: true,
             },
@@ -1128,6 +1138,22 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           message: 'This faction is not in the allowed faction pool for this tournament',
           statusCode: 422,
         });
+      }
+
+      // Open Play: the Standard Ruleset's banned factions are a hard ban (captain and teammate).
+      const bannedFactions = await openPlayBannedFactionIds({
+        tournament_id: match.tournament_id,
+        competitor_format: match.competitor_format,
+        battle_type: game.battle_type,
+      });
+      for (const fid of [faction_id, faction_id_2]) {
+        if (fid && bannedFactions.includes(fid)) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'This faction is banned in Open Play by the Standard Ruleset',
+            statusCode: 422,
+          });
+        }
       }
 
       // 2v2 (BPT_2V2): validate the teammate's faction the captain locks alongside their own.

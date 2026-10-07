@@ -47,7 +47,7 @@ export type StandardRulesetMap = z.infer<typeof StandardRulesetMapSchema>;
 
 export const DEFAULT_STANDARD_RULESET: StandardRuleset = {
   settings: ['Default Funds', 'Ultra Unit Scale', '1500 Tickets', 'Unit Caps On'],
-  banned_factions: [],
+  banned_factions: ['undead_legions'],
   banned: ['Masque of Slaanesh', 'Dreadmaw'],
   banned_abilities: [],
   conduct: [
@@ -85,4 +85,43 @@ export async function resolveAllStandardRulesets(): Promise<Record<string, Stand
   const row = await prisma.adminConfig.findUnique({ where: { key: STANDARD_RULESET_CONFIG_KEY } });
   const stored = row ? parseStored(row.value) : {};
   return Object.fromEntries(allRulesetKeys().map((k) => [k, stored[k] ?? DEFAULT_STANDARD_RULESET]));
+}
+
+const normFactionKey = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * Faction ids banned by a combo's Standard Ruleset. The admin editor stores faction ids, but an
+ * entry typed as a name ("Undead Legions") is resolved too (case/spacing-insensitive against the
+ * faction id and name), so a legacy free-text entry still bans. Unknown entries are ignored.
+ */
+export async function standardBannedFactionIds(
+  battleType: $Enums.BattleType = 'DOMINATION',
+  competitorFormat: $Enums.CompetitorFormat = 'ONE_V_ONE',
+): Promise<string[]> {
+  const ruleset = await resolveStandardRuleset(battleType, competitorFormat);
+  if (ruleset.banned_factions.length === 0) return [];
+  const factions = await prisma.faction.findMany({ select: { id: true, name: true } });
+  const byKey = new Map<string, string>();
+  for (const f of factions) {
+    byKey.set(normFactionKey(f.id), f.id);
+    byKey.set(normFactionKey(f.name), f.id);
+  }
+  const ids = ruleset.banned_factions
+    .map((entry) => byKey.get(normFactionKey(entry)))
+    .filter((id): id is string => !!id);
+  return [...new Set(ids)];
+}
+
+/**
+ * Open Play is bound by the Standard Ruleset (Alex, 2026-10-07): its banned factions cannot be
+ * picked there. Tournaments are NOT — a host runs with or without the Standard Rules and bans
+ * factions per tournament. Returns [] for a tournament match.
+ */
+export async function openPlayBannedFactionIds(match: {
+  tournament_id: string | null;
+  competitor_format: $Enums.CompetitorFormat;
+  battle_type: $Enums.BattleType | null | undefined;
+}): Promise<string[]> {
+  if (match.tournament_id) return [];
+  return standardBannedFactionIds(match.battle_type ?? 'DOMINATION', match.competitor_format);
 }

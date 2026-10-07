@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.17.0] — 2026-10-07
+
+### Changed
+- **Open Play now follows the Standard Ruleset's banned factions.** A banned faction is greyed out in the faction pick and cannot be chosen in Open Play matches. Undead Legions is banned in Open Play. Tournaments are unaffected: hosts still decide whether to use the Standard Rules and which factions to exclude.
+
 ## [2.16.0] — 2026-10-07
 
 ### Changed
