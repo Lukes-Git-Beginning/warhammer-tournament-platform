@@ -316,7 +316,7 @@ export function buildTournamentFacts(t: TournamentFactsInput): TournamentFacts {
   if (t.mapNames.length > 0) lines.push(`Map pool: ${t.mapNames.join(', ')}`);
 
   if (t.standardRulesEnabled) {
-    lines.push('The community Standard Ruleset applies (funds, unit scale, ticket count, banned units, conduct).');
+    lines.push('The community Standard Ruleset applies (funds, unit scale, ticket count, banned factions/units/spells/items/abilities, conduct).');
   }
   const restrictions = (t.restrictions ?? '').trim();
   if (restrictions) lines.push(`Custom restrictions: ${truncate(restrictions, 600)}`);

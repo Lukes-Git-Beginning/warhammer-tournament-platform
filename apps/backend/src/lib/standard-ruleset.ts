@@ -3,7 +3,9 @@
  *
  * Stored under the AdminConfig key `standard_ruleset` as a map keyed by
  * `"<BattleType>:<CompetitorFormat>"` (6 combos), each value being
- * `{ settings: string[]; banned: string[]; conduct: string[] }`. Until an admin
+ * `{ settings; banned_factions; banned (units); banned_abilities (spells/items/abilities); conduct }`,
+ * all string lists. The two extra ban lists were added 2026-10-07 and default to [] so rulesets
+ * stored before then still parse without a migration. Until an admin
  * overrides a combo, the defaults apply (the original Total Tavern research values,
  * previously hard-coded in the frontend StandardRulesetCard).
  *
@@ -18,7 +20,11 @@ export const STANDARD_RULESET_CONFIG_KEY = 'standard_ruleset';
 
 export const StandardRulesetSchema = z.object({
   settings: z.array(z.string()),
+  banned_factions: z.array(z.string()).default([]),
+  /** Banned units (kept as `banned` for backwards compatibility). */
   banned: z.array(z.string()),
+  /** Banned spells, items and abilities. */
+  banned_abilities: z.array(z.string()).default([]),
   conduct: z.array(z.string()),
 });
 export type StandardRuleset = z.infer<typeof StandardRulesetSchema>;
@@ -41,7 +47,9 @@ export type StandardRulesetMap = z.infer<typeof StandardRulesetMapSchema>;
 
 export const DEFAULT_STANDARD_RULESET: StandardRuleset = {
   settings: ['Default Funds', 'Ultra Unit Scale', '1500 Tickets', 'Unit Caps On'],
+  banned_factions: [],
   banned: ['Masque of Slaanesh', 'Dreadmaw'],
+  banned_abilities: [],
   conduct: [
     '10 minutes to ready up',
     '40 minute round limit',

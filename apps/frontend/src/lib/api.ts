@@ -1821,7 +1821,12 @@ export function putAdminConfig(key: string, value: unknown): Promise<AdminConfig
 
 export interface StandardRuleset {
   settings: string[];
+  /** Banned factions. Optional for rulesets saved before 2026-10-07 (the API fills []). */
+  banned_factions?: string[];
+  /** Banned units. */
   banned: string[];
+  /** Banned spells, items and abilities. Optional like banned_factions. */
+  banned_abilities?: string[];
   conduct: string[];
 }
 

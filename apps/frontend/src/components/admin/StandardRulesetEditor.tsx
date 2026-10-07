@@ -50,6 +50,7 @@ export function StandardRulesetEditor() {
   }, [data]);
 
   const current = map[selected] ?? STANDARD_RULESET;
+  const list = (a: string[] | undefined) => arrayToLines(a ?? []);
   const setField = (field: keyof StandardRuleset) => (v: string) => {
     setSaved(false);
     setMap((prev) => ({
@@ -101,7 +102,9 @@ export function StandardRulesetEditor() {
           <div className="flex flex-col gap-6 lg:flex-row">
             <div className="flex flex-1 flex-col gap-4">
               <Field label="Settings" hint="Game settings (e.g. 1500 Tickets)" value={arrayToLines(current.settings)} onChange={setField('settings')} />
-              <Field label="Banned Units" hint="Units banned from play" value={arrayToLines(current.banned)} onChange={setField('banned')} />
+              <Field label="Banned Factions" hint="Factions banned from play (hidden when empty)" value={list(current.banned_factions)} onChange={setField('banned_factions')} />
+              <Field label="Banned Units" hint="Units banned from play (hidden when empty)" value={list(current.banned)} onChange={setField('banned')} />
+              <Field label="Banned Spells / Items / Abilities" hint="Spells, items and abilities banned from play (hidden when empty)" value={list(current.banned_abilities)} onChange={setField('banned_abilities')} />
               <Field label="Conduct" hint="Timing + conduct rules" value={arrayToLines(current.conduct)} onChange={setField('conduct')} />
             </div>
 

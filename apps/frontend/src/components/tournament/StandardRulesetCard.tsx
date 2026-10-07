@@ -19,7 +19,9 @@ const BATTLE_TYPE_LABEL: Record<string, string> = {
 
 export const STANDARD_RULESET: StandardRuleset = {
   settings: ['Default Funds', 'Ultra Unit Scale', '1500 Tickets', 'Unit Caps On'],
+  banned_factions: [],
   banned: ['Masque of Slaanesh', 'Dreadmaw'],
+  banned_abilities: [],
   conduct: [
     '10 minutes to ready up',
     '40 minute round limit',
@@ -30,7 +32,7 @@ export const STANDARD_RULESET: StandardRuleset = {
 function Row({ label, items }: { label: string; items: readonly string[] }) {
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
-      <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80 sm:w-24">
+      <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80 sm:w-40">
         {label}
       </span>
       <span className="text-stone-300">{items.join(' · ')}</span>
@@ -85,7 +87,12 @@ export function StandardRulesetCard({
         </div>
         <div className="space-y-1.5">
           <Row label="Settings" items={rs.settings} />
-          <Row label="Banned" items={rs.banned} />
+          {/* Each ban category is shown only when something in it is banned. */}
+          {(rs.banned_factions?.length ?? 0) > 0 && <Row label="Banned Factions" items={rs.banned_factions!} />}
+          {rs.banned.length > 0 && <Row label="Banned Units" items={rs.banned} />}
+          {(rs.banned_abilities?.length ?? 0) > 0 && (
+            <Row label="Banned Spells / Items / Abilities" items={rs.banned_abilities!} />
+          )}
           <Row label="Conduct" items={rs.conduct} />
         </div>
       </div>

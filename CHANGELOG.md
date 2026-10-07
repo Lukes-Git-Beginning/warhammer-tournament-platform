@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.16.0] — 2026-10-07
+
+### Changed
+- **The Standard Ruleset now lists bans in three groups:** Banned Factions, Banned Units, and Banned Spells / Items / Abilities. A group only appears when something in it is banned.
+
 ## [2.15.0] — 2026-10-07
 
 ### Changed
