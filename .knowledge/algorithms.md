@@ -40,11 +40,11 @@ RawPoints(Sieger)    = 100 · (1 − ExpectedChanceToWin)         // kein Cap/Fl
 
 Einstufung (Gating, BaLi-Divisionen), Profil und GS-History lesen **`model.getSkillEstimate(player, scope)`**, nie die rohe Basis-GS:
 - `OVERALL` = spielgewichtet (`getOverallSkill`: Σ gamesₜ·(GS+BTOₜ) / Σ games). Die rohe Basis-GS liegt nahe dem *ungewichteten* Zentrum der Typ-Skills → ein einziges Conquest-Spiel zog Maze (219 Domination-Spiele) von 93 % auf 85 %.
-- Battle Type t = `overall + w·(GS+BTOₜ − overall)`, `w = min(1, n/BATTLE_TYPE_FULL_WEIGHT_GAMES)` (20, linear; Alex 2026-10-08). Nie gespielter Typ = Overall-Niveau; ab 20 Spielen im Typ zählen nur noch dessen Daten. (Der rohe Typ-Wert bei wenigen Spielen ist zu volatil — der eigene Prior des Fits zieht zur Basis-GS.)
+- Battle Type t = **eigener Typ-Wert** `GS + BTOₜ` (= `getBattleTypeSkill`, dieselbe Zahl wie die Rankings-Boards), **ohne Overall-Beimischung** (Alex 2026-10-08: wie bei einem neuen Spieler — Fragebogen, dann echte Daten). Wenige Spiele → große SE → in `classify()` führt der Typ-Fragebogen-Floor. Nie gespielter Typ → `null` (keine Daten) → Einstufung nur per Fragebogen; ohne Typ-Antworten unrated → Gating verlangt Kalibrierung.
 - SE: Varianzen der summierten Parameter addieren (Fisher-Diagonale), wie bei Faction-Skills.
 - Gating/BaLi: Scope = `Tournament.battle_type` (`scopeForBattleType`). Gating nur bei der Anmeldung → Bestandsschutz für bereits Angemeldete.
 - Fragebogen-Floor pro Typ: nur Fragen dieses Typs + allgemeine (`CalibrationQuestion.battleTypes`, leer = allgemein). Kein Transfer zwischen Typen.
-- Rankings-/Quarterly-Boards bleiben bei `getBattleTypeSkill` (roh) — nicht umgestellt (Finals-Seeding hängt dran).
+- Rankings-/Quarterly-Boards nutzen denselben Typ-Wert → Board und Profil zeigen dieselbe Zahl.
 - Faction Proficiency pro Typ = **eigener Fit** nur über die Spiele des Typs (`getRatingModel({ battleType })`), da das Modell keinen Faktion×Typ-Term hat.
 - Fit: **Batch-Gradient-Descent mit Adam**, deterministisch (Null-Init, feste Iterationen, kein Random → cachebar). Loss = binary log loss + L2 (`lambdaPlayerFaction` 0.1, `lambdaMatchup` 0.5; via `AdminConfig`-Keys `rating_model_*` überschreibbar). L2-Shrinkage macht das Modell identifizierbar (Gauge-Freiheit der PFS-Differenzen) und verhindert Extremwerte bei wenig Daten.
 

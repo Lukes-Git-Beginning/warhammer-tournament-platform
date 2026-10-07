@@ -209,22 +209,15 @@ export interface RatingModel extends RatingModelData {
   /**
    * A player's skill estimate in one scope — what classification (gating, BaLi divisions), the
    * profile and the GS-history snapshots read. 'OVERALL' = game-weighted (as getOverallSkill); a
-   * battle type = the overall level plus that type's deviation, weighted by the games played in it
-   * (w = min(1, n/BATTLE_TYPE_FULL_WEIGHT_GAMES)) — a type never played = the overall level, from
-   * BATTLE_TYPE_FULL_WEIGHT_GAMES games on it is that type's data alone. SE: summed
-   * parameter variances (Fisher diagonal, no covariance), as for faction skills. `gamesCount` =
-   * decisive games IN that scope. Null if the player has no fitted GS.
-   * (The Rankings/Quarterly boards keep the raw GS + offset view via getBattleTypeSkill.)
+   * battle type = that type's own view, GS + the type's offset (= getBattleTypeSkill, the same
+   * value the Rankings/Quarterly boards show). No Overall is mixed in (Alex, 2026-10-08): thin data
+   * is handled like for a brand-new player — its large SE lets the type's questionnaire floor lead
+   * in classify(). SE: summed parameter variances (Fisher diagonal, no covariance), as for faction
+   * skills. `gamesCount` = decisive games IN that scope. Null if the player has no fitted GS, or
+   * has never played that battle type (no data there → questionnaire only).
    */
   getSkillEstimate(playerId: string, scope: string): SkillEstimate | null;
 }
-
-/**
- * Games in a battle type from which that type's skill is judged on its own data alone (Alex,
- * 2026-10-08). Below it, a linear ramp: the overall level fills in the rest (n/20 type data,
- * 1 − n/20 overall), so one early result can't swing a band.
- */
-export const BATTLE_TYPE_FULL_WEIGHT_GAMES = 20;
 
 /** A scoped skill estimate (see RatingModel.getSkillEstimate). */
 export interface SkillEstimate {
@@ -435,36 +428,26 @@ export function createRatingModel(data: RatingModelData): RatingModel {
     if (!e) return null;
     const gsVar = e.stdError * e.stdError;
 
-    // OVERALL: game-weighted; Var(GS + Σ wₜ·BTOₜ) with wₜ = gamesₜ/total, diagonal only.
-    const types = btoGamesByPlayer.get(playerId);
-    const total = types?.reduce((s, t) => s + t.gamesCount, 0) ?? 0;
-    let overall: SkillEstimate;
-    if (!types || total === 0) {
-      overall = { skill: e.generalSkill, se: e.stdError, gamesCount: e.gamesCount };
-    } else {
+    if (scope === 'OVERALL') {
+      // Game-weighted; Var(GS + Σ wₜ·BTOₜ) with wₜ = gamesₜ/total, diagonal only.
+      const types = btoGamesByPlayer.get(playerId);
+      const total = types?.reduce((s, t) => s + t.gamesCount, 0) ?? 0;
+      if (!types || total === 0) return { skill: e.generalSkill, se: e.stdError, gamesCount: e.gamesCount };
       let v = gsVar;
       for (const t of types) {
         const w = t.gamesCount / total;
         const se = btoEntry.get(`${playerId}:${t.battleType}`)?.stdError ?? 0;
         v += w * w * se * se;
       }
-      overall = { skill: getOverallSkill(playerId)!, se: Math.sqrt(v), gamesCount: e.gamesCount };
+      return { skill: getOverallSkill(playerId)!, se: Math.sqrt(v), gamesCount: e.gamesCount };
     }
-    if (scope === 'OVERALL') return overall;
 
-    // A battle type: linear ramp from the player's OVERALL level to that type's own data,
-    // skill = overall + w·(GS + BTO − overall), w = min(1, n / BATTLE_TYPE_FULL_WEIGHT_GAMES).
-    // From 20 games in the type it is the type's data alone. Below that the overall level fills in:
-    // the raw per-type view of a thin sample is far too volatile (the fit's own prior pulls it toward
-    // the BASE GS — prod 2026-10: 219 Domination + 1 Conquest game → raw Conquest 78% vs Overall 93%).
+    // A battle type: its own view (GS + offset), no Overall mixed in. Never played → no data there.
     const t = btoEntry.get(`${playerId}:${scope}`);
-    if (!t || t.gamesCount <= 0) return { skill: overall.skill, se: overall.se, gamesCount: 0 };
-    const raw = e.generalSkill + t.offset;
-    const rawVar = gsVar + t.stdError * t.stdError;
-    const w = Math.min(1, t.gamesCount / BATTLE_TYPE_FULL_WEIGHT_GAMES);
+    if (!t || t.gamesCount <= 0) return null;
     return {
-      skill: overall.skill + w * (raw - overall.skill),
-      se: Math.sqrt((1 - w) * (1 - w) * overall.se * overall.se + w * w * rawVar),
+      skill: e.generalSkill + t.offset,
+      se: Math.sqrt(gsVar + t.stdError * t.stdError),
       gamesCount: t.gamesCount,
     };
   };

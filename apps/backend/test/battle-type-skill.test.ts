@@ -47,21 +47,17 @@ describe('getSkillEstimate — scoped skill', () => {
     expect(dom.gamesCount).toBe(219);
   });
 
-  it('one game in a new battle type barely moves that type away from the overall level', () => {
+  it('a battle type = its own view (the value the Rankings board shows), no Overall mixed in', () => {
     const m = mazeModel();
-    const overall = m.getSkillEstimate('P', 'OVERALL')!.skill;
     const conq = m.getSkillEstimate('P', 'CONQUEST')!;
-    const rawConq = m.getBattleTypeSkill('P', 'CONQUEST')!; // the fit's raw per-type view
+    expect(conq.skill).toBeCloseTo(m.getBattleTypeSkill('P', 'CONQUEST')!, 10);
     expect(conq.gamesCount).toBe(1);
-    expect(overall - conq.skill).toBeLessThan(0.3); // shrunk toward the overall level…
-    expect(conq.skill).toBeGreaterThan(rawConq + 0.5); // …not left at the raw one-game value
+    // One game → a wide SE, so classification leans on the type's questionnaire floor.
+    expect(conq.se).toBeGreaterThan(3 * m.getSkillEstimate('P', 'DOMINATION')!.se);
   });
 
-  it('a battle type never played = the overall level, 0 games', () => {
-    const m = mazeModel();
-    const siege = m.getSkillEstimate('P', 'SIEGE')!;
-    expect(siege.skill).toBeCloseTo(m.getSkillEstimate('P', 'OVERALL')!.skill, 10);
-    expect(siege.gamesCount).toBe(0);
+  it('a battle type never played has no data (questionnaire only)', () => {
+    expect(mazeModel().getSkillEstimate('P', 'SIEGE')).toBeNull();
   });
 
   it('keeps a genuine per-type difference once both types have a real sample', () => {
@@ -74,25 +70,6 @@ describe('getSkillEstimate — scoped skill', () => {
     expect(dom).toBeGreaterThan(conq + 0.2);
     expect(overall).toBeLessThan(dom);
     expect(overall).toBeGreaterThan(conq);
-  });
-
-  it('linear ramp: n/20 type data below 20 games, the type data alone from 20 games on', () => {
-    const at = (conquestGames: number) => {
-      const m = fitRatingModel(
-        [...record('P', 70, 30, 'DOMINATION'), ...record('P', Math.floor(conquestGames / 4), conquestGames - Math.floor(conquestGames / 4), 'CONQUEST')],
-        { hierarchical: true },
-      );
-      const overall = m.getSkillEstimate('P', 'OVERALL')!.skill;
-      const raw = m.getBattleTypeSkill('P', 'CONQUEST')!;
-      const est = m.getSkillEstimate('P', 'CONQUEST')!.skill;
-      return { overall, raw, est };
-    };
-    const ten = at(10); // halfway
-    expect(ten.est).toBeCloseTo(ten.overall + 0.5 * (ten.raw - ten.overall), 10);
-    const twenty = at(20); // full weight
-    expect(twenty.est).toBeCloseTo(twenty.raw, 10);
-    const forty = at(40); // stays full weight
-    expect(forty.est).toBeCloseTo(forty.raw, 10);
   });
 
   it('null for a player without a fitted GS', () => {
@@ -161,16 +138,29 @@ describe('withBattleTypeScopes — admin catalogs saved before the rework', () =
 });
 
 describe('classifyWithModel', () => {
-  it('Maze: OVERALL and Domination stay Top, Conquest stays near it and is provisional', () => {
+  it('thin type data defers to that type\'s questionnaire floor (like a brand-new player)', () => {
     const m = mazeModel();
-    const overall = classifyWithModel(m, {}, CALIBRATION_QUESTIONS, 'P', 'OVERALL');
-    const conq = classifyWithModel(m, {}, CALIBRATION_QUESTIONS, 'P', 'CONQUEST');
-    expect(overall.scope).toBe('OVERALL');
-    expect(overall.provisional).toBe(false);
+    // Claims Advanced in Conquest; one lost Conquest game must not drag him far below that.
+    const answers = { best_result: 'tt_top16', conquest_self_rating: '4' };
+    const conq = classifyWithModel(m, answers, CALIBRATION_QUESTIONS, 'P', 'CONQUEST');
     expect(conq.scope).toBe('CONQUEST');
     expect(conq.scopeGames).toBe(1);
     expect(conq.provisional).toBe(true);
-    expect(conq.matchmakingWinChance).toBeGreaterThan(overall.matchmakingWinChance - 0.06);
+    expect(conq.questionnaireFloor).toBe(4);
+    expect(conq.gatingBand).toBeGreaterThanOrEqual(4);
+    expect(conq.matchmakingBand).toBeGreaterThanOrEqual(3);
+    const overall = classifyWithModel(m, answers, CALIBRATION_QUESTIONS, 'P', 'OVERALL');
+    expect(overall.scope).toBe('OVERALL');
+    expect(overall.provisional).toBe(false);
+  });
+
+  it('a battle type never played: questionnaire only — unrated without a type answer', () => {
+    const m = mazeModel();
+    expect(classifyWithModel(m, {}, CALIBRATION_QUESTIONS, 'P', 'SIEGE').rated).toBe(false);
+    const withAnswer = classifyWithModel(m, { siege_self_rating: '3' }, CALIBRATION_QUESTIONS, 'P', 'SIEGE');
+    expect(withAnswer.rated).toBe(true);
+    expect(withAnswer.generalSkill).toBeNull();
+    expect(withAnswer.matchmakingBand).toBe(3);
   });
 
   it('scopeForBattleType maps tournament battle types, falls back to OVERALL', () => {

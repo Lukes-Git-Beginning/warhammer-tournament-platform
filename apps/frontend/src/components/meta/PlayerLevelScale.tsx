@@ -114,7 +114,7 @@ export function PlayerLevelScale({
               title={
                 battleType === 'OVERALL'
                   ? 'Fewer than 5 games — this level is still settling.'
-                  : `Fewer than 5 ${SCOPE_LABEL[battleType]} games — this level leans on the overall level until more games are played.`
+                  : `Fewer than 5 ${SCOPE_LABEL[battleType]} games — this level still leans on your ${SCOPE_LABEL[battleType]} calibration answers.`
               }
             >
               Provisional · {games} {games === 1 ? 'game' : 'games'}
