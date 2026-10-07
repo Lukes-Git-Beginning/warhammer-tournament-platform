@@ -1,6 +1,20 @@
 # Battle-Type Skill — per-type bands, profile switcher, questionnaire rework
 
-Status: **DRAFT for Alex's review** (2026-10-08). Nothing built yet.
+Status: **BUILT on `feat/battle-type-skill` (2026-10-08), NOT deployed.** BE 1156 + FE 146 tests
+green, profile verified locally (Playwright screenshots).
+
+Deviations from the draft below, decided while building:
+- **Per-type skill is shrunk toward the OVERALL level**, not taken raw: `overall + w·(GS+BTO − overall)`,
+  `w = n/(n+10)`. The fit's own prior pulls the raw per-type view toward the *base* GS, which one game in
+  a new type already drags (Maze: raw Conquest 78% after 1 game vs 93% overall). Rankings/Quarterly
+  boards keep the raw `getBattleTypeSkill` (finals seeding depends on them) — aligning them is a follow-up.
+- **Open Play matchmaking** uses no band/GS (only faction fairness) → nothing to scope there.
+- Per-type SE = summed variances (Fisher diagonal), same convention as faction skills.
+- Registering for a band-gated tournament of a type the player wasn't asked about yet →
+  `CalibrationRequired` (wizard asks that type's questions first).
+- Per-type record uses the GAME-level set (`eligibleStatGameWhere`), not the points-board match set
+  (which needs a match winner and would drop a 1–1 Siege Bo2).
+- Classification no longer 404s when no game version is active (it is timeless).
 
 ## Trigger
 

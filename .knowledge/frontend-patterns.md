@@ -86,7 +86,7 @@ export const router = createRouter({ routeTree });
 | `/tournaments/create`        | `CreateTournamentPage` | `routes/CreateTournamentPage.tsx` |
 | `/tournaments/$slug`         | `TournamentDetail`     | `routes/TournamentDetail.tsx`     |
 | `/leaderboard`               | `LeaderboardPage`      | `routes/LeaderboardPage.tsx`      |
-| `/users/$id`                 | `UserProfilePage`      | `routes/UserProfilePage.tsx`      |
+| `/users/$id` (`?version=&battleType=`, beide optional; Default All-Time + meistgespielter Typ) | `UserProfilePage` | `routes/UserProfilePage.tsx` |
 | `/meta`                      | `MetaDashboard`        | `routes/MetaDashboard.tsx`        |
 | `/factions`                  | `FactionListPage`      | `routes/FactionListPage.tsx`      |
 | `/factions/$id`              | `FactionDetailPage`    | `routes/FactionDetailPage.tsx`    |

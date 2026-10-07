@@ -471,6 +471,14 @@ export interface PlayerClassificationDto {
   hasQuestionnaire: boolean;
   /** #18 — false when the player has no real signal; bandName is then "Unrated". */
   rated: boolean;
+  /** The scope classified: a battle type, or OVERALL (game-weighted summary). */
+  scope?: SkillScope;
+  /** Decisive games in that scope. */
+  scopeGames?: number;
+  /** Fewer than 5 games in the scope → show the value as provisional. */
+  provisional?: boolean;
+  /** Battle types a calibrated player hasn't answered yet (own-profile banner). */
+  pendingCalibrationTypes?: Exclude<SkillScope, 'OVERALL'>[];
 }
 
 export interface CalibrationOption {
@@ -482,10 +490,20 @@ export interface CalibrationQuestionDto {
   id: string;
   prompt: string;
   options: CalibrationOption[];
+  /** Battle types this question speaks to; absent = general (every type). */
+  battleTypes?: Exclude<SkillScope, 'OVERALL'>[];
 }
 
-export function getPlayerClassification(id: string): Promise<PlayerClassificationDto> {
-  return apiFetch<PlayerClassificationDto>(`/api/players/${id}/classification`);
+export function getPlayerClassification(id: string, battleType: SkillScope = 'OVERALL'): Promise<PlayerClassificationDto> {
+  const params = new URLSearchParams();
+  scopeParam(params, battleType);
+  const qs = params.toString();
+  return apiFetch<PlayerClassificationDto>(`/api/players/${id}/classification${qs ? `?${qs}` : ''}`);
+}
+
+/** My stored calibration answers — seeds the wizard so it only asks what's still open. */
+export function getMyCalibrationAnswers(): Promise<{ answers: Record<string, string> }> {
+  return apiFetch<{ answers: Record<string, string> }>('/api/me/calibration');
 }
 
 export function getCalibrationQuestions(): Promise<{ questions: CalibrationQuestionDto[] }> {
@@ -949,12 +967,29 @@ export interface UserVersionStats {
   games_played: number;
   wins: number;
   losses: number;
+  /** false for a single battle type — points are an all-types board (shown under Overall only). */
+  pointsAvailable?: boolean;
 }
 
-/** Player totals for one version, or All-Time (versionId 'all', the default). */
-export function getUserVersionStats(id: string, versionId: string): Promise<UserVersionStats> {
-  const q = versionId ? `?versionId=${encodeURIComponent(versionId)}` : '';
-  return apiFetch<UserVersionStats>(`/api/users/${id}/version-stats${q}`);
+/** Profile scope: the game-weighted summary, or one battle type. */
+export type SkillScope = 'OVERALL' | 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+
+/** `?battleType=` for a scope (omitted for OVERALL, the server default). */
+function scopeParam(params: URLSearchParams, battleType: SkillScope | undefined): void {
+  if (battleType && battleType !== 'OVERALL') params.set('battleType', battleType);
+}
+
+/** Player totals for one version, or All-Time (versionId 'all', the default); optionally one battle type. */
+export function getUserVersionStats(
+  id: string,
+  versionId: string,
+  battleType: SkillScope = 'OVERALL',
+): Promise<UserVersionStats> {
+  const params = new URLSearchParams();
+  if (versionId) params.set('versionId', versionId);
+  scopeParam(params, battleType);
+  const qs = params.toString();
+  return apiFetch<UserVersionStats>(`/api/users/${id}/version-stats${qs ? `?${qs}` : ''}`);
 }
 
 export function listVersions(): Promise<{ data: VersionSummary[] }> {
@@ -2430,9 +2465,11 @@ export function getMatchupMatrix(versionId?: string): Promise<FactionMatchupMatr
 export function getPlayerFactionProficiency(
   playerId: string,
   versionId?: string,
+  battleType?: SkillScope,
 ): Promise<PlayerFactionProficiencyResponse> {
   const params = new URLSearchParams();
   if (versionId) params.set('versionId', versionId);
+  scopeParam(params, battleType);
   const qs = params.toString();
   return apiFetch<PlayerFactionProficiencyResponse>(
     `/api/players/${playerId}/faction-proficiency${qs ? `?${qs}` : ''}`,
@@ -3169,8 +3206,11 @@ export function getUserTournaments(
   userId: string,
   page = 1,
   limit = 10,
+  battleType?: SkillScope,
 ): Promise<{ results: RecentTournamentEntry[]; total: number; page: number; limit: number }> {
-  return apiFetch(`/api/users/${encodeURIComponent(userId)}/tournaments?page=${page}&limit=${limit}`);
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  scopeParam(params, battleType);
+  return apiFetch(`/api/users/${encodeURIComponent(userId)}/tournaments?${params.toString()}`);
 }
 
 export type FactionTopPlayer = {
@@ -3510,8 +3550,11 @@ export interface SkillHistory {
   points: SkillHistoryPoint[];
 }
 
-export function getSkillHistory(userId: string): Promise<SkillHistory> {
-  return apiFetch<SkillHistory>(`/api/users/${userId}/skill-history`);
+export function getSkillHistory(userId: string, battleType: SkillScope = 'OVERALL'): Promise<SkillHistory> {
+  const params = new URLSearchParams();
+  scopeParam(params, battleType);
+  const qs = params.toString();
+  return apiFetch<SkillHistory>(`/api/users/${userId}/skill-history${qs ? `?${qs}` : ''}`);
 }
 
 // ---------------------------------------------------------------------------

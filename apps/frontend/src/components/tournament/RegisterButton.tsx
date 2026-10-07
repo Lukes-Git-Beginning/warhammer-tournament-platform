@@ -12,6 +12,7 @@ import {
   getMyTeams,
 } from '@/lib/api';
 import type { Tournament, ParticipantStatus, ApiError } from '@/lib/api';
+import type { BattleType } from '@rizzotto/types';
 import { Button } from '@/components/ui/button';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { CalibrationWizard } from '@/components/meta/CalibrationWizard';
@@ -164,18 +165,21 @@ function BandPickerDialog({
   onOpenChange,
   userId,
   onConfirm,
+  battleType,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: string;
   onConfirm: (band: number) => void;
+  /** The tournament's battle type — divisions are judged in that type's skill. */
+  battleType: BattleType;
 }) {
   const [calibrationOpen, setCalibrationOpen] = useState(false);
   const [selectedBand, setSelectedBand] = useState<number | null>(null);
 
   const { data: classification, refetch } = useQuery({
-    queryKey: ['player-classification', userId],
-    queryFn: () => getPlayerClassification(userId),
+    queryKey: ['player-classification', userId, battleType],
+    queryFn: () => getPlayerClassification(userId, battleType),
     enabled: open,
     retry: false,
   });
@@ -191,7 +195,10 @@ function BandPickerDialog({
   // matchmakingBand is 1-based (1..5); BANDS array is 0-based
   const currentBand = classification?.matchmakingBand ?? 1;
   const bandName   = classification?.bandName ?? 'New';
-  const needsCalibration = classification != null && !classification.hasQuestionnaire;
+  // Uncalibrated, or calibrated before this battle type had its own questions.
+  const needsCalibration =
+    classification != null &&
+    (!classification.hasQuestionnaire || (classification.pendingCalibrationTypes ?? []).includes(battleType));
 
   // Pre-select currentBand when data arrives (only if not manually chosen yet)
   const effectiveBand = selectedBand ?? currentBand;
@@ -667,6 +674,7 @@ export function RegisterButton({ tournament, participantStatus, isLoggedIn, user
           open={pickingBand}
           onOpenChange={setPickingBand}
           userId={userId}
+          battleType={tournament.battle_type ?? 'DOMINATION'}
           onConfirm={(band) => {
             // After the skill band, continue any faction step the mode needs
             // (Free Pick choice, or the SFT/2D3 faction picker) before registering;

@@ -12,6 +12,7 @@
 import type { PrismaClient, BattleType } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { confirmedMatchWhere, getRatingModel } from './rating-model-service.js';
+import { eligibleStatGameWhere } from './stat-eligibility.js';
 import { rawPoints, opponentShare, opponentModifier, finalPoints } from './scoring-service.js';
 import { effectiveTiersOf, SUPPORTER_FLAG_SELECT, NO_TIERS } from './supporter-service.js';
 import type { SupporterTiers } from './supporter-status.js';
@@ -186,10 +187,11 @@ const ZERO_STATS: PlayerStats = { total_points: 0, games_played: 0, wins: 0, los
 
 /**
  * A player's raw game record (games / W / L) in ONE battle type, for one version or all-time
- * (null). Same decisive-confirmed-game set the dynamic leaderboard counts (confirmedMatchWhere —
- * all-time = every versioned match), just filtered to the battle type. The anti-farming POINTS
- * are an all-battle-types board and are deliberately not split per type (Alex, 2026-10-08), so
- * total_points is 0 here and the profile shows points under Overall only.
+ * (null). GAME-level set — the decisive leaderboard-eligible games the rating model fits and the
+ * profile's battle-type switcher counts (eligibleStatGameWhere) — NOT the match-level points-board
+ * set, which needs a match winner and so would drop e.g. the games of a 1–1 Siege Bo2. The
+ * anti-farming POINTS are an all-battle-types board and are deliberately not split per type
+ * (Alex, 2026-10-08), so total_points is 0 here and the profile shows points under Overall only.
  */
 export async function getPlayerBattleTypeRecord(
   prisma: PrismaClient,
@@ -197,18 +199,13 @@ export async function getPlayerBattleTypeRecord(
   versionId: string | null,
   battleType: BattleType,
 ): Promise<PlayerStats> {
-  const { version_id: _v, ...matchWhere } = confirmedMatchWhere(versionId ?? '');
+  const eligible = eligibleStatGameWhere(versionId);
   const games = await prisma.matchGame.findMany({
     where: {
-      status: 'COMPLETED',
+      ...eligible,
       winner_id: { not: null },
-      counts_for_leaderboard: true,
       battle_type: battleType,
-      match: {
-        ...matchWhere,
-        version_id: versionId ?? { not: null },
-        AND: [{ OR: [{ player1_id: playerId }, { player2_id: playerId }] }],
-      },
+      match: { AND: [eligible.match ?? {}, { OR: [{ player1_id: playerId }, { player2_id: playerId }] }] },
     },
     select: { winner_id: true },
   });

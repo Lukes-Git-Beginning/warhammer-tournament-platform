@@ -19,18 +19,19 @@ import {
 } from '../lib/skill-classification-service.js';
 import { SKILL_BATTLE_TYPES } from '../lib/skill-classification.js';
 
+// Classification is timeless (an all-time fit) — the version is a legacy parameter only. An unknown
+// explicit version is still a 404, but "no active version" no longer blocks a player's band.
 async function resolveVersionId(
   fastify: FastifyInstance,
   versionId: string | undefined,
-): Promise<{ id: string } | { error: { code: number; message: string } }> {
+): Promise<{ id: string | null } | { error: { code: number; message: string } }> {
   if (versionId) {
     const version = await fastify.prisma.gameVersion.findUnique({ where: { id: versionId } });
     if (!version) return { error: { code: 404, message: 'Version not found' } };
     return { id: version.id };
   }
   const active = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
-  if (!active) return { error: { code: 404, message: 'No active version' } };
-  return { id: active.id };
+  return { id: active?.id ?? null };
 }
 
 const err = (code: number, message: string): { error: string; message: string; statusCode: number } => ({

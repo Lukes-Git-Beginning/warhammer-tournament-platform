@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo, useEffect } from 'react';
-import { useParams, Link } from '@tanstack/react-router';
+import { useParams, useSearch, useNavigate, Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import {
   getUserProfile,
@@ -14,6 +14,7 @@ import {
   liftAdminUserQueueCooldown,
   type AntiFarmingOpponent,
   type UserGamesFilters,
+  type SkillScope,
 } from '@/lib/api.js';
 import { patchMePreferences } from '@/lib/onboarding.js';
 import type { UserMe } from '@rizzotto/types';
@@ -192,15 +193,66 @@ interface StatsSectionProps {
   losses: number;
   gamesPlayed: number;
   versionId?: string; // undefined = All-Time; scopes the faction proficiency view
+  battleType: SkillScope; // the page's battle-type scope
 }
 
-function StatsSection({ userId, wins, losses, gamesPlayed, versionId }: StatsSectionProps) {
+function StatsSection({ userId, wins, losses, gamesPlayed, versionId, battleType }: StatsSectionProps) {
   const winRate = gamesPlayed > 0 ? wins / gamesPlayed : 0;
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_2fr]">
       <WinLossCard wins={wins} losses={losses} winRate={winRate} />
-      <PlayerFactionProficiencyCard userId={userId} versionId={versionId} />
+      <PlayerFactionProficiencyCard userId={userId} versionId={versionId} battleType={battleType} />
+    </div>
+  );
+}
+
+const SCOPE_OPTIONS: { value: SkillScope; label: string }[] = [
+  { value: 'OVERALL', label: 'Overall' },
+  { value: 'DOMINATION', label: 'Domination' },
+  { value: 'CONQUEST', label: 'Conquest' },
+  { value: 'SIEGE', label: 'Siege' },
+];
+
+/** Page-wide battle-type switcher. Offers Overall + every type the player has games in (and the
+ *  selected one, e.g. from a shared link). Hidden when there is nothing to switch between. */
+function BattleTypeSwitcher({
+  value,
+  played,
+  onChange,
+}: {
+  value: SkillScope;
+  played: Record<string, number>;
+  onChange: (scope: SkillScope) => void;
+}) {
+  const playedTypes = Object.keys(played).filter((k) => (played[k] ?? 0) > 0);
+  // One type (or none) played and nothing exotic selected → Overall ≈ that type, nothing to switch.
+  if (playedTypes.length <= 1 && (value === 'OVERALL' || playedTypes.includes(value))) return null;
+  const options = SCOPE_OPTIONS.filter((o) => o.value === 'OVERALL' || o.value === value || playedTypes.includes(o.value));
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">Battle type</span>
+      <div className="flex flex-wrap gap-1" role="radiogroup" aria-label="Battle type">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={value === o.value}
+            onClick={() => onChange(o.value)}
+            className={`rounded border px-3 py-1.5 text-sm font-medium transition-colors ${
+              value === o.value
+                ? 'border-rizzotto-gold-500 bg-rizzotto-gold-500/10 text-rizzotto-gold-400'
+                : 'border-rizzotto-iron-700 bg-rizzotto-iron-900 text-rizzotto-stone-300 hover:border-rizzotto-iron-500'
+            }`}
+          >
+            {o.label}
+            {o.value !== 'OVERALL' && (played[o.value] ?? 0) > 0 && (
+              <span className="ml-1.5 text-xs text-stone-500">{played[o.value]}</span>
+            )}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -226,12 +278,15 @@ function Pager({ page, totalPages, onChange }: { page: number; totalPages: numbe
   );
 }
 
-function RecentTournamentsSection({ userId }: { userId: string }) {
+function RecentTournamentsSection({ userId, battleType }: { userId: string; battleType: SkillScope }) {
   const { t } = useTranslation();
   const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [battleType]);
   const { data } = useQuery({
-    queryKey: ['user-tournaments', userId, page],
-    queryFn: () => getUserTournaments(userId, page, 10),
+    queryKey: ['user-tournaments', userId, page, battleType],
+    queryFn: () => getUserTournaments(userId, page, 10, battleType),
   });
   const results = data?.results ?? [];
   const total = data?.total ?? 0;
@@ -290,10 +345,11 @@ function RecentTournamentsSection({ userId }: { userId: string }) {
 const GAME_SELECT_CLASS =
   'rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none';
 
-function RecentGamesSection({ userId }: { userId: string }) {
+function RecentGamesSection({ userId, scope }: { userId: string; scope: SkillScope }) {
   const [page, setPage] = useState(1);
   const [result, setResult] = useState('');
-  const [battleType, setBattleType] = useState('');
+  // Battle type comes from the page-wide switcher (OVERALL = all types).
+  const battleType = scope === 'OVERALL' ? '' : scope;
   const [ownFactionId, setOwnFactionId] = useState('');
   const [oppFactionId, setOppFactionId] = useState('');
   const [source, setSource] = useState('');
@@ -330,12 +386,6 @@ function RecentGamesSection({ userId }: { userId: string }) {
           <option value="win">Wins</option>
           <option value="loss">Losses</option>
           <option value="draw">Draws</option>
-        </select>
-        <select value={battleType} onChange={(e) => setBattleType(e.target.value)} aria-label="Battle type" className={GAME_SELECT_CLASS}>
-          <option value="">All battle types</option>
-          <option value="DOMINATION">Domination</option>
-          <option value="CONQUEST">Conquest</option>
-          <option value="SIEGE">Siege</option>
         </select>
         <select value={ownFactionId} onChange={(e) => setOwnFactionId(e.target.value)} aria-label="Your faction" className={GAME_SELECT_CLASS}>
           <option value="">Any faction</option>
@@ -523,21 +573,30 @@ export function UserProfilePage() {
   const { data: me } = useAuthQuery();
   const isOwnProfile = me?.id === id;
   const [wizardOpen, setWizardOpen] = useState(false);
-  // Per-version stats block: defaults to All-Time (Alex 2026-09-25); 'all' reuses the profile's
-  // all_time totals, a specific version is fetched on demand.
-  const [statsVersion, setStatsVersion] = useState<string>('all');
+  // Page filters live in the URL (shareable, survive reload). Version: defaults to All-Time
+  // (Alex 2026-09-25); 'all' reuses the profile's all_time totals, a version is fetched on demand.
+  // Battle type: defaults to the player's most-played type (Alex 2026-10-08).
+  const search = useSearch({ from: '/users/$id' });
+  const navigate = useNavigate({ from: '/users/$id' });
+  const statsVersion = search.version ?? 'all';
+  const setStatsVersion = (v: string) =>
+    void navigate({ search: (s) => ({ ...s, version: v === 'all' ? undefined : v }), replace: true, resetScroll: false });
+  const setScope = (bt: SkillScope) =>
+    void navigate({ search: (s) => ({ ...s, battleType: bt }), replace: true, resetScroll: false });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['user-profile', id],
     queryFn: () => getUserProfile(id),
     retry: false,
   });
+  const scope: SkillScope =
+    search.battleType ?? (data?.most_played_battle_type as SkillScope | null | undefined) ?? 'OVERALL';
 
   const { data: versionsData } = useQuery({ queryKey: ['versions'], queryFn: listVersions });
   const { data: verStats } = useQuery({
-    queryKey: ['user-version-stats', id, statsVersion],
-    queryFn: () => getUserVersionStats(id, statsVersion),
-    enabled: statsVersion !== 'all',
+    queryKey: ['user-version-stats', id, statsVersion, scope],
+    queryFn: () => getUserVersionStats(id, statsVersion, scope),
+    enabled: data != null && (statsVersion !== 'all' || scope !== 'OVERALL'),
   });
 
   if (isLoading) {
@@ -567,20 +626,24 @@ export function UserProfilePage() {
 
   // Version scope for the stats blocks (Record, Win/Loss, Faction Proficiency). 'all' → All-Time
   // (reuse the profile's all_time totals); a specific version → the on-demand version-stats fetch.
+  // A battle type narrows them further (games/W/L of that type; points stay Overall-only).
   const statsVersionId = statsVersion === 'all' ? undefined : statsVersion;
   const shownStats =
-    statsVersion === 'all'
+    statsVersion === 'all' && scope === 'OVERALL'
       ? {
           total_points: all_time.total_points,
           games_played: all_time.games_played,
           wins: all_time.wins,
           losses: all_time.losses,
+          pointsAvailable: true,
         }
       : verStats;
-  const scopeName =
+  const versionName =
     statsVersion === 'all'
       ? t('user_profile.all_time')
       : versionsData?.data.find((v) => v.id === statsVersion)?.name ?? '';
+  const scopeLabel = SCOPE_OPTIONS.find((o) => o.value === scope)?.label ?? 'Overall';
+  const scopeName = scope === 'OVERALL' ? versionName : `${versionName} · ${scopeLabel}`;
 
   return (
     <PageShell variant="wide" className="space-y-8">
@@ -599,8 +662,11 @@ export function UserProfilePage() {
         </div>
       </div>
 
-      {/* Stats version scope (top) — applies to Record, Win/Loss and Faction Proficiency below.
-          The skill standing stays all-time (canonical rating) and is labelled as such. */}
+      {/* Page scope (top). Battle type applies to EVERYTHING below (standing, chart, record,
+          proficiency, tournaments, games). Stats version applies to Record, Win/Loss and Faction
+          Proficiency; the skill standing stays all-time (canonical rating) and is labelled as such. */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <BattleTypeSwitcher value={scope} played={data.battle_type_games ?? {}} onChange={setScope} />
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">Stats version</span>
         <select
@@ -618,8 +684,10 @@ export function UserProfilePage() {
           ))}
         </select>
       </div>
+      </div>
 
-      {/* Skill standing — always all-time (canonical rating; the stats-version selector does NOT affect it). */}
+      {/* Skill standing — always all-time (canonical rating; the stats-version selector does NOT
+          affect it), in the selected battle type (a Conquest tournament gates on Conquest skill). */}
       <div className="space-y-1.5">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
           Skill standing · all-time
@@ -628,6 +696,7 @@ export function UserProfilePage() {
           userId={id}
           isOwnProfile={isOwnProfile}
           onCalibrate={() => setWizardOpen(true)}
+          battleType={scope}
         />
       </div>
       {isOwnProfile && (
@@ -658,11 +727,14 @@ export function UserProfilePage() {
           <p className="py-4 text-sm text-stone-500">{t('common.loading')}</p>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <StatCard label={t('user_profile.stats.points')} value={Math.round(shownStats.total_points)} />
+            {/* Points are an all-battle-types board → Overall only (Alex 2026-10-08). */}
+            {shownStats.pointsAvailable !== false && (
+              <StatCard label={t('user_profile.stats.points')} value={Math.round(shownStats.total_points)} />
+            )}
             <StatCard label={t('user_profile.stats.games')} value={shownStats.games_played} />
             <StatCard label={t('user_profile.stats.wins')} value={shownStats.wins} />
             <StatCard label={t('user_profile.stats.losses')} value={shownStats.losses} />
-            {statsVersion === 'all' && (
+            {statsVersion === 'all' && scope === 'OVERALL' && (
               <StatCard label={t('user_profile.stats.tournaments')} value={all_time.tournaments_played} />
             )}
           </div>
@@ -678,6 +750,7 @@ export function UserProfilePage() {
           losses={shownStats?.losses ?? 0}
           gamesPlayed={shownStats?.games_played ?? 0}
           versionId={statsVersionId}
+          battleType={scope}
         />
       </section>
 
@@ -687,13 +760,13 @@ export function UserProfilePage() {
       )}
 
       {/* Recent Tournaments — paginated (10/page), all available. */}
-      <RecentTournamentsSection userId={id} />
+      <RecentTournamentsSection userId={id} battleType={scope} />
 
       {/* Timezone (own profile only) */}
       {isOwnProfile && me && <TimezoneSection user={me} />}
 
       {/* Recent Games — paginated (25/page) + filters, all available. */}
-      <RecentGamesSection userId={id} />
+      <RecentGamesSection userId={id} scope={scope} />
     </PageShell>
   );
 }

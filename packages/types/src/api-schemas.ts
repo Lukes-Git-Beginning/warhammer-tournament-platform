@@ -275,6 +275,10 @@ export const UserProfileResponseSchema = z.object({
     tournaments_played: z.number().int(),
     total_points: z.number(),
   }),
+  /** Decisive 1v1 games per battle type (types never played are absent) — the profile switcher. */
+  battle_type_games: z.record(z.string(), z.number().int()).optional(),
+  /** The player's most-played battle type (the profile's default view); null with no games. */
+  most_played_battle_type: z.string().nullable().optional(),
   recent_results: z.array(
     z.object({
       tournament: z.object({ slug: z.string(), name: z.string(), start_date: z.string().datetime() }),

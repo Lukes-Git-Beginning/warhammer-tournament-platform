@@ -123,6 +123,17 @@ const userProfileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/users/$id',
   component: UserProfilePage,
+  // Profile filters in the URL (shareable, survive reload). Both optional → plain profile links stay
+  // valid; absent = the page defaults (All-Time, the player's most-played battle type).
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { version?: string; battleType?: 'OVERALL' | 'DOMINATION' | 'CONQUEST' | 'SIEGE' } => {
+    const bt = search.battleType;
+    return {
+      ...(typeof search.version === 'string' && search.version !== 'all' ? { version: search.version } : {}),
+      ...(bt === 'OVERALL' || bt === 'DOMINATION' || bt === 'CONQUEST' || bt === 'SIEGE' ? { battleType: bt } : {}),
+    };
+  },
 });
 
 const h2hRoute = createRoute({

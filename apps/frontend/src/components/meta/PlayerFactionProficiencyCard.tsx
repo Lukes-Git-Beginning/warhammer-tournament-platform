@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import {
   getPlayerFactionProficiency,
   getFactions,
+  type SkillScope,
 } from '@/lib/api.js';
 import type { PlayerFactionProficiencyDto, FactionDto } from '@rizzotto/types';
 import { EmptyState } from '@/components/ui/empty-state.js';
@@ -11,6 +12,8 @@ import { FactionBadge } from './FactionBadge.js';
 interface PlayerFactionProficiencyCardProps {
   userId: string;
   versionId?: string;
+  /** OVERALL (all battle types) or one battle type — a type is fitted on its own games. */
+  battleType?: SkillScope;
 }
 
 function SkillBar({ value }: { value: number }) {
@@ -85,10 +88,11 @@ function ProficiencyRow({
 export function PlayerFactionProficiencyCard({
   userId,
   versionId,
+  battleType = 'OVERALL',
 }: PlayerFactionProficiencyCardProps) {
   const { data: proficiency, isLoading: loadingProf } = useQuery({
-    queryKey: ['player-faction-proficiency', userId, versionId],
-    queryFn: () => getPlayerFactionProficiency(userId, versionId),
+    queryKey: ['player-faction-proficiency', userId, versionId, battleType],
+    queryFn: () => getPlayerFactionProficiency(userId, versionId, battleType),
     retry: false,
   });
 

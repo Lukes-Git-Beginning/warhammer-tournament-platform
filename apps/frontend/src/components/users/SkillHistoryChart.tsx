@@ -9,17 +9,27 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from 'recharts';
-import { getSkillHistory } from '@/lib/api.js';
+import { getSkillHistory, type SkillScope } from '@/lib/api.js';
 import { BANDS, THRESHOLDS, bandIndex, winChance } from '@/components/meta/skillBands.js';
 
 interface Props {
   userId: string;
+  /** OVERALL (game-weighted) or one battle type. */
+  battleType?: SkillScope;
 }
+
+/** Below this many games in the scope a point is provisional (dashed) — matches the backend. */
+const PROVISIONAL_MIN_GAMES = 5;
 
 interface Row {
   date: string;
   winPct: number;
   band: number;
+  games: number;
+  /** winPct on solid (>= PROVISIONAL_MIN_GAMES) points, else null. */
+  solidPct: number | null;
+  /** winPct on provisional points (+ the first solid one, to join the two lines), else null. */
+  provPct: number | null;
 }
 
 // Band boundaries as win-% vs the average player (sigmoid of the log-odds
@@ -83,6 +93,10 @@ function ChartTooltip({
         {BANDS[row.band]!.name}
       </div>
       <div className="text-stone-300">{Math.round(row.winPct)}% vs. average</div>
+      <div className="text-stone-500">
+        {row.games} {row.games === 1 ? 'game' : 'games'}
+        {row.games < PROVISIONAL_MIN_GAMES ? ' · provisional' : ''}
+      </div>
     </div>
   );
 }
@@ -91,12 +105,13 @@ function ChartTooltip({
  * General Skill over time, drawn as win-% vs the average player. The line is
  * painted in the colour of the skill band the player was in at each point,
  * flipping hard at the midpoint whenever the band changes. Dashed reference
- * lines mark the band boundaries.
+ * lines mark the band boundaries. Points with fewer than PROVISIONAL_MIN_GAMES games in the
+ * scope are drawn dashed (provisional).
  */
-export function SkillHistoryChart({ userId }: Props) {
+export function SkillHistoryChart({ userId, battleType = 'OVERALL' }: Props) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['skill-history', userId],
-    queryFn: () => getSkillHistory(userId),
+    queryKey: ['skill-history', userId, battleType],
+    queryFn: () => getSkillHistory(userId, battleType),
   });
 
   if (isLoading) {
@@ -110,11 +125,19 @@ export function SkillHistoryChart({ userId }: Props) {
     );
   }
 
-  const rows: Row[] = (data?.points ?? []).map((p) => ({
-    date: p.date,
-    winPct: winChance(p.generalSkill),
-    band: bandIndex(p.generalSkill),
-  }));
+  const rows: Row[] = (data?.points ?? []).map((p, i, all) => {
+    const winPct = winChance(p.generalSkill);
+    const solid = p.gamesCount >= PROVISIONAL_MIN_GAMES;
+    const prevProvisional = i > 0 && all[i - 1]!.gamesCount < PROVISIONAL_MIN_GAMES;
+    return {
+      date: p.date,
+      winPct,
+      band: bandIndex(p.generalSkill),
+      games: p.gamesCount,
+      solidPct: solid ? winPct : null,
+      provPct: !solid || prevProvisional ? winPct : null,
+    };
+  });
 
   if (rows.length === 0) {
     return <p className="text-sm italic text-stone-500">No skill history yet.</p>;
@@ -133,7 +156,7 @@ export function SkillHistoryChart({ userId }: Props) {
   }
   stops.push({ offset: 1, color: BANDS[rows[n - 1]!.band]!.hex });
 
-  const gradId = `skillband-${userId}`;
+  const gradId = `skillband-${userId}-${battleType}`;
   const lastHex = BANDS[rows[n - 1]!.band]!.hex;
 
   return (
@@ -174,9 +197,21 @@ export function SkillHistoryChart({ userId }: Props) {
         <Tooltip content={<ChartTooltip />} />
         <Line
           type="monotone"
-          dataKey="winPct"
+          dataKey="solidPct"
           stroke={`url(#${gradId})`}
           strokeWidth={2.5}
+          dot={n === 1 ? { r: 4, fill: lastHex } : false}
+          activeDot={{ r: 4, fill: lastHex, stroke: '#1c1917' }}
+          isAnimationActive={false}
+        />
+        {/* Provisional stretch (too few games in this scope) — dashed and dimmer. */}
+        <Line
+          type="monotone"
+          dataKey="provPct"
+          stroke={`url(#${gradId})`}
+          strokeWidth={2}
+          strokeDasharray="4 4"
+          strokeOpacity={0.7}
           dot={n === 1 ? { r: 4, fill: lastHex } : false}
           activeDot={{ r: 4, fill: lastHex, stroke: '#1c1917' }}
           isAnimationActive={false}
