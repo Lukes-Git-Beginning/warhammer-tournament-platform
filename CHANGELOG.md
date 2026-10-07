@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.18.0] — 2026-10-07
+
+### Added
+- **Your Open Play queue settings are now saved.** Pick your battle types, your match format (Bo1 and/or Bo3) and 1v1 or 2v2 once, and they apply every time you join the queue: from the Open Play page, "Queue again" after a match, the landing page and the Discord buttons. Change them on the Open Play page whenever you like. New players start with all battle types, Bo1 and Bo3, and 1v1.
+- **Bo1 and Bo3 in Open Play.** Choose one or both. Two players are matched when they share a battle type and a match format. If both formats are shared, the match is a Bo1. Siege is always a Bo2.
+- **A short note on the Open Play page when your selection is very narrow**, so you know a match may take longer to find.
+- **The admin queue overview shows the match formats** each entry is waiting for.
+
+### Changed
+- **Discord queue messages are now tailored to you.** You only get a message when someone is waiting whose battle type, format and team size fit your saved settings, and the message lists the available matches (for example "Conquest, 1v1, Bo1") with one button per match. Clicking a button starts that match right away, without changing your saved settings. If the match is already gone, you are told so and you are not added to the queue.
+- If your saved 2v2 team is no longer valid, joining the queue falls back to 1v1 for that join and keeps your 2v2 setting.
+
 ## [2.17.0] — 2026-10-07
 
 ### Added
