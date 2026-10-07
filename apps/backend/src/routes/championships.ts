@@ -15,6 +15,8 @@ import {
   openAvailabilityRound,
   setInviteRsvp,
   setInviteRsvpByManager,
+  promoteReserve,
+  ReserveError,
   computeFieldView,
   pickRaffleWinner,
   type QuarterlyBattleType,
@@ -26,6 +28,7 @@ import {
   notifyRaffleWinner,
   notifyAvailabilityInvites,
   notifyRsvpSetByManager,
+  notifyReservePromoted,
 } from '../lib/championship-notify.js';
 
 const QUARTERLY_BATTLE_TYPES: QuarterlyBattleType[] = ['DOMINATION', 'CONQUEST', 'SIEGE'];
@@ -152,6 +155,13 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const inviteCount = await fastify.prisma.championshipInvite.count({ where: { tournament_id: t.id } });
         if (inviteCount > 0) {
+          // Once the field exists it is only changed via promote-reserve. A second seed would
+          // rebuild it from the invites' RSVPs and silently undo drops and promotions (a dropped
+          // player's invite can still read AVAILABLE), so re-seeding is locked.
+          const seededCount = await fastify.prisma.tournamentParticipant.count({ where: { tournament_id: t.id, deleted_at: null } });
+          if (seededCount > 0) {
+            return reply.code(409).send({ error: 'Conflict', message: 'This final is already seeded. Use the reserve controls to replace a player.', statusCode: 409 });
+          }
           // Availability-round path: seed from the confirmed (AVAILABLE) invitees, top-N by rank.
           const result = await seedFromConfirmed(fastify.prisma, fastify.redis, {
             tournamentId: t.id,
@@ -308,6 +318,55 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
       if (!result) return reply.code(404).send({ error: 'NotFound', message: 'No such invitee in this final.', statusCode: 404 });
       if (result.rsvp !== 'PENDING') void notifyRsvpSetByManager(fastify.prisma, t.id, result.userId, result.rsvp);
       return { rsvp: result.rsvp };
+    },
+  );
+
+  // POST /api/championships/:slug/promote-reserve — staff/host of the final: after seeding and before
+  // the start, replace a dropped/unavailable finalist with the next reserve (or promote a chosen
+  // reserve into a slot freed by an earlier drop). Seeds are renumbered by frozen rank; the
+  // promoted competitor is DM'd.
+  fastify.post(
+    '/api/championships/:slug/promote-reserve',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      const body = z
+        .object({ dropCompetitorId: z.string().uuid().optional(), promoteCompetitorId: z.string().uuid().optional() })
+        .refine((b) => b.dropCompetitorId || b.promoteCompetitorId, { message: 'dropCompetitorId or promoteCompetitorId is required' })
+        .safeParse(request.body);
+      if (!body.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: body.error.issues[0]?.message ?? 'Invalid body', statusCode: 400 });
+      }
+      const t = await fastify.prisma.tournament.findUnique({
+        where: { slug },
+        select: { id: true, championship_kind: true, status: true },
+      });
+      if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
+      const forbidden = await forbidUnlessManager(request, t.id);
+      if (forbidden) return reply.code(403).send(forbidden);
+      if (t.championship_kind === 'NONE') {
+        return reply.code(400).send({ error: 'BadRequest', message: 'This tournament is not a championship final.', statusCode: 400 });
+      }
+      if (t.status === 'ONGOING' || t.status === 'COMPLETED') {
+        return reply.code(409).send({ error: 'Conflict', message: 'The final has already started.', statusCode: 409 });
+      }
+      try {
+        const result = await promoteReserve(fastify.prisma, {
+          tournamentId: t.id,
+          dropCompetitorId: body.data.dropCompetitorId,
+          promoteCompetitorId: body.data.promoteCompetitorId,
+          actorId: request.user.sub,
+          redis: fastify.redis,
+        });
+        void notifyReservePromoted(fastify.prisma, t.id, result.promoted.userId, result.promoted.seed);
+        return result;
+      } catch (err) {
+        if (err instanceof ReserveError) {
+          const label = err.statusCode === 404 ? 'NotFound' : err.statusCode === 409 ? 'Conflict' : 'BadRequest';
+          return reply.code(err.statusCode).send({ error: label, message: err.message, statusCode: err.statusCode });
+        }
+        throw err;
+      }
     },
   );
 

@@ -1261,6 +1261,7 @@ export async function notifyHostsOfWithdrawal(
   tournamentId: string,
   userId: string,
   excludeUserId?: string,
+  note?: string,
 ): Promise<void> {
   if (!getToken()) return;
   try {
@@ -1283,7 +1284,8 @@ export async function notifyHostsOfWithdrawal(
     const msg =
       `**[RizzOtto's Arena] Player dropped — ${tournament.name}**\n` +
       `<@${user.discord_id}> is no longer in the tournament. ` +
-      `Review the bracket at <${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}>.`;
+      `Review the bracket at <${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}>.` +
+      (note ? ` ${note}` : '');
     await Promise.allSettled(hosts.map((h) => sendDm(h.discord_id, msg)));
   } catch (err) {
     console.warn('[discord-notify] notifyHostsOfWithdrawal error (non-fatal):', err);

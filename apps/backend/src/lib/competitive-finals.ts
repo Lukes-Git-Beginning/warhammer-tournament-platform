@@ -16,7 +16,7 @@
 import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { computeGsBoard, type BattleTypeFilter, type CompetitorFormatFilter } from './gs-board.js';
-import { captainMap } from './competitors.js';
+import { captainMap, resolveCompetitorId } from './competitors.js';
 import {
   qualiGate,
   parseMonth,
@@ -593,6 +593,7 @@ export interface FieldEntry {
   rsvpByManager?: boolean; // availability phase only: rsvp was set by a host/staff on their behalf
   status?: string; // seeded phase only (participant status)
   inField: boolean; // preview: within top-N; availability: within top-N of AVAILABLE; seeded: is in the field
+  reserve?: boolean; // seeded phase only: AVAILABLE but not in the field — can be promoted before the start
 }
 
 export interface FieldView {
@@ -605,6 +606,8 @@ export interface FieldView {
   entries: FieldEntry[];
   viewerIsInvitee: boolean;
   viewerRsvp: RsvpValue | null;
+  /** Seeded phase only: field slots vacated by a drop that no reserve has taken over yet. */
+  freeSlots?: number;
 }
 
 /**
@@ -643,27 +646,67 @@ export async function computeFieldView(
     return new Map(users.map((u) => [u.id, u]));
   };
 
-  // SEEDED — the sealed field (real participants).
+  // SEEDED — the sealed field (real participants) + the reserve behind it. Dropped (WITHDREW)
+  // players stay listed so the field history is visible; competitors are matched to invites by
+  // competitor id (the team for 2v2), never by user id.
   const participants = await prisma.tournamentParticipant.findMany({
-    where: { tournament_id: t.id, deleted_at: null, status: { in: ['CHECKED_IN', 'REGISTERED', 'DISQUALIFIED'] } },
-    select: { user_id: true, seed: true, status: true },
+    where: { tournament_id: t.id, deleted_at: null, status: { in: ['CHECKED_IN', 'REGISTERED', 'DISQUALIFIED', 'WITHDREW'] } },
+    select: { user_id: true, team_id: true, seed: true, status: true },
     orderBy: { seed: 'asc' },
   });
   if (participants.length > 0) {
-    const umap = await resolveUsers(participants.map((p) => p.user_id));
-    const entries: FieldEntry[] = participants.map((p, i) => {
+    const invites = await prisma.championshipInvite.findMany({ where: { tournament_id: t.id }, orderBy: { rank: 'asc' } });
+    const inviteByComp = new Map(invites.map((i) => [i.competitor_id, i]));
+    const seatedComps = new Set(participants.map((p) => resolveCompetitorId(p)));
+    const reserveInvites = invites.filter((i) => i.rsvp === 'AVAILABLE' && !seatedComps.has(i.competitor_id));
+    const umap = await resolveUsers([...participants.map((p) => p.user_id), ...reserveInvites.map((i) => i.user_id)]);
+    const isOut = (status: string) => status === 'DISQUALIFIED' || status === 'WITHDREW';
+    const fieldEntries: FieldEntry[] = [];
+    const outEntries: FieldEntry[] = [];
+    participants.forEach((p, i) => {
       const u = umap.get(p.user_id);
-      return {
-        rank: p.seed ?? i + 1,
+      const competitorId = resolveCompetitorId(p);
+      const inv = inviteByComp.get(competitorId);
+      const out = isOut(p.status);
+      const entry: FieldEntry = {
+        // A dropped/DQ'd player's seed no longer means a bracket slot — show their frozen rank.
+        rank: out ? (inv?.rank ?? p.seed ?? i + 1) : (p.seed ?? inv?.rank ?? i + 1),
         userId: p.user_id,
-        competitorId: p.user_id,
+        competitorId,
         username: u?.username ?? 'Unknown',
         avatarUrl: u?.avatar_url ?? null,
         status: p.status,
-        inField: p.status !== 'DISQUALIFIED',
+        inField: !out,
+      };
+      (out ? outEntries : fieldEntries).push(entry);
+    });
+    const reserveEntries: FieldEntry[] = reserveInvites.map((inv) => {
+      const u = umap.get(inv.user_id);
+      return {
+        rank: inv.rank,
+        userId: inv.user_id,
+        competitorId: inv.competitor_id,
+        username: u?.username ?? 'Unknown',
+        avatarUrl: u?.avatar_url ?? null,
+        rsvp: 'AVAILABLE' as RsvpValue,
+        inField: false,
+        reserve: true,
       };
     });
-    return { phase: 'SEEDED', kind, period, fieldSize: entries.filter((e) => e.inField).length, cutRank: entries.length, deadline: t.rsvp_deadline?.toISOString() ?? null, entries, viewerIsInvitee: false, viewerRsvp: null };
+    fieldEntries.sort((a, b) => a.rank - b.rank);
+    outEntries.sort((a, b) => a.rank - b.rank);
+    return {
+      phase: 'SEEDED',
+      kind,
+      period,
+      fieldSize: fieldEntries.length,
+      cutRank: fieldEntries.length,
+      deadline: t.rsvp_deadline?.toISOString() ?? null,
+      entries: [...fieldEntries, ...outEntries, ...reserveEntries],
+      viewerIsInvitee: false,
+      viewerRsvp: null,
+      freeSlots: countFreeSlots(participants),
+    };
   }
 
   const { ranking, fieldSize: plannedSize } = await computeFullRanking(prisma, redis, { kind, period, battleType, competitorFormat, now: opts.now });
@@ -722,4 +765,194 @@ export async function computeFieldView(
     };
   });
   return { phase: 'PREVIEW', kind, period, fieldSize: plannedSize, cutRank: plannedSize, deadline: null, entries, viewerIsInvitee: false, viewerRsvp: null };
+}
+
+// ---------------------------------------------------------------------------
+// Reserve — after seeding, the AVAILABLE invitees who did not make the field stay on hand so a
+// short-notice drop (before the final starts) can be backfilled.
+//
+// Conventions:
+//   - A competitor is "reserve" when its invite is AVAILABLE and it has NO participant row at all.
+//     (A self-dropped player keeps a WITHDREW row and is therefore never mistaken for reserve.)
+//   - A WITHDREW row whose seed is still set is an unfilled hole: a free field slot. When a reserve
+//     takes over, the dropped row's seed is nulled ("replaced"), so holes are countable.
+// ---------------------------------------------------------------------------
+
+/** Free field slots = dropped (WITHDREW) rows still holding their seed, i.e. not yet replaced. */
+function countFreeSlots(participants: Array<{ status: string; seed: number | null }>): number {
+  return participants.filter((p) => p.status === 'WITHDREW' && p.seed !== null).length;
+}
+
+/** Thrown by promoteReserve; carries the HTTP status the route should answer with. */
+export class ReserveError extends Error {
+  constructor(
+    public readonly statusCode: 400 | 404 | 409,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ReserveError';
+  }
+}
+
+/** How many promotable reserve competitors a seeded final currently has. */
+export async function countReserve(prisma: PrismaClient, tournamentId: string): Promise<number> {
+  const [invites, participants] = await Promise.all([
+    prisma.championshipInvite.findMany({ where: { tournament_id: tournamentId, rsvp: 'AVAILABLE' }, select: { competitor_id: true } }),
+    prisma.tournamentParticipant.findMany({ where: { tournament_id: tournamentId, deleted_at: null }, select: { user_id: true, team_id: true } }),
+  ]);
+  if (participants.length === 0) return 0;
+  const seated = new Set(participants.map((p) => resolveCompetitorId(p)));
+  return invites.filter((i) => !seated.has(i.competitor_id)).length;
+}
+
+export interface PromoteReserveResult {
+  promoted: { competitorId: string; userId: string; seed: number };
+  dropped: { competitorId: string; userId: string } | null;
+  seeds: Array<{ competitorId: string; seed: number }>;
+}
+
+/**
+ * Backfill a seeded final from its reserve, before the final starts. One transaction:
+ *   (a) drop: that participant becomes WITHDREW (seed cleared = "replaced") and its invite
+ *       DECLINED (manager-set), so no later action can pull it back into the field;
+ *   (b) the replacement is `promoteCompetitorId` or the best-ranked reserve (AVAILABLE invite
+ *       without a participant row); 409 if there is none. Without a drop there must be a free
+ *       slot (an earlier self-drop) so the field never grows past its seeded size;
+ *   (c) the replacement becomes a CHECKED_IN participant + frozen cycle snapshot;
+ *   (d) the active field is renumbered 1..N by frozen invite rank: the replacement is ranked
+ *       lower than the player it replaces and must not inherit that player's seed;
+ *   (e) audit-logged.
+ */
+export async function promoteReserve(
+  prisma: PrismaClient,
+  opts: { tournamentId: string; dropCompetitorId?: string; promoteCompetitorId?: string; actorId: string; redis?: Redis },
+): Promise<PromoteReserveResult> {
+  if (!opts.dropCompetitorId && !opts.promoteCompetitorId) {
+    throw new ReserveError(400, 'Pick a player to replace and/or a reserve to promote.');
+  }
+  const t = await prisma.tournament.findUnique({
+    where: { id: opts.tournamentId },
+    select: { id: true, status: true, championship_kind: true, championship_period: true, battle_type: true, competitor_format: true },
+  });
+  if (!t) throw new ReserveError(404, 'Tournament not found');
+  if (t.championship_kind === 'NONE' || !t.championship_period) {
+    throw new ReserveError(400, 'This tournament is not a championship final.');
+  }
+  if (t.status === 'ONGOING' || t.status === 'COMPLETED') {
+    throw new ReserveError(409, 'The final has already started. Reserves can only be promoted before the start.');
+  }
+  const kind = t.championship_kind as ChampKind;
+  const period = t.championship_period;
+  const competitorFormat = t.competitor_format as CompetitorFormatFilter;
+  const isTeam = competitorFormat === 'TWO_V_TWO';
+  const battleType: QuarterlyBattleType = kind === 'QUARTERLY' ? (t.battle_type as QuarterlyBattleType) : 'DOMINATION';
+
+  // Points/GS for the new snapshot row (deterministic once the cycle is closed); best effort.
+  let rankInfo = new Map<string, RankedCompetitor>();
+  try {
+    const { ranking } = await computeFullRanking(prisma, opts.redis, { kind, period, battleType, competitorFormat });
+    rankInfo = new Map(ranking.map((r) => [r.competitorId, r]));
+  } catch {
+    /* the snapshot simply carries no gs/points */
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const invites = await tx.championshipInvite.findMany({ where: { tournament_id: t.id }, orderBy: { rank: 'asc' } });
+    const participants = await tx.tournamentParticipant.findMany({ where: { tournament_id: t.id, deleted_at: null } });
+    if (invites.length === 0 || participants.length === 0) {
+      throw new ReserveError(409, 'This final has not been seeded from an availability round yet.');
+    }
+    const compOf = (p: { team_id: string | null; user_id: string }) => resolveCompetitorId(p);
+
+    // --- validate everything before mutating (the transaction would roll back anyway) ---
+    let dropped: (typeof participants)[number] | null = null;
+    if (opts.dropCompetitorId) {
+      dropped = participants.find((p) => compOf(p) === opts.dropCompetitorId) ?? null;
+      if (!dropped) throw new ReserveError(404, 'That competitor is not in this final.');
+      if (dropped.status !== 'CHECKED_IN' && dropped.status !== 'REGISTERED' && dropped.status !== 'WITHDREW') {
+        throw new ReserveError(409, 'That competitor is not part of the field.');
+      }
+      if (dropped.status === 'WITHDREW' && dropped.seed === null) {
+        throw new ReserveError(409, 'That competitor has already been replaced.');
+      }
+    } else if (countFreeSlots(participants) === 0) {
+      throw new ReserveError(409, 'The field is full. Pick a player to replace.');
+    }
+
+    const seated = new Set(participants.map(compOf));
+    const reserve = invites.filter((i) => i.rsvp === 'AVAILABLE' && !seated.has(i.competitor_id));
+    const target = opts.promoteCompetitorId ? reserve.find((i) => i.competitor_id === opts.promoteCompetitorId) : reserve[0];
+    if (!target) {
+      throw new ReserveError(409, opts.promoteCompetitorId ? 'That competitor is not an available reserve.' : 'There is no reserve left to promote.');
+    }
+
+    // --- (a) drop (or: the new player takes over the slot of an earlier self-drop) ---
+    if (!dropped) {
+      const hole = participants
+        .filter((p) => p.status === 'WITHDREW' && p.seed !== null)
+        .sort((a, b) => (a.seed ?? 0) - (b.seed ?? 0))[0];
+      if (hole) await tx.tournamentParticipant.update({ where: { id: hole.id }, data: { seed: null } });
+    } else {
+      await tx.tournamentParticipant.update({ where: { id: dropped.id }, data: { status: 'WITHDREW', seed: null } });
+      const dropInvite = invites.find((i) => i.competitor_id === opts.dropCompetitorId);
+      if (dropInvite) {
+        await tx.championshipInvite.update({
+          where: { id: dropInvite.id },
+          data: { rsvp: 'DECLINED', rsvp_at: new Date(), rsvp_by_manager: true },
+        });
+      }
+    }
+
+    // --- (c) the replacement ---
+    const teamFields = { team_id: target.competitor_id, participant_type: 'TEAM' as const };
+    const promotedRow = await tx.tournamentParticipant.upsert({
+      where: { tournament_id_user_id: { tournament_id: t.id, user_id: target.user_id } },
+      update: { status: 'CHECKED_IN', deleted_at: null, ...(isTeam ? teamFields : { participant_type: 'USER' as const }) },
+      create: { tournament_id: t.id, user_id: target.user_id, status: 'CHECKED_IN', ...(isTeam ? teamFields : {}) },
+    });
+    const snapKey = { kind, period, battle_type: battleType, competitor_format: competitorFormat };
+    const ri = rankInfo.get(target.competitor_id);
+    await tx.competitiveCycleSnapshot.upsert({
+      where: { kind_period_battle_type_competitor_format_competitor_id: { ...snapKey, competitor_id: target.competitor_id } },
+      update: {},
+      create: { ...snapKey, competitor_id: target.competitor_id, rank: target.rank, gs: ri?.gs ?? null, points: ri?.points ?? null },
+    });
+
+    // --- (d) renumber the active field 1..N by frozen invite rank ---
+    const active = await tx.tournamentParticipant.findMany({
+      where: { tournament_id: t.id, deleted_at: null, status: { in: ['CHECKED_IN', 'REGISTERED'] } },
+    });
+    const rankOf = new Map(invites.map((i) => [i.competitor_id, i.rank]));
+    const big = Number.MAX_SAFE_INTEGER;
+    active.sort(
+      (a, b) => (rankOf.get(compOf(a)) ?? big) - (rankOf.get(compOf(b)) ?? big) || (a.seed ?? big) - (b.seed ?? big),
+    );
+    const seeds: Array<{ competitorId: string; seed: number }> = [];
+    for (const [i, p] of active.entries()) {
+      const seed = i + 1;
+      if (p.seed !== seed) await tx.tournamentParticipant.update({ where: { id: p.id }, data: { seed } });
+      // The snapshot rank mirrors the seed (same convention as writeSeededField).
+      await tx.competitiveCycleSnapshot.updateMany({ where: { ...snapKey, competitor_id: compOf(p) }, data: { rank: seed } });
+      seeds.push({ competitorId: compOf(p), seed });
+    }
+    const promotedSeed = seeds.find((s) => s.competitorId === target.competitor_id)?.seed ?? 0;
+
+    // --- (e) audit ---
+    await tx.auditLog.create({
+      data: {
+        entity_type: 'TournamentParticipant',
+        entity_id: promotedRow.id,
+        action: 'reserve_promoted',
+        actor_id: opts.actorId,
+        old_value: dropped ? { dropped_competitor_id: opts.dropCompetitorId, previous_status: dropped.status } : undefined,
+        new_value: { tournament_id: t.id, promoted_competitor_id: target.competitor_id, invite_rank: target.rank, seed: promotedSeed },
+      },
+    });
+
+    return {
+      promoted: { competitorId: target.competitor_id, userId: target.user_id, seed: promotedSeed },
+      dropped: dropped ? { competitorId: opts.dropCompetitorId as string, userId: dropped.user_id } : null,
+      seeds,
+    };
+  });
 }

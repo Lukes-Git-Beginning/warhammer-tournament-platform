@@ -90,6 +90,32 @@ export async function notifyAvailabilityInvites(
   }
 }
 
+/** A reserve was moved into the field after seeding (before the start): tell them their seed. */
+export async function notifyReservePromoted(
+  prisma: PrismaClient,
+  tournamentId: string,
+  userId: string,
+  seed: number,
+): Promise<void> {
+  if (!isBotConfigured()) return;
+  try {
+    const [t, user] = await Promise.all([
+      prisma.tournament.findUnique({ where: { id: tournamentId }, select: { name: true, slug: true, start_date: true } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { discord_id: true } }),
+    ]);
+    if (!t || !user?.discord_id) return;
+    const url = `${baseUrl()}/tournaments/${t.slug}`;
+    const startTs = Math.floor(t.start_date.getTime() / 1000);
+    const msg =
+      `**[RizzOtto's Arena] A spot opened up — ${t.name}** 🏆\n` +
+      `A player dropped out and you moved up from the reserve into **${t.name}**, seeded **#${seed}**. ` +
+      `It starts <t:${startTs}:F> (<t:${startTs}:R>): <${url}>`;
+    await sendDm(user.discord_id, msg);
+  } catch (err) {
+    console.warn('[championship-notify] notifyReservePromoted error (non-fatal):', err);
+  }
+}
+
 /** The Monthly Ladder Invitational raffle was drawn: DM the winner (skill decides the tournament
  *  prize, luck decides the raffle prize — every invitee had an equal shot). */
 export async function notifyRaffleWinner(

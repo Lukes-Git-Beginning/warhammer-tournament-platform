@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { emitParticipantChange, emitBracketUpdate } from '../lib/emit.js';
 import { canManageTournament, createLateJoinerBye } from '../lib/tournament-utils.js';
 import { notifyHostsOfWithdrawal, notifyHostsLateJoinRequest, notifyLateJoinDecision, notifyOpponentOfWithdrawal } from '../lib/discord-notify.js';
+import { countReserve } from '../lib/competitive-finals.js';
 import { addLateParticipant, setParticipantFactionOp } from '../lib/tournament-management.js';
 import { reapplyDynamicSizing } from '../lib/auto-swiss-service.js';
 import { admitBalancedLateJoiner } from '../lib/balanced-liechtenstein-service.js';
@@ -1337,7 +1338,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, status: true, host_id: true },
+        select: { id: true, status: true, host_id: true, championship_kind: true },
       });
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
@@ -1390,7 +1391,13 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       emitParticipantChange(fastify.io, { tournamentId: tournament.id, userId, action: 'withdrew' });
 
       // B20: let the host(s) know a player dropped — excluding the actor.
-      void notifyHostsOfWithdrawal(tournament.id, userId, callerId);
+      // A seeded championship final with a reserve waiting: point the host at the promote control
+      // (never auto-promotes, the host decides).
+      let reserveNote: string | undefined;
+      if (tournament.championship_kind !== 'NONE' && tournament.status !== 'ONGOING' && (await countReserve(fastify.prisma, tournament.id)) > 0) {
+        reserveNote = 'A reserve is available. Promote them on the tournament page.';
+      }
+      void notifyHostsOfWithdrawal(tournament.id, userId, callerId, reserveNote);
 
       // Mark any open unreported group matches of the dropped player so the
       // survivor can decide: played → report normally, not played → void.
@@ -1485,7 +1492,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findUnique({
         where: { slug, deleted_at: null },
-        select: { id: true, status: true, host_id: true, format: true },
+        select: { id: true, status: true, host_id: true, format: true, championship_kind: true },
       });
       if (!tournament) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
       // N13: undrop must also work before the tournament starts (a player can
@@ -1501,11 +1508,16 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const participant = await fastify.prisma.tournamentParticipant.findFirst({
         where: { tournament_id: tournament.id, user_id: userId, deleted_at: null },
-        select: { id: true, status: true },
+        select: { id: true, status: true, seed: true },
       });
       if (!participant) return reply.code(404).send({ error: 'NotFound', message: 'Participant not found', statusCode: 404 });
       if (participant.status === 'DISQUALIFIED') {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Cannot undrop a disqualified player', statusCode: 422 });
+      }
+      // A finalist whose slot a reserve already took over (seed cleared by promote-reserve) can't
+      // come back: the field would grow past its seeded size.
+      if (tournament.championship_kind !== 'NONE' && participant.status === 'WITHDREW' && participant.seed === null && tournament.status !== 'ONGOING') {
+        return reply.code(409).send({ error: 'Conflict', message: 'A reserve has taken this slot.', statusCode: 409 });
       }
 
       // Reset any never-played playoff matches that were only forfeited/cancelled
