@@ -1,4 +1,5 @@
 import type { PrismaClient, $Enums } from '@rizzotto/db';
+import { SQL_NOT_TEAM_MATCH } from './stat-eligibility.js';
 
 // ---------------------------------------------------------------------------
 // Types (local — mirrors Zod DTOs without importing from packages/types)
@@ -213,12 +214,12 @@ export async function getFactionsWithStats(
         WITH sides AS (
           SELECT mg.player1_faction_id AS faction_id, m.player1_id AS player_id
           FROM "MatchGame" mg JOIN "Match" m ON m.id = mg.match_id
-          WHERE mg.status = 'COMPLETED' AND m.deleted_at IS NULL
+          WHERE mg.status = 'COMPLETED' AND m.deleted_at IS NULL AND ${SQL_NOT_TEAM_MATCH}
             AND mg.player1_faction_id IS NOT NULL AND m.player1_id IS NOT NULL
           UNION ALL
           SELECT mg.player2_faction_id, m.player2_id
           FROM "MatchGame" mg JOIN "Match" m ON m.id = mg.match_id
-          WHERE mg.status = 'COMPLETED' AND m.deleted_at IS NULL
+          WHERE mg.status = 'COMPLETED' AND m.deleted_at IS NULL AND ${SQL_NOT_TEAM_MATCH}
             AND mg.player2_faction_id IS NOT NULL AND m.player2_id IS NOT NULL
         ),
         counts AS (
@@ -267,12 +268,12 @@ export async function getFactionsWithStats(
       WITH sides AS (
         SELECT mg.player1_faction_id AS faction_id, m.player1_id AS player_id
         FROM "MatchGame" mg JOIN "Match" m ON m.id = mg.match_id
-        WHERE mg.status = 'COMPLETED' AND m.season_id = ${versionId}::uuid AND m.deleted_at IS NULL
+        WHERE mg.status = 'COMPLETED' AND m.season_id = ${versionId}::uuid AND m.deleted_at IS NULL AND ${SQL_NOT_TEAM_MATCH}
           AND mg.player1_faction_id IS NOT NULL AND m.player1_id IS NOT NULL
         UNION ALL
         SELECT mg.player2_faction_id, m.player2_id
         FROM "MatchGame" mg JOIN "Match" m ON m.id = mg.match_id
-        WHERE mg.status = 'COMPLETED' AND m.season_id = ${versionId}::uuid AND m.deleted_at IS NULL
+        WHERE mg.status = 'COMPLETED' AND m.season_id = ${versionId}::uuid AND m.deleted_at IS NULL AND ${SQL_NOT_TEAM_MATCH}
           AND mg.player2_faction_id IS NOT NULL AND m.player2_id IS NOT NULL
       ),
       counts AS (

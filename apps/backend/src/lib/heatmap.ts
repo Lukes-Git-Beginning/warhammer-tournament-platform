@@ -1,6 +1,6 @@
 import type { PrismaClient, $Enums } from '@rizzotto/db';
 import type { MatchupCell } from '@rizzotto/types';
-import { eligibleStatGameWhere } from './stat-eligibility.js';
+import { eligibleStatGameWhere, TEAM_MATCH_WHERE } from './stat-eligibility.js';
 import { getVersionDecayWeights } from './factions.js';
 
 // ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ import { getVersionDecayWeights } from './factions.js';
  *
  * 1v1 only — like recomputeFactionStats, 2v2 games are excluded because
  * player1/2_faction_id hold only the captains' factions (the 2v2 meta is the
- * separate duo view). Open Play (null tournament) is always 1v1, so it stays.
+ * separate duo view). Open Play 2v2 (its own competitor_format) is excluded too — TEAM_MATCH_WHERE.
  */
 export async function getMatchupMatrix(
   prisma: PrismaClient,
@@ -44,7 +44,7 @@ export async function getMatchupMatrix(
     where: {
       ...base,
       ...(battleType ? { battle_type: battleType } : {}),
-      match: { ...(base.match as object), NOT: { tournament: { competitor_format: 'TWO_V_TWO' } } },
+      match: { ...(base.match as object), NOT: TEAM_MATCH_WHERE },
     },
     select: {
       winner_id: true,

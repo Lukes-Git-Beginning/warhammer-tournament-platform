@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import type { PrismaClient, $Enums } from '@rizzotto/db';
-import { eligibleStatGameWhere } from './stat-eligibility.js';
+import { eligibleStatGameWhere, TEAM_MATCH_WHERE } from './stat-eligibility.js';
 
 export interface DuoStat {
   /** Order-independent faction pair (sorted). */
@@ -31,8 +31,8 @@ export async function computeDuoMeta(
     where: {
       ...base,
       ...(battleType ? { battle_type: battleType } : {}),
-      // Only 2v2 games — Open Play (no tournament) is always 1v1, so it's excluded here.
-      match: { ...(base.match as object), tournament: { competitor_format: 'TWO_V_TWO' } },
+      // Only 2v2 games — tournament 2v2 AND Open Play 2v2 (TEAM_MATCH_WHERE).
+      match: { ...(base.match as object), AND: [TEAM_MATCH_WHERE] },
     },
     select: {
       winner_id: true,

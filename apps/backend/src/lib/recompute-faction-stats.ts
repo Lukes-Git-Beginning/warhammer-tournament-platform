@@ -1,4 +1,5 @@
 import type { PrismaClient, $Enums } from '@rizzotto/db';
+import { TEAM_MATCH_WHERE } from './stat-eligibility.js';
 
 type BattleType = $Enums.BattleType;
 
@@ -43,8 +44,8 @@ export async function recomputeFactionStats(
       match: {
         version_id: versionId,
         deleted_at: null,
-        // 1v1 only — Open Play (null tournament) is always 1v1, so keep it.
-        NOT: { tournament: { competitor_format: 'TWO_V_TWO' } },
+        // 1v1 only — tournament 2v2 and Open Play 2v2 excluded (captain factions aren't 1v1 data).
+        NOT: TEAM_MATCH_WHERE,
       },
     },
     select: {

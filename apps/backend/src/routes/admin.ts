@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { SQL_NOT_TEAM_MATCH } from '../lib/stat-eligibility.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1119,7 +1120,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
             AND mg.status = 'COMPLETED'
           JOIN "Match" m
             ON mg.match_id = m.id AND m.deleted_at IS NULL
-          WHERE TRUE
+          WHERE ${SQL_NOT_TEAM_MATCH}
             ${tournamentFilter}
             ${dateClause}
           GROUP BY f.id, f.name

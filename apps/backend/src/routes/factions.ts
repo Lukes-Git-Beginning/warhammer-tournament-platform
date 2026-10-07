@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { SQL_NOT_TEAM_MATCH } from '../lib/stat-eligibility.js';
 import { z } from 'zod';
 import { cached, cacheKey } from '../lib/cache.js';
 import {
@@ -259,6 +260,7 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
             AND m.deleted_at IS NULL
             AND m.player1_id IS NOT NULL
             AND m.player2_id IS NOT NULL
+            AND ${SQL_NOT_TEAM_MATCH}
           GROUP BY user_id
           HAVING COUNT(*) >= 5
           ORDER BY (CAST(SUM(CASE

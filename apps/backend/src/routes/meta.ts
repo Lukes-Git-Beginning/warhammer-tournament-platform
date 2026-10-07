@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { TEAM_MATCH_WHERE } from '../lib/stat-eligibility.js';
 import type { Prisma } from '@rizzotto/db';
 import { z } from 'zod';
 import { cached, cacheKey } from '../lib/cache.js';
@@ -89,7 +90,7 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
           player2_id: { not: null },
           counts_for_leaderboard: true,
           deleted_at: null,
-          NOT: { tournament: { competitor_format: 'TWO_V_TWO' as const } },
+          NOT: TEAM_MATCH_WHERE, // 1v1 only — tournament 2v2 and Open Play 2v2 excluded
         };
 
         const [allFactions, total_games] = await Promise.all([
@@ -352,15 +353,14 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
       : [];
     const isLadderQ = tournamentQ ? /^(ladder|open( ?play)?|queue)$/i.test(tournamentQ) : false;
 
-    // Team-size filter. 2v2 ⇒ the match's tournament is competitor_format TWO_V_TWO.
-    // 1v1 ⇒ everything that isn't (incl. Open Play, whose tournament is null). Applied via
-    // the match AND array so it composes with the tournament name/slug filters without
-    // colliding on the `tournament` key.
+    // Team-size filter. 2v2 ⇒ a 2v2 tournament OR an Open Play 2v2 match (TEAM_MATCH_WHERE);
+    // 1v1 ⇒ everything else. Applied via the match AND array so it composes with the tournament
+    // name/slug filters without colliding on the `tournament` key.
     const competitorFormatCond =
       competitorFormat === 'TWO_V_TWO'
-        ? [{ tournament: { competitor_format: 'TWO_V_TWO' as const } }]
+        ? [TEAM_MATCH_WHERE]
         : competitorFormat === 'ONE_V_ONE'
-          ? [{ NOT: { tournament: { competitor_format: 'TWO_V_TWO' as const } } }]
+          ? [{ NOT: TEAM_MATCH_WHERE }]
           : [];
     // source — where the game came from: tournament / ladder (matchmade Open Play) / challenge.
     const sourceCond =
