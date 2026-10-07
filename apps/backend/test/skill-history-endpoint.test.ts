@@ -17,6 +17,8 @@ beforeAll(async () => {
     data: [
       { user_id: USER_ID, snapshot_date: new Date(Date.UTC(2026, 5, 28)), general_skill: 0.5, std_error: 0.4, band: 3, games_count: 5, version_id: null },
       { user_id: USER_ID, snapshot_date: new Date(Date.UTC(2026, 5, 27)), general_skill: 0.1, std_error: 0.5, band: 3, games_count: 2, version_id: null },
+      // A per-battle-type row on the same day — must not leak into the OVERALL series.
+      { user_id: USER_ID, snapshot_date: new Date(Date.UTC(2026, 5, 28)), general_skill: -0.4, std_error: 0.9, band: 2, games_count: 1, version_id: null, battle_type: 'CONQUEST' },
     ],
   });
 });
@@ -41,6 +43,18 @@ describe('GET /api/users/:id/skill-history', () => {
     expect(body.points.map((p) => p.date)).toEqual(['2026-06-27', '2026-06-28']);
     expect(body.points[0]).toMatchObject({ generalSkill: 0.1, band: 3, gamesCount: 2 });
     expect(body.points[1]).toMatchObject({ generalSkill: 0.5, gamesCount: 5 });
+  });
+
+  it('?battleType returns only that scope', async () => {
+    const res = await app.inject({ method: 'GET', url: `/api/users/${USER_ID}/skill-history?battleType=CONQUEST` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { points: { date: string; generalSkill: number; gamesCount: number }[] };
+    expect(body.points).toEqual([expect.objectContaining({ date: '2026-06-28', generalSkill: -0.4, gamesCount: 1 })]);
+  });
+
+  it('400 for an unknown battle type', async () => {
+    const res = await app.inject({ method: 'GET', url: `/api/users/${USER_ID}/skill-history?battleType=LAND` });
+    expect(res.statusCode).toBe(400);
   });
 
   it('404 for an unknown user', async () => {

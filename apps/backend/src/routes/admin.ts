@@ -22,17 +22,17 @@ import {
   loadCalibrationQuestions,
   CalibrationQuestionsSchema,
   CALIBRATION_CONFIG_KEY,
+  classifyWithModel,
+  getClassificationModel,
 } from '../lib/skill-classification-service.js';
 import {
   CALIBRATION_QUESTIONS,
   questionnaireFloor,
-  classify,
   BAND_NAMES,
   bandToLogOdds,
   skillToWinChance,
 } from '../lib/skill-classification.js';
 import { skillToBand } from '../lib/rating-model.js';
-import { getRatingModel } from '../lib/rating-model-service.js';
 import { getQueuePenaltyState, resetQueuePenaltyToWarned } from '../lib/queue-penalty.js';
 import { publishChangelog, changelogChannelId } from '../lib/changelog-publish.js';
 import { BroadcastAudienceSchema, resolveAdminAudience, sendBroadcast } from '../lib/broadcast.js';
@@ -837,7 +837,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       cacheKey('admin:skill-distribution', { scope: 'all-time' }),
       async () => {
         const [model, users, questions] = await Promise.all([
-          getRatingModel(fastify.prisma, fastify.redis, { versionId: null, config: { hierarchical: true } }),
+          getClassificationModel(fastify.prisma, fastify.redis),
           fastify.prisma.user.findMany({ where: { deleted_at: null }, select: { id: true, calibration_answers: true } }),
           loadCalibrationQuestions(fastify.prisma),
         ]);
@@ -850,15 +850,13 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         let unclassified = 0;
         for (const u of users) {
           const answers = (u.calibration_answers as Record<string, string> | null) ?? {};
-          const hasQ = Object.keys(answers).length > 0;
-          const gs = model.getGeneralSkill(u.id);
-          if (!hasQ && !gs) {
+          const cls = classifyWithModel(model, answers, questions, u.id);
+          if (!cls.rated) {
             unclassified++;
             continue;
           }
-          const qFloor = questionnaireFloor(answers, questions);
-          const { gatingBand } = classify(qFloor, { generalSkill: gs?.skill ?? null, stdError: gs?.se ?? null });
-          if (hasQ) withQuestionnaire[gatingBand] = (withQuestionnaire[gatingBand] ?? 0) + 1;
+          const { gatingBand } = cls;
+          if (cls.hasQuestionnaire) withQuestionnaire[gatingBand] = (withQuestionnaire[gatingBand] ?? 0) + 1;
           else dataOnly[gatingBand] = (dataOnly[gatingBand] ?? 0) + 1;
         }
 
@@ -1001,7 +999,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     // version and would drop or mis-rate players — the same bug the timeless getPlayerClassification
     // fix addressed. The version is intentionally not a parameter here.
     const [model, users, questions] = await Promise.all([
-      getRatingModel(fastify.prisma, fastify.redis, { versionId: null, config: { hierarchical: true } }),
+      getClassificationModel(fastify.prisma, fastify.redis),
       fastify.prisma.user.findMany({
         where: { deleted_at: null },
         select: { id: true, username: true, calibration_answers: true },
@@ -1013,7 +1011,9 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     for (const u of users) {
       const answers = (u.calibration_answers as Record<string, string> | null) ?? {};
       if (Object.keys(answers).length === 0) continue; // need a self-claim to compare against
-      const gs = model.getGeneralSkill(u.id);
+      // OVERALL (game-weighted) data skill vs the overall claim — not the raw base GS, which a few
+      // games in a second battle type drag toward the unweighted centroid.
+      const gs = model.getSkillEstimate(u.id, 'OVERALL');
       if (!gs) continue; // need fitted data to compare
       const qFloor = questionnaireFloor(answers, questions);
       const qSkill = bandToLogOdds(qFloor);

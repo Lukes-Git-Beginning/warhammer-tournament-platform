@@ -10,7 +10,7 @@
 // authoritative — the model is always rebuildable from them.
 // ---------------------------------------------------------------------------
 
-import type { PrismaClient, Prisma } from '@rizzotto/db';
+import type { PrismaClient, Prisma, BattleType } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { cached, cacheKey, invalidate } from './cache.js';
 import { eligibleStatGameWhere } from './stat-eligibility.js';
@@ -77,6 +77,7 @@ export async function loadVersionObservations(
   prisma: PrismaClient,
   versionId: string | null, // null = all versions (timeless / all-time fit)
   window?: { from: Date; to: Date }, // optional played_at window (quarterly-quali fit, §6)
+  battleType?: BattleType, // optional: fit ONE battle type only (per-type faction proficiency)
 ): Promise<MatchObservation[]> {
   // Same canonical game set as the raw matchup heatmap (getMatchupMatrix), plus a
   // decisive winner (draws carry no signal). Game-level only — the parent Match's
@@ -88,6 +89,7 @@ export async function loadVersionObservations(
       winner_id: { not: null },
       // Quarterly quali: a time-boxed fit over ALL games (tournament + ladder) in the window.
       ...(window ? { played_at: { gte: window.from, lt: window.to } } : {}),
+      ...(battleType ? { battle_type: battleType } : {}),
     },
     select: {
       winner_id: true,
@@ -185,6 +187,11 @@ export interface GetRatingModelArgs {
   versionId: string | null;
   /** Optional played_at window — a time-boxed fit (quarterly quali, §6). Spans all versions. */
   window?: { from: Date; to: Date };
+  /**
+   * Optional: fit only the games of ONE battle type. Gives genuinely per-type faction skills (the
+   * all-types fit has no faction × battle-type term, so its per-type view is a uniform shift).
+   */
+  battleType?: BattleType;
   /** Explicit overrides; when omitted, config is read from AdminConfig. */
   config?: Partial<RatingModelConfig>;
 }
@@ -198,7 +205,7 @@ export async function getRatingModel(
   redis: Redis | undefined,
   args: GetRatingModelArgs,
 ): Promise<RatingModel> {
-  const { versionId, window } = args;
+  const { versionId, window, battleType } = args;
   const cfg: RatingModelConfig = {
     ...DEFAULT_RATING_MODEL_CONFIG,
     ...(await loadRatingModelConfig(prisma)),
@@ -212,6 +219,7 @@ export async function getRatingModel(
       // Window keys the cache per time-box; versionId stays 'all' so the confirmed-match
       // invalidation (rating-model:*versionId=all*) also refreshes windowed fits.
       win: window ? `${window.from.toISOString()}_${window.to.toISOString()}` : 'none',
+      bt: battleType ?? 'all',
       lpfs: cfg.lambdaPlayerFaction,
       lme: cfg.lambdaMatchup,
       iter: cfg.maxIterations,
@@ -219,9 +227,10 @@ export async function getRatingModel(
       hier: cfg.hierarchical,
       lgs: cfg.lambdaGeneralSkill,
       lfo: cfg.lambdaFactionOffset,
+      lbto: cfg.lambdaBattleTypeOffset,
     }),
     async () => {
-      const observations = await loadVersionObservations(prisma, versionId, window);
+      const observations = await loadVersionObservations(prisma, versionId, window, battleType);
       return toData(fitRatingModel(observations, cfg));
     },
     { ttlSeconds: RATING_MODEL_TTL },

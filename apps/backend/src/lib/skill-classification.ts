@@ -35,25 +35,104 @@ export interface QuestionOption {
   floor: number | null;
 }
 
+/** The battle types a skill/band can be judged in (mirrors the Prisma BattleType enum). */
+export const SKILL_BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'SIEGE'] as const;
+export type SkillBattleType = (typeof SKILL_BATTLE_TYPES)[number];
+/** A classification scope: one battle type, or OVERALL (the game-weighted summary). */
+export type SkillScope = 'OVERALL' | SkillBattleType;
+
+/** Display label for a battle type (user-facing copy: "Conquest", not "CONQUEST"). */
+export function battleTypeLabel(type: SkillBattleType): string {
+  return type.charAt(0) + type.slice(1).toLowerCase();
+}
+
 export interface CalibrationQuestion {
   id: string;
   /** Heaviest (most discriminating) questions first — drives the adaptive early-exit order. */
   prompt: string;
   options: QuestionOption[];
+  /**
+   * The battle types this question speaks to. Absent/empty = GENERAL (counts toward every
+   * type's floor). A type's floor only ever comes from its own questions + the general ones —
+   * no transfer between types (Alex, 2026-10-08).
+   */
+  battleTypes?: SkillBattleType[];
+}
+
+// Conquest and Siege are asked the same way (same shapes/floors) — built from these templates.
+function typeBestResult(type: SkillBattleType, label: string): CalibrationQuestion {
+  return {
+    id: `${type.toLowerCase()}_best_result`,
+    prompt: `What is your highest ${label} tournament achievement?`,
+    battleTypes: [type],
+    options: [
+      { value: 'none', label: `Never made the semifinals of a ${label} tournament.`, floor: null },
+      { value: 'semis_restricted', label: `Reached the semifinals of a beginner / restricted ${label} tournament.`, floor: 2 },
+      { value: 'won_restricted', label: `Won a beginner / restricted ${label} tournament, or made the semifinals of an open one.`, floor: 3 },
+      { value: 'won_open', label: `Won an open / unrestricted ${label} tournament.`, floor: 4 },
+      { value: 'major', label: `Won a major ${label} event or finished at the top of a ${label} season.`, floor: 5 },
+    ],
+  };
+}
+function typeBattles(type: SkillBattleType, label: string): CalibrationQuestion {
+  return {
+    id: `${type.toLowerCase()}_battles`,
+    prompt: `Total multiplayer battles played (${label} only)?`,
+    battleTypes: [type],
+    options: [
+      { value: 'lt10', label: 'Fewer than 10', floor: null },
+      { value: '10_50', label: '10–50', floor: 1 },
+      { value: '50_200', label: '50–200', floor: 2 },
+      { value: 'gt200', label: '200+', floor: 3 },
+    ],
+  };
+}
+function typeRanked(type: SkillBattleType, id: string, label: string): CalibrationQuestion {
+  return {
+    id,
+    prompt: `Your performance on CA's Ranked Matchmaking in ${label}?`,
+    battleTypes: [type],
+    options: [
+      { value: 'never_casual', label: 'Never ranked / casual only', floor: 1 },
+      { value: 'lower_mid', label: 'Lower to mid-ranked', floor: 2 },
+      { value: 'high', label: 'High-ranked', floor: 3 },
+      { value: 'top_ladder', label: 'Top of the ladder (just below the cheaters)', floor: 4 },
+    ],
+  };
+}
+function typeSelfRating(type: SkillBattleType, label: string): CalibrationQuestion {
+  return {
+    id: `${type.toLowerCase()}_self_rating`,
+    prompt: `Where would you place yourself in ${label}?`,
+    battleTypes: [type],
+    options: [
+      { value: '1', label: `New — barely any ${label} experience`, floor: 1 },
+      { value: '2', label: `Beginner — some ${label} battles, still learning`, floor: 2 },
+      { value: '3', label: `Intermediate — I hold my own in ${label} tournaments`, floor: 3 },
+      { value: '4', label: `Advanced — I win ${label} tournaments`, floor: 4 },
+      { value: '5', label: `Top — among the very best ${label} players`, floor: 5 },
+    ],
+  };
 }
 
 /**
- * Strongest-first: the achievement question (best_result) and tournament tier
- * classify experienced players in 1–2 clicks. Most volume/proxy questions cap at
- * band 3; the only routes to band 4 are a real achievement (best_result),
- * top-of-ladder ranked play (ranked_level), or the self-rating, and band 5 is only
- * reachable via best_result or the self-rating — so no one can grind low-signal
- * volume answers up to Advanced/Top.
+ * Grouped per battle type, strongest-first within each type: the achievement question
+ * (best_result) and tournament tier classify experienced players in 1–2 clicks. Most
+ * volume/proxy questions cap at band 3; the only routes to band 4 are a real achievement,
+ * top-of-ladder ranked play, or the self-rating, and band 5 is only reachable via the
+ * achievement or the self-rating — so no one can grind low-signal volume answers up to
+ * Advanced/Top. Every type is asked (Alex, 2026-10-08); the general block comes last and
+ * feeds every type's floor.
+ *
+ * The Domination ids are the original (pre-battle-type) ids, so existing answers keep
+ * counting — they now count for Domination only.
  */
 export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
+  // --- Domination ---
   {
     id: 'best_result',
-    prompt: 'What is your highest competitive achievement?',
+    prompt: 'What is your highest Domination tournament achievement?',
+    battleTypes: ['DOMINATION'],
     options: [
       { value: 'none', label: 'Never made semifinals.', floor: null },
       { value: 'semis_npt', label: 'Reached semis in a New Player Tournament.', floor: 2 },
@@ -64,7 +143,8 @@ export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
   },
   {
     id: 'tournament_types',
-    prompt: 'What kinds of tournaments have you played?',
+    prompt: 'What kinds of Domination tournaments have you played?',
+    battleTypes: ['DOMINATION'],
     options: [
       { value: 'none', label: 'None yet', floor: null },
       { value: 'npt', label: 'New Player Tournaments (NPT)', floor: 1 },
@@ -72,16 +152,50 @@ export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
       { value: 'open', label: 'Open / unrestricted tournaments', floor: 3 },
     ],
   },
+  typeRanked('DOMINATION', 'ranked_level', 'Domination'),
   {
-    id: 'ranked_level',
-    prompt: "Your performance on CA's Ranked Matchmaking?",
+    id: 'domination_battles',
+    prompt: 'Total multiplayer battles played (Domination only)?',
+    battleTypes: ['DOMINATION'],
     options: [
-      { value: 'never_casual', label: 'Never ranked / casual only', floor: 1 },
-      { value: 'lower_mid', label: 'Lower to mid-ranked', floor: 2 },
-      { value: 'high', label: 'High-ranked', floor: 3 },
-      { value: 'top_ladder', label: 'Top of the ladder (just below the cheaters)', floor: 4 },
+      { value: 'lt10', label: 'Fewer than 10', floor: null },
+      { value: '10_50', label: '10–50', floor: 1 },
+      { value: '50_200', label: '50–200', floor: 2 },
+      { value: 'gt200', label: '200+', floor: 3 },
     ],
   },
+  {
+    id: 'meta_familiarity',
+    prompt: 'How well do you know the current competitive Domination meta?',
+    battleTypes: ['DOMINATION'],
+    options: [
+      { value: 'barely', label: 'Barely / just the basics', floor: null },
+      { value: 'solid', label: 'Solid understanding', floor: 2 },
+      { value: 'very_good', label: 'Very good', floor: 3 },
+    ],
+  },
+  {
+    id: 'self_rating',
+    prompt: 'Where would you place yourself in Domination?',
+    battleTypes: ['DOMINATION'],
+    options: [
+      { value: '1', label: 'New — barely any PvP experience', floor: 1 },
+      { value: '2', label: 'Beginner — some PvP, some tournament experience', floor: 2 },
+      { value: '3', label: 'Intermediate — semis at IPT/wins at NPT/IPT level', floor: 3 },
+      { value: '4', label: 'Advanced — won open/unrestricted tournaments', floor: 4 },
+      { value: '5', label: 'Top — TT-season Top 16', floor: 5 },
+    ],
+  },
+  // --- Conquest (CA Ranked has a Conquest queue) ---
+  typeBestResult('CONQUEST', 'Conquest'),
+  typeRanked('CONQUEST', 'conquest_ranked', 'Conquest'),
+  typeBattles('CONQUEST', 'Conquest'),
+  typeSelfRating('CONQUEST', 'Conquest'),
+  // --- Siege (not in CA Ranked → no ranked question) ---
+  typeBestResult('SIEGE', 'Siege'),
+  typeBattles('SIEGE', 'Siege'),
+  typeSelfRating('SIEGE', 'Siege'),
+  // --- General: feeds every type's floor; volume/proxy questions, cap at band 3 ---
   {
     id: 'total_battles',
     prompt: 'Total multiplayer battles played (Land Battle + Domination + Conquest)?',
@@ -90,16 +204,6 @@ export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
       { value: '50_200', label: '50–200', floor: 2 },
       { value: '200_1000', label: '200–1000', floor: 3 },
       { value: 'gt1000', label: '1000+', floor: 3 },
-    ],
-  },
-  {
-    id: 'domination_battles',
-    prompt: 'Total multiplayer battles played (Domination only)?',
-    options: [
-      { value: 'lt10', label: 'Fewer than 10', floor: null },
-      { value: '10_50', label: '10–50', floor: 1 },
-      { value: '50_200', label: '50–200', floor: 2 },
-      { value: 'gt200', label: '200+', floor: 3 },
     ],
   },
   {
@@ -130,15 +234,6 @@ export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
     ],
   },
   {
-    id: 'meta_familiarity',
-    prompt: 'How well do you know the current competitive meta?',
-    options: [
-      { value: 'barely', label: 'Barely / just the basics', floor: null },
-      { value: 'solid', label: 'Solid understanding', floor: 2 },
-      { value: 'very_good', label: 'Very good', floor: 3 },
-    ],
-  },
-  {
     id: 'community',
     prompt: 'How active are you in the competitive community?',
     options: [
@@ -156,33 +251,50 @@ export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
       { value: 'confident', label: 'Very confident', floor: 2 },
     ],
   },
-  {
-    id: 'self_rating',
-    prompt: 'Where would you place yourself?',
-    options: [
-      { value: '1', label: 'New — barely any PvP experience', floor: 1 },
-      { value: '2', label: 'Beginner — some PvP, some tournament experience', floor: 2 },
-      { value: '3', label: 'Intermediate — semis at IPT/wins at NPT/IPT level', floor: 3 },
-      { value: '4', label: 'Advanced — won open/unrestricted tournaments', floor: 4 },
-      { value: '5', label: 'Top — TT-season Top 16', floor: 5 },
-    ],
-  },
 ];
+
+/** True when `question` feeds the floor of `scope` (OVERALL = every question). */
+export function questionAppliesTo(question: CalibrationQuestion, scope: SkillScope): boolean {
+  if (scope === 'OVERALL') return true;
+  return !question.battleTypes || question.battleTypes.length === 0 || question.battleTypes.includes(scope);
+}
+
+/**
+ * Battle types the player has NOT been asked about yet: a calibrated player (any answer) with
+ * no answer to any question scoped to that type. Drives the "answer a few Conquest/Siege
+ * questions" banner for players who calibrated before the battle-type questionnaire existed.
+ */
+export function pendingCalibrationTypes(
+  answers: Record<string, string>,
+  questions: readonly CalibrationQuestion[] = CALIBRATION_QUESTIONS,
+): SkillBattleType[] {
+  if (Object.keys(answers).length === 0) return []; // not calibrated at all → the normal CTA
+  return SKILL_BATTLE_TYPES.filter((type) => {
+    const typed = questions.filter((q) => q.battleTypes?.includes(type));
+    return typed.length > 0 && !typed.some((q) => answers[q.id] != null);
+  });
+}
 
 /**
  * Questionnaire floor = the highest band any answer implies (conservative-up),
  * default 1. Unknown question ids / option values are ignored. `answers` maps
  * question id → chosen option value. Pass a custom `questions` catalog (e.g. the
  * admin-edited one from the DB); defaults to the built-in catalog.
+ *
+ * `scope` restricts the floor to one battle type: only that type's questions + the general
+ * ones count. OVERALL (default) = every answer, the pre-battle-type behaviour.
  */
 export function questionnaireFloor(
   answers: Record<string, string>,
   questions: readonly CalibrationQuestion[] = CALIBRATION_QUESTIONS,
+  scope: SkillScope = 'OVERALL',
 ): number {
   const byId = new Map(questions.map((q) => [q.id, q]));
   let floor = 1;
   for (const [qid, value] of Object.entries(answers)) {
-    const opt = byId.get(qid)?.options.find((o) => o.value === value);
+    const q = byId.get(qid);
+    if (!q || !questionAppliesTo(q, scope)) continue;
+    const opt = q.options.find((o) => o.value === value);
     if (opt?.floor != null && opt.floor > floor) floor = opt.floor;
   }
   return floor;

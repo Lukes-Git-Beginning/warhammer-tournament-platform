@@ -10,7 +10,7 @@
 //   - a player's faction table   (playerFactionProficiency)
 // ---------------------------------------------------------------------------
 
-import type { PrismaClient } from '@rizzotto/db';
+import type { PrismaClient, BattleType } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { getRatingModel } from './rating-model-service.js';
 import { logistic } from './rating-model.js';
@@ -274,8 +274,21 @@ export async function playerFactionProficiency(
   redis: Redis | undefined,
   versionId: string | null, // null = timeless (all versions); proficiency is a skill measure
   playerId: string,
+  battleType?: BattleType, // undefined = Overall (all battle types)
 ): Promise<PlayerFactionProficiencyEntry[]> {
-  const model = await getRatingModel(prisma, redis, { versionId });
+  // Hierarchical fit (consistent with the player's GS). A battle type gets its OWN fit over that
+  // type's games only: the all-types fit has no faction × battle-type term, so its per-type view
+  // would just shift every faction by the same offset — a separate fit yields genuinely per-type
+  // faction skills (Alex, 2026-10-08).
+  const model = await getRatingModel(prisma, redis, { versionId, battleType, config: { hierarchical: true } });
+  // Level shift on top of GS + faction offset: in a per-type fit the player's level is partly
+  // carried by that type's offset; Overall uses the game-weighted level (as the Overall GS does).
+  const gsLevel = model.getGeneralSkill(playerId)?.skill;
+  const levelShift = battleType
+    ? model.getBattleTypeOffset(playerId, battleType)
+    : gsLevel != null
+      ? (model.getOverallSkill(playerId) ?? gsLevel) - gsLevel
+      : 0;
 
   // Game-level data: each individual battle (MatchGame) the player participated in.
   // BYEs are automatically excluded — they have no MatchGame records.
@@ -284,6 +297,7 @@ export async function playerFactionProficiency(
       status: 'COMPLETED',
       winner_id: { not: null },
       counts_for_leaderboard: true,
+      ...(battleType ? { battle_type: battleType } : {}),
       match: {
         // null versionId = lifetime proficiency across every version (skill is timeless).
         ...(versionId ? { version_id: versionId } : {}),
@@ -324,7 +338,7 @@ export async function playerFactionProficiency(
   );
 
   return [...tally.entries()].map(([factionId, t]) => {
-    const skill = model.getPlayerFactionSkill(playerId, factionId);
+    const skill = model.getPlayerFactionSkill(playerId, factionId) + levelShift;
     return {
       playerId,
       factionId,

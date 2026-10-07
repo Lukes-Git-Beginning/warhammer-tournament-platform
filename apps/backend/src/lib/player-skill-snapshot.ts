@@ -9,7 +9,7 @@
 import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { getRatingModel } from './rating-model-service.js';
-import { skillToBand } from './rating-model.js';
+import { buildSnapshotRows } from './gs-history.js';
 import { siteDayAsDate } from './site-time.js';
 
 /** The snapshot day: today's German calendar date (stored as a Postgres DATE). */
@@ -19,7 +19,7 @@ function utcToday(): Date {
 
 /**
  * Snapshot every player's timeless (all-time) General Skill for today. Idempotent
- * per day via the (user_id, snapshot_date) unique + skipDuplicates: the first run
+ * per day via the (user_id, snapshot_date, battle_type) unique + skipDuplicates: the first run
  * of the day writes, later runs are no-ops. Returns the number of rows written.
  */
 export async function snapshotPlayerSkills(
@@ -36,24 +36,21 @@ export async function snapshotPlayerSkills(
     select: { id: true },
   });
   const snapshot_date = utcToday();
+  if (model.generalSkills.length === 0) return 0;
 
-  const rows = model.generalSkills.map((gs) => ({
-    user_id: gs.playerId,
-    snapshot_date,
-    general_skill: gs.generalSkill,
-    std_error: gs.stdError,
-    band: skillToBand(gs.generalSkill),
-    games_count: gs.gamesCount,
-    version_id: active?.id ?? null,
-  }));
-  if (rows.length === 0) return 0;
   // The fit's competitor ids can include Team ids (2v2), but PlayerSkillSnapshot.user_id FKs
   // to User. Filter to real users — teams are not snapshotted in v1 (team GS stays derive-on-
   // read). Without this, the daily cron would hit an FK violation once any 2v2 game exists.
   const realUserIds = new Set(
-    (await prisma.user.findMany({ where: { id: { in: rows.map((r) => r.user_id) } }, select: { id: true } })).map((u) => u.id),
+    (
+      await prisma.user.findMany({
+        where: { id: { in: model.generalSkills.map((g) => g.playerId) } },
+        select: { id: true },
+      })
+    ).map((u) => u.id),
   );
-  const userRows = rows.filter((r) => realUserIds.has(r.user_id));
+  // One OVERALL row (game-weighted) + one row per battle type played, per user.
+  const userRows = buildSnapshotRows(model, snapshot_date, realUserIds, active?.id ?? null);
   if (userRows.length === 0) return 0;
   const result = await prisma.playerSkillSnapshot.createMany({
     data: userRows,

@@ -1,21 +1,13 @@
 // ---------------------------------------------------------------------------
 // GS history reconstruction (pure core). The timeless General Skill is derive-on-read
 // and not stored historically, so we recompute it day-by-day from launch and persist a
-// PlayerSkillSnapshot per (user, day). This module holds the PURE, testable pieces; the
+// PlayerSkillSnapshot per (user, day, scope). This module holds the PURE, testable pieces; the
 // batch wrapper (scripts/reconstruct-gs-history.ts) supplies the fits + DB writes.
 // ---------------------------------------------------------------------------
-import { skillToBand } from './rating-model.js';
+import { skillToBand, type RatingModel } from './rating-model.js';
 
 /** Platform launch (2026-06-27 00:00 UTC) — the first day of reconstructed GS history. */
 export const GS_HISTORY_LAUNCH_DATE = new Date(Date.UTC(2026, 5, 27));
-
-/** One general-skill entry from a hierarchical rating-model fit (subset used here). */
-export interface GsEntry {
-  playerId: string;
-  generalSkill: number;
-  stdError: number;
-  gamesCount: number;
-}
 
 /** A PlayerSkillSnapshot row (matches the Prisma createMany input). */
 export interface SnapshotRow {
@@ -26,6 +18,7 @@ export interface SnapshotRow {
   band: number;
   games_count: number;
   version_id: string | null;
+  battle_type: string; // OVERALL | DOMINATION | CONQUEST | SIEGE
 }
 
 /** Inclusive list of UTC midnights from `from`'s day to `to`'s day, one Date per day. */
@@ -48,25 +41,42 @@ export function endOfUtcDayExclusive(day: Date): Date {
 }
 
 /**
- * PURE: map a hierarchical fit's general-skill entries into snapshot rows for one day.
- * Only real Users get a row — team competitor-ids (2v2) are filtered out via `validUserIds`
- * (PlayerSkillSnapshot.user_id FKs to User). Band is derived from raw GS, mirroring the boards.
+ * PURE (given a fit): one day's snapshot rows from a hierarchical fit — per player an OVERALL row
+ * (game-weighted across battle types, NOT the raw base GS) plus one row per battle type the player
+ * has played (GS + that type's offset). Only real Users get rows — team competitor-ids (2v2) are
+ * filtered out via `validUserIds` (PlayerSkillSnapshot.user_id FKs to User). Band derives from the
+ * row's skill, mirroring the boards.
  */
 export function buildSnapshotRows(
-  generalSkills: GsEntry[],
+  model: Pick<RatingModel, 'generalSkills' | 'battleTypeOffsets' | 'getSkillEstimate'>,
   snapshotDate: Date,
   validUserIds: Set<string>,
   versionId: string | null,
 ): SnapshotRow[] {
-  return generalSkills
-    .filter((e) => validUserIds.has(e.playerId))
-    .map((e) => ({
-      user_id: e.playerId,
-      snapshot_date: snapshotDate,
-      general_skill: e.generalSkill,
-      std_error: e.stdError,
-      band: skillToBand(e.generalSkill),
-      games_count: e.gamesCount,
-      version_id: versionId,
-    }));
+  const typesByPlayer = new Map<string, string[]>();
+  for (const e of model.battleTypeOffsets) {
+    if (e.gamesCount <= 0) continue;
+    const arr = typesByPlayer.get(e.playerId) ?? [];
+    arr.push(e.battleType);
+    typesByPlayer.set(e.playerId, arr);
+  }
+  const rows: SnapshotRow[] = [];
+  for (const e of model.generalSkills) {
+    if (!validUserIds.has(e.playerId)) continue;
+    for (const scope of ['OVERALL', ...(typesByPlayer.get(e.playerId) ?? []).sort()]) {
+      const est = model.getSkillEstimate(e.playerId, scope);
+      if (!est) continue;
+      rows.push({
+        user_id: e.playerId,
+        snapshot_date: snapshotDate,
+        general_skill: est.skill,
+        std_error: est.se,
+        band: skillToBand(est.skill),
+        games_count: est.gamesCount,
+        version_id: versionId,
+        battle_type: scope,
+      });
+    }
+  }
+  return rows;
 }

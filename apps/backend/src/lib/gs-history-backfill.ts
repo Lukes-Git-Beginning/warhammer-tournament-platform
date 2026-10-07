@@ -47,7 +47,7 @@ export async function backfillGsHistory(prisma: PrismaClient, log?: Logger): Pro
       window: { from: startDay, to: endOfUtcDayExclusive(day) },
       config: { hierarchical: true },
     });
-    const rows = buildSnapshotRows(model.generalSkills, day, validUserIds, versionId);
+    const rows = buildSnapshotRows(model, day, validUserIds, versionId);
     if (rows.length > 0) {
       const res = await prisma.playerSkillSnapshot.createMany({ data: rows, skipDuplicates: true });
       inserted += res.count;

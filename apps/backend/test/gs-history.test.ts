@@ -27,23 +27,29 @@ describe('gs-history pure core', () => {
     );
   });
 
-  it('buildSnapshotRows maps entries, derives band from raw GS, and filters non-users (teams)', () => {
+  it('buildSnapshotRows maps entries, derives band from the scope skill, and filters non-users (teams)', () => {
     const day = new Date(Date.UTC(2026, 6, 1));
-    const rows = buildSnapshotRows(
-      [
-        { playerId: 'u1', generalSkill: 2.5, stdError: 0.3, gamesCount: 40 }, // >= 2.1972 → band 5
-        { playerId: 'u2', generalSkill: -1.0, stdError: 0.5, gamesCount: 10 }, // < -0.619 → band 2
-        { playerId: 'team1', generalSkill: 1.5, stdError: 0.4, gamesCount: 20 }, // not a user → dropped
-      ],
-      day,
-      new Set(['u1', 'u2']),
-      'v1',
-    );
+    const entries = [
+      { playerId: 'u1', generalSkill: 2.5, stdError: 0.3, gamesCount: 40 }, // >= 2.1972 → band 5
+      { playerId: 'u2', generalSkill: -1.0, stdError: 0.5, gamesCount: 10 }, // < -0.619 → band 2
+      { playerId: 'team1', generalSkill: 1.5, stdError: 0.4, gamesCount: 20 }, // not a user → dropped
+    ];
+    // A legacy (no battle-type offsets) fit: only OVERALL rows, OVERALL = the GS itself.
+    const model = {
+      generalSkills: entries.map((e) => ({ ...e, peakSkill: e.generalSkill, peakFactionId: null, factionsPlayed: 1 })),
+      battleTypeOffsets: [],
+      getSkillEstimate: (id: string) => {
+        const e = entries.find((x) => x.playerId === id);
+        return e ? { skill: e.generalSkill, se: e.stdError, gamesCount: e.gamesCount } : null;
+      },
+    };
+    const rows = buildSnapshotRows(model, day, new Set(['u1', 'u2']), 'v1');
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({
       user_id: 'u1', snapshot_date: day, general_skill: 2.5, std_error: 0.3, band: 5, games_count: 40, version_id: 'v1',
+      battle_type: 'OVERALL',
     });
-    expect(rows[1]).toMatchObject({ user_id: 'u2', band: 2 });
+    expect(rows[1]).toMatchObject({ user_id: 'u2', band: 2, battle_type: 'OVERALL' });
     expect(rows.some((r) => r.user_id === 'team1')).toBe(false);
   });
 });

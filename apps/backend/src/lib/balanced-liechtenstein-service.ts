@@ -35,7 +35,7 @@ import {
 } from './bali-playoff-plan.js';
 import { isLegalLateJoinReclaim } from './bali-pairing-cost.js';
 import { computeSwissStandings, sortSwissStandings, type CompletedMatchRecord } from './swiss.js';
-import { getPlayerClassification } from './skill-classification-service.js';
+import { getPlayerClassification, scopeForBattleType } from './skill-classification-service.js';
 import { getRatingModel } from './rating-model-service.js';
 import { resolveTeamGs } from './team-rating.js';
 import { balancedRounds } from './auto-swiss-service.js';
@@ -92,8 +92,10 @@ export async function assignSkillBandsForTournament(
 ): Promise<void> {
   const [version, tournament] = await Promise.all([
     fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } }),
-    fastify.prisma.tournament.findFirst({ where: { id: tournamentId }, select: { competitor_format: true } }),
+    fastify.prisma.tournament.findFirst({ where: { id: tournamentId }, select: { competitor_format: true, battle_type: true } }),
   ]);
+  // Divisions are judged in the tournament's battle type (a Conquest BaLi bands on Conquest skill).
+  const scope = scopeForBattleType(tournament?.battle_type);
   const isTeam = tournament?.competitor_format === 'TWO_V_TWO';
 
   const participants = await fastify.prisma.tournamentParticipant.findMany({
@@ -132,7 +134,7 @@ export async function assignSkillBandsForTournament(
           computed = gs?.band ?? 0;
         }
       } else if (version) {
-        const cls = await getPlayerClassification(fastify.prisma, fastify.redis, version.id, p.user_id);
+        const cls = await getPlayerClassification(fastify.prisma, fastify.redis, version.id, p.user_id, scope);
         computed = cls.matchmakingBand;
       }
       // Effective band = the higher of the computed band and the requested one —
@@ -216,7 +218,7 @@ export async function runBalancedPairingTick(
     // tournament match, so bail before touching Redis for non-balanced tournaments.
     const tournament = await fastify.prisma.tournament.findFirst({
       where: { id: tournamentId, deleted_at: null },
-      select: { format: true, status: true, rounds_count: true },
+      select: { format: true, status: true, rounds_count: true, battle_type: true },
     });
     if (
       !tournament ||
@@ -727,7 +729,7 @@ export async function admitBalancedLateJoiner(
 ): Promise<void> {
   const tournament = await fastify.prisma.tournament.findFirst({
     where: { id: tournamentId, deleted_at: null },
-    select: { format: true, status: true, rounds_count: true },
+    select: { format: true, status: true, rounds_count: true, battle_type: true },
   });
   if (!tournament || tournament.format !== 'BALANCED_LIECHTENSTEIN' || tournament.status !== 'ONGOING') {
     return;
@@ -765,7 +767,13 @@ export async function admitBalancedLateJoiner(
           const gs = resolveTeamGs(model, participant.team_id, participant.team?.members.map((m) => m.user_id) ?? []);
           if (gs) effective = Math.max(effective, gs.band);
         } else {
-          const cls = await getPlayerClassification(fastify.prisma, fastify.redis, version.id, participant.user_id);
+          const cls = await getPlayerClassification(
+            fastify.prisma,
+            fastify.redis,
+            version.id,
+            participant.user_id,
+            scopeForBattleType(tournament.battle_type),
+          );
           effective = Math.max(effective, cls.matchmakingBand);
         }
       }

@@ -22,6 +22,8 @@ describe('getPlayerClassification uses the TIMELESS General Skill (regression)',
     // A player with decisive mid-skill (band 3) all-time data, but their questionnaire claims band 4.
     mockedGetRatingModel.mockResolvedValue({
       getGeneralSkill: () => ({ skill: bandToLogOdds(3), se: 0.05 }), // small SE = decisive data
+      // Classification reads the scoped estimate (OVERALL = game-weighted).
+      getSkillEstimate: () => ({ skill: bandToLogOdds(3), se: 0.05, gamesCount: 200 }),
     });
 
     // The active version id is passed (as the caller does) — the fix must IGNORE it and fit all-time.

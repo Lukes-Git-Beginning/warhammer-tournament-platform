@@ -15,9 +15,7 @@ import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { sendDm } from './discord-notify.js';
 import { SUPPORTER_FLAG_SELECT, effectiveTiersOf } from './supporter-service.js';
-import { loadCalibrationQuestions } from './skill-classification-service.js';
-import { getRatingModel } from './rating-model-service.js';
-import { classify, questionnaireFloor } from './skill-classification.js';
+import { loadCalibrationQuestions, classifyWithModel, getClassificationModel } from './skill-classification-service.js';
 import { BroadcastAudienceSchema, type BroadcastAudience } from './broadcast-audience.js';
 
 // Re-export so existing importers (admin.ts) keep working from './broadcast.js'.
@@ -78,10 +76,11 @@ export async function resolveAdminAudience(
   // ONCE, fetch all survivors' calibration answers in ONE query, then classify in
   // memory. Uses the headline (gating) band, what a player sees as "their band".
   if (audience.bands.length > 0) {
-    const version = await prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
-    if (!version) return []; // no active version → no band signal → target nobody
+    // Timeless all-time fit + the OVERALL band (game-weighted), the same classification the
+    // profile summary and admin stats use. (Was a version-scoped fit, which thins/resets on a
+    // freshly-activated version.)
     const [model, questions, answerRows] = await Promise.all([
-      getRatingModel(prisma, redis, { versionId: version.id, config: { hierarchical: true } }),
+      getClassificationModel(prisma, redis),
       loadCalibrationQuestions(prisma),
       prisma.user.findMany({
         where: { id: { in: candidates.map((c) => c.id) } },
@@ -93,16 +92,12 @@ export async function resolveAdminAudience(
     );
     candidates = candidates.filter((c) => {
       const answers = answersById.get(c.id) ?? {};
-      const gs = model.getGeneralSkill(c.id);
+      const cls = classifyWithModel(model, answers, questions, c.id);
       // Unclassified users (NO questionnaire AND NO fitted game data) are not in any band —
       // exclude them, exactly as the skill-distribution stats endpoint does. Otherwise they all
       // default to gatingBand 1, and a "band 1" broadcast would blast every dormant/unrated account.
-      if (Object.keys(answers).length === 0 && !gs) return false;
-      const { gatingBand } = classify(questionnaireFloor(answers, questions), {
-        generalSkill: gs?.skill ?? null,
-        stdError: gs?.se ?? null,
-      });
-      return audience.bands.includes(gatingBand);
+      if (!cls.rated) return false;
+      return audience.bands.includes(cls.gatingBand);
     });
   }
 

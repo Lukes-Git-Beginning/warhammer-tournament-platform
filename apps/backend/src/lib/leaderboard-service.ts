@@ -9,7 +9,7 @@
 // current dataset, so nothing is stored — a score is always rebuildable.
 // ---------------------------------------------------------------------------
 
-import type { PrismaClient } from '@rizzotto/db';
+import type { PrismaClient, BattleType } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { confirmedMatchWhere, getRatingModel } from './rating-model-service.js';
 import { rawPoints, opponentShare, opponentModifier, finalPoints } from './scoring-service.js';
@@ -183,6 +183,38 @@ export interface PlayerStats {
 }
 
 const ZERO_STATS: PlayerStats = { total_points: 0, games_played: 0, wins: 0, losses: 0 };
+
+/**
+ * A player's raw game record (games / W / L) in ONE battle type, for one version or all-time
+ * (null). Same decisive-confirmed-game set the dynamic leaderboard counts (confirmedMatchWhere —
+ * all-time = every versioned match), just filtered to the battle type. The anti-farming POINTS
+ * are an all-battle-types board and are deliberately not split per type (Alex, 2026-10-08), so
+ * total_points is 0 here and the profile shows points under Overall only.
+ */
+export async function getPlayerBattleTypeRecord(
+  prisma: PrismaClient,
+  playerId: string,
+  versionId: string | null,
+  battleType: BattleType,
+): Promise<PlayerStats> {
+  const { version_id: _v, ...matchWhere } = confirmedMatchWhere(versionId ?? '');
+  const games = await prisma.matchGame.findMany({
+    where: {
+      status: 'COMPLETED',
+      winner_id: { not: null },
+      counts_for_leaderboard: true,
+      battle_type: battleType,
+      match: {
+        ...matchWhere,
+        version_id: versionId ?? { not: null },
+        AND: [{ OR: [{ player1_id: playerId }, { player2_id: playerId }] }],
+      },
+    },
+    select: { winner_id: true },
+  });
+  const wins = games.filter((g) => g.winner_id === playerId).length;
+  return { total_points: 0, games_played: games.length, wins, losses: games.length - wins };
+}
 
 /**
  * Single-player view of the dynamic version leaderboard. Reuses

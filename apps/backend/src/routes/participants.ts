@@ -7,8 +7,8 @@ import { countReserve } from '../lib/competitive-finals.js';
 import { addLateParticipant, setParticipantFactionOp } from '../lib/tournament-management.js';
 import { reapplyDynamicSizing } from '../lib/auto-swiss-service.js';
 import { admitBalancedLateJoiner } from '../lib/balanced-liechtenstein-service.js';
-import { getPlayerClassification } from '../lib/skill-classification-service.js';
-import { BAND_NAMES } from '../lib/skill-classification.js';
+import { getPlayerClassification, scopeForBattleType } from '../lib/skill-classification-service.js';
+import { BAND_NAMES, battleTypeLabel } from '../lib/skill-classification.js';
 import { effectiveTiersOf, SUPPORTER_FLAG_SELECT } from '../lib/supporter-service.js';
 import { recordTournamentEvent } from '../lib/tournament-events.js';
 import { captainMap } from '../lib/competitors.js';
@@ -66,6 +66,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           max_participants: true,
           min_band: true,
           max_band: true,
+          battle_type: true,
           faction_allowlist: { select: { faction_id: true } },
           restricted_factions: { select: { faction_id: true } },
           _count: {
@@ -114,19 +115,34 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       // Uses the competition band (matchmakingBand — the value shown on the player's profile),
       // so what a player sees IS what decides which gated tournaments they can enter. A strong
       // player who out-performs their questionnaire is gated up quickly (soft-floor climb).
+      // The band is judged IN THE TOURNAMENT'S BATTLE TYPE (a Conquest tournament gates on Conquest
+      // skill). Checked only here, at registration — already-registered players are grandfathered.
       if (tournament.min_band != null || tournament.max_band != null) {
         const version = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
         if (version) {
-          const classification = await getPlayerClassification(fastify.prisma, fastify.redis, version.id, request.user.sub);
+          const classification = await getPlayerClassification(
+            fastify.prisma,
+            fastify.redis,
+            version.id,
+            request.user.sub,
+            scopeForBattleType(tournament.battle_type),
+          );
           if (!classification.rated) {
             return reply.code(422).send({ error: 'CalibrationRequired', message: 'Complete your skill calibration before registering for this tournament.', statusCode: 422 });
           }
+          // Calibrated before the battle-type questionnaire existed → answer this type's questions
+          // first, so the gate isn't judged on the general answers alone.
+          const scope = classification.scope;
+          if (scope !== 'OVERALL' && classification.pendingCalibrationTypes.includes(scope)) {
+            return reply.code(422).send({ error: 'CalibrationRequired', message: `Answer the ${battleTypeLabel(scope)} questions in your skill calibration before registering for this tournament.`, statusCode: 422 });
+          }
           const band = classification.matchmakingBand;
+          const yourBand = scope === 'OVERALL' ? 'your skill band' : `your ${battleTypeLabel(scope)} skill band`;
           if (tournament.min_band != null && band < tournament.min_band) {
-            return reply.code(422).send({ error: 'UnprocessableEntity', message: `This tournament requires at least ${BAND_NAMES[tournament.min_band]!} — your skill band is ${BAND_NAMES[band]!}.`, statusCode: 422 });
+            return reply.code(422).send({ error: 'UnprocessableEntity', message: `This tournament requires at least ${BAND_NAMES[tournament.min_band]!} — ${yourBand} is ${BAND_NAMES[band]!}.`, statusCode: 422 });
           }
           if (tournament.max_band != null && band > tournament.max_band) {
-            return reply.code(422).send({ error: 'UnprocessableEntity', message: `This tournament is capped at ${BAND_NAMES[tournament.max_band]!} — your skill band is ${BAND_NAMES[band]!}.`, statusCode: 422 });
+            return reply.code(422).send({ error: 'UnprocessableEntity', message: `This tournament is capped at ${BAND_NAMES[tournament.max_band]!} — ${yourBand} is ${BAND_NAMES[band]!}.`, statusCode: 422 });
           }
         }
       }

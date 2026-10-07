@@ -8,12 +8,12 @@ import {
 } from '@rizzotto/types';
 import { z } from 'zod';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
-import { getPlayerVersionStats, getPlayerAllTimeStats } from '../lib/leaderboard-service.js';
+import { getPlayerVersionStats, getPlayerAllTimeStats, getPlayerBattleTypeRecord } from '../lib/leaderboard-service.js';
+import { eligibleStatGameWhere } from '../lib/stat-eligibility.js';
 import { effectiveTiersOf } from '../lib/supporter-service.js';
 import { resolveCompetitors } from '../lib/competitors.js';
-import { getRatingModel } from '../lib/rating-model-service.js';
-import { loadCalibrationQuestions } from '../lib/skill-classification-service.js';
-import { questionnaireFloor, classify } from '../lib/skill-classification.js';
+import { loadCalibrationQuestions, classifyWithModel, getClassificationModel } from '../lib/skill-classification-service.js';
+import { SKILL_BATTLE_TYPES } from '../lib/skill-classification.js';
 
 const meSelect = {
   id: true,
@@ -334,16 +334,13 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       // Current (timeless) skill band per user — the same gating band the Skill Distribution chart
       // buckets by, so its bars can deep-link into a band filter here. One all-time model fit (cached).
       const [model, questions] = await Promise.all([
-        getRatingModel(fastify.prisma, fastify.redis, { versionId: null, config: { hierarchical: true } }),
+        getClassificationModel(fastify.prisma, fastify.redis),
         loadCalibrationQuestions(fastify.prisma),
       ]);
       const bandOf = (calibrationAnswers: unknown, userId: string): number | null => {
         const answers = (calibrationAnswers as Record<string, string> | null) ?? {};
-        const hasQuestionnaire = Object.keys(answers).length > 0;
-        const gs = model.getGeneralSkill(userId);
-        if (!hasQuestionnaire && !gs) return null; // unclassified — no questionnaire, no games
-        const qFloor = questionnaireFloor(answers, questions);
-        return classify(qFloor, { generalSkill: gs?.skill ?? null, stdError: gs?.se ?? null }).gatingBand;
+        const cls = classifyWithModel(model, answers, questions, userId);
+        return cls.rated ? cls.gatingBand : null; // unclassified — no questionnaire, no games
       };
 
       return {
@@ -639,16 +636,23 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // GET /api/users/:id/skill-history — public: the player's daily timeless-GS snapshots
-  // (PlayerSkillSnapshot), oldest first. Powers the GS-over-time chart on the profile.
+  // GET /api/users/:id/skill-history?battleType= — public: the player's daily timeless-GS snapshots
+  // (PlayerSkillSnapshot) in one scope (OVERALL default, or a battle type), oldest first. Powers
+  // the GS-over-time chart on the profile.
   fastify.get('/api/users/:id/skill-history', async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const query = z
+      .object({ battleType: z.enum(['OVERALL', ...SKILL_BATTLE_TYPES]).default('OVERALL') })
+      .safeParse(request.query);
+    if (!query.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: query.error.message, statusCode: 400 });
+    }
     const user = await fastify.prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!user) {
       return reply.code(404).send({ error: 'NotFound', message: 'User not found', statusCode: 404 });
     }
     const snapshots = await fastify.prisma.playerSkillSnapshot.findMany({
-      where: { user_id: id },
+      where: { user_id: id, battle_type: query.data.battleType },
       orderBy: { snapshot_date: 'asc' },
       select: { snapshot_date: true, general_skill: true, std_error: true, band: true, games_count: true },
     });
@@ -666,16 +670,33 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /api/users/:id/version-stats?versionId=<uuid|all> — points/games/wins/losses for one version,
   // or All-Time (summed across all versions) by default. Powers the profile's selectable stats block
-  // (Alex 2026-09-25); that block defaults to All-Time.
+  // (Alex 2026-09-25); that block defaults to All-Time. With a battleType (not OVERALL) it returns the
+  // raw games/W/L in that type and `pointsAvailable: false` — points are an all-types board.
   fastify.get('/api/users/:id/version-stats', async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const q = z
-      .object({ versionId: z.union([z.string().uuid(), z.literal('all')]).optional() })
+      .object({
+        versionId: z.union([z.string().uuid(), z.literal('all')]).optional(),
+        battleType: z.enum(['OVERALL', ...SKILL_BATTLE_TYPES]).default('OVERALL'),
+      })
       .safeParse(request.query);
     if (!q.success) {
       return reply.code(400).send({ error: 'BadRequest', message: q.error.message, statusCode: 400 });
     }
     const versionId = q.data.versionId;
+    if (q.data.battleType !== 'OVERALL') {
+      const scopedVersion = !versionId || versionId === 'all' ? null : versionId;
+      const r = await getPlayerBattleTypeRecord(fastify.prisma, id, scopedVersion, q.data.battleType);
+      return {
+        versionId: scopedVersion ?? 'all',
+        battleType: q.data.battleType,
+        pointsAvailable: false,
+        total_points: r.total_points,
+        games_played: r.games_played,
+        wins: r.wins,
+        losses: r.losses,
+      };
+    }
     if (!versionId || versionId === 'all') {
       const all = await getPlayerAllTimeStats(fastify.prisma, fastify.redis, id);
       return {
@@ -704,13 +725,19 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       .object({
         page: z.coerce.number().int().min(1).default(1),
         limit: z.coerce.number().int().min(1).max(50).default(10),
+        // Profile battle-type switcher: only tournaments of that type (OVERALL = all).
+        battleType: z.enum(['OVERALL', ...SKILL_BATTLE_TYPES]).default('OVERALL'),
       })
       .safeParse(request.query);
     if (!q.success) {
       return reply.code(400).send({ error: 'BadRequest', message: q.error.message, statusCode: 400 });
     }
-    const { page, limit } = q.data;
-    const where = { user_id: id, deleted_at: null };
+    const { page, limit, battleType } = q.data;
+    const where = {
+      user_id: id,
+      deleted_at: null,
+      ...(battleType !== 'OVERALL' ? { tournament: { battle_type: battleType } } : {}),
+    };
     const [rows, total] = await Promise.all([
       fastify.prisma.tournamentParticipant.findMany({
         where,
@@ -829,6 +856,23 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     });
     const tournamentsPlayed = playedTournamentRows.length;
 
+    // Decisive games per battle type (1v1 — a 2v2 slot is a Team id, so it never matches the user).
+    // Drives the profile's battle-type switcher: which types to offer, and the default view = the
+    // most-played type (Alex, 2026-10-08).
+    const eligible = eligibleStatGameWhere(null);
+    const typedGames = await fastify.prisma.matchGame.findMany({
+      where: {
+        ...eligible,
+        winner_id: { not: null },
+        match: { AND: [eligible.match ?? {}, { OR: [{ player1_id: id }, { player2_id: id }] }] },
+      },
+      select: { battle_type: true },
+    });
+    const battleTypeGames: Record<string, number> = {};
+    for (const g of typedGames) battleTypeGames[g.battle_type] = (battleTypeGames[g.battle_type] ?? 0) + 1;
+    const mostPlayedBattleType =
+      Object.entries(battleTypeGames).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
     // Recent tournaments — based on participation, merged with result data when available
     const recentParticipations = await fastify.prisma.tournamentParticipant.findMany({
       where: { user_id: id, deleted_at: null },
@@ -891,6 +935,8 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         tournaments_played: tournamentsPlayed,
         total_points: allTime.total_points,
       },
+      battle_type_games: battleTypeGames,
+      most_played_battle_type: mostPlayedBattleType,
       recent_results: recentParticipations.map((p) => {
         const result = p.tournament.results[0] ?? null;
         return {

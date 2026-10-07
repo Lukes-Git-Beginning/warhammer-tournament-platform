@@ -22,7 +22,7 @@ async function main(): Promise<void> {
     const validUserIds = new Set(users.map((u) => u.id));
     const nameById = new Map(users.map((u) => [u.id, u.username]));
     const model = await getRatingModel(prisma, undefined, { versionId: null, config: { hierarchical: true } });
-    const rows = buildSnapshotRows(model.generalSkills, new Date(), validUserIds, version?.id ?? null)
+    const rows = buildSnapshotRows(model, new Date(), validUserIds, version?.id ?? null)
       .sort((a, b) => b.general_skill - a.general_skill)
       .slice(0, 10);
     console.log(`=== ALL-TIME GS top 10 (${model.generalSkills.length} players, ${model.totalMatches} obs) ===`);

@@ -206,6 +206,29 @@ export interface RatingModel extends RatingModelData {
    * base GS when the player has no per-battle-type games. Null if the player has no fitted GS.
    */
   getOverallSkill(playerId: string): number | null;
+  /**
+   * A player's skill estimate in one scope — what classification (gating, BaLi divisions), the
+   * profile and the GS-history snapshots read. 'OVERALL' = game-weighted (as getOverallSkill); a
+   * battle type = the overall level plus that type's deviation, shrunk by the games played in it
+   * (w = n/(n+BATTLE_TYPE_PRIOR_GAMES)) — a type never played = the overall level. SE: summed
+   * parameter variances (Fisher diagonal, no covariance), as for faction skills. `gamesCount` =
+   * decisive games IN that scope. Null if the player has no fitted GS.
+   * (The Rankings/Quarterly boards keep the raw GS + offset view via getBattleTypeSkill.)
+   */
+  getSkillEstimate(playerId: string, scope: string): SkillEstimate | null;
+}
+
+/**
+ * Prior strength (in games) of a player's per-battle-type deviation around their overall level:
+ * at this many games in a type, the type's own evidence and the overall level weigh equally.
+ */
+export const BATTLE_TYPE_PRIOR_GAMES = 10;
+
+/** A scoped skill estimate (see RatingModel.getSkillEstimate). */
+export interface SkillEstimate {
+  skill: number; // log-odds
+  se: number;
+  gamesCount: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -299,8 +322,10 @@ export function createRatingModel(data: RatingModelData): RatingModel {
     gs.set(e.playerId, e);
   }
   const bto = new Map<string, number>();
+  const btoEntry = new Map<string, BattleTypeOffsetEntry>();
   for (const e of data.battleTypeOffsets ?? []) {
     bto.set(`${e.playerId}:${e.battleType}`, e.offset);
+    btoEntry.set(`${e.playerId}:${e.battleType}`, e);
   }
 
   const getPlayerFactionSkill = (playerId: string, factionId: string): number =>
@@ -403,6 +428,46 @@ export function createRatingModel(data: RatingModelData): RatingModel {
     return total > 0 ? weighted / total : e.generalSkill;
   };
 
+  const getSkillEstimate = (playerId: string, scope: string): SkillEstimate | null => {
+    const e = gs.get(playerId);
+    if (!e) return null;
+    const gsVar = e.stdError * e.stdError;
+
+    // OVERALL: game-weighted; Var(GS + Σ wₜ·BTOₜ) with wₜ = gamesₜ/total, diagonal only.
+    const types = btoGamesByPlayer.get(playerId);
+    const total = types?.reduce((s, t) => s + t.gamesCount, 0) ?? 0;
+    let overall: SkillEstimate;
+    if (!types || total === 0) {
+      overall = { skill: e.generalSkill, se: e.stdError, gamesCount: e.gamesCount };
+    } else {
+      let v = gsVar;
+      for (const t of types) {
+        const w = t.gamesCount / total;
+        const se = btoEntry.get(`${playerId}:${t.battleType}`)?.stdError ?? 0;
+        v += w * w * se * se;
+      }
+      overall = { skill: getOverallSkill(playerId)!, se: Math.sqrt(v), gamesCount: e.gamesCount };
+    }
+    if (scope === 'OVERALL') return overall;
+
+    // A battle type: shrink its deviation from the player's OVERALL level by the games played in it,
+    // skill = overall + w·(GS + BTO − overall), w = n/(n + BATTLE_TYPE_PRIOR_GAMES). The fit's own
+    // prior pulls the raw per-type view toward the BASE GS — which a single game in a second type
+    // already drags far (prod 2026-10: 219 Domination + 1 Conquest game → raw Conquest 78% vs
+    // Overall 93%). Shrinking toward the overall level instead means: a type you never played =
+    // your overall level; each game in it moves you toward your real level there.
+    const t = btoEntry.get(`${playerId}:${scope}`);
+    if (!t || t.gamesCount <= 0) return { skill: overall.skill, se: overall.se, gamesCount: 0 };
+    const raw = e.generalSkill + t.offset;
+    const rawVar = gsVar + t.stdError * t.stdError;
+    const w = t.gamesCount / (t.gamesCount + BATTLE_TYPE_PRIOR_GAMES);
+    return {
+      skill: overall.skill + w * (raw - overall.skill),
+      se: Math.sqrt((1 - w) * (1 - w) * overall.se * overall.se + w * w * rawVar),
+      gamesCount: t.gamesCount,
+    };
+  };
+
   return {
     ...data,
     getPlayerFactionSkill,
@@ -413,6 +478,7 @@ export function createRatingModel(data: RatingModelData): RatingModel {
     getBattleTypeOffset,
     getBattleTypeSkill,
     getOverallSkill,
+    getSkillEstimate,
   };
 }
 

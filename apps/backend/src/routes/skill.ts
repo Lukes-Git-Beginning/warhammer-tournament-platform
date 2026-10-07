@@ -15,7 +15,9 @@ import {
   getPlayerClassification,
   saveCalibrationAnswers,
   loadCalibrationQuestions,
+  loadAnswers,
 } from '../lib/skill-classification-service.js';
+import { SKILL_BATTLE_TYPES } from '../lib/skill-classification.js';
 
 async function resolveVersionId(
   fastify: FastifyInstance,
@@ -46,7 +48,13 @@ const skillRoutes: FastifyPluginAsync = async (fastify) => {
   // A player's classification (public — the band is shown on profiles).
   fastify.get('/api/players/:id/classification', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const query = z.object({ versionId: z.string().uuid().optional() }).safeParse(request.query);
+    const query = z
+      .object({
+        versionId: z.string().uuid().optional(),
+        // The scope to classify in: a battle type, or OVERALL (game-weighted summary, default).
+        battleType: z.enum(['OVERALL', ...SKILL_BATTLE_TYPES]).default('OVERALL'),
+      })
+      .safeParse(request.query);
     if (!query.success) return reply.code(400).send(err(400, query.error.message));
 
     const resolved = await resolveVersionId(fastify, query.data.versionId);
@@ -57,9 +65,16 @@ const skillRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.redis,
       resolved.id,
       id,
+      query.data.battleType,
     );
     return classification;
   });
+
+  // My own stored answers — the wizard seeds itself with them, so a returning player is only
+  // asked what's still open (e.g. the Conquest/Siege questions added after they calibrated).
+  fastify.get('/api/me/calibration', { preHandler: fastify.authenticate }, async (request) => ({
+    answers: await loadAnswers(fastify.prisma, request.user.sub),
+  }));
 
   // Save my own calibration answers (incremental merge), return updated classification.
   fastify.post(

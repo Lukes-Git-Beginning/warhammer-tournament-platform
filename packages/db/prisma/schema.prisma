@@ -1112,11 +1112,14 @@ model PlayerSkillSnapshot {
   band          Int // derived 1..5 band
   games_count   Int
   version_id    String?  @db.Uuid // active version at snapshot time — context tag, no FK
+  // Scope of this row: OVERALL (game-weighted) or a battle type (DOMINATION/CONQUEST/SIEGE).
+  // general_skill/std_error/games_count are IN that scope. One row per (user, day, scope).
+  battle_type   String   @default("OVERALL")
   created_at    DateTime @default(now())
 
   user User @relation(fields: [user_id], references: [id])
 
-  @@unique([user_id, snapshot_date])
+  @@unique([user_id, snapshot_date, battle_type])
   @@index([snapshot_date])
 }
 

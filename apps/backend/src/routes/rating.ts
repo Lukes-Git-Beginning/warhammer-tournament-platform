@@ -120,26 +120,30 @@ const ratingRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // -------------------------------------------------------------------------
-  // #5 — GET /api/players/:id/faction-proficiency?versionId=
+  // #5 — GET /api/players/:id/faction-proficiency?versionId=&battleType=
   // -------------------------------------------------------------------------
   fastify.get('/api/players/:id/faction-proficiency', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const parsed = VersionQuerySchema.safeParse(request.query);
+    const parsed = VersionQuerySchema.extend({
+      battleType: z.enum(['OVERALL', 'DOMINATION', 'CONQUEST', 'SIEGE']).default('OVERALL'),
+    }).safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
-    // Faction proficiency is offered as a version-filterable VIEW on the profile (default All-Time).
-    // The canonical matchmaking/gating band stays timeless elsewhere (getPlayerClassification); this
-    // is just a per-version lens on the player's games + fitted skill. 'all'/omitted = All-Time (null).
+    // Faction proficiency is offered as a version- and battle-type-filterable VIEW on the profile
+    // (default All-Time + Overall). 'all'/omitted version = All-Time (null). A battle type runs its
+    // own fit over that type's games (genuinely per-type faction skills).
     const raw = parsed.data.versionId;
     const scoped = raw && raw !== 'all' ? raw : null;
+    const battleType = parsed.data.battleType === 'OVERALL' ? undefined : parsed.data.battleType;
     return cached(
       fastify.redis,
-      cacheKey('leaderboard:proficiency', { scope: scoped ?? 'all', playerId: id }),
+      cacheKey('leaderboard:proficiency', { scope: scoped ?? 'all', bt: battleType ?? 'OVERALL', playerId: id }),
       async () => ({
         playerId: id,
         versionId: scoped,
-        entries: await playerFactionProficiency(fastify.prisma, fastify.redis, scoped, id),
+        battleType: battleType ?? 'OVERALL',
+        entries: await playerFactionProficiency(fastify.prisma, fastify.redis, scoped, id, battleType),
       }),
       { ttlSeconds: 60 },
     );
