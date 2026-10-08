@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { broadcastAdmin, type BroadcastAudience } from '@/lib/api';
+import { broadcastAdmin, type BroadcastAudience, type SkillScope } from '@/lib/api';
+import { BattleTypeSelect } from './BattleTypeSelect.js';
 
 type Tier = 'supporter' | 'lord' | 'champion';
 
@@ -21,12 +22,13 @@ export function BroadcastDmTab() {
   const [activeOnly, setActiveOnly] = useState(false);
   const [activeDays, setActiveDays] = useState(30);
   const [bands, setBands] = useState<number[]>([]);
+  const [bandBattleType, setBandBattleType] = useState<SkillScope>('OVERALL');
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [count, setCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  const audience = (): BroadcastAudience => ({ activeOnly, activeDays, bands, tiers });
+  const audience = (): BroadcastAudience => ({ activeOnly, activeDays, bands, bandBattleType, tiers });
 
   const toggle = <T,>(setter: React.Dispatch<React.SetStateAction<T[]>>, val: T) =>
     setter((prev) => (prev.includes(val) ? prev.filter((x) => x !== val) : [...prev, val]));
@@ -112,7 +114,8 @@ export function BroadcastDmTab() {
         </div>
         <div className="sm:col-span-2">
           <label className={labelClass}>Skill band (headline)</label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <BattleTypeSelect value={bandBattleType} onChange={setBandBattleType} label="Band in" />
             {BANDS.map((b) => (
               <button key={b} type="button" onClick={() => toggle(setBands, b)} className={chip(bands.includes(b))}>
                 Band {b}

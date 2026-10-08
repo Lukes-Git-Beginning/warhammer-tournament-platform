@@ -15,6 +15,7 @@ import {
   type AnnouncementDraftResult,
   type Tournament,
 } from '@/lib/api.js';
+import { BattleTypeSelect } from './BattleTypeSelect.js';
 
 const LENGTHS: AnnouncementLength[] = ['SHORT', 'MEDIUM', 'LONG'];
 const UPCOMING_STATUSES = ['DRAFT', 'OPEN_REGISTRATION', 'REGISTRATION_CLOSED'];
@@ -134,7 +135,12 @@ function DestinationRow({
                 days
               </label>
               <div className="mb-2 flex flex-wrap items-center gap-1">
-                <span className="mr-1 text-xs text-stone-500">Skill band:</span>
+                <BattleTypeSelect
+                  value={dest.audience?.bandBattleType ?? 'OVERALL'}
+                  onChange={(bandBattleType) => setAud({ bandBattleType })}
+                  label="Skill band in"
+                />
+                <span className="mr-1 text-xs text-stone-500">:</span>
                 {[1, 2, 3, 4, 5].map((b) => (
                   <button
                     key={b}

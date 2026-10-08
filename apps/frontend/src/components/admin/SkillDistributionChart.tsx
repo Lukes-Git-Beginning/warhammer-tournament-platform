@@ -10,7 +10,9 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { getAdminSkillDistribution } from '@/lib/api.js';
+import { useState } from 'react';
+import { getAdminSkillDistribution, type SkillScope } from '@/lib/api.js';
+import { BattleTypeSelect } from './BattleTypeSelect.js';
 
 const COLOR_Q = '#d4a853'; // with questionnaire — gold
 const COLOR_DATA = '#78716c'; // games only — stone
@@ -18,9 +20,11 @@ const COLOR_DATA = '#78716c'; // games only — stone
 export function SkillDistributionChart() {
   const navigate = useNavigate();
   // Skill is timeless — the band distribution spans all versions, so there is no version selector.
+  // It IS per battle type: bands can be read in Overall or one battle type.
+  const [scope, setScope] = useState<SkillScope>('OVERALL');
   const { data, isLoading, error } = useQuery({
-    queryKey: ['admin-skill-distribution'],
-    queryFn: () => getAdminSkillDistribution(),
+    queryKey: ['admin-skill-distribution', scope],
+    queryFn: () => getAdminSkillDistribution(scope),
   });
 
   const chartData = (data?.distribution ?? []).map((d) => ({
@@ -32,15 +36,19 @@ export function SkillDistributionChart() {
 
   // Clicking a column deep-links to the Users tab, pre-filtered to that skill band.
   function openBand(band: number) {
-    void navigate({ to: '/admin', search: { tab: 'users', bands: String(band) } });
+    void navigate({
+      to: '/admin',
+      search: { tab: 'users', bands: String(band), ...(scope !== 'OVERALL' ? { bandBattleType: scope } : {}) },
+    });
   }
   const classified = (data?.distribution ?? []).reduce((s, d) => s + d.withQuestionnaire + d.dataOnly, 0);
 
   return (
     <div className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
-      <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500 mb-1">
-        Skill Level Distribution
-      </h3>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">Skill Level Distribution</h3>
+        <BattleTypeSelect value={scope} onChange={setScope} />
+      </div>
       <p className="mb-4 text-xs text-stone-500">
         Players per band, split by whether they filled in the questionnaire or are rated from games
         alone. Click a bar to open that band in the Users tab.

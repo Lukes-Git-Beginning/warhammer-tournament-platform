@@ -194,11 +194,12 @@ const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin',
   component: AdminPage,
-  validateSearch: (search: Record<string, unknown>): { tab: string; bands?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { tab: string; bands?: string; bandBattleType?: string } => ({
     tab: typeof search.tab === 'string' ? search.tab : 'dashboard',
     // Deep-link filter for the users tab (e.g. from the Skill Distribution bars): comma-separated
-    // bands. Optional so a plain tab switch needn't carry it.
+    // bands, optionally judged in one battle type. Optional so a plain tab switch needn't carry it.
     ...(typeof search.bands === 'string' ? { bands: search.bands } : {}),
+    ...(typeof search.bandBattleType === 'string' ? { bandBattleType: search.bandBattleType } : {}),
   }),
 });
 

@@ -76,9 +76,9 @@ export async function resolveAdminAudience(
   // ONCE, fetch all survivors' calibration answers in ONE query, then classify in
   // memory. Uses the headline (gating) band, what a player sees as "their band".
   if (audience.bands.length > 0) {
-    // Timeless all-time fit + the OVERALL band (game-weighted), the same classification the
-    // profile summary and admin stats use. (Was a version-scoped fit, which thins/resets on a
-    // freshly-activated version.)
+    // Timeless all-time fit, classified in the audience's scope (OVERALL = game-weighted, or one
+    // battle type, e.g. "Beginner in Conquest") — the same classification profile + admin stats use.
+    const scope = audience.bandBattleType ?? 'OVERALL';
     const [model, questions, answerRows] = await Promise.all([
       getClassificationModel(prisma, redis),
       loadCalibrationQuestions(prisma),
@@ -92,7 +92,7 @@ export async function resolveAdminAudience(
     );
     candidates = candidates.filter((c) => {
       const answers = answersById.get(c.id) ?? {};
-      const cls = classifyWithModel(model, answers, questions, c.id);
+      const cls = classifyWithModel(model, answers, questions, c.id, scope);
       // Unclassified users (NO questionnaire AND NO fitted game data) are not in any band —
       // exclude them, exactly as the skill-distribution stats endpoint does. Otherwise they all
       // default to gatingBand 1, and a "band 1" broadcast would blast every dormant/unrated account.

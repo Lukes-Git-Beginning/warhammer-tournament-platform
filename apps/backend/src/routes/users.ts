@@ -278,6 +278,8 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         limit: z.coerce.number().int().min(1).max(500).default(50),
         sortBy: z.enum(['username', 'created_at', 'role', 'is_banned']).default('username'),
         sortDir: z.enum(['asc', 'desc']).default('asc'),
+        // Scope of the per-user `band` (Overall or one battle type) — drives the band filter.
+        battleType: z.enum(['OVERALL', ...SKILL_BATTLE_TYPES]).default('OVERALL'),
       });
 
       const parsed = SearchQuerySchema.safeParse(request.query);
@@ -289,7 +291,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { search, page, limit, sortBy, sortDir } = parsed.data;
+      const { search, page, limit, sortBy, sortDir, battleType } = parsed.data;
       const skip = (page - 1) * limit;
 
       const searchFilter = search && search.length >= 2
@@ -339,7 +341,7 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       ]);
       const bandOf = (calibrationAnswers: unknown, userId: string): number | null => {
         const answers = (calibrationAnswers as Record<string, string> | null) ?? {};
-        const cls = classifyWithModel(model, answers, questions, userId);
+        const cls = classifyWithModel(model, answers, questions, userId, battleType);
         return cls.rated ? cls.gatingBand : null; // unclassified — no questionnaire, no games
       };
 

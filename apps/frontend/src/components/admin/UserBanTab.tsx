@@ -2,7 +2,8 @@ import { SITE_TZ } from '@/lib/site-time';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { searchUsers, updateUserRole, resetUserSteam, deleteUser, type AdminUser } from '@/lib/api';
+import { searchUsers, updateUserRole, resetUserSteam, deleteUser, type AdminUser, type SkillScope } from '@/lib/api';
+import { BattleTypeSelect, parseScope } from './BattleTypeSelect.js';
 import { UserBanModal } from './UserBanModal';
 import { UserEditModal } from './UserEditModal';
 
@@ -211,7 +212,7 @@ function CopyIdButton({ id }: { id: string }) {
   );
 }
 
-export function UserBanTab({ initialBands }: { initialBands?: string }) {
+export function UserBanTab({ initialBands, initialBattleType }: { initialBands?: string; initialBattleType?: string }) {
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
@@ -221,10 +222,14 @@ export function UserBanTab({ initialBands }: { initialBands?: string }) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [bandFilter, setBandFilter] = useState<Set<number>>(() => parseBands(initialBands));
 
+  // Which battle type the band column / filter reads (Overall or one type).
+  const [bandScope, setBandScope] = useState<SkillScope>(() => parseScope(initialBattleType));
+
   // Apply a deep-linked band filter (e.g. a click on a Skill Distribution bar) when it changes.
   useEffect(() => {
     setBandFilter(parseBands(initialBands));
-  }, [initialBands]);
+    setBandScope(parseScope(initialBattleType));
+  }, [initialBands, initialBattleType]);
 
   function toggleBand(b: number) {
     setBandFilter((prev) => {
@@ -245,8 +250,8 @@ export function UserBanTab({ initialBands }: { initialBands?: string }) {
   }
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['admin-users', search, sortBy, sortDir],
-    queryFn: () => searchUsers(search, sortBy, sortDir),
+    queryKey: ['admin-users', search, sortBy, sortDir, bandScope],
+    queryFn: () => searchUsers(search, sortBy, sortDir, bandScope),
   });
 
   const users = data?.users ?? [];
@@ -266,7 +271,8 @@ export function UserBanTab({ initialBands }: { initialBands?: string }) {
         />
         {/* Skill-band filter — multi-select; deep-linkable from the Skill Distribution bars. */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-stone-500">Band:</span>
+          <BattleTypeSelect value={bandScope} onChange={setBandScope} label="Band in" />
+          <span className="text-xs text-stone-500">:</span>
           {[1, 2, 3, 4, 5].map((b) => {
             const active = bandFilter.has(b);
             return (

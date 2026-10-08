@@ -36,6 +36,7 @@ import { skillToBand } from '../lib/rating-model.js';
 import { getQueuePenaltyState, resetQueuePenaltyToWarned } from '../lib/queue-penalty.js';
 import { publishChangelog, changelogChannelId } from '../lib/changelog-publish.js';
 import { BroadcastAudienceSchema, resolveAdminAudience, sendBroadcast } from '../lib/broadcast.js';
+import { SkillScopeSchema } from '../lib/broadcast-audience.js';
 import {
   parseAnnouncementDestinations,
   buildTournamentFacts,
@@ -828,13 +829,16 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // cached once per version, then each player's gating band is a pure in-memory blend
   // of their questionnaire floor and (if any) their fitted general skill. Players with
   // neither a questionnaire nor fitted data are counted as "unclassified".
-  fastify.get('/api/admin/stats/skill-distribution', async (_request, reply) => {
-    void reply;
+  fastify.get('/api/admin/stats/skill-distribution', async (request, reply) => {
     // Skill is TIMELESS — a player's band spans every version, so the distribution is version-
     // independent (fitted from the all-time model). Not scoped to the active version.
+    // ?battleType= buckets by the band IN that battle type (default OVERALL).
+    const q = z.object({ battleType: SkillScopeSchema.default('OVERALL') }).safeParse(request.query);
+    if (!q.success) return reply.code(400).send({ error: 'BadRequest', message: q.error.message, statusCode: 400 });
+    const scope = q.data.battleType;
     return cached(
       fastify.redis,
-      cacheKey('admin:skill-distribution', { scope: 'all-time' }),
+      cacheKey('admin:skill-distribution', { scope: 'all-time', bt: scope }),
       async () => {
         const [model, users, questions] = await Promise.all([
           getClassificationModel(fastify.prisma, fastify.redis),
@@ -850,7 +854,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         let unclassified = 0;
         for (const u of users) {
           const answers = (u.calibration_answers as Record<string, string> | null) ?? {};
-          const cls = classifyWithModel(model, answers, questions, u.id);
+          const cls = classifyWithModel(model, answers, questions, u.id, scope);
           if (!cls.rated) {
             unclassified++;
             continue;
@@ -862,6 +866,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
         return {
           versionId: null,
+          battleType: scope,
           total: users.length,
           unclassified,
           distribution: [1, 2, 3, 4, 5].map((band) => ({
@@ -992,12 +997,15 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // their QUESTIONNAIRE-based rating (potentially stronger than they claimed). Sorted
   // by the gap, descending; NO threshold — the admin judges. Needs BOTH signals to
   // compare, so players lacking a questionnaire or lacking fitted data are omitted.
-  fastify.get('/api/admin/reports/underrated', async (_request, reply) => {
-    void reply;
+  fastify.get('/api/admin/reports/underrated', async (request, reply) => {
     // Skill is TIMELESS: compare each player's questionnaire claim against their ALL-TIME General
     // Skill, never the active version's fit. A version-scoped fit resets/thins on a freshly-activated
     // version and would drop or mis-rate players — the same bug the timeless getPlayerClassification
     // fix addressed. The version is intentionally not a parameter here.
+    // ?battleType= compares the claim FOR that battle type against the data IN it (default OVERALL).
+    const q = z.object({ battleType: SkillScopeSchema.default('OVERALL') }).safeParse(request.query);
+    if (!q.success) return reply.code(400).send({ error: 'BadRequest', message: q.error.message, statusCode: 400 });
+    const scope = q.data.battleType;
     const [model, users, questions] = await Promise.all([
       getClassificationModel(fastify.prisma, fastify.redis),
       fastify.prisma.user.findMany({
@@ -1011,11 +1019,10 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     for (const u of users) {
       const answers = (u.calibration_answers as Record<string, string> | null) ?? {};
       if (Object.keys(answers).length === 0) continue; // need a self-claim to compare against
-      // OVERALL (game-weighted) data skill vs the overall claim — not the raw base GS, which a few
-      // games in a second battle type drag toward the unweighted centroid.
-      const gs = model.getSkillEstimate(u.id, 'OVERALL');
-      if (!gs) continue; // need fitted data to compare
-      const qFloor = questionnaireFloor(answers, questions);
+      // Data skill in the scope (OVERALL = game-weighted, not the raw base GS) vs the claim in it.
+      const gs = model.getSkillEstimate(u.id, scope);
+      if (!gs) continue; // need fitted data to compare (a type the player never played → skip)
+      const qFloor = questionnaireFloor(answers, questions, scope);
       const qSkill = bandToLogOdds(qFloor);
       const dataBand = skillToBand(gs.skill);
       // N9: only surface a genuine upward band jump (data band strictly above the
@@ -1037,7 +1044,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
     players.sort((a, b) => b.delta - a.delta);
-    return { versionId: null, players };
+    return { versionId: null, battleType: scope, players };
   });
 
   fastify.get('/api/admin/stats/faction-winrates', async (request, reply) => {

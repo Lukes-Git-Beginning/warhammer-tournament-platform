@@ -7,7 +7,9 @@ import {
   getAdminNotInDiscordReport,
   getAdminUnderratedReport,
   type AdminEngagementUser,
+  type SkillScope,
 } from '@/lib/api.js';
+import { BattleTypeSelect } from './BattleTypeSelect.js';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -43,16 +45,19 @@ function UserRow({
 // #19 / N9 — data rating vs self-claim. Backend lists only genuine upward band jumps
 // (dataBand > questionnaireBand), sorted by the gap descending.
 function UnderratedSection() {
+  // Claim and data are compared in one scope: Overall, or one battle type (its questions vs its games).
+  const [scope, setScope] = useState<SkillScope>('OVERALL');
   const { data, isLoading, error } = useQuery({
-    queryKey: ['admin-underrated-report'],
-    queryFn: () => getAdminUnderratedReport(),
+    queryKey: ['admin-underrated-report', scope],
+    queryFn: () => getAdminUnderratedReport(scope),
   });
 
   return (
     <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
-      <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">
-        Underrated players
-      </h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">Underrated players</h3>
+        <BattleTypeSelect value={scope} onChange={setScope} />
+      </div>
       <p className="mb-3 text-xs text-stone-500">
         Players whose results place them a full band above their questionnaire self-rating —
         potentially stronger than they claimed. Sorted by the gap. Only players with both a

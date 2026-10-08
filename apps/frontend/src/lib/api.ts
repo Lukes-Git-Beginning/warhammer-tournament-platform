@@ -1473,11 +1473,14 @@ export function searchUsers(
   search?: string,
   sortBy: 'username' | 'created_at' | 'role' | 'is_banned' = 'username',
   sortDir: 'asc' | 'desc' = 'asc',
+  /** Scope of each user's `band` (Overall or one battle type). */
+  battleType: SkillScope = 'OVERALL',
 ): Promise<{ users: AdminUser[]; total: number }> {
   const params = new URLSearchParams();
   if (search && search.length >= 2) params.set('search', search);
   params.set('sortBy', sortBy);
   params.set('sortDir', sortDir);
+  scopeParam(params, battleType);
   params.set('limit', '500');
   return apiFetch(`/api/users?${params.toString()}`);
 }
@@ -1589,12 +1592,17 @@ export interface SkillDistributionEntry {
 }
 export interface SkillDistributionResponse {
   versionId: string | null;
+  battleType?: SkillScope;
   total: number;
   unclassified: number;
   distribution: SkillDistributionEntry[];
 }
-export function getAdminSkillDistribution(version?: string): Promise<SkillDistributionResponse> {
-  return apiFetch(`/api/admin/stats/skill-distribution${version ? `?version=${encodeURIComponent(version)}` : ''}`);
+/** Players per skill band, banded in `battleType` (Overall or one battle type). */
+export function getAdminSkillDistribution(battleType: SkillScope = 'OVERALL'): Promise<SkillDistributionResponse> {
+  const params = new URLSearchParams();
+  scopeParam(params, battleType);
+  const qs = params.toString();
+  return apiFetch(`/api/admin/stats/skill-distribution${qs ? `?${qs}` : ''}`);
 }
 
 // #17 — engagement-gap report.
@@ -1641,10 +1649,15 @@ export interface AdminUnderratedPlayer {
 }
 export interface AdminUnderratedReport {
   versionId: string | null;
+  battleType?: SkillScope;
   players: AdminUnderratedPlayer[];
 }
-export function getAdminUnderratedReport(version?: string): Promise<AdminUnderratedReport> {
-  return apiFetch(`/api/admin/reports/underrated${version ? `?version=${encodeURIComponent(version)}` : ''}`);
+/** Claim vs data, compared in `battleType` (Overall or one battle type). */
+export function getAdminUnderratedReport(battleType: SkillScope = 'OVERALL'): Promise<AdminUnderratedReport> {
+  const params = new URLSearchParams();
+  scopeParam(params, battleType);
+  const qs = params.toString();
+  return apiFetch(`/api/admin/reports/underrated${qs ? `?${qs}` : ''}`);
 }
 
 export interface GamesOverTimeEntry {
@@ -2142,6 +2155,8 @@ export interface BroadcastAudience {
   activeOnly?: boolean;
   activeDays?: number;
   bands?: number[];
+  /** Which skill the band filter reads (e.g. "Beginner in Conquest"). Default Overall. */
+  bandBattleType?: SkillScope;
   tiers?: ('supporter' | 'lord' | 'champion')[];
 }
 

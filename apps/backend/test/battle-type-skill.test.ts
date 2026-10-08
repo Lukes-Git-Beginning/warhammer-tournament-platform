@@ -182,3 +182,12 @@ describe('buildSnapshotRows — one row per scope', () => {
     expect(rows.every((r) => r.user_id === 'P')).toBe(true); // opponents aren't in validUserIds
   });
 });
+
+describe('admin band filters per battle type', () => {
+  it('broadcast audience: band filter defaults to Overall, accepts a battle type, rejects junk', async () => {
+    const { BroadcastAudienceSchema } = await import('../src/lib/broadcast-audience.js');
+    expect(BroadcastAudienceSchema.parse({ bands: [2] }).bandBattleType).toBe('OVERALL');
+    expect(BroadcastAudienceSchema.parse({ bands: [2], bandBattleType: 'CONQUEST' }).bandBattleType).toBe('CONQUEST');
+    expect(BroadcastAudienceSchema.safeParse({ bandBattleType: 'LAND_BATTLE' }).success).toBe(false);
+  });
+});
