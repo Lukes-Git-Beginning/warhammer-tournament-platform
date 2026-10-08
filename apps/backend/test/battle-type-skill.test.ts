@@ -14,7 +14,12 @@ import {
   pendingCalibrationTypes,
   questionnaireFloor,
 } from '../src/lib/skill-classification.js';
-import { classifyWithModel, scopeForBattleType, withBattleTypeScopes } from '../src/lib/skill-classification-service.js';
+import {
+  classifyWithModel,
+  divisionBandWithModel,
+  scopeForBattleType,
+  withBattleTypeScopes,
+} from '../src/lib/skill-classification-service.js';
 import { buildSnapshotRows } from '../src/lib/gs-history.js';
 
 // One faction for everyone → the matchup term is always a mirror (0), isolating GS/BTO behaviour.
@@ -161,6 +166,35 @@ describe('classifyWithModel', () => {
     expect(withAnswer.rated).toBe(true);
     expect(withAnswer.generalSkill).toBeNull();
     expect(withAnswer.matchmakingBand).toBe(3);
+  });
+
+  it('calibrated before the rework, type never asked: unrated in that type, not "New" (even with games)', () => {
+    const m = mazeModel();
+    const answers = { best_result: 'tt_top16', years_competitive: 'gt2y' }; // Domination + general only
+    const conq = classifyWithModel(m, answers, CALIBRATION_QUESTIONS, 'P', 'CONQUEST');
+    expect(conq.rated).toBe(false);
+    expect(conq.bandName).toBe('Unrated');
+    expect(classifyWithModel(m, answers, CALIBRATION_QUESTIONS, 'P', 'SIEGE').rated).toBe(false);
+    expect(classifyWithModel(m, answers, CALIBRATION_QUESTIONS, 'P', 'DOMINATION').rated).toBe(true);
+    expect(classifyWithModel(m, answers, CALIBRATION_QUESTIONS, 'P', 'OVERALL').rated).toBe(true);
+    // Answering the type's questions rates it again.
+    const answered = classifyWithModel(m, { ...answers, conquest_self_rating: '4' }, CALIBRATION_QUESTIONS, 'P', 'CONQUEST');
+    expect(answered.rated).toBe(true);
+  });
+
+  it('BaLi division: unrated in the type → the Overall band, never the placeholder band 1', () => {
+    const m = mazeModel();
+    const answers = { best_result: 'tt_top16', years_competitive: 'gt2y' };
+    const overallBand = classifyWithModel(m, answers, CALIBRATION_QUESTIONS, 'P', 'OVERALL').matchmakingBand;
+    expect(overallBand).toBeGreaterThanOrEqual(4);
+    expect(divisionBandWithModel(m, answers, CALIBRATION_QUESTIONS, 'P', 'CONQUEST')).toBe(overallBand);
+    // Rated in the type → the type's own band.
+    const typed = { ...answers, conquest_self_rating: '2' };
+    expect(divisionBandWithModel(m, typed, CALIBRATION_QUESTIONS, 'P', 'CONQUEST')).toBe(
+      classifyWithModel(m, typed, CALIBRATION_QUESTIONS, 'P', 'CONQUEST').matchmakingBand,
+    );
+    // Unrated everywhere (no answers, no games) → band 1.
+    expect(divisionBandWithModel(m, {}, CALIBRATION_QUESTIONS, 'nobody', 'CONQUEST')).toBe(1);
   });
 
   it('scopeForBattleType maps tournament battle types, falls back to OVERALL', () => {

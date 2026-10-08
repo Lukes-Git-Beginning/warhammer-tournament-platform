@@ -70,6 +70,28 @@ export function PlayerLevelScale({
   if (!data) return null;
 
   const pending = isOwnProfile ? (data.pendingCalibrationTypes ?? []) : [];
+  // Calibrated before this battle type had its own questions → unrated in it (no floor to show).
+  const typePending = battleType !== 'OVERALL' && (data.pendingCalibrationTypes ?? []).includes(battleType);
+
+  if (typePending) {
+    const type = SCOPE_LABEL[battleType];
+    return (
+      <Frame scope={battleType}>
+        {isOwnProfile ? (
+          <div className="space-y-3">
+            <p className="text-sm text-stone-400">
+              Your level is set per battle type. Answer a few {type} questions so we can place you in {type} too.
+            </p>
+            <Button variant="etched" size="sm" onClick={onCalibrate}>
+              Answer a few questions →
+            </Button>
+          </div>
+        ) : (
+          <p className="text-sm text-stone-500">Not placed in {type} yet.</p>
+        )}
+      </Frame>
+    );
+  }
 
   // With a questionnaire, show the blended estimate; otherwise the raw data
   // estimate (the default band-1 prior is not real signal to display).

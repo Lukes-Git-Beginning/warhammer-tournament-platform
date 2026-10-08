@@ -183,10 +183,14 @@ export function classifyWithModel(
   });
 
   const hasQuestionnaire = Object.keys(answers).length > 0;
+  const pendingTypes = pendingCalibrationTypes(answers, questions);
+  // A calibrated player who was never asked this type's questions has no floor for it: the
+  // default 1 is a placeholder, not a "Beginner" claim, and it would dominate thin data.
+  const typePending = scope !== 'OVERALL' && pendingTypes.includes(scope);
   // #18 — "rated" means we have real signal: a questionnaire OR fitted game data.
   // A player with neither is NOT band-1 "New"; the default floor is just a
   // placeholder. Such players are surfaced as "Unrated" and kept out of band stats.
-  const rated = hasQuestionnaire || est != null;
+  const rated = !typePending && (hasQuestionnaire || est != null);
   const scopeGames = est?.gamesCount ?? 0;
 
   return {
@@ -206,7 +210,7 @@ export function classifyWithModel(
     bandName: rated ? BAND_NAMES[result.matchmakingBand]! : 'Unrated',
     hasQuestionnaire,
     rated,
-    pendingCalibrationTypes: pendingCalibrationTypes(answers, questions),
+    pendingCalibrationTypes: pendingTypes,
   };
 }
 
@@ -237,6 +241,40 @@ export async function getPlayerClassification(
     getClassificationModel(prisma, redis),
   ]);
   return classifyWithModel(model, answers, questions, playerId, scope);
+}
+
+/**
+ * The band a player's BaLi division is computed from, in the tournament's battle type. A player
+ * still unrated in that type (registered before answering its questions, or never asked) falls
+ * back to their Overall band — the only signal there is — so an experienced player is never
+ * seeded among the beginners of a type they haven't calibrated for. Unrated in Overall too → 1.
+ */
+export async function getDivisionBand(
+  prisma: PrismaClient,
+  redis: Redis | undefined,
+  playerId: string,
+  scope: SkillScope,
+): Promise<number> {
+  const [answers, questions, model] = await Promise.all([
+    loadAnswers(prisma, playerId),
+    loadCalibrationQuestions(prisma),
+    getClassificationModel(prisma, redis),
+  ]);
+  return divisionBandWithModel(model, answers, questions, playerId, scope);
+}
+
+/** PURE core of getDivisionBand (given a fitted model). */
+export function divisionBandWithModel(
+  model: RatingModel,
+  answers: Record<string, string>,
+  questions: readonly CalibrationQuestion[],
+  playerId: string,
+  scope: SkillScope,
+): number {
+  const cls = classifyWithModel(model, answers, questions, playerId, scope);
+  if (cls.rated || scope === 'OVERALL') return cls.matchmakingBand;
+  const overall = classifyWithModel(model, answers, questions, playerId, 'OVERALL');
+  return overall.rated ? overall.matchmakingBand : cls.matchmakingBand;
 }
 
 /**

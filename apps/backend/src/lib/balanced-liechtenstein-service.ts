@@ -35,7 +35,7 @@ import {
 } from './bali-playoff-plan.js';
 import { isLegalLateJoinReclaim } from './bali-pairing-cost.js';
 import { computeSwissStandings, sortSwissStandings, type CompletedMatchRecord } from './swiss.js';
-import { getPlayerClassification, scopeForBattleType } from './skill-classification-service.js';
+import { getDivisionBand, scopeForBattleType } from './skill-classification-service.js';
 import { getRatingModel } from './rating-model-service.js';
 import { resolveTeamGs } from './team-rating.js';
 import { balancedRounds } from './auto-swiss-service.js';
@@ -134,8 +134,7 @@ export async function assignSkillBandsForTournament(
           computed = gs?.band ?? 0;
         }
       } else if (version) {
-        const cls = await getPlayerClassification(fastify.prisma, fastify.redis, version.id, p.user_id, scope);
-        computed = cls.matchmakingBand;
+        computed = await getDivisionBand(fastify.prisma, fastify.redis, p.user_id, scope);
       }
       // Effective band = the higher of the computed band and the requested one —
       // play-up only, so a competitor can enter a higher division but never a lower one.
@@ -767,14 +766,13 @@ export async function admitBalancedLateJoiner(
           const gs = resolveTeamGs(model, participant.team_id, participant.team?.members.map((m) => m.user_id) ?? []);
           if (gs) effective = Math.max(effective, gs.band);
         } else {
-          const cls = await getPlayerClassification(
+          const band = await getDivisionBand(
             fastify.prisma,
             fastify.redis,
-            version.id,
             participant.user_id,
             scopeForBattleType(tournament.battle_type),
           );
-          effective = Math.max(effective, cls.matchmakingBand);
+          effective = Math.max(effective, band);
         }
       }
     } catch (err) {

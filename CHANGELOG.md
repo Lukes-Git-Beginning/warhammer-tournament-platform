@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.20.1] — 2026-10-08
+
+### Fixed
+- **No more "New" in battle types you haven't been asked about.** If you calibrated before Conquest and Siege had their own questions, your level there now shows as not placed yet instead of "New", until you answer a few questions for that type.
+- **Balanced Liechtenstein divisions in Conquest and Siege** now use your Overall level while you're not placed in that battle type yet, so experienced players can't land in the beginner division. Signing up asks that type's questions first.
+
 ## [2.20.0] — 2026-10-08
 
 ### Added

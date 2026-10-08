@@ -45,7 +45,7 @@ describe('admin band views per battle type', () => {
       return (res.json() as { users: { id: string; band: number | null }[] }).users.find((u) => u.id === PLAYER_ID)?.band;
     };
     expect(await band('CONQUEST')).toBe(4); // the Conquest claim
-    expect(await band('SIEGE')).toBe(1); // calibrated, but nothing said about Siege → floor 1
+    expect(await band('SIEGE')).toBeNull(); // calibrated, but never asked about Siege → unrated there
   });
 
   it('skill distribution accepts a battle type and echoes it; rejects junk', async () => {

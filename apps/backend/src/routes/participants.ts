@@ -67,6 +67,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           min_band: true,
           max_band: true,
           battle_type: true,
+          format: true,
           faction_allowlist: { select: { faction_id: true } },
           restricted_factions: { select: { faction_id: true } },
           _count: {
@@ -143,6 +144,17 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
           }
           if (tournament.max_band != null && band > tournament.max_band) {
             return reply.code(422).send({ error: 'UnprocessableEntity', message: `This tournament is capped at ${BAND_NAMES[tournament.max_band]!} — ${yourBand} is ${BAND_NAMES[band]!}.`, statusCode: 422 });
+          }
+        }
+      } else if (tournament.format === 'BALANCED_LIECHTENSTEIN' && tournament.competitor_format !== 'TWO_V_TWO') {
+        // BaLi divisions are judged in the tournament's battle type, so a player who calibrated
+        // before that type had its own questions answers them first — otherwise their division
+        // would rest on a placeholder floor instead of a real answer.
+        const scope = scopeForBattleType(tournament.battle_type);
+        if (scope !== 'OVERALL') {
+          const classification = await getPlayerClassification(fastify.prisma, fastify.redis, null, request.user.sub, scope);
+          if (classification.pendingCalibrationTypes.includes(scope)) {
+            return reply.code(422).send({ error: 'CalibrationRequired', message: `Answer the ${battleTypeLabel(scope)} questions in your skill calibration before registering for this tournament.`, statusCode: 422 });
           }
         }
       }
