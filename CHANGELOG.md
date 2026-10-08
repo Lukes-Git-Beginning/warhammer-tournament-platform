@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.19.1] — 2026-10-08
+
+### Fixed
+- **The skill chart on profiles is back.** Its history is rebuilt right away instead of waiting for running tournaments to finish.
+
 ## [2.19.0] — 2026-10-08
 
 ### Added
