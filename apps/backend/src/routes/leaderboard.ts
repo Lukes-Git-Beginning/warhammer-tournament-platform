@@ -719,10 +719,11 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         // fallback). Show EVERYONE who played (>=1) with a `qualified` flag; the frontend greys
         // the sub-gate players + shows a legend, rather than hiding them.
         const inScope = (e: (typeof board)[number]) => (battleType === 'OVERALL' ? e.gamesCount : e.battleTypeGames);
-        // A battle-type view lists from PROVISIONAL_MIN_GAMES games in that type (as the Rankings
-        // board) — but never hides a qualified player (early in a quarter the gate is below 5).
-        const minListed = battleType === 'OVERALL' ? 1 : Math.max(1, Math.min(PROVISIONAL_MIN_GAMES, gate));
-        const played = board.filter((e) => inScope(e) >= minListed);
+        // Every view lists from the first in-scope game (Alex 2026-10-09): the quarter's games are
+        // all that count here and the gate already greys sub-gate players, so a battle-type view
+        // shows the same players as Overall would for those games. (Only the timeless Rankings
+        // board waits for PROVISIONAL_MIN_GAMES in a type.)
+        const played = board.filter((e) => inScope(e) >= 1);
         const qualifiedCount = played.filter((e) => inScope(e) >= gate).length;
         // `qualifiedOnly` (landing-page teaser) keeps only gate-clearers and renumbers ranks
         // 1..N among them; the default board shows everyone who played, flagged via `qualified`.

@@ -311,6 +311,28 @@ describe('GET /api/leaderboard/quarterly (filtered)', () => {
     expect(typeof body.gate).toBe('number');
   });
 
+  it('a battle-type view lists a player from the first game in that type (greyed below the gate)', async () => {
+    TestVersion = await createTestVersion({ is_active: true });
+    testTournament = await createTestTournament({ organizerId: testUser1.id });
+    const f1 = await createTestFaction(911);
+    const f2 = await createTestFaction(912);
+    // Alpha: two Domination games in Q2 2026 (completedMatch plays on 2026-06-01) — below
+    // PROVISIONAL_MIN_GAMES (5) and below the gate.
+    await completedMatch(TestVersion.id, testTournament.id, testUser1.id, testUser2.id, f1, f2, testUser1.id);
+    await completedMatch(TestVersion.id, testTournament.id, testUser1.id, testUser3.id, f1, f2, testUser1.id);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/leaderboard/quarterly?battleType=DOMINATION&competitorFormat=ONE_V_ONE&pageSize=1000&quarter=2026-Q2',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ entries: { user?: { id: string }; gamesCount: number; qualified: boolean }[]; gate: number }>();
+    const alpha = body.entries.find((e) => e.user?.id === testUser1.id);
+    expect(alpha).toBeDefined();
+    expect(alpha!.gamesCount).toBe(2);
+    expect(alpha!.qualified).toBe(2 >= body.gate);
+  });
+
   it('qualifiedOnly=true returns only gate-clearers, capped to the qualified count', async () => {
     const full = await app.inject({
       method: 'GET',
