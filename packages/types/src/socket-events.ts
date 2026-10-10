@@ -126,6 +126,17 @@ export interface ServerToClientEvents {
     player1FactionId: string | null; // null until reveal
     player2FactionId: string | null;
   }) => void;
+  // Blind Pick faction bans (tournament.faction_bans_per_player > 0) for the current game.
+  'match.faction-bans.update': (payload: {
+    matchId: string;
+    perPlayer: number;
+    player1Locked: boolean;
+    player2Locked: boolean;
+    firstLockedAt: string | null;
+    revealedAt: string | null;
+    player1Bans: string[]; // [] until reveal
+    player2Bans: string[];
+  }) => void;
   'match.game.updated': (payload: {
     matchId: string;
     gameNumber: number;

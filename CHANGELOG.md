@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.21.0] — 2026-10-10
+
+### Added
+- **Faction bans for Blind Pick tournaments.** Hosts can now give each player 1 or 2 faction bans per game. Before every blind pick both players ban at the same time without seeing each other's choice, then the bans are revealed and nobody can pick a banned faction that game. Works in 1v1 and 2v2 (the captain bans for the team). If you don't ban in time after your opponent has, you lose your bans for that game.
+
 ## [2.20.2] — 2026-10-09
 
 ### Fixed

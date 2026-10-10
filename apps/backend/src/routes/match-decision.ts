@@ -8,6 +8,7 @@ import { ensureOneVThreeDecision } from '../lib/one-v-three.js';
 import {
   OPEN_PLAY_BLIND_PICK_TIMEOUT_MS,
   TOURNAMENT_BLIND_PICK_TIMEOUT_MS,
+  revealedBans,
 } from '../lib/blind-pick-auto-resolve.js';
 import { isTeamFormat, resolveActorFlags } from '../lib/competitors.js';
 
@@ -24,6 +25,13 @@ const BlindPickLockBodySchema = z.object({
   // 2v2 (BPT_2V2): the teammate's faction, locked together with the captain's in one action.
   faction_id_2: z.string().min(1).optional(),
 });
+
+const FactionBansLockBodySchema = z.object({
+  faction_ids: z.array(z.string().min(1)).min(1).max(2),
+});
+
+/** The blind-pick modes that support per-game faction bans (tournament.faction_bans_per_player). */
+const BAN_MODES = new Set(['BPT', 'BPT_2V2']);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -76,7 +84,34 @@ type BlindPickRow = {
   // 2v2 (BPT_2V2): the teammate's faction per side.
   player1_faction_id_2?: string | null;
   player2_faction_id_2?: string | null;
+  // Faction bans before the pick.
+  player1_bans?: string[];
+  player2_bans?: string[];
+  player1_bans_locked_at?: Date | null;
+  player2_bans_locked_at?: Date | null;
+  bans_revealed_at?: Date | null;
 } | null;
+
+/**
+ * The ban step of a blind-pick game, or null when the tournament has bans off. The bans stay
+ * hidden until both sides locked (like the pick itself).
+ */
+function serializeFactionBans(perPlayer: number, blindPick: BlindPickRow) {
+  if (perPlayer <= 0) return null;
+  const p1 = blindPick?.player1_bans_locked_at ?? null;
+  const p2 = blindPick?.player2_bans_locked_at ?? null;
+  const revealed = blindPick?.bans_revealed_at ?? null;
+  const first = p1 && p2 ? (p1 < p2 ? p1 : p2) : (p1 ?? p2);
+  return {
+    perPlayer,
+    player1Locked: Boolean(p1),
+    player2Locked: Boolean(p2),
+    firstLockedAt: first?.toISOString() ?? null,
+    revealedAt: revealed?.toISOString() ?? null,
+    player1Bans: revealed ? (blindPick?.player1_bans ?? []) : [],
+    player2Bans: revealed ? (blindPick?.player2_bans ?? []) : [],
+  };
+}
 
 type FactionMatrixRow = {
   p1_locked_at: Date | null;
@@ -103,6 +138,9 @@ function serializeDecisionState(
   matchPlayer1Id: string | null = null,
   factionMatrix: FactionMatrixRow = null,
   isOpenPlay: boolean = false,
+  // Faction bans per player (tournament setting). Only callers that know it pass it; when omitted
+  // the key is left out so a client merging a partial update keeps its current ban state.
+  factionBansPerPlayer?: number,
 ) {
   let serializedMatrix = null;
   if (factionMatrix) {
@@ -160,6 +198,9 @@ function serializeDecisionState(
         }
       : null,
     factionMatrix: serializedMatrix,
+    ...(factionBansPerPlayer !== undefined
+      ? { factionBans: serializeFactionBans(factionBansPerPlayer, blindPick) }
+      : {}),
   };
 }
 
@@ -441,6 +482,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
             select: {
               mode: true,
               set_faction_id: true,
+              faction_bans_per_player: true,
               restricted_factions: { select: { faction_id: true } },
               faction_allowlist: { select: { faction_id: true } },
             },
@@ -505,7 +547,16 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(200).send({
         // Open-Play 2v2 has no tournament → derive the 2v2 blind-pick mode from the match so the
         // client (is2v2 = tournamentMode === 'BPT_2V2') shows the two-faction pick, not 1v1.
-        ...serializeDecisionState(matchId, game.map_decision, game.blind_pick, match.tournament?.mode ?? (match.competitor_format === 'TWO_V_TWO' ? 'BPT_2V2' : 'BPT'), match.player1_id, factionMatrix, match.tournament == null),
+        ...serializeDecisionState(
+          matchId,
+          game.map_decision,
+          game.blind_pick,
+          match.tournament?.mode ?? (match.competitor_format === 'TWO_V_TWO' ? 'BPT_2V2' : 'BPT'),
+          match.player1_id,
+          factionMatrix,
+          match.tournament == null,
+          match.tournament && BAN_MODES.has(match.tournament.mode) ? match.tournament.faction_bans_per_player : 0,
+        ),
         restrictedFactions: match.tournament?.restricted_factions.map((r) => r.faction_id) ?? [],
         factionAllowlist: match.tournament?.faction_allowlist.map((r) => r.faction_id) ?? [],
         // Open Play is bound by the Standard Ruleset: its banned factions can't be picked (the
@@ -1035,6 +1086,118 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // -------------------------------------------------------------------------
+  // POST /api/matches/:id/decision/faction-bans/lock
+  // Blind Pick tournaments with faction_bans_per_player > 0: each side (the player / the 2v2
+  // captain) locks exactly that many bans for the current game, blind. When both have locked the
+  // bans are revealed and become unpickable for BOTH sides in this game's blind pick. A side that
+  // doesn't ban in time forfeits its bans (cron, see blind-pick-auto-resolve).
+  // -------------------------------------------------------------------------
+  fastify.post(
+    '/api/matches/:id/decision/faction-bans/lock',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const { id: matchId } = request.params as { id: string };
+      const parsed = FactionBansLockBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+      }
+      const factionIds = parsed.data.faction_ids;
+      const userId = request.user.sub;
+
+      const match = await fastify.prisma.match.findFirst({
+        where: { id: matchId, deleted_at: null },
+        select: {
+          id: true,
+          player1_id: true,
+          player2_id: true,
+          competitor_format: true,
+          games: {
+            where: { map_decision: { isNot: null }, status: { not: 'COMPLETED' } },
+            orderBy: { game_number: 'desc' },
+            select: { id: true, map_decision: { select: { picked_map_id: true } }, blind_pick: true },
+            take: 1,
+          },
+          tournament: {
+            select: {
+              mode: true,
+              competitor_format: true,
+              faction_bans_per_player: true,
+              faction_allowlist: { select: { faction_id: true } },
+            },
+          },
+        },
+      });
+      if (!match) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
+      }
+
+      const perPlayer = match.tournament && BAN_MODES.has(match.tournament.mode) ? match.tournament.faction_bans_per_player : 0;
+      if (perPlayer <= 0) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'This tournament has no faction bans', statusCode: 422 });
+      }
+      if (factionIds.length !== perPlayer || new Set(factionIds).size !== factionIds.length) {
+        return reply.code(400).send({
+          error: 'BadRequest',
+          message: `Ban exactly ${perPlayer} different faction${perPlayer === 1 ? '' : 's'}`,
+          statusCode: 400,
+        });
+      }
+
+      const game = match.games[0];
+      if (!game?.map_decision?.picked_map_id) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'Map decision must be completed before the ban phase',
+          statusCode: 422,
+        });
+      }
+
+      const found = await fastify.prisma.faction.findMany({ where: { id: { in: factionIds } }, select: { id: true } });
+      if (found.length !== factionIds.length) {
+        return reply.code(422).send({ error: 'UnprocessableEntity', message: 'One or more factions do not exist', statusCode: 422 });
+      }
+      const allowlist = match.tournament!.faction_allowlist.map((r) => r.faction_id);
+      if (allowlist.length > 0 && factionIds.some((id) => !allowlist.includes(id))) {
+        return reply.code(422).send({
+          error: 'UnprocessableEntity',
+          message: 'You can only ban factions from this tournament\'s faction pool',
+          statusCode: 422,
+        });
+      }
+
+      const isTeam = isTeamFormat(match.tournament!.competitor_format ?? match.competitor_format);
+      const { isPlayer1, isPlayer2, isParticipant } = await resolveActorFlags(fastify.prisma, userId, match, isTeam);
+      if (!isParticipant) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'You are not a participant in this match', statusCode: 403 });
+      }
+
+      const existing = game.blind_pick;
+      if ((isPlayer1 && existing?.player1_bans_locked_at) || (isPlayer2 && existing?.player2_bans_locked_at)) {
+        return reply.code(409).send({ error: 'Conflict', message: 'You have already locked your bans', statusCode: 409 });
+      }
+
+      const now = new Date();
+      const sideData = {
+        ...(isPlayer1 ? { player1_bans: factionIds, player1_bans_locked_at: now } : {}),
+        ...(isPlayer2 ? { player2_bans: factionIds, player2_bans_locked_at: now } : {}),
+      };
+      let row = existing
+        ? await fastify.prisma.matchBlindPick.update({ where: { game_id: game.id }, data: sideData })
+        : await fastify.prisma.matchBlindPick.create({ data: { game_id: game.id, ...sideData } });
+
+      if (row.player1_bans_locked_at && row.player2_bans_locked_at && !row.bans_revealed_at) {
+        row = await fastify.prisma.matchBlindPick.update({ where: { game_id: game.id }, data: { bans_revealed_at: now } });
+      }
+
+      const payload = { matchId, ...serializeFactionBans(perPlayer, row)! };
+      if (fastify.io) {
+        fastify.io.to(matchDecisionRoom(matchId)).emit('match.faction-bans.update', payload);
+      }
+      return reply.code(200).send(payload);
+    },
+  );
+
+  // -------------------------------------------------------------------------
   // POST /api/matches/:id/decision/blind-pick/lock
   // Player locks their faction choice. Reveal happens when both locked.
   // -------------------------------------------------------------------------
@@ -1079,6 +1242,7 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
             select: {
               mode: true,
               competitor_format: true,
+              faction_bans_per_player: true,
               faction_allowlist: { select: { faction_id: true } },
             },
           },
@@ -1113,6 +1277,25 @@ const matchDecisionRoutes: FastifyPluginAsync = async (fastify) => {
           message: 'Map decision must be completed before blind-pick phase',
           statusCode: 422,
         });
+      }
+
+      // Faction bans: the ban step comes first, and a banned faction can't be picked by either side.
+      if ((match.tournament?.faction_bans_per_player ?? 0) > 0) {
+        if (!game.blind_pick?.bans_revealed_at) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'Both sides must lock their faction bans before the blind pick',
+            statusCode: 422,
+          });
+        }
+        const banned = revealedBans(game.blind_pick);
+        if ([faction_id, faction_id_2].some((fid) => fid && banned.includes(fid))) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'This faction is banned for this game',
+            statusCode: 422,
+          });
+        }
       }
 
       // Validate faction exists

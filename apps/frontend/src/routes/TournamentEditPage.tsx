@@ -76,6 +76,7 @@ type EditFormData = {
   rounds_count: number;
   playoff_format: 'NONE' | 'TOP2' | 'TOP4' | 'TOP8';
   has_third_place_match: boolean;
+  faction_bans_per_player: number;
   swiss_match_format: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   playoff_match_format: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   finale_match_format: 'BO1' | 'BO2' | 'BO3' | 'BO5';
@@ -244,6 +245,7 @@ function buildInitialForm(t: Tournament): EditFormData {
     rounds_count: t.rounds_count ?? 5,
     playoff_format: t.playoff_format ?? 'NONE',
     has_third_place_match: t.has_third_place_match ?? false,
+    faction_bans_per_player: t.faction_bans_per_player ?? 0,
     swiss_match_format: t.swiss_match_format ?? 'BO1',
     playoff_match_format: t.playoff_match_format ?? 'BO1',
     finale_match_format: t.finale_match_format ?? 'BO1',
@@ -329,6 +331,9 @@ function buildPatchBody(
   if (form.playoff_format !== (current.playoff_format ?? 'NONE')) body.playoff_format = form.playoff_format;
   if (form.has_third_place_match !== (current.has_third_place_match ?? false)) {
     body.has_third_place_match = form.has_third_place_match;
+  }
+  if (form.faction_bans_per_player !== (current.faction_bans_per_player ?? 0)) {
+    body.faction_bans_per_player = form.faction_bans_per_player;
   }
   if (form.min_band !== (current.min_band ?? null)) body.min_band = form.min_band;
   if (form.max_band !== (current.max_band ?? null)) body.max_band = form.max_band;
@@ -1034,6 +1039,26 @@ export function TournamentEditPage() {
             </div>
           </div>
 
+          {/* ── Blind Pick: faction bans per game (changeable any time — applies from the next game) ── */}
+          {(form.mode === 'BPT' || form.mode === 'BPT_2V2') && (
+            <div className="mt-3">
+              <Label htmlFor="tef-faction-bans">Faction bans per player</Label>
+              <Select
+                id="tef-faction-bans"
+                name="faction_bans_per_player"
+                value={String(form.faction_bans_per_player)}
+                onChange={(e) => setForm((prev) => (prev ? { ...prev, faction_bans_per_player: Number(e.target.value) } : prev))}
+              >
+                <option value="0">No bans</option>
+                <option value="1">1 ban per player</option>
+                <option value="2">2 bans per player</option>
+              </Select>
+              <p className="mt-1 text-xs text-rizzotto-stone-500">
+                Before every game&apos;s blind pick, both {form.mode === 'BPT_2V2' ? 'teams' : 'players'} ban factions
+                blind; neither side can pick a banned faction that game. A change applies from the next game.
+              </p>
+            </div>
+          )}
 
           {/* ── ONE_V_THREE: Set Faction ─────────────────────────────────── */}
           {form.mode === 'ONE_V_THREE' && (

@@ -8,6 +8,7 @@ import {
   forceResolveDecision,
   banMap,
   lockBlindPick,
+  lockFactionBans,
   lockFactionMatrix,
   banMatrixCell,
   offerFreePickFactions,
@@ -528,6 +529,8 @@ interface BlindPickPhaseProps {
   factionAllowlist?: string[];
   /** Open Play: factions banned by the Standard Ruleset — shown but not pickable. */
   bannedFactions?: string[];
+  /** Blind Pick tournaments with faction bans: this game's revealed bans — unpickable for both. */
+  gameBans?: string[];
   /** Whether the viewer may act (1v1 player / 2v2 captain). Teammates/spectators are read-only. */
   canAct?: boolean;
 }
@@ -542,6 +545,7 @@ function BlindPickPhase({
   restrictedFactions = [],
   factionAllowlist = [],
   bannedFactions = [],
+  gameBans = [],
   canAct = true,
 }: BlindPickPhaseProps) {
   const queryClient = useQueryClient();
@@ -739,19 +743,25 @@ function BlindPickPhase({
             </p>
           )}
 
+          {gameBans.length > 0 && <GameBansSummary bans={gameBans} factions={factions} />}
+
           <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-5">
             {factions.map(({ faction }) => {
               // Restricted factions are nerfed, not banned — keep them pickable.
               const isRestricted = restrictedFactions.includes(faction.id);
               const isBanned = bannedFactions.includes(faction.id);
-              const isDisabled = isBanned || (factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id));
+              const isGameBan = gameBans.includes(faction.id);
+              const isDisabled =
+                isBanned || isGameBan || (factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id));
               return (
               <button
                 key={faction.id}
                 type="button"
                 disabled={isDisabled}
                 title={
-                  isBanned
+                  isGameBan
+                    ? 'Banned for this game'
+                    : isBanned
                     ? 'Banned in Open Play by the Standard Ruleset'
                     : isDisabled
                     ? 'Not permitted in this tournament'
@@ -799,6 +809,183 @@ function BlindPickPhase({
           {lockError && (
             <p className="text-sm text-red-400 text-center">{lockError}</p>
           )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Faction Ban Phase (Blind Pick tournaments with faction_bans_per_player > 0)
+// ---------------------------------------------------------------------------
+
+/** This game's revealed bans, shown above the blind-pick grid. */
+function GameBansSummary({ bans, factions }: { bans: string[]; factions: FactionWithStatsDto[] }) {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+      <span className="uppercase tracking-widest text-rizzotto-stone-500">Banned this game</span>
+      {bans.map((id) => {
+        const f = factions.find((e) => e.faction.id === id)?.faction;
+        return (
+          <span
+            key={id}
+            className="flex items-center gap-1.5 rounded-sm border border-red-900/60 bg-red-950/30 px-2 py-1 text-rizzotto-stone-300"
+          >
+            {f && <FactionBadge colorHex={f.color_hex} initials={f.initials} name={f.name} size="sm" iconUrl={f.icon_url} />}
+            <span className="line-through decoration-red-500/70">{f?.name ?? id}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+interface FactionBanPhaseProps {
+  matchId: string;
+  decision: MatchDecisionState;
+  currentUserId: string;
+  factions: FactionWithStatsDto[];
+  factionAllowlist?: string[];
+  canAct?: boolean;
+}
+
+function FactionBanPhase({
+  matchId,
+  decision,
+  currentUserId,
+  factions,
+  factionAllowlist = [],
+  canAct = true,
+}: FactionBanPhaseProps) {
+  const queryClient = useQueryClient();
+  const bans = decision.factionBans!;
+  const banCount = bans.perPlayer;
+  const is2v2 = decision.tournamentMode === 'BPT_2V2';
+  const [selected, setSelected] = useState<string[]>([]);
+  const [locking, setLocking] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
+
+  const isMatchPlayer1 = decision.matchPlayer1Id
+    ? decision.matchPlayer1Id === currentUserId
+    : decision.topPlayerId === currentUserId;
+  const myLocked = isMatchPlayer1 ? bans.player1Locked : bans.player2Locked;
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (banCount === 1) return [id];
+      if (prev.length >= banCount) return prev;
+      return [...prev, id];
+    });
+
+  async function handleLock() {
+    if (selected.length !== banCount) return;
+    setLocking(true);
+    setLockError(null);
+    try {
+      await lockFactionBans(matchId, selected);
+      await queryClient.invalidateQueries({ queryKey: ['match-decision', matchId] });
+    } catch (err) {
+      setLockError(err instanceof Error ? err.message : 'Lock failed — please try again.');
+    } finally {
+      setLocking(false);
+    }
+  }
+
+  const countdown = bans.firstLockedAt ? (
+    <BlindPickCountdown
+      firstLockedAt={bans.firstLockedAt}
+      timeoutMs={2 * 60 * 1000}
+      actionLabel="Bans close in"
+      expiredLabel="Closing bans now…"
+    />
+  ) : null;
+
+  return (
+    <div className="flex flex-col items-center gap-6">
+      <h2 className="font-display text-xl font-semibold text-rizzotto-gold-400 tracking-wider">Faction Bans</h2>
+
+      {!canAct ? (
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="text-sm text-rizzotto-stone-400 max-w-sm">
+            {is2v2
+              ? 'Your captain bans for the team. This view is read-only.'
+              : 'Only the players in this match can ban. This view is read-only.'}
+          </p>
+          {countdown}
+        </div>
+      ) : myLocked ? (
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span className="h-8 w-8 rounded-full border-2 border-rizzotto-gold-400 border-t-transparent animate-spin" />
+          <p className="text-sm text-rizzotto-stone-400">Bans locked. Waiting for your opponent…</p>
+          {countdown}
+        </div>
+      ) : (
+        <>
+          <p className="text-sm text-rizzotto-stone-400 text-center max-w-sm">
+            Ban {banCount === 1 ? 'one faction' : `${banCount} factions`}. Neither side can pick a banned faction this
+            game. Bans are revealed once both {is2v2 ? 'teams' : 'players'} have locked in.
+          </p>
+          {countdown && (
+            <div className="flex flex-col items-center gap-1">
+              <p className="text-xs text-rizzotto-stone-400">Your opponent has banned. If you don&apos;t ban in time, you lose your bans.</p>
+              {countdown}
+            </div>
+          )}
+          {banCount > 1 && (
+            <p className="text-xs">
+              <span className={selected.length === banCount ? 'font-semibold text-red-400' : 'font-semibold text-rizzotto-stone-300'}>
+                {selected.length}/{banCount}
+              </span>{' '}
+              <span className="text-rizzotto-stone-500">selected</span>
+            </p>
+          )}
+
+          <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-5">
+            {factions.map(({ faction }) => {
+              const notAllowed = factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id);
+              const isSelected = selected.includes(faction.id);
+              return (
+                <button
+                  key={faction.id}
+                  type="button"
+                  disabled={notAllowed}
+                  title={notAllowed ? 'Not permitted in this tournament' : undefined}
+                  onClick={() => !notAllowed && toggle(faction.id)}
+                  className={[
+                    'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center',
+                    'transition-[border-color,background-color] duration-150',
+                    notAllowed
+                      ? 'cursor-not-allowed opacity-40 border-rizzotto-iron-700 bg-rizzotto-iron-900'
+                      : isSelected
+                        ? 'border-red-500 bg-red-950/40'
+                        : 'border-rizzotto-iron-600 bg-rizzotto-iron-900 hover:border-red-500/60 hover:bg-rizzotto-iron-800',
+                  ].join(' ')}
+                >
+                  <FactionBadge
+                    colorHex={faction.color_hex}
+                    initials={faction.initials}
+                    name={faction.name}
+                    size="lg"
+                    iconUrl={faction.icon_url}
+                  />
+                  <span
+                    className={[
+                      'line-clamp-2 font-display text-[10px] uppercase leading-tight tracking-wide',
+                      isSelected ? 'text-red-300 line-through' : 'text-rizzotto-stone-300',
+                    ].join(' ')}
+                  >
+                    {faction.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <Button variant="forge" size="md" disabled={selected.length !== banCount || locking} onClick={handleLock}>
+            {locking ? 'Locking…' : banCount === 1 ? 'Lock In Ban' : 'Lock In Bans'}
+          </Button>
+          {lockError && <p className="text-sm text-red-400 text-center">{lockError}</p>}
         </>
       )}
     </div>
@@ -1632,13 +1819,24 @@ type DecisionPhase =
   | 'coin_flip'
   | 'map_random'
   | 'map_pick_ban'
+  | 'faction_ban'
   | 'blind_pick'
   | 'faction_matrix'
   | 'free_pick_mini'
   | 'one_v_three'
   | 'ready';
 
-function BlindPickCountdown({ firstLockedAt, timeoutMs }: { firstLockedAt: string | null; timeoutMs: number }) {
+function BlindPickCountdown({
+  firstLockedAt,
+  timeoutMs,
+  actionLabel = 'Auto-pick in',
+  expiredLabel = 'Auto-picking now…',
+}: {
+  firstLockedAt: string | null;
+  timeoutMs: number;
+  actionLabel?: string;
+  expiredLabel?: string;
+}) {
   const [label, setLabel] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1648,18 +1846,18 @@ function BlindPickCountdown({ firstLockedAt, timeoutMs }: { firstLockedAt: strin
     function tick() {
       const diff = deadline.getTime() - Date.now();
       if (diff <= 0) {
-        setLabel('Auto-picking now…');
+        setLabel(expiredLabel);
         return;
       }
       const m = Math.floor(diff / 60000);
       const s = Math.floor((diff % 60000) / 1000);
-      setLabel(`Auto-pick in ${m}:${s.toString().padStart(2, '0')}`);
+      setLabel(`${actionLabel} ${m}:${s.toString().padStart(2, '0')}`);
     }
 
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [firstLockedAt, timeoutMs]);
+  }, [firstLockedAt, timeoutMs, actionLabel, expiredLabel]);
 
   if (!label) return null;
   return <p className="text-xs text-rizzotto-stone-500 font-mono">{label}</p>;
@@ -1770,7 +1968,15 @@ function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
       if (!d.factionMatrix?.decidedAt) return 'one_v_three';
       return 'ready';
     }
-    // Map decided — check blind pick
+    // Map decided — Blind Pick tournaments with faction bans ban first (per game), then pick.
+    if (
+      (d.tournamentMode === 'BPT' || d.tournamentMode === 'BPT_2V2') &&
+      d.factionBans &&
+      !d.factionBans.revealedAt
+    ) {
+      return 'faction_ban';
+    }
+    // Then the blind pick
     if (d.blindPick?.revealedAt) return 'ready';
     if (d.blindPick != null) return 'blind_pick';
     // blindPick is null: BPT / BPT_2V2 require a blind pick even before the first lock
@@ -1870,6 +2076,12 @@ export function MatchDecisionPage() {
       );
     };
 
+    const handleFactionBansUpdate: ServerToClientEvents['match.faction-bans.update'] = (payload) => {
+      if (payload.matchId !== matchId) return;
+      const { matchId: _id, ...factionBans } = payload;
+      setDecision((prev) => (prev ? { ...prev, factionBans } : prev));
+    };
+
     const handleMatrixUpdate: ServerToClientEvents['match.matrix.update'] = (payload) => {
       if (payload.matchId !== matchId) return;
       setDecision((prev) =>
@@ -1900,6 +2112,7 @@ export function MatchDecisionPage() {
     socket.on('match.decision.update', handleDecisionUpdate);
     socket.on('match.decision.complete', handleDecisionComplete);
     socket.on('match.blind-pick.update', handleBlindPickUpdate);
+    socket.on('match.faction-bans.update', handleFactionBansUpdate);
     socket.on('match.matrix.update', handleMatrixUpdate);
 
     // Fallback polling when socket disconnected
@@ -1931,6 +2144,7 @@ export function MatchDecisionPage() {
       socket.off('match.decision.update', handleDecisionUpdate);
       socket.off('match.decision.complete', handleDecisionComplete);
       socket.off('match.blind-pick.update', handleBlindPickUpdate);
+      socket.off('match.faction-bans.update', handleFactionBansUpdate);
       socket.off('match.matrix.update', handleMatrixUpdate);
       socket.off('disconnect', startPolling);
       socket.off('connect', stopPolling);
@@ -2148,6 +2362,25 @@ export function MatchDecisionPage() {
             </motion.div>
           )}
 
+          {phase === 'faction_ban' && (
+            <motion.div
+              key="faction_ban"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              <FactionBanPhase
+                matchId={matchId}
+                decision={decision}
+                currentUserId={viewerCompetitorId}
+                factions={factions}
+                factionAllowlist={decision.factionAllowlist ?? []}
+                canAct={viewerCanAct}
+              />
+            </motion.div>
+          )}
+
           {phase === 'blind_pick' && (
             <motion.div
               key="blind_pick"
@@ -2166,6 +2399,9 @@ export function MatchDecisionPage() {
                 restrictedFactions={decision.restrictedFactions ?? []}
                 factionAllowlist={decision.factionAllowlist ?? []}
                 bannedFactions={decision.bannedFactions ?? []}
+                gameBans={[
+                  ...new Set([...(decision.factionBans?.player1Bans ?? []), ...(decision.factionBans?.player2Bans ?? [])]),
+                ]}
                 canAct={viewerCanAct}
               />
             </motion.div>

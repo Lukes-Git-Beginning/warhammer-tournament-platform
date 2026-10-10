@@ -18,6 +18,71 @@ import {
  */
 export const OPEN_PLAY_BLIND_PICK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes — ladder, then cancel
 export const TOURNAMENT_BLIND_PICK_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes — tournament, then random-pick
+/** Faction bans (Blind Pick tournaments): after the first side locked its bans, the other side has
+ *  this long — then its bans lapse and the bans are revealed. Same 2 minutes as the pick. */
+export const FACTION_BAN_TIMEOUT_MS = 2 * 60 * 1000;
+
+/** Factions banned for this game by either side — empty until the bans are revealed. */
+export function revealedBans(
+  row: { bans_revealed_at: Date | null; player1_bans: string[]; player2_bans: string[] } | null,
+): string[] {
+  if (!row?.bans_revealed_at) return [];
+  return [...new Set([...row.player1_bans, ...row.player2_bans])];
+}
+
+/**
+ * Faction-ban timeout (Alex 2026-10-10: a side that doesn't ban in time simply loses its bans).
+ * One side locked its bans more than FACTION_BAN_TIMEOUT_MS ago and the other hasn't → mark the
+ * missing side as locked with no bans and reveal, so the game moves on to the blind pick.
+ */
+async function autoResolveStaleFactionBans(fastify: FastifyInstance, cutoff: Date): Promise<number> {
+  const stale = await fastify.prisma.matchBlindPick.findMany({
+    where: {
+      bans_revealed_at: null,
+      OR: [
+        { player1_bans_locked_at: { not: null, lt: cutoff }, player2_bans_locked_at: null },
+        { player2_bans_locked_at: { not: null, lt: cutoff }, player1_bans_locked_at: null },
+      ],
+    },
+    select: {
+      game_id: true,
+      player1_bans_locked_at: true,
+      player2_bans_locked_at: true,
+      game: { select: { match: { select: { id: true, tournament: { select: { faction_bans_per_player: true } } } } } },
+    },
+  });
+
+  const now = new Date();
+  let resolved = 0;
+  for (const row of stale) {
+    try {
+      const updated = await fastify.prisma.matchBlindPick.update({
+        where: { game_id: row.game_id },
+        data: {
+          player1_bans_locked_at: row.player1_bans_locked_at ?? now,
+          player2_bans_locked_at: row.player2_bans_locked_at ?? now,
+          bans_revealed_at: now,
+        },
+      });
+      const matchId = row.game.match.id;
+      const first = row.player1_bans_locked_at ?? row.player2_bans_locked_at;
+      fastify.io?.to(`match_decision_${matchId}`).emit('match.faction-bans.update', {
+        matchId,
+        perPlayer: row.game.match.tournament?.faction_bans_per_player ?? 0,
+        player1Locked: true,
+        player2Locked: true,
+        firstLockedAt: first?.toISOString() ?? null,
+        revealedAt: now.toISOString(),
+        player1Bans: updated.player1_bans,
+        player2Bans: updated.player2_bans,
+      });
+      resolved++;
+    } catch (err) {
+      fastify.log.warn({ err, gameId: row.game_id }, 'Failed to auto-resolve faction bans');
+    }
+  }
+  return resolved;
+}
 
 /**
  * Blind-Pick Tournament (type TOURNAMENT) fallback: a tournament match MUST produce a result, so
@@ -57,7 +122,10 @@ async function autoResolveTournamentBlindPicks(fastify: FastifyInstance, cutoff:
   for (const pick of stale) {
     const lockedFactionId = pick.player1_faction_id ?? pick.player2_faction_id;
     const allowlist = pick.game.match.tournament?.faction_allowlist.map((f) => f.faction_id) ?? [];
-    const allowed = allowlist.length > 0 ? allFactions.filter((f) => allowlist.includes(f.id)) : allFactions;
+    const banned = revealedBans(pick); // this game's faction bans are off-limits for the random pick
+    const allowed = (allowlist.length > 0 ? allFactions.filter((f) => allowlist.includes(f.id)) : allFactions).filter(
+      (f) => !banned.includes(f.id),
+    );
     const pool = allowed.filter((f) => f.id !== lockedFactionId);
     const randomFaction = pool[Math.floor(Math.random() * pool.length)] ?? allowed[0];
     if (!randomFaction) continue;
@@ -224,9 +292,10 @@ async function cancelOpenPlayNoShows(fastify: FastifyInstance, cutoff: Date): Pr
  */
 export async function autoResolveStaleBlindPicks(fastify: FastifyInstance): Promise<number> {
   const now = Date.now();
-  const [tournament, openPlay] = await Promise.all([
+  const [tournament, openPlay, bans] = await Promise.all([
     autoResolveTournamentBlindPicks(fastify, new Date(now - TOURNAMENT_BLIND_PICK_TIMEOUT_MS)),
     cancelOpenPlayNoShows(fastify, new Date(now - OPEN_PLAY_BLIND_PICK_TIMEOUT_MS)),
+    autoResolveStaleFactionBans(fastify, new Date(now - FACTION_BAN_TIMEOUT_MS)),
   ]);
-  return tournament + openPlay;
+  return tournament + openPlay + bans;
 }

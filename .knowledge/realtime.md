@@ -93,6 +93,7 @@ Definiert in `packages/types/src/socket-events.ts` — Interface `ServerToClient
 | `match.decision.update`   | `match_<id>`                                | **Welle 2** — Ban-Action committed: aktualisiert `bans_top` / `bans_bottom` |
 | `match.decision.complete` | `match_<id>`                                | **Welle 2** — `picked_map_id` final, Match bereit für Blind-Pick-Phase |
 | `match.blind-pick.update` | `match_<id>`                                | **Welle 2** — Blind-Pick-Lock Event: bei beidseitigem Lock revealed Payload beide Factions |
+| `match.faction-bans.update` | `match_decision_<id>`                     | Blind-Pick-Fraktionsbans (Turnier `faction_bans_per_player` > 0): Lock-Status pro Seite; Bans erst nach beidseitigem Lock (oder Timeout) im Payload |
 | `match.matrix.update`     | `match_decision_<matchId>`                  | **MATRIX-Mode** — vollständiger State der MatchFactionMatrix (Lock, Reveal, Bans, Pick). Payload: `{ matchId, p1/p2Locked, firstLockedAt, revealedAt, p1/p2Factions[], bans[], pickedCell, lastActionAt, decidedAt, p1/p2FactionId, topPlayerId, bottomPlayerId }`. Factions leer bis reveal. |
 | `match.game.updated`      | `match_decision_<matchId>`                  | **Welle 2** — Game-Status-Update (score, winner, lobby code, confirmed) |
 

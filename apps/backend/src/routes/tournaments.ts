@@ -278,6 +278,8 @@ const CreateTournamentSchema = z.object({
   faction_pool: z.array(z.string().min(1)).max(MAX_FACTIONS).optional(),
   restricted_factions: z.array(z.string().min(1)).max(MAX_FACTIONS).optional(),
   has_third_place_match: z.boolean().optional(),
+  // Blind Pick (BPT / BPT_2V2): factions each side bans per game before the pick. 0 = off.
+  faction_bans_per_player: z.number().int().min(0).max(2).optional(),
   min_band: z.number().int().min(1).max(5).nullable().optional(),
   max_band: z.number().int().min(1).max(5).nullable().optional(),
   battle_type: BattleTypeSchema.optional(),
@@ -345,6 +347,7 @@ const PatchTournamentSchema = z.object({
   mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR', 'SFT_2V2', 'BPT_2V2']).optional(),
   set_faction_id: z.string().min(1).nullable().optional(),
   has_third_place_match: z.boolean().optional(),
+  faction_bans_per_player: z.number().int().min(0).max(2).optional(),
   counts_for_leaderboard: z.boolean().optional(),
   faction_pool: z.array(z.string().min(1)).optional(),
   restricted_factions: z.array(z.string().min(1)).optional(),
@@ -655,6 +658,9 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           map_decision_mode: data.map_decision_mode,
           map_preset_config: data.map_preset_config != null ? (data.map_preset_config as Prisma.InputJsonValue) : undefined,
           has_third_place_match: data.has_third_place_match ?? false,
+          // Bans only exist in the blind-pick modes; any other mode stores 0.
+          faction_bans_per_player:
+            data.mode === 'BPT' || data.mode === 'BPT_2V2' ? (data.faction_bans_per_player ?? 0) : 0,
           min_band: data.min_band ?? null,
           max_band: data.max_band ?? null,
           battle_type: data.battle_type ?? 'DOMINATION',
@@ -934,6 +940,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         rounds_count: true,
         playoff_format: true,
         has_third_place_match: true,
+        faction_bans_per_player: true,
         set_faction_id: true,
         swiss_match_format: true,
         playoff_match_format: true,

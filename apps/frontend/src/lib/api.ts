@@ -58,6 +58,8 @@ export interface Tournament {
   poster_url?: string | null;
   format: 'SINGLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'DOUBLE_ELIMINATION' | 'LIECHTENSTEIN' | 'BALANCED_LIECHTENSTEIN';
   has_third_place_match?: boolean;
+  /** Blind Pick (BPT / BPT_2V2): factions each side bans per game before the pick (0 = off, max 2). */
+  faction_bans_per_player?: number;
   mode: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR' | 'SFT_2V2' | 'BPT_2V2';
   /** Team size (team-as-actor). 2v2 modes (SFT_2V2/BPT_2V2) require TWO_V_TWO. */
   competitor_format?: 'ONE_V_ONE' | 'TWO_V_TWO';
@@ -148,6 +150,16 @@ export interface TournamentArmyList {
   revealed_to_all_at: string | null;
 }
 
+export interface FactionBansState {
+  perPlayer: number;
+  player1Locked: boolean;
+  player2Locked: boolean;
+  firstLockedAt: string | null;
+  revealedAt: string | null;
+  player1Bans: string[];
+  player2Bans: string[];
+}
+
 export interface MatchDecisionState {
   matchId: string;
   mode: MapDecisionMode;
@@ -185,6 +197,9 @@ export interface MatchDecisionState {
     player1FactionId2?: string | null;
     player2FactionId2?: string | null;
   } | null;
+  /** Blind Pick tournaments with faction bans: this game's ban step (null = bans off). The bans
+   *  stay hidden until both sides locked. Absent on partial updates (keep the current state). */
+  factionBans?: FactionBansState | null;
   factionMatrix?: {
     p1Locked: boolean;
     p2Locked: boolean;
@@ -207,6 +222,8 @@ export interface TournamentCreate {
   name: string;
   format: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'AUTO_SWISS' | 'ROUND_ROBIN' | 'LIECHTENSTEIN' | 'BALANCED_LIECHTENSTEIN';
   has_third_place_match?: boolean;
+  /** Blind Pick (BPT / BPT_2V2): factions each side bans per game before the pick (0 = off, max 2). */
+  faction_bans_per_player?: number;
   mode?: 'ONE_V_ONE' | 'TWO_V_TWO' | 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR' | 'SFT_2V2' | 'BPT_2V2';
   competitor_format?: 'ONE_V_ONE' | 'TWO_V_TWO';
   battle_type?: BattleType;
@@ -278,6 +295,8 @@ export interface TournamentPatchInput {
   auto_advance?: boolean;
   allow_late_join_requests?: boolean;
   has_third_place_match?: boolean;
+  /** Blind Pick (BPT / BPT_2V2): factions each side bans per game before the pick (0 = off, max 2). */
+  faction_bans_per_player?: number;
   swiss_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   playoff_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
   finale_match_format?: 'BO1' | 'BO2' | 'BO3' | 'BO5';
@@ -2526,6 +2545,13 @@ export function banMap(matchId: string, mapId: string): Promise<MatchDecisionSta
 export function randomPickMap(matchId: string): Promise<MatchDecisionState> {
   return apiFetch<MatchDecisionState>(`/api/matches/${matchId}/decision/random`, {
     method: 'POST',
+  });
+}
+
+export function lockFactionBans(matchId: string, factionIds: string[]): Promise<FactionBansState> {
+  return apiFetch<FactionBansState>(`/api/matches/${matchId}/decision/faction-bans/lock`, {
+    method: 'POST',
+    body: JSON.stringify({ faction_ids: factionIds }),
   });
 }
 

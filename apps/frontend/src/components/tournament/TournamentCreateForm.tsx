@@ -62,6 +62,8 @@ const TournamentCreateSchema = z.object({
   // Welle 2 fields
   rounds_count: z.coerce.number().int().min(3).max(8).default(5),
   has_third_place_match: z.boolean().default(false),
+  // Blind Pick: factions each side bans per game before the pick (0 = off).
+  faction_bans_per_player: z.coerce.number().int().min(0).max(2).default(0),
   playoff_format: z.enum(['NONE', 'TOP2', 'TOP4', 'TOP8']).default('NONE'),
   auto_sizing: z.boolean().default(false),
   auto_advance: z.boolean().default(false),
@@ -265,6 +267,7 @@ export function TournamentCreateForm({
     standard_rules_enabled: true,
     rounds_count: 5,
     has_third_place_match: false,
+    faction_bans_per_player: 0,
     playoff_format: 'NONE',
     auto_sizing: false,
     auto_advance: false,
@@ -347,6 +350,7 @@ export function TournamentCreateForm({
       rounds_count: sourceForDuplicate.rounds_count ?? prev.rounds_count,
       playoff_format: (sourceForDuplicate.playoff_format ?? 'NONE') as FormData['playoff_format'],
       has_third_place_match: sourceForDuplicate.has_third_place_match ?? false,
+      faction_bans_per_player: sourceForDuplicate.faction_bans_per_player ?? 0,
       auto_sizing: sourceForDuplicate.auto_sizing ?? false,
       auto_advance: sourceForDuplicate.auto_advance ?? false,
       allow_late_join_requests: sourceForDuplicate.allow_late_join_requests ?? false,
@@ -657,6 +661,7 @@ export function TournamentCreateForm({
         rounds_count: t.rounds_count ?? prev.rounds_count,
         playoff_format: (t.playoff_format ?? 'NONE') as FormData['playoff_format'],
         has_third_place_match: t.has_third_place_match ?? false,
+        faction_bans_per_player: t.faction_bans_per_player ?? 0,
         auto_sizing: t.auto_sizing ?? false,
         auto_advance: t.auto_advance ?? false,
         allow_late_join_requests: t.allow_late_join_requests ?? false,
@@ -1553,6 +1558,27 @@ export function TournamentCreateForm({
           </Select>
           <FieldHint>{MODE_DESCRIPTIONS[form.mode ?? 'BPT']}</FieldHint>
         </div>
+
+        {/* ─── Blind Pick: faction bans per game ─────────────────────────── */}
+        {(form.mode === 'BPT' || form.mode === 'BPT_2V2') && (
+          <div className="min-w-0">
+            <Label htmlFor="tcf-faction-bans">Faction bans per player</Label>
+            <Select
+              id="tcf-faction-bans"
+              name="faction_bans_per_player"
+              value={String(form.faction_bans_per_player ?? 0)}
+              onChange={(e) => setForm((prev) => ({ ...prev, faction_bans_per_player: Number(e.target.value) }))}
+            >
+              <option value="0">No bans</option>
+              <option value="1">1 ban per player</option>
+              <option value="2">2 bans per player</option>
+            </Select>
+            <FieldHint>
+              Before every game&apos;s blind pick, both {form.mode === 'BPT_2V2' ? 'teams' : 'players'} ban factions
+              blind. The bans are revealed together and neither side can pick a banned faction that game.
+            </FieldHint>
+          </div>
+        )}
 
         {/* ─── ONE_V_THREE: Set Faction ──────────────────────────────────── */}
         {form.mode === 'ONE_V_THREE' && (
