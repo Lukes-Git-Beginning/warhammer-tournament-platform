@@ -420,10 +420,15 @@ export async function reconcileSwissByes(
 
   const queue = [...idle];
   while (queue.length >= 2) {
-    const a = queue.shift()!;
-    const b = queue.shift()!;
+    let a = queue.shift()!;
+    let b = queue.shift()!;
     await cancelOrphans(a);
     await cancelOrphans(b);
+    // When both hold a bye row, the real (scoring) bye row becomes the match and a catch-up
+    // placeholder is the one removed — deterministic, independent of the id sort order.
+    if (byeRowByHolder.has(a) && byeRowByHolder.has(b) && catchupHolders.has(a) && !catchupHolders.has(b)) {
+      [a, b] = [b, a];
+    }
     const aBye = byeRowByHolder.get(a);
     const bBye = byeRowByHolder.get(b);
     if (aBye) {
