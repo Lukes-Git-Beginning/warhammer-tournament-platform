@@ -384,6 +384,21 @@ async function resolveSlug(
   return `${base}-${Date.now().toString(36)}`;
 }
 
+/**
+ * Every map id named in a host map preset (HOST_PRESET: round → string[], HOST_PRESET_PICK_BAN:
+ * round → string[][]), deduplicated and sorted. Anything that isn't a string is ignored.
+ */
+export function presetMapIdsOf(config: unknown): string[] {
+  if (!config || typeof config !== 'object') return [];
+  const ids = new Set<string>();
+  const walk = (v: unknown): void => {
+    if (typeof v === 'string') ids.add(v);
+    else if (Array.isArray(v)) v.forEach(walk);
+  };
+  for (const entry of Object.values(config as Record<string, unknown>)) walk(entry);
+  return [...ids].sort();
+}
+
 // ---------------------------------------------------------------------------
 // Route plugin
 // ---------------------------------------------------------------------------
@@ -1577,7 +1592,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
 
     const tournament = await fastify.prisma.tournament.findFirst({
       where: { slug, deleted_at: null },
-      select: { id: true },
+      select: { id: true, map_preset_config: true },
     });
 
     if (!tournament) {
@@ -1588,27 +1603,28 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    // Host-preset modes play the maps named per round in map_preset_config, which need not be in the
+    // pool snapshot (the onslaught case: rounds 3–5 used maps outside the pool → players saw no map).
+    // Clients resolve a match's map name/image from this list, so include every preset map too.
+    const presetMapIds = presetMapIdsOf(tournament.map_preset_config);
+
     return cached(
       fastify.redis,
-      cacheKey('tournament:maps', { tournamentId: tournament.id }),
+      cacheKey('tournament:maps', { tournamentId: tournament.id, preset: presetMapIds.join(',') }),
       async () => {
+        const mapSelect = { id: true, slug: true, name: true, description: true, image_url: true } as const;
         const pool = await fastify.prisma.tournamentMapPool.findMany({
           where: { tournament_id: tournament.id },
-          select: {
-            map: {
-              select: {
-                id: true,
-                slug: true,
-                name: true,
-                description: true,
-                image_url: true,
-              },
-            },
-          },
-          orderBy: { map: { name: 'asc' } },
+          select: { map: { select: mapSelect } },
         });
+        const poolIds = new Set(pool.map((p) => p.map.id));
+        const extra = presetMapIds.filter((id) => !poolIds.has(id));
+        const presetMaps = extra.length > 0
+          ? await fastify.prisma.map.findMany({ where: { id: { in: extra } }, select: mapSelect })
+          : [];
 
-        return { data: pool.map((p) => p.map) };
+        const maps = [...pool.map((p) => p.map), ...presetMaps].sort((a, b) => a.name.localeCompare(b.name));
+        return { data: maps };
       },
       { ttlSeconds: 300 },
     );

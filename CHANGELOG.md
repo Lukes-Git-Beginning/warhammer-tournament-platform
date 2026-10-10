@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 - **Late joiners in Swiss no longer hold up a round.** A late joiner is put straight into a match only while the round is still young (first 10 minutes, before any game of the round has finished). After that they rest this round and are paired from the next round on, so a match created seconds before the last game ends can't add half an hour to the round.
 - **No more "OUT vs TBD" leftover in Swiss brackets** after a late joiner was paired against the bye.
 - **Deleting a tournament now removes its open matches,** so players no longer keep a "current match" in a deleted event.
+- **Maps from a host's per-round map preset now always show.** If a preset round used a map outside the tournament's map pool, players saw no map for that round.
 
 ## [2.22.0] — 2026-10-10
 
