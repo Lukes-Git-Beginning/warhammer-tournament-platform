@@ -8,6 +8,8 @@ import {
   getMyAvailability,
   setMyAvailability,
   setAvailabilityPaused,
+  getTournamentNotifyPrefs,
+  saveTournamentNotifyPrefs,
   getAvailabilityHeatmap,
   getAvailabilityHeatmapNamed,
   getAvailabilityNow,
@@ -26,6 +28,7 @@ import {
   type BattleType,
   type QueueMatchFormat,
   type QueuePrefs,
+  type TournamentNotifyPrefs,
 } from '../lib/api';
 import {
   DEFAULT_QUEUE_PREFS,
@@ -185,6 +188,24 @@ const OP_BATTLE_TYPES: { value: BattleType; label: string }[] = [
   { value: 'CONQUEST', label: 'Conquest' },
   { value: 'SIEGE', label: 'Siege' },
 ];
+
+/** Toggle chip in the gold "selected" style used by the queue settings. */
+function PrefChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded border px-3 py-1 text-xs font-medium transition-colors ${
+        active
+          ? 'border-rizzotto-gold-400/70 bg-rizzotto-gold-500/20 text-rizzotto-gold-300'
+          : 'border-rizzotto-iron-700 text-rizzotto-stone-400 hover:border-rizzotto-iron-500 hover:text-rizzotto-stone-200'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
 
 const OP_FORMATS: { value: QueueMatchFormat; label: string }[] = [
   { value: 'BO1', label: 'Bo1' },
@@ -456,7 +477,6 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
 function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: string; userTimezone?: string }) {
   const [editContext, setEditContext] = useState<AvailabilityContext>('MATCHMAKING');
   const [view, setView] = useState<'mine' | 'matchmaking' | 'tournament'>('mine');
-  const [localSlots, setLocalSlots] = useState<AvailabilitySlot[] | null>(null);
   const qc = useQueryClient();
   const { data: me } = useAuthQuery();
   const isStaff = me?.role === 'ADMIN' || me?.role === 'MODERATOR';
@@ -494,21 +514,49 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
     staleTime: 5 * 60 * 1000,
   });
 
+  // Every calendar change saves right away (like the queue settings). The grid shows the new slots
+  // immediately; the saves run one after another, so the last edit always ends up stored.
+  type MyAvailability = { slots: AvailabilitySlot[]; paused: boolean; timezone: string | null };
   const save = useMutation({
     mutationFn: (slots: AvailabilitySlot[]) =>
       setMyAvailability(
         slots.map(({ day_of_week, hour, context }) => ({ day_of_week, hour, context })),
         getBrowserZone(),
       ),
-    onSuccess: (data) => {
-      // Keep the pause flag: the save response only carries slots + timezone.
-      qc.setQueryData<{ slots: AvailabilitySlot[]; paused: boolean; timezone: string | null }>(
-        ['availability-me', currentUserId],
-        (prev) => ({ ...data, paused: prev?.paused ?? false }),
-      );
-      setLocalSlots(null);
-    },
+    scope: { id: 'availability-slots' },
+    // Only the timezone comes from the response: an older save finishing must not overwrite a newer edit.
+    onSuccess: (data) =>
+      qc.setQueryData<MyAvailability>(['availability-me', currentUserId], (prev) =>
+        prev ? { ...prev, timezone: data.timezone } : prev,
+      ),
+    // On failure, drop the optimistic slots and show what is really stored.
+    onError: () => void qc.invalidateQueries({ queryKey: ['availability-me', currentUserId] }),
   });
+  const updateSlots = (slots: AvailabilitySlot[]) => {
+    qc.setQueryData<MyAvailability>(['availability-me', currentUserId], (prev) =>
+      prev ? { ...prev, slots } : prev,
+    );
+    save.mutate(slots);
+  };
+
+  // Which tournaments the tournament-availability DM is for (battle types + team sizes, at least one each).
+  const { data: tournPrefs } = useQuery({
+    queryKey: ['tournament-notify-prefs', currentUserId],
+    queryFn: getTournamentNotifyPrefs,
+    enabled: !!currentUserId,
+    staleTime: 60_000,
+  });
+  const saveTournPrefs = useMutation({
+    mutationFn: saveTournamentNotifyPrefs,
+    scope: { id: 'tournament-notify-prefs' },
+    onError: () => void qc.invalidateQueries({ queryKey: ['tournament-notify-prefs', currentUserId] }),
+  });
+  const updateTournPrefs = (patch: Partial<TournamentNotifyPrefs>) => {
+    if (!tournPrefs) return;
+    const next = { ...tournPrefs, ...patch };
+    qc.setQueryData(['tournament-notify-prefs', currentUserId], next);
+    saveTournPrefs.mutate(next);
+  };
 
   const paused = myData?.paused ?? false;
   const pauseToggle = useMutation({
@@ -521,8 +569,7 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
     },
   });
 
-  const slots = localSlots ?? myData?.slots ?? [];
-  const isDirty = localSlots !== null;
+  const slots = myData?.slots ?? [];
 
   if (isLoading) return <p className="text-sm text-stone-400">Loading…</p>;
 
@@ -595,12 +642,39 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
           {pauseToggle.isPending ? '…' : paused ? 'Resume availability' : 'Pause availability'}
         </button>
 
-        {isDirty && (
-          <Button size="sm" onClick={() => save.mutate(slots)} disabled={save.isPending}>
-            {save.isPending ? 'Saving…' : 'Save'}
-          </Button>
-        )}
+        <span className="text-xs text-stone-500" aria-live="polite">
+          {save.isPending ? 'Saving…' : save.isError ? 'Could not save, please try again' : ''}
+        </span>
       </div>
+
+      {/* Tournament DM filter — which kinds of tournament the availability DM is sent for. */}
+      {editContext === 'TOURNAMENT' && tournPrefs && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">DM me about</span>
+          <div className="flex flex-wrap gap-2">
+            {OP_BATTLE_TYPES.map((b) => (
+              <PrefChip
+                key={b.value}
+                label={b.label}
+                active={tournPrefs.battleTypes.includes(b.value)}
+                onClick={() => updateTournPrefs({ battleTypes: toggleAtLeastOne(tournPrefs.battleTypes, b.value) })}
+              />
+            ))}
+          </div>
+          <div className="flex gap-2">
+            {(['ONE_V_ONE', 'TWO_V_TWO'] as const).map((fmt) => (
+              <PrefChip
+                key={fmt}
+                label={fmt === 'ONE_V_ONE' ? '1v1' : '2v2'}
+                active={tournPrefs.competitorFormats.includes(fmt)}
+                onClick={() =>
+                  updateTournPrefs({ competitorFormats: toggleAtLeastOne(tournPrefs.competitorFormats, fmt) })
+                }
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {paused && (
         <p className="rounded border border-amber-800/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-400/90">
@@ -613,7 +687,7 @@ function AvailabilityTab({ currentUserId, userTimezone }: { currentUserId?: stri
         <WeekAvailabilityGrid
           slots={slots}
           editContext={editContext}
-          onChange={setLocalSlots}
+          onChange={updateSlots}
           userTimezone={userTimezone}
         />
       ) : view === 'matchmaking' ? (

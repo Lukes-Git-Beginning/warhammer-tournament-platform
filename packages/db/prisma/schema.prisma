@@ -289,7 +289,7 @@ model User {
   // Set on the admin user view.
   bot_message_policy  BotMessagePolicy @default(NORMAL)
   // Availability pause: when true the player is temporarily not matchable — excluded from the
-  // matchmaking DM wave, the "available now" count and the public heatmap — WITHOUT deleting their
+  // matchmaking DM wave, the tournament DMs, the "available now" count and the public heatmap — WITHOUT deleting their
   // calendar slots. Toggled from the Availability page. See routes/availability.ts.
   availability_paused Boolean          @default(false)
   created_at          DateTime         @default(now())
@@ -325,6 +325,7 @@ model User {
   // M8 Open Play
   availability_slots      AvailabilitySlot[]
   queue_pref              UserQueuePref?
+  tournament_notify_pref  UserTournamentNotifyPref?
   proposed_matchups       ScheduledMatchup[]      @relation("MatchupProposer")
   accepted_matchups       ScheduledMatchup[]      @relation("MatchupAcceptor")
   queue_activity          QueueActivityLog[]      @relation("QueueActivityUser")
@@ -1461,6 +1462,17 @@ model UserQueuePref {
   competitor_format CompetitorFormat @default(ONE_V_ONE)
   team_id           String?          @db.Uuid // 2v2: preferred team (validated at join time; no FK on purpose)
   updated_at        DateTime         @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+// Which tournaments a player wants the TOURNAMENT-availability DM for. No row = every battle type
+// and both team sizes (the behaviour before this filter existed). Edited on the Availability tab.
+model UserTournamentNotifyPref {
+  user_id            String             @id @db.Uuid
+  battle_types       BattleType[]       @default([DOMINATION, CONQUEST, SIEGE])
+  competitor_formats CompetitorFormat[] @default([ONE_V_ONE, TWO_V_TWO])
+  updated_at         DateTime           @updatedAt
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }

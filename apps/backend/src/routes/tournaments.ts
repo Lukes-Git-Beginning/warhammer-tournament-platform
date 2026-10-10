@@ -1400,7 +1400,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
       if (newStatus === 'OPEN_REGISTRATION') {
         const fullTournament = await fastify.prisma.tournament.findUnique({
           where: { id: tournament.id },
-          select: { id: true, name: true, slug: true, start_date: true },
+          select: { id: true, name: true, slug: true, start_date: true, battle_type: true, competitor_format: true },
         });
         if (fullTournament) {
           notifyTournamentAnnounce(fullTournament).catch((err) => {

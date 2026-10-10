@@ -9,6 +9,12 @@ import {
   projectSlotToUtcCell,
   slotsActiveAtWhere,
 } from '../lib/availability-time.js';
+import { ALL_BATTLE_TYPES } from '../lib/queue-matching.js';
+import {
+  ALL_COMPETITOR_FORMATS,
+  getTournamentNotifyPrefs,
+  saveTournamentNotifyPrefs,
+} from '../lib/tournament-notify-prefs.js';
 
 // Slots are LOCAL time (weekday + hour in the user's own timezone) so they survive DST changes.
 const SlotSchema = z.object({
@@ -21,6 +27,11 @@ const BulkUpsertSchema = z.object({
   slots: z.array(SlotSchema).max(7 * 24 * 2), // max 7 days × 24h × 2 contexts
   // Browser timezone (IANA). Stored on the user only when they have none yet.
   timezone: z.string().max(64).optional(),
+});
+
+const TournamentNotifyPrefsSchema = z.object({
+  battleTypes: z.array(z.enum(ALL_BATTLE_TYPES)).min(1),
+  competitorFormats: z.array(z.enum(ALL_COMPETITOR_FORMATS)).min(1),
 });
 
 /** Add `count` to a UTC raster cell in a keyed map. */
@@ -141,8 +152,37 @@ const availabilityRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // GET /api/availability/tournament-prefs — which tournaments the player wants the availability DM
+  // for (battle types + team sizes). Defaults to everything when nothing is stored.
+  fastify.get(
+    '/api/availability/tournament-prefs',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      return reply.code(200).send(await getTournamentNotifyPrefs(fastify.prisma, request.user.sub));
+    },
+  );
+
+  // PUT /api/availability/tournament-prefs — replace the stored tournament DM filter (at least one of each).
+  fastify.put(
+    '/api/availability/tournament-prefs',
+    { preHandler: fastify.authenticate },
+    async (request, reply) => {
+      const parsed = TournamentNotifyPrefsSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+      }
+      const prefs = {
+        battleTypes: [...new Set(parsed.data.battleTypes)],
+        competitorFormats: [...new Set(parsed.data.competitorFormats)],
+      };
+      await saveTournamentNotifyPrefs(fastify.prisma, request.user.sub, prefs);
+      return reply.code(200).send(prefs);
+    },
+  );
+
   // PUT /api/availability/paused — authenticated: temporarily stop being matchable (excluded from the
-  // matchmaking DM wave, "available now" count and heatmap) WITHOUT deleting any calendar slots.
+  // matchmaking DM wave, the tournament DMs, "available now" count and heatmap) WITHOUT deleting any
+  // calendar slots.
   fastify.put(
     '/api/availability/paused',
     { preHandler: fastify.authenticate },

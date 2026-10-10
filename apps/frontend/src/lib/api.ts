@@ -3334,6 +3334,23 @@ export function setAvailabilityPaused(paused: boolean): Promise<{ paused: boolea
   });
 }
 
+/** Which tournaments the player wants the availability DM for (defaults: everything). */
+export interface TournamentNotifyPrefs {
+  battleTypes: BattleType[];
+  competitorFormats: ('ONE_V_ONE' | 'TWO_V_TWO')[];
+}
+
+export function getTournamentNotifyPrefs(): Promise<TournamentNotifyPrefs> {
+  return apiFetch<TournamentNotifyPrefs>('/api/availability/tournament-prefs');
+}
+
+export function saveTournamentNotifyPrefs(prefs: TournamentNotifyPrefs): Promise<TournamentNotifyPrefs> {
+  return apiFetch<TournamentNotifyPrefs>('/api/availability/tournament-prefs', {
+    method: 'PUT',
+    body: JSON.stringify(prefs),
+  });
+}
+
 export function setMyAvailability(
   slots: Omit<AvailabilitySlot, 'id'>[],
   timezone?: string,

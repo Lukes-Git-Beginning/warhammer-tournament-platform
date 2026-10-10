@@ -9,6 +9,7 @@ import { prisma } from '@rizzotto/db';
 import { resolveCompetitors } from './competitors.js';
 import { slotsActiveAtWhere } from './availability-time.js';
 import { encodeOffer, offerBullet, offerLabel, type QueueOffer } from './queue-matching.js';
+import { tournamentNotifyUserWhere } from './tournament-notify-prefs.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
@@ -21,6 +22,12 @@ interface TournamentForNotify {
   name: string;
   slug: string;
   start_date: Date;
+}
+
+/** The availability DM also filters on what kind of tournament it is. */
+interface TournamentForAvailabilityNotify extends TournamentForNotify {
+  battle_type: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  competitor_format: 'ONE_V_ONE' | 'TWO_V_TWO';
 }
 
 interface PairingForNotify {
@@ -853,31 +860,44 @@ export async function notifyTournamentAnnounce(tournament: TournamentForNotify):
 }
 
 /**
- * DM users who marked TOURNAMENT availability for the tournament's start slot (its day-of-week +
- * hour on the user's own clock) when it opens for registration — the tournament counterpart to the Open-Play
- * availability ping. Automatic → per-recipient DM caps + the NO_BOT_MESSAGES opt-out apply
- * (via sendDm). Best-effort; a single DM per opened tournament per available user.
+ * Discord ids of the players to DM about a tournament opening: they marked TOURNAMENT availability
+ * for its start slot (day-of-week + hour on their own clock), are not paused, and their tournament
+ * prefs include its battle type and team size (no stored prefs = everything).
  */
-export async function notifyTournamentAvailability(tournament: TournamentForNotify): Promise<void> {
+export async function findTournamentAvailabilityRecipients(
+  tournament: Pick<TournamentForAvailabilityNotify, 'start_date' | 'battle_type' | 'competitor_format'>,
+): Promise<string[]> {
+  // Slots are local time: match each user's own wall clock at the tournament's start instant.
+  const activeWhere = await slotsActiveAtWhere(prisma, tournament.start_date);
+  if (!activeWhere) return [];
+  const slots = await prisma.availabilitySlot.findMany({
+    where: {
+      AND: [
+        activeWhere,
+        { context: 'TOURNAMENT' },
+        { user: tournamentNotifyUserWhere(tournament.battle_type, tournament.competitor_format) },
+      ],
+    },
+    select: { user: { select: { discord_id: true } } },
+  });
+  return slots.map((s) => s.user?.discord_id).filter((id): id is string => !!id);
+}
+
+/**
+ * DM the players from findTournamentAvailabilityRecipients when a tournament opens for registration
+ * — the tournament counterpart to the Open-Play availability ping. Automatic → per-recipient DM caps
+ * + the NO_BOT_MESSAGES opt-out apply (via sendDm). Best-effort; a single DM per opened tournament
+ * per available user.
+ */
+export async function notifyTournamentAvailability(tournament: TournamentForAvailabilityNotify): Promise<void> {
   const token = getToken();
   if (!token) return;
   try {
-    const start = tournament.start_date;
-    // Slots are local time: match each user's own wall clock at the tournament's start instant.
-    const activeWhere = await slotsActiveAtWhere(prisma, start);
-    const slots = activeWhere
-      ? await prisma.availabilitySlot.findMany({
-          where: { AND: [activeWhere, { context: 'TOURNAMENT' }] },
-          select: { user: { select: { discord_id: true } } },
-        })
-      : [];
-    const recipients = slots
-      .map((s) => s.user?.discord_id)
-      .filter((id): id is string => !!id);
+    const recipients = await findTournamentAvailabilityRecipients(tournament);
     if (recipients.length === 0) return;
 
     const url = `${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/tournaments/${tournament.slug}`;
-    const startTs = Math.floor(start.getTime() / 1000);
+    const startTs = Math.floor(tournament.start_date.getTime() / 1000);
     const content = `⚔️ A tournament you're available for just opened for registration: **${tournament.name}** — starts <t:${startTs}:F>.\n${url}`;
     await Promise.allSettled(recipients.map((discordId) => sendDm(discordId, content)));
   } catch (err) {

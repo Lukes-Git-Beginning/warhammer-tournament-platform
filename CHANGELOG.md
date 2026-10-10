@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.23.0] — 2026-10-10
+
+### Added
+- **Choose which tournaments you get availability DMs for.** On the Availability tab, while editing your tournament times, you can now pick the battle types (Domination, Conquest, Siege) and team sizes (1v1, 2v2) you want to hear about. By default you still get all of them.
+
+### Changed
+- **Your availability saves itself.** Every change in the calendar is stored right away, so there is no Save button to forget anymore.
+
+### Fixed
+- **Pausing your availability now also stops tournament DMs,** not only matchmaking messages.
+
 ## [2.22.1] — 2026-10-10
 
 ### Fixed
