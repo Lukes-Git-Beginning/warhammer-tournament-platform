@@ -658,9 +658,9 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
           map_decision_mode: data.map_decision_mode,
           map_preset_config: data.map_preset_config != null ? (data.map_preset_config as Prisma.InputJsonValue) : undefined,
           has_third_place_match: data.has_third_place_match ?? false,
-          // Bans only exist in the blind-pick modes; any other mode stores 0.
+          // Bans only exist in Blind Pick (1v1/2v2) and 3×3 Matrix; any other mode stores 0.
           faction_bans_per_player:
-            data.mode === 'BPT' || data.mode === 'BPT_2V2' ? (data.faction_bans_per_player ?? 0) : 0,
+            data.mode === 'BPT' || data.mode === 'BPT_2V2' || data.mode === 'MATRIX' ? (data.faction_bans_per_player ?? 0) : 0,
           min_band: data.min_band ?? null,
           max_band: data.max_band ?? null,
           battle_type: data.battle_type ?? 'DOMINATION',

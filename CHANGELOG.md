@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.22.0] — 2026-10-10
+
+### Added
+- **Faction bans for 3×3 Matrix tournaments.** The faction ban option now works in 3×3 Matrix too. Before every game's 3×3 pick, both players ban at the same time, the bans are revealed, and nobody can put a banned faction into their three that game.
+
 ## [2.21.0] — 2026-10-10
 
 ### Added

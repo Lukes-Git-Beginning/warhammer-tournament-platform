@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
 import { ensureOneVThreeDecision } from '../lib/one-v-three.js';
+import { revealedBans } from '../lib/blind-pick-auto-resolve.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -97,6 +98,7 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
           tournament: {
             select: {
               mode: true,
+              faction_bans_per_player: true,
               faction_allowlist: { select: { faction_id: true } },
             },
           },
@@ -114,6 +116,7 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
             select: {
               id: true,
               faction_matrix: true,
+              faction_ban: true,
             },
             take: 1,
           },
@@ -125,6 +128,23 @@ const factionMatrixRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (match.tournament?.mode !== 'MATRIX' && match.tournament?.mode !== 'FREE_PICK') {
         return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Match is not in a faction-matrix mode', statusCode: 422 });
+      }
+
+      // 3×3 with faction bans: the ban step comes first, and neither side may put a banned faction
+      // into their three.
+      if (match.tournament.mode === 'MATRIX' && match.tournament.faction_bans_per_player > 0) {
+        const banRow = match.games[0]?.faction_ban ?? null;
+        if (!banRow?.revealed_at) {
+          return reply.code(422).send({
+            error: 'UnprocessableEntity',
+            message: 'Both sides must lock their faction bans before picking factions',
+            statusCode: 422,
+          });
+        }
+        const banned = revealedBans(banRow);
+        if (factions.some((f) => banned.includes(f))) {
+          return reply.code(422).send({ error: 'UnprocessableEntity', message: 'One of these factions is banned for this game', statusCode: 422 });
+        }
       }
 
       // Validate faction picks against the tournament allowlist. Note: restricted_factions

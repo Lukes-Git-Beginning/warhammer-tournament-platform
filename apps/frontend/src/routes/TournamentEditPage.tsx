@@ -1039,8 +1039,8 @@ export function TournamentEditPage() {
             </div>
           </div>
 
-          {/* ── Blind Pick: faction bans per game (changeable any time — applies from the next game) ── */}
-          {(form.mode === 'BPT' || form.mode === 'BPT_2V2') && (
+          {/* ── Blind Pick / 3×3: faction bans per game (changeable any time — applies from the next game) ── */}
+          {(form.mode === 'BPT' || form.mode === 'BPT_2V2' || form.mode === 'MATRIX') && (
             <div className="mt-3">
               <Label htmlFor="tef-faction-bans">Faction bans per player</Label>
               <Select
@@ -1054,8 +1054,10 @@ export function TournamentEditPage() {
                 <option value="2">2 bans per player</option>
               </Select>
               <p className="mt-1 text-xs text-rizzotto-stone-500">
-                Before every game&apos;s blind pick, both {form.mode === 'BPT_2V2' ? 'teams' : 'players'} ban factions
-                blind; neither side can pick a banned faction that game. A change applies from the next game.
+                {form.mode === 'MATRIX'
+                  ? "Before every game's 3×3 pick, both players ban factions blind; neither side can put a banned faction into their three that game."
+                  : `Before every game's blind pick, both ${form.mode === 'BPT_2V2' ? 'teams' : 'players'} ban factions blind; neither side can pick a banned faction that game.`}{' '}
+                A change applies from the next game.
               </p>
             </div>
           )}

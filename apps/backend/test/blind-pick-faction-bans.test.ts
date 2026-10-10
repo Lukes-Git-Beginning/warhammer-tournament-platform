@@ -40,13 +40,13 @@ afterAll(async () => {
 
 const cookieFor = (userId: string) => ({ auth_token: app.jwt.sign({ sub: userId, username: 'test', role: 'USER' }) });
 
-/** A BPT tournament match whose current game has a decided map (the ban step comes right after). */
-async function bptMatch(bansPerPlayer: number) {
+/** A BPT (or 3×3) tournament match whose current game has a decided map (the ban step comes next). */
+async function bptMatch(bansPerPlayer: number, mode: 'BPT' | 'MATRIX' = 'BPT') {
   const [p1, p2] = await Promise.all([createTestUser(), createTestUser()]);
   userIds.push(p1.id, p2.id);
   const t = await createTestTournament({ organizerId: p1.id });
   tournamentIds.push(t.id);
-  await prisma.tournament.update({ where: { id: t.id }, data: { mode: 'BPT', faction_bans_per_player: bansPerPlayer } });
+  await prisma.tournament.update({ where: { id: t.id }, data: { mode, faction_bans_per_player: bansPerPlayer } });
   // Reuse the Open Play builder for the game + decided map, then attach the match to the tournament.
   const { matchId } = await createOpenPlayMatch(prisma, p1.id, p2.id, 'QUEUE', 'DOMINATION');
   await prisma.match.update({ where: { id: matchId }, data: { tournament_id: t.id, type: 'TOURNAMENT' } });
@@ -139,9 +139,9 @@ describe('Blind Pick faction bans', () => {
     const { matchId, p1, p2 } = await bptMatch(2);
     await banLock(matchId, p1.id, [factions[0]!, factions[1]!]);
     // Age p1's lock past the timeout.
-    await prisma.matchBlindPick.updateMany({
+    await prisma.matchFactionBan.updateMany({
       where: { game: { match_id: matchId } },
-      data: { player1_bans_locked_at: new Date(Date.now() - FACTION_BAN_TIMEOUT_MS - 1000) },
+      data: { player1_locked_at: new Date(Date.now() - FACTION_BAN_TIMEOUT_MS - 1000) },
     });
     await autoResolveStaleBlindPicks(app);
 
@@ -171,5 +171,61 @@ describe('Blind Pick faction bans', () => {
     const row = await prisma.matchBlindPick.findFirst({ where: { game: { match_id: matchId } } });
     expect(row?.revealed_at).not.toBeNull();
     expect(row?.player2_faction_id).toBe(factions[4]); // the only allowed faction nobody banned
+  });
+
+  it('bans do not create a blind-pick row (modes without a blind pick stay unaffected)', async () => {
+    const { matchId, p1 } = await bptMatch(1, 'MATRIX');
+    // (the Open Play builder used for the fixture may already create a blind-pick row itself)
+    const blindPicksBefore = await prisma.matchBlindPick.count({ where: { game: { match_id: matchId } } });
+    await banLock(matchId, p1.id, [factions[0]!]);
+    expect(await prisma.matchBlindPick.count({ where: { game: { match_id: matchId } } })).toBe(blindPicksBefore);
+    expect(await prisma.matchFactionBan.count({ where: { game: { match_id: matchId } } })).toBe(1);
+  });
+});
+
+describe('3×3 Matrix faction bans', () => {
+  const matrixLock = (matchId: string, userId: string, ids: string[]) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/matches/${matchId}/matrix/lock`,
+      cookies: cookieFor(userId),
+      payload: { factions: ids },
+    });
+
+  it('the ban step comes first, then neither side may put a banned faction into their three', async () => {
+    const { matchId, p1, p2 } = await bptMatch(1, 'MATRIX');
+    expect(await decisionBans(matchId)).toMatchObject({ perPlayer: 1, revealedAt: null });
+    expect((await matrixLock(matchId, p1.id, [factions[2]!, factions[3]!, factions[4]!])).statusCode).toBe(422);
+
+    await banLock(matchId, p1.id, [factions[0]!]);
+    await banLock(matchId, p2.id, [factions[1]!]);
+
+    const withBanned = await matrixLock(matchId, p1.id, [factions[1]!, factions[3]!, factions[4]!]); // opponent's ban
+    expect(withBanned.statusCode).toBe(422);
+    expect(withBanned.json<{ message: string }>().message).toMatch(/banned for this game/i);
+    expect((await matrixLock(matchId, p1.id, [factions[2]!, factions[3]!, factions[4]!])).statusCode).toBe(200);
+  });
+
+  it('the matrix pick timeout never fills a missing three with a banned faction', async () => {
+    const { matchId, p1, p2 } = await bptMatch(2, 'MATRIX');
+    // Pool of 6; ban 4 → only two legal factions left, so the timed-out side's three can't avoid
+    // repeats but must never contain a banned one.
+    const t = await prisma.match.findUnique({ where: { id: matchId }, select: { tournament_id: true } });
+    await prisma.tournamentFactionAllowlist.createMany({
+      data: factions.map((faction_id) => ({ tournament_id: t!.tournament_id!, faction_id })),
+    });
+    await banLock(matchId, p1.id, [factions[0]!, factions[1]!]);
+    await banLock(matchId, p2.id, [factions[2]!, factions[3]!]);
+    expect((await matrixLock(matchId, p1.id, [factions[4]!, factions[5]!, factions[4]!])).statusCode).toBe(200);
+    await prisma.matchFactionMatrix.updateMany({
+      where: { game: { match_id: matchId } },
+      data: { first_locked_at: new Date(Date.now() - 3 * 60 * 1000) },
+    });
+    const { autoResolveStaleMatrixActions } = await import('../src/lib/matrix-auto-resolve.js');
+    await autoResolveStaleMatrixActions(app);
+    const m = await prisma.matchFactionMatrix.findFirst({ where: { game: { match_id: matchId } } });
+    expect(m?.revealed_at).not.toBeNull();
+    expect(m?.p2_factions.length).toBe(3);
+    for (const f of m?.p2_factions ?? []) expect(factions.slice(0, 4)).not.toContain(f);
   });
 });

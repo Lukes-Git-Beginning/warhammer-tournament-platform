@@ -1559,8 +1559,8 @@ export function TournamentCreateForm({
           <FieldHint>{MODE_DESCRIPTIONS[form.mode ?? 'BPT']}</FieldHint>
         </div>
 
-        {/* ─── Blind Pick: faction bans per game ─────────────────────────── */}
-        {(form.mode === 'BPT' || form.mode === 'BPT_2V2') && (
+        {/* ─── Blind Pick / 3×3: faction bans per game ───────────────────── */}
+        {(form.mode === 'BPT' || form.mode === 'BPT_2V2' || form.mode === 'MATRIX') && (
           <div className="min-w-0">
             <Label htmlFor="tcf-faction-bans">Faction bans per player</Label>
             <Select
@@ -1574,8 +1574,9 @@ export function TournamentCreateForm({
               <option value="2">2 bans per player</option>
             </Select>
             <FieldHint>
-              Before every game&apos;s blind pick, both {form.mode === 'BPT_2V2' ? 'teams' : 'players'} ban factions
-              blind. The bans are revealed together and neither side can pick a banned faction that game.
+              {form.mode === 'MATRIX'
+                ? "Before every game's 3×3 pick, both players ban factions blind. The bans are revealed together and neither side can put a banned faction into their three that game."
+                : `Before every game's blind pick, both ${form.mode === 'BPT_2V2' ? 'teams' : 'players'} ban factions blind. The bans are revealed together and neither side can pick a banned faction that game.`}
             </FieldHint>
           </div>
         )}

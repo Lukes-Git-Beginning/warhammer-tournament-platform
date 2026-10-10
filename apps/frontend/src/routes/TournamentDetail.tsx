@@ -848,10 +848,16 @@ export function TournamentDetail() {
               </InfoTooltip>
             </div>
           )}
-          {(tournament.mode === 'BPT' || tournament.mode === 'BPT_2V2') && (tournament.faction_bans_per_player ?? 0) > 0 && (
+          {(tournament.mode === 'BPT' || tournament.mode === 'BPT_2V2' || tournament.mode === 'MATRIX') && (tournament.faction_bans_per_player ?? 0) > 0 && (
             <div>
               <span className="text-stone-500">Faction bans:</span>{' '}
-              <InfoTooltip text="Before every game's blind pick, both sides ban factions blind. The bans are revealed together and neither side can pick a banned faction that game.">
+              <InfoTooltip
+                text={
+                  tournament.mode === 'MATRIX'
+                    ? "Before every game's 3×3 pick, both players ban factions blind. The bans are revealed together and neither side can put a banned faction into their three that game."
+                    : "Before every game's blind pick, both sides ban factions blind. The bans are revealed together and neither side can pick a banned faction that game."
+                }
+              >
                 <span className="text-stone-200 underline decoration-dotted decoration-stone-600 underline-offset-2">
                   {tournament.faction_bans_per_player} per player, per game
                 </span>

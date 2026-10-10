@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { randomBytes, randomInt } from 'node:crypto';
+import { revealedBans } from './blind-pick-auto-resolve.js';
 
 const BLIND_TIMEOUT_MS = 2 * 60 * 1000;   // 2 min for blind faction picks
 const BAN_TIMEOUT_MS = 30 * 1000;          // 30s per ban/pick action (all bans + the final pick)
@@ -97,6 +98,7 @@ export async function autoResolveStaleMatrixActions(fastify: FastifyInstance): P
             },
           },
           map_decision: { select: { picked_map_id: true } },
+          faction_ban: true,
         },
       },
     },
@@ -115,7 +117,11 @@ export async function autoResolveStaleMatrixActions(fastify: FastifyInstance): P
       // #4: honour the tournament faction allowlist (if any); restricted factions
       // stay pickable. Open Play (no tournament) has no allowlist → full pool.
       const allowlist = matrix.game.match.tournament?.faction_allowlist.map((f) => f.faction_id) ?? [];
-      const pool = (allowlist.length > 0 ? allFactions.filter((f) => allowlist.includes(f.id)) : allFactions).map((f) => f.id);
+      // This game's faction bans (3×3 with bans) are off-limits for the random three.
+      const banned = revealedBans(matrix.game.faction_ban);
+      const pool = (allowlist.length > 0 ? allFactions.filter((f) => allowlist.includes(f.id)) : allFactions)
+        .map((f) => f.id)
+        .filter((id) => !banned.includes(id));
       const existingIds = [...(matrix.p1_factions as string[]), ...(matrix.p2_factions as string[])];
       const available = pool.filter((id) => !existingIds.includes(id));
 

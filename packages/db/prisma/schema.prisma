@@ -409,8 +409,8 @@ model Tournament {
   // Welle 2 — Tournament-Mechanik
   rounds_count             Int             @default(5) // 3–6 via constraint
   has_third_place_match    Boolean         @default(false)
-  // Blind Pick (BPT / BPT_2V2): factions each side bans per game before the blind pick (0 = off,
-  // max 2). Both sides ban blind, the bans are revealed together and are unpickable for both.
+  // Factions each side bans per game before the faction step (0 = off, max 2) — Blind Pick
+  // (BPT / BPT_2V2) and 3×3 Matrix. Bans are blind, revealed together, unpickable for both.
   faction_bans_per_player  Int             @default(0)
   playoff_format           PlayoffFormat   @default(NONE)
   // NI-5: skill-gate — a host restricts registration to a gating-band range (1..5). null = open.
@@ -782,6 +782,7 @@ model MatchGame {
   map_decision   MatchMapDecision?
   blind_pick     MatchBlindPick?
   faction_matrix MatchFactionMatrix?
+  faction_ban    MatchFactionBan?
 
   @@unique([match_id, game_number])
   @@index([match_id])
@@ -836,13 +837,20 @@ model MatchBlindPick {
   player1_locked_at    DateTime?
   player2_locked_at    DateTime?
   revealed_at          DateTime?
-  // Faction bans before the pick (tournament.faction_bans_per_player > 0). Each side locks its
-  // bans blind; revealed together, then the banned factions are unpickable for both sides.
-  player1_bans           String[]  @default([])
-  player2_bans           String[]  @default([])
-  player1_bans_locked_at DateTime?
-  player2_bans_locked_at DateTime?
-  bans_revealed_at       DateTime?
+
+  game MatchGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
+}
+
+// Per-game faction bans before the faction step (tournament.faction_bans_per_player > 0; Blind
+// Pick, Blind Pick 2v2 and 3×3 Matrix). Each side (player / 2v2 captain) locks its bans blind;
+// revealed together, then the banned factions are unpickable for both sides in that game.
+model MatchFactionBan {
+  game_id           String    @id @db.Uuid
+  player1_bans      String[]  @default([])
+  player2_bans      String[]  @default([])
+  player1_locked_at DateTime?
+  player2_locked_at DateTime?
+  revealed_at       DateTime?
 
   game MatchGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
 }

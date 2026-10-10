@@ -923,8 +923,11 @@ function FactionBanPhase({
       ) : (
         <>
           <p className="text-sm text-rizzotto-stone-400 text-center max-w-sm">
-            Ban {banCount === 1 ? 'one faction' : `${banCount} factions`}. Neither side can pick a banned faction this
-            game. Bans are revealed once both {is2v2 ? 'teams' : 'players'} have locked in.
+            Ban {banCount === 1 ? 'one faction' : `${banCount} factions`}.{' '}
+            {decision.tournamentMode === 'MATRIX'
+              ? 'Neither side can put a banned faction into their three this game.'
+              : 'Neither side can pick a banned faction this game.'}{' '}
+            Bans are revealed once both {is2v2 ? 'teams' : 'players'} have locked in.
           </p>
           {countdown && (
             <div className="flex flex-col items-center gap-1">
@@ -1029,9 +1032,11 @@ interface FactionMatrixPhaseProps {
   factionAllowlist?: string[];
   pickedMapName?: string | null;
   pickedMapImageUrl?: string | null;
+  /** 3×3 with faction bans: this game's revealed bans — neither side may pick them into their three. */
+  gameBans?: string[];
 }
 
-function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer, restrictedFactions = [], factionAllowlist = [], pickedMapName = null, pickedMapImageUrl = null }: FactionMatrixPhaseProps) {
+function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPlayer, colPlayer, restrictedFactions = [], factionAllowlist = [], pickedMapName = null, pickedMapImageUrl = null, gameBans = [] }: FactionMatrixPhaseProps) {
   const queryClient = useQueryClient();
   const [selectedFactions, setSelectedFactions] = useState<string[]>([]);
   const [locking, setLocking] = useState(false);
@@ -1104,7 +1109,7 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
   function pickRandom3() {
     const pool = factions
       .map((f) => f.faction.id)
-      .filter((id) => factionAllowlist.length === 0 || factionAllowlist.includes(id));
+      .filter((id) => (factionAllowlist.length === 0 || factionAllowlist.includes(id)) && !gameBans.includes(id));
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j]!, pool[i]!];
@@ -1355,12 +1360,15 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
         <BlindPickCountdown firstLockedAt={mx.firstLockedAt} timeoutMs={2 * 60 * 1000} />
       )}
 
+      {gameBans.length > 0 && <GameBansSummary bans={gameBans} factions={factions} />}
+
       <div className="grid grid-cols-3 gap-2 w-full sm:grid-cols-4 lg:grid-cols-5">
         {factions.map(({ faction }) => {
           const isSelected = selectedFactions.includes(faction.id);
           // Restricted factions are nerfed, not banned — keep them pickable.
           const isRestricted = restrictedFactions.includes(faction.id);
-          const isBanned = factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id);
+          const isGameBan = gameBans.includes(faction.id);
+          const isBanned = isGameBan || (factionAllowlist.length > 0 && !factionAllowlist.includes(faction.id));
           const isDisabled = isBanned || (!isSelected && selectedFactions.length >= 3);
           return (
             <button
@@ -1368,7 +1376,13 @@ function FactionMatrixPhase({ matchId, decision, currentUserId, factions, rowPla
               type="button"
               onClick={() => toggleFaction(faction.id)}
               disabled={isDisabled}
-              title={isRestricted && !isBanned ? 'Restricted (nerfed) — does not count toward the leaderboard' : undefined}
+              title={
+                isGameBan
+                  ? 'Banned for this game'
+                  : isRestricted && !isBanned
+                    ? 'Restricted (nerfed) — does not count toward the leaderboard'
+                    : undefined
+              }
               className={[
                 'flex flex-col items-center gap-1.5 rounded-sm border p-2 text-center',
                 'transition-[border-color,background-color,opacity] duration-150',
@@ -1960,6 +1974,8 @@ function resolvePhase(d: MatchDecisionState | null): DecisionPhase {
   if (d.pickedMapId) {
     // MATRIX mode: faction pick/ban after map decision
     if (d.tournamentMode === 'MATRIX') {
+      // With faction bans the ban step comes before the three picks (per game).
+      if (d.factionBans && !d.factionBans.revealedAt && !d.factionMatrix?.revealedAt) return 'faction_ban';
       if (!d.factionMatrix?.decidedAt) return 'faction_matrix';
       return 'ready';
     }
@@ -2426,6 +2442,9 @@ export function MatchDecisionPage() {
                 pickedMapImageUrl={allTournamentMaps.find((m) => m.id === decision.pickedMapId)?.image_url ?? null}
                 restrictedFactions={decision.restrictedFactions ?? []}
                 factionAllowlist={decision.factionAllowlist ?? []}
+                gameBans={[
+                  ...new Set([...(decision.factionBans?.player1Bans ?? []), ...(decision.factionBans?.player2Bans ?? [])]),
+                ]}
               />
             </motion.div>
           )}

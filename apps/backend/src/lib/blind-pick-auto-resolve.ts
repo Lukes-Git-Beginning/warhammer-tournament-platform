@@ -22,11 +22,11 @@ export const TOURNAMENT_BLIND_PICK_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes — 
  *  this long — then its bans lapse and the bans are revealed. Same 2 minutes as the pick. */
 export const FACTION_BAN_TIMEOUT_MS = 2 * 60 * 1000;
 
-/** Factions banned for this game by either side — empty until the bans are revealed. */
+/** Factions banned for this game by either side (MatchFactionBan) — empty until revealed. */
 export function revealedBans(
-  row: { bans_revealed_at: Date | null; player1_bans: string[]; player2_bans: string[] } | null,
+  row: { revealed_at: Date | null; player1_bans: string[]; player2_bans: string[] } | null | undefined,
 ): string[] {
-  if (!row?.bans_revealed_at) return [];
+  if (!row?.revealed_at) return [];
   return [...new Set([...row.player1_bans, ...row.player2_bans])];
 }
 
@@ -36,18 +36,18 @@ export function revealedBans(
  * missing side as locked with no bans and reveal, so the game moves on to the blind pick.
  */
 async function autoResolveStaleFactionBans(fastify: FastifyInstance, cutoff: Date): Promise<number> {
-  const stale = await fastify.prisma.matchBlindPick.findMany({
+  const stale = await fastify.prisma.matchFactionBan.findMany({
     where: {
-      bans_revealed_at: null,
+      revealed_at: null,
       OR: [
-        { player1_bans_locked_at: { not: null, lt: cutoff }, player2_bans_locked_at: null },
-        { player2_bans_locked_at: { not: null, lt: cutoff }, player1_bans_locked_at: null },
+        { player1_locked_at: { not: null, lt: cutoff }, player2_locked_at: null },
+        { player2_locked_at: { not: null, lt: cutoff }, player1_locked_at: null },
       ],
     },
     select: {
       game_id: true,
-      player1_bans_locked_at: true,
-      player2_bans_locked_at: true,
+      player1_locked_at: true,
+      player2_locked_at: true,
       game: { select: { match: { select: { id: true, tournament: { select: { faction_bans_per_player: true } } } } } },
     },
   });
@@ -56,16 +56,16 @@ async function autoResolveStaleFactionBans(fastify: FastifyInstance, cutoff: Dat
   let resolved = 0;
   for (const row of stale) {
     try {
-      const updated = await fastify.prisma.matchBlindPick.update({
+      const updated = await fastify.prisma.matchFactionBan.update({
         where: { game_id: row.game_id },
         data: {
-          player1_bans_locked_at: row.player1_bans_locked_at ?? now,
-          player2_bans_locked_at: row.player2_bans_locked_at ?? now,
-          bans_revealed_at: now,
+          player1_locked_at: row.player1_locked_at ?? now,
+          player2_locked_at: row.player2_locked_at ?? now,
+          revealed_at: now,
         },
       });
       const matchId = row.game.match.id;
-      const first = row.player1_bans_locked_at ?? row.player2_bans_locked_at;
+      const first = row.player1_locked_at ?? row.player2_locked_at;
       fastify.io?.to(`match_decision_${matchId}`).emit('match.faction-bans.update', {
         matchId,
         perPlayer: row.game.match.tournament?.faction_bans_per_player ?? 0,
@@ -105,6 +105,7 @@ async function autoResolveTournamentBlindPicks(fastify: FastifyInstance, cutoff:
         select: {
           id: true,
           map_decision: { select: { picked_map_id: true } },
+          faction_ban: true,
           match: { select: { id: true, competitor_format: true, tournament: { select: { faction_allowlist: { select: { faction_id: true } } } } } },
         },
       },
@@ -122,7 +123,7 @@ async function autoResolveTournamentBlindPicks(fastify: FastifyInstance, cutoff:
   for (const pick of stale) {
     const lockedFactionId = pick.player1_faction_id ?? pick.player2_faction_id;
     const allowlist = pick.game.match.tournament?.faction_allowlist.map((f) => f.faction_id) ?? [];
-    const banned = revealedBans(pick); // this game's faction bans are off-limits for the random pick
+    const banned = revealedBans(pick.game.faction_ban); // this game's bans are off-limits for the random pick
     const allowed = (allowlist.length > 0 ? allFactions.filter((f) => allowlist.includes(f.id)) : allFactions).filter(
       (f) => !banned.includes(f.id),
     );
