@@ -71,7 +71,14 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
 
       // factionFromGames is built after the matches query — see below.
       const matches = await fastify.prisma.match.findMany({
-        where: { tournament_id: tournament.id, deleted_at: null },
+        where: {
+          tournament_id: tournament.id,
+          deleted_at: null,
+          // A cancelled one-player Swiss row is a superseded bye placeholder (e.g. a late joiner's
+          // catch-up bye after they were paired) — not a withdrawal. Hide it instead of drawing it as
+          // "OUT vs TBD". Elimination nodes stay (the bracket tree needs every node).
+          NOT: { phase: 'SWISS', status: 'CANCELLED', OR: [{ player1_id: null }, { player2_id: null }] },
+        },
         orderBy: [{ round: 'asc' }, { match_number: 'asc' }],
         select: {
           id: true,

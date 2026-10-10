@@ -66,6 +66,8 @@ const activeMatchesRoutes: FastifyPluginAsync = async (fastify) => {
             {
               type: TOURNAMENT_TYPE,
               status: { in: TOURNAMENT_ACTIVE },
+              // A deleted tournament's leftover matches are not "current" (e.g. a deleted test event).
+              tournament: { deleted_at: null },
               OR: [{ player1_id: { in: actorIds } }, { player2_id: { in: actorIds } }],
             },
             {

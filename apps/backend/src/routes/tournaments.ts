@@ -1491,9 +1491,20 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      const deletedAt = new Date();
       await fastify.prisma.tournament.update({
         where: { id: tournament.id },
-        data: { deleted_at: new Date() },
+        data: { deleted_at: deletedAt },
+      });
+      // Remove the tournament's OPEN matches with it (Alex 2026-10-10) so nobody is left with a
+      // "current match" in a tournament that no longer exists. Finished games stay as they are.
+      await fastify.prisma.match.updateMany({
+        where: {
+          tournament_id: tournament.id,
+          deleted_at: null,
+          status: { in: ['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED', 'PENDING_BYE'] },
+        },
+        data: { deleted_at: deletedAt },
       });
 
       await fastify.prisma.auditLog.create({

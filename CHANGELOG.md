@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.22.1] — 2026-10-10
+
+### Fixed
+- **Late joiners in Swiss no longer hold up a round.** A late joiner is put straight into a match only while the round is still young (first 10 minutes, before any game of the round has finished). After that they rest this round and are paired from the next round on, so a match created seconds before the last game ends can't add half an hour to the round.
+- **No more "OUT vs TBD" leftover in Swiss brackets** after a late joiner was paired against the bye.
+- **Deleting a tournament now removes its open matches,** so players no longer keep a "current match" in a deleted event.
+
 ## [2.22.0] — 2026-10-10
 
 ### Added

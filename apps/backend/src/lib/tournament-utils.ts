@@ -283,8 +283,24 @@ export async function createLateJoinerBye(
 
   void recordTournamentEvent({ tournamentId, type: 'match_created', actor: 'system', subjectId: userId, payload: { phase: 'catchup_bye' } });
 
+  // Reconcile right away instead of waiting for the next cron pass: early in the round the late
+  // joiner is paired with an open bye now (not up to a minute later); late in the round they keep
+  // the catch-up bye (see the pairing window in reconcileSwissByes).
+  await reconcileSwissByes(prisma, tournamentId).catch(() => {});
+
   return match;
 }
+
+/**
+ * A late joiner is paired into the CURRENT Swiss round only while that round is young: within this
+ * long after it started AND before any of its games has finished. Later, a fresh pairing would hold
+ * the whole round up (a match created seconds before the last game ends can add half an hour), so the
+ * joiner keeps their 0-point catch-up bye and plays from the next round (Alex 2026-10-10).
+ */
+export const SWISS_LATE_JOIN_PAIRING_WINDOW_MS = 10 * 60 * 1000;
+
+/** Match statuses that mean a game of the round is already decided (or reported). */
+const ROUND_PROGRESS_STATUSES = new Set(['COMPLETED', 'FORFEIT', 'NO_CONTEST', 'AWAITING_CONFIRMATION', 'DISPUTED']);
 
 /**
  * Reconciler safety net for Swiss / Auto-Swiss byes (Alex 2026-09-27, mirroring the Balanced
@@ -320,13 +336,16 @@ export async function reconcileSwissByes(
 
   const matches = await prisma.match.findMany({
     where: { tournament_id: tournamentId, round, phase: 'SWISS', deleted_at: null },
-    select: { id: true, player1_id: true, player2_id: true, status: true, withdrawn_player_id: true, match_number: true },
+    select: { id: true, player1_id: true, player2_id: true, status: true, withdrawn_player_id: true, match_number: true, created_at: true },
   });
+  // match_number is unique per (tournament, round) INCLUDING soft-deleted rows → number new rows past them.
+  const numberAgg = await prisma.match.aggregate({ where: { tournament_id: tournamentId, round }, _max: { match_number: true } });
 
   const matched = new Set<string>(); // competitors in a live two-player game
   const byeRowByHolder = new Map<string, string>(); // competitor -> their open (unfilled) bye row id
+  const catchupHolders = new Set<string>(); // competitors resting on a 0-point catch-up bye (late joiners)
   const orphanRowsByComp = new Map<string, string[]>(); // survivor -> their orphaned (opponent-withdrew) row ids
-  let maxMatchNumber = 0;
+  let maxMatchNumber = numberAgg._max.match_number ?? 0;
   for (const m of matches) {
     if (m.match_number > maxMatchNumber) maxMatchNumber = m.match_number;
     const twoPlayers = !!m.player1_id && !!m.player2_id;
@@ -335,6 +354,7 @@ export async function reconcileSwissByes(
       matched.add(m.player2_id!);
     } else if ((m.status === 'BYE' || m.status === 'CATCHUP_BYE') && m.player1_id && !m.player2_id) {
       byeRowByHolder.set(m.player1_id, m.id);
+      if (m.status === 'CATCHUP_BYE') catchupHolders.add(m.player1_id);
     } else if (twoPlayers && m.withdrawn_player_id && m.status !== 'CANCELLED') {
       const survivor = m.player1_id === m.withdrawn_player_id ? m.player2_id! : m.player1_id!;
       orphanRowsByComp.set(survivor, [...(orphanRowsByComp.get(survivor) ?? []), m.id]);
@@ -343,13 +363,19 @@ export async function reconcileSwissByes(
 
   let actions = 0;
 
-  // A competitor can't both play and bye in the same round: cancel a stray solo bye held by someone
+  // A redundant solo bye row is removed (soft-delete), not cancelled: a CANCELLED solo row renders in
+  // the bracket as a withdrawn player ("OUT" vs TBD), which it is not. Standings ignore both.
+  const dropRow = (rowId: string) =>
+    prisma.match.update({ where: { id: rowId }, data: { deleted_at: new Date(), winner_id: null } });
+
+  // A competitor can't both play and bye in the same round: remove a stray solo bye held by someone
   // who already has a live game (e.g. a catch-up bye left behind when a host manually paired a late
   // joiner). This also self-heals that orphaned-bye residue after the fact.
   for (const [holder, rowId] of [...byeRowByHolder]) {
     if (matched.has(holder)) {
-      await prisma.match.update({ where: { id: rowId }, data: { status: 'CANCELLED', winner_id: null } });
+      await dropRow(rowId);
       byeRowByHolder.delete(holder);
+      catchupHolders.delete(holder);
       actions += 1;
     }
   }
@@ -358,7 +384,28 @@ export async function reconcileSwissByes(
     where: { tournament_id: tournamentId, deleted_at: null, status: 'CHECKED_IN' },
     select: { user_id: true, team_id: true },
   });
-  const idle = participants.map((p) => p.team_id ?? p.user_id).filter((id) => !matched.has(id));
+  let idle = participants.map((p) => p.team_id ?? p.user_id).filter((id) => !matched.has(id));
+
+  // Late-join pairing window: once the round is under way, a late joiner (catch-up bye, or no row at
+  // all yet) is NOT paired into it — a fresh match would hold the whole round up. They keep / get a
+  // 0-point catch-up bye and are paired from the next round on. Everyone else is reconciled as before.
+  const roundRows = matches.filter((m) => m.status !== 'CATCHUP_BYE');
+  const roundStartMs = roundRows.length > 0 ? Math.min(...roundRows.map((m) => m.created_at.getTime())) : Date.now();
+  const roundUnderWay =
+    Date.now() - roundStartMs > SWISS_LATE_JOIN_PAIRING_WINDOW_MS ||
+    matches.some((m) => !!m.player1_id && !!m.player2_id && ROUND_PROGRESS_STATUSES.has(m.status));
+  if (roundUnderWay) {
+    const isLateJoiner = (id: string) => catchupHolders.has(id) || (!byeRowByHolder.has(id) && !orphanRowsByComp.has(id));
+    for (const id of idle.filter(isLateJoiner)) {
+      if (byeRowByHolder.has(id)) continue; // already resting on a catch-up bye
+      maxMatchNumber += 1;
+      await prisma.match.create({
+        data: { tournament_id: tournamentId, round, match_number: maxMatchNumber, player1_id: id, player2_id: null, winner_id: null, status: 'CATCHUP_BYE', phase: 'SWISS' },
+      });
+      actions += 1;
+    }
+    idle = idle.filter((id) => !isLateJoiner(id));
+  }
 
   if (idle.length === 0) return actions;
   if (idle.length === 1 && byeRowByHolder.has(idle[0]!)) return actions; // a single legitimate bye — leave it
@@ -381,7 +428,7 @@ export async function reconcileSwissByes(
     const bBye = byeRowByHolder.get(b);
     if (aBye) {
       await prisma.match.update({ where: { id: aBye }, data: { player2_id: b, status: 'PENDING', winner_id: null } });
-      if (bBye) await prisma.match.update({ where: { id: bBye }, data: { status: 'CANCELLED', winner_id: null } });
+      if (bBye) await dropRow(bBye);
     } else if (bBye) {
       await prisma.match.update({ where: { id: bBye }, data: { player2_id: a, status: 'PENDING', winner_id: null } });
     } else {
