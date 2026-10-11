@@ -1653,6 +1653,76 @@ export function getAdminNotInDiscordReport(): Promise<AdminNotInDiscordReport> {
   return apiFetch(`/api/admin/reports/not-in-discord`);
 }
 
+// Players report — one row per user: what they use on the site. Window counts cover `days`
+// (0 = all time); first/last game and hosted totals are all-time.
+export interface AdminPlayerReportRow {
+  id: string;
+  username: string;
+  createdAt: string;
+  lastLogin: string | null;
+  timezone: string | null;
+  steamVerified: boolean;
+  referralSource: string | null;
+  botPolicy: 'NORMAL' | 'NO_BROADCASTS' | 'NO_BOT_MESSAGES';
+  mmSlots: number;
+  tournamentSlots: number;
+  paused: boolean;
+  tournamentDmFilterCustom: boolean;
+  queuePrefsSaved: boolean;
+  tournamentGames: number;
+  openPlayQueue: number;
+  openPlayAvailability: number;
+  openPlayChallenge: number;
+  gamesWithReplay: number;
+  gamesTotal: number;
+  firstGameAt: string | null;
+  lastGameAt: string | null;
+  tournamentsEntered: number;
+  drops: number;
+  noShows: number;
+  disqualified: number;
+  hosted: number;
+  hostedTotal: number;
+  lastHostedAt: string | null;
+  queueJoins: number;
+  queueWarnings: number;
+  queueTimeouts: number;
+  dmSent: number;
+  dmFailed: number;
+  answered: { general: boolean; DOMINATION: boolean; CONQUEST: boolean; SIEGE: boolean };
+}
+export function getAdminPlayersReport(days: number): Promise<{ days: number; players: AdminPlayerReportRow[] }> {
+  return apiFetch(`/api/admin/reports/players?days=${days}`);
+}
+
+export interface AdminHostReportRow {
+  id: string;
+  username: string;
+  hosted: number;
+  hostedTotal: number;
+  lastHostedAt: string | null;
+  avgField: number | null;
+  battleTypes: { DOMINATION: number; CONQUEST: number; SIEGE: number };
+  upcoming: number;
+}
+export function getAdminHostsReport(days: number): Promise<{ days: number; hosts: AdminHostReportRow[] }> {
+  return apiFetch(`/api/admin/reports/hosts?days=${days}`);
+}
+
+/** 7×24 grids (Monday-first, site time). */
+export interface AdminScheduleReport {
+  days: number;
+  timezone: string;
+  tournamentAvailability: number[][];
+  matchmakingAvailability: number[][];
+  tournamentsStarted: number[][];
+  avgTournamentField: number[][];
+  openPlayGames: number[][];
+}
+export function getAdminScheduleReport(days: number): Promise<AdminScheduleReport> {
+  return apiFetch(`/api/admin/reports/schedule?days=${days}`);
+}
+
 // #19 — underrated players: data rating vs questionnaire rating.
 export interface AdminUnderratedPlayer {
   id: string;
@@ -2177,6 +2247,8 @@ export interface BroadcastAudience {
   /** Which skill the band filter reads (e.g. "Beginner in Conquest"). Default Overall. */
   bandBattleType?: SkillScope;
   tiers?: ('supporter' | 'lord' | 'champion')[];
+  /** Explicit user list, e.g. a filtered admin report. */
+  userIds?: string[];
 }
 
 /** Admin broadcast. dryRun=true returns just the recipient count (live preview). */

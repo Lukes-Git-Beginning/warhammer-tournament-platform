@@ -14,6 +14,11 @@ export const BroadcastAudienceSchema = z.object({
   bands: z.array(z.number().int().min(1).max(5)).optional().default([]),
   /** Which skill the `bands` filter reads (e.g. "Beginner in Conquest"). Ignored without bands. */
   bandBattleType: SkillScopeSchema.optional().default('OVERALL'),
-  tiers: z.array(z.enum(['supporter', 'lord', 'champion'])).optional().default([]),
+  tiers: z
+    .array(z.enum(['supporter', 'lord', 'champion']))
+    .optional()
+    .default([]),
+  /** Explicit user list (e.g. a filtered admin report). Absent = no restriction; [] = nobody. */
+  userIds: z.array(z.string().uuid()).max(5000).optional(),
 });
 export type BroadcastAudience = z.infer<typeof BroadcastAudienceSchema>;

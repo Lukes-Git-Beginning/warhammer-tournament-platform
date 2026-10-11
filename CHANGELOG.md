@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.24.0] — 2026-10-11
+
+### Added
+- **More admin reports.** An overview of which site features players use, a sign-up funnel by month, a hosting overview and a schedule view that compares when players are available with when events actually run. Lists can be filtered and exported.
+
 ## [2.23.0] — 2026-10-10
 
 ### Added

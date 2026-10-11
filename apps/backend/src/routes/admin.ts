@@ -37,6 +37,7 @@ import { getQueuePenaltyState, resetQueuePenaltyToWarned } from '../lib/queue-pe
 import { publishChangelog, changelogChannelId } from '../lib/changelog-publish.js';
 import { BroadcastAudienceSchema, resolveAdminAudience, sendBroadcast } from '../lib/broadcast.js';
 import { SkillScopeSchema } from '../lib/broadcast-audience.js';
+import { loadHostReport, loadPlayerReport, loadScheduleReport } from '../lib/admin-player-report.js';
 import {
   parseAnnouncementDestinations,
   buildTournamentFacts,
@@ -991,6 +992,37 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           lastLogin: u.last_login?.toISOString() ?? null,
         })),
     };
+  });
+
+  // GET /api/admin/reports/players?days=30 — one row per user: what they use (availability, Open
+  // Play, tournaments, hosting, reliability, reachability, replays, questionnaire). Window counts
+  // use `days` (0 = all time); first/last game and hosted totals are all-time. Filtered client-side.
+  const ReportDaysSchema = z.object({ days: z.coerce.number().int().min(0).max(3650).default(30) });
+  fastify.get('/api/admin/reports/players', async (request, reply) => {
+    const parsed = ReportDaysSchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    return { days: parsed.data.days, players: await loadPlayerReport(fastify.prisma, parsed.data.days) };
+  });
+
+  // GET /api/admin/reports/hosts?days=30 — hosting per user (main host + co-hosts).
+  fastify.get('/api/admin/reports/hosts', async (request, reply) => {
+    const parsed = ReportDaysSchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    return { days: parsed.data.days, hosts: await loadHostReport(fastify.prisma, parsed.data.days) };
+  });
+
+  // GET /api/admin/reports/schedule?days=30 — 7×24 grids in site time: who is available vs. when
+  // tournaments actually started (and how full they were) vs. when Open Play is played.
+  fastify.get('/api/admin/reports/schedule', async (request, reply) => {
+    const parsed = ReportDaysSchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    return { days: parsed.data.days, ...(await loadScheduleReport(fastify.prisma, parsed.data.days)) };
   });
 
   // GET /api/admin/reports/underrated — #19: players whose DATA-based rating exceeds

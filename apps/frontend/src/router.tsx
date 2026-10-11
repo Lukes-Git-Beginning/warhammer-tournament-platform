@@ -45,8 +45,7 @@ export const tournamentsListingRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => {
     const isMajor = search.major === true || search.major === 'true';
     const bt = search.battle_type;
-    const battleType =
-      bt === 'DOMINATION' || bt === 'CONQUEST' || bt === 'SIEGE' ? bt : undefined;
+    const battleType = bt === 'DOMINATION' || bt === 'CONQUEST' || bt === 'SIEGE' ? bt : undefined;
     const cf = search.competitor_format;
     const competitorFormat = cf === 'ONE_V_ONE' || cf === 'TWO_V_TWO' ? cf : undefined;
     return {
@@ -81,9 +80,16 @@ const createTournamentRoute = createRoute({
       period?: string;
     } = {};
     if (typeof search.duplicate === 'string') out.duplicate = search.duplicate;
-    if (search.championship === 'QUARTERLY' || search.championship === 'MONTHLY_LADDER') out.championship = search.championship;
-    if (search.battleType === 'DOMINATION' || search.battleType === 'CONQUEST' || search.battleType === 'SIEGE') out.battleType = search.battleType;
-    if (search.competitorFormat === 'ONE_V_ONE' || search.competitorFormat === 'TWO_V_TWO') out.competitorFormat = search.competitorFormat;
+    if (search.championship === 'QUARTERLY' || search.championship === 'MONTHLY_LADDER')
+      out.championship = search.championship;
+    if (
+      search.battleType === 'DOMINATION' ||
+      search.battleType === 'CONQUEST' ||
+      search.battleType === 'SIEGE'
+    )
+      out.battleType = search.battleType;
+    if (search.competitorFormat === 'ONE_V_ONE' || search.competitorFormat === 'TWO_V_TWO')
+      out.competitorFormat = search.competitorFormat;
     if (typeof search.period === 'string') out.period = search.period;
     return out;
   },
@@ -130,8 +136,12 @@ const userProfileRoute = createRoute({
   ): { version?: string; battleType?: 'OVERALL' | 'DOMINATION' | 'CONQUEST' | 'SIEGE' } => {
     const bt = search.battleType;
     return {
-      ...(typeof search.version === 'string' && search.version !== 'all' ? { version: search.version } : {}),
-      ...(bt === 'OVERALL' || bt === 'DOMINATION' || bt === 'CONQUEST' || bt === 'SIEGE' ? { battleType: bt } : {}),
+      ...(typeof search.version === 'string' && search.version !== 'all'
+        ? { version: search.version }
+        : {}),
+      ...(bt === 'OVERALL' || bt === 'DOMINATION' || bt === 'CONQUEST' || bt === 'SIEGE'
+        ? { battleType: bt }
+        : {}),
     };
   },
 });
@@ -163,43 +173,62 @@ const factionDetailRoute = createRoute({
 const draftLobbyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/drafts/$id',
-  component: () => { window.location.replace('/'); return null; },
+  component: () => {
+    window.location.replace('/');
+    return null;
+  },
 });
 
 const draftSpectatorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/drafts/$id/spectate',
-  component: () => { window.location.replace('/'); return null; },
+  component: () => {
+    window.location.replace('/');
+    return null;
+  },
 });
 
 const presetListRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/presets',
-  component: () => { window.location.replace('/'); return null; },
+  component: () => {
+    window.location.replace('/');
+    return null;
+  },
 });
 
 const presetNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/presets/new',
-  component: () => { window.location.replace('/'); return null; },
+  component: () => {
+    window.location.replace('/');
+    return null;
+  },
 });
 
 const presetEditRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/presets/$id/edit',
-  component: () => { window.location.replace('/'); return null; },
+  component: () => {
+    window.location.replace('/');
+    return null;
+  },
 });
 
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin',
   component: AdminPage,
-  validateSearch: (search: Record<string, unknown>): { tab: string; bands?: string; bandBattleType?: string } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { tab: string; bands?: string; bandBattleType?: string; audience?: 'report' } => ({
     tab: typeof search.tab === 'string' ? search.tab : 'dashboard',
     // Deep-link filter for the users tab (e.g. from the Skill Distribution bars): comma-separated
     // bands, optionally judged in one battle type. Optional so a plain tab switch needn't carry it.
     ...(typeof search.bands === 'string' ? { bands: search.bands } : {}),
     ...(typeof search.bandBattleType === 'string' ? { bandBattleType: search.bandBattleType } : {}),
+    // Broadcast tab: use the player list handed over from the Players report (sessionStorage).
+    ...(search.audience === 'report' ? { audience: 'report' as const } : {}),
   }),
 });
 

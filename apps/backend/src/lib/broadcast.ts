@@ -15,7 +15,11 @@ import type { PrismaClient } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { sendDm } from './discord-notify.js';
 import { SUPPORTER_FLAG_SELECT, effectiveTiersOf } from './supporter-service.js';
-import { loadCalibrationQuestions, classifyWithModel, getClassificationModel } from './skill-classification-service.js';
+import {
+  loadCalibrationQuestions,
+  classifyWithModel,
+  getClassificationModel,
+} from './skill-classification-service.js';
 import { BroadcastAudienceSchema, type BroadcastAudience } from './broadcast-audience.js';
 
 // Re-export so existing importers (admin.ts) keep working from './broadcast.js'.
@@ -41,6 +45,8 @@ export async function resolveAdminAudience(
       deleted_at: null,
       // Respect the bot message policy: NO_BROADCASTS and NO_BOT_MESSAGES are both excluded.
       bot_message_policy: 'NORMAL',
+      // Explicit list from an admin report; the other filters still apply on top.
+      ...(audience.userIds ? { id: { in: audience.userIds } } : {}),
       ...(audience.activeOnly
         ? { last_login: { gte: new Date(Date.now() - audience.activeDays * 86_400_000) } }
         : {}),

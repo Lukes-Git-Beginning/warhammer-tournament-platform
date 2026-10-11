@@ -10,19 +10,22 @@ import {
   type SkillScope,
 } from '@/lib/api.js';
 import { BattleTypeSelect } from './BattleTypeSelect.js';
+import { PlayersReport } from './reports/PlayersReport.js';
+import { FunnelReport } from './reports/FunnelReport.js';
+import { HostsReport } from './reports/HostsReport.js';
+import { ScheduleReport } from './reports/ScheduleReport.js';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString(undefined, { timeZone: SITE_TZ, year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString(undefined, {
+    timeZone: SITE_TZ,
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
-function UserRow({
-  user,
-  extra,
-}: {
-  user: AdminEngagementUser;
-  extra?: ReactNode;
-}) {
+function UserRow({ user, extra }: { user: AdminEngagementUser; extra?: ReactNode }) {
   return (
     <tr className="border-t border-rizzotto-iron-800">
       <td className="px-3 py-2">
@@ -55,7 +58,9 @@ function UnderratedSection() {
   return (
     <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">Underrated players</h3>
+        <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">
+          Underrated players
+        </h3>
         <BattleTypeSelect value={scope} onChange={setScope} />
       </div>
       <p className="mb-3 text-xs text-stone-500">
@@ -112,7 +117,9 @@ function UnderratedSection() {
                     <td className="px-3 py-2 text-stone-300">
                       {p.dataBand} {p.dataBandName}
                     </td>
-                    <td className="px-3 py-2 text-stone-400">{Math.round(p.dataWinChance * 100)}%</td>
+                    <td className="px-3 py-2 text-stone-400">
+                      {Math.round(p.dataWinChance * 100)}%
+                    </td>
                     <td className="px-3 py-2">
                       <span className="font-semibold text-rizzotto-gold-400">
                         +{bandGap} band{bandGap === 1 ? '' : 's'}
@@ -150,10 +157,12 @@ function NotSteamVerifiedSection() {
 
   return (
     <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
-      <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">Not Steam-verified</h3>
+      <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">
+        Not Steam-verified
+      </h3>
       <p className="mb-3 text-xs text-stone-500">
-        Registered users who have not linked and verified their Steam account yet — they can&rsquo;t be
-        matched into Steam-gated play. {data.notSteamVerified.length} total.
+        Registered users who have not linked and verified their Steam account yet — they can&rsquo;t
+        be matched into Steam-gated play. {data.notSteamVerified.length} total.
       </p>
       {data.notSteamVerified.length === 0 ? (
         <p className="py-4 text-center text-sm text-stone-500">Everyone is verified. 🎉</p>
@@ -193,7 +202,9 @@ function VerifiedNeverPlayedSection() {
 
   return (
     <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
-      <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">Verified, never played</h3>
+      <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">
+        Verified, never played
+      </h3>
       <p className="mb-3 text-xs text-stone-500">
         Fully registered and Steam-verified users who have never completed a game — dormant accounts
         worth a nudge. {data.verifiedNeverPlayed.length} total.
@@ -252,16 +263,21 @@ function NotInDiscordSection() {
     queryFn: getAdminNotInDiscordReport,
   });
 
-  if (isLoading) return <div className="py-8 text-center text-stone-400 text-sm">Checking Discord membership…</div>;
+  if (isLoading)
+    return (
+      <div className="py-8 text-center text-stone-400 text-sm">Checking Discord membership…</div>
+    );
   if (error) return <EngagementError />;
   if (!data) return null;
 
   return (
     <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
-      <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">Registered, not in Discord</h3>
+      <h3 className="font-display text-lg font-semibold text-rizzotto-gold-500">
+        Registered, not in Discord
+      </h3>
       <p className="mb-3 text-xs text-stone-500">
-        Fully registered (Steam-verified) players who are not members of the Discord server — an invite
-        list. {data.configured ? `${data.users.length} total.` : ''}
+        Fully registered (Steam-verified) players who are not members of the Discord server — an
+        invite list. {data.configured ? `${data.users.length} total.` : ''}
       </p>
       {!data.configured ? (
         <p className="py-4 text-center text-sm text-stone-500">
@@ -294,6 +310,10 @@ function NotInDiscordSection() {
 
 // N10 — split the previously-stacked reports into sub-tabs to cut down on scrolling.
 const SUB_TABS = [
+  { key: 'players', label: 'Players' },
+  { key: 'funnel', label: 'Funnel' },
+  { key: 'hosts', label: 'Hosts' },
+  { key: 'schedule', label: 'Schedule' },
   { key: 'underrated', label: 'Underrated' },
   { key: 'notVerified', label: 'Not verified' },
   { key: 'neverPlayed', label: 'Never played' },
@@ -301,26 +321,59 @@ const SUB_TABS = [
 ] as const;
 type SubTab = (typeof SUB_TABS)[number]['key'];
 
+/** Report window (days; 0 = all time) for the Players / Hosts / Schedule reports. */
+const WINDOWS = [
+  { days: 7, label: '7 days' },
+  { days: 30, label: '30 days' },
+  { days: 90, label: '90 days' },
+  { days: 365, label: '1 year' },
+  { days: 0, label: 'All time' },
+];
+const WINDOWED: SubTab[] = ['players', 'hosts', 'schedule'];
+
 export function AdminReportsTab() {
-  const [sub, setSub] = useState<SubTab>('underrated');
+  const [sub, setSub] = useState<SubTab>('players');
+  const [days, setDays] = useState(30);
   return (
     <div className="space-y-6">
-      <div className="inline-flex gap-1 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-1">
-        {SUB_TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setSub(t.key)}
-            className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
-              sub === t.key
-                ? 'bg-rizzotto-gold-600/20 text-rizzotto-gold-300'
-                : 'text-stone-400 hover:text-stone-200'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex flex-wrap gap-1 rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-1">
+          {SUB_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setSub(t.key)}
+              className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+                sub === t.key
+                  ? 'bg-rizzotto-gold-600/20 text-rizzotto-gold-300'
+                  : 'text-stone-400 hover:text-stone-200'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {WINDOWED.includes(sub) && (
+          <label className="flex items-center gap-2 text-xs text-stone-400">
+            Window
+            <select
+              value={days}
+              onChange={(e) => setDays(Number(e.target.value))}
+              className="rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200"
+            >
+              {WINDOWS.map((w) => (
+                <option key={w.days} value={w.days}>
+                  {w.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
+      {sub === 'players' && <PlayersReport days={days} />}
+      {sub === 'funnel' && <FunnelReport days={days} />}
+      {sub === 'hosts' && <HostsReport days={days} />}
+      {sub === 'schedule' && <ScheduleReport days={days} />}
       {sub === 'underrated' && <UnderratedSection />}
       {sub === 'notVerified' && <NotSteamVerifiedSection />}
       {sub === 'neverPlayed' && <VerifiedNeverPlayedSection />}

@@ -1,12 +1,15 @@
 import { useState } from 'react';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { broadcastAdmin, type BroadcastAudience, type SkillScope } from '@/lib/api';
+import { BROADCAST_LIST_KEY, type BroadcastListHandoff } from '@/lib/player-report';
 import { BattleTypeSelect } from './BattleTypeSelect.js';
 
 type Tier = 'supporter' | 'lord' | 'champion';
 
 const inputClass =
   'w-full rounded border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-rizzotto-gold-500 focus:outline-none';
-const labelClass = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80';
+const labelClass =
+  'mb-1 block text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80';
 const chip = (active: boolean) =>
   `rounded border px-3 py-1 text-sm transition-colors ${
     active
@@ -28,7 +31,37 @@ export function BroadcastDmTab() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  const audience = (): BroadcastAudience => ({ activeOnly, activeDays, bands, bandBattleType, tiers });
+  // A player list handed over from the Players report ("Use as broadcast audience").
+  const search = useSearch({ from: '/admin' });
+  const navigate = useNavigate({ from: '/admin' });
+  const [reportList, setReportList] = useState<BroadcastListHandoff | null>(() => {
+    if (search.audience !== 'report') return null;
+    try {
+      const raw = sessionStorage.getItem(BROADCAST_LIST_KEY);
+      return raw ? (JSON.parse(raw) as BroadcastListHandoff) : null;
+    } catch {
+      return null;
+    }
+  });
+  const dropReportList = () => {
+    setReportList(null);
+    setCount(null);
+    try {
+      sessionStorage.removeItem(BROADCAST_LIST_KEY);
+    } catch {
+      /* storage unavailable */
+    }
+    void navigate({ search: { tab: 'broadcast' } });
+  };
+
+  const audience = (): BroadcastAudience => ({
+    activeOnly,
+    activeDays,
+    bands,
+    bandBattleType,
+    tiers,
+    ...(reportList ? { userIds: reportList.userIds } : {}),
+  });
 
   const toggle = <T,>(setter: React.Dispatch<React.SetStateAction<T[]>>, val: T) =>
     setter((prev) => (prev.includes(val) ? prev.filter((x) => x !== val) : [...prev, val]));
@@ -57,7 +90,9 @@ export function BroadcastDmTab() {
     setStatus(null);
     try {
       const r = await broadcastAdmin(message, audience(), false);
-      setStatus(`Sending to ${r.count} recipient(s). They will receive it over the next minute or two.`);
+      setStatus(
+        `Sending to ${r.count} recipient(s). They will receive it over the next minute or two.`,
+      );
     } catch (e) {
       setStatus((e as Error).message);
     } finally {
@@ -65,15 +100,18 @@ export function BroadcastDmTab() {
     }
   };
 
-  const noFilters = !activeOnly && bands.length === 0 && tiers.length === 0;
+  const noFilters = !reportList && !activeOnly && bands.length === 0 && tiers.length === 0;
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <section>
-        <h3 className="mb-1 font-display text-base font-semibold text-rizzotto-gold-400">Broadcast a DM</h3>
+        <h3 className="mb-1 font-display text-base font-semibold text-rizzotto-gold-400">
+          Broadcast a DM
+        </h3>
         <p className="mb-4 text-xs text-stone-500">
-          Sends a direct message from the bot to everyone matching the filters below. Filters combine (AND); leave
-          them all off to reach every registered player. Use sparingly, one send per hour.
+          Sends a direct message from the bot to everyone matching the filters below. Filters
+          combine (AND); leave them all off to reach every registered player. Use sparingly, one
+          send per hour.
         </p>
         <textarea
           rows={5}
@@ -84,18 +122,42 @@ export function BroadcastDmTab() {
         />
       </section>
 
+      {reportList && (
+        <section className="flex flex-wrap items-center gap-3 rounded border border-rizzotto-gold-700/60 bg-rizzotto-gold-500/10 px-3 py-2 text-sm">
+          <span className="text-stone-200">
+            Audience from the Players report:{' '}
+            <strong className="text-rizzotto-gold-300">{reportList.label}</strong> (
+            {reportList.userIds.length} players). Players who opted out of broadcasts are skipped;
+            the filters below still apply on top.
+          </span>
+          <button
+            type="button"
+            onClick={dropReportList}
+            className="rounded border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-800"
+          >
+            Remove list
+          </button>
+        </section>
+      )}
+
       <section className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className={labelClass}>Activity</label>
           <label className="flex items-center gap-2 text-sm text-stone-300">
-            <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={activeOnly}
+              onChange={(e) => setActiveOnly(e.target.checked)}
+            />
             Only players active in the last
             <input
               type="number"
               min={1}
               max={365}
               value={activeDays}
-              onChange={(e) => setActiveDays(Math.max(1, Math.min(365, Number(e.target.value) || 30)))}
+              onChange={(e) =>
+                setActiveDays(Math.max(1, Math.min(365, Number(e.target.value) || 30)))
+              }
               disabled={!activeOnly}
               className="w-16 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-sm text-stone-200 disabled:opacity-40"
             />
@@ -106,7 +168,12 @@ export function BroadcastDmTab() {
           <label className={labelClass}>Supporter tier</label>
           <div className="flex flex-wrap gap-2">
             {TIERS.map((t) => (
-              <button key={t} type="button" onClick={() => toggle(setTiers, t)} className={chip(tiers.includes(t))}>
+              <button
+                key={t}
+                type="button"
+                onClick={() => toggle(setTiers, t)}
+                className={chip(tiers.includes(t))}
+              >
                 {t}
               </button>
             ))}
@@ -117,7 +184,12 @@ export function BroadcastDmTab() {
           <div className="flex flex-wrap items-center gap-2">
             <BattleTypeSelect value={bandBattleType} onChange={setBandBattleType} label="Band in" />
             {BANDS.map((b) => (
-              <button key={b} type="button" onClick={() => toggle(setBands, b)} className={chip(bands.includes(b))}>
+              <button
+                key={b}
+                type="button"
+                onClick={() => toggle(setBands, b)}
+                className={chip(bands.includes(b))}
+              >
                 Band {b}
               </button>
             ))}
