@@ -45,6 +45,8 @@ interface SimResult {
   immediateRematches: SimPairing[];
   maxGap: number;
   gapGE3: SimPairing[];
+  /** Sum over completion steps of players sitting idle (unpaired, not finished) — the waiting cost. */
+  idleSteps: number;
 }
 
 /** Deterministic mulberry32 PRNG seeded from a string. */
@@ -68,8 +70,17 @@ function makeRand(seed: string): () => number {
  * (order chosen by the seeded PRNG) and re-planning after each completion — modelling the
  * real tick that fires on every match completion. Winners are irrelevant to pairing, so
  * they are left unset.
+ *
+ * `slow` players are laggards: a match involving one of them only completes once no other match
+ * is in progress, so they (and whoever they play) fall rounds behind the field — the shape of a
+ * player whose opponent dropped and who had to replay his round late.
  */
-function simulate(participants: SimParticipant[], rounds: number, seed: string): SimResult {
+function simulate(
+  participants: SimParticipant[],
+  rounds: number,
+  seed: string,
+  opts: { slow?: Set<string> } = {},
+): SimResult {
   const bandOf = new Map(participants.map((p) => [p.userId, p.band]));
   const bp: BalancedParticipant[] = participants.map((p) => ({ userId: p.userId, band: p.band }));
   const rand = makeRand(seed);
@@ -81,12 +92,27 @@ function simulate(participants: SimParticipant[], rounds: number, seed: string):
   const lastMetRound = new Map<string, number>(); // "a|b" -> latest round they met
   const immediateRematches: SimPairing[] = [];
 
+  const slow = opts.slow ?? new Set<string>();
+  const isSlow = (m: BalancedMatchRow): boolean =>
+    (m.player1_id !== null && slow.has(m.player1_id)) || (m.player2_id !== null && slow.has(m.player2_id));
   const completeOne = (): boolean => {
     const active = matches.filter((m) => m.status === 'ONGOING');
     if (active.length === 0) return false;
-    const pick = active[Math.floor(rand() * active.length)]!;
+    const fast = active.filter((m) => !isSlow(m));
+    const pool = fast.length > 0 ? fast : active;
+    const pick = pool[Math.floor(rand() * pool.length)]!;
     pick.status = 'COMPLETED';
     return true;
+  };
+  let idleSteps = 0;
+  const countIdle = (): void => {
+    const busy = new Set<string>();
+    for (const m of matches)
+      if (m.status === 'ONGOING') {
+        if (m.player1_id) busy.add(m.player1_id);
+        if (m.player2_id) busy.add(m.player2_id);
+      }
+    for (const p of participants) if (!busy.has(p.userId) && played.get(p.userId)! < rounds) idleSteps += 1;
   };
 
   let guard = 0;
@@ -120,6 +146,7 @@ function simulate(participants: SimParticipant[], rounds: number, seed: string):
       played.set(b.player_id, played.get(b.player_id)! + 1);
       matches.push({ round: b.round, player1_id: b.player_id, player2_id: null, status: 'BYE' });
     }
+    countIdle();
     completeOne(); // stagger: advance time by one completion, then re-plan
   }
 
@@ -131,6 +158,7 @@ function simulate(participants: SimParticipant[], rounds: number, seed: string):
     immediateRematches,
     maxGap,
     gapGE3: pairings.filter((p) => p.gap >= 3),
+    idleSteps,
   };
 }
 
@@ -215,6 +243,52 @@ describe('BaLi 2.0 simulation — Enticity-shaped skewed field', () => {
       console.log(
         `[bali-sim ${seed}] gap distribution ${JSON.stringify(dist)}, ${rematches} eventual ` +
           `rematch(es), ${r.immediateRematches.length} last-resort replay(s), ${r.byes.length} bye(s)`,
+      );
+    }
+  });
+});
+
+describe('BaLi 2.0 simulation — laggards two or more rounds behind', () => {
+  // The perfect-balance field (2026-10-12, 16 at start): a lone b2, four b3s, three b4s, eight b5s.
+  // Stelios (b4) fell behind and whoever he played fell behind with him; the planner used to close
+  // the later round pools before the laggards got there → forced rematches + avoidable byes.
+  const perfectBalance = [
+    ...band('t', 5, 8), // Maze/Dat/Boss/BERRSERK/Ahzek/Chosen/TL/FoK
+    ...band('s', 4, 3), // Stelios/Arkhan/Tobiaz
+    ...band('m', 3, 4), // Briefumschlag/sabayua/anderland/Racar
+    ...band('l', 2, 1), // Dniper
+  ];
+  const scenarios: Array<{ name: string; field: SimParticipant[]; slow: string[] }> = [
+    { name: 'perfect-balance, one b4 laggard', field: perfectBalance, slow: ['s1'] },
+    { name: 'perfect-balance, odd field, one b4 laggard', field: perfectBalance.slice(0, 15), slow: ['s1'] },
+    { name: 'perfect-balance, b4 + b3 laggards', field: perfectBalance, slow: ['s1', 'm1'] },
+    { name: 'enticity-shaped, one b3 laggard', field: [...band('t', 5, 5), ...band('m', 3, 6), ...band('l', 2, 2), ...band('n', 1, 2)], slow: ['m1'] },
+  ];
+
+  it('never forces an immediate rematch on a laggard pair', () => {
+    for (const sc of scenarios)
+      for (const seed of SEEDS) {
+        const r = simulate(sc.field, 5, seed, { slow: new Set(sc.slow) });
+        expect(r.immediateRematches, `${sc.name} @ ${seed}`).toEqual([]);
+        for (const [uid, n] of r.played) expect(n, `${uid} rounds, ${sc.name} @ ${seed}`).toBe(5);
+      }
+  });
+
+  it('reports byes, rematches and waiting (visibility, not an assertion)', () => {
+    const withoutLaggards = scenarios.map((sc) => ({ ...sc, name: `${sc.name.split(',')[0]} (no laggard)`, slow: [] }));
+    for (const sc of [...scenarios, ...withoutLaggards.slice(0, 2), withoutLaggards[3]!]) {
+      let byes = 0, eventual = 0, immediate = 0, ge3 = 0, idle = 0;
+      for (const seed of SEEDS) {
+        const r = simulate(sc.field, 5, seed, { slow: new Set(sc.slow) });
+        byes += r.byes.length;
+        eventual += r.pairings.filter((p) => p.rematch).length - r.immediateRematches.length;
+        immediate += r.immediateRematches.length;
+        ge3 += r.gapGE3.length;
+        idle += r.idleSteps;
+      }
+      console.log(
+        `[bali-sim laggards] ${sc.name}: over ${SEEDS.length} seeds — ${byes} bye(s), ${immediate} immediate + ` +
+          `${eventual} eventual rematch(es), ${ge3} Δ≥3, ${idle} idle player-steps`,
       );
     }
   });

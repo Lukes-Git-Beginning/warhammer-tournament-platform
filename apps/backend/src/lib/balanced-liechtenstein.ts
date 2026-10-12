@@ -19,7 +19,8 @@
 //    smallest skill distance first.
 //  - Pair the earliest COMPATIBLE opponent, not merely the earliest available: a
 //    cross-band jump of two or more bands is DEFERRED while a strictly-closer
-//    opponent is still due to arrive in this pool (finishing the previous round).
+//    opponent is still due to arrive in this pool (finishing the previous round, or
+//    further behind — anyone who has not reached this pool yet will).
 //    Two New players who just met wait for a Beginner to free up instead of being
 //    shoved three bands into the lone Advanced player. The hold resolves over the
 //    next ticks as the pool fills; a big jump only happens once nothing closer can
@@ -78,7 +79,7 @@ const MUST_PAIR_BONUS = 100_000_000;
 
 /** Terminal statuses that count as a played round toward a player's progress. A
  *  PENDING_BYE advances the holder too (so the tournament flows), but stays reclaimable
- *  into a real match until the holder is paired forward — see the tick's reclaim pass. */
+ *  into a real match until it settles — see the tick's reclaim pass. */
 const ADVANCING = new Set(['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST', 'CATCHUP_BYE', 'PENDING_BYE']);
 /** Non-terminal statuses: the player is assigned/playing, not waiting for a new match. */
 const ACTIVE = new Set(['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED']);
@@ -173,7 +174,8 @@ function metBefore(a: Waiter, b: Waiter): boolean {
  * Pair one round pool under BaLi 2.0's "provisional optimum, commit-when-free" model.
  *
  * The pool's FULL field is modelled at once: the FREE players waiting now (`waiting`)
- * plus the INCOMING players still finishing the previous round (`incoming`). A single
+ * plus every INCOMING player still due to arrive (`incoming`: finishing the previous round,
+ * or further behind). A single
  * global minimum-cost matching (Edmonds' Blossom over the progressive `pairCost`) is
  * computed across the whole field, and only edges between two FREE players are COMMITTED
  * now. A free player whose optimal partner is still incoming is HELD (no match), to be
@@ -271,19 +273,26 @@ function pairPool(
     return { pairs, byes };
   };
 
-  // Play-up profile of a matching: (worst band-gap, #gaps≥2, total gap). Lower is better.
-  const profile = (m: { pairs: [Waiter, Waiter][] }): [number, number, number] => {
-    let worst = 0, heavy = 0, total = 0;
+  // Play-up profile of a matching: (#immediate rematches, worst band-gap, #gaps≥2, total gap). Lower
+  // is better. An immediate rematch ranks first: it is the closed pool's last resort, so a bye that
+  // forces two players who just met to replay must lose to any bye that only costs a play-up (the
+  // perfect-balance R4 case: byeing the weakest b3 left the two b4s only each other).
+  type Profile = [number, number, number, number];
+  const profile = (m: { pairs: [Waiter, Waiter][] }): Profile => {
+    let replays = 0, worst = 0, heavy = 0, total = 0;
     for (const [a, b] of m.pairs) {
+      if (isImmediateRematch(a, b)) replays += 1;
       const g = Math.abs(a.band - b.band);
       if (g > worst) worst = g;
       if (g >= 2) heavy += 1;
       total += g;
     }
-    return [worst, heavy, total];
+    return [replays, worst, heavy, total];
   };
-  const strictlyLess = (x: [number, number, number], y: [number, number, number]): boolean =>
-    x[0] !== y[0] ? x[0] < y[0] : x[1] !== y[1] ? x[1] < y[1] : x[2] < y[2];
+  const strictlyLess = (x: Profile, y: Profile): boolean => {
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i]! < y[i]!;
+    return false;
+  };
 
   // #36 cost-neutral DE-HOLD. The base matching (with the protect bonus) can HOLD every free
   // player when enough same-band players are still incoming — total tie-break bonus 30−5p is
@@ -372,7 +381,7 @@ function pairPool(
   if (closed && free.length % 2 === 1 && pickBye) {
     const ranked = pickBye(free.map((w) => w.userId)); // eligible byes, weakest first
     let chosen: { m: { pairs: [Waiter, Waiter][]; byes: Waiter[] }; byed: Waiter } | null = null;
-    let chosenProfile: [number, number, number] | null = null;
+    let chosenProfile: Profile | null = null;
     for (const id of ranked) {
       const idx = free.findIndex((w) => w.userId === id);
       if (idx < 0) continue;
@@ -485,32 +494,39 @@ export function planPairings(
     lastOpponentId: pr.lastOpponentId,
     pastOpponents: pr.pastOpponents,
   });
+  // Every unfinished player's pool position: an idle player waits in pool completed+1, a playing one
+  // joins pool activeRound+1 once done. Past the final round = finished (no more pairing).
+  const unfinished: Array<{ pr: Progress; pos: number; active: boolean }> = [];
   const waitingByRound = new Map<number, Waiter[]>();
-  const incomingByRound = new Map<number, Waiter[]>(); // pool round → players still arriving
   for (const pr of progress.values()) {
-    if (pr.activeRound !== null) {
-      // Currently playing round `activeRound` → will join pool activeRound+1 next.
-      const next = pr.activeRound + 1;
-      if (next <= roundsCount) {
-        const arr = incomingByRound.get(next) ?? [];
-        arr.push(asWaiter(pr));
-        incomingByRound.set(next, arr);
-      }
-      continue;
-    }
-    if (pr.completed >= roundsCount) continue; // done — no more pairing
-    const round = pr.completed + 1;
-    const list = waitingByRound.get(round) ?? [];
+    const active = pr.activeRound !== null;
+    const pos = active ? pr.activeRound! + 1 : pr.completed + 1;
+    if (pos > roundsCount) continue;
+    unfinished.push({ pr, pos, active });
+    if (active) continue;
+    const list = waitingByRound.get(pos) ?? [];
     list.push(asWaiter(pr));
-    waitingByRound.set(round, list);
+    waitingByRound.set(pos, list);
   }
+  // A pool's incoming field is EVERYONE who will still arrive there: the players finishing the previous
+  // round, and anyone further behind (idle in an earlier pool, or playing an earlier round) — every
+  // player plays every round, so they all reach this pool eventually. Counting only the previous round
+  // closed later pools too early: a pair two rounds behind found nobody left but each other and was
+  // forced into back-to-back rematches while the players who could have waited for them took byes
+  // (perfect-balance, 2026-10-12). A player further behind has not settled the opponent they will
+  // "just have played" on arrival, so no edge of theirs is an immediate rematch yet (lastOpponentId
+  // null); a past meeting still carries the eventual-rematch cost via pastOpponents.
+  const incomingFor = (round: number): Waiter[] =>
+    unfinished
+      .filter((u) => u.pos < round || (u.pos === round && u.active))
+      .map((u) => (u.pos === round ? asWaiter(u.pr) : { ...asWaiter(u.pr), lastOpponentId: null }));
 
   const pairings: PlannedPairing[] = [];
   const byes: PlannedBye[] = [];
   for (const [round, waiting] of waitingByRound) {
     const { pairs, byes: poolByes } = pairPool(
       waiting,
-      incomingByRound.get(round) ?? [],
+      incomingFor(round),
       `${tournamentId}:${round}`,
       pickBye ? (ids) => pickBye(ids, round) : undefined,
       noBye,

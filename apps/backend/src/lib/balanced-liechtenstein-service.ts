@@ -49,9 +49,9 @@ const RELEASE_LOCK =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
 /** Match statuses that count as a played (advancing) round toward a player's depth.
- *  PENDING_BYE advances provisionally (it crystallises into BYE/CATCHUP_BYE once the
- *  holder is paired forward, and a final-round bye is scored outright), so a complete
- *  player never carries an unresolved one. */
+ *  PENDING_BYE advances provisionally: it crystallises into BYE/CATCHUP_BYE once the holder
+ *  is paired forward — a final-round one once the holder's division is generated or the group
+ *  phase is through (its point already counts for the seeding, see scoreProvisionalFinalByes). */
 const BL_ADVANCING = new Set(['COMPLETED', 'BYE', 'FORFEIT', 'NO_CONTEST', 'CATCHUP_BYE', 'PENDING_BYE']);
 /** Non-terminal statuses: the player is assigned/playing, not finished. */
 const BL_ACTIVE = new Set(['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED']);
@@ -77,6 +77,33 @@ export function computeRestByePlayers(
     }
   }
   return set;
+}
+
+/**
+ * Score a FINAL-round PENDING_BYE as the BYE it will crystallise into. A final-round bye stays
+ * provisional (reclaimable) until its holder's division is generated, but the holder already counts
+ * as complete for playoff readiness — so the seeding that generates the division must already see the
+ * bye's point. A still-catching-up late joiner's bye crystallises as a 0-point CATCHUP_BYE, so theirs
+ * stays unscored. Pure; returns the rows unchanged otherwise.
+ */
+export function scoreProvisionalFinalByes<
+  M extends { round: number; status: string; player1_id: string | null; player2_id: string | null; winner_id: string | null },
+>(matches: M[], roundsCount: number, lateJoined: Set<string>): M[] {
+  const playedReal = new Set<string>();
+  for (const m of matches) {
+    if (m.status !== 'COMPLETED') continue;
+    if (m.player1_id) playedReal.add(m.player1_id);
+    if (m.player2_id) playedReal.add(m.player2_id);
+  }
+  return matches.map((m) =>
+    m.status === 'PENDING_BYE' &&
+    m.round >= roundsCount &&
+    m.player1_id !== null &&
+    m.player2_id === null &&
+    !(lateJoined.has(m.player1_id) && !playedReal.has(m.player1_id))
+      ? { ...m, status: 'BYE', winner_id: m.player1_id }
+      : m,
+  );
 }
 
 /**
@@ -208,6 +235,9 @@ export async function runBalancedPairingTick(
   const pendingKey = `rizzotto:bl:tick:${tournamentId}:pending`;
   const token = randomUUID();
   let roundsCount: number;
+  // Set when this tick generated a playoff division → run once more so the final-round byes of the
+  // players it just seated crystallise right away (instead of on the next trigger).
+  let rerun = false;
 
   // Guard + lock acquisition are wrapped: nearly every caller invokes this fire-and-forget, so a
   // rejecting Prisma or Redis call here would take the whole process down instead of skipping a
@@ -254,11 +284,20 @@ export async function runBalancedPairingTick(
       player1_id: string;
       player2_id: string;
     }> = [];
-    // Final-round BYE holders (scored BYE only) — DM'd separately with a playoff outlook.
-    const finalRoundByePlayers: string[] = [];
+    // Final-round BYE holders (scored BYE only) — DM'd separately with a playoff outlook. `outsidePlayoffs`
+    // = their division was already generated without them, so the outlook is no longer provisional.
+    const finalRoundByePlayers: Array<{ id: string; outsidePlayoffs: boolean }> = [];
     // True once any row was created OR a PENDING_BYE was reclaimed/crystallised, so a
     // tick that only resolves byes still pushes a live bracket update to the clients.
     let mutated = false;
+    // Members of every already-generated playoff division, seated or not (playoff generation only runs
+    // after this loop, so the set is stable for the whole tick).
+    const generatedMembers = placedFromGeneratedEvents(
+      await fastify.prisma.tournamentEvent.findMany({
+        where: { tournament_id: tournamentId, type: 'playoff_division_generated' },
+        select: { payload: true },
+      }),
+    );
 
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
       const [roster, matches] = await Promise.all([
@@ -318,12 +357,27 @@ export async function runBalancedPairingTick(
         isCatchingUp(userId)
           ? { status: 'CATCHUP_BYE' as MatchStatus, winner: null }
           : { status: 'BYE' as MatchStatus, winner: userId };
+      // The whole group phase is through: every competitor has all rounds behind them (a provisional
+      // bye counts) and nobody is still playing — so nobody can turn up needing a partner anymore.
+      const groupDone = participants.every((p) => {
+        const own = matches.filter(
+          (m) => (m.phase === null || m.phase === 'SWISS') && (m.player1_id === p.user_id || m.player2_id === p.user_id),
+        );
+        return own.filter((m) => BL_ADVANCING.has(m.status)).length >= roundsCount && !own.some((m) => BL_ACTIVE.has(m.status));
+      });
+      // A PENDING_BYE is settled once nobody can reclaim it. Before the final round that is when its holder
+      // has moved on. A FINAL-round bye has no later round to move on to, so it stays provisional — a player
+      // whose final-round opponent drops can still turn it into a real game (perfect-balance: BERRSERK got a
+      // second final-round bye beside anderland's) — until the holder's playoff division has been generated
+      // (seated or not) or the whole group phase is through.
+      const finalised = (userId: string, round: number): boolean =>
+        movedOn(userId, round) || (round >= roundsCount && (generatedMembers.has(userId) || groupDone));
 
-      // Step A — crystallise any PENDING_BYE whose holder has moved on: it can no longer be
-      // reclaimed into a real match, so it becomes a scored bye (or a 0-point catch-up bye
-      // for a late joiner with no real game yet). Re-loop so the plan sees the fresh data.
+      // Step A — crystallise any PENDING_BYE that can no longer be reclaimed into a real match: it
+      // becomes a scored bye (or a 0-point catch-up bye for a late joiner with no real game yet).
+      // Re-loop so the plan sees the fresh data.
       const toCrystallise = matches.filter(
-        (m) => m.status === 'PENDING_BYE' && m.player1_id !== null && movedOn(m.player1_id, m.round),
+        (m) => m.status === 'PENDING_BYE' && m.player1_id !== null && finalised(m.player1_id, m.round),
       );
       if (toCrystallise.length > 0) {
         const crystallisedByes: Array<{ id: string; round: number; player1_id: string }> = [];
@@ -332,7 +386,16 @@ export async function runBalancedPairingTick(
           await fastify.prisma.match.update({ where: { id: m.id }, data: { status, winner_id: winner } });
           // Only a real (scored) BYE earns the encouraging DM — a 0-point CATCHUP_BYE is a
           // late-join placeholder, not a "free win", so it stays silent.
-          if (status === 'BYE') crystallisedByes.push({ id: m.id, round: m.round, player1_id: m.player1_id! });
+          if (status !== 'BYE') continue;
+          if (m.round >= roundsCount) {
+            // Final-round bye → the playoff-outlook DM (below). A holder already seated in a playoff got
+            // the pairing DM instead.
+            if (!movedOn(m.player1_id!, m.round)) {
+              finalRoundByePlayers.push({ id: m.player1_id!, outsidePlayoffs: generatedMembers.has(m.player1_id!) });
+            }
+          } else {
+            crystallisedByes.push({ id: m.id, round: m.round, player1_id: m.player1_id! });
+          }
         }
         // The provisional PENDING_BYE was intentionally silent (it could still be reclaimed);
         // now that it is final, DM the bye player — closes the "BaLi byes never notify" gap.
@@ -414,7 +477,7 @@ export async function runBalancedPairingTick(
             (m.status === 'PENDING_BYE' || m.status === 'CATCHUP_BYE') &&
             m.player1_id !== null &&
             m.player2_id === null &&
-            !movedOn(m.player1_id, m.round),
+            !finalised(m.player1_id, m.round),
         );
         if (restingRows.length >= 2) {
           const committedGaps = matches
@@ -524,7 +587,7 @@ export async function runBalancedPairingTick(
             m.player1_id !== null &&
             m.player1_id !== b.player_id &&
             !reclaimUsed.has(m.id) &&
-            !movedOn(m.player1_id, m.round) &&
+            !finalised(m.player1_id, m.round) &&
             isLegalReclaim(m.player1_id),
         );
         if (pb) {
@@ -569,39 +632,20 @@ export async function runBalancedPairingTick(
         });
       }
       for (const b of freshByes) {
-        // A non-final bye is PROVISIONAL (PENDING_BYE): it can still be pulled into a real
-        // match if a same-depth opponent turns up (Step B). A final-round bye has no next
-        // round to reclaim into, so it scores immediately.
-        if (b.round >= roundsCount) {
-          const { status, winner } = byeStatusFor(b.player_id);
-          const byeId = randomUUID();
-          rows.push({
-            id: byeId,
-            tournament_id: tournamentId,
-            round: b.round,
-            match_number: nextNumber++,
-            player1_id: b.player_id,
-            player2_id: null,
-            status,
-            winner_id: winner,
-            phase: null as MatchPhase | null,
-          });
-          // A final-round scored BYE is final immediately → DM the player with a playoff
-          // outlook (below). A 0-point catch-up bye stays silent.
-          if (status === 'BYE') finalRoundByePlayers.push(b.player_id);
-        } else {
-          rows.push({
-            id: randomUUID(),
-            tournament_id: tournamentId,
-            round: b.round,
-            match_number: nextNumber++,
-            player1_id: b.player_id,
-            player2_id: null,
-            status: 'PENDING_BYE' as MatchStatus,
-            winner_id: null,
-            phase: null as MatchPhase | null,
-          });
-        }
+        // Every bye starts PROVISIONAL (PENDING_BYE), the final round's too: it can still be pulled into
+        // a real match if a same-depth opponent turns up (Step B), and crystallises in Step A once
+        // nobody can reclaim it anymore (see `finalised`).
+        rows.push({
+          id: randomUUID(),
+          tournament_id: tournamentId,
+          round: b.round,
+          match_number: nextNumber++,
+          player1_id: b.player_id,
+          player2_id: null,
+          status: 'PENDING_BYE' as MatchStatus,
+          winner_id: null,
+          phase: null as MatchPhase | null,
+        });
       }
       if (rows.length === 0) break;
       await fastify.prisma.match.createMany({ data: rows });
@@ -643,9 +687,9 @@ export async function runBalancedPairingTick(
       if (tRow) {
         // finalRoundByePlayers are competitor ids — resolve each to its recipient(s) (both
         // members for a 2v2 team) and DM them; qualifiers is keyed by the same competitor id.
-        const recipientsBySlot = await resolveCompetitorRecipients(finalRoundByePlayers);
-        for (const competitorId of finalRoundByePlayers) {
-          const inPlayoffZone = qualifiers.has(competitorId);
+        const recipientsBySlot = await resolveCompetitorRecipients(finalRoundByePlayers.map((p) => p.id));
+        for (const { id: competitorId, outsidePlayoffs } of finalRoundByePlayers) {
+          const inPlayoffZone = !outsidePlayoffs && qualifiers.has(competitorId);
           for (const r of recipientsBySlot.get(competitorId) ?? []) {
             await notifyFinalRoundBye(
               { name: tRow.name, slug: tRow.slug, stream_url: tRow.stream_url },
@@ -667,6 +711,7 @@ export async function runBalancedPairingTick(
     if (!('error' in playoffResult) && playoffResult.finals > 0) {
       emitBracketUpdate(fastify.io, tournamentId);
       fastify.log.info({ tournamentId, ...playoffResult }, 'balanced division playoffs generated');
+      rerun = true;
     }
   } catch (err) {
     fastify.log.error({ err, tournamentId }, 'balanced pairing tick failed');
@@ -682,9 +727,11 @@ export async function runBalancedPairingTick(
 
   // A trigger that arrived while we held the lock flagged a re-run — process the now-latest state
   // so nothing is lost (e.g. the final withdrawal in a burst that just completed the field, which
-  // otherwise leaves the auto playoff-generation un-triggered).
-  if (redis && (await redis.get(pendingKey)) === '1') {
-    await redis.del(pendingKey);
+  // otherwise leaves the auto playoff-generation un-triggered). A tick that generated a division
+  // re-runs too; the recursion ends with the first tick that generates no new division.
+  const pending = redis ? (await redis.get(pendingKey)) === '1' : false;
+  if (rerun || pending) {
+    if (pending) await redis!.del(pendingKey);
     return runBalancedPairingTick(fastify, tournamentId);
   }
 }
@@ -987,9 +1034,10 @@ export async function provisionalPlayoffQualifiers(
   const roster = (
     await fastify.prisma.tournamentParticipant.findMany({
       where: { tournament_id: tournamentId, deleted_at: null, status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] } },
-      select: { user_id: true, team_id: true, skill_band: true, status: true },
+      select: { user_id: true, team_id: true, skill_band: true, status: true, late_joined: true },
     })
-  ).map((p) => ({ user_id: p.team_id ?? p.user_id, skill_band: p.skill_band, status: p.status }));
+  ).map((p) => ({ user_id: p.team_id ?? p.user_id, skill_band: p.skill_band, status: p.status, late_joined: p.late_joined }));
+  const lateJoinedIds = new Set(roster.filter((p) => p.late_joined).map((p) => p.user_id));
   const withdrawnIds = new Set(roster.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
   const active = roster.filter((p) => p.status !== 'WITHDREW');
   const anyCheckedIn = active.some((p) => p.status === 'CHECKED_IN');
@@ -997,7 +1045,8 @@ export async function provisionalPlayoffQualifiers(
   const contenderIds = new Set(contenders.map((p) => p.user_id));
 
   const participantIds = roster.map((p) => p.user_id);
-  const completed: CompletedMatchRecord[] = matches
+  // A still-provisional final-round bye already scores for the playoffs (see scoreProvisionalFinalByes).
+  const completed: CompletedMatchRecord[] = scoreProvisionalFinalByes(matches, roundsCount, lateJoinedIds)
     .filter(
       (m) =>
         (m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST') &&
@@ -1074,9 +1123,10 @@ export async function startBalancedPlayoffs(
         deleted_at: null,
         status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
       },
-      select: { user_id: true, team_id: true, skill_band: true, status: true },
+      select: { user_id: true, team_id: true, skill_band: true, status: true, late_joined: true },
     })
-  ).map((p) => ({ user_id: p.team_id ?? p.user_id, skill_band: p.skill_band, status: p.status }));
+  ).map((p) => ({ user_id: p.team_id ?? p.user_id, skill_band: p.skill_band, status: p.status, late_joined: p.late_joined }));
+  const lateJoinedIds = new Set(roster.filter((p) => p.late_joined).map((p) => p.user_id));
   const withdrawnIds = new Set(roster.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
   const active = roster.filter((p) => p.status !== 'WITHDREW');
   const anyCheckedIn = active.some((p) => p.status === 'CHECKED_IN');
@@ -1087,7 +1137,8 @@ export async function startBalancedPlayoffs(
 
   // Final Swiss standings → global rank (best = 1).
   const participantIds = roster.map((p) => p.user_id);
-  const completed: CompletedMatchRecord[] = matches
+  // A still-provisional final-round bye already scores for the playoffs (see scoreProvisionalFinalByes).
+  const completed: CompletedMatchRecord[] = scoreProvisionalFinalByes(matches, roundsCount, lateJoinedIds)
     .filter(
       (m) =>
         (m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST') &&
@@ -1393,14 +1444,16 @@ export async function describeBalancedPlayoffPreview(
         deleted_at: null,
         status: { in: ['REGISTERED', 'CHECKED_IN', 'WITHDREW'] },
       },
-      select: { user_id: true, team_id: true, skill_band: true, status: true, user: { select: { username: true } }, team: { select: { name: true } } },
+      select: { user_id: true, team_id: true, skill_band: true, status: true, late_joined: true, user: { select: { username: true } }, team: { select: { name: true } } },
     })
   ).map((p) => ({
     user_id: p.team_id ?? p.user_id, // competitor id (team for 2v2)
     skill_band: p.skill_band,
     status: p.status,
+    late_joined: p.late_joined,
     displayName: p.team?.name ?? p.user?.username ?? 'Unknown',
   }));
+  const lateJoinedIds = new Set(roster.filter((p) => p.late_joined).map((p) => p.user_id));
   const usernameById = new Map(roster.map((p) => [p.user_id, p.displayName]));
   const withdrawnIds = new Set(roster.filter((p) => p.status === 'WITHDREW').map((p) => p.user_id));
   const active = roster.filter((p) => p.status !== 'WITHDREW');
@@ -1408,7 +1461,8 @@ export async function describeBalancedPlayoffPreview(
   const contenders = anyCheckedIn ? active.filter((p) => p.status === 'CHECKED_IN') : active;
 
   const participantIds = roster.map((p) => p.user_id);
-  const completed: CompletedMatchRecord[] = matches
+  // A still-provisional final-round bye already scores for the playoffs (see scoreProvisionalFinalByes).
+  const completed: CompletedMatchRecord[] = scoreProvisionalFinalByes(matches, roundsCount, lateJoinedIds)
     .filter(
       (m) =>
         (m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST') &&

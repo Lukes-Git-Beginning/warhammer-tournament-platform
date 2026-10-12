@@ -11,6 +11,7 @@ import {
   runBalancedPairingTick,
   startBalancedPlayoffs,
   describeBalancedPlayoffPreview,
+  scoreProvisionalFinalByes,
 } from '../lib/balanced-liechtenstein-service.js';
 import {
   generateSwissRound,
@@ -250,6 +251,7 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
             team_id: true,
             status: true,
             skill_band: true,
+            late_joined: true,
           },
         });
 
@@ -262,7 +264,16 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
           participants.filter((p) => p.status === 'WITHDREW').map((p) => resolveCompetitorId(p)),
         );
 
-        const completedMatches = matches
+        // BaLi: a still-provisional final-round bye already scores, exactly as in the playoff seeding.
+        const scoredMatches =
+          tournament.format === TournamentFormat.BALANCED_LIECHTENSTEIN
+            ? scoreProvisionalFinalByes(
+                matches,
+                tournament.rounds_count ?? 5,
+                new Set(participants.filter((p) => p.late_joined).map((p) => resolveCompetitorId(p))),
+              )
+            : matches;
+        const completedMatches = scoredMatches
           .filter((m) =>
             (m.status === 'COMPLETED' || m.status === 'BYE' || m.status === 'FORFEIT' || m.status === 'NO_CONTEST') &&
             (m.phase === null || m.phase === 'SWISS'),

@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.24.1] — 2026-10-12
+
+### Fixed
+- **Balanced Liechtenstein waits for players who fell behind.** When someone is more than one round behind (for example because their opponent dropped and they had to replay a round), the later rounds now keep a spot open for them instead of handing out byes too early. Two late players are no longer left with only each other, round after round.
+- **Final-round byes in Balanced Liechtenstein stay open until the round is settled.** If a final-round opponent drops, the player left without a game now plays the player who had the bye, instead of both getting one. The bye point counts for the playoff seeding right away, so playoffs still start on time.
+- **The last bye of a round no longer forces a rematch.** If giving the bye to one player would make two others replay the opponent they just faced, the bye goes elsewhere.
+
 ## [2.24.0] — 2026-10-11
 
 ### Added
