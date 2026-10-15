@@ -46,6 +46,46 @@ export async function notifyChampionshipSeeded(
 }
 
 /**
+ * The final was just seeded: tell each confirmed invitee who missed the field that they are on the
+ * reserve and where in line, so they keep the date free — last-minute drops are common, and a
+ * promoted reserve has to be ready at the start. Ordered next-in-line first.
+ */
+export async function notifyChampionshipReserves(
+  prisma: PrismaClient,
+  tournamentId: string,
+  orderedUserIds: string[],
+): Promise<void> {
+  if (!isBotConfigured() || orderedUserIds.length === 0) return;
+  try {
+    const t = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { name: true, slug: true, start_date: true },
+    });
+    if (!t) return;
+    const url = `${baseUrl()}/tournaments/${t.slug}`;
+    const startTs = Math.floor(t.start_date.getTime() / 1000);
+    const users = await prisma.user.findMany({
+      where: { id: { in: orderedUserIds } },
+      select: { id: true, discord_id: true },
+    });
+    const discById = new Map(users.map((u) => [u.id, u.discord_id]));
+    const dms = orderedUserIds.map((uid, i) => {
+      const disc = discById.get(uid);
+      if (!disc) return Promise.resolve();
+      const msg =
+        `**[RizzOtto's Arena] You're on the reserve — ${t.name}**\n` +
+        `The field for **${t.name}** is set and you're **#${i + 1}** in line on the reserve. ` +
+        `Players often drop at short notice, so please keep <t:${startTs}:F> (<t:${startTs}:R>) free if you can. ` +
+        `If a spot opens up before the start, you move up and I'll DM you right away: <${url}>`;
+      return sendDm(disc, msg);
+    });
+    await Promise.allSettled(dms);
+  } catch (err) {
+    console.warn('[championship-notify] notifyChampionshipReserves error (non-fatal):', err);
+  }
+}
+
+/**
  * The availability round just opened: DM every invitee with their rank, differentiated by whether
  * they'd currently make the cut. Everyone is asked to confirm availability (check in) or decline by
  * the deadline; no response counts as unavailable at seed. Ordered by rank.

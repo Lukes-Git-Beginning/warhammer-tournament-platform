@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.25.0] — 2026-10-15
+
+### Added
+- **Finals: reserve players get a heads-up.** When a Quarterly or Ladder Final is seeded, every confirmed player who missed the cut gets a DM with his place on the reserve list, so he can keep the date free in case a spot opens up. The reserve list stays on the finals page until the start.
+
 ## [2.24.3] — 2026-10-15
 
 ### Fixed

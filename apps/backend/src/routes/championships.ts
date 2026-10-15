@@ -25,6 +25,7 @@ import {
 } from '../lib/competitive-finals.js';
 import {
   notifyChampionshipSeeded,
+  notifyChampionshipReserves,
   notifyRaffleWinner,
   notifyAvailabilityInvites,
   notifyRsvpSetByManager,
@@ -171,7 +172,14 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
             competitorFormat: t.competitor_format,
           });
           void notifyChampionshipSeeded(fastify.prisma, t.id, result.seededUserIds);
-          return { seeded: result.seededUserIds.length, size: result.size, available: result.available, plannedSize: result.plannedSize };
+          void notifyChampionshipReserves(fastify.prisma, t.id, result.reserveUserIds);
+          return {
+            seeded: result.seededUserIds.length,
+            size: result.size,
+            available: result.available,
+            plannedSize: result.plannedSize,
+            reserves: result.reserveUserIds.length,
+          };
         }
         // Direct path (no availability round): freeze the top-N straight to the field.
         const result = await seedFinal(fastify.prisma, fastify.redis, {

@@ -61,7 +61,13 @@ export function ChampionshipFieldPanel({
   });
   const seedMut = useMutation({
     mutationFn: () => seedChampionship(slug),
-    onSuccess: (r) => { setError(null); setNotice(`Seeded ${r.seeded} player${r.seeded === 1 ? '' : 's'}${r.plannedSize && r.seeded < r.plannedSize ? ` (planned Top ${r.plannedSize}, shrunk to fit)` : ''}.`); invalidate(); },
+    onSuccess: (r) => {
+      setError(null);
+      const shrunk = r.plannedSize && r.seeded < r.plannedSize ? ` (planned Top ${r.plannedSize}, shrunk to fit)` : '';
+      const reserves = r.reserves ? ` ${r.reserves} on the reserve got a save-the-date DM.` : '';
+      setNotice(`Seeded ${r.seeded} player${r.seeded === 1 ? '' : 's'}${shrunk}.${reserves}`);
+      invalidate();
+    },
     onError: (e: Error) => setError(e.message),
   });
   const managerRsvpMut = useMutation({

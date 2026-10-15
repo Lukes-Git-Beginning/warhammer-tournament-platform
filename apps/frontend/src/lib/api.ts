@@ -760,8 +760,9 @@ export function getLadderChampionship(period: string): Promise<LadderChampionshi
 }
 /** Admin: seed the tagged final + DM the seeds. If an availability round is open, seeds from the
  *  confirmed (AVAILABLE) invitees; otherwise freezes the top-N directly. */
-export function seedChampionship(slug: string): Promise<{ seeded: number; size: number; available?: number; plannedSize?: number }> {
-  return apiFetch<{ seeded: number; size: number; available?: number; plannedSize?: number }>(`/api/championships/${slug}/seed`, { method: 'POST' });
+export type SeedChampionshipResult = { seeded: number; size: number; available?: number; plannedSize?: number; reserves?: number };
+export function seedChampionship(slug: string): Promise<SeedChampionshipResult> {
+  return apiFetch<SeedChampionshipResult>(`/api/championships/${slug}/seed`, { method: 'POST' });
 }
 /** Admin: draw the Monthly Ladder Invitational raffle among the invitees. */
 export function drawChampionshipRaffle(slug: string): Promise<{ winnerUserId: string }> {

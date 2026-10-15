@@ -361,6 +361,12 @@ describe('Quarterly final — the cut is frozen when the availability round open
       cookies: { auth_token: token(ADMIN_ID, 'ADMIN') },
     });
     expect(seed.statusCode, seed.body).toBe(200);
-    expect(seed.json()).toMatchObject({ seeded: 16, size: 16, available: 18, plannedSize: 16 });
+    expect(seed.json()).toMatchObject({ seeded: 16, size: 16, available: 18, plannedSize: 16, reserves: 2 });
+
+    // The two confirmed players who missed the cut stay listed as the reserve, next in line first.
+    const after = await app.inject({ method: 'GET', url: `/api/championships/${slug}/field` });
+    const seeded = after.json<{ phase: string; entries: Array<{ rank: number; reserve?: boolean }> }>();
+    expect(seeded.phase).toBe('SEEDED');
+    expect(seeded.entries.filter((e) => e.reserve).map((e) => e.rank)).toEqual([17, 18]);
   });
 });

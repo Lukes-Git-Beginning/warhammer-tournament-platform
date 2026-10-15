@@ -532,6 +532,8 @@ export async function setInviteRsvpByManager(
 export interface ConfirmedSeedResult extends SeedResult {
   available: number;
   plannedSize: number;
+  /** The confirmed invitees who did not make the field, next in line first (the captain for 2v2). */
+  reserveUserIds: string[];
 }
 
 /**
@@ -596,7 +598,16 @@ export async function seedFromConfirmed(
     { tournamentId: opts.tournamentId, kind: opts.kind, period: opts.period, battleType, competitorFormat: opts.competitorFormat },
     seeds,
   );
-  return { kind: opts.kind, period: opts.period, size: finalSize, seededUserIds, seeds, available: available.length, plannedSize };
+  return {
+    kind: opts.kind,
+    period: opts.period,
+    size: finalSize,
+    seededUserIds,
+    seeds,
+    available: available.length,
+    plannedSize,
+    reserveUserIds: available.slice(finalSize).map((inv) => inv.user_id),
+  };
 }
 
 export type FieldPhase = 'PREVIEW' | 'AVAILABILITY' | 'SEEDED';
