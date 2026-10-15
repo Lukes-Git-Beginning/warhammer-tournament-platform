@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 ### Fixed
 - **Quarterly Finals: confirmed players show as in the field again.** A qualification rule change after the invites went out made the finals page treat the field as empty, so nobody showed as in. The field size is now fixed the moment the invites go out, and the confirmed players are seeded from it as planned.
+- **Q3 2026 keeps its qualification mark of 90 games.** The one-game-per-day mark applies from Q4 2026 on, so everyone who qualified for the Q3 Final stays qualified.
 
 ## [2.24.2] — 2026-10-15
 

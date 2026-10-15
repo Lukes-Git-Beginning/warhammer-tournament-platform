@@ -214,15 +214,23 @@ export function rankingsCutoff(cfg: CompetitionConfig, now: Date = new Date()): 
   return Math.min(cfg.hallOfFameMinGames, daysSince(LAUNCH_DATE, now));
 }
 
+/** First quarter whose gate is uncapped. Earlier quarters keep the old cap of 90 (Alex 2026-10-15):
+ *  Q3 2026 was qualified and its final invited under min(90, days), so the later rule must not move it. */
+const UNCAPPED_GATE_FROM = '2026-Q4';
+const LEGACY_GATE_CAP = 90;
+
 /** Quarterly qualifier gate = one game per competitive day elapsed in the quarter up to now — no
- *  cap and no floor (Alex, 2026-10-06; it used to be min(90, days)). Self-scaling for the CURRENT
- *  quarter; a fully-elapsed PAST quarter demands one per day of the whole quarter. The start is
- *  clamped to LAUNCH_DATE so the LAUNCH quarter (only a few weeks of play) doesn't demand a full
- *  quarter's worth of games it never had time to accrue. */
-export function qualiGate(window: TimeWindow, now: Date = new Date()): number {
-  const start = new Date(Math.max(window.from.getTime(), LAUNCH_DATE.getTime()));
-  const end = new Date(Math.min(now.getTime(), window.to.getTime()));
-  return daysSince(start, end);
+ *  cap and no floor from Q4 2026 on (Alex, 2026-10-06); quarters before that keep min(90, days).
+ *  Self-scaling for the CURRENT quarter; a fully-elapsed PAST quarter demands one per day of the
+ *  whole quarter. The start is clamped to LAUNCH_DATE so the LAUNCH quarter (only a few weeks of
+ *  play) doesn't demand a full quarter's worth of games it never had time to accrue. */
+export function qualiGate(quarter: Period, now: Date = new Date()): number {
+  const start = new Date(Math.max(quarter.from.getTime(), LAUNCH_DATE.getTime()));
+  const end = new Date(Math.min(now.getTime(), quarter.to.getTime()));
+  const days = daysSince(start, end);
+  // "YYYY-Qn" keys sort chronologically as strings. Keyed on the quarter, not its dates, so a shifted
+  // quarter boundary (admin override) can't move a quarter across the rule change.
+  return quarter.value < UNCAPPED_GATE_FROM ? Math.min(LEGACY_GATE_CAP, days) : days;
 }
 
 export interface LadderStanding {
