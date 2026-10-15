@@ -3279,9 +3279,18 @@ export function getGameAudit(): Promise<{ total: number; games: AuditGameEntry[]
   return apiFetch<{ total: number; games: AuditGameEntry[] }>(`/api/admin/game-audit`);
 }
 
-export function getFactionGames(factionId: string, page = 1, limit = 30, opponentFactionId?: string): Promise<{ games: GameHistoryEntry[]; total: number }> {
+export function getFactionGames(
+  factionId: string,
+  page = 1,
+  limit = 30,
+  opponentFactionId?: string,
+  versionId?: string,
+  battleType?: BattleType,
+): Promise<{ games: GameHistoryEntry[]; total: number }> {
   const params = new URLSearchParams({ factionId, page: String(page), limit: String(limit) });
   if (opponentFactionId) params.set('opponentFactionId', opponentFactionId);
+  if (versionId) params.set('versionId', versionId);
+  if (battleType) params.set('battleType', battleType);
   return apiFetch<{ games: GameHistoryEntry[]; total: number }>(`/api/meta/games?${params.toString()}`);
 }
 
@@ -3337,8 +3346,18 @@ export type FactionTopPlayer = {
   proficiency: number | null;
 };
 
-export function getFactionTopPlayers(factionId: string): Promise<{ players: FactionTopPlayer[] }> {
-  return apiFetch<{ players: FactionTopPlayer[] }>(`/api/factions/${encodeURIComponent(factionId)}/top-players`);
+export function getFactionTopPlayers(
+  factionId: string,
+  versionId?: string,
+  battleType?: BattleType,
+): Promise<{ players: FactionTopPlayer[] }> {
+  const params = new URLSearchParams();
+  if (versionId) params.set('versionId', versionId);
+  if (battleType) params.set('battleType', battleType);
+  const qs = params.toString();
+  return apiFetch<{ players: FactionTopPlayer[] }>(
+    `/api/factions/${encodeURIComponent(factionId)}/top-players${qs ? `?${qs}` : ''}`,
+  );
 }
 
 // ---------------------------------------------------------------------------

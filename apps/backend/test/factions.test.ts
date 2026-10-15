@@ -412,3 +412,58 @@ describe('GET /api/meta/matchups', () => {
 });
 
 
+
+// ---------------------------------------------------------------------------
+// GET /api/factions/:id/top-players — follows the page's version + battle type
+// ---------------------------------------------------------------------------
+
+describe('GET /api/factions/:id/top-players', () => {
+  type TopPlayers = { players: Array<{ userId: string; games: number; proficiency: number | null }> };
+  const topPlayers = async (query: string) => {
+    const res = await app.inject({ method: 'GET', url: `/api/factions/dark_elves/top-players${query}` });
+    expect(res.statusCode).toBe(200);
+    return res.json<TopPlayers>().players;
+  };
+
+  // U1 plays Dark Elves in Domination, U2 plays Dark Elves in Conquest (5 games each).
+  async function seedPerType() {
+    await seedVersion();
+    await seedMatchupGames(prisma, {
+      versionId: S1, u1: U1, u2: U2, p1f: 'dark_elves', p2f: 'empire',
+      results: ['P1', 'P1', 'P1', 'P2', 'P1'],
+    });
+    await seedMatchupGames(prisma, {
+      versionId: S1, u1: U2, u2: U1, p1f: 'dark_elves', p2f: 'empire',
+      results: ['P2', 'P1', 'P2', 'P2', 'P1'], battleType: 'CONQUEST',
+    });
+  }
+
+  it('lists only the selected battle type, and every type when none is given', async () => {
+    await seedPerType();
+    expect((await topPlayers('?versionId=all&battleType=DOMINATION')).map((p) => p.userId)).toEqual([U1]);
+    expect((await topPlayers('?versionId=all&battleType=CONQUEST')).map((p) => p.userId)).toEqual([U2]);
+    expect(new Set((await topPlayers('')).map((p) => p.userId))).toEqual(new Set([U1, U2]));
+  });
+
+  it('lists only the selected version', async () => {
+    await seedPerType();
+    expect((await topPlayers(`?versionId=${S1}&battleType=DOMINATION`)).map((p) => p.userId)).toEqual([U1]);
+    const otherVersion = 'f1000000-0000-0000-0000-0000000000ff';
+    expect(await topPlayers(`?versionId=${otherVersion}&battleType=DOMINATION`)).toEqual([]);
+  });
+
+  it('shows the same proficiency as the player profile for that scope', async () => {
+    await seedPerType();
+    const [top] = await topPlayers('?versionId=all&battleType=DOMINATION');
+    const res = await app.inject({ method: 'GET', url: `/api/players/${U1}/faction-proficiency?battleType=DOMINATION` });
+    const profile = res.json<{ entries: Array<{ factionId: string; neutralWinChance: number }> }>().entries;
+    const de = profile.find((e) => e.factionId === 'dark_elves');
+    expect(de).toBeDefined();
+    expect(top!.proficiency).toBeCloseTo(de!.neutralWinChance, 10);
+  });
+
+  it('rejects an unknown battle type', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/factions/dark_elves/top-players?battleType=LAND' });
+    expect(res.statusCode).toBe(400);
+  });
+});

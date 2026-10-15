@@ -13,7 +13,7 @@
 import type { PrismaClient, BattleType } from '@rizzotto/db';
 import type { Redis } from 'ioredis';
 import { getRatingModel } from './rating-model-service.js';
-import { logistic } from './rating-model.js';
+import { logistic, type RatingModel } from './rating-model.js';
 import { rawPoints, opponentShare, opponentModifier, finalPoints } from './scoring-service.js';
 import { loadConfirmedGames, type ConfirmedGame } from './leaderboard-service.js';
 
@@ -269,6 +269,42 @@ export interface PlayerFactionProficiencyEntry {
   lowSampleWarning: boolean;
 }
 
+/** The fit faction proficiency reads, for a version (null = timeless) and battle type (undefined = Overall). */
+export function getProficiencyModel(
+  prisma: PrismaClient,
+  redis: Redis | undefined,
+  versionId: string | null,
+  battleType?: BattleType,
+): Promise<RatingModel> {
+  // Hierarchical fit (consistent with the player's GS). A battle type gets its OWN fit over that
+  // type's games only: the all-types fit has no faction × battle-type term, so its per-type view
+  // would just shift every faction by the same offset — a separate fit yields genuinely per-type
+  // faction skills (Alex, 2026-10-08).
+  return getRatingModel(prisma, redis, { versionId, battleType, config: { hierarchical: true } });
+}
+
+/**
+ * A player's faction proficiency as log-odds: their fitted player × faction skill plus the level shift
+ * on top of GS + faction offset — in a per-type fit the player's level is partly carried by that type's
+ * offset; Overall uses the game-weighted level (as the Overall GS does). `model` must come from
+ * getProficiencyModel for the same scope. Shared by the profile table and a faction's top players so
+ * both show the same number.
+ */
+export function factionProficiencySkill(
+  model: RatingModel,
+  playerId: string,
+  factionId: string,
+  battleType?: BattleType,
+): number {
+  const gsLevel = model.getGeneralSkill(playerId)?.skill;
+  const levelShift = battleType
+    ? model.getBattleTypeOffset(playerId, battleType)
+    : gsLevel != null
+      ? (model.getOverallSkill(playerId) ?? gsLevel) - gsLevel
+      : 0;
+  return model.getPlayerFactionSkill(playerId, factionId) + levelShift;
+}
+
 export async function playerFactionProficiency(
   prisma: PrismaClient,
   redis: Redis | undefined,
@@ -276,19 +312,7 @@ export async function playerFactionProficiency(
   playerId: string,
   battleType?: BattleType, // undefined = Overall (all battle types)
 ): Promise<PlayerFactionProficiencyEntry[]> {
-  // Hierarchical fit (consistent with the player's GS). A battle type gets its OWN fit over that
-  // type's games only: the all-types fit has no faction × battle-type term, so its per-type view
-  // would just shift every faction by the same offset — a separate fit yields genuinely per-type
-  // faction skills (Alex, 2026-10-08).
-  const model = await getRatingModel(prisma, redis, { versionId, battleType, config: { hierarchical: true } });
-  // Level shift on top of GS + faction offset: in a per-type fit the player's level is partly
-  // carried by that type's offset; Overall uses the game-weighted level (as the Overall GS does).
-  const gsLevel = model.getGeneralSkill(playerId)?.skill;
-  const levelShift = battleType
-    ? model.getBattleTypeOffset(playerId, battleType)
-    : gsLevel != null
-      ? (model.getOverallSkill(playerId) ?? gsLevel) - gsLevel
-      : 0;
+  const model = await getProficiencyModel(prisma, redis, versionId, battleType);
 
   // Game-level data: each individual battle (MatchGame) the player participated in.
   // BYEs are automatically excluded — they have no MatchGame records.
@@ -338,7 +362,7 @@ export async function playerFactionProficiency(
   );
 
   return [...tally.entries()].map(([factionId, t]) => {
-    const skill = model.getPlayerFactionSkill(playerId, factionId) + levelShift;
+    const skill = factionProficiencySkill(model, playerId, factionId, battleType);
     return {
       playerId,
       factionId,

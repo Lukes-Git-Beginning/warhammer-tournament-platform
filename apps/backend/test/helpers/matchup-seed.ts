@@ -31,11 +31,19 @@ let seq = 0;
 /**
  * Seeds one OPEN_PLAY match (u1 vs u2) in `versionId` with one COMPLETED MatchGame
  * per entry in `results`. player1 plays `p1f`, player2 plays `p2f`; each result
- * picks the winner — 'P1' | 'P2' | 'D' (draw → winner_id null).
+ * picks the winner — 'P1' | 'P2' | 'D' (draw → winner_id null). `battleType` defaults to Domination.
  */
 export async function seedMatchupGames(
   prisma: PrismaClient,
-  opts: { versionId: string; u1: string; u2: string; p1f: string; p2f: string; results: GameResult[] },
+  opts: {
+    versionId: string;
+    u1: string;
+    u2: string;
+    p1f: string;
+    p2f: string;
+    results: GameResult[];
+    battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  },
 ): Promise<string> {
   const match = await prisma.match.create({
     data: {
@@ -59,6 +67,7 @@ export async function seedMatchupGames(
         player1_faction_id: opts.p1f,
         player2_faction_id: opts.p2f,
         winner_id: r === 'P1' ? opts.u1 : r === 'P2' ? opts.u2 : null,
+        ...(opts.battleType ? { battle_type: opts.battleType } : {}),
       },
     });
   }

@@ -282,14 +282,15 @@ export function FactionDetailPage() {
     staleTime: 2 * 60 * 1000,
   });
 
+  // Top players + recent games follow the page's version and battle-type selectors like the stats do.
   const { data: topPlayersData } = useQuery({
-    queryKey: ['faction-top-players', id],
-    queryFn: () => getFactionTopPlayers(id),
+    queryKey: ['faction-top-players', id, versionId, battleType],
+    queryFn: () => getFactionTopPlayers(id, versionId, battleType),
   });
 
   const { data: gamesData } = useQuery({
-    queryKey: ['faction-games', id, opponentFactionFilter],
-    queryFn: () => getFactionGames(id, 1, 30, opponentFactionFilter || undefined),
+    queryKey: ['faction-games', id, opponentFactionFilter, versionId, battleType],
+    queryFn: () => getFactionGames(id, 1, 30, opponentFactionFilter || undefined, versionId, battleType),
   });
 
   const { data: factionsData } = useQuery({
@@ -487,7 +488,9 @@ export function FactionDetailPage() {
         <section className="rounded-md border border-stone-800 bg-stone-900/40 p-5">
           <SectionHeader title="Top Players" />
           {(topPlayersData?.players.length ?? 0) === 0 ? (
-            <p className="text-sm text-stone-600">No players with 3+ games yet.</p>
+            <p className="text-sm text-stone-600">
+              No players with 5+ {BATTLE_TYPES.find((b) => b.value === battleType)?.label ?? battleType} games yet.
+            </p>
           ) : (
             <>
               <div className="flex items-center gap-3 pb-1.5 text-[10px] uppercase tracking-wider text-stone-500 border-b border-stone-800 mb-1">

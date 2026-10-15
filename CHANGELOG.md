@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.24.2] — 2026-10-15
+
+### Fixed
+- **Faction pages: Top Players and Recent Games now follow the Version and Type selectors.** They used to show every battle type and version together, so the lists looked the same on Domination, Conquest and Siege.
+- **Proficiency in a faction's Top Players list shows each player's real value** (the same as on their profile) instead of 50% for everyone.
+
 ## [2.24.1] — 2026-10-12
 
 ### Fixed

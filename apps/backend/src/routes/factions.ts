@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { Prisma } from '@rizzotto/db';
 import { SQL_NOT_TEAM_MATCH } from '../lib/stat-eligibility.js';
 import { z } from 'zod';
 import { cached, cacheKey } from '../lib/cache.js';
@@ -9,7 +10,7 @@ import {
   getFactionsWithStats,
   getVersionDecayWeights,
 } from '../lib/factions.js';
-import { getRatingModel } from '../lib/rating-model-service.js';
+import { getProficiencyModel, factionProficiencySkill } from '../lib/breakdown-service.js';
 import { logistic } from '../lib/rating-model.js';
 
 // ---------------------------------------------------------------------------
@@ -23,6 +24,10 @@ const VersionQuerySchema = z.object({
 
 const FactionDetailQuerySchema = VersionQuerySchema.extend({
   battleType: z.enum(['DOMINATION', 'CONQUEST', 'SIEGE']).default('DOMINATION'),
+});
+
+const TopPlayersQuerySchema = VersionQuerySchema.extend({
+  battleType: z.enum(['DOMINATION', 'CONQUEST', 'SIEGE']).optional(), // omitted = every type
 });
 
 const FactionParamSchema = z.object({
@@ -219,8 +224,9 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // -------------------------------------------------------------------------
-  // GET /api/factions/:id/top-players
-  // Top players by game count with this faction (min 3 games), all-time.
+  // GET /api/factions/:id/top-players?versionId=&battleType=
+  // Best players with this faction (min 5 games) in the page's selected version and battle type.
+  // Omitted/'all' version = every version; omitted battle type = every type (Overall).
   // -------------------------------------------------------------------------
   fastify.get('/api/factions/:id/top-players', async (request, reply) => {
     const paramParsed = FactionParamSchema.safeParse(request.params);
@@ -228,13 +234,24 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'BadRequest', message: paramParsed.error.message, statusCode: 400 });
     }
     const { id } = paramParsed.data;
+    const queryParsed = TopPlayersQuerySchema.safeParse(request.query);
+    if (!queryParsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: queryParsed.error.message, statusCode: 400 });
+    }
+    const scopedVersionId =
+      queryParsed.data.versionId && queryParsed.data.versionId !== 'all' ? queryParsed.data.versionId : null;
+    const { battleType } = queryParsed.data;
 
     const faction = await fastify.prisma.faction.findUnique({ where: { id }, select: { id: true } });
     if (!faction) return reply.code(404).send({ error: 'NotFound', message: 'Faction not found', statusCode: 404 });
 
+    // Match.version_id lives in the legacy "season_id" column.
+    const versionFilter = scopedVersionId ? Prisma.sql`AND m.season_id::text = ${scopedVersionId}` : Prisma.empty;
+    const battleTypeFilter = battleType ? Prisma.sql`AND mg.battle_type::text = ${battleType}` : Prisma.empty;
+
     return cached(
       fastify.redis,
-      cacheKey('factions:top-players', { id }),
+      cacheKey('factions:top-players', { id, versionId: scopedVersionId ?? 'all', battleType: battleType ?? 'OVERALL' }),
       async () => {
         type RawRow = { user_id: string; games: bigint; wins: bigint };
         const rows = await fastify.prisma.$queryRaw<RawRow[]>`
@@ -261,6 +278,8 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
             AND m.player1_id IS NOT NULL
             AND m.player2_id IS NOT NULL
             AND ${SQL_NOT_TEAM_MATCH}
+            ${versionFilter}
+            ${battleTypeFilter}
           GROUP BY user_id
           HAVING COUNT(*) >= 5
           ORDER BY (CAST(SUM(CASE
@@ -283,10 +302,12 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
         });
         const userById = new Map(users.map((u) => [u.id, u]));
 
-        // Resolve active version for proficiency computation.
-        const activeVersion = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true } });
+        // Proficiency exactly as the player's profile shows it for the same version + battle type (the
+        // shared hierarchical fit). It used to read an unscoped active-version model that has no
+        // player × faction entries, so every player showed the 0.5 default.
+        const model = await getProficiencyModel(fastify.prisma, fastify.redis, scopedVersionId, battleType);
 
-        const rawPlayers = rows
+        const players = rows
           .map((r) => {
             const user = userById.get(r.user_id);
             if (!user) return null;
@@ -299,28 +320,10 @@ const factionsRoutes: FastifyPluginAsync = async (fastify) => {
               games,
               wins,
               winRate: games > 0 ? wins / games : null,
+              proficiency: logistic(factionProficiencySkill(model, user.id, id, battleType)),
             };
           })
           .filter((p): p is NonNullable<typeof p> => p !== null);
-
-        // Attach per-faction proficiency (neutralWinChance) for each player.
-        // The version-wide rating model is fitted once (cached, event-invalidated)
-        // and already holds every player's skill for this faction, so we read it
-        // directly — no per-player query. Same value & freshness as the profile
-        // page (both derive from this one model). Unknown pairs default to 0 skill
-        // → logistic(0) = 0.5; top players always have a fitted entry here.
-        let players: (typeof rawPlayers[number] & { proficiency: number | null })[];
-        if (activeVersion) {
-          const model = await getRatingModel(fastify.prisma, fastify.redis, {
-            versionId: activeVersion.id,
-          });
-          players = rawPlayers.map((p) => ({
-            ...p,
-            proficiency: logistic(model.getPlayerFactionSkill(p.userId, id)),
-          }));
-        } else {
-          players = rawPlayers.map((p) => ({ ...p, proficiency: null }));
-        }
 
         return { players };
       },
