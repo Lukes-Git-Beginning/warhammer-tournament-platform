@@ -461,6 +461,10 @@ model Tournament {
   // then takes the top-N of AVAILABLE invitees. Both null for a normal tournament / unopened final.
   availability_opened_at   DateTime?
   rsvp_deadline            DateTime?
+  // The planned field size (the cut) frozen when the availability round opened, like the invite list.
+  // A later rule or data change must not move it (the Q3 final dropped to 0 when the quarterly gate
+  // changed after the invites went out). Null = no round opened yet → computed live.
+  championship_field_size  Int?
   created_at               DateTime        @default(now())
   updated_at               DateTime        @updatedAt
   deleted_at               DateTime?

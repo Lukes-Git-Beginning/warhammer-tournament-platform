@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.24.3] — 2026-10-15
+
+### Fixed
+- **Quarterly Finals: confirmed players show as in the field again.** A qualification rule change after the invites went out made the finals page treat the field as empty, so nobody showed as in. The field size is now fixed the moment the invites go out, and the confirmed players are seeded from it as planned.
+
 ## [2.24.2] — 2026-10-15
 
 ### Fixed

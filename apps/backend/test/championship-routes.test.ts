@@ -13,7 +13,9 @@ const ADMIN_ID = 'cf1a0000-0000-0000-0000-000000000001';
 const USER_ID = 'cf1a0000-0000-0000-0000-000000000002';
 const HOST_ID = 'cf1a0000-0000-0000-0000-000000000003';
 const INVITEE_ID = 'cf1a0000-0000-0000-0000-000000000004';
-const ALL_IDS = [ADMIN_ID, USER_ID, HOST_ID, INVITEE_ID];
+/** 18 invitees for a full quarterly field (Top-16 floor + 2 reserves). */
+const POOL_IDS = Array.from({ length: 18 }, (_, i) => `cf1a0000-0000-0000-0000-0000000001${String(i).padStart(2, '0')}`);
+const ALL_IDS = [ADMIN_ID, USER_ID, HOST_ID, INVITEE_ID, ...POOL_IDS];
 
 let app: FastifyInstance;
 
@@ -325,5 +327,40 @@ describe('Championship invites — host declines on an invitee\'s behalf', () =>
       data: { tournament_id: tournamentId, user_id: INVITEE_ID, status: 'CHECKED_IN' },
     });
     expect((await managerRsvp(slug, [HOST_ID, 'HOST'], 'DECLINED')).statusCode).toBe(409);
+  });
+});
+
+describe('Quarterly final — the cut is frozen when the availability round opens', () => {
+  it('keeps the frozen Top 16 even when a live recompute of the closed quarter finds no field', async () => {
+    // The Q3 2026 final: the round opened at Top 16, then the quarterly gate rose past four invitees,
+    // a live recompute fell under the floor (size 0) and nobody was "in" anymore — the seed would have
+    // refused to run. 2099-Q1 has no games, so its live size is 0 too; the round froze Top 16.
+    const create = await createChampionship(ADMIN_ID, 'ADMIN');
+    const { id, slug } = create.json<{ id: string; slug: string }>();
+    await prisma.tournament.update({
+      where: { id },
+      data: { availability_opened_at: new Date(), rsvp_deadline: new Date(Date.now() + 86_400_000), championship_field_size: 16 },
+    });
+    await prisma.user.createMany({
+      data: POOL_IDS.map((uid, i) => ({ id: uid, discord_id: `champ_pool_${i}`, username: `ChampPool${i}`, email: null, role: 'USER' as const })),
+    });
+    await prisma.championshipInvite.createMany({
+      data: POOL_IDS.map((uid, i) => ({ tournament_id: id, competitor_id: uid, user_id: uid, rank: i + 1, rsvp: 'AVAILABLE' as const })),
+    });
+
+    const field = await app.inject({ method: 'GET', url: `/api/championships/${slug}/field` });
+    expect(field.statusCode).toBe(200);
+    const view = field.json<{ phase: string; cutRank: number; entries: Array<{ rank: number; inField: boolean }> }>();
+    expect(view.phase).toBe('AVAILABILITY');
+    expect(view.cutRank).toBe(16);
+    expect(view.entries.filter((e) => e.inField).map((e) => e.rank)).toEqual(Array.from({ length: 16 }, (_, i) => i + 1));
+
+    const seed = await app.inject({
+      method: 'POST',
+      url: `/api/championships/${slug}/seed`,
+      cookies: { auth_token: token(ADMIN_ID, 'ADMIN') },
+    });
+    expect(seed.statusCode, seed.body).toBe(200);
+    expect(seed.json()).toMatchObject({ seeded: 16, size: 16, available: 18, plannedSize: 16 });
   });
 });

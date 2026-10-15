@@ -355,6 +355,14 @@ export interface FullRanking {
    *  Quarterly: quarterlyFinalSize(active, qualified) using the REAL active count (competitors with
    *  ≥1 game in the battle type), NOT the qualified pool size. 0 when there is no field yet. */
   fieldSize: number;
+  /** Quarterly: the window GS of EVERY competitor in the battle type, gate or not, so an invitee who
+   *  no longer clears a since-changed gate still shows his GS. Empty for the ladder. */
+  gsByCompetitor: Map<string, number>;
+}
+
+/** The planned field size of a final: the one frozen when its availability round opened, else live. */
+export function frozenOrLiveFieldSize(frozen: number | null | undefined, live: number): number {
+  return frozen ?? live;
 }
 
 /**
@@ -370,14 +378,14 @@ export async function computeFullRanking(
 ): Promise<FullRanking> {
   if (opts.kind === 'MONTHLY_LADDER') {
     const window = parseMonth(opts.period);
-    if (!window) return { ranking: [], fieldSize: 0 };
+    if (!window) return { ranking: [], fieldSize: 0, gsByCompetitor: new Map() };
     const standings = await computeLadderStandings(prisma, redis, window);
     const ranking = standings.map((s, i) => ({ competitorId: s.playerId, userId: s.playerId, rank: i + 1, points: s.points }));
-    return { ranking, fieldSize: plannedFieldSize('MONTHLY_LADDER', ranking.length) };
+    return { ranking, fieldSize: plannedFieldSize('MONTHLY_LADDER', ranking.length), gsByCompetitor: new Map() };
   }
   const overrides = await loadQuarterOverrides(prisma);
   const window = resolveQuarter(opts.period, overrides);
-  if (!window) return { ranking: [], fieldSize: 0 };
+  if (!window) return { ranking: [], fieldSize: 0, gsByCompetitor: new Map() };
   const now = opts.now ?? new Date();
   const gate = qualiGate(window, now);
   const board = await computeGsBoard(prisma, redis, {
@@ -397,7 +405,11 @@ export async function computeFullRanking(
     if (!userId) return [];
     return [{ competitorId: e.competitorId, userId, rank: i + 1, gs: e.gs, ...(e.memberIds.length ? { memberIds: e.memberIds } : {}) }];
   });
-  return { ranking, fieldSize: quarterlyFinalSize(active, qualified.length) };
+  return {
+    ranking,
+    fieldSize: quarterlyFinalSize(active, qualified.length),
+    gsByCompetitor: new Map(board.map((e) => [e.competitorId, e.gs])),
+  };
 }
 
 export interface OpenRoundResult {
@@ -456,7 +468,8 @@ export async function openAvailabilityRound(
     });
     await tx.tournament.update({
       where: { id: opts.tournamentId },
-      data: { availability_opened_at: now, rsvp_deadline: deadline },
+      // Freeze the cut with the invite list: field view and seed read it, never a live recompute.
+      data: { availability_opened_at: now, rsvp_deadline: deadline, championship_field_size: fieldSize },
     });
   });
 
@@ -539,15 +552,21 @@ export async function seedFromConfirmed(
   if (invites.length === 0) throw new Error('No availability round has been opened for this final.');
   const available = invites.filter((i) => i.rsvp === 'AVAILABLE');
 
-  // Field size N comes from the FULL pool (invites may be capped, e.g. the ladder's top 2N). The
-  // cycle is closed, so the recomputed ranking + size are deterministic.
-  const { ranking, fieldSize: plannedSize } = await computeFullRanking(prisma, redis, {
+  // Field size N is the one frozen when the round opened (from the FULL pool — invites may be capped,
+  // e.g. the ladder's top 2N). A live recompute is not stable even for a closed cycle: a rule change
+  // (the quarterly gate) can move it after the invites went out. The live ranking only enriches gs/points.
+  const { ranking, fieldSize: liveSize, gsByCompetitor } = await computeFullRanking(prisma, redis, {
     kind: opts.kind,
     period: opts.period,
     battleType: opts.battleType,
     competitorFormat: opts.competitorFormat,
     now: opts.now,
   });
+  const frozen = await prisma.tournament.findUnique({
+    where: { id: opts.tournamentId },
+    select: { championship_field_size: true },
+  });
+  const plannedSize = frozenOrLiveFieldSize(frozen?.championship_field_size, liveSize);
   const floor = opts.kind === 'QUARTERLY' ? QUARTERLY_FLOOR : 0;
   const finalSize = confirmedFieldSize(plannedSize, available.length, floor);
   if (finalSize === 0) {
@@ -562,11 +581,12 @@ export async function seedFromConfirmed(
   const chosen = available.slice(0, finalSize);
   const seeds: FinalSeed[] = chosen.map((inv, i) => {
     const r = byCompetitor.get(inv.competitor_id);
+    const gs = r?.gs ?? gsByCompetitor.get(inv.competitor_id);
     return {
       competitorId: inv.competitor_id,
       rank: i + 1,
       ...(r?.points != null ? { points: r.points } : {}),
-      ...(r?.gs != null ? { gs: r.gs } : {}),
+      ...(gs != null ? { gs } : {}),
       ...(r?.memberIds?.length ? { memberIds: r.memberIds } : {}),
     };
   });
@@ -629,6 +649,7 @@ export async function computeFieldView(
       competitor_format: CompetitorFormatFilter;
       availability_opened_at: Date | null;
       rsvp_deadline: Date | null;
+      championship_field_size: number | null;
     };
     viewerUserId?: string;
     now?: Date;
@@ -709,11 +730,13 @@ export async function computeFieldView(
     };
   }
 
-  const { ranking, fieldSize: plannedSize } = await computeFullRanking(prisma, redis, { kind, period, battleType, competitorFormat, now: opts.now });
+  const { ranking, fieldSize: liveSize, gsByCompetitor } = await computeFullRanking(prisma, redis, { kind, period, battleType, competitorFormat, now: opts.now });
   const floor = kind === 'QUARTERLY' ? QUARTERLY_FLOOR : 0;
 
-  // AVAILABILITY — round open, not sealed yet.
+  // AVAILABILITY — round open, not sealed yet. The cut is the size frozen at opening, so the view
+  // always matches what the seed will build.
   if (t.availability_opened_at) {
+    const plannedSize = frozenOrLiveFieldSize(t.championship_field_size, liveSize);
     const invites = await prisma.championshipInvite.findMany({ where: { tournament_id: t.id }, orderBy: { rank: 'asc' } });
     const rankInfo = new Map(ranking.map((r) => [r.competitorId, r]));
     const umap = await resolveUsers(invites.map((i) => i.user_id));
@@ -730,7 +753,7 @@ export async function computeFieldView(
         username: u?.username ?? 'Unknown',
         avatarUrl: u?.avatar_url ?? null,
         points: ri?.points ?? null,
-        gs: ri?.gs ?? null,
+        gs: ri?.gs ?? gsByCompetitor.get(inv.competitor_id) ?? null,
         rsvp: inv.rsvp as RsvpValue,
         rsvpByManager: inv.rsvp_by_manager,
         inField: inFieldIds.has(inv.competitor_id),
@@ -749,6 +772,7 @@ export async function computeFieldView(
   }
 
   // PREVIEW — live top-N, no writes.
+  const plannedSize = liveSize;
   const top = ranking.slice(0, plannedSize);
   const umap = await resolveUsers(top.map((r) => r.userId));
   const entries: FieldEntry[] = top.map((r) => {
@@ -849,9 +873,11 @@ export async function promoteReserve(
 
   // Points/GS for the new snapshot row (deterministic once the cycle is closed); best effort.
   let rankInfo = new Map<string, RankedCompetitor>();
+  let gsByCompetitor = new Map<string, number>();
   try {
-    const { ranking } = await computeFullRanking(prisma, opts.redis, { kind, period, battleType, competitorFormat });
-    rankInfo = new Map(ranking.map((r) => [r.competitorId, r]));
+    const full = await computeFullRanking(prisma, opts.redis, { kind, period, battleType, competitorFormat });
+    rankInfo = new Map(full.ranking.map((r) => [r.competitorId, r]));
+    gsByCompetitor = full.gsByCompetitor;
   } catch {
     /* the snapshot simply carries no gs/points */
   }
@@ -915,7 +941,13 @@ export async function promoteReserve(
     await tx.competitiveCycleSnapshot.upsert({
       where: { kind_period_battle_type_competitor_format_competitor_id: { ...snapKey, competitor_id: target.competitor_id } },
       update: {},
-      create: { ...snapKey, competitor_id: target.competitor_id, rank: target.rank, gs: ri?.gs ?? null, points: ri?.points ?? null },
+      create: {
+        ...snapKey,
+        competitor_id: target.competitor_id,
+        rank: target.rank,
+        gs: ri?.gs ?? gsByCompetitor.get(target.competitor_id) ?? null,
+        points: ri?.points ?? null,
+      },
     });
 
     // --- (d) renumber the active field 1..N by frozen invite rank ---

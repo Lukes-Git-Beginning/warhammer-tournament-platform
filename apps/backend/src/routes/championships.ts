@@ -391,6 +391,7 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
         competitor_format: true,
         availability_opened_at: true,
         rsvp_deadline: true,
+        championship_field_size: true,
       },
     });
     if (!t) return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
@@ -403,6 +404,7 @@ const championshipRoutes: FastifyPluginAsync = async (fastify) => {
         competitor_format: t.competitor_format,
         availability_opened_at: t.availability_opened_at,
         rsvp_deadline: t.rsvp_deadline,
+        championship_field_size: t.championship_field_size,
       },
       viewerUserId,
     });
