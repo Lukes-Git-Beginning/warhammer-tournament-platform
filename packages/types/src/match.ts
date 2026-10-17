@@ -2,6 +2,7 @@
 // Backend route schemas + frontend mutation payloads share these definitions.
 
 import { z } from 'zod';
+import type { BattleType } from './api-schemas.js';
 
 export const MatchResultTypeSchema = z.enum(['PLAYER1_WIN', 'PLAYER2_WIN', 'DRAW', 'DOUBLE_LOSS']);
 export type MatchResultType = z.infer<typeof MatchResultTypeSchema>;
@@ -219,7 +220,7 @@ export interface GameHistoryEntry {
   /** 2v2: the teammate's faction per side (null/omitted for 1v1) */
   player1FactionId2?: string | null;
   player2FactionId2?: string | null;
-  battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  battleType?: BattleType;
   mapName: string | null;
   replayUrl: string | null;
   countsForLeaderboard?: boolean;

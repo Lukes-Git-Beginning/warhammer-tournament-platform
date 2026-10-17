@@ -2,8 +2,9 @@ import { SITE_TZ } from '@/lib/site-time';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { getAdminStats, getAdminOpenPlayQueue, getAdminOpenPlayActiveMatches, getAdminScheduledMatchups, type AdminStats, type BattleType, type QueueMatchFormat } from '@/lib/api';
+import { BATTLE_TYPE_LABELS } from '@rizzotto/types';
 
-const BATTLE_TYPE_LABEL: Record<BattleType, string> = { DOMINATION: 'Domination', CONQUEST: 'Conquest', SIEGE: 'Siege' };
+const BATTLE_TYPE_LABEL = BATTLE_TYPE_LABELS;
 
 /** Open Play flags shared by the Queue and Active Matches panels. */
 function BattleTypeChip({ battleType }: { battleType: BattleType }) {

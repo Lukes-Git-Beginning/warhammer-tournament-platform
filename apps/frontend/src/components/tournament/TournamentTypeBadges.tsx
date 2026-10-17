@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { battleTypeIconSrc } from '@/lib/battleTypeIcons';
 
 // Marks for a tournament's two new axes. Team size → a "2v2" chip on the status row.
 // Battle type → a faint full-tile watermark behind the content (Card `watermark` slot), using
@@ -10,7 +11,6 @@ export function Team2v2Badge() {
   return <Badge variant="magenta">2v2</Badge>;
 }
 
-const BATTLE_TYPES = new Set(['DOMINATION', 'CONQUEST', 'SIEGE']);
 // Tried in order; whatever format the official asset ships as just works. Hidden if none exist.
 const EXTS = ['png', 'svg', 'webp'];
 
@@ -22,11 +22,12 @@ const EXTS = ['png', 'svg', 'webp'];
  */
 export function BattleTypeWatermark({ battleType }: { battleType?: string | null }) {
   const [attempt, setAttempt] = useState(0);
-  if (!battleType || !BATTLE_TYPES.has(battleType) || attempt >= EXTS.length) return null;
+  // Only types with a shipped image (see battleTypeIconSrc) — never request a missing asset.
+  if (!battleTypeIconSrc(battleType) || attempt >= EXTS.length) return null;
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 top-1/2 flex items-center justify-center overflow-hidden" aria-hidden>
       <img
-        src={`/battle-types/${battleType.toLowerCase()}.${EXTS[attempt]}`}
+        src={`/battle-types/${battleType!.toLowerCase()}.${EXTS[attempt]}`}
         alt=""
         className="h-full w-full object-contain opacity-[0.12]"
         onError={() => setAttempt((a) => a + 1)}

@@ -1,6 +1,7 @@
 // Admin Players report — client-side filters (presets), KPIs, signup funnel and CSV export over the
 // rows from /api/admin/reports/players. Pure functions, unit-tested in player-report.test.ts.
 import type { AdminPlayerReportRow } from './api';
+import { BATTLE_TYPES } from '@rizzotto/types';
 
 export interface PresetContext {
   nowMs: number;
@@ -202,7 +203,7 @@ export const PRESETS: Preset[] = [
     label: 'No questionnaire',
     hint: 'Never answered any question',
     test: (r) =>
-      !r.answered.general && !r.answered.DOMINATION && !r.answered.CONQUEST && !r.answered.SIEGE,
+      !r.answered.general && BATTLE_TYPES.every((t) => !r.answered[t]),
   },
   {
     id: 'missingDomination',
@@ -217,6 +218,13 @@ export const PRESETS: Preset[] = [
     label: 'Missing Conquest',
     hint: 'No Conquest questions answered',
     test: (r) => !r.answered.CONQUEST,
+  },
+  {
+    id: 'missingLandBattle',
+    group: 'Questionnaire',
+    label: 'Missing Land Battle',
+    hint: 'No Land Battle questions answered',
+    test: (r) => !r.answered.LAND_BATTLE,
   },
   {
     id: 'missingSiege',
@@ -348,6 +356,7 @@ const CSV_COLUMNS: {
   { key: 'referral_source', get: (r) => r.referralSource ?? '' },
   { key: 'q_domination', get: (r) => r.answered.DOMINATION },
   { key: 'q_conquest', get: (r) => r.answered.CONQUEST },
+  { key: 'q_land_battle', get: (r) => r.answered.LAND_BATTLE },
   { key: 'q_siege', get: (r) => r.answered.SIEGE },
 ];
 

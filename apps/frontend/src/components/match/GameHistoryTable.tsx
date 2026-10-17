@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { getFactions } from '@/lib/api';
 import type { GameHistoryEntry } from '@rizzotto/types';
 import { formatInUserTimezone } from '@/lib/timezone';
+import { BATTLE_TYPE_LABELS } from '@rizzotto/types';
 
 interface Props {
   games: GameHistoryEntry[];
@@ -10,11 +11,7 @@ interface Props {
   showBattleType?: boolean;
 }
 
-const BATTLE_TYPE_LABEL: Record<string, string> = {
-  DOMINATION: 'Domination',
-  CONQUEST: 'Conquest',
-  SIEGE: 'Siege',
-};
+const BATTLE_TYPE_LABEL: Record<string, string> = BATTLE_TYPE_LABELS;
 
 function FactionChip({ factionId, factionMap }: {
   factionId: string | null;

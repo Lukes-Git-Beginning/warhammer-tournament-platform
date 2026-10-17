@@ -10,12 +10,10 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { getFactions, getStandardRuleset, type BattleType, type StandardRuleset } from '@/lib/api.js';
+import { BATTLE_TYPE_LABELS } from '@rizzotto/types';
+import { battleTypeIconSrc } from '@/lib/battleTypeIcons';
 
-const BATTLE_TYPE_LABEL: Record<string, string> = {
-  DOMINATION: 'Domination',
-  CONQUEST: 'Conquest',
-  SIEGE: 'Siege',
-};
+const BATTLE_TYPE_LABEL: Record<string, string> = BATTLE_TYPE_LABELS;
 
 export const STANDARD_RULESET: StandardRuleset = {
   settings: ['Default Funds', 'Ultra Unit Scale', '1500 Tickets', 'Unit Caps On'],
@@ -60,6 +58,7 @@ export function StandardRulesetCard({
     enabled: !ruleset,
   });
   const rs = ruleset ?? data ?? STANDARD_RULESET;
+  const icon = battleTypeIconSrc(battleType);
   // Banned factions are stored as faction ids — show their names (raw entry as a fallback).
   const { data: factionList } = useQuery({
     queryKey: ['factions'],
@@ -80,15 +79,15 @@ export function StandardRulesetCard({
       {/* Battle-type watermark at a fixed, centered size (not stretched to the card) so it
           reads at the same scale as on the tournament tiles rather than filling the larger
           rules tile. opacity matches the tournament watermark (0.12). */}
-      {battleType && (
+      {icon && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden" aria-hidden>
-          <img src={`/battle-types/${battleType.toLowerCase()}.png`} alt="" className="h-48 w-48 object-contain opacity-[0.12]" />
+          <img src={icon} alt="" className="h-48 w-48 object-contain opacity-[0.12]" />
         </div>
       )}
       <div className="relative">
         <div className="mb-2 flex items-center gap-2">
-          {battleType ? (
-            <img src={`/battle-types/${battleType.toLowerCase()}.png`} alt="" className="h-5 w-5 shrink-0 object-contain" />
+          {icon ? (
+            <img src={icon} alt="" className="h-5 w-5 shrink-0 object-contain" />
           ) : (
             <span className="text-rizzotto-gold-400">⚔️</span>
           )}

@@ -92,7 +92,7 @@ describe('questionnaire floor per battle type', () => {
 
   it('general questions count toward every type', () => {
     const answers = { years_competitive: 'gt2y' }; // general, band 3
-    for (const scope of ['DOMINATION', 'CONQUEST', 'SIEGE', 'OVERALL'] as const) {
+    for (const scope of ['DOMINATION', 'CONQUEST', 'LAND_BATTLE', 'SIEGE', 'OVERALL'] as const) {
       expect(questionnaireFloor(answers, CALIBRATION_QUESTIONS, scope)).toBe(3);
     }
   });

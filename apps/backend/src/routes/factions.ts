@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { Prisma } from '@rizzotto/db';
 import { SQL_NOT_TEAM_MATCH } from '../lib/stat-eligibility.js';
 import { z } from 'zod';
+import { BATTLE_TYPES } from '@rizzotto/types';
 import { cached, cacheKey } from '../lib/cache.js';
 import {
   asFactionDto,
@@ -23,11 +24,11 @@ const VersionQuerySchema = z.object({
 });
 
 const FactionDetailQuerySchema = VersionQuerySchema.extend({
-  battleType: z.enum(['DOMINATION', 'CONQUEST', 'SIEGE']).default('DOMINATION'),
+  battleType: z.enum(BATTLE_TYPES).default('DOMINATION'),
 });
 
 const TopPlayersQuerySchema = VersionQuerySchema.extend({
-  battleType: z.enum(['DOMINATION', 'CONQUEST', 'SIEGE']).optional(), // omitted = every type
+  battleType: z.enum(BATTLE_TYPES).optional(), // omitted = every type
 });
 
 const FactionParamSchema = z.object({

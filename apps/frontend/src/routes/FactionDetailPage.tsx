@@ -51,6 +51,7 @@ function SectionHeader({ title }: { title: string }) {
 const BATTLE_TYPES: { value: BattleType; label: string }[] = [
   { value: 'DOMINATION', label: 'Domination' },
   { value: 'CONQUEST', label: 'Conquest' },
+  { value: 'LAND_BATTLE', label: 'Land Battle' },
   { value: 'SIEGE', label: 'Siege' },
 ];
 

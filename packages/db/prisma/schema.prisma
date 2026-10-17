@@ -64,6 +64,7 @@ enum TournamentMode {
 enum BattleType {
   DOMINATION // current standard
   CONQUEST
+  LAND_BATTLE // classic land battle (no capture points), Conquest maps + the Land Battle extras
   SIEGE
 }
 
@@ -1461,7 +1462,7 @@ model AvailabilitySlot {
 // buttons all join the queue with these; the Discord availability offers never change them.
 model UserQueuePref {
   user_id           String           @id @db.Uuid
-  battle_types      BattleType[]     @default([DOMINATION, CONQUEST, SIEGE])
+  battle_types      BattleType[]     @default([DOMINATION, CONQUEST, LAND_BATTLE, SIEGE])
   match_formats     MatchFormat[]    @default([BO1, BO3]) // Bo1/Bo3 only; Siege is always Bo2 regardless
   competitor_format CompetitorFormat @default(ONE_V_ONE)
   team_id           String?          @db.Uuid // 2v2: preferred team (validated at join time; no FK on purpose)
@@ -1474,7 +1475,7 @@ model UserQueuePref {
 // and both team sizes (the behaviour before this filter existed). Edited on the Availability tab.
 model UserTournamentNotifyPref {
   user_id            String             @id @db.Uuid
-  battle_types       BattleType[]       @default([DOMINATION, CONQUEST, SIEGE])
+  battle_types       BattleType[]       @default([DOMINATION, CONQUEST, LAND_BATTLE, SIEGE])
   competitor_formats CompetitorFormat[] @default([ONE_V_ONE, TWO_V_TWO])
   updated_at         DateTime           @updatedAt
 

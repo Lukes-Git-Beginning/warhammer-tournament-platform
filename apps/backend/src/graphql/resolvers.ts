@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@rizzotto/db';
+import { isBattleType } from '@rizzotto/types';
 import { asFactionDto, asFactionStatsDto, getFactionsWithStats } from '../lib/factions.js';
 import { getMatchupMatrix } from '../lib/heatmap.js';
 
@@ -68,7 +69,7 @@ export const resolvers = {
       if (!version) return null;
 
       const battleType =
-        args.battleType === 'CONQUEST' || args.battleType === 'SIEGE' ? args.battleType : 'DOMINATION';
+        isBattleType(args.battleType) ? args.battleType : 'DOMINATION';
 
       const stats = await ctx.prisma.factionStats.findUnique({
         where: {

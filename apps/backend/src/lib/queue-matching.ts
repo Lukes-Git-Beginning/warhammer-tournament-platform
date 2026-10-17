@@ -1,8 +1,10 @@
 // Pure Open Play queue matching rules (no Redis / DB) — shared by the matchmaking tick, the queue
 // routes and the Discord availability offers.
 
-export const ALL_BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'SIEGE'] as const;
-export type QueueBattleType = (typeof ALL_BATTLE_TYPES)[number];
+import { BATTLE_TYPES, BATTLE_TYPE_LABELS, type BattleType } from '@rizzotto/types';
+
+export const ALL_BATTLE_TYPES = BATTLE_TYPES;
+export type QueueBattleType = BattleType;
 export type QueueCompetitorFormat = 'ONE_V_ONE' | 'TWO_V_TWO';
 /** Series lengths a player can ask for in Open Play (Bo5 is not offered). */
 export const ALL_QUEUE_MATCH_FORMATS = ['BO1', 'BO3'] as const;
@@ -145,8 +147,9 @@ export function buildOffers(prefs: QueuePrefs, waiting: QueueEntry[]): QueueOffe
   return offers;
 }
 
-const BT_LABEL: Record<QueueBattleType, string> = { DOMINATION: 'Domination', CONQUEST: 'Conquest', SIEGE: 'Siege' };
-const BT_CODE: Record<QueueBattleType, string> = { DOMINATION: 'D', CONQUEST: 'C', SIEGE: 'S' };
+const BT_LABEL = BATTLE_TYPE_LABELS;
+/** One letter per battle type for the Discord offer button id — must stay unique and stable. */
+const BT_CODE: Record<QueueBattleType, string> = { DOMINATION: 'D', CONQUEST: 'C', LAND_BATTLE: 'L', SIEGE: 'S' };
 const FORMAT_LABEL: Record<QueueSeriesFormat, string> = { BO1: 'Bo1', BO2: 'Bo2', BO3: 'Bo3' };
 
 /** "Conquest 1v1 Bo1" — used for the offer button label; the DM bullet adds separators. */

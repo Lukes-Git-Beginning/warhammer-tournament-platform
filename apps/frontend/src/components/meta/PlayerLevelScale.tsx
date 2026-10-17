@@ -4,15 +4,14 @@ import { getPlayerClassification, type SkillScope } from '@/lib/api.js';
 import { Button } from '@/components/ui/button.js';
 import { BANDS, bandIndex, winChance } from './skillBands.js';
 import { SkillHistoryChart } from '@/components/users/SkillHistoryChart.js';
+import { BATTLE_TYPE_LABELS } from '@rizzotto/types';
 
 // Below this SE the data alone is confident enough to place a player without a questionnaire.
 const CONFIDENT_SE = 1.0;
 
 const SCOPE_LABEL: Record<SkillScope, string> = {
   OVERALL: 'Overall',
-  DOMINATION: 'Domination',
-  CONQUEST: 'Conquest',
-  SIEGE: 'Siege',
+  ...BATTLE_TYPE_LABELS,
 };
 
 function Frame({ children, scope }: { children: ReactNode; scope: SkillScope }) {

@@ -13,6 +13,7 @@
 
 import type { FastifyPluginAsync, FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { BATTLE_TYPE_SCOPES } from '@rizzotto/types';
 import { cached, cacheKey } from '../lib/cache.js';
 import {
   matchBreakdown,
@@ -125,7 +126,7 @@ const ratingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/api/players/:id/faction-proficiency', async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = VersionQuerySchema.extend({
-      battleType: z.enum(['OVERALL', 'DOMINATION', 'CONQUEST', 'SIEGE']).default('OVERALL'),
+      battleType: z.enum(BATTLE_TYPE_SCOPES).default('OVERALL'),
     }).safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });

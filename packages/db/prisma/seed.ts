@@ -237,7 +237,7 @@ interface MapSeedEntry {
   name: string;
   slug: string;
   local_path: string | null;
-  battle_type?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  battle_type?: 'DOMINATION' | 'CONQUEST' | 'LAND_BATTLE' | 'SIEGE';
 }
 
 // The curated active pool (the original 36 + Otsuchi Castle, Blasphemous Snowfield, Excavation Site
@@ -263,19 +263,22 @@ async function seedMaps(): Promise<void> {
   const mapData = JSON.parse(fs.readFileSync(path.join(__dirname, 'map-data.json'), 'utf8')) as MapSeedEntry[];
   const canonical = new Set(CANONICAL_MAP_NAMES.map(normMapKey));
 
-  // Reconcile against existing rows BY NORMALISED NAME (not slug) so re-pulling the sheet
-  // updates the curated maps in place instead of creating duplicates when spelling differs.
-  const existing = await prisma.map.findMany({ select: { id: true, name: true } });
-  const byKey = new Map(existing.map((m) => [normMapKey(m.name), m]));
+  // Reconcile against existing rows BY BATTLE TYPE + NORMALISED NAME (not slug) so re-pulling the
+  // sheet updates the curated maps in place instead of creating duplicates when spelling differs.
+  // The battle type is part of the key because the same map exists once per type it is played in
+  // (Ash Plains is both a Conquest and a Land Battle map).
+  const existing = await prisma.map.findMany({ select: { id: true, name: true, battle_type: true } });
+  const keyOf = (battleType: string, name: string): string => `${battleType}:${normMapKey(name)}`;
+  const byKey = new Map(existing.map((m) => [keyOf(m.battle_type, m.name), m]));
 
   let available = 0;
   for (const m of mapData) {
     const battleType = m.battle_type ?? 'DOMINATION';
-    // Domination: only the curated set is available. Conquest / Siege: the whole imported pool
-    // is available (these are the intended pools for those battle types).
+    // Domination: only the curated set is available. Conquest / Land Battle / Siege: the whole
+    // imported pool is available (these are the intended pools for those battle types).
     const isAvailable = battleType === 'DOMINATION' ? canonical.has(normMapKey(m.name)) : true;
     if (isAvailable) available += 1;
-    const match = byKey.get(normMapKey(m.name));
+    const match = byKey.get(keyOf(battleType, m.name));
     if (match) {
       // Refresh name + local image; preserve the admin's battle_type/available choices.
       await prisma.map.update({ where: { id: match.id }, data: { slug: m.slug, name: m.name, image_url: m.local_path } });

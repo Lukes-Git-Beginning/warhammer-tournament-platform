@@ -10,7 +10,9 @@ import { finalizeTournament, unfinalizeTournament } from '../lib/finalize-tourna
 import { cached, invalidate, cacheKey } from '../lib/cache.js';
 import type { TournamentStatusLiteral } from '@rizzotto/types';
 import {
+  BATTLE_TYPES,
   BattleTypeSchema,
+  type BattleType,
   CalendarQuerySchema,
   CalendarTournamentSchema,
   MAX_FACTIONS,
@@ -36,7 +38,7 @@ const ListQuerySchema = z.object({
     .optional(),
   date_from: z.string().datetime().optional(),
   date_to: z.string().datetime().optional(),
-  battle_type: z.enum(['DOMINATION', 'CONQUEST', 'SIEGE']).optional(),
+  battle_type: z.enum(BATTLE_TYPES).optional(),
   competitor_format: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).optional(),
   // Restrict to tournaments the viewer can MANAGE (own + co-hosted; staff = all). Used by the
   // series qualifier picker so it only offers tournaments the user is allowed to attach.
@@ -1138,7 +1140,7 @@ const tournamentRoutes: FastifyPluginAsync = async (fastify) => {
             id: { in: newMapPool },
             deleted_at: null,
             available: true,
-            battle_type: effectiveBattleType as 'DOMINATION' | 'CONQUEST' | 'SIEGE',
+            battle_type: effectiveBattleType as BattleType,
           },
           select: { id: true },
         });

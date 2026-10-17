@@ -1,9 +1,10 @@
 import type { BattleType } from '@/lib/api';
+import { BATTLE_TYPES, BATTLE_TYPE_LABELS } from '@rizzotto/types';
 
 /**
  * Required Steam Workshop mod per battle type. The mod differs by battle type and is not always
- * the same kind: Domination uses the Total Tavern map pack, Conquest uses a rules-enforcement mod
- * (unit caps), and Siege needs none. Single source of truth for the "required mod" notices on the
+ * the same kind: Domination uses the Total Tavern map pack, Conquest and Land Battle use a
+ * rules-enforcement mod (unit caps), and Siege needs none. Single source of truth for the "required mod" notices on the
  * tournament and Open Play pages.
  */
 type Mod = { id: string; name: string };
@@ -11,14 +12,11 @@ type Mod = { id: string; name: string };
 export const REQUIRED_MODS: Record<BattleType, Mod | null> = {
   DOMINATION: { id: '2875865414', name: 'Total Tavern Tournament Map Pack' },
   CONQUEST: { id: '3763978597', name: "Loupi's Fruit Rules Unit Caps Mod" },
+  LAND_BATTLE: { id: '3763978597', name: "Loupi's Fruit Rules Unit Caps Mod" },
   SIEGE: null,
 };
 
-const BATTLE_TYPE_LABEL: Record<BattleType, string> = {
-  DOMINATION: 'Domination',
-  CONQUEST: 'Conquest',
-  SIEGE: 'Siege',
-};
+const BATTLE_TYPE_LABEL = BATTLE_TYPE_LABELS;
 
 const steamUrl = (id: string) => `https://steamcommunity.com/sharedfiles/filedetails/?id=${id}`;
 
@@ -59,23 +57,27 @@ export function RequiredModNotice({
 
 /**
  * Multi-battle-type notice (Open Play, where a player may queue for any battle type): lists the
- * required mod per battle type, and "none" for the ones that need no mod.
+ * required mod per battle type, and "none" for the ones that need no mod. Battle types that share a
+ * mod are listed together ("Conquest & Land Battle").
  */
 export function RequiredModsNotice({ label = 'Required mods' }: { label?: string }) {
-  const order: BattleType[] = ['DOMINATION', 'CONQUEST', 'SIEGE'];
+  const groups: Array<{ types: BattleType[]; mod: Mod | null }> = [];
+  for (const bt of BATTLE_TYPES) {
+    const mod = REQUIRED_MODS[bt];
+    const same = groups.find((g) => (g.mod?.id ?? null) === (mod?.id ?? null));
+    if (same) same.types.push(bt);
+    else groups.push({ types: [bt], mod });
+  }
   return (
     <div className="rounded-md border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 px-4 py-3 text-sm">
       <span className="text-stone-300">{label}: </span>
-      {order.map((bt, i) => {
-        const mod = REQUIRED_MODS[bt];
-        return (
-          <span key={bt}>
-            {i > 0 && <span className="text-stone-600"> · </span>}
-            <span className="text-stone-400">{BATTLE_TYPE_LABEL[bt]} — </span>
-            {mod ? <ModLink mod={mod} /> : <span className="text-stone-500">none</span>}
-          </span>
-        );
-      })}
+      {groups.map(({ types, mod }, i) => (
+        <span key={types.join()}>
+          {i > 0 && <span className="text-stone-600"> · </span>}
+          <span className="text-stone-400">{types.map((t) => BATTLE_TYPE_LABEL[t]).join(' & ')} — </span>
+          {mod ? <ModLink mod={mod} /> : <span className="text-stone-500">none</span>}
+        </span>
+      ))}
     </div>
   );
 }

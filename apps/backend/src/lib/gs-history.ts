@@ -18,7 +18,7 @@ export interface SnapshotRow {
   band: number;
   games_count: number;
   version_id: string | null;
-  battle_type: string; // OVERALL | DOMINATION | CONQUEST | SIEGE
+  battle_type: string; // OVERALL or a battle type
 }
 
 /** Inclusive list of UTC midnights from `from`'s day to `to`'s day, one Date per day. */

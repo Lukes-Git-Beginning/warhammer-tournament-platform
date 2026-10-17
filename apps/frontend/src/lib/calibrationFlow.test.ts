@@ -101,7 +101,7 @@ describe('nextCalibrationQuestion — adaptive skip', () => {
 });
 
 describe('per battle type (2026-10-08)', () => {
-  // Domination block, Conquest block, Siege block, then a general question feeding every type.
+  // One block per battle type (as in the real catalog), then a general question feeding every type.
   const SCOPED: CalibrationQuestionDto[] = [
     { ...QUESTIONS[0]!, battleTypes: ['DOMINATION'] }, // best_result, can reach 5
     {
@@ -122,6 +122,15 @@ describe('per battle type (2026-10-08)', () => {
         { value: 'gt200', label: '200+', floor: 3 },
       ],
     },
+    {
+      id: 'land_battle_self_rating',
+      prompt: 'Where would you place yourself in Land Battle?',
+      battleTypes: ['LAND_BATTLE'],
+      options: [
+        { value: '1', label: 'New', floor: 1 },
+        { value: '3', label: 'Intermediate', floor: 3 },
+      ],
+    },
     { ...QUESTIONS[1]!, id: 'years', prompt: 'Years competitive?' }, // general, caps at 3
   ];
 
@@ -137,12 +146,12 @@ describe('per battle type (2026-10-08)', () => {
   });
 
   it('a general question is still asked while some type could rise', () => {
-    const answers = { best_result: 'tt_top16', conquest_self_rating: '4', siege_battles: 'lt10' };
+    const answers = { best_result: 'tt_top16', conquest_self_rating: '4', siege_battles: 'lt10', land_battle_self_rating: '3' };
     expect(nextCalibrationQuestion(SCOPED, answers, NONE)?.id).toBe('years'); // Siege still at 1
   });
 
   it('a general question is skipped once every type is at or above its best option', () => {
-    const answers = { best_result: 'tt_top16', conquest_self_rating: '4', siege_battles: 'gt200' };
+    const answers = { best_result: 'tt_top16', conquest_self_rating: '4', siege_battles: 'gt200', land_battle_self_rating: '3' };
     expect(nextCalibrationQuestion(SCOPED, answers, NONE)).toBeUndefined();
   });
 });

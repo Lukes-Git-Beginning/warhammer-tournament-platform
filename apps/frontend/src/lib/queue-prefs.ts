@@ -1,8 +1,9 @@
 import type { BattleType, QueueMatchFormat, QueuePrefs } from './api';
+import { BATTLE_TYPES } from '@rizzotto/types';
 
 /** What a brand-new player (no stored settings yet) queues with. */
 export const DEFAULT_QUEUE_PREFS: QueuePrefs = {
-  battleTypes: ['DOMINATION', 'CONQUEST', 'SIEGE'],
+  battleTypes: [...BATTLE_TYPES],
   matchFormats: ['BO1', 'BO3'],
   competitorFormat: 'ONE_V_ONE',
   teamId: null,

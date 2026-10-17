@@ -1,4 +1,5 @@
 import type { CalibrationQuestionDto } from './api.js';
+import { BATTLE_TYPES, BATTLE_TYPE_LABELS, type BattleType } from '@rizzotto/types';
 
 /**
  * Adaptive calibration flow (Alex-spec, 2026-07-03; per battle type since 2026-10-08).
@@ -14,8 +15,7 @@ import type { CalibrationQuestionDto } from './api.js';
  * since a Domination answer never sets their floor).
  */
 
-const BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'SIEGE'] as const;
-type BattleType = (typeof BATTLE_TYPES)[number];
+
 
 /** The battle types a question feeds (no scope = general = every type). */
 function typesOf(question: CalibrationQuestionDto): readonly BattleType[] {
@@ -61,9 +61,8 @@ export function nextCalibrationQuestion(
   );
 }
 
-/** Display label for a question's battle type ("Conquest"), or null for a general question. */
+/** Display label for a question's battle type ("Land Battle"), or null for a general question. */
 export function questionTypeLabel(question: CalibrationQuestionDto): string | null {
   if (!question.battleTypes || question.battleTypes.length !== 1) return null;
-  const t = question.battleTypes[0]!;
-  return t.charAt(0) + t.slice(1).toLowerCase();
+  return BATTLE_TYPE_LABELS[question.battleTypes[0]!];
 }

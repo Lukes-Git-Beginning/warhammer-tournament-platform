@@ -10,13 +10,9 @@ import {
   type MapDto,
   type BattleType,
 } from '@/lib/api.js';
+import { BATTLE_TYPES, BATTLE_TYPE_LABELS } from '@rizzotto/types';
 
-const BATTLE_TYPES: BattleType[] = ['DOMINATION', 'CONQUEST', 'SIEGE'];
-const BATTLE_TYPE_LABELS: Record<BattleType, string> = {
-  DOMINATION: 'Domination',
-  CONQUEST: 'Conquest',
-  SIEGE: 'Siege',
-};
+
 
 /** Single battle-type select — a map is built for exactly one type. */
 function BattleTypeSelect({ value, onChange }: { value: BattleType; onChange: (bt: BattleType) => void }) {

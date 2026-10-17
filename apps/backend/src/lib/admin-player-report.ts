@@ -7,12 +7,18 @@
  * The builders are pure (arrays in, rows out) so they are unit-testable; the loaders do the queries.
  */
 import type { PrismaClient } from '@rizzotto/db';
+import { BATTLE_TYPES } from '@rizzotto/types';
 import { localSlotNow, slotToInstant } from './availability-time.js';
 import { SITE_TZ } from './site-time.js';
 import { loadCalibrationQuestions } from './skill-classification-service.js';
 
-export const REPORT_BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'SIEGE'] as const;
+export const REPORT_BATTLE_TYPES = BATTLE_TYPES;
 type ReportBattleType = (typeof REPORT_BATTLE_TYPES)[number];
+
+/** One value per battle type (report columns are per type). */
+function emptyByType<T>(value: T): Record<ReportBattleType, T> {
+  return Object.fromEntries(REPORT_BATTLE_TYPES.map((t) => [t, value])) as Record<ReportBattleType, T>;
+}
 
 /** A completed, counted game, reduced to what the report needs. Competitor ids may be team ids. */
 export interface ReportGame {
@@ -242,7 +248,7 @@ export function answeredScopes(
   answers: Record<string, unknown> | null | undefined,
   questions: { id: string; battleTypes?: string[] }[],
 ): ReportUser['answered'] {
-  const out = { general: false, DOMINATION: false, CONQUEST: false, SIEGE: false };
+  const out = { general: false, ...emptyByType(false) };
   if (!answers) return out;
   for (const q of questions) {
     if (answers[q.id] === undefined || answers[q.id] === null || answers[q.id] === '') continue;
@@ -473,7 +479,7 @@ export async function loadHostReport(prisma: PrismaClient, days: number): Promis
         total: 0,
         last: null,
         fields: [],
-        bt: { DOMINATION: 0, CONQUEST: 0, SIEGE: 0 },
+        bt: emptyByType(0),
         upcoming: 0,
       };
       if (t.start_date > now && t.status !== 'COMPLETED') a.upcoming++;
