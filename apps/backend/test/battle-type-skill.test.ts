@@ -112,14 +112,22 @@ describe('questionnaire floor per battle type', () => {
 });
 
 describe('pendingCalibrationTypes — banner for players calibrated before the rework', () => {
-  it('pre-rework answers (Domination + general) → Conquest and Siege pending', () => {
+  it('pre-rework answers (Domination + general) → every other type pending', () => {
     expect(pendingCalibrationTypes({ best_result: 'won_open', years_competitive: 'gt2y' })).toEqual([
       'CONQUEST',
+      'LAND_BATTLE',
       'SIEGE',
     ]);
   });
   it('any answer for a type clears it (a "skipped" marker counts)', () => {
-    expect(pendingCalibrationTypes({ best_result: 'none', conquest_battles: 'lt10', siege_self_rating: 'skipped' })).toEqual([]);
+    expect(
+      pendingCalibrationTypes({
+        best_result: 'none',
+        conquest_battles: 'lt10',
+        land_battle_battles: 'lt10',
+        siege_self_rating: 'skipped',
+      }),
+    ).toEqual([]);
   });
   it('uncalibrated players get the normal CTA, not the banner', () => {
     expect(pendingCalibrationTypes({})).toEqual([]);
@@ -200,7 +208,8 @@ describe('classifyWithModel', () => {
   it('scopeForBattleType maps tournament battle types, falls back to OVERALL', () => {
     expect(scopeForBattleType('CONQUEST')).toBe('CONQUEST');
     expect(scopeForBattleType(null)).toBe('OVERALL');
-    expect(scopeForBattleType('LAND_BATTLE')).toBe('OVERALL');
+    expect(scopeForBattleType('LAND_BATTLE')).toBe('LAND_BATTLE');
+    expect(scopeForBattleType('NAVAL_BATTLE')).toBe('OVERALL');
   });
 });
 
@@ -222,6 +231,7 @@ describe('admin band filters per battle type', () => {
     const { BroadcastAudienceSchema } = await import('../src/lib/broadcast-audience.js');
     expect(BroadcastAudienceSchema.parse({ bands: [2] }).bandBattleType).toBe('OVERALL');
     expect(BroadcastAudienceSchema.parse({ bands: [2], bandBattleType: 'CONQUEST' }).bandBattleType).toBe('CONQUEST');
-    expect(BroadcastAudienceSchema.safeParse({ bandBattleType: 'LAND_BATTLE' }).success).toBe(false);
+    expect(BroadcastAudienceSchema.parse({ bands: [2], bandBattleType: 'LAND_BATTLE' }).bandBattleType).toBe('LAND_BATTLE');
+    expect(BroadcastAudienceSchema.safeParse({ bandBattleType: 'NAVAL_BATTLE' }).success).toBe(false);
   });
 });
