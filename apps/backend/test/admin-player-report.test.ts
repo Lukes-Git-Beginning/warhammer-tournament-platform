@@ -264,12 +264,14 @@ describe('report helpers', () => {
       general: true,
       DOMINATION: false,
       CONQUEST: true,
+      LAND_BATTLE: false,
       SIEGE: false,
     });
     expect(answeredScopes(null, questions)).toEqual({
       general: false,
       DOMINATION: false,
       CONQUEST: false,
+      LAND_BATTLE: false,
       SIEGE: false,
     });
   });

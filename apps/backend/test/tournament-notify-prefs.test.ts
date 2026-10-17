@@ -80,7 +80,7 @@ describe('tournament DM prefs — REST', () => {
     const u = await availablePlayer('tnp-invalid');
     expect((await putPrefs(u, { battleTypes: [], competitorFormats: ['ONE_V_ONE'] })).statusCode).toBe(400);
     expect((await putPrefs(u, { battleTypes: ['DOMINATION'], competitorFormats: [] })).statusCode).toBe(400);
-    expect((await putPrefs(u, { battleTypes: ['LAND_BATTLE'], competitorFormats: ['ONE_V_ONE'] })).statusCode).toBe(400);
+    expect((await putPrefs(u, { battleTypes: ['NAVAL_BATTLE'], competitorFormats: ['ONE_V_ONE'] })).statusCode).toBe(400);
   });
 
   it('requires a login', async () => {

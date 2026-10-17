@@ -46,14 +46,16 @@ describe('Land Battle — map pool', () => {
   it('offers its own maps, alongside (not instead of) the Conquest ones of the same name', async () => {
     const land = await app.inject({ method: 'GET', url: '/api/maps?battle_type=LAND_BATTLE' });
     expect(land.statusCode).toBe(200);
-    const landMaps = land.json<Array<{ name: string; image_url: string | null }>>();
+    const landMaps = land.json<{ data: Array<{ name: string; image_url: string | null }> }>().data;
     expect(landMaps.length).toBeGreaterThanOrEqual(34);
     const ashLand = landMaps.find((m) => m.name === 'Ash Plains');
     expect(ashLand?.image_url).toBe('/maps/land-battle/ash-plains.png');
     expect(landMaps.some((m) => m.name === 'Shagrath Strand')).toBe(true);
 
     const conquest = await app.inject({ method: 'GET', url: '/api/maps?battle_type=CONQUEST' });
-    const ashConquest = conquest.json<Array<{ name: string; image_url: string | null }>>().find((m) => m.name === 'Ash Plains');
+    const ashConquest = conquest
+      .json<{ data: Array<{ name: string; image_url: string | null }> }>()
+      .data.find((m) => m.name === 'Ash Plains');
     expect(ashConquest?.image_url).toBe('/maps/ash-plains.png');
   });
 });
