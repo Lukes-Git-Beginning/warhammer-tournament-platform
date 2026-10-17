@@ -1211,7 +1211,7 @@
     "battle_type": "LAND_BATTLE"
   },
   {
-    "name": "The Deserts Bounty",
+    "name": "The Desert's Bounty",
     "image_url": "(local)",
     "slug": "the-deserts-bounty-land-battle",
     "local_path": "/maps/land-battle/the-deserts-bounty.png",

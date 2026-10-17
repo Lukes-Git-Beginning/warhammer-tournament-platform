@@ -40,7 +40,7 @@ INSERT INTO "Map" ("id", "slug", "name", "image_url", "battle_type", "available"
   ('79360c4c-aca9-4af4-9c8c-143ed2065e65', 'sword-of-torgald-land-battle', 'Sword of Torgald', '/maps/land-battle/sword-of-torgald.png', 'LAND_BATTLE'::"BattleType", true, now(), now()),
   ('23c804bd-2454-43ce-b511-b0d98cff9048', 'the-bitter-dunes-land-battle', 'The Bitter Dunes', '/maps/land-battle/the-bitter-dunes.png', 'LAND_BATTLE'::"BattleType", true, now(), now()),
   ('34fa3e81-fa91-4386-aea7-d791ba8c632e', 'the-chill-flow-land-battle', 'The Chill Flow', '/maps/land-battle/the-chill-flow.png', 'LAND_BATTLE'::"BattleType", true, now(), now()),
-  ('634a8bd5-8d73-414c-8dde-a145927a7c89', 'the-deserts-bounty-land-battle', 'The Deserts Bounty', '/maps/land-battle/the-deserts-bounty.png', 'LAND_BATTLE'::"BattleType", true, now(), now()),
+  ('634a8bd5-8d73-414c-8dde-a145927a7c89', 'the-deserts-bounty-land-battle', 'The Desert''s Bounty', '/maps/land-battle/the-deserts-bounty.png', 'LAND_BATTLE'::"BattleType", true, now(), now()),
   ('80fb7091-f82b-458a-bd85-7bf1e5f41144', 'the-flats-of-kislev-land-battle', 'The Flats of Kislev', '/maps/land-battle/the-flats-of-kislev.png', 'LAND_BATTLE'::"BattleType", true, now(), now()),
   ('0733ea0d-1345-499e-81fa-5430897ddbc0', 'the-lost-crater-land-battle', 'The Lost Crater', '/maps/land-battle/the-lost-crater.png', 'LAND_BATTLE'::"BattleType", true, now(), now()),
   ('fcbdb23a-a3df-4c72-b2cd-228746fb0ac9', 'the-reikland-estates-land-battle', 'The Reikland Estates', '/maps/land-battle/the-reikland-estates.png', 'LAND_BATTLE'::"BattleType", true, now(), now()),
