@@ -17,6 +17,7 @@ import { TournamentDefaultsEditor } from '@/components/admin/TournamentDefaultsE
 import { FeatureFlagsPanel } from '@/components/admin/FeatureFlagsPanel.js';
 import { WelcomeBannerEditor } from '@/components/admin/WelcomeBannerEditor.js';
 import { StandardRulesetEditor } from '@/components/admin/StandardRulesetEditor.js';
+import { RuleDocumentsEditor } from '@/components/admin/RuleDocumentsEditor.js';
 import { PageShell } from '@/components/layout/PageShell.js';
 import { ImportLogTable } from '@/components/admin/ImportLogTable.js';
 import { AdminMatchesTab } from '@/components/admin/AdminMatchesTab.js';
@@ -115,6 +116,11 @@ function SettingsTab() {
       {/* Section: Standard Ruleset */}
       <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-5">
         <StandardRulesetEditor />
+      </section>
+
+      {/* Section: Rules Documents (permalinks) */}
+      <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-5">
+        <RuleDocumentsEditor />
       </section>
 
       {/* Section: Feature Flags */}

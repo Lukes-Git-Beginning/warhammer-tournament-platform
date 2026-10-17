@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 ### Added
 - **Land Battle is here.** The classic battle type joins Domination, Conquest and Siege. Hosts can run Land Battle tournaments, you can queue for it in Open Play, and it gets its own skill rating, leaderboards and quarterly final. It starts with a pool of 34 maps, uses Loupi's Fruit Rules Unit Caps Mod like Conquest, and has its own Standard Ruleset.
+- **The full rules, one click away.** The Conquest and Land Battle rulesets now link to the full Fruit Rules, at a fixed address that always opens the current version.
 - **A few Land Battle questions in the skill calibration.** If you calibrated before, you'll be asked the new block once, so Land Battle tournaments can place you in the right band.
 
 ### Changed

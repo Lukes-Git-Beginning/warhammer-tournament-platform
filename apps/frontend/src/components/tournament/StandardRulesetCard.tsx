@@ -9,7 +9,7 @@
  * Host customisations still go into the "Custom Rules" / "Custom Restrictions" fields.
  */
 import { useQuery } from '@tanstack/react-query';
-import { getFactions, getStandardRuleset, type BattleType, type StandardRuleset } from '@/lib/api.js';
+import { getFactions, getRuleDocuments, getStandardRuleset, type BattleType, type StandardRuleset } from '@/lib/api.js';
 import { BATTLE_TYPE_LABELS } from '@rizzotto/types';
 import { battleTypeIconSrc } from '@/lib/battleTypeIcons';
 
@@ -68,6 +68,15 @@ export function StandardRulesetCard({
   });
   const factionName = new Map((factionList?.data ?? []).map((d) => [d.faction.id, d.faction.name]));
   const bannedFactionNames = (rs.banned_factions ?? []).map((id) => factionName.get(id) ?? id);
+  // Full rules documents for this battle type (e.g. the Fruit Rules), linked via their permalink so
+  // a new document version never changes the link. Only documents the admin has pointed somewhere.
+  const { data: ruleDocs } = useQuery({
+    queryKey: ['rule-documents'],
+    queryFn: getRuleDocuments,
+    staleTime: 5 * 60 * 1000,
+    enabled: !!battleType,
+  });
+  const fullRules = (ruleDocs?.documents ?? []).filter((d) => d.url && battleType && d.battle_types.includes(battleType));
   const title = battleType ? `Standard ${BATTLE_TYPE_LABEL[battleType] ?? battleType} Ruleset` : 'Standard Ruleset';
 
   return (
@@ -102,6 +111,23 @@ export function StandardRulesetCard({
             <Row label="Banned Spells / Items / Abilities" items={rs.banned_abilities!} />
           )}
           <Row label="Conduct" items={rs.conduct} />
+          {fullRules.length > 0 && (
+            <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
+              <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80 sm:w-40">
+                Full Rules
+              </span>
+              <span className="text-stone-300">
+                {fullRules.map((d, i) => (
+                  <span key={d.slug}>
+                    {i > 0 && ' · '}
+                    <a href={`/rules/${d.slug}`} target="_blank" rel="noopener noreferrer" className="text-rizzotto-gold-400 underline">
+                      {d.label}
+                    </a>
+                  </span>
+                ))}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>
