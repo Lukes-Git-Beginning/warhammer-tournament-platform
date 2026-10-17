@@ -13,12 +13,13 @@
 // ---------------------------------------------------------------------------
 
 import type { PrismaClient } from '@rizzotto/db';
+import type { BattleTypeScope } from '@rizzotto/types';
 import type { Redis } from 'ioredis';
 import { getRatingModel } from './rating-model-service.js';
 import { skillToBand } from './rating-model.js';
 import { resolveTeamGs } from './team-rating.js';
 
-export type BattleTypeFilter = 'OVERALL' | 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+export type BattleTypeFilter = BattleTypeScope;
 export type CompetitorFormatFilter = 'ONE_V_ONE' | 'TWO_V_TWO';
 
 export interface GsBoardEntry {

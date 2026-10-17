@@ -5,6 +5,7 @@
  */
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { BATTLE_TYPES } from '@rizzotto/types';
 import { cached, cacheKey } from '../lib/cache.js';
 import { canManageTournament } from '../lib/tournament-utils.js';
 import {
@@ -32,7 +33,7 @@ import {
   notifyReservePromoted,
 } from '../lib/championship-notify.js';
 
-const QUARTERLY_BATTLE_TYPES: QuarterlyBattleType[] = ['DOMINATION', 'CONQUEST', 'SIEGE'];
+const QUARTERLY_BATTLE_TYPES: QuarterlyBattleType[] = [...BATTLE_TYPES];
 
 /** The tile never needs the full seed list — only the sizing + how far off the floor. */
 function quarterlyTile(p: QuarterlyFinalPreview) {

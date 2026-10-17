@@ -19,6 +19,7 @@
 // with Alex to 20/35/75/90% win-chance vs the average active player.
 // ---------------------------------------------------------------------------
 
+import { BATTLE_TYPES, BATTLE_TYPE_LABELS, type BattleType } from '@rizzotto/types';
 import { skillToBand, SKILL_BAND_THRESHOLDS, logistic } from './rating-model.js';
 
 // ---------------------------------------------------------------------------
@@ -35,15 +36,15 @@ export interface QuestionOption {
   floor: number | null;
 }
 
-/** The battle types a skill/band can be judged in (mirrors the Prisma BattleType enum). */
-export const SKILL_BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'SIEGE'] as const;
-export type SkillBattleType = (typeof SKILL_BATTLE_TYPES)[number];
+/** The battle types a skill/band can be judged in (every battle type). */
+export const SKILL_BATTLE_TYPES = BATTLE_TYPES;
+export type SkillBattleType = BattleType;
 /** A classification scope: one battle type, or OVERALL (the game-weighted summary). */
 export type SkillScope = 'OVERALL' | SkillBattleType;
 
-/** Display label for a battle type (user-facing copy: "Conquest", not "CONQUEST"). */
+/** Display label for a battle type (user-facing copy: "Land Battle", not "LAND_BATTLE"). */
 export function battleTypeLabel(type: SkillBattleType): string {
-  return type.charAt(0) + type.slice(1).toLowerCase();
+  return BATTLE_TYPE_LABELS[type];
 }
 
 export interface CalibrationQuestion {
@@ -191,6 +192,10 @@ export const CALIBRATION_QUESTIONS: CalibrationQuestion[] = [
   typeRanked('CONQUEST', 'conquest_ranked', 'Conquest'),
   typeBattles('CONQUEST', 'Conquest'),
   typeSelfRating('CONQUEST', 'Conquest'),
+  // --- Land Battle (no CA Ranked queue → no ranked question) ---
+  typeBestResult('LAND_BATTLE', 'Land Battle'),
+  typeBattles('LAND_BATTLE', 'Land Battle'),
+  typeSelfRating('LAND_BATTLE', 'Land Battle'),
   // --- Siege (not in CA Ranked → no ranked question) ---
   typeBestResult('SIEGE', 'Siege'),
   typeBattles('SIEGE', 'Siege'),

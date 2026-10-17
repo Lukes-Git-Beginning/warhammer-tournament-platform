@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAllStandardRulesets, getFactions, putAdminConfig, type StandardRuleset } from '@/lib/api.js';
 import { StandardRulesetCard, STANDARD_RULESET } from '@/components/tournament/StandardRulesetCard.js';
+import { BATTLE_TYPES, BATTLE_TYPE_LABELS, type BattleType } from '@rizzotto/types';
 
 const CONFIG_KEY = 'standard_ruleset';
 
-const BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'SIEGE'] as const;
 const COMPETITOR_FORMATS = ['ONE_V_ONE', 'TWO_V_TWO'] as const;
-const BT_LABEL: Record<string, string> = { DOMINATION: 'Domination', CONQUEST: 'Conquest', SIEGE: 'Siege' };
+const BT_LABEL: Record<string, string> = BATTLE_TYPE_LABELS;
 const CF_LABEL: Record<string, string> = { ONE_V_ONE: '1v1', TWO_V_TWO: '2v2' };
 const comboKey = (bt: string, cf: string) => `${bt}:${cf}`;
 const COMBOS = BATTLE_TYPES.flatMap((bt) =>
@@ -153,7 +153,7 @@ export function StandardRulesetEditor() {
               <p className="mb-1 text-xs text-stone-500">Live preview — {COMBOS.find((c) => c.key === selected)?.label}</p>
               <StandardRulesetCard
                 ruleset={current}
-                battleType={selected.split(':')[0] as 'DOMINATION' | 'CONQUEST' | 'SIEGE'}
+                battleType={selected.split(':')[0] as BattleType}
                 competitorFormat={selected.split(':')[1] as 'ONE_V_ONE' | 'TWO_V_TWO'}
               />
             </div>

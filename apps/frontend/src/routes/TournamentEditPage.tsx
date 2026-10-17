@@ -33,6 +33,7 @@ import { StandardRulesetCard } from '@/components/tournament/StandardRulesetCard
 import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
 import { estimateDurationHours, intervalsOverlap, describeClash } from '@/lib/tournamentSchedule';
 import { useMajorsEnabled } from '@/hooks/useFeatureFlags';
+import { BATTLE_TYPES, BATTLE_TYPE_LABELS, type BattleType } from '@rizzotto/types';
 
 // ---------------------------------------------------------------------------
 // Lock helpers
@@ -89,7 +90,7 @@ type EditFormData = {
   map_preset_config: MapPresetConfig | null;
   format: Tournament['format'];
   mode: 'BPT' | 'SFT' | 'SLT' | 'MATRIX' | 'TWO_D_THREE' | 'FREE_PICK' | 'ONE_V_THREE' | 'FACTION_WAR' | 'SFT_2V2' | 'BPT_2V2';
-  battle_type: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  battle_type: BattleType;
   competitor_format: 'ONE_V_ONE' | 'TWO_V_TWO';
   auto_advance: boolean;
   championship_kind: 'NONE' | 'QUARTERLY' | 'MONTHLY_LADDER';
@@ -258,7 +259,7 @@ function buildInitialForm(t: Tournament): EditFormData {
     map_preset_config: (t.map_preset_config as MapPresetConfig | null) ?? null,
     format: t.format,
     mode: (t.mode === 'BPT' || t.mode === 'SFT' || t.mode === 'SLT' || t.mode === 'MATRIX' || t.mode === 'TWO_D_THREE' || t.mode === 'FREE_PICK' || t.mode === 'ONE_V_THREE' || t.mode === 'FACTION_WAR' || t.mode === 'SFT_2V2' || t.mode === 'BPT_2V2') ? t.mode : 'BPT',
-    battle_type: (t.battle_type ?? 'DOMINATION') as 'DOMINATION' | 'CONQUEST' | 'SIEGE',
+    battle_type: (t.battle_type ?? 'DOMINATION') as BattleType,
     competitor_format: (t.competitor_format ?? 'ONE_V_ONE') as 'ONE_V_ONE' | 'TWO_V_TWO',
     auto_advance: t.auto_advance ?? false,
     championship_kind: (((t as unknown as { championship_kind?: string }).championship_kind ?? 'NONE') as 'NONE' | 'QUARTERLY' | 'MONTHLY_LADDER'),
@@ -961,9 +962,11 @@ export function TournamentEditPage() {
                 </>
               ) : (
                 <Select id="tef-battle-type" name="battle_type" value={form.battle_type} onChange={handleChange}>
-                  <option value="DOMINATION">Domination</option>
-                  <option value="CONQUEST">Conquest</option>
-                  <option value="SIEGE">Siege</option>
+                  {BATTLE_TYPES.map((bt) => (
+                    <option key={bt} value={bt}>
+                      {BATTLE_TYPE_LABELS[bt]}
+                    </option>
+                  ))}
                 </Select>
               )}
             </div>

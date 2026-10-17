@@ -25,6 +25,7 @@ import { TeamProfilePage } from './routes/TeamProfilePage';
 import { SeriesListingPage } from './routes/SeriesListingPage';
 import { SeriesDetailPage } from './routes/SeriesDetailPage';
 import { CreateSeriesPage } from './routes/CreateSeriesPage';
+import { isBattleType, type BattleType, type BattleTypeScope } from '@rizzotto/types';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -45,7 +46,7 @@ export const tournamentsListingRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => {
     const isMajor = search.major === true || search.major === 'true';
     const bt = search.battle_type;
-    const battleType = bt === 'DOMINATION' || bt === 'CONQUEST' || bt === 'SIEGE' ? bt : undefined;
+    const battleType = isBattleType(bt) ? bt : undefined;
     const cf = search.competitor_format;
     const competitorFormat = cf === 'ONE_V_ONE' || cf === 'TWO_V_TWO' ? cf : undefined;
     return {
@@ -68,26 +69,21 @@ const createTournamentRoute = createRoute({
   ): {
     duplicate?: string;
     championship?: 'QUARTERLY' | 'MONTHLY_LADDER';
-    battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+    battleType?: BattleType;
     competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
     period?: string;
   } => {
     const out: {
       duplicate?: string;
       championship?: 'QUARTERLY' | 'MONTHLY_LADDER';
-      battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+      battleType?: BattleType;
       competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
       period?: string;
     } = {};
     if (typeof search.duplicate === 'string') out.duplicate = search.duplicate;
     if (search.championship === 'QUARTERLY' || search.championship === 'MONTHLY_LADDER')
       out.championship = search.championship;
-    if (
-      search.battleType === 'DOMINATION' ||
-      search.battleType === 'CONQUEST' ||
-      search.battleType === 'SIEGE'
-    )
-      out.battleType = search.battleType;
+    if (isBattleType(search.battleType)) out.battleType = search.battleType;
     if (search.competitorFormat === 'ONE_V_ONE' || search.competitorFormat === 'TWO_V_TWO')
       out.competitorFormat = search.competitorFormat;
     if (typeof search.period === 'string') out.period = search.period;
@@ -133,15 +129,13 @@ const userProfileRoute = createRoute({
   // valid; absent = the page defaults (All-Time, the player's most-played battle type).
   validateSearch: (
     search: Record<string, unknown>,
-  ): { version?: string; battleType?: 'OVERALL' | 'DOMINATION' | 'CONQUEST' | 'SIEGE' } => {
+  ): { version?: string; battleType?: BattleTypeScope } => {
     const bt = search.battleType;
     return {
       ...(typeof search.version === 'string' && search.version !== 'all'
         ? { version: search.version }
         : {}),
-      ...(bt === 'OVERALL' || bt === 'DOMINATION' || bt === 'CONQUEST' || bt === 'SIEGE'
-        ? { battleType: bt }
-        : {}),
+      ...(bt === 'OVERALL' || isBattleType(bt) ? { battleType: bt } : {}),
     };
   },
 });

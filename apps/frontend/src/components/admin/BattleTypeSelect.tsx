@@ -1,9 +1,11 @@
 import type { SkillScope } from '@/lib/api.js';
+import { isBattleType } from '@rizzotto/types';
 
 const OPTIONS: { value: SkillScope; label: string }[] = [
   { value: 'OVERALL', label: 'Overall' },
   { value: 'DOMINATION', label: 'Domination' },
   { value: 'CONQUEST', label: 'Conquest' },
+  { value: 'LAND_BATTLE', label: 'Land Battle' },
   { value: 'SIEGE', label: 'Siege' },
 ];
 
@@ -38,5 +40,5 @@ export function BattleTypeSelect({
 
 /** Parse a deep-linked battle type, falling back to Overall. */
 export function parseScope(raw: string | undefined): SkillScope {
-  return raw === 'DOMINATION' || raw === 'CONQUEST' || raw === 'SIEGE' ? raw : 'OVERALL';
+  return isBattleType(raw) ? raw : 'OVERALL';
 }

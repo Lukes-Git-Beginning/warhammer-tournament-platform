@@ -1027,5 +1027,243 @@
     "slug": "zhufbar-dwarfs",
     "local_path": "/maps/zhufbar-dwarfs.png",
     "battle_type": "SIEGE"
+  },
+  {
+    "name": "Alpine Ridge",
+    "image_url": "(local)",
+    "slug": "alpine-ridge-land-battle",
+    "local_path": "/maps/land-battle/alpine-ridge.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Ash Plains",
+    "image_url": "(local)",
+    "slug": "ash-plains-land-battle",
+    "local_path": "/maps/land-battle/ash-plains.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Bloodpine Woods",
+    "image_url": "(local)",
+    "slug": "bloodpine-woods-land-battle",
+    "local_path": "/maps/land-battle/bloodpine-woods.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Cliff of Beasts",
+    "image_url": "(local)",
+    "slug": "cliff-of-beasts-land-battle",
+    "local_path": "/maps/land-battle/cliff-of-beasts.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Da Stompin Groundz",
+    "image_url": "(local)",
+    "slug": "da-stompin-groundz-land-battle",
+    "local_path": "/maps/land-battle/da-stompin-groundz.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Dok Karaz",
+    "image_url": "(local)",
+    "slug": "dok-karaz-land-battle",
+    "local_path": "/maps/land-battle/dok-karaz.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Eschen",
+    "image_url": "(local)",
+    "slug": "eschen-land-battle",
+    "local_path": "/maps/land-battle/eschen.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Galbaraz",
+    "image_url": "(local)",
+    "slug": "galbaraz-land-battle",
+    "local_path": "/maps/land-battle/galbaraz.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Gor Gazan",
+    "image_url": "(local)",
+    "slug": "gor-gazan-land-battle",
+    "local_path": "/maps/land-battle/gor-gazan.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Grey Mountain Stables",
+    "image_url": "(local)",
+    "slug": "grey-mountain-stables-land-battle",
+    "local_path": "/maps/land-battle/grey-mountain-stables.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Knights Run",
+    "image_url": "(local)",
+    "slug": "knights-run-land-battle",
+    "local_path": "/maps/land-battle/knights-run.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Mortis Wastes",
+    "image_url": "(local)",
+    "slug": "mortis-wastes-land-battle",
+    "local_path": "/maps/land-battle/mortis-wastes.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Peak Pass",
+    "image_url": "(local)",
+    "slug": "peak-pass-land-battle",
+    "local_path": "/maps/land-battle/peak-pass.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Peasants Pasture",
+    "image_url": "(local)",
+    "slug": "peasants-pasture-land-battle",
+    "local_path": "/maps/land-battle/peasants-pasture.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Pillar of Bone",
+    "image_url": "(local)",
+    "slug": "pillar-of-bone-land-battle",
+    "local_path": "/maps/land-battle/pillar-of-bone.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Plain of Spiders",
+    "image_url": "(local)",
+    "slug": "plain-of-spiders-land-battle",
+    "local_path": "/maps/land-battle/plain-of-spiders.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Praag",
+    "image_url": "(local)",
+    "slug": "praag-land-battle",
+    "local_path": "/maps/land-battle/praag.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "River Amaxon",
+    "image_url": "(local)",
+    "slug": "river-amaxon-land-battle",
+    "local_path": "/maps/land-battle/river-amaxon.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Schwartzhafen",
+    "image_url": "(local)",
+    "slug": "schwartzhafen-land-battle",
+    "local_path": "/maps/land-battle/schwartzhafen.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Shagrath Strand",
+    "image_url": "(local)",
+    "slug": "shagrath-strand-land-battle",
+    "local_path": "/maps/land-battle/shagrath-strand.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Shimmersward",
+    "image_url": "(local)",
+    "slug": "shimmersward-land-battle",
+    "local_path": "/maps/land-battle/shimmersward.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Southern Chaos Wastes",
+    "image_url": "(local)",
+    "slug": "southern-chaos-wastes-land-battle",
+    "local_path": "/maps/land-battle/southern-chaos-wastes.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Spice Dunes",
+    "image_url": "(local)",
+    "slug": "spice-dunes-land-battle",
+    "local_path": "/maps/land-battle/spice-dunes.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Sword of Torgald",
+    "image_url": "(local)",
+    "slug": "sword-of-torgald-land-battle",
+    "local_path": "/maps/land-battle/sword-of-torgald.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "The Bitter Dunes",
+    "image_url": "(local)",
+    "slug": "the-bitter-dunes-land-battle",
+    "local_path": "/maps/land-battle/the-bitter-dunes.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "The Chill Flow",
+    "image_url": "(local)",
+    "slug": "the-chill-flow-land-battle",
+    "local_path": "/maps/land-battle/the-chill-flow.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "The Deserts Bounty",
+    "image_url": "(local)",
+    "slug": "the-deserts-bounty-land-battle",
+    "local_path": "/maps/land-battle/the-deserts-bounty.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "The Flats of Kislev",
+    "image_url": "(local)",
+    "slug": "the-flats-of-kislev-land-battle",
+    "local_path": "/maps/land-battle/the-flats-of-kislev.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "The Lost Crater",
+    "image_url": "(local)",
+    "slug": "the-lost-crater-land-battle",
+    "local_path": "/maps/land-battle/the-lost-crater.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "The Reikland Estates",
+    "image_url": "(local)",
+    "slug": "the-reikland-estates-land-battle",
+    "local_path": "/maps/land-battle/the-reikland-estates.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "The Tourney Grounds",
+    "image_url": "(local)",
+    "slug": "the-tourney-grounds-land-battle",
+    "local_path": "/maps/land-battle/the-tourney-grounds.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Tower of Hoeth",
+    "image_url": "(local)",
+    "slug": "tower-of-hoeth-land-battle",
+    "local_path": "/maps/land-battle/tower-of-hoeth.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Valley of Thieves",
+    "image_url": "(local)",
+    "slug": "valley-of-thieves-land-battle",
+    "local_path": "/maps/land-battle/valley-of-thieves.png",
+    "battle_type": "LAND_BATTLE"
+  },
+  {
+    "name": "Vulture Ridge",
+    "image_url": "(local)",
+    "slug": "vulture-ridge-land-battle",
+    "local_path": "/maps/land-battle/vulture-ridge.png",
+    "battle_type": "LAND_BATTLE"
   }
 ]

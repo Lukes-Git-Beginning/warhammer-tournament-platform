@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { TEAM_MATCH_WHERE } from '../lib/stat-eligibility.js';
 import type { Prisma } from '@rizzotto/db';
 import { z } from 'zod';
+import { BATTLE_TYPES } from '@rizzotto/types';
 import { cached, cacheKey } from '../lib/cache.js';
 import { asFactionDto, getFactionsWithStats } from '../lib/factions.js';
 import { getMatchupMatrix } from '../lib/heatmap.js';
@@ -13,7 +14,6 @@ import { computeDuoMeta } from '../lib/duo-meta.js';
 // Query Schemas
 // ---------------------------------------------------------------------------
 
-const BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'SIEGE'] as const;
 
 // Meta views are sliced by version × battle type. `battleType` defaults to DOMINATION
 // (the standard) when omitted so the dashboard has a sensible first render.

@@ -32,7 +32,7 @@ function user(id: string, extra: Partial<ReportUser> = {}): ReportUser {
     discordId: `d-${id}`,
     steamVerified: true,
     referralSource: null,
-    answered: { general: false, DOMINATION: false, CONQUEST: false, SIEGE: false },
+    answered: { general: false, DOMINATION: false, CONQUEST: false, LAND_BATTLE: false, SIEGE: false },
     ...extra,
   };
 }
@@ -248,7 +248,7 @@ describe('buildPlayerReportRows', () => {
 describe('report helpers', () => {
   it('detects narrowed tournament DM prefs', () => {
     expect(
-      isCustomTournamentPref(['DOMINATION', 'CONQUEST', 'SIEGE'], ['ONE_V_ONE', 'TWO_V_TWO']),
+      isCustomTournamentPref(['DOMINATION', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'], ['ONE_V_ONE', 'TWO_V_TWO']),
     ).toBe(false);
     expect(isCustomTournamentPref(['DOMINATION'], ['ONE_V_ONE', 'TWO_V_TWO'])).toBe(true);
     expect(isCustomTournamentPref(['DOMINATION', 'CONQUEST', 'SIEGE'], ['ONE_V_ONE'])).toBe(true);

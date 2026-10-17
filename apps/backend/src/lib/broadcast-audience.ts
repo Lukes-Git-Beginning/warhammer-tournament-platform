@@ -1,11 +1,12 @@
 import { z } from 'zod';
+import { BATTLE_TYPE_SCOPES } from '@rizzotto/types';
 
 // Standalone (no heavy deps) so both the sender (broadcast.ts) and the announcement
 // destination schema (announcements.ts) can share ONE audience shape without pulling
 // the Discord/bot imports into the unit-tested announcements module.
 
 /** The classification scope a band filter is judged in: Overall or one battle type. */
-export const SkillScopeSchema = z.enum(['OVERALL', 'DOMINATION', 'CONQUEST', 'SIEGE']);
+export const SkillScopeSchema = z.enum(BATTLE_TYPE_SCOPES);
 
 /** Admin/broadcast audience filters. All empty/false = every user. Filters AND together. */
 export const BroadcastAudienceSchema = z.object({

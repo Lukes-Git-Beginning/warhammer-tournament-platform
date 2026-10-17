@@ -28,6 +28,7 @@ import { EmptyState } from '@/components/ui/empty-state.js';
 import { SupporterBadge } from '@/components/supporter/SupporterBadge.js';
 import { useMajorsEnabled } from '@/hooks/useFeatureFlags.js';
 import { useAuthQuery } from '@/lib/auth.js';
+import { BATTLE_TYPE_LABELS, type BattleType } from '@rizzotto/types';
 
 type Tab = 'rankings' | 'quarterly' | 'ladder' | 'champions';
 
@@ -260,6 +261,7 @@ const BATTLE_TYPES: { value: LeaderboardBattleType; label: string }[] = [
   { value: 'OVERALL', label: 'Overall' },
   { value: 'DOMINATION', label: 'Domination' },
   { value: 'CONQUEST', label: 'Conquest' },
+  { value: 'LAND_BATTLE', label: 'Land Battle' },
   { value: 'SIEGE', label: 'Siege' },
 ];
 
@@ -560,19 +562,13 @@ function RankingsTab() {
 // Championship Tiles
 // ---------------------------------------------------------------------------
 
-const BATTLE_TYPE_LABELS: Record<'DOMINATION' | 'CONQUEST' | 'SIEGE', string> = {
-  DOMINATION: 'Domination',
-  CONQUEST: 'Conquest',
-  SIEGE: 'Siege',
-};
-
 const SEEABLE_STATUSES = new Set(['DRAFT', 'OPEN_REGISTRATION', 'REGISTRATION_CLOSED']);
 
 /** A single championship tile — quarterly or ladder. */
 /** Prefill query for the tile's "+ Create Final" link → the create form's championship block. */
 type CreateFinalSearch = {
   championship: 'QUARTERLY' | 'MONTHLY_LADDER';
-  battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  battleType?: BattleType;
   competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
   period: string;
 };

@@ -14,7 +14,7 @@ const MapsQuerySchema = z.object({
 
 const mapsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/maps — public, all AVAILABLE maps (offered to hosts + Open Play), cached 5 min.
-  // Optional ?battle_type=DOMINATION|CONQUEST|SIEGE filter — a map is built for one battle type.
+  // Optional ?battle_type=<battle type> filter — a map is built for one battle type.
   fastify.get('/api/maps', async (request, _reply) => {
     const parsed = MapsQuerySchema.safeParse(request.query);
     // Silently ignore invalid battle_type values — treat as unfiltered.

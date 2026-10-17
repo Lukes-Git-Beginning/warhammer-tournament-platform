@@ -2,7 +2,7 @@
  * The community "Standard Ruleset" — admin-editable, per (battle type × team size).
  *
  * Stored under the AdminConfig key `standard_ruleset` as a map keyed by
- * `"<BattleType>:<CompetitorFormat>"` (6 combos), each value being
+ * `"<BattleType>:<CompetitorFormat>"` (one combo per battle type and team size), each value being
  * `{ settings; banned_factions; banned (units); banned_abilities (spells/items/abilities); conduct }`,
  * all string lists. The two extra ban lists were added 2026-10-07 and default to [] so rulesets
  * stored before then still parse without a migration. Until an admin
@@ -13,6 +13,7 @@
  * as the ruleset for every combo.
  */
 import { z } from 'zod';
+import { BATTLE_TYPES } from '@rizzotto/types';
 import type { $Enums } from '@rizzotto/db';
 import { prisma } from '@rizzotto/db';
 
@@ -29,7 +30,6 @@ export const StandardRulesetSchema = z.object({
 });
 export type StandardRuleset = z.infer<typeof StandardRulesetSchema>;
 
-const BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'SIEGE'] as const;
 const COMPETITOR_FORMATS = ['ONE_V_ONE', 'TWO_V_TWO'] as const;
 
 /** Config key for one combo, e.g. "DOMINATION:ONE_V_ONE". */
@@ -37,7 +37,7 @@ export function rulesetKey(battleType: $Enums.BattleType, competitorFormat: $Enu
   return `${battleType}:${competitorFormat}`;
 }
 
-/** Every (battle type × team size) key — the 6 combos. */
+/** Every (battle type × team size) key — one combo per battle type and team size. */
 export function allRulesetKeys(): string[] {
   return BATTLE_TYPES.flatMap((bt) => COMPETITOR_FORMATS.map((cf) => `${bt}:${cf}`));
 }
@@ -57,6 +57,13 @@ export const DEFAULT_STANDARD_RULESET: StandardRuleset = {
   ],
 };
 
+/** The default for one battle type until an admin sets it: a land battle has no tickets, so its
+ *  default drops the ticket count. */
+export function defaultRulesetFor(battleType: $Enums.BattleType): StandardRuleset {
+  if (battleType !== 'LAND_BATTLE') return DEFAULT_STANDARD_RULESET;
+  return { ...DEFAULT_STANDARD_RULESET, settings: DEFAULT_STANDARD_RULESET.settings.filter((s) => !/ticket/i.test(s)) };
+}
+
 /** Parse the stored AdminConfig value into a per-combo map (handling the legacy single shape). */
 function parseStored(value: unknown): StandardRulesetMap {
   const asMap = StandardRulesetMapSchema.safeParse(value);
@@ -75,16 +82,18 @@ export async function resolveStandardRuleset(
   competitorFormat: $Enums.CompetitorFormat = 'ONE_V_ONE',
 ): Promise<StandardRuleset> {
   const row = await prisma.adminConfig.findUnique({ where: { key: STANDARD_RULESET_CONFIG_KEY } });
-  if (!row) return DEFAULT_STANDARD_RULESET;
+  if (!row) return defaultRulesetFor(battleType);
   const map = parseStored(row.value);
-  return map[rulesetKey(battleType, competitorFormat)] ?? DEFAULT_STANDARD_RULESET;
+  return map[rulesetKey(battleType, competitorFormat)] ?? defaultRulesetFor(battleType);
 }
 
-/** Read all 6 combos, filling any missing combo with the defaults. */
+/** Read every combo, filling any missing combo with its battle type's defaults. */
 export async function resolveAllStandardRulesets(): Promise<Record<string, StandardRuleset>> {
   const row = await prisma.adminConfig.findUnique({ where: { key: STANDARD_RULESET_CONFIG_KEY } });
   const stored = row ? parseStored(row.value) : {};
-  return Object.fromEntries(allRulesetKeys().map((k) => [k, stored[k] ?? DEFAULT_STANDARD_RULESET]));
+  return Object.fromEntries(
+    allRulesetKeys().map((k) => [k, stored[k] ?? defaultRulesetFor(k.split(':')[0] as $Enums.BattleType)]),
+  );
 }
 
 const normFactionKey = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');

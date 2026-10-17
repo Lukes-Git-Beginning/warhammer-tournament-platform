@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { BATTLE_TYPE_SCOPES } from '@rizzotto/types';
 import { cached, cacheKey } from '../lib/cache.js';
 import { computeVersionLeaderboard } from '../lib/leaderboard-service.js';
 import { getRatingModel } from '../lib/rating-model-service.js';
@@ -565,7 +566,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
       .object({
         page: z.coerce.number().int().min(1).default(1),
         pageSize: z.coerce.number().int().min(1).max(1000).default(100),
-        battleType: z.enum(['OVERALL', 'DOMINATION', 'CONQUEST', 'SIEGE']).default('OVERALL'),
+        battleType: z.enum(BATTLE_TYPE_SCOPES).default('OVERALL'),
         competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).default('ONE_V_ONE'),
       })
       .safeParse(request.query);
@@ -687,7 +688,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
       .object({
         page: z.coerce.number().int().min(1).default(1),
         pageSize: z.coerce.number().int().min(1).max(1000).default(100),
-        battleType: z.enum(['OVERALL', 'DOMINATION', 'CONQUEST', 'SIEGE']).default('OVERALL'),
+        battleType: z.enum(BATTLE_TYPE_SCOPES).default('OVERALL'),
         competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).default('ONE_V_ONE'),
         quarter: z.string().optional(), // "YYYY-Qn"; default = current quarter
         // Restrict to competitors that cleared this quarter's activity gate (e.g. landing-page teaser).

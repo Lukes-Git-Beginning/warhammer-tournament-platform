@@ -48,8 +48,8 @@ export function HostsReport({ days }: { days: number }) {
                 <th className="px-3 py-2">All time</th>
                 <th className="px-3 py-2">Upcoming</th>
                 <th className="px-3 py-2">Avg field</th>
-                <th className="px-3 py-2" title="Domination / Conquest / Siege in the window">
-                  Dom / Conq / Siege
+                <th className="px-3 py-2" title="Domination / Conquest / Land Battle / Siege in the window">
+                  Dom / Conq / Land / Siege
                 </th>
                 <th className="px-3 py-2">Last hosted</th>
               </tr>
@@ -71,7 +71,7 @@ export function HostsReport({ days }: { days: number }) {
                   <td className="px-3 py-2">{h.upcoming || '·'}</td>
                   <td className="px-3 py-2">{h.avgField ?? '—'}</td>
                   <td className="px-3 py-2 text-stone-400">
-                    {h.battleTypes.DOMINATION} / {h.battleTypes.CONQUEST} / {h.battleTypes.SIEGE}
+                    {h.battleTypes.DOMINATION} / {h.battleTypes.CONQUEST} / {h.battleTypes.LAND_BATTLE} / {h.battleTypes.SIEGE}
                   </td>
                   <td className="px-3 py-2 text-stone-400">{fmtDate(h.lastHostedAt)}</td>
                 </tr>

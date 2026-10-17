@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { MAX_MAP_POOL } from '@rizzotto/types';
+import { MAX_MAP_POOL, BATTLE_TYPES, BATTLE_TYPE_LABELS, type BattleType } from '@rizzotto/types';
 import { createTournament, createSeries, getTournament, patchTournament, listDraftPresets, getMaps, getFactions, getAvailabilityHeatmap, uploadTournamentPoster, uploadSeriesPoster, listTournaments, listSeries, type ScoringConfig } from '@/lib/api';
 import { TournamentScheduleCalendar, useCalendarTournaments } from '@/components/tournament/TournamentScheduleCalendar';
 import { estimateDurationHours, intervalsOverlap, describeClash } from '@/lib/tournamentSchedule';
@@ -45,7 +45,7 @@ const TournamentCreateSchema = z.object({
   format: z.enum(['SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'AUTO_SWISS', 'ROUND_ROBIN', 'LIECHTENSTEIN', 'BALANCED_LIECHTENSTEIN']),
   mode: z.enum(['BPT', 'SFT', 'SLT', 'MATRIX', 'TWO_D_THREE', 'FREE_PICK', 'ONE_V_THREE', 'FACTION_WAR', 'SFT_2V2', 'BPT_2V2']).default('BPT'),
   competitor_format: z.enum(['ONE_V_ONE', 'TWO_V_TWO']).default('ONE_V_ONE'),
-  battle_type: z.enum(['DOMINATION', 'CONQUEST', 'SIEGE']).default('DOMINATION'),
+  battle_type: z.enum(BATTLE_TYPES).default('DOMINATION'),
   set_faction_id: z.string().min(1).optional(),
   start_date: z.string().min(1),
   timezone: z.string().min(1),
@@ -202,7 +202,7 @@ export function TournamentCreateForm({
   seriesMode?: SeriesModeConfig;
   championshipPrefill?: {
     kind: 'QUARTERLY' | 'MONTHLY_LADDER';
-    battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+    battleType?: BattleType;
     competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
     period?: string;
   };
@@ -1435,9 +1435,11 @@ export function TournamentCreateForm({
                   value={form.battle_type ?? 'DOMINATION'}
                   onChange={handleChange}
                 >
-                  <option value="DOMINATION">Domination</option>
-                  <option value="CONQUEST">Conquest</option>
-                  <option value="SIEGE">Siege</option>
+                  {BATTLE_TYPES.map((bt) => (
+                    <option key={bt} value={bt}>
+                      {BATTLE_TYPE_LABELS[bt]}
+                    </option>
+                  ))}
                 </Select>
               </div>
               <div>
@@ -1497,9 +1499,11 @@ export function TournamentCreateForm({
             value={form.battle_type ?? 'DOMINATION'}
             onChange={handleChange}
           >
-            <option value="DOMINATION">Domination</option>
-            <option value="CONQUEST">Conquest</option>
-            <option value="SIEGE">Siege</option>
+            {BATTLE_TYPES.map((bt) => (
+              <option key={bt} value={bt}>
+                {BATTLE_TYPE_LABELS[bt]}
+              </option>
+            ))}
           </Select>
           <FieldHint>Sets the map pool and the standard ruleset for this tournament.</FieldHint>
         </div>

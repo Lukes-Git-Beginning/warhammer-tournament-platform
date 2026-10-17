@@ -345,7 +345,7 @@ export function PlayersReport({ days }: { days: number }) {
               </Th>
               <th
                 className="px-2 py-2 uppercase tracking-wide"
-                title="Questionnaire answered: Domination / Conquest / Siege"
+                title="Questionnaire answered: Domination / Conquest / Land Battle / Siege"
               >
                 Q&apos;naire
               </th>
@@ -425,6 +425,9 @@ export function PlayersReport({ days }: { days: number }) {
                     </span>{' '}
                     <span className={r.answered.CONQUEST ? 'text-emerald-400' : 'text-stone-600'}>
                       C
+                    </span>{' '}
+                    <span className={r.answered.LAND_BATTLE ? 'text-emerald-400' : 'text-stone-600'}>
+                      L
                     </span>{' '}
                     <span className={r.answered.SIEGE ? 'text-emerald-400' : 'text-stone-600'}>
                       S

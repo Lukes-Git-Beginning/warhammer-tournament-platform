@@ -24,6 +24,7 @@ import type {
   PlayoffPreview,
   SupporterTiers,
   BattleType,
+  BattleTypeScope,
 } from '@rizzotto/types';
 
 export type {
@@ -717,7 +718,7 @@ export function getSkillLeaderboard(opts?: { versionId?: string; page?: number; 
 
 export interface CompetitorRef { id: string; username: string; avatar_url: string | null; tiers?: SupporterTiers }
 
-export type LeaderboardBattleType = 'OVERALL' | 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+export type LeaderboardBattleType = BattleTypeScope;
 export type LeaderboardFormat = 'ONE_V_ONE' | 'TWO_V_TWO';
 
 /** A selectable period (quarter for the Qualifier, month for the Ladder). */
@@ -726,7 +727,7 @@ export interface LeaderboardPeriod { value: string; label: string }
 // ── Recurring competitive finals (the leaderboard tile) ──────────────────────
 export interface ChampionshipRef { slug: string; name: string; status: string }
 export interface ChampionshipTile {
-  battleType: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  battleType: BattleType;
   size: number; // field size, 0 = not enough yet
   active: number;
   qualified: number;
@@ -992,7 +993,7 @@ export interface UserVersionStats {
 }
 
 /** Profile scope: the game-weighted summary, or one battle type. */
-export type SkillScope = 'OVERALL' | 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+export type SkillScope = BattleTypeScope;
 
 /** `?battleType=` for a scope (omitted for OVERALL, the server default). */
 function scopeParam(params: URLSearchParams, battleType: SkillScope | undefined): void {
@@ -1690,7 +1691,7 @@ export interface AdminPlayerReportRow {
   queueTimeouts: number;
   dmSent: number;
   dmFailed: number;
-  answered: { general: boolean; DOMINATION: boolean; CONQUEST: boolean; SIEGE: boolean };
+  answered: { general: boolean } & Record<BattleType, boolean>;
 }
 export function getAdminPlayersReport(days: number): Promise<{ days: number; players: AdminPlayerReportRow[] }> {
   return apiFetch(`/api/admin/reports/players?days=${days}`);
@@ -1703,7 +1704,7 @@ export interface AdminHostReportRow {
   hostedTotal: number;
   lastHostedAt: string | null;
   avgField: number | null;
-  battleTypes: { DOMINATION: number; CONQUEST: number; SIEGE: number };
+  battleTypes: Record<BattleType, number>;
   upcoming: number;
 }
 export function getAdminHostsReport(days: number): Promise<{ days: number; hosts: AdminHostReportRow[] }> {
@@ -3297,7 +3298,7 @@ export function getFactionGames(
 
 export interface UserGamesFilters {
   result?: 'win' | 'loss' | 'draw';
-  battleType?: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  battleType?: BattleType;
   ownFactionId?: string;
   oppFactionId?: string;
   source?: 'tournament' | 'ladder' | 'challenge';

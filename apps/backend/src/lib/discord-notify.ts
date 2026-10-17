@@ -6,6 +6,7 @@
  */
 
 import { prisma } from '@rizzotto/db';
+import type { BattleType } from '@rizzotto/types';
 import { resolveCompetitors } from './competitors.js';
 import { slotsActiveAtWhere } from './availability-time.js';
 import { encodeOffer, offerBullet, offerLabel, type QueueOffer } from './queue-matching.js';
@@ -26,7 +27,7 @@ interface TournamentForNotify {
 
 /** The availability DM also filters on what kind of tournament it is. */
 interface TournamentForAvailabilityNotify extends TournamentForNotify {
-  battle_type: 'DOMINATION' | 'CONQUEST' | 'SIEGE';
+  battle_type: BattleType;
   competitor_format: 'ONE_V_ONE' | 'TWO_V_TWO';
 }
 
