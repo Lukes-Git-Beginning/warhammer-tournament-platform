@@ -24,6 +24,7 @@ import { TeamsPage } from './routes/TeamsPage';
 import { TeamProfilePage } from './routes/TeamProfilePage';
 import { SeriesListingPage } from './routes/SeriesListingPage';
 import { SeriesDetailPage } from './routes/SeriesDetailPage';
+import { RuleDocumentPage } from './routes/RuleDocumentPage';
 import { CreateSeriesPage } from './routes/CreateSeriesPage';
 import { isBattleType, type BattleType, type BattleTypeScope } from '@rizzotto/types';
 
@@ -284,6 +285,13 @@ const createSeriesRoute = createRoute({
   component: CreateSeriesPage,
 });
 
+// Rules-document permalinks (e.g. /rules/fruit-rules-land-battle) — forward to the admin-set target.
+const ruleDocumentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/rules/$slug',
+  component: RuleDocumentPage,
+});
+
 const seriesDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/series/$slug',
@@ -321,6 +329,7 @@ const routeTree = rootRoute.addChildren([
   seriesListingRoute,
   createSeriesRoute,
   seriesDetailRoute,
+  ruleDocumentRoute,
 ]);
 
 export const router = createRouter({ routeTree });

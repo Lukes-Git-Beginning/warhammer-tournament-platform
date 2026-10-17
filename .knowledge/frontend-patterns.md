@@ -101,6 +101,7 @@ export const router = createRouter({ routeTree });
 | `/matches/$matchId/decision` | `MatchDecisionPage`    | `routes/MatchDecisionPage.tsx`    |
 | `/users/$a/vs/$b`            | `H2HPage`              | `routes/H2HPage.tsx`              |
 | `/tournaments/calendar`      | `CalendarPage`         | `routes/CalendarPage.tsx`         |
+| `/rules/$slug` (Permalink → externes Regel-Dokument, `window.location.replace`; Ziele in AdminConfig `rule_documents`, Admin → Rules Documents) | `RuleDocumentPage` | `routes/RuleDocumentPage.tsx` |
 
 **Route-Spezifitäts-Hinweis (M6):** `/tournaments/calendar` MUSS in `router.tsx` VOR `/tournaments/$slug` registriert sein. TanStack Router bevorzugt statische Segmente gegenüber Params automatisch, aber die Reihenfolge im `addChildren`-Array schützt gegen Regressionen — in `apps/e2e/tests/m6-routes.spec.ts` runtime-verifiziert.
 

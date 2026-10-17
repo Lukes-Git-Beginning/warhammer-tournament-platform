@@ -138,7 +138,7 @@ Alle Route-Files registrieren sich direkt mit absoluten Pfaden (kein `prefix`-Op
 | `routes/leaderboard.ts` | `GET /api/leaderboard`, `GET /api/leaderboard/all-time` | Public |
 | **`routes/rating.ts`** | **Dynamic Leaderboard (Alex-Spec):** `GET /api/matches/:id/scoring-breakdown`, `GET /api/leaderboard/anti-farming`, `GET /api/factions/matchup-matrix`, `GET /api/players/:id/faction-proficiency` | Public |
 | `routes/factions.ts` | `GET /api/factions`, `GET /api/factions/:id` | Public |
-| `routes/meta.ts` | `GET /api/meta/overview`, `GET /api/meta/matchups` | Public |
+| `routes/meta.ts` | `GET /api/meta/overview`, `GET /api/meta/matchups`, `GET /api/meta/rule-documents` (Regel-Dokument-Permalinks, `lib/rule-documents.ts`: Defaults + AdminConfig `rule_documents`, beim Lesen validiert, nur http(s)-Ziele) | Public |
 | `routes/drafts.ts` | `GET /api/drafts/:id`, `GET /api/drafts/:id/events`, `POST /api/drafts/:id/...` | Optional-Auth (Spectator wenn anonym) |
 | `routes/draft-presets.ts` | `GET /api/draft-presets`, `GET /api/draft-presets/:id`, `POST /api/draft-presets`, `PUT /api/draft-presets/:id`, `DELETE /api/draft-presets/:id` | Schreibende Ops: `ORGANIZER`/`ADMIN` |
 | `routes/admin.ts` | `GET /api/admin/audit-log`, `GET /api/admin/stats`, `POST /api/admin/users/:id/ban`, `DELETE /api/admin/users/:id/ban`, **+Welle 2:** `GET /api/admin/stats/{faction-winrates,elo-distribution,dropoff-funnel,pickban-stats}`, `CRUD /api/admin/maps[/:id]`, `POST/PATCH /api/admin/factions[/:id]`, `POST /api/admin/factions/:id/sigil` (multipart), `GET /api/admin/config/all`, `GET/PUT /api/admin/config/:key` | Alle: `authenticate` + `ADMIN` |

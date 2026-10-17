@@ -7,6 +7,7 @@ import { cached, cacheKey } from '../lib/cache.js';
 import { asFactionDto, getFactionsWithStats } from '../lib/factions.js';
 import { getMatchupMatrix } from '../lib/heatmap.js';
 import { resolveStandardRuleset, resolveAllStandardRulesets } from '../lib/standard-ruleset.js';
+import { resolveRuleDocuments } from '../lib/rule-documents.js';
 import { resolveCompetitors } from '../lib/competitors.js';
 import { computeDuoMeta } from '../lib/duo-meta.js';
 
@@ -549,11 +550,20 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // GET /api/meta/standard-rulesets
-  // Public — all 6 (battle type × team size) rulesets, defaults filled. Powers the
+  // Public — every (battle type × team size) ruleset, defaults filled. Powers the
   // admin editor (which edits every combo) and any client that wants them all.
   // -------------------------------------------------------------------------
   fastify.get('/api/meta/standard-rulesets', async () => {
     return { rulesets: await resolveAllStandardRulesets() };
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/meta/rule-documents
+  // Public — the rules-document permalinks (/rules/<slug>) and where they forward to. Read by the
+  // permalink page, the Standard Ruleset card ("Full rules") and the admin editor.
+  // -------------------------------------------------------------------------
+  fastify.get('/api/meta/rule-documents', async () => {
+    return { documents: await resolveRuleDocuments() };
   });
 };
 

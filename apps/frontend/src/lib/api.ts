@@ -1995,6 +1995,19 @@ export function getStandardRuleset(battleType?: BattleType, competitorFormat?: '
   return apiFetch(`/api/meta/standard-ruleset${qs ? `?${qs}` : ''}`);
 }
 
+/** A rules-document permalink: rizzotto.gg/rules/<slug> forwards to `url` (empty = not linked yet). */
+export interface RuleDocument {
+  slug: string;
+  label: string;
+  url: string;
+  /** Battle types whose Standard Ruleset links to this document. */
+  battle_types: BattleType[];
+}
+
+export function getRuleDocuments(): Promise<{ documents: RuleDocument[] }> {
+  return apiFetch('/api/meta/rule-documents');
+}
+
 /** All 6 (battle type × team size) rulesets, defaults filled — for the admin editor. */
 export function getAllStandardRulesets(): Promise<{ rulesets: Record<string, StandardRuleset> }> {
   return apiFetch('/api/meta/standard-rulesets');

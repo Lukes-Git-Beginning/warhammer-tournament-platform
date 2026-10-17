@@ -60,7 +60,8 @@ export const DEFAULT_STANDARD_RULESET: StandardRuleset = {
 /**
  * Land Battle's rules of play, condensed from the Fruit Rules (Cranberry Edition v10, Land Battle):
  * the attacking rule, white line abuse and forest abuse. Conquest's edition has neither; a land
- * battle has no capture points, so these keep both players engaging. The migration that seeds the
+ * battle has no capture points, so these keep both players engaging (the full document is linked from
+ * the ruleset via the fruit-rules-land-battle permalink). The migration that seeds the
  * Land Battle ruleset appends the same lines (a test keeps them in sync).
  */
 export const LAND_BATTLE_CONDUCT: readonly string[] = [
@@ -68,7 +69,6 @@ export const LAND_BATTLE_CONDUCT: readonly string[] = [
   "Single entities only count as attacking by shooting (not characters or flyers, except Ku'Gath and Saytang), or in melee once all your multi-entity units are dead, routing or unable to attack. Cycle charging with single entities never counts.",
   "No white line abuse: don't hold or reposition defensively within about 200 m of a map border (impassable terrain on the border counts as border). Units near a border don't have to be attacked.",
   "No forest camping: don't hold defensive positions in forests with a significant part of your army. Nobody has to attack into or next to a forest; falling back to open field is allowed.",
-  'Full rules of play: Fruit Rules, Cranberry Edition v10 (Land Battle).',
 ];
 
 /** The default for one battle type until an admin sets it. A land battle has no tickets, so its
