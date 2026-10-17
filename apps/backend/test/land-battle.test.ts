@@ -3,10 +3,14 @@
  * same name) and creating a Land Battle tournament. The pure rules live in land-battle-rules.test.ts.
  */
 
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '@rizzotto/db';
 import { buildApp } from '../src/app.js';
+import { LAND_BATTLE_CONDUCT } from '../src/lib/standard-ruleset.js';
 
 // ---------------------------------------------------------------------------
 // Database: the migration's map pool and a Land Battle tournament
@@ -79,5 +83,48 @@ describe('Land Battle — tournaments', () => {
     const body = res.json<{ id: string; battle_type: string; format: string }>();
     createdTournamentIds.push(body.id);
     expect(body).toMatchObject({ battle_type: 'LAND_BATTLE', format: 'SINGLE_ELIMINATION' });
+  });
+});
+
+describe('Land Battle — Standard Ruleset migration', () => {
+  // Prod has an admin-edited ruleset row, which the CI database (fresh migrations) does not — so run the
+  // migration's two ruleset UPDATEs against a prod-shaped row here, then restore whatever was there.
+  const migrationSql = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'packages/db/prisma/migrations/20261017100100_land_battle_maps_prefs_ruleset/migration.sql'),
+    'utf8',
+  );
+  const rulesetUpdates = migrationSql.match(/UPDATE "AdminConfig"[\s\S]*?;\s*$/gm) ?? [];
+  const conquest = {
+    settings: ['Default Funds', 'Ultra Unit Scale', '600 Tickets', 'No Character Loading', 'Unit Caps On'],
+    banned_factions: ['undead_legions'],
+    banned: ['Masque of Slaanesh'],
+    banned_abilities: ['Ghostly Howl (Banshees)'],
+    conduct: ['10 minutes to ready up', '40 minute round limit'],
+  };
+
+  it('copies Conquest without tickets and appends the rules of play once', async () => {
+    expect(rulesetUpdates).toHaveLength(2);
+    const before = await prisma.adminConfig.findUnique({ where: { key: 'standard_ruleset' } });
+    try {
+      await prisma.adminConfig.upsert({
+        where: { key: 'standard_ruleset' },
+        update: { value: { 'CONQUEST:ONE_V_ONE': conquest, 'CONQUEST:TWO_V_TWO': conquest } },
+        create: { key: 'standard_ruleset', value: { 'CONQUEST:ONE_V_ONE': conquest, 'CONQUEST:TWO_V_TWO': conquest } },
+      });
+      // Twice: the migration must not duplicate anything if it ever ran against an already-seeded row.
+      for (let i = 0; i < 2; i++) for (const sql of rulesetUpdates) await prisma.$executeRawUnsafe(sql);
+
+      const row = await prisma.adminConfig.findUniqueOrThrow({ where: { key: 'standard_ruleset' } });
+      const value = row.value as Record<string, typeof conquest>;
+      for (const key of ['LAND_BATTLE:ONE_V_ONE', 'LAND_BATTLE:TWO_V_TWO']) {
+        expect(value[key]!.settings).toEqual(['Default Funds', 'Ultra Unit Scale', 'No Character Loading', 'Unit Caps On']);
+        expect(value[key]!.banned_abilities).toEqual(conquest.banned_abilities);
+        expect(value[key]!.conduct).toEqual([...conquest.conduct, ...LAND_BATTLE_CONDUCT]);
+      }
+      expect(value['CONQUEST:ONE_V_ONE']).toEqual(conquest); // the source stays untouched
+    } finally {
+      if (before) await prisma.adminConfig.update({ where: { key: 'standard_ruleset' }, data: { value: before.value as object } });
+      else await prisma.adminConfig.deleteMany({ where: { key: 'standard_ruleset' } });
+    }
   });
 });

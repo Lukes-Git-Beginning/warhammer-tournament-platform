@@ -17,7 +17,7 @@ import {
   questionnaireFloor,
 } from '../src/lib/skill-classification.js';
 import { decodeOffer, encodeOffer, offerBullet } from '../src/lib/queue-matching.js';
-import { DEFAULT_STANDARD_RULESET, defaultRulesetFor } from '../src/lib/standard-ruleset.js';
+import { DEFAULT_STANDARD_RULESET, LAND_BATTLE_CONDUCT, defaultRulesetFor } from '../src/lib/standard-ruleset.js';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -61,12 +61,21 @@ describe('Land Battle — Open Play offers', () => {
 });
 
 describe('Land Battle — Standard Ruleset default', () => {
-  it('drops the ticket count (a land battle has none) and keeps everything else', () => {
+  it('drops the ticket count (a land battle has none) and adds the Land Battle rules of play', () => {
     const lb = defaultRulesetFor('LAND_BATTLE');
     expect(lb.settings.some((s) => /ticket/i.test(s))).toBe(false);
     expect(lb.banned).toEqual(DEFAULT_STANDARD_RULESET.banned);
-    expect(lb.conduct).toEqual(DEFAULT_STANDARD_RULESET.conduct);
+    expect(lb.conduct).toEqual([...DEFAULT_STANDARD_RULESET.conduct, ...LAND_BATTLE_CONDUCT]);
     expect(defaultRulesetFor('CONQUEST')).toBe(DEFAULT_STANDARD_RULESET);
+  });
+
+  it('the migration appends exactly the same rules of play as the code default', () => {
+    const migration = readFileSync(
+      join(repoRoot, 'packages/db/prisma/migrations/20261017100100_land_battle_maps_prefs_ruleset/migration.sql'),
+      'utf8',
+    );
+    // In the SQL the lines sit in a JSON array inside a single-quoted literal (apostrophes doubled).
+    expect(migration).toContain(JSON.stringify(LAND_BATTLE_CONDUCT).replace(/'/g, "''"));
   });
 });
 

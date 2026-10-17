@@ -70,3 +70,18 @@ WHERE c."key" = 'standard_ruleset'
   AND c."value" ? 'CONQUEST:ONE_V_ONE'
   AND c."value" ? 'CONQUEST:TWO_V_TWO'
   AND NOT c."value" ? 'LAND_BATTLE:ONE_V_ONE';
+
+-- Land Battle rules of play, condensed from the Fruit Rules (Cranberry Edition v10, Land Battle): the
+-- attacking rule, white line abuse and forest abuse. Appended once to both team sizes of the copied
+-- ruleset (the code default carries the same lines, see LAND_BATTLE_CONDUCT).
+UPDATE "AdminConfig" c
+SET "value" = jsonb_set(
+      jsonb_set(c."value", '{"LAND_BATTLE:ONE_V_ONE","conduct"}',
+        COALESCE(c."value"->'LAND_BATTLE:ONE_V_ONE'->'conduct', '[]'::jsonb) || '["Both players must attack at all times: shooting, melee, chasing routing units, and advancing or repositioning at a reasonable pace count. Stalling does not.","Single entities only count as attacking by shooting (not characters or flyers, except Ku''Gath and Saytang), or in melee once all your multi-entity units are dead, routing or unable to attack. Cycle charging with single entities never counts.","No white line abuse: don''t hold or reposition defensively within about 200 m of a map border (impassable terrain on the border counts as border). Units near a border don''t have to be attacked.","No forest camping: don''t hold defensive positions in forests with a significant part of your army. Nobody has to attack into or next to a forest; falling back to open field is allowed.","Full rules of play: Fruit Rules, Cranberry Edition v10 (Land Battle)."]'::jsonb),
+      '{"LAND_BATTLE:TWO_V_TWO","conduct"}',
+      COALESCE(c."value"->'LAND_BATTLE:TWO_V_TWO'->'conduct', '[]'::jsonb) || '["Both players must attack at all times: shooting, melee, chasing routing units, and advancing or repositioning at a reasonable pace count. Stalling does not.","Single entities only count as attacking by shooting (not characters or flyers, except Ku''Gath and Saytang), or in melee once all your multi-entity units are dead, routing or unable to attack. Cycle charging with single entities never counts.","No white line abuse: don''t hold or reposition defensively within about 200 m of a map border (impassable terrain on the border counts as border). Units near a border don''t have to be attacked.","No forest camping: don''t hold defensive positions in forests with a significant part of your army. Nobody has to attack into or next to a forest; falling back to open field is allowed.","Full rules of play: Fruit Rules, Cranberry Edition v10 (Land Battle)."]'::jsonb),
+    "updated_at" = now()
+WHERE c."key" = 'standard_ruleset'
+  AND c."value" ? 'LAND_BATTLE:ONE_V_ONE'
+  AND c."value" ? 'LAND_BATTLE:TWO_V_TWO'
+  AND NOT COALESCE(c."value"->'LAND_BATTLE:ONE_V_ONE'->'conduct', '[]'::jsonb) @> '["Both players must attack at all times: shooting, melee, chasing routing units, and advancing or repositioning at a reasonable pace count. Stalling does not."]'::jsonb;
