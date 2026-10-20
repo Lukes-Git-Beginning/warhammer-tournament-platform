@@ -1,4 +1,4 @@
-import { createRoute, createRouter } from '@tanstack/react-router';
+import { createRoute, createRouter, lazyRouteComponent } from '@tanstack/react-router';
 import { rootRoute } from './routes/__root';
 import { IndexPage } from './routes/IndexPage';
 import { LoginPage } from './routes/LoginPage';
@@ -265,6 +265,14 @@ const supportRoute = createRoute({
   component: SupportPage,
 });
 
+// Unlisted (no nav entry): shared by link until the Fruit Rules go public. Lazy, so the page
+// text, the markdown-tables plugin and the faction data load only here.
+const fruitRulesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/fruit-rules',
+  component: lazyRouteComponent(() => import('./routes/FruitRulesPage'), 'FruitRulesPage'),
+});
+
 const teamsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/teams',
@@ -322,6 +330,7 @@ const routeTree = rootRoute.addChildren([
   matchDecisionRoute,
   openPlayRoute,
   supportRoute,
+  fruitRulesRoute,
   teamsRoute,
   teamProfileRoute,
   seriesListingRoute,
