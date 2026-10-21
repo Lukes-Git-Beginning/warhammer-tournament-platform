@@ -24,7 +24,7 @@ describe('mergeRuleDocuments', () => {
 
   it('never lets a non-http(s) target through (the permalink page redirects to it)', () => {
     for (const url of ['javascript:alert(1)', 'data:text/html,hi', 'ftp://example.com/x.pdf', 'not a url']) {
-      expect(mergeRuleDocuments([conquest(url)])[0]!.url).toBe(''); // dropped → the empty default
+      expect(mergeRuleDocuments([conquest(url)])[0]!.url).toBe(DEFAULT_RULE_DOCUMENTS[0]!.url); // dropped → the default
     }
   });
 

@@ -19,10 +19,11 @@ export const RuleDocumentSchema = z.object({
 });
 export type RuleDocument = z.infer<typeof RuleDocumentSchema>;
 
-/** The permalinks that exist from the start; the admin fills in where they point. */
+/** The permalinks that exist from the start. The Fruit Rules authors keep these Drive links pointing at the
+ *  current version (pinned in their Discord); the admin can repoint them under Admin → Rules Documents. */
 export const DEFAULT_RULE_DOCUMENTS: RuleDocument[] = [
-  { slug: 'fruit-rules-conquest', label: 'Fruit Rules (Conquest)', url: '', battle_types: ['CONQUEST'] },
-  { slug: 'fruit-rules-land-battle', label: 'Fruit Rules (Land Battle)', url: '', battle_types: ['LAND_BATTLE'] },
+  { slug: 'fruit-rules-conquest', label: 'Fruit Rules (Conquest)', url: 'https://drive.google.com/file/d/1Knv1mVafQckcgozQ5uwRP8D_r6wIePA2/view', battle_types: ['CONQUEST'] },
+  { slug: 'fruit-rules-land-battle', label: 'Fruit Rules (Land Battle)', url: 'https://drive.google.com/file/d/1bALrMJ_QBit22Y27kLMeIEnQJPr0rLm1/view', battle_types: ['LAND_BATTLE'] },
 ];
 
 /** Merge the stored list over the defaults: defaults first (stable order), each replaced by its stored

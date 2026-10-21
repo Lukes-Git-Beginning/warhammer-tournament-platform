@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
-## [2.26.0] — 2026-10-17
+## [2.26.0] — 2026-10-22
 
 ### Added
 - **Land Battle is here.** The classic battle type joins Domination, Conquest and Siege. Hosts can run Land Battle tournaments, you can queue for it in Open Play, and it gets its own skill rating, leaderboards and quarterly final. It starts with a pool of 34 maps, uses Loupi's Fruit Rules Unit Caps Mod like Conquest, and has its own Standard Ruleset.
