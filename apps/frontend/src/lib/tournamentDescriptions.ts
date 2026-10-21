@@ -26,6 +26,6 @@ export const FORMAT_DESCRIPTIONS: Record<string, string> = {
   SWISS: 'Swiss rounds — everyone plays a fixed number of rounds, paired by record, with no early elimination. Optional top-cut playoffs.',
   AUTO_SWISS: 'Self-running Swiss — rounds, playoff size and match format are set automatically from the check-in count, and rounds advance on their own.',
   ROUND_ROBIN: 'Round robin — everyone plays everyone once.',
-  LIECHTENSTEIN: 'Liechtenstein — a pre-drawn schedule with unique pairings every round (no repeat opponents).',
+  LIECHTENSTEIN: 'Liechtenstein — Swiss-style pairing by record, but each next match is paired as soon as you and an opponent are free, so nobody waits for the round to finish. Rematches are avoided. Optional top-cut playoffs.',
   BALANCED_LIECHTENSTEIN: 'Balanced Liechtenstein — skill-banded asynchronous Swiss: players are paired within their division, and each division plays its own playoff.',
 };

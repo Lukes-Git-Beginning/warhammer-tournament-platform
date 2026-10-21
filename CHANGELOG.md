@@ -15,6 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 ### Changed
 - **If you had every battle type selected** for Open Play or for tournament DMs, Land Battle is now included too. A narrower selection stays as you set it.
 
+### Fixed
+- **The Liechtenstein description now matches how it plays.** You're paired by record, and your next match comes as soon as you and an opponent are free. The old text still described a schedule drawn in advance.
+
 ## [2.25.0] — 2026-10-15
 
 ### Added

@@ -206,7 +206,7 @@ const FORMAT_EXPLAIN: Record<string, string> = {
   DOUBLE_ELIMINATION: "Double-elimination bracket — a loss drops you to the lower bracket; two losses and you're out.",
   SWISS: 'Swiss rounds — everyone plays a fixed number of rounds, paired by record, with no early elimination. Optional top-cut playoffs.',
   ROUND_ROBIN: 'Round robin — everyone plays everyone once.',
-  LIECHTENSTEIN: 'Liechtenstein — a pre-drawn schedule with unique pairings every round (no repeat opponents).',
+  LIECHTENSTEIN: 'Liechtenstein — Swiss-style pairing by record, but each next match is paired as soon as you and an opponent are free, so nobody waits for the round to finish. Rematches are avoided. Optional top-cut playoffs.',
   BALANCED_LIECHTENSTEIN: 'Balanced Liechtenstein — skill-banded asynchronous Swiss: players are paired within their division, and each division plays its own playoff.',
 };
 

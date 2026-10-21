@@ -80,7 +80,7 @@
     "pillars": {
       "tournaments": {
         "title": "Tournaments",
-        "body": "Swiss rounds, elimination brackets, Liechtenstein, and skill-balanced divisions — a pre-drawn schedule with unique pairings every round. Register with a locked faction, blind-pick, a 1v3 counter-pick, or draft live in Captain's Mode."
+        "body": "Swiss rounds, elimination brackets, Liechtenstein and skill-balanced divisions. Register with a locked faction, blind-pick, a 1v3 counter-pick, or draft live in Captain's Mode."
       },
       "honour": {
         "title": "Roll of Honour",
@@ -177,7 +177,7 @@
           },
           "liechtenstein": {
             "name": "Liechtenstein",
-            "desc": "A pre-drawn Swiss-style schedule with faction-spread pairings to avoid mirror matchups."
+            "desc": "Swiss-style pairing by record, but each next match is paired as soon as both players are free, so nobody waits for the round to finish. Rematches are avoided."
           },
           "balanced_liechtenstein": {
             "name": "Balanced Liechtenstein",
