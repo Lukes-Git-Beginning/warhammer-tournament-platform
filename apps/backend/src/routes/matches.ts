@@ -19,6 +19,7 @@ import { resolvePoolsFromPlan, bracketSeeds, type PlayoffPlan } from '../lib/bal
 import { invalidate } from '../lib/cache.js';
 import { recomputeFactionStats } from '../lib/recompute-faction-stats.js';
 import { recordTournamentEvent } from '../lib/tournament-events.js';
+import { afterMatchDeleted } from '../lib/match-deletion.js';
 
 /**
  * Cascade a match's leaderboard eligibility onto its games and refresh global stats.
@@ -1019,7 +1020,10 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       const { id: matchId } = request.params as { id: string };
       const match = await fastify.prisma.match.findUnique({
         where: { id: matchId },
-        select: { id: true, tournament_id: true, tournament: { select: { host_id: true } } },
+        select: {
+          id: true, tournament_id: true, round: true, match_number: true, status: true, player1_id: true, player2_id: true,
+          tournament: { select: { host_id: true } },
+        },
       });
       if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
 
@@ -1027,6 +1031,10 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await canManageTournament(fastify.prisma, match.tournament_id ?? '', userId, role))) return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient permissions', statusCode: 403 });
 
       await fastify.prisma.match.update({ where: { id: matchId }, data: { deleted_at: new Date() } });
+      // Log it, refresh viewers and let the ASAP engines re-pair the freed players right away.
+      if (match.tournament_id) {
+        afterMatchDeleted(fastify, { ...match, tournament_id: match.tournament_id }, role === 'ADMIN' ? 'admin' : 'host', userId);
+      }
       return reply.code(200).send({ ok: true });
     },
   );

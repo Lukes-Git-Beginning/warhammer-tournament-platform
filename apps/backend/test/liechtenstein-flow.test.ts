@@ -267,3 +267,38 @@ describe('Liechtenstein ASAP engine', () => {
     expect(total).toBeGreaterThan(catchup);
   });
 });
+
+describe('Liechtenstein match numbers after a deleted match', () => {
+  // no-mercy-for-the-wicked (2026-10-22): the host deleted a match, the tick reused its match_number
+  // (soft-deleted rows still count for the unique key), createMany failed with P2002 on every tick and
+  // nothing was ever paired again.
+  it('re-pairs past a soft-deleted match instead of colliding on its number', async () => {
+    const { id } = await makeTournament({ rounds: 3 });
+    await addPlayers(id, 6);
+    await runLiechtensteinPairingTick(app, id); // round 1: three matches
+
+    const r1 = await prisma.match.findMany({ where: { tournament_id: id, deleted_at: null, round: 1 } });
+    for (const m of r1) {
+      await prisma.match.update({ where: { id: m.id }, data: { status: 'COMPLETED', winner_id: m.player1_id } });
+    }
+    await runLiechtensteinPairingTick(app, id); // round 2
+    const r2 = await prisma.match.findMany({
+      where: { tournament_id: id, deleted_at: null, round: 2 },
+      orderBy: { match_number: 'desc' },
+    });
+    expect(r2.length).toBeGreaterThan(0);
+
+    // The host deletes the highest-numbered match of the new round; its number stays taken.
+    const deleted = r2[0]!;
+    await prisma.match.update({ where: { id: deleted.id }, data: { deleted_at: new Date() } });
+
+    await runLiechtensteinPairingTick(app, id);
+    const before = new Set(r2.map((m) => m.id));
+    const fresh = (await prisma.match.findMany({ where: { tournament_id: id, deleted_at: null, round: 2 } }))
+      .filter((m) => !before.has(m.id));
+    expect(fresh.length).toBeGreaterThan(0); // the freed players got a new slot (was 0 before the fix)
+    for (const m of fresh) expect(m.match_number).toBeGreaterThan(deleted.match_number);
+    const failures = await prisma.tournamentEvent.count({ where: { tournament_id: id, type: 'pairing_tick_failed' } });
+    expect(failures).toBe(0);
+  });
+});

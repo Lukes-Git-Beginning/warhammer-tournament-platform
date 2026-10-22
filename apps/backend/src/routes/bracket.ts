@@ -19,6 +19,7 @@ import {
   sortSwissStandings,
   recommendNumberOfRounds,
 } from '../lib/swiss.js';
+import { maxMatchNumberByRound } from '../lib/match-numbers.js';
 import {
   generatePlayoffBracket,
   type PlayoffMatch,
@@ -888,12 +889,15 @@ const bracketRoutes: FastifyPluginAsync = async (fastify) => {
       const newMatches = generateSwissRound(tournament.id, swissPlayers, targetRound, fairnessCost);
 
       await fastify.prisma.$transaction(async (tx) => {
+        // Number above any soft-deleted row of this round (a deleted round being regenerated): the
+        // unique key (tournament_id, round, match_number) still counts deleted rows.
+        const numberBase = (await maxMatchNumberByRound(tx, tournament.id)).get(targetRound) ?? 0;
         await tx.match.createMany({
           data: newMatches.map((m) => ({
             id: m.id,
             tournament_id: m.tournament_id,
             round: m.round,
-            match_number: m.match_number,
+            match_number: m.match_number + numberBase,
             player1_id: m.player1_id,
             player2_id: m.player2_id,
             status: m.status as MatchStatus,

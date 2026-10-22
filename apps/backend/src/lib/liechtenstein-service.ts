@@ -27,6 +27,7 @@ import { generatePlayoffBracket, InsufficientPlayersError } from './playoff-gene
 import { emitBracketUpdate } from './emit.js';
 import { recordTournamentEvent } from './tournament-events.js';
 import { notifyMatchesCreated } from './discord-notify.js';
+import { maxMatchNumberByRound } from './match-numbers.js';
 
 const LOCK_TTL_SECONDS = 30;
 const RELEASE_LOCK = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`;
@@ -46,6 +47,28 @@ interface TickMatch {
   phase: string | null;
   player1_game_wins: number;
   player2_game_wins: number;
+}
+
+/** How often a failing tick may write to the host event log (the reconciler retries every minute). */
+const TICK_FAILURE_EVENT_TTL_SECONDS = 60 * 60;
+
+/**
+ * Surface a failed tick in the tournament event log, which hosts can read, not only in the server
+ * logs. Throttled to one event per tournament per hour via Redis because the reconciler retries every
+ * minute; without Redis (tests) every failure is recorded. Never throws.
+ */
+async function recordTickFailure(fastify: FastifyInstance, tournamentId: string, err: unknown): Promise<void> {
+  try {
+    if (fastify.redis) {
+      const first = await fastify.redis.set(`rizzotto:li:tick:${tournamentId}:failure-event`, '1', 'EX', TICK_FAILURE_EVENT_TTL_SECONDS, 'NX');
+      if (first !== 'OK') return;
+    }
+    const code = typeof err === 'object' && err !== null && 'code' in err ? String((err as { code: unknown }).code) : null;
+    const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
+    await recordTournamentEvent({ tournamentId, type: 'pairing_tick_failed', actor: 'system', payload: { engine: 'liechtenstein', code, message } });
+  } catch {
+    // logging must never break the tick
+  }
 }
 
 /**
@@ -206,8 +229,10 @@ export async function runLiechtensteinPairingTick(
 
     const plan = planLiechtensteinPairings(pool, tournamentId);
 
-    // Next match_number per round (across existing rows + rows we add this tick).
-    const nextMatchNo = new Map<number, number>();
+    // Next match_number per round (across existing rows + rows we add this tick). Seeded from ALL rows,
+    // soft-deleted included: the unique key still counts a deleted row, so reusing its number failed
+    // createMany with P2002 on every tick and stalled the tournament after a host deleted a match.
+    const nextMatchNo = await maxMatchNumberByRound(fastify.prisma, tournamentId);
     for (const m of matches) nextMatchNo.set(m.round, Math.max(nextMatchNo.get(m.round) ?? 0, m.match_number));
     const takeMatchNo = (round: number): number => {
       const n = (nextMatchNo.get(round) ?? 0) + 1;
@@ -255,19 +280,21 @@ export async function runLiechtensteinPairingTick(
     }
 
     let mutated = mutatedByCrystallise;
-    if (byesToDelete.length > 0) {
-      await fastify.prisma.match.deleteMany({ where: { id: { in: byesToDelete } } });
+    // One transaction: a failed insert must not leave reclaimed PENDING_BYE rows deleted or rests scored
+    // without their replacement matches (each failed retry used to strip a resting player's marker).
+    if (byesToDelete.length > 0 || byesToScore.length > 0 || rows.length > 0) {
+      await fastify.prisma.$transaction(async (tx) => {
+        if (byesToDelete.length > 0) await tx.match.deleteMany({ where: { id: { in: byesToDelete } } });
+        for (const id of byesToScore) {
+          const holder = [...restingBye].find(([, b]) => b.id === id)?.[0];
+          await tx.match.update({ where: { id }, data: { status: 'BYE', winner_id: holder ?? null } });
+        }
+        if (rows.length > 0) await tx.match.createMany({ data: rows });
+      });
       mutated = true;
-    }
-    for (const id of byesToScore) {
-      const holder = [...restingBye].find(([, b]) => b.id === id)?.[0];
-      await fastify.prisma.match.update({ where: { id }, data: { status: 'BYE', winner_id: holder ?? null } });
-      mutated = true;
-    }
-    if (rows.length > 0) {
-      await fastify.prisma.match.createMany({ data: rows });
-      mutated = true;
-      void recordTournamentEvent({ tournamentId, type: 'matches_created', actor: 'system', payload: { phase: 'liechtenstein', count: rows.length } });
+      if (rows.length > 0) {
+        void recordTournamentEvent({ tournamentId, type: 'matches_created', actor: 'system', payload: { phase: 'liechtenstein', count: rows.length } });
+      }
     }
 
     // Group phase complete → generate the optional TOP-N playoffs once (idempotent). `committed`
@@ -297,6 +324,7 @@ export async function runLiechtensteinPairingTick(
     }
   } catch (err) {
     fastify.log.error({ err, tournamentId }, 'Liechtenstein pairing tick failed');
+    await recordTickFailure(fastify, tournamentId, err);
   } finally {
     if (redis) {
       try {

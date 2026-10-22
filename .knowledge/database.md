@@ -154,6 +154,7 @@ Wenn Backend vom Host nach Postgres im Container über `127.0.0.1:5432` verbinde
 - `status MatchStatus` — `PENDING | ONGOING | COMPLETED | BYE | FORFEIT | DISPUTED`.
 - `next_match_id String?` — Selbstreferenz (`BracketProgression`) für Bracket-Traversal.
 - `deleted_at DateTime?` — Soft-Delete.
+- **Gotcha `match_number` (2026-10-23):** `@@unique([tournament_id, round, match_number])` zählt soft-gelöschte Zeilen mit. Neue Zeilen IMMER ab `maxMatchNumberByRound()` (`lib/match-numbers.ts`, ohne `deleted_at`-Filter) nummerieren, nie aus den lebenden Zeilen allein, sonst P2002. Der Liechtenstein-Tick hat das falsch gemacht und ein Live-Turnier nach einem gelöschten Match stillgelegt (v2.26.1); Swiss-Folgerunden (`auto-swiss-service.ts`, `routes/bracket.ts`) nutzen den Helfer ebenfalls. Löschen über Host-/Admin-Route ruft `afterMatchDeleted()` (`lib/match-deletion.ts`): Event `match_deleted`, Bracket-Emit, BaLi- + Liechtenstein-Tick.
 - **Dynamic-Leaderboard (2026-06):** `season_id String? @db.Uuid` (+ `season Season?` Relation, Index `[season_id, status]`), `played_at DateTime?`, `ruleset String?` — beim Statuswechsel auf COMPLETED gestempelt (beide Completion-Pfade: `match-result-service.ts` + Legacy `routes/matches.ts`). Authoritative Season-Zuordnung für die derive-on-read-Aggregation.
 - Relationen: `player1/player2 User?`, `winner User?`, `draft Draft?`, `feeder_matches Match[]`, `season Season?`.
 

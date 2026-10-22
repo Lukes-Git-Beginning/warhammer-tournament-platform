@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.26.1] — 2026-10-23
+
+### Fixed
+- **Liechtenstein tournaments no longer stall after a match is deleted.** Deleting a match could stop all new pairings for the rest of the event. New matches now get a free match number, and the freed players are paired again right away. The same fix covers Swiss rounds that are deleted and generated again.
+- **Deleting a match now updates the bracket for everyone straight away** and is recorded in the tournament log.
+
 ## [2.26.0] — 2026-10-22
 
 ### Added

@@ -8,6 +8,7 @@ import { TournamentFormat, PlayoffFormat, Prisma } from '@rizzotto/db';
 import { BattleTypeSchema, ImportLogListResponseSchema } from '@rizzotto/types';
 import { cached, cacheKey, invalidate } from '../lib/cache.js';
 import { runBalancedPairingTick } from '../lib/balanced-liechtenstein-service.js';
+import { afterMatchDeleted } from '../lib/match-deletion.js';
 import { emitBracketUpdate } from '../lib/emit.js';
 import { addLateParticipant, setParticipantFactionOp, createManualMatch } from '../lib/tournament-management.js';
 import { guardBalancedManualPairing } from '../lib/tournament-utils.js';
@@ -2513,7 +2514,10 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // DELETE /api/admin/matches/:matchId — soft-delete a match (sets deleted_at)
   fastify.delete('/api/admin/matches/:matchId', async (request, reply) => {
     const { matchId } = request.params as { matchId: string };
-    const match = await fastify.prisma.match.findUnique({ where: { id: matchId }, select: { id: true, tournament_id: true } });
+    const match = await fastify.prisma.match.findUnique({
+      where: { id: matchId },
+      select: { id: true, tournament_id: true, round: true, match_number: true, status: true, player1_id: true, player2_id: true },
+    });
     if (!match) return reply.code(404).send({ error: 'NotFound', message: 'Match not found', statusCode: 404 });
     const delGuard = await guardBalancedManualPairing(
       fastify.prisma,
@@ -2523,9 +2527,9 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     );
     if (delGuard) return reply.code(delGuard.status).send(delGuard.body);
     await fastify.prisma.match.update({ where: { id: matchId }, data: { deleted_at: new Date() } });
-    // Deleting a node changes the field — for Balanced Liechtenstein re-pair / let playoffs
-    // generate off the new state. No-ops for other formats.
-    if (match.tournament_id) void runBalancedPairingTick(fastify, match.tournament_id);
+    // Deleting a node changes the field: log it and let the ASAP engines (Balanced Liechtenstein,
+    // Liechtenstein) re-pair / generate playoffs off the new state. No-ops for other formats.
+    if (match.tournament_id) afterMatchDeleted(fastify, { ...match, tournament_id: match.tournament_id }, 'admin', request.user.sub);
     return reply.code(200).send({ ok: true });
   });
 
