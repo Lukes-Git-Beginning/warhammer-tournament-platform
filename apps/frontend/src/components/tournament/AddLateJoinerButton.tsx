@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { searchTeammates, getAllTeams, addLateJoiner } from '@/lib/api';
+import { searchUsersIncludingSelf, getAllTeams, addLateJoiner } from '@/lib/api';
 
 /**
  * Host tool: add a late joiner by searching for them by name, instead of pasting a raw id.
@@ -18,10 +18,11 @@ export function AddLateJoinerButton({ slug, competitorFormat }: { slug: string; 
   const [search, setSearch] = useState('');
   const [lastAdded, setLastAdded] = useState<string | null>(null);
 
-  // 1v1: user search. 2v2: pull the team directory once, filter to ACTIVE teams by name client-side.
+  // 1v1: user search, including the host themselves (they may join their own running tournament).
+  // 2v2: pull the team directory once, filter to ACTIVE teams by name client-side.
   const { data: userData } = useQuery({
     queryKey: ['late-joiner-search', search],
-    queryFn: () => searchTeammates(search),
+    queryFn: () => searchUsersIncludingSelf(search),
     enabled: open && !is2v2 && search.trim().length >= 2,
     staleTime: 30_000,
   });

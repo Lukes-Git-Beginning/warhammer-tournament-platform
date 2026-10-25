@@ -3082,6 +3082,11 @@ export function searchTeammates(q: string): Promise<{ users: UserSearchResult[] 
   return apiFetch<{ users: UserSearchResult[] }>(`/api/users/search?q=${encodeURIComponent(q)}`);
 }
 
+/** User search that also returns the caller, e.g. so a host can add themselves as a late joiner. */
+export function searchUsersIncludingSelf(q: string): Promise<{ users: UserSearchResult[] }> {
+  return apiFetch<{ users: UserSearchResult[] }>(`/api/users/search?q=${encodeURIComponent(q)}&includeSelf=true`);
+}
+
 export type TeamStatus = 'FORMING' | 'ACTIVE' | 'ARCHIVED';
 
 export interface TeamMemberDto {

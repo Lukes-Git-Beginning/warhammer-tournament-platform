@@ -246,18 +246,22 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // GET /api/users/search?q= — lightweight authenticated user search for pickers
-  // (e.g. the 2v2 teammate picker). Minimal public fields only; excludes the caller.
+  // GET /api/users/search?q=&includeSelf= — lightweight authenticated user search for pickers.
+  // Minimal public fields only. Excludes the caller by default (the 2v2 teammate picker: you can't
+  // team with yourself); includeSelf=true keeps them (the host's late-joiner picker: a host may add
+  // themselves to their own running tournament).
   fastify.get('/api/users/search', { preHandler: fastify.authenticate }, async (request, reply) => {
-    const parsed = z.object({ q: z.string().trim().min(2).max(50) }).safeParse(request.query);
+    const parsed = z
+      .object({ q: z.string().trim().min(2).max(50), includeSelf: z.enum(['true', 'false']).optional() })
+      .safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
-    const { q } = parsed.data;
+    const { q, includeSelf } = parsed.data;
     const users = await fastify.prisma.user.findMany({
       where: {
         deleted_at: null,
-        id: { not: request.user.sub },
+        ...(includeSelf === 'true' ? {} : { id: { not: request.user.sub } }),
         OR: [{ username: { contains: q, mode: 'insensitive' } }, { discord_id: q }],
       },
       select: { id: true, username: true, avatar_url: true },
