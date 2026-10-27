@@ -31,6 +31,20 @@ export function cooldownLabel(hours: number): string {
   return hours >= 48 && hours % 24 === 0 ? plural(hours / 24, 'day') : plural(hours, 'hour');
 }
 
+/**
+ * Why strikes exist: joining the queue pings every player who marked himself available (the matchmaking
+ * DM wave), and a matched opponent waits for the pick; leaving right away or not picking wastes their time.
+ */
+export function strikeWhy(): string {
+  return (
+    "Open Play runs on other players' time. When you join the queue, everyone who marked himself available " +
+    "gets a DM that someone wants a game, and once you're matched, your opponent waits for your pick. If you " +
+    "leave right after joining or don't pick, they turned up for nothing. Strikes keep that rare: the first one " +
+    `is only a warning, and one is taken off for every ${OPEN_PLAY_CONDUCT.decayDays} days without a new one, so ` +
+    'an occasional slip costs you nothing. They only add up for players who keep doing it.'
+  );
+}
+
 /** What gets a strike. */
 export function strikeOffences(): string[] {
   const c = OPEN_PLAY_CONDUCT;
@@ -106,6 +120,10 @@ export function OpenPlayConduct({
         )}
       </div>
       <div className="space-y-3">
+        <div>
+          <Heading>What not to do</Heading>
+          <p className="text-stone-300">{strikeWhy()}</p>
+        </div>
         <div>
           <Heading>What gets you a strike</Heading>
           <List items={strikeOffences()} />

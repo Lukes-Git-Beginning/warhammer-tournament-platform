@@ -15,6 +15,7 @@ import {
   strikeDecay,
   strikeLadder,
   strikeOffences,
+  strikeWhy,
 } from '@/components/open-play/OpenPlayConduct';
 import { REPLACED_MODS, RIZZOTTOVERSE_INVITE, steamWorkshopUrl, useArenaMod } from '@/lib/arenaMod';
 
@@ -316,6 +317,8 @@ export function HowToPlayPage() {
 
         <Section id="open-play" number={5} title="Open Play conduct">
           <p>Open Play has no tournament host watching over it, so it has its own consequences. {OPEN_PLAY_CHEATING}</p>
+          <SubHeading>What not to do</SubHeading>
+          <p>{strikeWhy()}</p>
           <SubHeading>What gets you a strike</SubHeading>
           <ul className={ul}>
             {strikeOffences().map((s) => (
