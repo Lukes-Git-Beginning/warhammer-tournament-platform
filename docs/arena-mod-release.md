@@ -43,10 +43,13 @@ proofread before release.
 5. **Check on prod:** `/api/meta/arena-mod` shows `listed: true` and the version (at most 15 minutes after
    listing); `/api/maps?battle_type=DOMQUEST` returns the pool; the How to Play and Fruit Rules tabs; a ruleset
    card; the Domquest filter on Tournaments and Leaderboard.
-6. **Welcome banner:** Admin → Welcome Banner, text below.
-7. **Broadcast DM:** to everyone the bot may DM, text below.
-8. **Discord posts / video:** Alex.
-9. Optional: replace `public/img/how-to-play/lobby-warning.jpg` with a screenshot from the release build (the
+6. **Ban lists (Alex, Admin → Settings → Standard Ruleset):** remove what the mod now fixes or rebalances
+   (Dechala, Zombie Dragon, Manticore Mount (Dieter Helsnicht), Chalice of Blood & Darkness, Ghostly Howl) from
+   every combo. The lists only show in the admin editor, so nothing else depends on it.
+7. **Welcome banner:** Admin → Welcome Banner, text below.
+8. **Broadcast DM:** to everyone the bot may DM, text below.
+9. **Discord posts / video:** Alex.
+10. Optional: replace `public/img/how-to-play/lobby-warning.jpg` with a screenshot from the release build (the
    current one shows the test build's version line), at a new file name (CDN rule).
 
 ## Texts to proofread

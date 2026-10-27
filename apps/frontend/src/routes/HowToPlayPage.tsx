@@ -233,14 +233,6 @@ export function HowToPlayPage() {
             <li>Army setup: much less lag when you move the mouse over unit cards and when you add units.</li>
           </ul>
           <p>The mod also skips the intro movies at startup.</p>
-
-          <SubHeading>Credits</SubHeading>
-          <p>
-            Maps from the Total Tavern Domination Map Pack, included with the permission of WakaWaka3000. Map makers:
-            WakaWaka3000, Bob dat Builder, Sunshyne, The Space Pope, Sleepylion, HitmanHippo, HammeredZebra and
-            Chromosumo. The Fruit Rules v10 (Cranberry Edition) are the community ruleset for competitive Conquest and
-            Land Battle. Thanks to Dustman for continued support in the project.
-          </p>
         </Section>
 
         <Section id="domquest" number={3} title="Domquest">
