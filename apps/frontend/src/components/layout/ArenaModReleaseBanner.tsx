@@ -23,7 +23,11 @@ export function ArenaModReleaseBanner() {
   });
   const dismiss = useMutation({
     mutationFn: () => dismissSiteNotice(NOTICE),
-    onMutate: () => queryClient.setQueryData(['site-notices', user?.id], { notices: [] }),
+    // Only this notice: the query is shared with the weekly Discord prompt.
+    onMutate: () =>
+      queryClient.setQueryData<{ notices: string[] }>(['site-notices', user?.id], (prev) => ({
+        notices: (prev?.notices ?? []).filter((n) => n !== NOTICE),
+      })),
   });
 
   if (!user || !data?.notices.includes(NOTICE)) return null;

@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 - **Round limits and disqualification are for tournaments only.** Open Play no longer lists them. In Open Play, cheating voids the result, and an admin can ban you from Open Play.
 - **Logging in with Discord adds you to our Discord server**, so match notifications can reach you. Discord asks you once, the next time you log in.
 - **New players get a welcome page** after their first login, with our Discord server and the mod.
+- **A weekly reminder to join our Discord server.** If you've linked Steam but aren't on the RizzOttoverse, the site asks you once a week to join. Match notifications come as DMs from our bot, and Discord only lets it message players who share a server with it.
 - **If you had every battle type selected** for Open Play or for tournament DMs, Domquest is now included too. A narrower selection stays as you set it.
 
 ### Fixed

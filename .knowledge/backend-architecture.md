@@ -179,6 +179,7 @@ Zusätzlich registriert `buildApp()` direkt: `GET /health` → `{ status: 'ok', 
 | `lib/finalize-tournament.ts` | `finalizeTournament()` — schreibt Placements, ELO-Updates und Punkte nach Tournament-Ende |
 | `lib/factions.ts` | `getFactionsWithStats()`, `asFactionDto()`, `asFactionStatsDto()` — Stats-Aggregation aus DB |
 | `lib/faction-snapshot.ts` | `takeFactionsSnapshot(prisma)` — täglicher Cron-Snapshot der Fraktionsstatistiken |
+| `lib/discord-invite.ts` | `flagDiscordInvites(prisma, check?)` — **wöchentlicher Discord-Prompt** (Cron Mo 00:00 `SITE_TZ`): prüft jeden voll registrierten Spieler (Steam verknüpft) per Bot (`fetchGuildMembership`, gedrosselt über `discordRequest`), setzt `User.discord_invite_due_at` für Nicht-Mitglieder; Site-Notice `discord-invite` → Vollbild-Prompt `DiscordInvitePrompt`. Kein dauerhaftes Opt-out (Alex, 2026-10-28) |
 | `lib/heatmap.ts` | `getMatchupMatrix()` — 24×24-Faction-Matchup-Heatmap |
 | `lib/tournament-utils.ts` | `generateSlug()`, `validateStatusTransition()`, `TournamentStatus`-Enum — Status-Transitions und Slug-Generierung |
 | `lib/emit.ts` | `emitMatchResult()`, `emitStatusChange()`, `emitBracketUpdate()`, `emitParticipantChange()` — typisierte Socket.IO-Emit-Wrapper |

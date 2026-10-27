@@ -17,6 +17,7 @@ import { reconcileSwissTournaments } from '../lib/tournament-utils.js';
 import { getSupporterRoleConfig, refreshSupporterFromDiscord } from '../lib/supporter-service.js';
 import { syncKofiGoal } from '../lib/kofi-goal-sync.js';
 import { SITE_TZ } from '../lib/site-time.js';
+import { flagDiscordInvites } from '../lib/discord-invite.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -622,7 +623,25 @@ export default fp(
       { timezone: SITE_TZ },
     );
 
-    fastify.decorate('cronTasks', [snapshotTask, playerSkillSnapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask, kofiGoalSyncTask, accessLogPurgeTask, botMessagePurgeTask]);
+    // -----------------------------------------------------------------------
+    // Weekly Discord prompt — Monday 00:00 German time (Sunday into Monday). The bot checks every fully
+    // registered player; whoever is not on the RizzOttoverse gets the prompt on his next visit
+    // (lib/discord-invite.ts). One paced Discord call per player.
+    // -----------------------------------------------------------------------
+    const discordInviteTask = cron.schedule(
+      '0 0 * * 1',
+      async () => {
+        try {
+          const run = await flagDiscordInvites(fastify.prisma);
+          fastify.log.info(run, 'Weekly Discord check done');
+        } catch (err) {
+          fastify.log.error({ err }, 'Weekly Discord check failed');
+        }
+      },
+      { timezone: SITE_TZ },
+    );
+
+    fastify.decorate('cronTasks', [snapshotTask, playerSkillSnapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask, kofiGoalSyncTask, accessLogPurgeTask, botMessagePurgeTask, discordInviteTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
@@ -642,6 +661,7 @@ export default fp(
       kofiGoalSyncTask.stop();
       accessLogPurgeTask.stop();
       botMessagePurgeTask.stop();
+      discordInviteTask.stop();
       clearInterval(matrixInterval);
       clearInterval(matchmakingInterval);
     });

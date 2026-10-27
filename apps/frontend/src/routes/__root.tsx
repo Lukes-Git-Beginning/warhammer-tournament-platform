@@ -10,6 +10,7 @@ import { FactionPickTimerBanner } from '@/components/match/FactionPickTimerBanne
 import { SessionExpiredBanner } from '@/components/auth/SessionExpiredBanner';
 import { ArenaModReleaseBanner } from '@/components/layout/ArenaModReleaseBanner';
 import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
+import { DiscordInvitePrompt } from '@/components/layout/DiscordInvitePrompt';
 
 // Map a pathname to a compact page label for the access log (e.g. "tournament:<slug>").
 function pageLabel(path: string): string {
@@ -75,6 +76,8 @@ function RootLayout() {
       <SessionExpiredBanner />
       {/* The welcome page after a player's first login (Discord server + the mod), once. */}
       <OnboardingOverlay />
+      {/* The weekly Discord prompt for players who are not on the server (after the welcome page). */}
+      <DiscordInvitePrompt />
       {/* #2 — always-visible faction-pick countdown (renders only when a timer runs) */}
       <FactionPickTimerBanner />
 {import.meta.env.DEV && <DevLoginPanel />}

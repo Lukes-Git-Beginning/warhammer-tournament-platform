@@ -295,6 +295,10 @@ model User {
   // not on the server yet (lib/discord-membership.ts).
   discord_member            Boolean?
   discord_member_checked_at DateTime?
+  // Set by the weekly Discord check (Monday 00:00 site time) for a fully registered player (Steam linked) who
+  // is not on the server: his next visit shows the Discord prompt. Cleared when he clicks it away or the bot
+  // sees him on the server (lib/discord-invite.ts).
+  discord_invite_due_at     DateTime?
   // One-time site notices this user dismissed (notice ids from lib/site-notices.ts).
   dismissed_notices         String[]         @default([])
   // Availability pause: when true the player is temporarily not matchable — excluded from the

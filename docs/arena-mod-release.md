@@ -34,6 +34,10 @@ proofread before release.
   marks every existing player as onboarded, so only new players see it. `/api/users/me` carries `discord_member`,
   so the Discord card says "Logging in added you" when the bot saw him there.
 - Release banner for existing players who are not on the RizzOttoverse Discord server, dismissable for good.
+- Weekly Discord prompt: every Monday 00:00 (site time) the bot checks every player with Steam linked; whoever
+  is not on the server gets a full-screen prompt on his next visit ("Join the server" / "Continue to the site"),
+  again each week until he is on the server. No permanent opt-out. The first check runs on the first Monday
+  after the deploy.
 - Discord login always asks for `guilds.join`, so logging in adds players to the server.
 
 ## Release day, in order
