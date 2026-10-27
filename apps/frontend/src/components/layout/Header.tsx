@@ -66,7 +66,6 @@ export function Header() {
         to="/leaderboard"
         className={NAV_LINK_CLASS}
         activeProps={NAV_LINK_ACTIVE_PROPS}
-        data-onboarding-target="leaderboard-nav"
       >
         {t('header.leaderboard')}
       </Link>
@@ -74,7 +73,6 @@ export function Header() {
         to="/meta"
         className={NAV_LINK_CLASS}
         activeProps={NAV_LINK_ACTIVE_PROPS}
-        data-onboarding-target="meta-nav"
       >
         {t('header.meta')}
       </Link>
@@ -82,7 +80,6 @@ export function Header() {
         to="/factions"
         className={NAV_LINK_CLASS}
         activeProps={NAV_LINK_ACTIVE_PROPS}
-        data-onboarding-target="factions-nav"
       >
         {t('header.factions')}
       </Link>
@@ -156,13 +153,11 @@ export function Header() {
                   <img
                     src={user.avatar_url}
                     alt=""
-                    data-onboarding-target="avatar"
                     className="h-8 w-8 rounded-full ring-2 ring-rizzotto-gold-500/40 ring-offset-1 ring-offset-rizzotto-iron-950 transition-opacity group-hover:opacity-90"
                   />
                 )}
                 <span
                   className="hidden text-sm text-rizzotto-stone-300 transition-colors group-hover:text-rizzotto-gold-400 xl:inline"
-                  data-onboarding-target={user.avatar_url ? undefined : 'avatar'}
                 >
                   {user.username}
                 </span>

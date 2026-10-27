@@ -9,7 +9,8 @@ const NOTICE = 'arena-mod-release';
 /**
  * One-time notice that RizzOtto's Arena Mod is out, for logged-in players who aren't on the RizzOttoverse
  * Discord server (members hear about it there). The server decides who sees it; dismissing it hides it for
- * good. Not tied to onboarded_at: the onboarding overlay is unmounted, so almost nobody has that set.
+ * good. New players get the same hints on the welcome page (OnboardingOverlay), which covers the site
+ * until they click through; logging in usually adds them to the server anyway, which hides this banner.
  */
 export function ArenaModReleaseBanner() {
   const { data: user } = useAuthQuery();

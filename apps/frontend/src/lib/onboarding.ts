@@ -3,51 +3,15 @@ import type { UserMe } from '@rizzotto/types';
 import { apiFetch } from './api';
 import { useAuthQuery } from './auth';
 
-export type OnboardingStage = 0 | 1 | 2 | 3 | 4;
-export const ONBOARDING_STAGE_COUNT = 5;
-
-export interface OnboardingStageMeta {
-  index: OnboardingStage;
-  id: 'welcome' | 'workshop' | 'setup' | 'survey' | 'roll-awaits';
-  title: string;
-}
-
-export const ONBOARDING_STAGES: OnboardingStageMeta[] = [
-  { index: 0, id: 'welcome', title: 'Heed the Call' },
-  { index: 1, id: 'workshop', title: 'The Workshop' },
-  { index: 2, id: 'setup', title: 'Discord and the mod' },
-  { index: 3, id: 'survey', title: 'Survey the Field' },
-  { index: 4, id: 'roll-awaits', title: 'The Roll Awaits' },
-];
-
-function clampStage(stage: number | null | undefined): OnboardingStage {
-  if (stage == null) return 0;
-  if (stage < 0) return 0;
-  if (stage > 4) return 4;
-  return stage as OnboardingStage;
-}
-
+/**
+ * Onboarding is one welcome page (Alex, 2026-10-27): the Discord server and RizzOtto's Arena Mod, then
+ * done. It shows to a logged-in player until `onboarded_at` is set; players from before 2026-10-27 were
+ * backfilled as onboarded. (The old multi-stage flow with settings and a spotlight tour is gone; the
+ * `onboarding_stage` column is no longer used.)
+ */
 export function useOnboarding() {
-  const { data: user, isLoading } = useAuthQuery();
+  const { data: user } = useAuthQuery();
   const queryClient = useQueryClient();
-
-  const isOpen = !!user && user.onboarded_at === null;
-  const stage = clampStage(user?.onboarding_stage);
-
-  const advanceMutation = useMutation({
-    mutationFn: async (next: OnboardingStage) => {
-      await apiFetch<{ ok: true }>('/api/users/me/onboarding-stage', {
-        method: 'PATCH',
-        body: JSON.stringify({ stage: next }),
-      });
-      return next;
-    },
-    onSuccess: (next) => {
-      queryClient.setQueryData<UserMe | null | undefined>(['me'], (prev) =>
-        prev ? { ...prev, onboarding_stage: next } : prev,
-      );
-    },
-  });
 
   const completeMutation = useMutation({
     mutationFn: () =>
@@ -60,29 +24,11 @@ export function useOnboarding() {
     },
   });
 
-  const resetMutation = useMutation({
-    mutationFn: () =>
-      apiFetch<UserMe>('/api/users/me', {
-        method: 'PATCH',
-        body: JSON.stringify({ reset_onboarding: true }),
-      }),
-    onSuccess: (next) => {
-      queryClient.setQueryData<UserMe>(['me'], next);
-    },
-  });
-
   return {
-    isLoading,
-    isOpen,
-    stage,
+    isOpen: !!user && user.onboarded_at === null,
     user: user ?? null,
-    advance: (next: OnboardingStage) => advanceMutation.mutate(next),
-    advanceAsync: (next: OnboardingStage) => advanceMutation.mutateAsync(next),
     complete: () => completeMutation.mutateAsync(),
-    reset: () => resetMutation.mutateAsync(),
-    isAdvancing: advanceMutation.isPending,
     isCompleting: completeMutation.isPending,
-    isResetting: resetMutation.isPending,
   };
 }
 

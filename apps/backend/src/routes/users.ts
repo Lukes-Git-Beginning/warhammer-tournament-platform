@@ -28,6 +28,7 @@ const meSelect = {
   last_login: true,
   onboarded_at: true,
   onboarding_stage: true,
+  discord_member: true,
   created_at: true,
   supporter_discord: true,
   lord_discord: true,
@@ -64,6 +65,7 @@ type MeRow = {
   last_login: Date | null;
   onboarded_at: Date | null;
   onboarding_stage: number;
+  discord_member: boolean | null;
   created_at: Date;
   supporter_discord: boolean;
   lord_discord: boolean;

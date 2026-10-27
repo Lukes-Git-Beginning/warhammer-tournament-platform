@@ -19,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 - **The rule cards show only what you watch yourself:** hosting in the arena mode with the mod, and the conduct rules. The mod takes care of the settings and the bans. Open Play shows the rules of your battle types in one box: what they share once, then what each one adds.
 - **Round limits and disqualification are for tournaments only.** Open Play no longer lists them. In Open Play, cheating voids the result, and an admin can ban you from Open Play.
 - **Logging in with Discord adds you to our Discord server**, so match notifications can reach you. Discord asks you once, the next time you log in.
-- **New players get a step for Discord and the mod** when they first sign up.
+- **New players get a welcome page** after their first login, with our Discord server and the mod.
 - **If you had every battle type selected** for Open Play or for tournament DMs, Domquest is now included too. A narrower selection stays as you set it.
 
 ### Fixed

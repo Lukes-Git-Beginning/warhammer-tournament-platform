@@ -68,6 +68,8 @@ export async function createTestUsers(
         discord_id,
         username,
         role: prismaRole,
+        // Past the welcome page, which would otherwise cover the UI the specs drive.
+        onboarded_at: new Date(),
         ...(withSteamLink
           ? {
               steam_link: {

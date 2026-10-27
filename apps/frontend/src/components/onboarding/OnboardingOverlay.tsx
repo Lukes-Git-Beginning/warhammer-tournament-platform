@@ -1,93 +1,31 @@
 import { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useOnboarding } from '@/lib/onboarding';
-import { cn } from '@/lib/utils';
-import { OnboardingProgressBar } from './OnboardingProgressBar';
-import { OnboardingStage1Welcome } from './OnboardingStage1Welcome';
-import { OnboardingStage2Prefs } from './OnboardingStage2Prefs';
-import { OnboardingStage3Tour } from './OnboardingStage3Tour';
-import { OnboardingStageSetup } from './OnboardingStageSetup';
+import { OnboardingWelcome } from './OnboardingWelcome';
 
+/**
+ * The welcome page a player sees once, after his first login: full screen over the site until he
+ * clicks through (which sets `onboarded_at`).
+ */
 export function OnboardingOverlay() {
-  const {
-    isOpen,
-    stage,
-    user,
-    advance,
-    complete,
-    isCompleting,
-  } = useOnboarding();
-  const reduced = useReducedMotion();
-  const { t } = useTranslation('common');
+  const { isOpen, complete, isCompleting } = useOnboarding();
 
-  // Lock body scroll while overlay is open (fullscreen stages only). Stages: 0 welcome, 1 settings,
-  // 2 Discord + mod, 3 the spotlight tour (not fullscreen), which completes onboarding.
-  const isTour = stage === 3;
+  // Lock body scroll while the page is open.
   useEffect(() => {
-    if (!isOpen || isTour) return;
+    if (!isOpen) return;
     const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = original;
     };
-  }, [isOpen, isTour]);
+  }, [isOpen]);
 
-  if (!isOpen || !user) return null;
+  if (!isOpen) return null;
 
   return (
-    <div data-testid="onboarding-overlay">
-      {/* Progress bar — always rendered, fixed top */}
-      <div className="pointer-events-none fixed inset-x-0 top-0 z-[58]">
-        <OnboardingProgressBar current={stage} />
+    <div data-testid="onboarding-overlay" className="fixed inset-0 z-50 overflow-y-auto bg-rizzotto-iron-950/97 backdrop-blur-sm">
+      <div className="flex min-h-screen w-full items-center justify-center px-4 py-16 sm:py-20">
+        <OnboardingWelcome onDone={() => void complete()} isDone={isCompleting} />
       </div>
-
-      {/* Skip / End tour link */}
-      <div className="fixed top-4 right-3 z-[59] sm:top-5 sm:right-6">
-        <button
-          type="button"
-          onClick={() => void complete()}
-          disabled={isCompleting}
-          className={cn(
-            'font-display text-[11px] uppercase tracking-[0.18em]',
-            'text-rizzotto-stone-400 hover:text-rizzotto-gold-400',
-            'transition-colors duration-base ease-burn',
-            'disabled:opacity-50',
-          )}
-        >
-          {isCompleting ? t('onboarding.overlay.sealing') : t('onboarding.overlay.skip_label')}
-        </button>
-      </div>
-
-      {/* Stage content */}
-      {isTour ? (
-        <OnboardingStage3Tour onAdvance={() => void complete()} />
-      ) : (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-rizzotto-iron-950/97 backdrop-blur-sm">
-          <div className="flex min-h-screen w-full items-center justify-center px-4 py-16 sm:py-20">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={stage}
-                initial={reduced ? { opacity: 0 } : { opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                transition={
-                  reduced
-                    ? { duration: 0.18 }
-                    : { duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }
-                }
-                className="flex w-full justify-center"
-              >
-                {stage === 0 && <OnboardingStage1Welcome onAdvance={() => advance(1)} />}
-                {stage === 1 && (
-                  <OnboardingStage2Prefs user={user} onAdvance={() => advance(2)} />
-                )}
-                {stage === 2 && <OnboardingStageSetup onAdvance={() => advance(3)} />}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

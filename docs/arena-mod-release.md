@@ -29,7 +29,10 @@ proofread before release.
   tournaments only".
 - Strike DMs name the right reason (missed faction pick vs. leaving the queue) and link to How to Play; the queue's
   cooldown message names the wait, not a cause.
-- Onboarding step "Discord + mod" before the tour.
+- Onboarding is one welcome page (Discord server + the mod), shown once after a player's first login. The old
+  overlay (settings, spotlight tour) had been unmounted since 2026-06-13 and is gone; migration `20261027100400`
+  marks every existing player as onboarded, so only new players see it. `/api/users/me` carries `discord_member`,
+  so the Discord card says "Logging in added you" when the bot saw him there.
 - Release banner for existing players who are not on the RizzOttoverse Discord server, dismissable for good.
 - Discord login always asks for `guilds.join`, so logging in adds players to the server.
 
@@ -77,7 +80,7 @@ Workshop: <https://steamcommunity.com/sharedfiles/filedetails/?id=3827143159>
 
 - Changelog `## [3.0.0]` in `CHANGELOG.md`.
 - How to Play: `apps/frontend/src/routes/HowToPlayPage.tsx`.
-- Onboarding step: `onboarding.setup.*` in `apps/frontend/src/i18n/locales/en/common.json`.
+- Welcome page: `onboarding.welcome.*` in `apps/frontend/src/i18n/locales/en/common.json`.
 - Release banner: `apps/frontend/src/components/layout/ArenaModReleaseBanner.tsx`.
 - Rule card and required-mod notice: `StandardRulesetCard.tsx`, `RequiredModsNotice.tsx`.
 - Fruit Rules intro: top of `apps/frontend/src/content/fruit-rules/fruit_rules_interpretation.md` (the site's own

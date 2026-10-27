@@ -380,70 +380,20 @@
     }
   },
   "onboarding": {
-    "stage1": {
-      "title": "Welcome aboard.",
-      "body": "Your account is set up. Before you take the field, let us get your profile ready.",
-      "cta": "Enter the Workshop"
-    },
-    "stage2": {
-      "title": "Settings",
-      "body": "Pick your favoured factions and timezone so we can place you correctly.",
-      "factions_label": "Favoured factions",
-      "skip": "Skip — set it later",
-      "save": "Save",
-      "saving": "Saving…"
-    },
-    "setup": {
-      "title": "Get set up",
-      "body": "Two things every player on the Arena needs.",
-      "discord_title": "Join the RizzOttoverse on Discord",
-      "discord_body": "Our Discord server: tournament talk, announcements and mod updates. Match notifications come as DMs from our bot, which can only reach you there.",
+    "welcome": {
+      "title": "Welcome to RizzOtto's Arena.",
+      "body": "Your account is ready. Two things every player here needs before the first game:",
+      "discord_title": "The RizzOttoverse on Discord",
+      "discord_body": "Join our Discord server: tournament talk, announcements and mod updates. Match notifications come as DMs from our bot, which can only reach you there.",
+      "discord_body_member": "Logging in added you to our Discord server: tournament talk, announcements and mod updates. Match notifications come as DMs from our bot.",
       "discord_cta": "Join the server",
+      "discord_cta_member": "Open the server",
       "mod_title": "Install RizzOtto's Arena Mod",
       "mod_body": "Every game on the Arena is played with it: subscribe on the Steam Workshop and enable only this mod in the launcher. It replaces the Total Tavern map pack and Loupi's Fruit Rules mod.",
       "mod_cta": "Open the Workshop",
       "guide_cta": "How to Play",
-      "continue": "Continue"
-    },
-    "stage3": {
-      "title": "Build Your First List.",
-      "body": "A player without a list enters the field blind.",
-      "later": "Do it later",
-      "cta": "Save List"
-    },
-    "stage5": {
-      "title": "You're all set.",
-      "body": "Your profile is ready. Take the field.",
-      "cta": "Go to Profile",
-      "cta_loading": "Loading profile…"
-    },
-    "overlay": {
-      "sealing": "Sealing…",
-      "skip_label": "End tour"
-    },
-    "tour": {
-      "btn_back": "Back",
-      "btn_next": "Next",
-      "btn_finish": "Finish",
-      "dot_aria": "Stop {{current}} of {{total}}",
-      "stops": {
-        "roll_of_honour": {
-          "title": "Leaderboard",
-          "body": "Every player's standing — etched in stone. Your name will join the ranks."
-        },
-        "factions": {
-          "title": "Factions",
-          "body": "Twenty-four banners ride the Old World. Know each before the tournament is called."
-        },
-        "meta": {
-          "title": "The Heatmap",
-          "body": "Matchup balance, version by version. Read the field before you ride it."
-        },
-        "sigil": {
-          "title": "Your Sigil",
-          "body": "Your sigil binds your army lists and your results. Keep it sharp."
-        }
-      }
+      "cta": "Let's go",
+      "cta_loading": "One moment…"
     }
   },
   "draft": {

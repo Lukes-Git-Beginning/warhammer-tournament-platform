@@ -54,6 +54,8 @@ export const UserMeSchema = UserPublicSchema.extend({
   last_login: z.string().datetime().nullable(),
   onboarded_at: z.string().datetime().nullable(),
   onboarding_stage: z.number().int().min(0).max(4),
+  /** On the RizzOttoverse Discord server as the bot last saw it (login, on-demand checks); null = unknown. */
+  discord_member: z.boolean().nullable().optional(),
   created_at: z.string().datetime(),
   steam_link: SteamLinkSchema.nullable().optional(),
   /** Ko-Fi supporter tiers (cumulative). Optional for backward-compatible payloads. */
