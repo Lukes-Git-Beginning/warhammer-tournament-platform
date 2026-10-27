@@ -1640,20 +1640,37 @@ function formatDuration(seconds: number): string {
 }
 
 /**
+ * What earned an Open Play strike (lib/queue-penalty.ts): leaving the queue right after joining, or not
+ * picking a faction in time (the match is cancelled). Both share one strike record, but the DM must
+ * name the right one.
+ */
+export type QueueStrikeReason = 'queue' | 'no-show';
+
+/** Where the code of conduct explains the strikes. */
+function conductLine(): string {
+  return `\n\nWhat gets a strike in Open Play: <${process.env.FRONTEND_URL ?? 'https://rizzotto.gg'}/how-to-play#open-play>`;
+}
+
+/** L5+ is stored as a year-long cooldown that only an admin lifts; don't call it "365 days". */
+const LIFTED_BY_ADMIN_SEC = 300 * 86400;
+
+/**
  * #14 — first offense: a friendly heads-up only, NO sanction. Education-first.
  */
-export async function notifyQueueWarning(discordUserId: string): Promise<void> {
+export async function notifyQueueWarning(discordUserId: string, reason: QueueStrikeReason = 'queue'): Promise<void> {
   const token = getToken();
   if (!token) return;
-  try {
-    await sendDm(
-      discordUserId,
-      `**[RizzOtto's Arena] 👋 Quick heads-up**\n\n` +
-        `We noticed you've joined and left the Open Play queue a few times right after queueing. ` +
+  const body =
+    reason === 'no-show'
+      ? `You didn't pick your faction in time, so your Open Play match was cancelled and your opponent ` +
+        `was left waiting. Nothing happens this time. If something comes up, please cancel the match on ` +
+        `its page instead. ⚔️`
+      : `We noticed you've joined and left the Open Play queue a few times right after queueing. ` +
         `We understand that real life happens, and it's certainly better to leave than to go AFK ` +
         `while queued. Nothing happens this time — just please try to avoid it when you can, since ` +
-        `leaving right after queueing can leave other players hanging. Thanks for keeping matchmaking smooth! ⚔️`,
-    );
+        `leaving right after queueing can leave other players hanging. Thanks for keeping matchmaking smooth! ⚔️`;
+  try {
+    await sendDm(discordUserId, `**[RizzOtto's Arena] 👋 Quick heads-up**\n\n${body}${conductLine()}`);
   } catch {
     // non-fatal — user may have DMs disabled
   }
@@ -1662,17 +1679,26 @@ export async function notifyQueueWarning(discordUserId: string): Promise<void> {
 /**
  * #14 — repeat offense: DM the player about the cooldown that's now in effect.
  */
-export async function notifyQueueTimeout(discordUserId: string, timeoutSeconds: number): Promise<void> {
+export async function notifyQueueTimeout(
+  discordUserId: string,
+  timeoutSeconds: number,
+  reason: QueueStrikeReason = 'queue',
+): Promise<void> {
   const token = getToken();
   if (!token) return;
+  const lifted = timeoutSeconds >= LIFTED_BY_ADMIN_SEC;
+  const cooldown = lifted
+    ? `you can't join the queue until an admin lifts your cooldown`
+    : `you're on a **${formatDuration(timeoutSeconds)}** cooldown`;
+  const body =
+    reason === 'no-show'
+      ? `You didn't pick your faction in time again, so your Open Play match was cancelled and ${cooldown}.` +
+        (lifted ? '' : ` Hop back in once it's up.`)
+      : `You've kept joining and leaving the Open Play queue in quick succession, so ${cooldown}. ` +
+        `It keeps matchmaking fair for everyone waiting.` +
+        (lifted ? '' : ` Hop back in once it's up. See you on the field! ⚔️`);
   try {
-    await sendDm(
-      discordUserId,
-      `**[RizzOtto's Arena] ⏳ Queue cooldown**\n\n` +
-        `You've kept joining and leaving the Open Play queue in quick succession, so you're on a ` +
-        `**${formatDuration(timeoutSeconds)}** cooldown. It keeps matchmaking fair for everyone waiting — ` +
-        `hop back in once it's up. See you on the field! ⚔️`,
-    );
+    await sendDm(discordUserId, `**[RizzOtto's Arena] ⏳ Queue cooldown**\n\n${body}${conductLine()}`);
   } catch {
     // non-fatal — user may have DMs disabled
   }
@@ -1685,6 +1711,7 @@ export async function notifyQueueAbuseToStaff(
   username: string,
   level: number,
   timeoutSeconds: number,
+  reason: QueueStrikeReason = 'queue',
 ): Promise<void> {
   const token = getToken();
   if (!token) return;
@@ -1693,11 +1720,19 @@ export async function notifyQueueAbuseToStaff(
       where: { role: { in: ['ADMIN', 'MODERATOR'] }, deleted_at: null },
       select: { discord_id: true },
     });
-    const consequence = timeoutSeconds > 0 ? `a ${formatDuration(timeoutSeconds)} cooldown` : 'a warning only';
+    const consequence =
+      timeoutSeconds >= LIFTED_BY_ADMIN_SEC
+        ? 'a cooldown until an admin lifts it'
+        : timeoutSeconds > 0
+          ? `a ${formatDuration(timeoutSeconds)} cooldown`
+          : 'a warning only';
+    const what =
+      reason === 'no-show'
+        ? "didn't pick a faction in time, so the Open Play match was cancelled"
+        : 'repeatedly joining and leaving the Open Play queue';
     const message =
       `**[RizzOtto's Arena] ⚠️ Queue abuse**\n\n` +
-      `**${username}** hit queue-abuse level **${level}** (repeatedly joining and leaving the Open Play ` +
-      `queue). Applied: ${consequence}.`;
+      `**${username}** hit queue-abuse level **${level}** (${what}). Applied: ${consequence}.`;
     const recipients = [...new Set(staff.map((u) => u.discord_id))];
     await Promise.allSettled(recipients.map((id) => sendDm(id, message)));
   } catch {

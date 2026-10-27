@@ -9,6 +9,7 @@ import {
   reachedAbuseThreshold,
   timeoutMsForLevel,
   decayedLevel,
+  queueCooldownMessage,
   SHORT_STINT_MS,
   ABUSE_THRESHOLD,
   SEVEN_DAYS_MS,
@@ -81,5 +82,21 @@ describe('decayedLevel — one step forgiven per clean decay period', () => {
 
   it('is a no-op for a clean slate', () => {
     expect(decayedLevel(0, t, t + 5 * DECAY_PERIOD_MS)).toBe(0);
+  });
+});
+
+describe('queueCooldownMessage — names the wait, not a cause', () => {
+  it('counts minutes, then hours, then days', () => {
+    expect(queueCooldownMessage(30 * 60)).toContain('about 30 min.');
+    expect(queueCooldownMessage(20 * 3600)).toContain('about 20 hours.');
+    expect(queueCooldownMessage(SEVEN_DAYS_MS / 1000)).toContain('about 7 days.');
+  });
+
+  it('says an admin has to lift the permanent cooldown', () => {
+    expect(queueCooldownMessage(PERMANENT_TIMEOUT_MS / 1000)).toContain('until an admin lifts your cooldown');
+  });
+
+  it("doesn't blame queue leaving, since a no-show gives strikes too", () => {
+    expect(queueCooldownMessage(3600)).not.toMatch(/leaving/i);
   });
 });

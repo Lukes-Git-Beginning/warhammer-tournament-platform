@@ -12,13 +12,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 - **Domquest, our own battle type.** Think Conquest on the Domination engine: a Conquest-sized starting army, a small reinforcing army that works like a sideboard, and one capture point in the middle. It has its own skill rating, leaderboards, quarterly final, Open Play queue and Standard Ruleset. Your start there comes from your Domination rating, or from Conquest if you have played more Conquest.
 - **How to Play.** A new page in the header: installing the mod, everything that's in it, how Domquest works, the rules you still follow yourself and how a match on the site works.
 - **The Fruit Rules page.** Also in the header now: how we read the Fruit Rules v10, and every limit per faction for planning your armies.
+- **Open Play's code of conduct.** The Open Play page and How to Play now spell out what gets you a strike (leaving the queue right after joining, not picking your faction in time), what each strike does and how strikes fade.
 
 ### Changed
 - **Siege has the Fruit Rules too**, enforced by the mod.
 - **The rule cards show only what you watch yourself:** hosting in the arena mode with the mod, and the conduct rules. The mod takes care of the settings and the bans. Open Play shows the rules of your battle types in one box: what they share once, then what each one adds.
+- **Round limits and disqualification are for tournaments only.** Open Play no longer lists them. In Open Play, cheating voids the result, and an admin can ban you from Open Play.
 - **Logging in with Discord adds you to our Discord server**, so match notifications can reach you. Discord asks you once, the next time you log in.
 - **New players get a step for Discord and the mod** when they first sign up.
 - **If you had every battle type selected** for Open Play or for tournament DMs, Domquest is now included too. A narrower selection stays as you set it.
+
+### Fixed
+- **The DM after a missed faction pick** now says that, instead of telling you that you kept leaving the queue. The queue's cooldown message doesn't blame leaving any more either, and the longest cooldown says that an admin has to lift it.
 
 ## [2.26.1] — 2026-10-23
 

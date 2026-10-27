@@ -1983,7 +1983,10 @@ export interface StandardRuleset {
   banned: string[];
   /** Banned spells, items and abilities. Optional like banned_factions. */
   banned_abilities?: string[];
+  /** Conduct in every game, Open Play included. */
   conduct: string[];
+  /** Conduct only in tournaments (round limit, disqualification). Optional like banned_factions. */
+  tournament_conduct?: string[];
 }
 
 /** The Standard Ruleset for one (battle type × team size) combo. Defaults to Domination / 1v1. */

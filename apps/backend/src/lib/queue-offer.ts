@@ -16,7 +16,7 @@ import {
   type QueuePrefs,
 } from './queue-matching.js';
 import { findQueueableTeam, getStoredQueuePrefs } from './queue-prefs.js';
-import { getQueueTimeoutRemaining } from './queue-penalty.js';
+import { getQueueTimeoutRemaining, queueCooldownMessage } from './queue-penalty.js';
 
 export type ClaimOfferResult =
   | { status: 'matched'; matchId: string; opponentName: string }
@@ -60,7 +60,7 @@ export async function claimQueueOffer(
   if (cooldownSec > 0) {
     return {
       status: 'blocked',
-      message: `You're on a short queue cooldown. Try again in about ${Math.ceil(cooldownSec / 60)} min.`,
+      message: queueCooldownMessage(cooldownSec),
     };
   }
   const activeMatch = await prisma.match.findFirst({

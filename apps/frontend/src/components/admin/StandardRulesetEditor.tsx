@@ -146,7 +146,8 @@ export function StandardRulesetEditor() {
               />
               <Field label="Banned Units" hint="Units banned from play (hidden when empty)" value={list(current.banned)} onChange={setField('banned')} />
               <Field label="Banned Spells / Items / Abilities" hint="Spells, items and abilities banned from play (hidden when empty)" value={list(current.banned_abilities)} onChange={setField('banned_abilities')} />
-              <Field label="Conduct" hint="Timing + conduct rules" value={arrayToLines(current.conduct)} onChange={setField('conduct')} />
+              <Field label="Conduct" hint="Rules in every game, Open Play included (shown in Open Play and on tournaments)" value={arrayToLines(current.conduct)} onChange={setField('conduct')} />
+              <Field label="Conduct, tournaments only" hint="Round limit, disqualification: shown on tournaments, not in Open Play" value={arrayToLines(current.tournament_conduct ?? [])} onChange={setField('tournament_conduct')} />
             </div>
 
             <div className="flex-1">

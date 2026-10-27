@@ -44,7 +44,7 @@ import { QueueStatusCard } from '../components/open-play/QueueStatusCard';
 import { WeekAvailabilityGrid } from '../components/open-play/WeekAvailabilityGrid';
 import { AvailabilityHeatmap } from '../components/open-play/AvailabilityHeatmap';
 import { ChallengeCalendar } from '../components/open-play/ChallengeCalendar';
-import { StandardRulesetCard, StandardRulesOverview } from '../components/tournament/StandardRulesetCard';
+import { OpenPlayConduct } from '../components/open-play/OpenPlayConduct';
 import { RequiredModsNotice } from '../components/tournament/RequiredModsNotice';
 import { PageBackdrop } from '../components/layout/PageBackdrop';
 
@@ -307,7 +307,8 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="max-w-sm space-y-4">
+      {/* Wide enough for all five battle-type chips in one row (they still wrap on a phone). */}
+      <div className="max-w-xl space-y-4">
         <p className="text-sm text-stone-300">
           Join the queue to be instantly matched with another available player. A random map is
           drawn and both players pick their faction blind — you'll receive a Discord DM when your
@@ -447,11 +448,12 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
         </p>
       </div>
 
-      {/* Standard Rules for the selected battle types in one box: shared rules once, then what each
-          type adds. The team size (1v1 / 2v2) picks the ruleset variant. */}
+      {/* Code of conduct for the selected battle types: the rules (shared ones once, then what each
+          type adds; no tournament-only rules) and what gets a strike. The team size (1v1 / 2v2) picks
+          the ruleset variant. */}
       <div className="space-y-2">
-        <p className="text-sm font-medium text-stone-300">Standard Rules</p>
-        <StandardRulesOverview
+        <p className="text-sm font-medium text-stone-300">Code of Conduct</p>
+        <OpenPlayConduct
           battleTypes={battleTypes
             .slice()
             .sort((a, b) => OP_BATTLE_TYPES.findIndex((o) => o.value === a) - OP_BATTLE_TYPES.findIndex((o) => o.value === b))}
@@ -759,7 +761,8 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
 
   return (
     <div className="space-y-4">
-      <StandardRulesetCard compact />
+      {/* Challenges have no battle type of their own yet: Domination's rules, like before. */}
+      <OpenPlayConduct battleTypes={['DOMINATION']} />
       <div className="flex items-center gap-2">
         <span className="text-xs text-stone-400">Format</span>
         <Select

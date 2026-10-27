@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { OPEN_PLAY_CONDUCT } from '@rizzotto/types';
 import { cancelOpenPlayMatch } from './cancel-open-play-match.js';
 import { escalateQueuePenalty } from './queue-penalty.js';
 import {
@@ -16,7 +17,7 @@ import {
  * Both are mirrored on the frontend countdown (GameTile.tsx). The cron checks every minute, so
  * worst-case latency is +1 minute.
  */
-export const OPEN_PLAY_BLIND_PICK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes — ladder, then cancel
+export const OPEN_PLAY_BLIND_PICK_TIMEOUT_MS = OPEN_PLAY_CONDUCT.pickDeadlineMinutes * 60 * 1000; // 5 minutes — ladder, then cancel
 export const TOURNAMENT_BLIND_PICK_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes — tournament, then random-pick
 /** Faction bans (Blind Pick tournaments): after the first side locked its bans, the other side has
  *  this long — then its bans lapse and the bans are revealed. Same 2 minutes as the pick. */
@@ -270,10 +271,10 @@ async function cancelOpenPlayNoShows(fastify: FastifyInstance, cutoff: Date): Pr
           const outcome = await escalateQueuePenalty(fastify.redis, u.id, nowMs);
           if (!outcome.tripped || !u.discord_id) continue;
           if (outcome.timeoutSec > 0) {
-            void notifyQueueTimeout(u.discord_id, outcome.timeoutSec);
-            void notifyQueueAbuseToStaff(u.username, outcome.level, outcome.timeoutSec);
+            void notifyQueueTimeout(u.discord_id, outcome.timeoutSec, 'no-show');
+            void notifyQueueAbuseToStaff(u.username, outcome.level, outcome.timeoutSec, 'no-show');
           } else {
-            void notifyQueueWarning(u.discord_id);
+            void notifyQueueWarning(u.discord_id, 'no-show');
           }
         }
       }

@@ -40,7 +40,7 @@ const QueuePrefsSchema = z.object({
   competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']),
   teamId: z.string().uuid().nullable(),
 });
-import { getQueueTimeoutRemaining, recordQueueLeave } from '../lib/queue-penalty.js';
+import { getQueueTimeoutRemaining, queueCooldownMessage, recordQueueLeave } from '../lib/queue-penalty.js';
 import { cancelOpenPlayMatch } from '../lib/cancel-open-play-match.js';
 import { slotsActiveAtWhere } from '../lib/availability-time.js';
 import { isCompetitorMember } from '../lib/competitors.js';
@@ -108,7 +108,7 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
       if (cooldownSec > 0) {
         return reply.code(429).send({
           error: 'TooManyRequests',
-          message: `You're on a short queue cooldown for leaving too many times in quick succession. Try again in about ${Math.ceil(cooldownSec / 60)} min.`,
+          message: queueCooldownMessage(cooldownSec),
           statusCode: 429,
         });
       }

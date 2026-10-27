@@ -11,12 +11,17 @@
 // Redis-backed so it survives restarts; the pure helpers are unit-tested.
 
 import type { Redis } from 'ioredis';
+import { OPEN_PLAY_CONDUCT, openPlayCooldownHours } from '@rizzotto/types';
 
-export const SHORT_STINT_MS = 5 * 60 * 1000; // "left almost immediately"
-export const ABUSE_THRESHOLD = 3; // short stints within the window that trip one step
-export const ABUSE_WINDOW_MS = 24 * 60 * 60 * 1000; // rolling 24h
-export const DECAY_PERIOD_MS = 7 * 24 * 60 * 60 * 1000; // one level forgiven per 7 clean days
-export const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000; // L4 cooldown
+// The numbers live in @rizzotto/types (OPEN_PLAY_CONDUCT), so the code of conduct on the site shows
+// exactly what is enforced here.
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+export const SHORT_STINT_MS = OPEN_PLAY_CONDUCT.shortStintMinutes * MINUTE_MS; // "left almost immediately"
+export const ABUSE_THRESHOLD = OPEN_PLAY_CONDUCT.shortStintsPerStrike; // short stints within the window that trip one step
+export const ABUSE_WINDOW_MS = OPEN_PLAY_CONDUCT.shortStintWindowHours * HOUR_MS; // rolling 24h
+export const DECAY_PERIOD_MS = OPEN_PLAY_CONDUCT.decayDays * 24 * HOUR_MS; // one level forgiven per 7 clean days
+export const SEVEN_DAYS_MS = 7 * 24 * HOUR_MS; // L4 cooldown
 // L5+ is "permanent — until an admin lifts it" (via resetQueuePenaltyToWarned). Stored as a long
 // finite TTL (a year) so the cooldown check, which reads the key's TTL, keeps working; an admin
 // clears it early. Effectively permanent for a habitual offender.
@@ -28,11 +33,23 @@ export const PERMANENT_TIMEOUT_MS = 365 * 24 * 60 * 60 * 1000;
  * Sanctions (and staff notification) start at L2.
  */
 export function timeoutMsForLevel(level: number): number {
-  if (level <= 1) return 0; // L1 — warning only
-  if (level === 2) return 60 * 60 * 1000; // L2 — 1h
-  if (level === 3) return 24 * 60 * 60 * 1000; // L3 — 24h
-  if (level === 4) return SEVEN_DAYS_MS; // L4 — 7 days
-  return PERMANENT_TIMEOUT_MS; // L5+ — permanent, until an admin lifts it
+  const hours = openPlayCooldownHours(level); // null = permanent, until an admin lifts it
+  return hours === null ? PERMANENT_TIMEOUT_MS : hours * HOUR_MS;
+}
+
+/**
+ * What a player sees when the queue refuses them during a cooldown. It names no cause (a strike can
+ * come from queue ghosting or from a pick no-show) and points to the code of conduct on How to Play.
+ */
+export function queueCooldownMessage(cooldownSec: number): string {
+  if (cooldownSec * 1000 >= PERMANENT_TIMEOUT_MS / 2) {
+    return "You can't join the Open Play queue until an admin lifts your cooldown. How strikes work: How to Play → Open Play conduct.";
+  }
+  const minutes = Math.ceil(cooldownSec / 60);
+  const hours = Math.ceil(cooldownSec / 3600);
+  const wait =
+    minutes < 90 ? `${minutes} min` : hours < 48 ? `${hours} hours` : `${Math.ceil(cooldownSec / 86400)} days`;
+  return `You're on a queue cooldown after an Open Play strike. Try again in about ${wait}. How strikes work: How to Play → Open Play conduct.`;
 }
 
 /** A queue stint counts as abusive-short if the player bailed within SHORT_STINT_MS. */

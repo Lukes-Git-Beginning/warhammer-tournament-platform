@@ -3,11 +3,19 @@ import { Link } from '@tanstack/react-router';
 import { BATTLE_TYPES } from '@rizzotto/types';
 import { PageShell } from '@/components/layout/PageShell';
 import {
+  ARENA_MODE_DUTY,
   joinNames,
   PerBattleType,
   splitShared,
   useStandardRulesets,
 } from '@/components/tournament/StandardRulesetCard';
+import {
+  OPEN_PLAY_CANCELLING,
+  OPEN_PLAY_CHEATING,
+  strikeDecay,
+  strikeLadder,
+  strikeOffences,
+} from '@/components/open-play/OpenPlayConduct';
 import { REPLACED_MODS, RIZZOTTOVERSE_INVITE, steamWorkshopUrl, useArenaMod } from '@/lib/arenaMod';
 
 /**
@@ -25,6 +33,7 @@ const SECTIONS = [
   { id: 'mod', title: "What's in the mod" },
   { id: 'domquest', title: 'Domquest' },
   { id: 'rules', title: 'Rules you follow yourself' },
+  { id: 'open-play', title: 'Open Play conduct' },
   { id: 'matches', title: 'Playing a match on rizzotto.gg' },
   { id: 'faq', title: 'FAQ' },
 ] as const;
@@ -82,6 +91,9 @@ export function HowToPlayPage() {
   const mod = useArenaMod();
   const rulesets = useStandardRulesets(BATTLE_TYPES);
   const conduct = splitShared(rulesets.map((r) => ({ battleType: r.battleType, items: r.ruleset.conduct })));
+  const tournament = splitShared(
+    rulesets.map((r) => ({ battleType: r.battleType, items: r.ruleset.tournament_conduct ?? [] })),
+  );
   const settings = splitShared(rulesets.map((r) => ({ battleType: r.battleType, items: r.ruleset.settings })));
 
   useEffect(() => {
@@ -283,9 +295,9 @@ export function HowToPlayPage() {
         </Section>
 
         <Section id="rules" number={4} title="Rules you follow yourself">
-          <p>The mod can&apos;t check everything. These are on you, in every battle type:</p>
+          <p>The mod can&apos;t check everything. These are on you, in every game:</p>
           <ul className={ul}>
-            <li>Host the game in the arena mode (the aubergine button), with only RizzOtto&apos;s Arena Mod enabled.</li>
+            <li>{ARENA_MODE_DUTY}</li>
             {conduct.shared.map((c) => (
               <li key={c}>{c}</li>
             ))}
@@ -296,10 +308,40 @@ export function HowToPlayPage() {
               <PerBattleType extra={conduct.extra} />
             </>
           )}
+          {tournament.shared.length + tournament.extra.length > 0 && (
+            <>
+              <SubHeading>In tournaments, also</SubHeading>
+              <ul className={ul}>
+                {tournament.shared.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
+              </ul>
+              <PerBattleType extra={tournament.extra} inline />
+            </>
+          )}
           <p>A tournament can add rules of its own; you&apos;ll find them on its page.</p>
         </Section>
 
-        <Section id="matches" number={5} title="Playing a match on rizzotto.gg">
+        <Section id="open-play" number={5} title="Open Play conduct">
+          <p>Open Play has no tournament host watching over it, so it has its own consequences. {OPEN_PLAY_CHEATING}</p>
+          <SubHeading>What gets you a strike</SubHeading>
+          <ul className={ul}>
+            {strikeOffences().map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ul>
+          <SubHeading>What a strike does</SubHeading>
+          <ul className={ul}>
+            {strikeLadder().map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ul>
+          <p>{strikeDecay()}</p>
+          <SubHeading>Cancelling</SubHeading>
+          <p>{OPEN_PLAY_CANCELLING}</p>
+        </Section>
+
+        <Section id="matches" number={6} title="Playing a match on rizzotto.gg">
           <ol className={ol}>
             <li>
               Find a game: sign up for a{' '}
@@ -356,6 +398,12 @@ export function HowToPlayPage() {
           </Faq>
           <Faq q="Do I still need the Total Tavern map pack or Loupi's mod?">
             <p>No. RizzOtto&apos;s Arena Mod contains the maps and the rules. Disable both, or the lobby warns you.</p>
+          </Faq>
+          <Faq q="Why can't I join the Open Play queue?">
+            <p>
+              You&apos;re on a cooldown after a strike; the queue tells you how long. What gives strikes and how long
+              they last is under <a href="#open-play" className={linkClass}>Open Play conduct</a>.
+            </p>
           </Faq>
           <Faq q="What changed in the latest version?">
             <p>

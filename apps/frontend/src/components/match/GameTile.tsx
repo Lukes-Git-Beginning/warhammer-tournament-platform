@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useNavigate } from '@tanstack/react-router';
-import type { FactionDto } from '@rizzotto/types';
+import { OPEN_PLAY_CONDUCT, type FactionDto } from '@rizzotto/types';
 import { FactionBadge } from '@/components/meta/FactionBadge';
 import { useReportTileVisible } from '@/contexts/ActiveMatchVisibility';
 
@@ -931,9 +931,9 @@ function ProvisionalPanel({
 
 // Mirror of the timeouts in apps/backend/src/lib/blind-pick-auto-resolve.ts — once one player
 // locks, the other has this long to pick. Open Play (ladder) gets 5 minutes and the match is then
-// cancelled (the no-show gets a queue cooldown); a Blind Pick Tournament gets the stricter 2 minutes
-// and a random faction is assigned instead.
-const OPEN_PLAY_BLIND_PICK_TIMEOUT_MS = 5 * 60 * 1000;
+// cancelled (the no-show gets a strike); a Blind Pick Tournament gets the stricter 2 minutes
+// and a random faction is assigned instead. Open Play's value is shared via OPEN_PLAY_CONDUCT.
+const OPEN_PLAY_BLIND_PICK_TIMEOUT_MS = OPEN_PLAY_CONDUCT.pickDeadlineMinutes * 60 * 1000;
 const TOURNAMENT_BLIND_PICK_TIMEOUT_MS = 2 * 60 * 1000;
 
 function useCountdown(target: Date | null): string | null {

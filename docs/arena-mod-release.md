@@ -21,7 +21,14 @@ proofread before release.
   (public, in the sitemap, new intro). "What's in the mod" and "Domquest" follow the Workshop description
   (`tww3-modding/domquest/workshop/description_en.txt`); when the mod changes, update both. Its lobby settings and
   the rules come from the live Standard Rulesets, split into what every type shares and what each adds.
-- Open Play: the Standard Rules of the selected battle types in one box instead of one card each.
+- Open Play: a **Code of Conduct** box instead of one rule card per battle type: the rules of the selected types
+  (shared ones once, then what each adds), what gets a strike, what a strike does, cancelling. How to Play has the
+  same as section 5. The strike numbers live in `OPEN_PLAY_CONDUCT` (`@rizzotto/types`), which the backend enforces.
+- Standard Ruleset: new list `tournament_conduct` (round limit, "Cheating results in disqualification."), shown on
+  tournaments only; migration `20261027100300` moves them out of `conduct`. Admin editor field "Conduct,
+  tournaments only".
+- Strike DMs name the right reason (missed faction pick vs. leaving the queue) and link to How to Play; the queue's
+  cooldown message names the wait, not a cause.
 - Onboarding step "Discord + mod" before the tour.
 - Release banner for existing players who are not on the RizzOttoverse Discord server, dismissable for good.
 - Discord login always asks for `guilds.join`, so logging in adds players to the server.

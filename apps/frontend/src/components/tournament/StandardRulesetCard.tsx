@@ -12,7 +12,8 @@
  * configured. Pass an explicit `ruleset` to render given values without fetching (the admin editor's
  * live preview). Host customisations still go into the "Custom Rules" / "Custom Restrictions" fields.
  *
- * StandardRulesOverview shows several battle types in one box (Open Play's queue) instead of one card each.
+ * The card is the tournament view: it lists `conduct` and then `tournament_conduct` (round limit,
+ * disqualification). Open Play shows `conduct` only, in its code of conduct (OpenPlayConduct).
  */
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -26,18 +27,16 @@ const BATTLE_TYPE_LABEL: Record<string, string> = BATTLE_TYPE_LABELS;
 const FRUIT_RULES_TYPES = new Set<string>(['LAND_BATTLE', 'CONQUEST', 'SIEGE']);
 
 /** The one rule the mod can't enforce for the players: that the host picks an arena mode. */
-const ARENA_MODE_DUTY = "Host the game in the arena mode (the aubergine button), with only RizzOtto's Arena Mod enabled.";
+export const ARENA_MODE_DUTY =
+  "Host the game in the arena mode (the aubergine button), with only RizzOtto's Arena Mod enabled.";
 
 export const STANDARD_RULESET: StandardRuleset = {
   settings: ['Default Funds', 'Ultra Unit Scale', '1500 Tickets', 'Unit Caps On'],
   banned_factions: ['undead_legions'],
   banned: ['Masque of Slaanesh', 'Dreadmaw'],
   banned_abilities: [],
-  conduct: [
-    '10 minutes to ready up',
-    '40 minute round limit',
-    'Exploiting bugs or glitches is considered cheating and results in disqualification.',
-  ],
+  conduct: ['10 minutes to ready up', 'Exploiting bugs or glitches is considered cheating.'],
+  tournament_conduct: ['Cheating results in disqualification.', '40 minute round limit'],
 };
 
 const typeLabel = (bt: string) => BATTLE_TYPE_LABEL[bt] ?? bt;
@@ -97,7 +96,7 @@ function Label({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ModNote({ battleTypes }: { battleTypes: string[] }) {
+export function ModNote({ battleTypes }: { battleTypes: string[] }) {
   return (
     <span className="text-stone-400">
       RizzOtto&apos;s Arena Mod enforces {modEnforces(battleTypes)}, so you don&apos;t need to check them yourself.{' '}
@@ -130,7 +129,7 @@ export function StandardRulesetCard({
   const rs = ruleset ?? data ?? STANDARD_RULESET;
   const icon = battleTypeIconSrc(battleType);
   const title = battleType ? `Standard ${typeLabel(battleType)} Ruleset` : 'Standard Ruleset';
-  const duties = [ARENA_MODE_DUTY, ...rs.conduct];
+  const duties = [ARENA_MODE_DUTY, ...rs.conduct, ...(rs.tournament_conduct ?? [])];
 
   return (
     <div
@@ -211,44 +210,3 @@ export function PerBattleType({
   );
 }
 
-function Heading({ children }: { children: React.ReactNode }) {
-  return <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80">{children}</p>;
-}
-
-/**
- * The Standard Rules of several battle types in one box: what they all share is listed once, and each
- * type lists only what it adds (Siege's shorter round limit, Land Battle's rules of play).
- */
-export function StandardRulesOverview({
-  battleTypes,
-  competitorFormat,
-}: {
-  battleTypes: BattleType[];
-  competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
-}) {
-  const rulesets = useStandardRulesets(battleTypes, competitorFormat);
-  const { shared, extra } = splitShared(rulesets.map((r) => ({ battleType: r.battleType, items: r.ruleset.conduct })));
-
-  return (
-    <div className="space-y-3 rounded-md border border-stone-800 bg-stone-900/50 p-4 text-sm leading-relaxed">
-      <div>
-        <Heading>Your part</Heading>
-        <ul className="list-disc space-y-0.5 pl-5 text-stone-300">
-          {[ARENA_MODE_DUTY, ...shared].map((d) => (
-            <li key={d}>{d}</li>
-          ))}
-        </ul>
-      </div>
-      {extra.length > 0 && (
-        <div>
-          <Heading>Per battle type</Heading>
-          <PerBattleType extra={extra} />
-        </div>
-      )}
-      <div>
-        <Heading>Set by the mod</Heading>
-        <ModNote battleTypes={battleTypes} />
-      </div>
-    </div>
-  );
-}

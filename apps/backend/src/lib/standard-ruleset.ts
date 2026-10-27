@@ -5,7 +5,9 @@
  * `"<BattleType>:<CompetitorFormat>"` (one combo per battle type and team size), each value being
  * `{ settings; banned_factions; banned (units); banned_abilities (spells/items/abilities); conduct }`,
  * all string lists. The two extra ban lists were added 2026-10-07 and default to [] so rulesets
- * stored before then still parse without a migration. Until an admin
+ * stored before then still parse without a migration. `tournament_conduct` (2026-10-27) holds the
+ * conduct that applies only in tournaments (round limit, disqualification for cheating); Open Play
+ * shows `conduct` alone, tournaments show both. Until an admin
  * overrides a combo, the defaults apply (the original Total Tavern research values,
  * previously hard-coded in the frontend StandardRulesetCard).
  *
@@ -26,7 +28,10 @@ export const StandardRulesetSchema = z.object({
   banned: z.array(z.string()),
   /** Banned spells, items and abilities. */
   banned_abilities: z.array(z.string()).default([]),
+  /** Conduct in every game, Open Play included. */
   conduct: z.array(z.string()),
+  /** Conduct that applies only in tournaments (shown after `conduct` on tournament rule cards). */
+  tournament_conduct: z.array(z.string()).default([]),
 });
 export type StandardRuleset = z.infer<typeof StandardRulesetSchema>;
 
@@ -50,11 +55,8 @@ export const DEFAULT_STANDARD_RULESET: StandardRuleset = {
   banned_factions: ['undead_legions'],
   banned: ['Masque of Slaanesh', 'Dreadmaw'],
   banned_abilities: [],
-  conduct: [
-    '10 minutes to ready up',
-    '40 minute round limit',
-    'Exploiting bugs or glitches is considered cheating and results in disqualification.',
-  ],
+  conduct: ['10 minutes to ready up', 'Exploiting bugs or glitches is considered cheating.'],
+  tournament_conduct: ['Cheating results in disqualification.', '40 minute round limit'],
 };
 
 /**
