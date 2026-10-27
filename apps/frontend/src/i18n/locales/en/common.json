@@ -393,6 +393,18 @@
       "save": "Save",
       "saving": "Saving…"
     },
+    "setup": {
+      "title": "Get set up",
+      "body": "Two things every player on the Arena needs.",
+      "discord_title": "Join the RizzOttoverse on Discord",
+      "discord_body": "Our Discord server: tournament talk, announcements and mod updates. Match notifications come as DMs from our bot, which can only reach you there.",
+      "discord_cta": "Join the server",
+      "mod_title": "Install RizzOtto's Arena Mod",
+      "mod_body": "Every game on the Arena is played with it: subscribe on the Steam Workshop and enable only this mod in the launcher. It replaces the Total Tavern map pack and Loupi's Fruit Rules mod.",
+      "mod_cta": "Open the Workshop",
+      "guide_cta": "How to Play",
+      "continue": "Continue"
+    },
     "stage3": {
       "title": "Build Your First List.",
       "body": "A player without a list enters the field blind.",

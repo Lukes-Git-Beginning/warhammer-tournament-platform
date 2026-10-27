@@ -414,13 +414,14 @@ export type DuoMetaResponse = z.infer<typeof DuoMetaResponseSchema>;
  * all of them; only genuinely type-specific rules (Siege's Bo2 points format, required mods, the
  * questionnaire) need their own entry.
  */
-export const BATTLE_TYPES = ['DOMINATION', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'] as const;
+export const BATTLE_TYPES = ['DOMINATION', 'DOMQUEST', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'] as const;
 export const BattleTypeSchema = z.enum(BATTLE_TYPES);
 export type BattleType = (typeof BATTLE_TYPES)[number];
 
 /** User-facing name of each battle type ("Land Battle", not "LAND_BATTLE"). */
 export const BATTLE_TYPE_LABELS: Record<BattleType, string> = {
   DOMINATION: 'Domination',
+  DOMQUEST: 'Domquest',
   CONQUEST: 'Conquest',
   LAND_BATTLE: 'Land Battle',
   SIEGE: 'Siege',

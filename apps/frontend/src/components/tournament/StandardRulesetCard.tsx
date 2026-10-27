@@ -1,19 +1,30 @@
 /**
- * The community "Standard Ruleset".
+ * The community "Standard Ruleset" card.
  *
- * Admin-editable via Admin → Settings (AdminConfig key `standard_ruleset`,
- * served by GET /api/meta/standard-ruleset). The card fetches the live values and
- * falls back to STANDARD_RULESET (the original Total Tavern research defaults) while
- * loading or if nothing is configured. Pass an explicit `ruleset` to render given
- * values without fetching (used by the admin editor's live preview).
- * Host customisations still go into the "Custom Rules" / "Custom Restrictions" fields.
+ * RizzOtto's Arena Mod sets the lobby, enforces the bans and (Land Battle, Conquest, Siege) the Fruit
+ * Rules in its arena modes, so the card shows only what players must watch themselves: hosting in the
+ * arena mode with the mod, and the ruleset's conduct (for Land Battle that includes its rules of play).
+ * Settings and bans stay in the data, admin-editable via Admin → Settings (AdminConfig key
+ * `standard_ruleset`, served by GET /api/meta/standard-ruleset), and `banned_factions` still drives Open
+ * Play's faction restrictions; they just aren't a player duty on the card any more.
+ *
+ * The card fetches the live values and falls back to STANDARD_RULESET while loading or if nothing is
+ * configured. Pass an explicit `ruleset` to render given values without fetching (the admin editor's
+ * live preview). Host customisations still go into the "Custom Rules" / "Custom Restrictions" fields.
  */
 import { useQuery } from '@tanstack/react-query';
-import { getFactions, getRuleDocuments, getStandardRuleset, type BattleType, type StandardRuleset } from '@/lib/api.js';
+import { Link } from '@tanstack/react-router';
+import { getStandardRuleset, type BattleType, type StandardRuleset } from '@/lib/api.js';
 import { BATTLE_TYPE_LABELS } from '@rizzotto/types';
 import { battleTypeIconSrc } from '@/lib/battleTypeIcons';
 
 const BATTLE_TYPE_LABEL: Record<string, string> = BATTLE_TYPE_LABELS;
+
+/** Battle types whose arena mode enforces the Fruit Rules v10 (army composition limits). */
+const FRUIT_RULES_TYPES = new Set<string>(['LAND_BATTLE', 'CONQUEST', 'SIEGE']);
+
+/** The one rule the mod can't enforce for the players: that the host picks an arena mode. */
+const ARENA_MODE_DUTY = "Host the game in the arena mode (the aubergine button), with only RizzOtto's Arena Mod enabled.";
 
 export const STANDARD_RULESET: StandardRuleset = {
   settings: ['Default Funds', 'Ultra Unit Scale', '1500 Tickets', 'Unit Caps On'],
@@ -27,14 +38,11 @@ export const STANDARD_RULESET: StandardRuleset = {
   ],
 };
 
-function Row({ label, items }: { label: string; items: readonly string[] }) {
+function Label({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
-      <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80 sm:w-40">
-        {label}
-      </span>
-      <span className="text-stone-300">{items.join(' · ')}</span>
-    </div>
+    <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80 sm:w-40">
+      {children}
+    </span>
   );
 }
 
@@ -59,25 +67,11 @@ export function StandardRulesetCard({
   });
   const rs = ruleset ?? data ?? STANDARD_RULESET;
   const icon = battleTypeIconSrc(battleType);
-  // Banned factions are stored as faction ids — show their names (raw entry as a fallback).
-  const { data: factionList } = useQuery({
-    queryKey: ['factions'],
-    queryFn: () => getFactions(),
-    staleTime: 60 * 60_000,
-    enabled: (rs.banned_factions?.length ?? 0) > 0,
-  });
-  const factionName = new Map((factionList?.data ?? []).map((d) => [d.faction.id, d.faction.name]));
-  const bannedFactionNames = (rs.banned_factions ?? []).map((id) => factionName.get(id) ?? id);
-  // Full rules documents for this battle type (e.g. the Fruit Rules), linked via their permalink so
-  // a new document version never changes the link. Only documents the admin has pointed somewhere.
-  const { data: ruleDocs } = useQuery({
-    queryKey: ['rule-documents'],
-    queryFn: getRuleDocuments,
-    staleTime: 5 * 60 * 1000,
-    enabled: !!battleType,
-  });
-  const fullRules = (ruleDocs?.documents ?? []).filter((d) => d.url && battleType && d.battle_types.includes(battleType));
   const title = battleType ? `Standard ${BATTLE_TYPE_LABEL[battleType] ?? battleType} Ruleset` : 'Standard Ruleset';
+  const enforced = FRUIT_RULES_TYPES.has(battleType ?? '')
+    ? 'the lobby settings, the bans and the Fruit Rules'
+    : 'the lobby settings and the bans';
+  const duties = [ARENA_MODE_DUTY, ...rs.conduct];
 
   return (
     <div
@@ -102,32 +96,25 @@ export function StandardRulesetCard({
           )}
           <span className="font-display font-semibold text-rizzotto-gold-500">{title}</span>
         </div>
-        <div className="space-y-1.5">
-          <Row label="Settings" items={rs.settings} />
-          {/* Each ban category is shown only when something in it is banned. */}
-          {bannedFactionNames.length > 0 && <Row label="Banned Factions" items={bannedFactionNames} />}
-          {rs.banned.length > 0 && <Row label="Banned Units" items={rs.banned} />}
-          {(rs.banned_abilities?.length ?? 0) > 0 && (
-            <Row label="Banned Spells / Items / Abilities" items={rs.banned_abilities!} />
-          )}
-          <Row label="Conduct" items={rs.conduct} />
-          {fullRules.length > 0 && (
-            <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
-              <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80 sm:w-40">
-                Full Rules
-              </span>
-              <span className="text-stone-300">
-                {fullRules.map((d, i) => (
-                  <span key={d.slug}>
-                    {i > 0 && ' · '}
-                    <a href={`/rules/${d.slug}`} target="_blank" rel="noopener noreferrer" className="text-rizzotto-gold-400 underline">
-                      {d.label}
-                    </a>
-                  </span>
-                ))}
-              </span>
-            </div>
-          )}
+        <div className="space-y-2">
+          <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
+            <Label>Your part</Label>
+            <ul className="list-disc space-y-0.5 pl-5 text-stone-300">
+              {duties.map((d) => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
+            <Label>Set by the mod</Label>
+            <span className="text-stone-400">
+              RizzOtto&apos;s Arena Mod enforces {enforced} in the arena modes, so you don&apos;t need to check
+              them yourself.{' '}
+              <Link to="/how-to-play" className="text-rizzotto-gold-400 underline">
+                How to Play
+              </Link>
+            </span>
+          </div>
         </div>
       </div>
     </div>

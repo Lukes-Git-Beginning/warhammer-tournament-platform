@@ -95,7 +95,7 @@ describe('GET /api/admin/open-play/queue', () => {
 
     expect(members.map((m) => m.id)).toEqual([P1_ID, P2_ID, TEAM_ID]);
     expect(members[0]).toMatchObject({ username: 'Domi', isTeam: false, format: 'ONE_V_ONE', battleTypes: ['DOMINATION', 'SIEGE'] });
-    expect(members[1]).toMatchObject({ username: 'Legacy', isTeam: false, format: 'ONE_V_ONE', battleTypes: ['DOMINATION', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'] });
+    expect(members[1]).toMatchObject({ username: 'Legacy', isTeam: false, format: 'ONE_V_ONE', battleTypes: ['DOMINATION', 'DOMQUEST', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'] });
     // The 2v2 team used to be dropped (the route only looked ids up as users).
     expect(members[2]).toMatchObject({ username: 'Queue Duo', isTeam: true, format: 'TWO_V_TWO', battleTypes: ['CONQUEST'] });
   });

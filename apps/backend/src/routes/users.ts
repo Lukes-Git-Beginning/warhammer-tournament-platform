@@ -14,6 +14,7 @@ import { effectiveTiersOf } from '../lib/supporter-service.js';
 import { resolveCompetitors } from '../lib/competitors.js';
 import { loadCalibrationQuestions, classifyWithModel, getClassificationModel } from '../lib/skill-classification-service.js';
 import { SKILL_BATTLE_TYPES } from '../lib/skill-classification.js';
+import { SITE_NOTICES, activeNoticesFor, dismissNotice } from '../lib/site-notices.js';
 
 const meSelect = {
   id: true,
@@ -191,6 +192,22 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
       return serializeMe(user);
     },
   );
+
+  // GET /api/users/me/notices — one-time site notices to show this user (e.g. the Arena Mod release, only
+  // for players who aren't on the RizzOttoverse Discord server yet).
+  fastify.get('/api/users/me/notices', { preHandler: fastify.authenticate }, async (request) => {
+    return { notices: await activeNoticesFor(fastify.prisma, request.user.sub) };
+  });
+
+  // POST /api/users/me/notices/:id/dismiss — the user closed a notice; it stays closed.
+  fastify.post('/api/users/me/notices/:id/dismiss', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const parsed = z.object({ id: z.enum(SITE_NOTICES) }).safeParse(request.params);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'Unknown notice', statusCode: 400 });
+    }
+    await dismissNotice(fastify.prisma, request.user.sub, parsed.data.id);
+    return { ok: true } as const;
+  });
   // PATCH /api/users/:id/role — admin only
   fastify.patch(
     '/api/users/:id/role',

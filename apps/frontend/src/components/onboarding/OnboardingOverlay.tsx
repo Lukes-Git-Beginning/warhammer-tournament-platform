@@ -7,6 +7,7 @@ import { OnboardingProgressBar } from './OnboardingProgressBar';
 import { OnboardingStage1Welcome } from './OnboardingStage1Welcome';
 import { OnboardingStage2Prefs } from './OnboardingStage2Prefs';
 import { OnboardingStage3Tour } from './OnboardingStage3Tour';
+import { OnboardingStageSetup } from './OnboardingStageSetup';
 
 export function OnboardingOverlay() {
   const {
@@ -20,8 +21,9 @@ export function OnboardingOverlay() {
   const reduced = useReducedMotion();
   const { t } = useTranslation('common');
 
-  // Lock body scroll while overlay is open (fullscreen stages only)
-  const isTour = stage === 2;
+  // Lock body scroll while overlay is open (fullscreen stages only). Stages: 0 welcome, 1 settings,
+  // 2 Discord + mod, 3 the spotlight tour (not fullscreen), which completes onboarding.
+  const isTour = stage === 3;
   useEffect(() => {
     if (!isOpen || isTour) return;
     const original = document.body.style.overflow;
@@ -80,6 +82,7 @@ export function OnboardingOverlay() {
                 {stage === 1 && (
                   <OnboardingStage2Prefs user={user} onAdvance={() => advance(2)} />
                 )}
+                {stage === 2 && <OnboardingStageSetup onAdvance={() => advance(3)} />}
               </motion.div>
             </AnimatePresence>
           </div>

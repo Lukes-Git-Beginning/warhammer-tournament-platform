@@ -1,83 +1,41 @@
+import { Link } from '@tanstack/react-router';
 import type { BattleType } from '@/lib/api';
-import { BATTLE_TYPES, BATTLE_TYPE_LABELS } from '@rizzotto/types';
+import { useArenaMod } from '@/lib/arenaMod';
 
 /**
- * Required Steam Workshop mod per battle type. The mod differs by battle type and is not always
- * the same kind: Domination uses the Total Tavern map pack, Conquest and Land Battle use a
- * rules-enforcement mod (unit caps), and Siege needs none. Single source of truth for the "required mod" notices on the
- * tournament and Open Play pages.
+ * The one required mod: RizzOtto's Arena Mod, for every battle type. It brings the arena modes with
+ * their maps, lobby settings, bans and (Land Battle, Conquest, Siege) the Fruit Rules, so players need
+ * no other mod. Shows the current Workshop version once the item is listed. Single source of truth for
+ * the notices on the tournament and Open Play pages.
  */
-type Mod = { id: string; name: string };
-
-export const REQUIRED_MODS: Record<BattleType, Mod | null> = {
-  DOMINATION: { id: '2875865414', name: 'Total Tavern Tournament Map Pack' },
-  CONQUEST: { id: '3763978597', name: "Loupi's Fruit Rules Unit Caps Mod" },
-  LAND_BATTLE: { id: '3763978597', name: "Loupi's Fruit Rules Unit Caps Mod" },
-  SIEGE: null,
-};
-
-const BATTLE_TYPE_LABEL = BATTLE_TYPE_LABELS;
-
-const steamUrl = (id: string) => `https://steamcommunity.com/sharedfiles/filedetails/?id=${id}`;
-
-function ModLink({ mod }: { mod: Mod }) {
+function ArenaModNotice({ label, className = '' }: { label: string; className?: string }) {
+  const mod = useArenaMod();
   return (
-    <a
-      href={steamUrl(mod.id)}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="font-semibold text-rizzotto-gold-400 hover:underline"
-    >
-      {mod.name} ↗
-    </a>
-  );
-}
-
-/**
- * Single-battle-type notice (tournament detail). Renders nothing when the battle type needs no mod
- * (Siege). Legacy tournaments with no explicit battle type are treated as Domination — the
- * historical default the single universal notice was always for.
- */
-export function RequiredModNotice({
-  battleType,
-  label = 'Required mod',
-}: {
-  battleType?: BattleType;
-  label?: string;
-}) {
-  const mod = REQUIRED_MODS[battleType ?? 'DOMINATION'];
-  if (!mod) return null;
-  return (
-    <div className="mb-8 rounded-md border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 px-4 py-3 text-sm">
+    <div className={`rounded-md border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 px-4 py-3 text-sm ${className}`}>
       <span className="text-stone-300">{label}: </span>
-      <ModLink mod={mod} />
+      <a
+        href={mod.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-semibold text-rizzotto-gold-400 hover:underline"
+      >
+        {mod.name} ↗
+      </a>
+      {mod.version && <span className="text-stone-400"> · version {mod.version}</span>}
+      <span className="text-stone-500"> · enable only this mod · </span>
+      <Link to="/how-to-play" hash="install" className="text-rizzotto-gold-400 hover:underline">
+        How to install
+      </Link>
     </div>
   );
 }
 
-/**
- * Multi-battle-type notice (Open Play, where a player may queue for any battle type): lists the
- * required mod per battle type, and "none" for the ones that need no mod. Battle types that share a
- * mod are listed together ("Conquest & Land Battle").
- */
-export function RequiredModsNotice({ label = 'Required mods' }: { label?: string }) {
-  const groups: Array<{ types: BattleType[]; mod: Mod | null }> = [];
-  for (const bt of BATTLE_TYPES) {
-    const mod = REQUIRED_MODS[bt];
-    const same = groups.find((g) => (g.mod?.id ?? null) === (mod?.id ?? null));
-    if (same) same.types.push(bt);
-    else groups.push({ types: [bt], mod });
-  }
-  return (
-    <div className="rounded-md border border-rizzotto-gold-500/30 bg-rizzotto-gold-500/5 px-4 py-3 text-sm">
-      <span className="text-stone-300">{label}: </span>
-      {groups.map(({ types, mod }, i) => (
-        <span key={types.join()}>
-          {i > 0 && <span className="text-stone-600"> · </span>}
-          <span className="text-stone-400">{types.map((t) => BATTLE_TYPE_LABEL[t]).join(' & ')} — </span>
-          {mod ? <ModLink mod={mod} /> : <span className="text-stone-500">none</span>}
-        </span>
-      ))}
-    </div>
-  );
+/** Tournament detail. The mod is the same for every battle type, so the type doesn't change the notice. */
+export function RequiredModNotice({ label = 'Required mod' }: { battleType?: BattleType; label?: string }) {
+  return <ArenaModNotice label={label} className="mb-8" />;
+}
+
+/** Open Play, which covers every battle type at once. */
+export function RequiredModsNotice({ label = 'Required mod' }: { label?: string }) {
+  return <ArenaModNotice label={label} />;
 }

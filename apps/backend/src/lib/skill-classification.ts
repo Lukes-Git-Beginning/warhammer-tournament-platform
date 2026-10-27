@@ -393,16 +393,28 @@ export interface Classification {
 }
 
 /**
+ * A start taken from another battle type's classification instead of the questionnaire (Domquest
+ * starts from the player's Domination or Conquest standing). `mu` replaces the band midpoint as the
+ * Bayes prior mean; `floorBand` replaces the questionnaire floor in the gating MAX.
+ */
+export interface DerivedPrior {
+  mu: number;
+  floorBand: number;
+}
+
+/**
  * Combine the questionnaire floor and the on-platform data into the two skill
- * views. `data.generalSkill` null (no games) → the result is questionnaire-only.
+ * views. `data.generalSkill` null (no games) → the result is questionnaire-only
+ * (or, with a `prior`, the derived start).
  */
 export function classify(
   qFloor: number,
   data: DataSkill,
   config: Partial<ClassificationConfig> = {},
+  prior?: DerivedPrior,
 ): Classification {
   const cfg = { ...DEFAULT_CLASSIFICATION_CONFIG, ...config };
-  const priorMu = bandToLogOdds(qFloor);
+  const priorMu = prior?.mu ?? bandToLogOdds(qFloor);
 
   const hasData = data.generalSkill != null && data.stdError != null && data.stdError > 0;
 
@@ -430,7 +442,7 @@ export function classify(
   const conservativeDataBand = hasData
     ? skillToBand(data.generalSkill! - cfg.gatingSeMultiplier * data.stdError!)
     : 1;
-  const gatingBand = Math.max(qFloor, conservativeDataBand);
+  const gatingBand = Math.max(prior?.floorBand ?? qFloor, conservativeDataBand);
 
   return {
     matchmakingSkill: postMu,

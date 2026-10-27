@@ -46,6 +46,13 @@ export function Header() {
       >
         Open Play
       </Link>
+      <Link
+        to="/how-to-play"
+        className={NAV_LINK_CLASS}
+        activeProps={NAV_LINK_ACTIVE_PROPS}
+      >
+        How to Play
+      </Link>
       {user && (
         <Link
           to="/teams"
@@ -78,6 +85,13 @@ export function Header() {
         data-onboarding-target="factions-nav"
       >
         {t('header.factions')}
+      </Link>
+      <Link
+        to="/fruit-rules"
+        className={NAV_LINK_CLASS}
+        activeProps={NAV_LINK_ACTIVE_PROPS}
+      >
+        Fruit Rules
       </Link>
       <Link
         to="/support"

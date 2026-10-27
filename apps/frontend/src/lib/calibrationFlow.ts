@@ -17,9 +17,13 @@ import { BATTLE_TYPES, BATTLE_TYPE_LABELS, type BattleType } from '@rizzotto/typ
 
 
 
-/** The battle types a question feeds (no scope = general = every type). */
+/** Battle types with a questionnaire of their own. Domquest has none: a player's start there comes from his
+ *  Domination or Conquest standing (backend `domquestReferenceType`), so no answer can change it directly. */
+const QUESTIONNAIRE_TYPES: readonly BattleType[] = BATTLE_TYPES.filter((t) => t !== 'DOMQUEST');
+
+/** The battle types a question feeds (no scope = general = every questionnaire type). */
 function typesOf(question: CalibrationQuestionDto): readonly BattleType[] {
-  return question.battleTypes && question.battleTypes.length > 0 ? question.battleTypes : BATTLE_TYPES;
+  return question.battleTypes && question.battleTypes.length > 0 ? question.battleTypes : QUESTIONNAIRE_TYPES;
 }
 
 /** Floor implied by the answers so far — mirrors backend `questionnaireFloor`: the MAX
@@ -52,7 +56,7 @@ export function nextCalibrationQuestion(
   answers: Record<string, string>,
   dismissed: Record<string, boolean>,
 ): CalibrationQuestionDto | undefined {
-  const floors = new Map(BATTLE_TYPES.map((t) => [t, calibrationFloor(questions, answers, t)]));
+  const floors = new Map(QUESTIONNAIRE_TYPES.map((t) => [t, calibrationFloor(questions, answers, t)]));
   return questions.find(
     (q) =>
       answers[q.id] == null &&

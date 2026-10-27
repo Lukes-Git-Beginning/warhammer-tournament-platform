@@ -58,6 +58,7 @@ const CATEGORY_TAGS: Record<string, string> = {
   '360': '360°',
   chariots: 'Chariot',
   ranged_cav: 'Ranged cav',
+  ranged: 'Ranged',
   flying_ranged: 'Flying ranged',
   breath: 'Breath',
 };

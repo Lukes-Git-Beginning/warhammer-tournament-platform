@@ -8,6 +8,7 @@ import { asFactionDto, getFactionsWithStats } from '../lib/factions.js';
 import { getMatchupMatrix } from '../lib/heatmap.js';
 import { resolveStandardRuleset, resolveAllStandardRulesets } from '../lib/standard-ruleset.js';
 import { resolveRuleDocuments } from '../lib/rule-documents.js';
+import { arenaModFallback, fetchArenaModInfo } from '../lib/arena-mod.js';
 import { resolveCompetitors } from '../lib/competitors.js';
 import { computeDuoMeta } from '../lib/duo-meta.js';
 
@@ -560,10 +561,24 @@ const metaRoutes: FastifyPluginAsync = async (fastify) => {
   // -------------------------------------------------------------------------
   // GET /api/meta/rule-documents
   // Public — the rules-document permalinks (/rules/<slug>) and where they forward to. Read by the
-  // permalink page, the Standard Ruleset card ("Full rules") and the admin editor.
+  // permalink page and the admin editor.
   // -------------------------------------------------------------------------
   fastify.get('/api/meta/rule-documents', async () => {
     return { documents: await resolveRuleDocuments() };
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/meta/arena-mod
+  // Public — RizzOtto's Arena Mod: Workshop link and its current version from Steam (cached 15 min, so a
+  // new version or the public listing shows up quickly). Steam unreachable → the mod without a version.
+  // -------------------------------------------------------------------------
+  fastify.get('/api/meta/arena-mod', async (request) => {
+    try {
+      return await cached(fastify.redis, 'meta:arena-mod', fetchArenaModInfo, { ttlSeconds: 900 });
+    } catch (err) {
+      request.log.warn({ err }, 'Arena mod info: Steam unreachable');
+      return arenaModFallback();
+    }
   });
 };
 

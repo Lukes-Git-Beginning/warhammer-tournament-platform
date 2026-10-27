@@ -52,7 +52,7 @@ function row(id: string, patch: Partial<AdminPlayerReportRow> = {}): AdminPlayer
     queueTimeouts: 0,
     dmSent: 0,
     dmFailed: 0,
-    answered: { general: false, DOMINATION: false, CONQUEST: false, LAND_BATTLE: false, SIEGE: false },
+    answered: { general: false, DOMINATION: false, DOMQUEST: false, CONQUEST: false, LAND_BATTLE: false, SIEGE: false },
     ...patch,
   };
 }

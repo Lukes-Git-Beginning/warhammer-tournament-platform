@@ -260,12 +260,20 @@ const supportRoute = createRoute({
   component: SupportPage,
 });
 
-// Unlisted (no nav entry): shared by link until the Fruit Rules go public. Lazy, so the page
-// text, the markdown-tables plugin and the faction data load only here.
+// Header tab "Fruit Rules". Lazy, so the page text, the markdown-tables plugin and the faction data
+// load only here.
 const fruitRulesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/fruit-rules',
   component: lazyRouteComponent(() => import('./routes/FruitRulesPage'), 'FruitRulesPage'),
+});
+
+// Header tab "How to Play": installing RizzOtto's Arena Mod, the arena modes, the rules players follow
+// themselves and a match on the site. Rule cards, the required-mod notices and onboarding link here.
+const howToPlayRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/how-to-play',
+  component: lazyRouteComponent(() => import('./routes/HowToPlayPage'), 'HowToPlayPage'),
 });
 
 const teamsRoute = createRoute({
@@ -333,6 +341,7 @@ const routeTree = rootRoute.addChildren([
   openPlayRoute,
   supportRoute,
   fruitRulesRoute,
+  howToPlayRoute,
   teamsRoute,
   teamProfileRoute,
   seriesListingRoute,

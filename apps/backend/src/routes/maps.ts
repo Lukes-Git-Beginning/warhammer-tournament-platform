@@ -15,10 +15,14 @@ const MapsQuerySchema = z.object({
 const mapsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/maps — public, all AVAILABLE maps (offered to hosts + Open Play), cached 5 min.
   // Optional ?battle_type=<battle type> filter — a map is built for one battle type.
-  fastify.get('/api/maps', async (request, _reply) => {
+  fastify.get('/api/maps', async (request, reply) => {
     const parsed = MapsQuerySchema.safeParse(request.query);
-    // Silently ignore invalid battle_type values — treat as unfiltered.
-    const bt = parsed.success ? parsed.data.battle_type : undefined;
+    // An unknown battle_type is an error, not "no filter": RizzOtto's Arena Mod's build reads the pools
+    // from here and must be able to tell a missing pool apart from the full list.
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'Unknown battle_type', statusCode: 400 });
+    }
+    const bt = parsed.data.battle_type;
 
     const maps = await cached(
       fastify.redis,

@@ -175,12 +175,20 @@ export function classifyWithModel(
   playerId: string,
   scope: SkillScope = 'OVERALL',
 ): PlayerClassification {
-  const qFloor = questionnaireFloor(answers, questions, scope);
+  // Domquest has no questionnaire block: a player starts from his standing in its reference type
+  // (Domination, or Conquest if he played more of it) and his own Domquest games take over from there.
+  const ref =
+    scope === 'DOMQUEST'
+      ? classifyWithModel(model, answers, questions, playerId, domquestReferenceType(model, playerId))
+      : null;
+  const qFloor = ref ? ref.questionnaireFloor : questionnaireFloor(answers, questions, scope);
   const est = model.getSkillEstimate(playerId, scope);
-  const result = classify(qFloor, {
-    generalSkill: est?.skill ?? null,
-    stdError: est?.se ?? null,
-  });
+  const result = classify(
+    qFloor,
+    { generalSkill: est?.skill ?? null, stdError: est?.se ?? null },
+    {},
+    ref ? { mu: ref.matchmakingSkill, floorBand: ref.gatingBand } : undefined,
+  );
 
   const hasQuestionnaire = Object.keys(answers).length > 0;
   const pendingTypes = pendingCalibrationTypes(answers, questions);
@@ -190,7 +198,7 @@ export function classifyWithModel(
   // #18 — "rated" means we have real signal: a questionnaire OR fitted game data.
   // A player with neither is NOT band-1 "New"; the default floor is just a
   // placeholder. Such players are surfaced as "Unrated" and kept out of band stats.
-  const rated = !typePending && (hasQuestionnaire || est != null);
+  const rated = ref ? ref.rated || est != null : !typePending && (hasQuestionnaire || est != null);
   const scopeGames = est?.gamesCount ?? 0;
 
   return {
@@ -212,6 +220,17 @@ export function classifyWithModel(
     rated,
     pendingCalibrationTypes: pendingTypes,
   };
+}
+
+/**
+ * The battle type a player's Domquest start comes from (Alex, 2026-10-27): Domination, or Conquest when he
+ * has played more Conquest than Domination games. Domquest mixes the two (Conquest-sized armies on the
+ * Domination engine).
+ */
+export function domquestReferenceType(model: RatingModel, playerId: string): 'DOMINATION' | 'CONQUEST' {
+  const domination = model.getSkillEstimate(playerId, 'DOMINATION')?.gamesCount ?? 0;
+  const conquest = model.getSkillEstimate(playerId, 'CONQUEST')?.gamesCount ?? 0;
+  return conquest > domination ? 'CONQUEST' : 'DOMINATION';
 }
 
 /** The timeless all-time hierarchical fit every classification reads (cached). */

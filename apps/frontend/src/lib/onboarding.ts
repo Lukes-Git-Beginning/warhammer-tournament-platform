@@ -8,15 +8,15 @@ export const ONBOARDING_STAGE_COUNT = 5;
 
 export interface OnboardingStageMeta {
   index: OnboardingStage;
-  id: 'welcome' | 'workshop' | 'survey' | 'first-strike' | 'roll-awaits';
+  id: 'welcome' | 'workshop' | 'setup' | 'survey' | 'roll-awaits';
   title: string;
 }
 
 export const ONBOARDING_STAGES: OnboardingStageMeta[] = [
   { index: 0, id: 'welcome', title: 'Heed the Call' },
   { index: 1, id: 'workshop', title: 'The Workshop' },
-  { index: 2, id: 'survey', title: 'Survey the Field' },
-  { index: 3, id: 'first-strike', title: 'First Strike' },
+  { index: 2, id: 'setup', title: 'Discord and the mod' },
+  { index: 3, id: 'survey', title: 'Survey the Field' },
   { index: 4, id: 'roll-awaits', title: 'The Roll Awaits' },
 ];
 

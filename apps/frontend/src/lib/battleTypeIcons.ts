@@ -4,7 +4,7 @@
  * which would keep the icon broken after it is added. Add a type in the same deploy that ships its
  * image.
  */
-const TYPES_WITH_ICON = new Set(['DOMINATION', 'CONQUEST', 'LAND_BATTLE', 'SIEGE']);
+const TYPES_WITH_ICON = new Set(['DOMINATION', 'DOMQUEST', 'CONQUEST', 'LAND_BATTLE', 'SIEGE']);
 
 /** The icon path for a battle type, or null when it has no image (render a fallback instead). */
 export function battleTypeIconSrc(battleType: string | null | undefined): string | null {

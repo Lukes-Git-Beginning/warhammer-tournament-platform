@@ -237,7 +237,7 @@ interface MapSeedEntry {
   name: string;
   slug: string;
   local_path: string | null;
-  battle_type?: 'DOMINATION' | 'CONQUEST' | 'LAND_BATTLE' | 'SIEGE';
+  battle_type?: 'DOMINATION' | 'DOMQUEST' | 'CONQUEST' | 'LAND_BATTLE' | 'SIEGE';
 }
 
 // The curated active pool (the original 36 + Otsuchi Castle, Blasphemous Snowfield, Excavation Site
@@ -260,8 +260,15 @@ const normMapKey = (n: string): string =>
   n.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/the/g, '').replace('labour', 'labor').replace('rifts', 'rift');
 
 async function seedMaps(): Promise<void> {
-  const mapData = JSON.parse(fs.readFileSync(path.join(__dirname, 'map-data.json'), 'utf8')) as MapSeedEntry[];
+  const sheet = JSON.parse(fs.readFileSync(path.join(__dirname, 'map-data.json'), 'utf8')) as MapSeedEntry[];
   const canonical = new Set(CANONICAL_MAP_NAMES.map(normMapKey));
+  // Domquest plays the Domquest versions of the curated Domination maps (RizzOtto's Arena Mod builds them
+  // from this pool): one row per map with the slug suffix -domquest and the same image, as on prod
+  // (migration 20261027100100).
+  const domquest: MapSeedEntry[] = sheet
+    .filter((m) => (m.battle_type ?? 'DOMINATION') === 'DOMINATION' && canonical.has(normMapKey(m.name)))
+    .map((m) => ({ ...m, slug: `${m.slug}-domquest`, battle_type: 'DOMQUEST' }));
+  const mapData = [...sheet, ...domquest];
 
   // Reconcile against existing rows BY BATTLE TYPE + NORMALISED NAME (not slug) so re-pulling the
   // sheet updates the curated maps in place instead of creating duplicates when spelling differs.

@@ -1995,6 +1995,30 @@ export function getStandardRuleset(battleType?: BattleType, competitorFormat?: '
   return apiFetch(`/api/meta/standard-ruleset${qs ? `?${qs}` : ''}`);
 }
 
+/** RizzOtto's Arena Mod on the Steam Workshop, with its current version once the item is listed. */
+export interface ArenaModInfo {
+  workshopId: string;
+  name: string;
+  url: string;
+  changelogUrl: string;
+  listed: boolean;
+  version: string | null;
+  updatedAt: string | null;
+}
+
+export function getArenaMod(): Promise<ArenaModInfo> {
+  return apiFetch('/api/meta/arena-mod');
+}
+
+/** One-time site notices the server wants this user to see (e.g. 'arena-mod-release'). */
+export function getSiteNotices(): Promise<{ notices: string[] }> {
+  return apiFetch('/api/users/me/notices');
+}
+
+export function dismissSiteNotice(id: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/users/me/notices/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
+}
+
 /** A rules-document permalink: rizzotto.gg/rules/<slug> forwards to `url` (empty = not linked yet). */
 export interface RuleDocument {
   slug: string;

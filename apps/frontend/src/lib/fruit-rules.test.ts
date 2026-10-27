@@ -42,7 +42,7 @@ describe('committed Fruit Rules data', () => {
         .flatMap((r) => r.categories.map((c) => c.tag)),
     );
     expect([...tags].sort()).toEqual(
-      ['360°', 'Breath', 'Chariot', 'Flying ranged', 'RSE', 'Ranged cav', 'SE'].sort(),
+      ['360°', 'Breath', 'Chariot', 'Flying ranged', 'RSE', 'Ranged', 'Ranged cav', 'SE'].sort(),
     );
   });
 

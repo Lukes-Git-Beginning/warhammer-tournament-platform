@@ -71,9 +71,21 @@ export const LAND_BATTLE_CONDUCT: readonly string[] = [
   "No forest camping: don't hold defensive positions in forests with a significant part of your army. Nobody has to attack into or next to a forest; falling back to open field is allowed.",
 ];
 
+/** Domquest's lobby settings as RizzOtto's Arena Mod fixes them (bans and conduct as in Domination). */
+export const DOMQUEST_SETTINGS: readonly string[] = [
+  'Starting Army 12,400',
+  'Reinforcing Army up to 5,600',
+  'Ultra Unit Scale',
+  'Unit Caps On',
+  'No Character Loading',
+  '600 Tickets',
+];
+
 /** The default for one battle type until an admin sets it. A land battle has no tickets, so its
- *  default drops the ticket count and adds the Land Battle rules of play. */
+ *  default drops the ticket count and adds the Land Battle rules of play. Domquest keeps Domination's
+ *  bans and conduct with its own settings. */
 export function defaultRulesetFor(battleType: $Enums.BattleType): StandardRuleset {
+  if (battleType === 'DOMQUEST') return { ...DEFAULT_STANDARD_RULESET, settings: [...DOMQUEST_SETTINGS] };
   if (battleType !== 'LAND_BATTLE') return DEFAULT_STANDARD_RULESET;
   return {
     ...DEFAULT_STANDARD_RULESET,

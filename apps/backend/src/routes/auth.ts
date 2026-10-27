@@ -3,6 +3,7 @@ import fastifyOauth2 from '@fastify/oauth2';
 import type { Role, JwtPayload } from '@rizzotto/types';
 import { resolveGuildId } from '../lib/discord-notify.js';
 import { syncSupporterFromDiscordRoles } from '../lib/supporter-service.js';
+import { recordGuildMembership } from '../lib/discord-membership.js';
 
 const DISCORD_USERINFO_URL = 'https://discord.com/api/users/@me';
 
@@ -25,7 +26,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   const clientId = process.env.DISCORD_CLIENT_ID;
   const clientSecret = process.env.DISCORD_CLIENT_SECRET;
   const redirectUri = process.env.DISCORD_REDIRECT_URI;
-  const scopeStr = process.env.DISCORD_SCOPES ?? 'identify email';
+  // guilds.join is always requested, whatever DISCORD_SCOPES says: it lets the login add the player
+  // to the RizzOttoverse Discord server (see the auto-join below). Production's env still lists only
+  // "identify email", and that file can't be changed from the repo.
+  const scopeStr = [...new Set([...(process.env.DISCORD_SCOPES ?? 'identify email').split(/\s+/), 'guilds.join'])].join(' ');
   const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
   if (!clientId || !clientSecret || !redirectUri) {
@@ -150,15 +154,17 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
             );
             if (memberCheck.status === 404) {
               // Not a member — add them using the user's access_token (guilds.join scope)
-              await fetch(`https://discord.com/api/guilds/${guildId}/members/${profile.id}`, {
+              const added = await fetch(`https://discord.com/api/guilds/${guildId}/members/${profile.id}`, {
                 method: 'PUT',
                 headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ access_token: accessToken }),
               });
-              request.log.info({ userId: user.id }, 'Added user to RizzOttoverse Discord server');
+              await recordGuildMembership(fastify.prisma, user.id, added.ok);
+              request.log.info({ userId: user.id, status: added.status }, 'Added user to RizzOttoverse Discord server');
               // A freshly-added member holds no supporter roles yet — clear any stale Discord tiers.
               await syncSupporterFromDiscordRoles(fastify.prisma, user.id, []);
             } else if (memberCheck.ok) {
+              await recordGuildMembership(fastify.prisma, user.id, true);
               // Already a member — sync their supporter tiers from their current guild roles.
               const member = (await memberCheck.json()) as { roles?: string[] };
               await syncSupporterFromDiscordRoles(

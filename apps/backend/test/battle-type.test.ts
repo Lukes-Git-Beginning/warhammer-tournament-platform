@@ -8,7 +8,7 @@
  *     unavailable one) is rejected with 422.
  *  4. Map pool validation on PATCH: effective battle type logic.
  *  5. Admin map CRUD: battle_type (single) + available persist and update.
- *  6. GET /api/maps?battle_type=SIEGE returns only available SIEGE maps.
+ *  6. GET /api/maps?battle_type=SIEGE returns only available SIEGE maps; an unknown type is a 400.
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -329,11 +329,9 @@ describe('GET /api/maps — battle_type + availability filter', () => {
     expect(ids).toContain(domId);
   });
 
-  it('ignores an invalid battle_type value and returns all available maps', async () => {
-    const someId = await createMap({ battleType: 'DOMINATION' });
+  it('rejects an unknown battle_type with 400 instead of returning every map', async () => {
+    await createMap({ battleType: 'DOMINATION' });
     const res = await app.inject({ method: 'GET', url: '/api/maps?battle_type=INVALID' });
-    expect(res.statusCode).toBe(200);
-    const ids = res.json<{ data: { id: string }[] }>().data.map((m) => m.id);
-    expect(ids).toContain(someId);
+    expect(res.statusCode).toBe(400);
   });
 });

@@ -130,7 +130,7 @@ Alle Route-Files registrieren sich direkt mit absoluten Pfaden (kein `prefix`-Op
 | File | Methoden & Pfade | Schutz |
 |------|-----------------|--------|
 | `routes/auth.ts` | `GET /auth/discord` (redirect), `GET /auth/discord/callback`, `POST /auth/logout`, `POST /auth/test-login` | `/test-login` nur wenn `NODE_ENV=test` |
-| `routes/users.ts` | `GET /api/users/me`, `PATCH /api/users/me`, `PATCH /api/users/:id/role`, `GET /api/users/:id` | `me`-Endpunkte: `authenticate`; role-Patch: `ADMIN` |
+| `routes/users.ts` | `GET /api/users/me`, `PATCH /api/users/me`, `GET /api/users/me/notices` + `POST /api/users/me/notices/:id/dismiss` (einmalige Site-Hinweise, `lib/site-notices.ts`), `PATCH /api/users/:id/role`, `GET /api/users/:id` | `me`-Endpunkte: `authenticate`; role-Patch: `ADMIN` |
 | `routes/tournaments.ts` | `GET /api/tournaments`, `GET /api/tournaments/:slug`, `POST /api/tournaments`, `PATCH /api/tournaments/:slug`, `DELETE /api/tournaments/:slug` | Schreibende Ops: `authenticate` + `ORGANIZER`/`ADMIN` |
 | `routes/participants.ts` | `POST /api/tournaments/:slug/register`, `POST /api/tournaments/:slug/checkin`, `POST /api/tournaments/:slug/withdraw`, `GET /api/tournaments/:slug/participants` | Register/Checkin/Withdraw: `authenticate` |
 | `routes/matches.ts` | `POST /api/matches/:id/result`, `PATCH /api/matches/:id`, `GET /api/matches/:id/draft` | `authenticate` |
@@ -138,7 +138,7 @@ Alle Route-Files registrieren sich direkt mit absoluten Pfaden (kein `prefix`-Op
 | `routes/leaderboard.ts` | `GET /api/leaderboard`, `GET /api/leaderboard/all-time` | Public |
 | **`routes/rating.ts`** | **Dynamic Leaderboard (Alex-Spec):** `GET /api/matches/:id/scoring-breakdown`, `GET /api/leaderboard/anti-farming`, `GET /api/factions/matchup-matrix`, `GET /api/players/:id/faction-proficiency` | Public |
 | `routes/factions.ts` | `GET /api/factions`, `GET /api/factions/:id` | Public |
-| `routes/meta.ts` | `GET /api/meta/overview`, `GET /api/meta/matchups`, `GET /api/meta/rule-documents` (Regel-Dokument-Permalinks, `lib/rule-documents.ts`: Defaults + AdminConfig `rule_documents`, beim Lesen validiert, nur http(s)-Ziele) | Public |
+| `routes/meta.ts` | `GET /api/meta/overview`, `GET /api/meta/matchups`, `GET /api/meta/arena-mod` (RizzOtto's Arena Mod: Workshop-Link + aktuelle Version aus der Workshop-Beschreibung via Steam `GetPublishedFileDetails`, ohne Key, 15 min gecacht; unlisted = Steam result 9 → `listed:false`, keine Version; `lib/arena-mod.ts`), `GET /api/meta/rule-documents` (Regel-Dokument-Permalinks, `lib/rule-documents.ts`: Defaults + AdminConfig `rule_documents`, beim Lesen validiert, nur http(s)-Ziele) | Public |
 | `routes/drafts.ts` | `GET /api/drafts/:id`, `GET /api/drafts/:id/events`, `POST /api/drafts/:id/...` | Optional-Auth (Spectator wenn anonym) |
 | `routes/draft-presets.ts` | `GET /api/draft-presets`, `GET /api/draft-presets/:id`, `POST /api/draft-presets`, `PUT /api/draft-presets/:id`, `DELETE /api/draft-presets/:id` | Schreibende Ops: `ORGANIZER`/`ADMIN` |
 | `routes/admin.ts` | `GET /api/admin/audit-log`, `GET /api/admin/stats`, `POST /api/admin/users/:id/ban`, `DELETE /api/admin/users/:id/ban`, **+Welle 2:** `GET /api/admin/stats/{faction-winrates,elo-distribution,dropoff-funnel,pickban-stats}`, `CRUD /api/admin/maps[/:id]`, `POST/PATCH /api/admin/factions[/:id]`, `POST /api/admin/factions/:id/sigil` (multipart), `GET /api/admin/config/all`, `GET/PUT /api/admin/config/:key` | Alle: `authenticate` + `ADMIN` |
@@ -215,7 +215,7 @@ Zwei Quell-Files: `.env.example` im repo-root (Dev-Defaults) und `deploy/.env.pr
 | `DISCORD_CLIENT_ID` | `123456789` | Discord OAuth2 App-ID | Ja |
 | `DISCORD_CLIENT_SECRET` | `secret` | Discord OAuth2 Secret | Ja |
 | `DISCORD_REDIRECT_URI` | `http://localhost:3000/auth/discord/callback` | OAuth Callback-URL | Ja |
-| `DISCORD_SCOPES` | `identify email` | OAuth-Scopes; default `identify email` | Nein |
+| `DISCORD_SCOPES` | `identify email` | OAuth-Scopes; default `identify email`; `guilds.join` wird immer ergänzt (routes/auth.ts) | Nein |
 | `FRONTEND_URL` | `http://localhost:5173` | CORS-Origin + Redirect nach Login | Nein |
 | `BACKEND_URL` | `http://localhost:3000` | Für interne Referenzen | Nein |
 | `PORT` | `3000` | HTTP-Port; default 3000 | Nein |

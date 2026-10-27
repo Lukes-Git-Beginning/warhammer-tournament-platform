@@ -20,7 +20,7 @@ describe('parseQueuePrefs', () => {
     for (const raw of [null, undefined, 'not json', '{}', '{"battleTypes":[]}']) {
       expect(parseQueuePrefs(raw)).toEqual({
         format: 'ONE_V_ONE',
-        battleTypes: ['DOMINATION', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'],
+        battleTypes: ['DOMINATION', 'DOMQUEST', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'],
         matchFormats: ['BO1', 'BO3'],
       });
     }

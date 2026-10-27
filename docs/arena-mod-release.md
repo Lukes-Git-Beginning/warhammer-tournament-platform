@@ -1,0 +1,70 @@
+# Release of RizzOtto's Arena Mod on rizzotto.gg (v3.0.0)
+
+The site side of the mod's public release (plan: `tww3-modding/docs/platform/README.md`). Everything lives on
+the branch `feat/arena-mod-release` and goes live together with the mod. The texts below are for Alex to
+proofread before release.
+
+## What the branch contains
+
+- **Domquest** as the fifth battle type (`DOMQUEST`): own skill rating (start from Domination, or Conquest when
+  the player played more Conquest; no questionnaire block), leaderboards, quarterly final, Open Play queue,
+  tournaments, Standard Ruleset (`DOMQUEST_SETTINGS`, bans and conduct as Domination), icon, map pool (copy of
+  every Domination map that is available at deploy time, slug suffix `-domquest`).
+- `GET /api/maps` answers 400 for an unknown `battle_type` (the mod build can tell a missing pool apart).
+- `GET /api/meta/arena-mod`: Workshop link and current version, read from the Workshop description
+  (`Current version: 1.0`), cached 15 minutes. While the item is unlisted Steam answers result 9 and the site
+  shows the mod without a version.
+- Rule cards show only what players watch themselves (arena mode with the mod, conduct incl. Land Battle's rules
+  of play) plus a note on what the mod enforces. The Fruit Rules links (Drive PDFs) are gone from the cards.
+- Required-mod notice: RizzOtto's Arena Mod for every battle type, with version and "How to install".
+- Header tabs **How to Play** (new page) and **Fruit Rules** (public, in the sitemap, new intro).
+- Onboarding step "Discord + mod" before the tour.
+- Release banner for existing players who are not on the RizzOttoverse Discord server, dismissable for good.
+- Discord login always asks for `guilds.join`, so logging in adds players to the server.
+
+## Release day, in order
+
+1. **Mod:** the Workshop item is listed and its description carries `Current version: 1.0`.
+2. **Domination pool:** final as wanted. The deploy copies every available Domination map into the Domquest pool.
+3. **Branch:** rebase `feat/arena-mod-release` onto `main`, CI green, set the `## [3.0.0]` date to the release
+   day, Alex's go, no ongoing tournament.
+4. **Deploy:** fast-forward `main`. The changelog bot posts 3.0.0 on boot.
+5. **Check on prod:** `/api/meta/arena-mod` shows `listed: true` and the version (at most 15 minutes after
+   listing); `/api/maps?battle_type=DOMQUEST` returns the pool; the How to Play and Fruit Rules tabs; a ruleset
+   card; the Domquest filter on Tournaments and Leaderboard.
+6. **Welcome banner:** Admin → Welcome Banner, text below.
+7. **Broadcast DM:** to everyone the bot may DM, text below.
+8. **Discord posts / video:** Alex.
+9. Optional: replace `public/img/how-to-play/lobby-warning.jpg` with a screenshot from the release build (the
+   current one shows the test build's version line), at a new file name (CDN rule).
+
+## Texts to proofread
+
+### Welcome banner (Markdown)
+
+```
+**RizzOtto's Arena Mod is out.** Every game on the Arena now runs with it: one mod with the arena modes, our map pools and the rules, plus the new battle type **Domquest**. [How to Play](/how-to-play)
+```
+
+### Broadcast DM
+
+```
+Hey! RizzOtto's Arena Mod is out on the Steam Workshop, and from now on every game on RizzOtto's Arena runs with it.
+
+- One mod for everything: the arena modes in the custom battle lobby, our map pools, the lobby settings and bans, and the Fruit Rules in Land Battle, Conquest and now Siege.
+- You no longer need the Total Tavern map pack or Loupi's Fruit Rules mod. Disable both and enable only the arena mod.
+- New battle type Domquest: think Conquest on the Domination engine, with a Conquest-sized army, a small reinforcing army as a sideboard and one capture point in the middle. It has its own rating, leaderboards and queue.
+
+How to install it and everything else: <https://rizzotto.gg/how-to-play>
+Workshop: <https://steamcommunity.com/sharedfiles/filedetails/?id=3827143159>
+```
+
+### Already on the branch (proofread in place)
+
+- Changelog `## [3.0.0]` in `CHANGELOG.md`.
+- How to Play: `apps/frontend/src/routes/HowToPlayPage.tsx`.
+- Onboarding step: `onboarding.setup.*` in `apps/frontend/src/i18n/locales/en/common.json`.
+- Release banner: `apps/frontend/src/components/layout/ArenaModReleaseBanner.tsx`.
+- Rule card and required-mod notice: `StandardRulesetCard.tsx`, `RequiredModsNotice.tsx`.
+- Fruit Rules intro: top of `apps/frontend/src/content/fruit-rules/fruit_rules_interpretation.md` (the site's own
+  text; the mod repo's copy still has the old intro).

@@ -1,26 +1,32 @@
 # Fruit Rules – how the RizzOtto's Arena mod enforces them
 
 The Fruit Rules v10 (Cranberry Edition) are the community standard for competitive Conquest and
-Land Battle. Both editions of the PDF have the same army rules. The RizzOtto's Arena mod checks
-these rules in the army setup, so an army that breaks them cannot be readied.
+Land Battle. On RizzOtto's Arena they apply in Land Battle, Conquest, Siege Battle and
+Free-For-All Battle. RizzOtto's Arena Mod checks them in the army setup: a unit, mount or upgrade
+that would break a limit is greyed out, and Ready stays blocked while an army breaks a rule, so
+nobody has to check them by hand.
 
-This page lists exactly what the mod checks. The PDF stays the rulebook. Where the PDF leaves
-room for interpretation, this page shows the reading the mod uses, and section 9 lists every point
-where the mod differs from the PDF.
+This page shows how we read the rules where the PDF leaves room for interpretation, every point
+where the mod differs from the PDF (section 9), and all limits per faction at a glance for
+planning your armies.
+
+The rules come from the Fruit Rules v10 PDFs:
 
 - Fruit Rules v10, Conquest: https://drive.google.com/file/d/1Knv1mVafQckcgozQ5uwRP8D_r6wIePA2/view
 - Fruit Rules v10, Land Battle: https://drive.google.com/file/d/1bALrMJ_QBit22Y27kLMeIEnQJPr0rLm1/view
 
-
 ## 1. Where the rules apply
 
-- **Conquest and Land Battle**, in custom battles against the AI and in multiplayer.
-- The host's lobby settings are fixed in both modes: Ultra unit size, unit caps on, character
-  loading off, default funds. Conquest also has 600 tickets. The time limit of Land Battle stays
-  free.
+- **Conquest, Land Battle, Siege Battle and Free-For-All Battle** of the arena (the lobby buttons
+  without "Vanilla"), in custom battles against the AI and in multiplayer. CA's unmodded modes
+  ("Vanilla Conquest" etc.) have no rules.
+- The host's lobby settings are fixed in these modes: Ultra unit size, unit caps on, character
+  loading off, default funds. Conquest also has 600 tickets, Siege Battle a short time limit and
+  settlement level 1. The time limit of Land Battle and Free-For-All Battle stays free.
 - In addition to the Fruit Rules, the RizzOtto Standard Rules ban the **Undead Legions**,
   **Skreech Verminking** and **The Masque of Slaanesh** (also as the Changeling's form).
-- Domination, Domquest and Siege use the RizzOtto Standard Rules only, without the Fruit Rules.
+- The arena's Domination and Domquest use the RizzOtto Standard Rules only, without the Fruit
+  Rules.
 
 
 ## 2. What a player sees
@@ -106,6 +112,7 @@ Per army. A unit can count toward several categories.
 |---|---|---|
 | Single entities (SE) | 4 | All characters and all units with one model, including the Ironblaster, Scraplauncher, Magma Cannon and Deathshrieker. Exempt single entities (XSE on the faction page) don't count. |
 | Rare single entities (RSE) | 3 | Units marked RSE on the faction page (max 2 each, like every single entity). Characters: those the game groups as rare single entities, all Slanns including Mazdamundi and Kroak, Steam Tank mounts, and characters riding an RSE mount (Mammoths, Stonehorns, Thundertusks, Taurus, Lammasu). |
+| Ranged units | 12 | Every unit and character with ammunition (PDF p. 3), including units the game doesn't count as ranged: Miners (Blasting Charges), Ekrund Miners, Ironbreakers, Infernal Ironsworn, the Blazing Beards of Bazherak, Hobgoblin Sneaky Gits, Exalted Plaguebearers, Festering Stooges, Centigors (Throwing Axes), Groghooves of Wolf's Run, Cold One Chariots and 21 characters such as Ikit Claw, Ku'gath, the Ataman and Ulrika. Not the Khorne Soul Grinder (Khorne page). |
 | Ranged units with 360° firing arcs | 6 | Units marked 360 on the faction page; characters the game groups as 360° units. |
 | Chariots | 3 | Units with the chariot symbol on the faction page. Characters on a chariot mount: a chariot is a fast vehicle that deals impact damage, so Steam Tanks, Doomwheels, Doom-Flayers and the Blood Throne count; Corpse Carts, the War Compass, the Cauldron of a Thousand Poxes and other slow altars don't. |
 | Multi-entity ranged cavalry & chariots | 6 | Units with the ranged cavalry symbol on the faction page. |
@@ -113,8 +120,9 @@ Per army. A unit can count toward several categories.
 | Flying units with breath attacks | 2 | Flying units with a breath attack: an activated ability (not a spell) that fires a breath, for example every dragon breath, the Terrorgheist's Death Shriek and the Exalted Bloodthirster's Bellow of Fury. |
 
 These category limits of the PDF are the game's own unit caps with the same values; the game
-enforces them with unit caps on: heroes 2, flying units 6, ranged units 12, Extended Roster units 0,
-marked units 5 (Warriors of Chaos) and 4 (Beastmen).
+enforces them with unit caps on: heroes 2, flying units 6, Extended Roster units 0, marked units 5
+(Warriors of Chaos) and 4 (Beastmen). The game also caps ranged units at 12, but counts fewer units
+than the PDF (see above) and also counts the Khorne Soul Grinder; both limits apply.
 
 
 ## 6. Ability limits
@@ -173,9 +181,11 @@ Presence, Seductive Glory, Sword of Khaine (T), Whisper of Glory.
 - The Changeling counts as himself and as the form chosen for him: the form's unit limits,
   categories, abilities and the spells of its lore all count toward the army.
 - A form that breaks a rule on its own can never be legal and can't be chosen. This concerns
-  Coeddil (banned), Nagash (Undead Legions only), and the Slaanesh casters and daemons that bring
-  two targetable nets or rampages (Pavane of Slaanesh and Phantasmagoria), for example Azazel,
-  N'Kari, Heralds and Alluresses of Slaanesh and Exalted Keepers of Secrets.
+  Coeddil (banned) and the Slaanesh casters and daemons that bring two targetable nets or rampages
+  (Pavane of Slaanesh and Phantasmagoria), for example Azazel, N'Kari, Heralds and Alluresses of
+  Slaanesh and Exalted Keepers of Secrets.
+- Nagash is allowed as a form, although the Undead Legions are banned: he is only too strong
+  together with his own faction. He counts as a single entity and a rare single entity.
 - The Blue Scribes count as a form without their lore (it holds the spells of every lore).
 
 
@@ -225,7 +235,7 @@ applies. They are generated from the mod's own data, so they always match what t
   where stricter).
 - **Shared limits:** limits the unit shares with others, such as SAME UNIT groups, variants,
   regiments of renown counting toward their base unit, or a mount kind.
-- **Categories:** SE, RSE, 360°, Chariot, Ranged cavalry, Flying ranged, Breath.
+- **Categories:** SE, RSE, Ranged, 360°, Chariot, Ranged cavalry, Flying ranged, Breath.
 - **Fixed abilities:** drains, nets or rampages the unit always brings.
 - **Basis:** where the limit comes from.
 - **Characters** have one row per mount. Their limits come from their mount and the categories.

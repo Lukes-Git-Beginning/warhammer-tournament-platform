@@ -8,9 +8,9 @@ import { FruitFactionTables, scrollToAnchor } from '@/components/fruit-rules/Fru
 import { slugify, splitFruitRulesDoc } from '@/lib/fruit-rules';
 import { cn } from '@/lib/utils';
 
-// Unlisted for now: reachable by URL only, no nav entry, kept out of search engines.
-// To make it public, add a nav link in Header.tsx, drop the noindex below and add the URL
-// to public/sitemap.xml.
+// Public since the release of RizzOtto's Arena Mod: header tab "Fruit Rules", in the sitemap and open to
+// search engines. The text and the faction data come from the mod repo (docs/fruit_rules); the mod enforces
+// the rules itself, this page shows how we read them and every limit for planning.
 
 function nodeText(node: ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
@@ -119,13 +119,8 @@ function usePageMeta() {
   useEffect(() => {
     const previousTitle = document.title;
     document.title = "Fruit Rules — RizzOtto's Arena";
-    const robots = document.createElement('meta');
-    robots.name = 'robots';
-    robots.content = 'noindex';
-    document.head.appendChild(robots);
     return () => {
       document.title = previousTitle;
-      robots.remove();
     };
   }, []);
 }

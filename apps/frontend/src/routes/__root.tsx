@@ -8,6 +8,7 @@ import { DevLoginPanel } from '@/components/dev/DevLoginPanel';
 import { ActiveMatchVisibilityProvider } from '@/contexts/ActiveMatchVisibility';
 import { FactionPickTimerBanner } from '@/components/match/FactionPickTimerBanner';
 import { SessionExpiredBanner } from '@/components/auth/SessionExpiredBanner';
+import { ArenaModReleaseBanner } from '@/components/layout/ArenaModReleaseBanner';
 
 // Map a pathname to a compact page label for the access log (e.g. "tournament:<slug>").
 function pageLabel(path: string): string {
@@ -66,6 +67,7 @@ function RootLayout() {
       </a>
       <div className="relative z-10">
         <Header />
+        <ArenaModReleaseBanner />
         <Outlet />
       </div>
       {/* Global session-expiry watcher: flips the UI to logged-out on any 401 + prompts re-login */}

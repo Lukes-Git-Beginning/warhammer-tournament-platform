@@ -63,7 +63,7 @@ describe('tournament DM prefs — REST', () => {
     const res = await getPrefs(u);
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
-      battleTypes: ['DOMINATION', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'],
+      battleTypes: ['DOMINATION', 'DOMQUEST', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'],
       competitorFormats: ['ONE_V_ONE', 'TWO_V_TWO'],
     });
   });

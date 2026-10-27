@@ -149,7 +149,7 @@ export function buildOffers(prefs: QueuePrefs, waiting: QueueEntry[]): QueueOffe
 
 const BT_LABEL = BATTLE_TYPE_LABELS;
 /** One letter per battle type for the Discord offer button id — must stay unique and stable. */
-const BT_CODE: Record<QueueBattleType, string> = { DOMINATION: 'D', CONQUEST: 'C', LAND_BATTLE: 'L', SIEGE: 'S' };
+const BT_CODE: Record<QueueBattleType, string> = { DOMINATION: 'D', DOMQUEST: 'Q', CONQUEST: 'C', LAND_BATTLE: 'L', SIEGE: 'S' };
 const FORMAT_LABEL: Record<QueueSeriesFormat, string> = { BO1: 'Bo1', BO2: 'Bo2', BO3: 'Bo3' };
 
 /** "Conquest 1v1 Bo1" — used for the offer button label; the DM bullet adds separators. */
