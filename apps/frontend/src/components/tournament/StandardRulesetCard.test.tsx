@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StandardRulesetCard } from './StandardRulesetCard';
+import { modEnforces, splitShared, StandardRulesetCard } from './StandardRulesetCard';
 import type { BattleType, StandardRuleset } from '@/lib/api.js';
 
 // The card skips its fetch when an explicit ruleset is passed; stub react-query anyway.
@@ -39,5 +39,43 @@ describe('StandardRulesetCard — only what players watch themselves', () => {
   it('names the Fruit Rules as enforced only for Land Battle, Conquest and Siege', () => {
     for (const bt of ['LAND_BATTLE', 'CONQUEST', 'SIEGE'] as const) expect(render(base, bt)).toContain('Fruit Rules');
     for (const bt of ['DOMINATION', 'DOMQUEST'] as const) expect(render(base, bt)).not.toContain('Fruit Rules');
+  });
+});
+
+describe('splitShared — shared rules once, extras per battle type', () => {
+  const common = ['10 minutes to ready up', 'No exploits'];
+
+  it('keeps what every type has as shared and lists only the differences per type', () => {
+    const { shared, extra } = splitShared([
+      { battleType: 'DOMINATION', items: [...common, '40 minute round limit'] },
+      { battleType: 'LAND_BATTLE', items: [...common, '40 minute round limit', 'Attack at all times'] },
+      { battleType: 'SIEGE', items: [...common, '30 minute round limit'] },
+    ]);
+    expect(shared).toEqual(common);
+    expect(extra).toEqual([
+      { battleType: 'DOMINATION', items: ['40 minute round limit'] },
+      { battleType: 'LAND_BATTLE', items: ['40 minute round limit', 'Attack at all times'] },
+      { battleType: 'SIEGE', items: ['30 minute round limit'] },
+    ]);
+  });
+
+  it('leaves out types that add nothing, and a single type is all shared', () => {
+    const two = splitShared([
+      { battleType: 'DOMINATION', items: [...common, '40 minute round limit'] },
+      { battleType: 'LAND_BATTLE', items: [...common, '40 minute round limit', 'Attack at all times'] },
+    ]);
+    expect(two.shared).toEqual([...common, '40 minute round limit']);
+    expect(two.extra).toEqual([{ battleType: 'LAND_BATTLE', items: ['Attack at all times'] }]);
+    expect(splitShared([{ battleType: 'SIEGE', items: common }])).toEqual({ shared: common, extra: [] });
+  });
+});
+
+describe('modEnforces — the Fruit Rules only where they apply', () => {
+  it('names the Fruit Rules for all, none or some of the selected types', () => {
+    expect(modEnforces(['CONQUEST', 'SIEGE'])).toBe('the lobby settings, the bans and the Fruit Rules in the arena modes');
+    expect(modEnforces(['DOMINATION', 'DOMQUEST'])).toBe('the lobby settings and the bans in the arena modes');
+    expect(modEnforces(['DOMINATION', 'LAND_BATTLE', 'CONQUEST', 'SIEGE'])).toBe(
+      'the lobby settings and the bans in the arena modes, plus the Fruit Rules in Land Battle, Conquest and Siege',
+    );
   });
 });

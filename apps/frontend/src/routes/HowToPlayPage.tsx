@@ -1,21 +1,29 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
+import { BATTLE_TYPES } from '@rizzotto/types';
 import { PageShell } from '@/components/layout/PageShell';
-import { getStandardRuleset } from '@/lib/api';
-import { STANDARD_RULESET } from '@/components/tournament/StandardRulesetCard';
+import {
+  joinNames,
+  PerBattleType,
+  splitShared,
+  useStandardRulesets,
+} from '@/components/tournament/StandardRulesetCard';
 import { REPLACED_MODS, RIZZOTTOVERSE_INVITE, steamWorkshopUrl, useArenaMod } from '@/lib/arenaMod';
 
 /**
  * How to Play: one page for new and existing players, from installing RizzOtto's Arena Mod to a reported
- * result. Rule cards, the required-mod notices and onboarding link here. The rules in section 3 come from
- * the live Standard Rulesets (Domination's conduct for every type, Land Battle's extra rules of play), so an
- * admin edit shows up here too.
+ * result. Rule cards, the required-mod notices and onboarding link here ("Set by the mod" → #mod).
+ *
+ * Section 2 describes the mod from its Workshop description (tww3-modding:
+ * domquest/workshop/description_en.txt); keep the two in step when the mod changes. The lobby settings
+ * there and the rules in section 4 come from the live Standard Rulesets of all battle types, split into
+ * what every type shares and what each adds, so an admin edit shows up here too.
  */
 
 const SECTIONS = [
   { id: 'install', title: 'Install the mod' },
-  { id: 'arena-modes', title: 'The arena modes' },
+  { id: 'mod', title: "What's in the mod" },
+  { id: 'domquest', title: 'Domquest' },
   { id: 'rules', title: 'Rules you follow yourself' },
   { id: 'matches', title: 'Playing a match on rizzotto.gg' },
   { id: 'faq', title: 'FAQ' },
@@ -53,6 +61,10 @@ function Screenshot({ src, alt, caption }: { src: string; alt: string; caption: 
   );
 }
 
+function SubHeading({ children }: { children: ReactNode }) {
+  return <h3 className="pt-2 font-display text-lg text-rizzotto-stone-100">{children}</h3>;
+}
+
 function Faq({ q, children }: { q: string; children: ReactNode }) {
   return (
     <div>
@@ -68,18 +80,9 @@ const code = 'rounded bg-rizzotto-iron-800 px-1 py-0.5 font-mono text-[0.85em] t
 
 export function HowToPlayPage() {
   const mod = useArenaMod();
-  const { data: domination } = useQuery({
-    queryKey: ['standard-ruleset', 'DOMINATION', 'ONE_V_ONE'],
-    queryFn: () => getStandardRuleset('DOMINATION', 'ONE_V_ONE'),
-    staleTime: 5 * 60 * 1000,
-  });
-  const { data: landBattle } = useQuery({
-    queryKey: ['standard-ruleset', 'LAND_BATTLE', 'ONE_V_ONE'],
-    queryFn: () => getStandardRuleset('LAND_BATTLE', 'ONE_V_ONE'),
-    staleTime: 5 * 60 * 1000,
-  });
-  const commonConduct = domination?.conduct ?? STANDARD_RULESET.conduct;
-  const landBattleOnly = (landBattle?.conduct ?? []).filter((c) => !commonConduct.includes(c));
+  const rulesets = useStandardRulesets(BATTLE_TYPES);
+  const conduct = splitShared(rulesets.map((r) => ({ battleType: r.battleType, items: r.ruleset.conduct })));
+  const settings = splitShared(rulesets.map((r) => ({ battleType: r.battleType, items: r.ruleset.settings })));
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -97,8 +100,8 @@ export function HowToPlayPage() {
           <p className="leading-relaxed text-rizzotto-stone-300">
             Every game on RizzOtto&apos;s Arena is played with{' '}
             <ExternalLink href={mod.url}>RizzOtto&apos;s Arena Mod</ExternalLink>. It adds the arena modes to the
-            custom battle lobby and enforces their settings and rules, so it is the only mod you need. Here is
-            everything from installing it to your first reported result.
+            custom battle lobby, enforces their settings, bans and the Fruit Rules, and brings our map pools, so it is
+            the only mod you need. Here is everything from installing it to your first reported result.
           </p>
           <nav aria-label="Contents" className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-4">
             <ol className="space-y-1 text-sm">
@@ -143,72 +146,162 @@ export function HowToPlayPage() {
           </ol>
         </Section>
 
-        <Section id="arena-modes" number={2} title="The arena modes">
+        <Section id="mod" number={2} title="What's in the mod">
+          <p>
+            The mod sets up the arena&apos;s game modes the way the Standard Rules want them, so nobody can host a
+            wrong lobby or bring an illegal army by accident. It also brings our map pools and fixes a few units and
+            abilities.
+          </p>
+
+          <SubHeading>The arena modes</SubHeading>
           <p>
             The first buttons in the lobby&apos;s battle type bar are the arena modes, with the aubergine behind the
             icon: Domquest, Land Battle, Conquest, Domination, Siege Battle and Free-For-All Battle. Host every arena
             game in one of these. The game&apos;s own modes follow as &quot;Vanilla …&quot; and have none of the
-            arena&apos;s rules.
+            arena&apos;s rules. Ambush, Chokepoint, Subterranean, Survival and Minor Settlement battles are not shown.
           </p>
           <Screenshot
             src="/img/how-to-play/arena-mode-buttons.jpg"
             alt="The battle type bar in the lobby: the six arena modes with the aubergine, then the Vanilla modes"
             caption="The arena modes come first, the Vanilla modes after them."
           />
+
+          <SubHeading>Lobby settings</SubHeading>
           <p>
-            In the arena modes the mod fixes the lobby settings and applies the bans of the Standard Ruleset. In Land
-            Battle, Conquest, Siege Battle and Free-For-All Battle it also enforces the{' '}
-            <Link to="/fruit-rules" className={linkClass}>
-              Fruit Rules
-            </Link>
-            : a unit that would break a limit is greyed out, and Ready stays blocked until the army is legal.
+            The mod locks the lobby to the settings of the Standard Rules
+            {settings.shared.length > 0 ? <>: {joinNames(settings.shared)} in every mode, plus</> : ':'}
           </p>
-          <h3 className="pt-2 font-display text-lg text-rizzotto-stone-100">Domquest</h3>
+          <PerBattleType extra={settings.extra} inline />
+
+          <SubHeading>Bans</SubHeading>
+          <p>
+            Undead Legions, Skreech Verminking and The Masque of Slaanesh (also as the Changeling&apos;s form) are
+            banned in the arena modes, so you can&apos;t pick them.
+          </p>
+
+          <SubHeading>Fruit Rules</SubHeading>
+          <p>
+            In Land Battle, Conquest, Siege Battle and Free-For-All Battle the mod enforces the Fruit Rules v10: units,
+            mounts and upgrades that would break a limit are greyed out, the unit tooltip lists the limits, and Ready
+            stays blocked while an army breaks a rule. The{' '}
+            <Link to="/fruit-rules" className={linkClass}>
+              Fruit Rules page
+            </Link>{' '}
+            shows how we read the rules and every limit per faction.
+          </p>
+
+          <SubHeading>Fixes instead of bans</SubHeading>
+          <p>Instead of banning them, the mod fixes these. The fixes apply in every mode, the Vanilla ones included:</p>
+          <ul className={ul}>
+            <li>Ghostly Howl (Banshees) can be used once per battle.</li>
+            <li>Chalice of Blood and Darkness only triggers when an enemy spellcaster within 100 m casts.</li>
+            <li>
+              Dieter Helsnicht on Undead Manticore, the Zombie Dragon and the Spellweaver (Beasts) on Great Eagle can no
+              longer capture points, like other flying units.
+            </li>
+            <li>Dechala keeps the melee attack penalty of The Praise of Slaanesh after switching from Dance of Destruction.</li>
+            <li>Coeddil is in the Extended Roster again, like the other campaign-only characters.</li>
+          </ul>
+
+          <SubHeading>Maps</SubHeading>
+          <p>
+            The map lists in the arena modes are the arena&apos;s map pools from rizzotto.gg, so the lobby offers the
+            same maps as the site. Free-For-All shows all of the game&apos;s FFA maps. The Total Tavern Domination maps
+            of our pool are included, so you don&apos;t need that map pack any more; Vanilla Domination lists them too,
+            as &quot;[TT] …&quot;.
+          </p>
+
+          <SubHeading>In battle</SubHeading>
+          <p>
+            In Domquest and the arena&apos;s Domination, Conquest and Siege Battle, the team list shows each
+            army&apos;s gold value on the battlefield instead of the damage value: every unit&apos;s cost times its
+            remaining health.
+          </p>
+
+          <SubHeading>In every mode</SubHeading>
+          <ul className={ul}>
+            <li>Army setup: much less lag when you move the mouse over unit cards and when you add units.</li>
+            <li>The intro movies at startup are skipped.</li>
+          </ul>
+
+          <SubHeading>Credits</SubHeading>
+          <p>
+            Maps from the Total Tavern Domination Map Pack, included with the permission of WakaWaka3000. Map makers:
+            WakaWaka3000, Bob dat Builder, Sunshyne, The Space Pope, Sleepylion, HitmanHippo, HammeredZebra and
+            Chromosumo. The Fruit Rules v10 (Cranberry Edition) are the community ruleset for competitive Conquest and
+            Land Battle. Thanks to Dustman for continued support in the project.
+          </p>
+        </Section>
+
+        <Section id="domquest" number={3} title="Domquest">
           <p>
             Domquest brings Domination and Conquest players together: think Conquest on the Domination engine. Most of
             the battle is decided by a Conquest-sized starting army; the small reinforcing army works like a sideboard
             to answer the army your opponent brought.
           </p>
+          <SubHeading>Army setup</SubHeading>
           <ul className={ul}>
-            <li>Starting army 12,400 gold, reinforcing army up to 5,600 gold. Ultra unit size, unit caps on, character loading off, 600 tickets.</li>
-            <li>One capture point, equally far from both armies, and one reinforcement point per side, at the back of your side.</li>
+            <li>Starting army: 12,400 gold.</li>
             <li>
-              Reinforcements are paid from a budget that starts at 0 and grows by 10 per second, up to the value of your
-              reinforcing army: a full 5,600 takes a bit over 9 minutes. Army abilities, unit abilities and buildings are
-              paid from it too.
+              Reinforcing army: up to 5,600 gold. You can add more, but you can&apos;t click Ready until it is back at
+              5,600 or less.
             </li>
-            <li>Each reinforcing unit can be called in once. Units can&apos;t be withdrawn, and one that was on the field can&apos;t come back.</li>
-            <li>The maps are the Domquest versions of the arena&apos;s Domination maps (&quot;Domquest - …&quot; in the map list).</li>
+            <li>Ultra unit size, unit caps on, character loading off and 600 tickets, all fixed by the mod.</li>
+          </ul>
+          <SubHeading>The battlefield</SubHeading>
+          <ul className={ul}>
+            <li>One capture point, equally far from both armies. The map&apos;s other capture points are switched off.</li>
+            <li>
+              One reinforcement point per side, at the back of your side and as far from the capture point as your
+              opponent&apos;s. The mod picks both points; the map&apos;s other reinforcement points can&apos;t be used.
+            </li>
+            <li>
+              The maps are the Domquest versions of the arena&apos;s Domination maps (&quot;Domquest - …&quot; in the
+              map list).
+            </li>
           </ul>
           <Screenshot
             src="/img/how-to-play/domquest-map-setup.jpg"
             alt="Map setup with Domquest selected: the Domquest maps and the fixed lobby settings"
             caption="Domquest selected: the Domquest maps and the settings the mod fixes."
           />
+          <SubHeading>Reinforcements</SubHeading>
+          <ul className={ul}>
+            <li>
+              They are paid from a budget that starts at 0 and grows by 10 per second, up to the value of your
+              reinforcing army. The supplies counter shows this budget. Army abilities, unit abilities and buildings are
+              paid from it too.
+            </li>
+            <li>A full 5,600 reinforcing army takes a bit over 9 minutes to earn.</li>
+            <li>
+              Each unit of your reinforcing army can be called in once. Units can&apos;t be withdrawn, and a unit that
+              was on the field can&apos;t be called in again, even after it fled.
+            </li>
+          </ul>
+          <p>
+            These rules apply to human players. Against the AI they don&apos;t: it withdraws units and calls them in
+            again as in normal Domination.
+          </p>
         </Section>
 
-        <Section id="rules" number={3} title="Rules you follow yourself">
+        <Section id="rules" number={4} title="Rules you follow yourself">
           <p>The mod can&apos;t check everything. These are on you, in every battle type:</p>
           <ul className={ul}>
             <li>Host the game in the arena mode (the aubergine button), with only RizzOtto&apos;s Arena Mod enabled.</li>
-            {commonConduct.map((c) => (
+            {conduct.shared.map((c) => (
               <li key={c}>{c}</li>
             ))}
           </ul>
-          {landBattleOnly.length > 0 && (
+          {conduct.extra.length > 0 && (
             <>
-              <p>In Land Battle, also:</p>
-              <ul className={ul}>
-                {landBattleOnly.map((c) => (
-                  <li key={c}>{c}</li>
-                ))}
-              </ul>
+              <p>And per battle type:</p>
+              <PerBattleType extra={conduct.extra} />
             </>
           )}
           <p>A tournament can add rules of its own; you&apos;ll find them on its page.</p>
         </Section>
 
-        <Section id="matches" number={4} title="Playing a match on rizzotto.gg">
+        <Section id="matches" number={5} title="Playing a match on rizzotto.gg">
           <ol className={ol}>
             <li>
               Find a game: sign up for a{' '}

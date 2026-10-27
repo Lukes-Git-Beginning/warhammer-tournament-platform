@@ -11,8 +11,10 @@
  * The card fetches the live values and falls back to STANDARD_RULESET while loading or if nothing is
  * configured. Pass an explicit `ruleset` to render given values without fetching (the admin editor's
  * live preview). Host customisations still go into the "Custom Rules" / "Custom Restrictions" fields.
+ *
+ * StandardRulesOverview shows several battle types in one box (Open Play's queue) instead of one card each.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { getStandardRuleset, type BattleType, type StandardRuleset } from '@/lib/api.js';
 import { BATTLE_TYPE_LABELS } from '@rizzotto/types';
@@ -38,10 +40,70 @@ export const STANDARD_RULESET: StandardRuleset = {
   ],
 };
 
+const typeLabel = (bt: string) => BATTLE_TYPE_LABEL[bt] ?? bt;
+
+/** "A", "A and B", "A, B and C". */
+export function joinNames(names: string[]): string {
+  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** What the mod enforces for these battle types, as the middle of "RizzOtto's Arena Mod enforces …". */
+export function modEnforces(battleTypes: string[]): string {
+  const fruit = battleTypes.filter((bt) => FRUIT_RULES_TYPES.has(bt));
+  if (fruit.length === 0) return 'the lobby settings and the bans in the arena modes';
+  if (fruit.length === battleTypes.length) return 'the lobby settings, the bans and the Fruit Rules in the arena modes';
+  return `the lobby settings and the bans in the arena modes, plus the Fruit Rules in ${joinNames(fruit.map(typeLabel))}`;
+}
+
+/**
+ * Splits one list per battle type (conduct, settings) into what all of them share (in the first list's
+ * order) and what each one adds. Types that add nothing are left out of `extra`.
+ */
+export function splitShared<T extends string>(
+  lists: { battleType: T; items: string[] }[],
+): { shared: string[]; extra: { battleType: T; items: string[] }[] } {
+  const shared = (lists[0]?.items ?? []).filter((c) => lists.every((r) => r.items.includes(c)));
+  const extra = lists
+    .map((r) => ({ battleType: r.battleType, items: r.items.filter((c) => !shared.includes(c)) }))
+    .filter((r) => r.items.length > 0);
+  return { shared, extra };
+}
+
+/**
+ * The live Standard Rulesets of several battle types (same query keys as the card, so they share the
+ * cache). `rulesets` stays empty until every type has answered, so nothing regroups when the last one
+ * arrives; a type whose fetch fails falls back to STANDARD_RULESET.
+ */
+export function useStandardRulesets(
+  battleTypes: readonly BattleType[],
+  competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO',
+): { battleType: BattleType; ruleset: StandardRuleset }[] {
+  const results = useQueries({
+    queries: battleTypes.map((bt) => ({
+      queryKey: ['standard-ruleset', bt, competitorFormat ?? 'ONE_V_ONE'],
+      queryFn: () => getStandardRuleset(bt, competitorFormat),
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+  if (!results.every((r) => r.data !== undefined || r.isError)) return [];
+  return battleTypes.map((bt, i) => ({ battleType: bt, ruleset: results[i]?.data ?? STANDARD_RULESET }));
+}
+
 function Label({ children }: { children: React.ReactNode }) {
   return (
     <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80 sm:w-40">
       {children}
+    </span>
+  );
+}
+
+function ModNote({ battleTypes }: { battleTypes: string[] }) {
+  return (
+    <span className="text-stone-400">
+      RizzOtto&apos;s Arena Mod enforces {modEnforces(battleTypes)}, so you don&apos;t need to check them yourself.{' '}
+      <Link to="/how-to-play" hash="mod" className="text-rizzotto-gold-400 underline">
+        How to Play
+      </Link>
     </span>
   );
 }
@@ -67,10 +129,7 @@ export function StandardRulesetCard({
   });
   const rs = ruleset ?? data ?? STANDARD_RULESET;
   const icon = battleTypeIconSrc(battleType);
-  const title = battleType ? `Standard ${BATTLE_TYPE_LABEL[battleType] ?? battleType} Ruleset` : 'Standard Ruleset';
-  const enforced = FRUIT_RULES_TYPES.has(battleType ?? '')
-    ? 'the lobby settings, the bans and the Fruit Rules'
-    : 'the lobby settings and the bans';
+  const title = battleType ? `Standard ${typeLabel(battleType)} Ruleset` : 'Standard Ruleset';
   const duties = [ARENA_MODE_DUTY, ...rs.conduct];
 
   return (
@@ -107,15 +166,88 @@ export function StandardRulesetCard({
           </div>
           <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
             <Label>Set by the mod</Label>
-            <span className="text-stone-400">
-              RizzOtto&apos;s Arena Mod enforces {enforced} in the arena modes, so you don&apos;t need to check
-              them yourself.{' '}
-              <Link to="/how-to-play" className="text-rizzotto-gold-400 underline">
-                How to Play
-              </Link>
-            </span>
+            <ModNote battleTypes={[battleType ?? 'DOMINATION']} />
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One row per battle type: its icon and name, then its items as a list, or on one line when there is
+ * only one or `inline` is set (short items such as lobby settings).
+ */
+export function PerBattleType({
+  extra,
+  inline = false,
+}: {
+  extra: { battleType: BattleType; items: string[] }[];
+  inline?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      {extra.map(({ battleType, items }) => {
+        const icon = battleTypeIconSrc(battleType);
+        return (
+          <div key={battleType} className="flex flex-col gap-1 sm:flex-row sm:gap-3">
+            <span className="flex shrink-0 items-center gap-1.5 self-start font-medium text-rizzotto-gold-400 sm:w-32">
+              {icon && <img src={icon} alt="" className="h-4 w-4 object-contain" />}
+              {typeLabel(battleType)}
+            </span>
+            {inline || items.length === 1 ? (
+              <span className="text-stone-300">{items.join(', ')}</span>
+            ) : (
+              <ul className="list-disc space-y-0.5 pl-5 text-stone-300">
+                {items.map((d) => (
+                  <li key={d}>{d}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Heading({ children }: { children: React.ReactNode }) {
+  return <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80">{children}</p>;
+}
+
+/**
+ * The Standard Rules of several battle types in one box: what they all share is listed once, and each
+ * type lists only what it adds (Siege's shorter round limit, Land Battle's rules of play).
+ */
+export function StandardRulesOverview({
+  battleTypes,
+  competitorFormat,
+}: {
+  battleTypes: BattleType[];
+  competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
+}) {
+  const rulesets = useStandardRulesets(battleTypes, competitorFormat);
+  const { shared, extra } = splitShared(rulesets.map((r) => ({ battleType: r.battleType, items: r.ruleset.conduct })));
+
+  return (
+    <div className="space-y-3 rounded-md border border-stone-800 bg-stone-900/50 p-4 text-sm leading-relaxed">
+      <div>
+        <Heading>Your part</Heading>
+        <ul className="list-disc space-y-0.5 pl-5 text-stone-300">
+          {[ARENA_MODE_DUTY, ...shared].map((d) => (
+            <li key={d}>{d}</li>
+          ))}
+        </ul>
+      </div>
+      {extra.length > 0 && (
+        <div>
+          <Heading>Per battle type</Heading>
+          <PerBattleType extra={extra} />
+        </div>
+      )}
+      <div>
+        <Heading>Set by the mod</Heading>
+        <ModNote battleTypes={battleTypes} />
       </div>
     </div>
   );

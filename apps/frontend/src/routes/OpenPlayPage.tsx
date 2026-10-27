@@ -44,7 +44,7 @@ import { QueueStatusCard } from '../components/open-play/QueueStatusCard';
 import { WeekAvailabilityGrid } from '../components/open-play/WeekAvailabilityGrid';
 import { AvailabilityHeatmap } from '../components/open-play/AvailabilityHeatmap';
 import { ChallengeCalendar } from '../components/open-play/ChallengeCalendar';
-import { StandardRulesetCard } from '../components/tournament/StandardRulesetCard';
+import { StandardRulesetCard, StandardRulesOverview } from '../components/tournament/StandardRulesetCard';
 import { RequiredModsNotice } from '../components/tournament/RequiredModsNotice';
 import { PageBackdrop } from '../components/layout/PageBackdrop';
 
@@ -447,18 +447,16 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
         </p>
       </div>
 
-      {/* Standard Rules — one tile per selected battle type, side by side. The team size (1v1 /
-          2v2) picks the ruleset variant; there are never more than three tiles. */}
+      {/* Standard Rules for the selected battle types in one box: shared rules once, then what each
+          type adds. The team size (1v1 / 2v2) picks the ruleset variant. */}
       <div className="space-y-2">
         <p className="text-sm font-medium text-stone-300">Standard Rules</p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {battleTypes
+        <StandardRulesOverview
+          battleTypes={battleTypes
             .slice()
-            .sort((a, b) => OP_BATTLE_TYPES.findIndex((o) => o.value === a) - OP_BATTLE_TYPES.findIndex((o) => o.value === b))
-            .map((bt) => (
-              <StandardRulesetCard key={bt} compact battleType={bt} competitorFormat={competitorFormat} />
-            ))}
-        </div>
+            .sort((a, b) => OP_BATTLE_TYPES.findIndex((o) => o.value === a) - OP_BATTLE_TYPES.findIndex((o) => o.value === b))}
+          competitorFormat={competitorFormat}
+        />
       </div>
 
       <div className="space-y-2">

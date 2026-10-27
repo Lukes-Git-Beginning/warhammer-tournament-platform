@@ -17,7 +17,11 @@ proofread before release.
 - Rule cards show only what players watch themselves (arena mode with the mod, conduct incl. Land Battle's rules
   of play) plus a note on what the mod enforces. The Fruit Rules links (Drive PDFs) are gone from the cards.
 - Required-mod notice: RizzOtto's Arena Mod for every battle type, with version and "How to install".
-- Header tabs **How to Play** (new page) and **Fruit Rules** (public, in the sitemap, new intro).
+- Header tabs **How to Play** (new page: install, what's in the mod, Domquest, rules, a match, FAQ) and **Fruit Rules**
+  (public, in the sitemap, new intro). "What's in the mod" and "Domquest" follow the Workshop description
+  (`tww3-modding/domquest/workshop/description_en.txt`); when the mod changes, update both. Its lobby settings and
+  the rules come from the live Standard Rulesets, split into what every type shares and what each adds.
+- Open Play: the Standard Rules of the selected battle types in one box instead of one card each.
 - Onboarding step "Discord + mod" before the tour.
 - Release banner for existing players who are not on the RizzOttoverse Discord server, dismissable for good.
 - Discord login always asks for `guilds.join`, so logging in adds players to the server.

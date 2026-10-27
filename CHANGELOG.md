@@ -10,12 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 ### Added
 - **RizzOtto's Arena Mod.** Every game on the Arena now runs with one mod. It adds the arena modes to the custom battle lobby (Domquest, Land Battle, Conquest, Domination, Siege Battle and Free-For-All Battle) with their maps, lobby settings and bans, and enforces the Fruit Rules in Land Battle, Conquest and Siege. You no longer need the Total Tavern map pack or Loupi's Fruit Rules mod, so disable both. Get it on the Steam Workshop; the new How to Play page walks you through it.
 - **Domquest, our own battle type.** Think Conquest on the Domination engine: a Conquest-sized starting army, a small reinforcing army that works like a sideboard, and one capture point in the middle. It has its own skill rating, leaderboards, quarterly final, Open Play queue and Standard Ruleset. Your start there comes from your Domination rating, or from Conquest if you have played more Conquest.
-- **How to Play.** A new page in the header: installing the mod, the arena modes, the rules you still follow yourself and how a match on the site works.
+- **How to Play.** A new page in the header: installing the mod, everything that's in it, how Domquest works, the rules you still follow yourself and how a match on the site works.
 - **The Fruit Rules page.** Also in the header now: how we read the Fruit Rules v10, and every limit per faction for planning your armies.
 
 ### Changed
 - **Siege has the Fruit Rules too**, enforced by the mod.
-- **The rule cards show only what you watch yourself:** hosting in the arena mode with the mod, and the conduct rules. The mod takes care of the settings and the bans.
+- **The rule cards show only what you watch yourself:** hosting in the arena mode with the mod, and the conduct rules. The mod takes care of the settings and the bans. Open Play shows the rules of your battle types in one box: what they share once, then what each one adds.
 - **Logging in with Discord adds you to our Discord server**, so match notifications can reach you. Discord asks you once, the next time you log in.
 - **New players get a step for Discord and the mod** when they first sign up.
 - **If you had every battle type selected** for Open Play or for tournament DMs, Domquest is now included too. A narrower selection stays as you set it.
