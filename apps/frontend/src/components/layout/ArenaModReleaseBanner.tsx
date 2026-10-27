@@ -7,18 +7,17 @@ import { RIZZOTTOVERSE_INVITE } from '@/lib/arenaMod';
 const NOTICE = 'arena-mod-release';
 
 /**
- * One-time notice that RizzOtto's Arena Mod is out, for existing players who aren't on the RizzOttoverse
+ * One-time notice that RizzOtto's Arena Mod is out, for logged-in players who aren't on the RizzOttoverse
  * Discord server (members hear about it there). The server decides who sees it; dismissing it hides it for
- * good. New players get the same hints in onboarding instead, so it waits until onboarding is done.
+ * good. Not tied to onboarded_at: the onboarding overlay is unmounted, so almost nobody has that set.
  */
 export function ArenaModReleaseBanner() {
   const { data: user } = useAuthQuery();
   const queryClient = useQueryClient();
-  const onboarded = !!user && user.onboarded_at !== null;
   const { data } = useQuery({
     queryKey: ['site-notices', user?.id],
     queryFn: getSiteNotices,
-    enabled: onboarded,
+    enabled: !!user,
     staleTime: 30 * 60 * 1000,
   });
   const dismiss = useMutation({
@@ -26,7 +25,7 @@ export function ArenaModReleaseBanner() {
     onMutate: () => queryClient.setQueryData(['site-notices', user?.id], { notices: [] }),
   });
 
-  if (!onboarded || !data?.notices.includes(NOTICE)) return null;
+  if (!user || !data?.notices.includes(NOTICE)) return null;
 
   const button =
     'rounded border border-rizzotto-gold-500/40 px-3 py-1.5 text-xs text-rizzotto-gold-400 transition-colors hover:border-rizzotto-gold-400 hover:text-rizzotto-gold-300';
