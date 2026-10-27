@@ -149,8 +149,8 @@ export function HowToPlayPage() {
         <Section id="mod" number={2} title="What's in the mod">
           <p>
             The mod sets up the arena&apos;s game modes the way the Standard Rules want them, so nobody can host a
-            wrong lobby or bring an illegal army by accident. It also brings our map pools and fixes a few units and
-            abilities.
+            wrong lobby or bring an illegal army by accident. It also brings our map pools, one balancing change and a
+            few bug fixes.
           </p>
 
           <SubHeading>The arena modes</SubHeading>
@@ -190,19 +190,6 @@ export function HowToPlayPage() {
             shows how we read the rules and every limit per faction.
           </p>
 
-          <SubHeading>Fixes instead of bans</SubHeading>
-          <p>Instead of banning them, the mod fixes these. The fixes apply in every mode, the Vanilla ones included:</p>
-          <ul className={ul}>
-            <li>Ghostly Howl (Banshees) can be used once per battle.</li>
-            <li>Chalice of Blood and Darkness only triggers when an enemy spellcaster within 100 m casts.</li>
-            <li>
-              Dieter Helsnicht on Undead Manticore, the Zombie Dragon and the Spellweaver (Beasts) on Great Eagle can no
-              longer capture points, like other flying units.
-            </li>
-            <li>Dechala keeps the melee attack penalty of The Praise of Slaanesh after switching from Dance of Destruction.</li>
-            <li>Coeddil is in the Extended Roster again, like the other campaign-only characters.</li>
-          </ul>
-
           <SubHeading>Maps</SubHeading>
           <p>
             The map lists in the arena modes are the arena&apos;s map pools from rizzotto.gg, so the lobby offers the
@@ -218,11 +205,22 @@ export function HowToPlayPage() {
             remaining health.
           </p>
 
-          <SubHeading>In every mode</SubHeading>
+          <SubHeading>Balancing</SubHeading>
+          <p>Ghostly Howl (Banshees) can be used once per battle, in every mode, the Vanilla ones included.</p>
+
+          <SubHeading>Bug fixes</SubHeading>
+          <p>In every mode, the Vanilla ones included:</p>
           <ul className={ul}>
+            <li>Chalice of Blood and Darkness only triggers when an enemy spellcaster within 100 m casts.</li>
+            <li>
+              Dieter Helsnicht on Undead Manticore, the Zombie Dragon and the Spellweaver (Beasts) on Great Eagle can no
+              longer capture points, like other flying units.
+            </li>
+            <li>Dechala keeps the melee attack penalty of The Praise of Slaanesh after switching from Dance of Destruction.</li>
+            <li>Coeddil is in the Extended Roster again, like the other campaign-only characters.</li>
             <li>Army setup: much less lag when you move the mouse over unit cards and when you add units.</li>
-            <li>The intro movies at startup are skipped.</li>
           </ul>
+          <p>The mod also skips the intro movies at startup.</p>
 
           <SubHeading>Credits</SubHeading>
           <p>
