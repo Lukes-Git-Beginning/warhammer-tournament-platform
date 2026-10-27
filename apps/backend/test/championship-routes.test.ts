@@ -117,7 +117,7 @@ describe('Championship finals routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/championships/quarterly?period=2099-Q1&competitorFormat=ONE_V_ONE' });
     expect(res.statusCode).toBe(200);
     const body = res.json<{ battleTypes: Array<{ battleType: string; size: number; belowFloor: boolean; tournament: { slug: string } | null }> }>();
-    expect(body.battleTypes.map((b) => b.battleType).sort()).toEqual(['CONQUEST', 'DOMINATION', 'LAND_BATTLE', 'SIEGE']);
+    expect(body.battleTypes.map((b) => b.battleType).sort()).toEqual(['CONQUEST', 'DOMINATION', 'DOMQUEST', 'LAND_BATTLE', 'SIEGE']);
     const dom = body.battleTypes.find((b) => b.battleType === 'DOMINATION')!;
     expect(dom.size).toBe(0); // no games in the quarter
     expect(dom.belowFloor).toBe(true);
