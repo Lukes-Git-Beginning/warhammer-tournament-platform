@@ -174,8 +174,9 @@ export function StandardRulesetCard({
 }
 
 /**
- * One row per battle type: its icon and name, then its items as a list, or on one line when there is
- * only one or `inline` is set (short items such as lobby settings).
+ * One block per battle type: its icon and name, then its items. A single item or `inline` items (short
+ * ones such as lobby settings) sit on the same line as the name; a longer list goes below the name at
+ * full width, so a narrow name column doesn't leave a tall empty gap next to it.
  */
 export function PerBattleType({
   extra,
@@ -188,13 +189,16 @@ export function PerBattleType({
     <div className="space-y-2">
       {extra.map(({ battleType, items }) => {
         const icon = battleTypeIconSrc(battleType);
+        const oneLine = inline || items.length === 1;
         return (
-          <div key={battleType} className="flex flex-col gap-1 sm:flex-row sm:gap-3">
-            <span className="flex shrink-0 items-center gap-1.5 self-start font-medium text-rizzotto-gold-400 sm:w-32">
+          <div key={battleType} className={oneLine ? 'flex flex-col gap-1 sm:flex-row sm:gap-3' : 'space-y-1'}>
+            <span
+              className={`flex shrink-0 items-center gap-1.5 self-start font-medium text-rizzotto-gold-400 ${oneLine ? 'sm:w-32' : ''}`}
+            >
               {icon && <img src={icon} alt="" className="h-4 w-4 object-contain" />}
               {typeLabel(battleType)}
             </span>
-            {inline || items.length === 1 ? (
+            {oneLine ? (
               <span className="text-stone-300">{items.join(', ')}</span>
             ) : (
               <ul className="list-disc space-y-0.5 pl-5 text-stone-300">

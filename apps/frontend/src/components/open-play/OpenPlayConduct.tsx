@@ -104,10 +104,6 @@ export function OpenPlayConduct({
             <PerBattleType extra={extra} />
           </div>
         )}
-        <div>
-          <Heading>Set by the mod</Heading>
-          <ModNote battleTypes={battleTypes} />
-        </div>
       </div>
       <div className="space-y-3">
         <div>
@@ -122,6 +118,10 @@ export function OpenPlayConduct({
         <div>
           <Heading>Cancelling</Heading>
           <p className="text-stone-300">{OPEN_PLAY_CANCELLING}</p>
+        </div>
+        <div>
+          <Heading>Set by the mod</Heading>
+          <ModNote battleTypes={battleTypes} />
         </div>
       </div>
     </div>
