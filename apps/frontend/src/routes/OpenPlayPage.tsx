@@ -44,7 +44,7 @@ import { QueueStatusCard } from '../components/open-play/QueueStatusCard';
 import { WeekAvailabilityGrid } from '../components/open-play/WeekAvailabilityGrid';
 import { AvailabilityHeatmap } from '../components/open-play/AvailabilityHeatmap';
 import { ChallengeCalendar } from '../components/open-play/ChallengeCalendar';
-import { OpenPlayConduct } from '../components/open-play/OpenPlayConduct';
+import { OpenPlayConduct, OpenPlayRules } from '../components/open-play/OpenPlayConduct';
 import { RequiredModsNotice } from '../components/tournament/RequiredModsNotice';
 import { PageBackdrop } from '../components/layout/PageBackdrop';
 
@@ -448,17 +448,20 @@ function QueueTab({ userTimezone }: { userTimezone?: string }) {
         </p>
       </div>
 
-      {/* Code of conduct for the selected battle types: the rules (shared ones once, then what each
-          type adds; no tournament-only rules) and what gets a strike. The team size (1v1 / 2v2) picks
-          the ruleset variant. */}
+      {/* The rules of the selected battle types (what the mod enforces, what each type adds), then the
+          code of conduct (no tournament-only rules). The team size (1v1 / 2v2) picks the ruleset variant. */}
       <div className="space-y-2">
-        <p className="text-sm font-medium text-stone-300">Code of Conduct</p>
-        <OpenPlayConduct
+        <p className="text-sm font-medium text-stone-300">Rules</p>
+        <OpenPlayRules
           battleTypes={battleTypes
             .slice()
             .sort((a, b) => OP_BATTLE_TYPES.findIndex((o) => o.value === a) - OP_BATTLE_TYPES.findIndex((o) => o.value === b))}
           competitorFormat={competitorFormat}
         />
+      </div>
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-stone-300">Code of Conduct</p>
+        <OpenPlayConduct competitorFormat={competitorFormat} />
       </div>
 
       <div className="space-y-2">
@@ -762,7 +765,8 @@ function ChallengesTab({ currentUserId }: { currentUserId?: string }) {
   return (
     <div className="space-y-4">
       {/* Challenges have no battle type of their own yet: Domination's rules, like before. */}
-      <OpenPlayConduct battleTypes={['DOMINATION']} />
+      <OpenPlayRules battleTypes={['DOMINATION']} />
+      <OpenPlayConduct />
       <div className="flex items-center gap-2">
         <span className="text-xs text-stone-400">Format</span>
         <Select

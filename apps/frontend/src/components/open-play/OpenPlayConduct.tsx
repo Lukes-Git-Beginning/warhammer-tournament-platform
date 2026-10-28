@@ -1,14 +1,17 @@
 /**
- * Open Play's code of conduct: what players watch themselves (hosting in the arena mode with the mod,
- * the `conduct` of the selected battle types' Standard Rulesets; tournament-only conduct such as the
- * round limit is left out), what gets a strike and what a strike does, cancelling, and what the mod
- * takes care of. The strike numbers come from OPEN_PLAY_CONDUCT in @rizzotto/types, the same values
- * the backend enforces (lib/queue-penalty.ts), so the text can't drift from the code. How to Play
- * shows the same texts through the exported helpers.
+ * Open Play's rules and code of conduct, as two boxes. Rules: what the mod enforces and what each selected
+ * battle type adds on top (the `conduct` lines not every type shares, e.g. Land Battle's attacking rules).
+ * Code of conduct: what players watch themselves (hosting in the arena mode with the mod, the `conduct`
+ * every type shares; tournament-only conduct such as the round limit is left out), why strikes exist and,
+ * folded in, what gets a strike, what a strike does and cancelling. The strike numbers come from
+ * OPEN_PLAY_CONDUCT in @rizzotto/types, the same values the backend enforces (lib/queue-penalty.ts), so
+ * the text can't drift from the code. How to Play shows the same texts through the exported helpers.
  */
-import type { ReactNode } from 'react';
-import { OPEN_PLAY_CONDUCT, openPlayCooldownHours } from '@rizzotto/types';
+import { useId, useState, type ReactNode } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { BATTLE_TYPES, OPEN_PLAY_CONDUCT, openPlayCooldownHours } from '@rizzotto/types';
 import type { BattleType } from '@/lib/api.js';
+import { cn } from '@/lib/utils';
 import {
   ARENA_MODE_DUTY,
   ModNote,
@@ -91,56 +94,96 @@ function List({ items }: { items: string[] }) {
   );
 }
 
+const box = 'rounded-md border border-stone-800 bg-stone-900/50 p-4 text-sm leading-relaxed';
+
 /**
- * The box on Open Play: the rules of the selected battle types (shared ones once, then what each type
- * adds) next to the strikes.
+ * The `conduct` of every battle type, split into what all of them share (conduct for every game) and what
+ * each type adds (its own rules). Split over all types, like How to Play, so a type's own rules stay
+ * apart even when it's the only one selected.
  */
-export function OpenPlayConduct({
+function useConductSplit(competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO') {
+  const rulesets = useStandardRulesets(BATTLE_TYPES, competitorFormat);
+  return splitShared(rulesets.map((r) => ({ battleType: r.battleType, items: r.ruleset.conduct })));
+}
+
+/** The rules box on Open Play: what the mod enforces, then the selected types' own rules. */
+export function OpenPlayRules({
   battleTypes,
   competitorFormat,
 }: {
   battleTypes: BattleType[];
   competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO';
 }) {
-  const rulesets = useStandardRulesets(battleTypes, competitorFormat);
-  const { shared, extra } = splitShared(rulesets.map((r) => ({ battleType: r.battleType, items: r.ruleset.conduct })));
+  const { extra } = useConductSplit(competitorFormat);
+  const selected = battleTypes.flatMap((bt) => extra.filter((e) => e.battleType === bt));
 
   return (
-    <div className="grid gap-x-8 gap-y-3 rounded-md border border-stone-800 bg-stone-900/50 p-4 text-sm leading-relaxed lg:grid-cols-2">
-      <div className="space-y-3">
+    <div className={cn(box, 'space-y-3')}>
+      <div>
+        <Heading>Set by the mod</Heading>
+        <ModNote battleTypes={battleTypes} />
+      </div>
+      {selected.length > 0 && (
+        <div>
+          <Heading>Per battle type</Heading>
+          <PerBattleType extra={selected} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The code of conduct box on Open Play: your part and why strikes exist; the strike details and
+ * cancelling are folded in (they're on How to Play in full too).
+ */
+export function OpenPlayConduct({ competitorFormat }: { competitorFormat?: 'ONE_V_ONE' | 'TWO_V_TWO' }) {
+  const { shared } = useConductSplit(competitorFormat);
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+
+  return (
+    <div className={box}>
+      <div className="grid gap-x-8 gap-y-3 lg:grid-cols-2">
         <div>
           <Heading>Your part</Heading>
           <List items={[ARENA_MODE_DUTY, ...shared, OPEN_PLAY_CHEATING]} />
         </div>
-        {extra.length > 0 && (
-          <div>
-            <Heading>Per battle type</Heading>
-            <PerBattleType extra={extra} />
-          </div>
-        )}
-      </div>
-      <div className="space-y-3">
         <div>
           <Heading>What not to do</Heading>
           <p className="text-stone-300">{strikeWhy()}</p>
         </div>
-        <div>
-          <Heading>What gets you a strike</Heading>
-          <List items={strikeOffences()} />
-        </div>
-        <div>
-          <Heading>What a strike does</Heading>
-          <List items={strikeLadder()} />
-          <p className="mt-1 text-stone-400">{strikeDecay()}</p>
-        </div>
-        <div>
-          <Heading>Cancelling</Heading>
-          <p className="text-stone-300">{OPEN_PLAY_CANCELLING}</p>
-        </div>
-        <div>
-          <Heading>Set by the mod</Heading>
-          <ModNote battleTypes={battleTypes} />
-        </div>
+      </div>
+      <div className="mt-3 border-t border-stone-800 pt-3">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-rizzotto-gold-500/80 transition-colors hover:text-rizzotto-gold-400"
+        >
+          <ChevronRight aria-hidden="true" className={cn('size-4 transition-transform duration-200', open && 'rotate-90')} />
+          How strikes work
+        </button>
+        {open && (
+          <div id={panelId} className="mt-3 grid gap-x-8 gap-y-3 lg:grid-cols-2">
+            <div className="space-y-3">
+              <div>
+                <Heading>What gets you a strike</Heading>
+                <List items={strikeOffences()} />
+              </div>
+              <div>
+                <Heading>Cancelling</Heading>
+                <p className="text-stone-300">{OPEN_PLAY_CANCELLING}</p>
+              </div>
+            </div>
+            <div>
+              <Heading>What a strike does</Heading>
+              <List items={strikeLadder()} />
+              <p className="mt-1 text-stone-400">{strikeDecay()}</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

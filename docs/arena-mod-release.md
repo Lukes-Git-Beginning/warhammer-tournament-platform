@@ -21,9 +21,10 @@ proofread before release.
   (public, in the sitemap, new intro). "What's in the mod" and "Domquest" follow the Workshop description
   (`tww3-modding/domquest/workshop/description_en.txt`); when the mod changes, update both. Its lobby settings and
   the rules come from the live Standard Rulesets, split into what every type shares and what each adds.
-- Open Play: a **Code of Conduct** box instead of one rule card per battle type: the rules of the selected types
-  (shared ones once, then what each adds), what gets a strike, what a strike does, cancelling. How to Play has the
-  same as section 5. The strike numbers live in `OPEN_PLAY_CONDUCT` (`@rizzotto/types`), which the backend enforces.
+- Open Play: two boxes instead of one rule card per battle type. **Rules**: what the mod enforces, then what each
+  selected type adds (Land Battle's attacking rules). **Code of Conduct**: your part and why strikes exist; what
+  gets a strike, what a strike does and cancelling are folded in under "How strikes work". How to Play has it all
+  unfolded as section 5. The strike numbers live in `OPEN_PLAY_CONDUCT` (`@rizzotto/types`), which the backend enforces.
 - Standard Ruleset: new list `tournament_conduct` (round limit, "Cheating results in disqualification."), shown on
   tournaments only; migration `20261027100300` moves them out of `conduct`. Admin editor field "Conduct,
   tournaments only".
