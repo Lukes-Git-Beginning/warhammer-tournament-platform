@@ -14,6 +14,7 @@ import { PlayersReport } from './reports/PlayersReport.js';
 import { FunnelReport } from './reports/FunnelReport.js';
 import { HostsReport } from './reports/HostsReport.js';
 import { ScheduleReport } from './reports/ScheduleReport.js';
+import { QueueReport } from './reports/QueueReport.js';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -314,6 +315,7 @@ const SUB_TABS = [
   { key: 'funnel', label: 'Funnel' },
   { key: 'hosts', label: 'Hosts' },
   { key: 'schedule', label: 'Schedule' },
+  { key: 'queue', label: 'Open Play queue' },
   { key: 'underrated', label: 'Underrated' },
   { key: 'notVerified', label: 'Not verified' },
   { key: 'neverPlayed', label: 'Never played' },
@@ -321,7 +323,7 @@ const SUB_TABS = [
 ] as const;
 type SubTab = (typeof SUB_TABS)[number]['key'];
 
-/** Report window (days; 0 = all time) for the Players / Hosts / Schedule reports. */
+/** Report window (days; 0 = all time) for the Players / Hosts / Schedule / Open Play queue reports. */
 const WINDOWS = [
   { days: 7, label: '7 days' },
   { days: 30, label: '30 days' },
@@ -329,7 +331,7 @@ const WINDOWS = [
   { days: 365, label: '1 year' },
   { days: 0, label: 'All time' },
 ];
-const WINDOWED: SubTab[] = ['players', 'hosts', 'schedule'];
+const WINDOWED: SubTab[] = ['players', 'hosts', 'schedule', 'queue'];
 
 export function AdminReportsTab() {
   const [sub, setSub] = useState<SubTab>('players');
@@ -374,6 +376,7 @@ export function AdminReportsTab() {
       {sub === 'funnel' && <FunnelReport days={days} />}
       {sub === 'hosts' && <HostsReport days={days} />}
       {sub === 'schedule' && <ScheduleReport days={days} />}
+      {sub === 'queue' && <QueueReport days={days} />}
       {sub === 'underrated' && <UnderratedSection />}
       {sub === 'notVerified' && <NotSteamVerifiedSection />}
       {sub === 'neverPlayed' && <VerifiedNeverPlayedSection />}

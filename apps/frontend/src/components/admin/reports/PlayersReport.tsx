@@ -66,7 +66,7 @@ const SORTERS: Record<SortKey, (r: AdminPlayerReportRow) => number | string> = {
   lastLogin: (r) => r.lastLogin ?? '',
 };
 
-function Kpi({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+export function Kpi({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
     <div className="rounded border border-rizzotto-iron-700 bg-rizzotto-iron-900/80 px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-stone-500">{label}</div>

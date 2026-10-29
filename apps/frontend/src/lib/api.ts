@@ -1725,6 +1725,35 @@ export function getAdminScheduleReport(days: number): Promise<AdminScheduleRepor
   return apiFetch(`/api/admin/reports/schedule?days=${days}`);
 }
 
+/** One site-time day of the Open Play queue report: how that day's queue joins ended. */
+export interface AdminQueueReportDay {
+  day: string; // YYYY-MM-DD, site time
+  joins: number;
+  matched: number;
+  /** Of `matched`: an available player took the availability DM's offer. */
+  matchedViaDm: number;
+  left: number;
+  /** Removed by the queue cleanup after 30 minutes without a match. */
+  expired: number;
+  waiting: number;
+  players: number;
+  /** Players whose joins that day all ended without a match. */
+  playersWithoutGame: number;
+}
+export interface AdminQueueReport {
+  days: number;
+  timezone: string;
+  /** Newest first. */
+  daily: AdminQueueReportDay[];
+  medianWaitToMatchSec: number | null;
+  medianWaitBeforeLeavingSec: number | null;
+  joinsGrid: number[][];
+  unmatchedGrid: number[][];
+}
+export function getAdminQueueReport(days: number): Promise<AdminQueueReport> {
+  return apiFetch(`/api/admin/reports/queue?days=${days}`);
+}
+
 // #19 — underrated players: data rating vs questionnaire rating.
 export interface AdminUnderratedPlayer {
   id: string;

@@ -7,7 +7,7 @@ import {
 } from '@/lib/api.js';
 import { timezoneCounts, windowGames } from '@/lib/player-report';
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 type Layer =
   | 'tournamentAvailability'
@@ -43,7 +43,8 @@ const LAYERS: { key: Layer; label: string; hint: string }[] = [
   },
 ];
 
-function Heat({ grid }: { grid: number[][] }) {
+/** Weekday × hour heatmap (Monday first), shared with the Open Play queue report. */
+export function Heat({ grid }: { grid: number[][] }) {
   const max = Math.max(1, ...grid.flat());
   return (
     <div className="overflow-x-auto">
