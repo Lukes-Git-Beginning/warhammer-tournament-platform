@@ -2,7 +2,8 @@
  * Admin "Players" report: one row per user with what they use on the site (availability, Open Play,
  * tournaments, hosting, reliability, reachability, replays, questionnaire coverage). The admin UI
  * filters and aggregates these rows client-side (presets, funnel, KPIs, CSV, broadcast audience).
- * Plus two small aggregates: hosts and the schedule fit (availability vs. when events run).
+ * Plus two small aggregates: hosts and the schedule fit (availability vs. when events run). The Open
+ * Play queue report (admin-queue-report.ts) shares the grid helpers.
  *
  * The builders are pure (arrays in, rows out) so they are unit-testable; the loaders do the queries.
  */
@@ -521,9 +522,9 @@ export async function loadHostReport(prisma: PrismaClient, days: number): Promis
 // ---------------------------------------------------------------------------
 
 export type Grid = number[][];
-const emptyGrid = (): Grid => Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
+export const emptyGrid = (): Grid => Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
 /** Add `n` to a grid cell (cells always exist: 7 days × 24 hours). */
-function bump(grid: Grid, d: number, h: number, n = 1): void {
+export function bump(grid: Grid, d: number, h: number, n = 1): void {
   const row = grid[d];
   if (row) row[h] = (row[h] ?? 0) + n;
 }
@@ -538,7 +539,7 @@ export interface ScheduleReport {
 }
 
 /** Site-time cell of an instant. */
-function siteCell(at: Date): { d: number; h: number } {
+export function siteCell(at: Date): { d: number; h: number } {
   const c = localSlotNow(at, SITE_TZ);
   return { d: c.day_of_week, h: c.hour };
 }

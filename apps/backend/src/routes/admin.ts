@@ -39,6 +39,7 @@ import { publishChangelog, changelogChannelId } from '../lib/changelog-publish.j
 import { BroadcastAudienceSchema, resolveAdminAudience, sendBroadcast } from '../lib/broadcast.js';
 import { SkillScopeSchema } from '../lib/broadcast-audience.js';
 import { loadHostReport, loadPlayerReport, loadScheduleReport } from '../lib/admin-player-report.js';
+import { loadQueueReport } from '../lib/admin-queue-report.js';
 import {
   parseAnnouncementDestinations,
   buildTournamentFacts,
@@ -1024,6 +1025,16 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
     }
     return { days: parsed.data.days, ...(await loadScheduleReport(fastify.prisma, parsed.data.days)) };
+  });
+
+  // GET /api/admin/reports/queue?days=30 — what became of every Open Play queue join (matched, left,
+  // expired, still waiting): one row per site-time day plus weekday × hour grids of joins and misses.
+  fastify.get('/api/admin/reports/queue', async (request, reply) => {
+    const parsed = ReportDaysSchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    return { days: parsed.data.days, ...(await loadQueueReport(fastify.prisma, parsed.data.days)) };
   });
 
   // GET /api/admin/reports/underrated — #19: players whose DATA-based rating exceeds
