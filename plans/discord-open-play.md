@@ -57,6 +57,12 @@ AdminConfig `discord_open_play_guilds`, edited in Admin → Settings:
 
 The bot ignores `!join` everywhere else.
 
+**Join channel and ticker channel are separate**, and only the bot may post in the ticker channel. Otherwise a
+player's `!join` and the bot's ticker post both notify anyone who set the channel to "All messages", and deleting
+the `!join` doesn't reliably recall a push notification that already went out. With two channels, following the
+ticker (or holding the ping role) means exactly one notification per open request. `/join` creates no visible
+message at all, so it never notifies anyone.
+
 ### 3. Entry: `!join` and `/join`
 
 - `!join` in a join channel: delete the message (needs Manage Messages there), resolve the user by `discord_id`,
@@ -154,6 +160,7 @@ Each step deploys on Alex's go.
 ## What Alex and the UE admin set up
 
 - Alex: Developer Portal → Bot → "Message Content Intent" on, before step 2 deploys.
-- Alex: on RizzOttoverse, a join/ticker channel and optionally a ping role; enter them in Admin.
+- Alex: on RizzOttoverse, a join channel, a ticker channel (only the bot posts) and optionally a ping role; enter
+  them in Admin.
 - UE admin: accept the invite with View Channel, Send Messages, Embed Links, Use Application Commands, and
-  Manage Messages in the join/ticker channel; then the same Admin entry for UE.
+  Manage Messages in the join channel; a ticker channel where only the bot posts; then the same Admin entry for UE.
