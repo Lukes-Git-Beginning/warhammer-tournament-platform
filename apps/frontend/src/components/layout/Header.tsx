@@ -25,6 +25,20 @@ export function Header() {
   const navLinks = (
     <>
       <Link
+        to="/how-to-play"
+        className={NAV_LINK_CLASS}
+        activeProps={NAV_LINK_ACTIVE_PROPS}
+      >
+        How to Play
+      </Link>
+      <Link
+        to="/open-play"
+        className={NAV_LINK_CLASS}
+        activeProps={NAV_LINK_ACTIVE_PROPS}
+      >
+        Open Play
+      </Link>
+      <Link
         to="/tournaments"
         search={{ tab: 'upcoming', page: 1 }}
         className={NAV_LINK_CLASS}
@@ -40,18 +54,11 @@ export function Header() {
         Series
       </Link>
       <Link
-        to="/open-play"
+        to="/fruit-rules"
         className={NAV_LINK_CLASS}
         activeProps={NAV_LINK_ACTIVE_PROPS}
       >
-        Open Play
-      </Link>
-      <Link
-        to="/how-to-play"
-        className={NAV_LINK_CLASS}
-        activeProps={NAV_LINK_ACTIVE_PROPS}
-      >
-        How to Play
+        Fruit Rules
       </Link>
       {user && (
         <Link
@@ -82,13 +89,6 @@ export function Header() {
         activeProps={NAV_LINK_ACTIVE_PROPS}
       >
         {t('header.factions')}
-      </Link>
-      <Link
-        to="/fruit-rules"
-        className={NAV_LINK_CLASS}
-        activeProps={NAV_LINK_ACTIVE_PROPS}
-      >
-        Fruit Rules
       </Link>
       <Link
         to="/support"

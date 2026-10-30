@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { RizzottoSigil } from '@/components/icons/RizzottoSigil';
 import { Button } from '@/components/ui/button';
 import { useAuthQuery } from '@/lib/auth';
@@ -62,7 +62,9 @@ export function OnboardingWelcome({ onDone, isDone }: { onDone: () => void; isDo
         </div>
         <div className={card}>
           <h2 className="font-display text-base text-rizzotto-gold-400">{t('onboarding.welcome.mod_title')}</h2>
-          <p className="mt-2 text-sm leading-relaxed text-rizzotto-stone-300">{t('onboarding.welcome.mod_body')}</p>
+          <p className="mt-2 text-sm leading-relaxed text-rizzotto-stone-300">
+            <Trans i18nKey="onboarding.welcome.mod_body" components={{ b: <strong className="text-rizzotto-stone-100" /> }} />
+          </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <a href={mod.url} target="_blank" rel="noopener noreferrer" className={linkButton}>
               {t('onboarding.welcome.mod_cta')} ↗

@@ -74,7 +74,7 @@ proofread before release.
 Hey! RizzOtto's Arena Mod is out on the Steam Workshop, and from now on every game on RizzOtto's Arena runs with it.
 
 - One mod for everything: the arena modes in the custom battle lobby, our map pools, the lobby settings and bans, and the Fruit Rules in Land Battle, Conquest and now Siege.
-- You no longer need the Total Tavern map pack or Loupi's Fruit Rules mod. Disable both and enable only the arena mod.
+- You no longer need the Total Tavern map pack or Loupi's Fruit Rules mod. Disable both and enable only the arena mod. Thanks to the creators of both mods for their permission and support!
 - New battle type Domquest: think Conquest on the Domination engine, with a Conquest-sized army, a small reinforcing army as a sideboard and one capture point in the middle. It has its own rating, leaderboards and queue.
 
 How to install it and everything else: <https://rizzotto.gg/how-to-play>

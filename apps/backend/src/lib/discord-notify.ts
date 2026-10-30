@@ -1627,8 +1627,9 @@ export async function notifyAvailabilityPing(
 }
 
 function formatDuration(seconds: number): string {
-  if (seconds >= 86400) {
-    const d = Math.round(seconds / 86400);
+  // Days only from two whole days on, so a 24-hour cooldown reads "24 hours", as on How to Play.
+  if (seconds >= 2 * 86400 && seconds % 86400 === 0) {
+    const d = seconds / 86400;
     return `${d} day${d === 1 ? '' : 's'}`;
   }
   if (seconds >= 3600) {
@@ -1667,7 +1668,7 @@ export async function notifyQueueWarning(discordUserId: string, reason: QueueStr
         `its page instead. ⚔️`
       : `We noticed you've joined and left the Open Play queue a few times right after queueing. ` +
         `We understand that real life happens, and it's certainly better to leave than to go AFK ` +
-        `while queued. Nothing happens this time — just please try to avoid it when you can, since ` +
+        `while queued. Nothing happens this time. Just please try to avoid it when you can, since ` +
         `leaving right after queueing can leave other players hanging. Thanks for keeping matchmaking smooth! ⚔️`;
   try {
     await sendDm(discordUserId, `**[RizzOtto's Arena] 👋 Quick heads-up**\n\n${body}${conductLine()}`);
@@ -1690,9 +1691,11 @@ export async function notifyQueueTimeout(
   const cooldown = lifted
     ? `you can't join the queue until an admin lifts your cooldown`
     : `you're on a **${formatDuration(timeoutSeconds)}** cooldown`;
+  // The strike record is shared, so the earlier strike may have been for leaving the queue: no "again".
   const body =
     reason === 'no-show'
-      ? `You didn't pick your faction in time again, so your Open Play match was cancelled and ${cooldown}.` +
+      ? `You didn't pick your faction in time, so your Open Play match was cancelled. Since it isn't your ` +
+        `first strike, ${cooldown}.` +
         (lifted ? '' : ` Hop back in once it's up.`)
       : `You've kept joining and leaving the Open Play queue in quick succession, so ${cooldown}. ` +
         `It keeps matchmaking fair for everyone waiting.` +

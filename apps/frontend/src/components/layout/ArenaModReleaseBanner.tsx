@@ -42,7 +42,7 @@ export function ArenaModReleaseBanner() {
       <div className="mx-auto flex max-w-[96rem] flex-wrap items-center gap-x-4 gap-y-2 sm:px-2 lg:px-4">
         <p className="min-w-0 flex-1">
           <strong className="text-rizzotto-gold-400">RizzOtto&apos;s Arena Mod is out.</strong> Every game on the
-          Arena now runs with it: install it and enable only this mod. Join our Discord for match notifications and
+          Arena now runs with it: install it and <strong className="text-rizzotto-stone-100">enable only this mod</strong>. Join our Discord for match notifications and
           mod updates.
         </p>
         <div className="flex flex-wrap gap-2">
