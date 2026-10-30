@@ -11,7 +11,8 @@ const MODES = ['2v2', 'Conquest', 'Siege'];
  * supporters and invites continued Ko-Fis, which flow back to players via prize pools and more.
  *
  * - default: a centered, standalone section (e.g. the support page).
- * - `compact`: a wide, short horizontal band for the top of a page (e.g. above the landing hero).
+ * - `compact`: a wide, short horizontal band for the top of a page (above the landing hero). Since the
+ *   arena mod release it leads with the mod and Domquest, and keeps the Ko-Fi invite.
  */
 export function FundingSection({ compact = false }: { compact?: boolean }) {
   const reduced = useReducedMotion();
@@ -66,15 +67,16 @@ export function FundingSection({ compact = false }: { compact?: boolean }) {
               className="font-display font-bold text-rizzotto-stone-100"
               style={{ fontSize: 'clamp(1.3rem, 2.6vw, 2rem)', lineHeight: 1.15 }}
             >
-              <span className="text-rizzotto-gold-300">2v2, Conquest &amp; Siege</span> are live — thanks to you
+              <span className="text-rizzotto-gold-300">RizzOtto&apos;s Arena Mod</span> is out, with Domquest
             </h2>
             <p className="mx-auto mt-2 max-w-xl text-sm text-rizzotto-stone-300 lg:mx-0">
-              Every Ko-Fi from here goes back to the players, through prize pools and more.
+              One mod for every game on the Arena, and a battle type of our own. Every Ko-Fi from here goes
+              back to the players, through prize pools and more.
             </p>
           </motion.div>
           <motion.div {...rise(0.1)} className="flex shrink-0 flex-wrap items-center justify-center gap-3">
             <Button asChild variant="etched" size="md">
-              <Link to="/support">Learn more</Link>
+              <Link to="/how-to-play">How to Play</Link>
             </Button>
             <Button asChild variant="etched" size="md">
               <Link to="/support" hash="hall-of-fame">Supporter Hall of Fame</Link>

@@ -35,6 +35,9 @@ proofread before release.
   marks every existing player as onboarded, so only new players see it. `/api/users/me` carries `discord_member`,
   so the Discord card says "Logging in added you" when the bot saw him there.
 - Release banner for existing players who are not on the RizzOttoverse Discord server, dismissable for good.
+- Landing page: the Ko-Fi band above the hero now leads with the release ("RizzOtto's Arena Mod is out, with
+  Domquest", How to Play button) and keeps the Ko-Fi invite. Admin → Welcome Banner is not shown anywhere on
+  the site, so it plays no part in the release.
 - Weekly Discord prompt: every Monday 00:00 (site time) the bot checks every player with Steam linked; whoever
   is not on the server gets a full-screen prompt on his next visit ("Join the server" / "Continue to the site"),
   again each week until he is on the server. No permanent opt-out. The first check runs on the first Monday
@@ -54,19 +57,12 @@ proofread before release.
 6. **Ban lists (Alex, Admin → Settings → Standard Ruleset):** remove what the mod now fixes or rebalances
    (Dechala, Zombie Dragon, Manticore Mount (Dieter Helsnicht), Chalice of Blood & Darkness, Ghostly Howl) from
    every combo. The lists only show in the admin editor, so nothing else depends on it.
-7. **Welcome banner:** Admin → Welcome Banner, text below.
-8. **Broadcast DM:** to everyone the bot may DM, text below.
-9. **Discord posts / video:** Alex.
-10. Optional: replace `public/img/how-to-play/lobby-warning.jpg` with a screenshot from the release build (the
+7. **Broadcast DM:** to everyone the bot may DM, text below.
+8. **Discord posts / video:** Alex.
+9. Optional: replace `public/img/how-to-play/lobby-warning.jpg` with a screenshot from the release build (the
    current one shows the test build's version line), at a new file name (CDN rule).
 
 ## Texts to proofread
-
-### Welcome banner (Markdown)
-
-```
-**RizzOtto's Arena Mod is out.** Every game on the Arena now runs with it: one mod with the arena modes, our map pools and the rules, plus the new battle type **Domquest**. [How to Play](/how-to-play)
-```
 
 ### Broadcast DM
 
@@ -87,6 +83,7 @@ Workshop: <https://steamcommunity.com/sharedfiles/filedetails/?id=3827143159>
 - How to Play: `apps/frontend/src/routes/HowToPlayPage.tsx`.
 - Welcome page: `onboarding.welcome.*` in `apps/frontend/src/i18n/locales/en/common.json`.
 - Release banner: `apps/frontend/src/components/layout/ArenaModReleaseBanner.tsx`.
+- Landing band: compact variant in `apps/frontend/src/components/landing/FundingSection.tsx`.
 - Rule card and required-mod notice: `StandardRulesetCard.tsx`, `RequiredModsNotice.tsx`.
 - Fruit Rules intro: top of `apps/frontend/src/content/fruit-rules/fruit_rules_interpretation.md` (the site's own
   text; the mod repo's copy still has the old intro).
