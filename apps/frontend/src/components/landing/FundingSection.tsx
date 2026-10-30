@@ -109,13 +109,16 @@ export function FundingSection({ compact = false }: { compact?: boolean }) {
           className="font-display font-bold text-rizzotto-stone-100"
           style={{ fontSize: 'clamp(1.75rem, 4vw, 3rem)', lineHeight: 1.1 }}
         >
-          Thank you — you built the next three battle modes
+          Thank you for keeping the Arena growing
         </motion.h2>
 
         <motion.div
           {...rise(0.15)}
           className="mt-5 flex flex-wrap items-center justify-center gap-2"
         >
+          <span className="mr-1 font-display text-sm uppercase tracking-[0.15em] text-rizzotto-stone-400">
+            Funded by you
+          </span>
           {MODES.map((m) => (
             <span
               key={m}
@@ -127,11 +130,12 @@ export function FundingSection({ compact = false }: { compact?: boolean }) {
         </motion.div>
 
         {/* Thank-you + keep-supporting invite (Alex's voice). This full variant renders only on
-            /support; the landing uses the compact variant. */}
+            /support; the landing uses the compact variant. The Ko-Fis are credited with the three
+            modes only; the arena mod and Domquest are named as news, not as funded by them. */}
         <motion.p {...rise(0.2)} className="mt-6 max-w-2xl text-rizzotto-stone-300">
-          Thanks to everyone who chipped in, the three new battle modes are now live, and the Arena
-          keeps running the way it always has: no ads, no paywalls, built and run by players. If you
-          want to keep it growing, every Ko-Fi from here goes straight back to the players, through
+          Your Ko-Fis brought 2v2, Conquest and Siege to the Arena. Now RizzOtto&apos;s Arena Mod and
+          Domquest are out too, and the Arena keeps running the way it always has: no ads, no paywalls,
+          built and run by players. Every Ko-Fi from here goes straight back to the players, through
           prize pools and more. Supporters are credited on the site.
         </motion.p>
 
