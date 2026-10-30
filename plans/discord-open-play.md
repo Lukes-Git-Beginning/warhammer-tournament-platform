@@ -1,6 +1,7 @@
-# Discord Open Play: `!join`, ticker, matches in DMs (Vermin League merge)
+# Discord Open Play: `/join`, ticker, matches in DMs (Vermin League merge)
 
-Status: **DESIGN, not built** (2026-10-30). Decisions below are Alex's; open points are marked.
+Status: **DESIGN, not built** (2026-10-30, entry switched to `/join` 2026-10-31). Decisions below are Alex's; open
+points are marked.
 
 ## Why
 
@@ -19,65 +20,62 @@ built.
 - 2 preset global faction bans per player, set outside matches and locked for a week (against target-banning).
 - Extra VL bans and limits on top of the Fruit Rules (e.g. the Thunderbarge is banned).
 
-## Decisions (Alex, 2026-10-30)
+## Decisions (Alex, 2026-10-30/31)
 
-1. `!join` works as it does on the VL bot. The bot reads channel messages over the Gateway with the Message
-   Content intent. `/join` exists as well.
-2. The bot deletes the `!join` message once it has handled it. The channel only shows the bot's ticker posts.
+1. **The entry is `/join`, not `!join`.** The UE admins confirmed (2026-10-31) that the switch is no problem for
+   their players. So the bot needs **no Gateway connection and no Message Content intent**: commands, buttons,
+   selects and modals all arrive over the existing interactions endpoint.
+2. **One channel per server, the ticker.** Only the bot posts there. `/join` and the panel button leave no message
+   in the channel, so every open request notifies exactly once (the ticker post).
 3. A whole match can be played in DMs: faction pick, lobby code and password, result, replay. The match also
    lives on the site, and the opponent can use either.
 4. Registration stays: an account (Discord login) and a linked Steam account. A player without them gets a
-   one-time setup link, and his pending `!join` is remembered until he is done.
-5. A ticker channel on both servers (UE and RizzOttoverse).
-6. Who does what: the Gateway and all code = Claude. The Message Content intent = Alex as bot owner, one toggle in
-   the Developer Portal that applies to every server. Channel permissions = the UE admin on UE, Alex on
-   RizzOttoverse.
+   one-time setup link, and his pending join is remembered until he is done.
+5. The ticker runs on both servers (UE and RizzOttoverse).
+6. Who does what: all code = Claude. Channel permissions = the UE admin on UE, Alex on RizzOttoverse. Nothing to
+   change in the Developer Portal.
 
 ## Design
 
-### 1. Gateway connection
+### 1. Interactions only, no Gateway
 
-- `lib/discord-gateway.ts` with `@discordjs/ws` (WebSocketManager: heartbeat, resume, reconnect). Intents: GUILDS,
-  GUILD_MESSAGES, MESSAGE_CONTENT, DIRECT_MESSAGES.
-- Started from `server.ts` only when `DISCORD_BOT_TOKEN` is set and `DISCORD_GATEWAY` isn't `off`. Prod runs one
-  systemd process, so there is exactly one connection. Locally and in CI there is no token, so no connection.
-- Handles MESSAGE_CREATE only: guild messages in configured channels (`!join`, legacy redirect) and DMs that
-  carry a `.replay` attachment.
-- A failure stays isolated: if the Gateway can't connect, the site and all buttons keep working (buttons, menus
-  and modals come in over the existing interactions endpoint, not the Gateway).
-- Side effect: RizzBOTto shows as online.
+- `routes/discord-interactions.ts` today answers PING and MESSAGE_COMPONENT buttons. It gains APPLICATION_COMMAND
+  (`/join`), MESSAGE_COMPONENT string selects, and MODAL_SUBMIT.
+- `/join` is registered as a **global command** at boot (`PUT /applications/{DISCORD_CLIENT_ID}/commands`, bulk
+  overwrite, so it is idempotent), only when `DISCORD_BOT_TOKEN` is set. Allowed in servers and in the DM with the
+  bot. Locally and in CI there is no token, so nothing is registered.
+- No long-lived connection, no new dependency, no new failure mode. RizzBOTto keeps showing as offline in the member
+  list (cosmetic; presence would be the only reason left for a Gateway).
 
 ### 2. Server config
 
 AdminConfig `discord_open_play_guilds`, edited in Admin → Settings:
 
 ```
-[{ guildId, label, joinChannelIds[], tickerChannelId, pingRoleId?, legacyChannelIds[] }]
+[{ guildId, label, tickerChannelId, pingRoleId?, panelMessageId? }]
 ```
 
-The bot ignores `!join` everywhere else.
+`/join` works anywhere the command is available (any channel of those servers, the bot DM). The ticker only posts to
+the configured channels.
 
-**Join channel and ticker channel are separate**, and only the bot may post in the ticker channel. Otherwise a
-player's `!join` and the bot's ticker post both notify anyone who set the channel to "All messages", and deleting
-the `!join` doesn't reliably recall a push notification that already went out. With two channels, following the
-ticker (or holding the ping role) means exactly one notification per open request. `/join` creates no visible
-message at all, so it never notifies anyone.
+### 3. Entry: `/join` and the panel button
 
-### 3. Entry: `!join` and `/join`
-
-- `!join` in a join channel: delete the message (needs Manage Messages there), resolve the user by `discord_id`,
-  run the **shared join checks** (account, Steam linked, not banned, no cooldown, not queued, no active Open Play
-  match), then DM the **join panel**: battle types (multi-select, preset from the saved queue prefs), Bo1/Bo3,
-  buttons "Join" and "Join and save as default".
-- `!join` with arguments (e.g. `!join conquest bo3`) joins directly. Argument names: open, see below.
-- A failure (DMs closed, cooldown, already queued) gets a short reply in the channel that deletes itself after
-  about 20 seconds. `/join` answers privately (ephemeral) instead.
-- `/join` is a global application command and works without the Gateway.
-- Legacy VL channel: `!join` there gets the pointer "Open Play now runs in #…", auto-deleted.
+- `/join` runs the **shared join checks** (account, Steam linked, not banned, no cooldown, not queued, no active
+  Open Play match) and answers **privately** (ephemeral) with the **join panel**: battle types (multi-select, preset
+  from the saved queue prefs), Bo1/Bo3, buttons "Join" and "Join and save as default".
+- Options for a direct join: `/join battle_type:Conquest format:Bo3`. Discord shows them as dropdowns, so no
+  command words to learn.
+- **Panel message**: Admin → "Post join panel" makes the bot post one message in the ticker channel with a "Find a
+  game" button (opens the same private join panel) and a short how-to. The admin pins it. For players who don't
+  know slash commands.
+- After joining, the bot DMs a short "You're in the queue: Land Battle · Bo3" with a "Leave queue" button. If that
+  DM fails (DMs closed), the private reply says so and points to the site, because the match card needs DMs.
+- Failures (cooldown, already queued, banned) answer privately with the reason.
+- Old VL channel: the bot can't read it, so the UE admin locks it and pins a pointer to the ticker channel.
 
 ### 4. Registration for new players
 
-- Unknown `discord_id` or no Steam link: DM with a button "Set up (one-time, about a minute)" to
+- Unknown `discord_id` or no Steam link: private reply with a button "Set up (one-time, about a minute)" to
   `/login?return_to=/discord/setup-done`. The Discord login runs, the existing Steam gate sends him to
   `/connect-steam`, and the end page says "All set, back to Discord".
 - The pending join sits in Redis (`discord:pending_join:<discordId>`, 15 minutes, with his chosen prefs). When the
@@ -86,12 +84,14 @@ message at all, so it never notifies anyone.
 
 ### 5. Ticker
 
-- On every queue JOIN (site, DM, `!join`) the bot posts to every configured ticker channel, anonymous like the
-  availability DM: "Someone is looking for a game: Land Battle · Bo3", one button per offer (battle type ×
+- On every queue JOIN (site, `/join`, panel, DM buttons) the bot posts to every configured ticker channel, anonymous
+  like the availability DM: "Someone is looking for a game: Land Battle · Bo3", one button per offer (battle type ×
   format). A click claims the offer like `av_offer` does (`claimQueueOffer`).
-- When the entry closes (matched, left, timed out) the post is deleted, so the channel only shows open requests.
-  Post ids per queue entry and guild live in Redis.
-- Ping role: mention `pingRoleId` at most once per few minutes per guild (like the 5-minute cap on the DM wave).
+- When the entry closes (matched, left, timed out) the post is deleted, so the channel only shows open requests and
+  the panel. Post ids per queue entry and guild live in Redis. Deleting its own posts needs no extra permission.
+- Notifications: whoever sets the channel to "All messages" gets one push per open request. A ping role
+  (`pingRoleId`) is optional and mentioned at most once per few minutes per guild (like the 5-minute cap on the DM
+  wave). A mention inside the same post adds no second notification.
 - A click by an unregistered player answers privately with the setup button (§4).
 
 ### 6. Match in DMs
@@ -103,14 +103,16 @@ format, map, game n of N and the deadlines, plus a link button "Open on rizzotto
 |---|---|
 | Faction pick | String select of the allowed factions (Open Play bans removed). Discord allows 25 options; past that, two steps. Locks through the same function as the site. |
 | Lobby | "Set lobby code" opens a modal (code + password). The opponent's code shows once set. |
-| Result | "I won" / "They won", then "send the replay file to this DM" (Gateway DM attachment, `.replay`, ≤ 5 MB). Same report function as the site: verification, held mismatch, dispute. |
+| Result | "I won" / "They won" opens a modal with a **file upload** field for the `.replay` (≤ 5 MB). Same report function as the site: verification, held mismatch, dispute. |
 | Opponent reported | "Confirm" / "Dispute". |
 | Any time | "Cancel match". |
 
+- The replay upload uses Discord's modal File Upload component (type 19, inside a Label); the backend downloads the
+  file from the attachment URL in the submit payload. To verify at build time: the exact payload shape. Fallback: a
+  `/replay` command with an attachment option in the bot DM.
 - Bo3: the card moves on to the next game (new map, new pick), as on the site.
 - Sync: both cards are re-rendered whenever the match changes (pick, lobby, report, finalize, cancel), from the
   same place that emits the socket events. A pick on the site updates the DM and vice versa.
-- The interactions handler gains string selects and modal submits (today it only handles buttons).
 
 ### 7. One service layer
 
@@ -137,30 +139,33 @@ Discord handlers share it:
 
 ### 9. Leaderboard in Discord (later)
 
-`!ladder` or a pinned, auto-updated message with the Monthly Ladder top N. A VL-only board stays optional.
+`/ladder` (private reply) or a pinned, auto-updated message with the Monthly Ladder top N. A VL-only board stays
+optional.
 
 ## Open points
 
 - **VL picking:** does the VL need pick 3 / ban 1 and the 2 weekly global bans in Open Play? (A player also asked
   for matrix picking as an option.)
 - **VL extra limits** on top of the Fruit Rules: list needed. They would go into the mod or the ruleset.
-- `!join` argument names, ideally the VL's current command words.
 - Ticker: anonymous (current default, like the availability DM) or with the player's name.
+- To test on RizzOttoverse: `/join` in a channel where members may not send messages (Discord should only need
+  "Use Application Commands"; the panel button works either way).
 - 2v2 via DM: not in v1.
 
 ## Build order
 
 1. Service layer + the fixes in §8 (shared join checks incl. Steam).
-2. Gateway, server config, `!join` / `/join`, setup flow, ticker.
-3. Match card in DMs (pick, lobby, result + replay, confirm/dispute, cancel, Bo3).
+2. `/join` (command registration, join panel, queue DM), setup flow, panel message, ticker.
+3. Match card in DMs (pick, lobby, result + replay upload, confirm/dispute, cancel, Bo3).
 4. Test on RizzOttoverse, then Alex requests the UE invite.
 
 Each step deploys on Alex's go.
 
 ## What Alex and the UE admin set up
 
-- Alex: Developer Portal → Bot → "Message Content Intent" on, before step 2 deploys.
-- Alex: on RizzOttoverse, a join channel, a ticker channel (only the bot posts) and optionally a ping role; enter
-  them in Admin.
-- UE admin: accept the invite with View Channel, Send Messages, Embed Links, Use Application Commands, and
-  Manage Messages in the join channel; a ticker channel where only the bot posts; then the same Admin entry for UE.
+- Alex, on RizzOttoverse: a ticker channel where only the bot may send messages (members keep View Channel, Read
+  Message History and Use Application Commands), optionally a ping role; enter them in Admin, post the panel and
+  pin it.
+- UE admin: accept the invite (scopes `bot` + `applications.commands`; View Channel, Send Messages, Embed Links in
+  the ticker channel), set up the ticker channel the same way, lock the old VL channel with a pointer; then the same
+  Admin entry for UE.
