@@ -433,7 +433,7 @@ export async function getNonGuildMemberIds(discordIds: string[]): Promise<Set<st
  * Open (or fetch existing) DM channel for a Discord user.
  * Returns the channel ID or null on failure.
  */
-async function openDmChannel(discordUserId: string): Promise<string | null> {
+export async function openDmChannel(discordUserId: string): Promise<string | null> {
   try {
     const resp = await discordRequest('POST', '/users/@me/channels', {
       recipient_id: discordUserId,
@@ -626,13 +626,15 @@ function linkButton(label: string, url: string) {
 /**
  * DM both players when an Open Play match is created. Result reporting happens on
  * the website (a replay is mandatory there), so this is a notification with a link
- * button to the match page — no result/cancel buttons.
+ * button to the match page — no result/cancel buttons. `skip`: Discord ids that already
+ * got a Discord Open Play match card instead.
  */
 export async function notifyMatchFoundWithButtons(
   matchId: string,
   p1: { discordId: string; username: string },
   p2: { discordId: string; username: string },
   mapName: string | null,
+  skip: readonly string[] = [],
 ): Promise<void> {
   const token = getToken();
   if (!token) return;
@@ -646,7 +648,9 @@ export async function notifyMatchFoundWithButtons(
     components: [actionRow([linkButton('Open match', matchUrl)])],
   });
 
-  const [ch1, ch2] = await Promise.all([openDmChannel(p1.discordId), openDmChannel(p2.discordId)]);
+  const [ch1, ch2] = await Promise.all(
+    [p1, p2].map((p) => (skip.includes(p.discordId) ? Promise.resolve(null) : openDmChannel(p.discordId))),
+  );
 
   await Promise.allSettled([
     ch1 ? discordRequest('POST', `/channels/${ch1}/messages`, buildDm(p2)) : Promise.resolve(),
@@ -1564,6 +1568,40 @@ export async function notifyOpponentOfWithdrawal(matchId: string, survivorUserId
     await sendDm(survivor.discord_id, msg);
   } catch (err) {
     console.warn('[discord-notify] notifyOpponentOfWithdrawal error (non-fatal):', err);
+  }
+}
+
+/**
+ * DM the opponent of a player who dropped out of a Single / Double Elimination tournament: the
+ * match went to them by walkover and they advance (nothing to report or void). Fire-and-forget
+ * safe (never throws).
+ */
+export async function notifyOpponentWalkover(matchId: string, survivorUserId: string): Promise<void> {
+  if (!getToken()) return;
+  try {
+    const [match, survivor] = await Promise.all([
+      prisma.match.findFirst({
+        where: { id: matchId },
+        select: { id: true, tournament: { select: { name: true, slug: true } } },
+      }),
+      prisma.user.findUnique({ where: { id: survivorUserId }, select: { discord_id: true } }),
+    ]);
+    if (!match || !survivor?.discord_id) return;
+
+    const base = process.env.FRONTEND_URL ?? 'https://rizzotto.gg';
+    const slug = match.tournament?.slug;
+    const url = slug ? `${base}/tournaments/${slug}` : `${base}/matches/${matchId}`;
+    const tournamentName = match.tournament?.name ?? 'your tournament';
+
+    const msg =
+      `**[RizzOtto's Arena] Opponent withdrew: ${tournamentName}**\n\n` +
+      `Your opponent has withdrawn from the tournament, so you win your match by walkover and advance ` +
+      `in the bracket. Nothing to report.\n\n` +
+      `Bracket: <${url}>`;
+
+    await sendDm(survivor.discord_id, msg);
+  } catch (err) {
+    console.warn('[discord-notify] notifyOpponentWalkover error (non-fatal):', err);
   }
 }
 

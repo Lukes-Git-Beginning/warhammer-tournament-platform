@@ -70,6 +70,8 @@ afterAll(async () => {
 
 async function newUser(name: string): Promise<TestUser> {
   const u = await createTestUser({ username: name });
+  // Joining the queue needs a linked Steam account (registration), like on the site.
+  await prisma.steamLink.create({ data: { user_id: u.id, steam_id: `steam-${u.id}`, persona: name } });
   users.push(u);
   return u;
 }

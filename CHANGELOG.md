@@ -26,6 +26,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 ### Fixed
 - **The DM after a missed faction pick** now says that, instead of telling you that you kept leaving the queue. The queue's cooldown message doesn't blame leaving any more either, and the longest cooldown says that an admin has to lift it.
 
+## [2.28.1] — 2026-10-31
+
+### Fixed
+- **The faction pick in game 2 and 3 of a series can be reopened.** Leaving the faction picker in a later game of a Bo3 could leave no way back to it, because the game showed as decided with the factions from game 1. Matrix and Free Pick tournaments were affected; in 1v3 and 2v2 Blind Pick tournaments it could happen in game 1 too.
+- **Dropping a player from a Single or Double Elimination tournament now moves the bracket on.** His opponent wins their match by walkover and advances right away, also in the middle of a series (games already played are kept). A dropped player is no longer sent to the losers bracket, and whoever would have met him there gets a bye.
+
+## [2.28.0] — 2026-10-30
+
+### Added
+- **Underline in tournament and series texts.** The text boxes on the create and edit pages have an Underline button next to Bold and Italic.
+
+## [2.27.0] — 2026-10-30
+
+### Added
+- **Open Play queue report for admins.** Shows how queue joins end (matched, left, or timed out without a match) for each day and by hour of the week.
+
+## [2.26.2] — 2026-10-30
+
+### Fixed
+- **Hosts can add themselves as a late joiner again.** The player search under "+ Add Late Joiner" left out whoever was searching, so a host could never find himself there.
+
 ## [2.26.1] — 2026-10-23
 
 ### Fixed

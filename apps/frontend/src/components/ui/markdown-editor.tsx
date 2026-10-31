@@ -3,14 +3,15 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Markdown } from 'tiptap-markdown';
-import { Bold, Italic, Heading2, List, ListOrdered, Quote, Link2 } from 'lucide-react';
+import { Bold, Italic, Underline, Heading2, List, ListOrdered, Quote, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
  * WYSIWYG markdown editor: a drop-in replacement for <Textarea>. Formatting is
  * shown directly in the field (bold is bold, no `**`), but the value is read and
  * written as plain **markdown** — so storage and the public rendering (react-
- * markdown) are unchanged, and existing tournaments load fine.
+ * markdown) are unchanged, and existing tournaments load fine. Markdown has no
+ * underline, so tiptap-markdown writes it as `<u>…</u>`; SafeMarkdown renders that.
  *
  * `onChange` mirrors the native textarea handler, so existing form `handleChange`
  * functions (which read `e.target.name` / `e.target.value`) work unchanged.
@@ -114,6 +115,7 @@ export function MarkdownEditor({
   const tools: { icon: ReactNode; title: string; run: () => void; active: boolean }[] = [
     { icon: <Bold size={15} />, title: 'Bold', run: () => editor.chain().focus().toggleBold().run(), active: editor.isActive('bold') },
     { icon: <Italic size={15} />, title: 'Italic', run: () => editor.chain().focus().toggleItalic().run(), active: editor.isActive('italic') },
+    { icon: <Underline size={15} />, title: 'Underline', run: () => editor.chain().focus().toggleUnderline().run(), active: editor.isActive('underline') },
     { icon: <Heading2 size={15} />, title: 'Heading', run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(), active: editor.isActive('heading', { level: 2 }) },
     { icon: <List size={15} />, title: 'Bullet list', run: () => editor.chain().focus().toggleBulletList().run(), active: editor.isActive('bulletList') },
     { icon: <ListOrdered size={15} />, title: 'Numbered list', run: () => editor.chain().focus().toggleOrderedList().run(), active: editor.isActive('orderedList') },

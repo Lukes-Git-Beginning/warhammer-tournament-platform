@@ -39,6 +39,10 @@ export async function claimQueueOffer(
   const redis = fastify.redis!;
   const prisma = fastify.prisma;
 
+  // Registration, as for every way into a match: a linked Steam account.
+  const steam = await prisma.steamLink.findUnique({ where: { user_id: userId }, select: { user_id: true } });
+  if (!steam) return { status: 'blocked', message: 'Connect Steam on rizzotto.gg first, then try again.' };
+
   const stored = await getStoredQueuePrefs(prisma, userId);
   let queueId = userId;
   if (offer.size === 2) {

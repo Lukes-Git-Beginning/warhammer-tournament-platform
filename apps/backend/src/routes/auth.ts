@@ -4,6 +4,7 @@ import type { Role, JwtPayload } from '@rizzotto/types';
 import { resolveGuildId } from '../lib/discord-notify.js';
 import { syncSupporterFromDiscordRoles } from '../lib/supporter-service.js';
 import { recordGuildMembership } from '../lib/discord-membership.js';
+import { onSteamLinked } from '../lib/discord-open-play.js';
 
 const DISCORD_USERINFO_URL = 'https://discord.com/api/users/@me';
 
@@ -380,6 +381,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         verified_at: new Date(),
       },
     });
+
+    // Came from Discord's /join without an account: the join DM goes out now.
+    void onSteamLinked(fastify, userId);
 
     // Audit the first-time link so admins have a trail of when the account was established.
     if (!existingLink) {

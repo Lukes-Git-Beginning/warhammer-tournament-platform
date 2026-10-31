@@ -1725,6 +1725,35 @@ export function getAdminScheduleReport(days: number): Promise<AdminScheduleRepor
   return apiFetch(`/api/admin/reports/schedule?days=${days}`);
 }
 
+/** One site-time day of the Open Play queue report: how that day's queue joins ended. */
+export interface AdminQueueReportDay {
+  day: string; // YYYY-MM-DD, site time
+  joins: number;
+  matched: number;
+  /** Of `matched`: an available player took the availability DM's offer. */
+  matchedViaDm: number;
+  left: number;
+  /** Removed by the queue cleanup after 30 minutes without a match. */
+  expired: number;
+  waiting: number;
+  players: number;
+  /** Players whose joins that day all ended without a match. */
+  playersWithoutGame: number;
+}
+export interface AdminQueueReport {
+  days: number;
+  timezone: string;
+  /** Newest first. */
+  daily: AdminQueueReportDay[];
+  medianWaitToMatchSec: number | null;
+  medianWaitBeforeLeavingSec: number | null;
+  joinsGrid: number[][];
+  unmatchedGrid: number[][];
+}
+export function getAdminQueueReport(days: number): Promise<AdminQueueReport> {
+  return apiFetch(`/api/admin/reports/queue?days=${days}`);
+}
+
 // #19 — underrated players: data rating vs questionnaire rating.
 export interface AdminUnderratedPlayer {
   id: string;
@@ -1968,6 +1997,29 @@ export function putAdminConfig(key: string, value: unknown): Promise<AdminConfig
   return apiFetch(`/api/admin/config/${key}`, {
     method: 'PUT',
     body: JSON.stringify({ value }),
+  });
+}
+
+/** Post the Discord Open Play "Find a game" panel in a configured server's ticker channel. */
+export function postDiscordJoinPanel(guildId: string): Promise<{ messageId: string }> {
+  return apiFetch('/api/admin/discord-open-play/panel', {
+    method: 'POST',
+    body: JSON.stringify({ guildId }),
+  });
+}
+
+export interface DiscordOpenPlayRollout {
+  live: boolean;
+  testerDiscordIds: string[];
+}
+
+/** Discord Open Play for testers only (live: false) or everyone; also re-registers `/join`. */
+export function putDiscordOpenPlayRollout(
+  rollout: DiscordOpenPlayRollout,
+): Promise<DiscordOpenPlayRollout & { commandUpdated: boolean; commandError: string | null }> {
+  return apiFetch('/api/admin/discord-open-play/rollout', {
+    method: 'PUT',
+    body: JSON.stringify(rollout),
   });
 }
 
@@ -2782,6 +2834,12 @@ export interface GameDto {
     player1FactionId2: string | null;
     player2FactionId2: string | null;
   } | null;
+  /** Whether this game's own faction step (blind pick, matrix, Free Pick) is done. Absent on the
+   *  virtual game the API returns before a Bo1's first row exists. */
+  factionsDecided?: boolean;
+  /** This game's factions known so far (decided matrix cell, Free Pick fixed faction); never an
+   *  unrevealed blind pick, never another game's. */
+  pickedFactions?: { player1FactionId: string | null; player2FactionId: string | null } | null;
 }
 
 export function getMatchGames(matchId: string): Promise<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }> {
@@ -3107,6 +3165,11 @@ export interface UserSearchResult {
  *  admin `searchUsers` which hits `GET /api/users`). */
 export function searchTeammates(q: string): Promise<{ users: UserSearchResult[] }> {
   return apiFetch<{ users: UserSearchResult[] }>(`/api/users/search?q=${encodeURIComponent(q)}`);
+}
+
+/** User search that also returns the caller, e.g. so a host can add themselves as a late joiner. */
+export function searchUsersIncludingSelf(q: string): Promise<{ users: UserSearchResult[] }> {
+  return apiFetch<{ users: UserSearchResult[] }>(`/api/users/search?q=${encodeURIComponent(q)}&includeSelf=true`);
 }
 
 export type TeamStatus = 'FORMING' | 'ACTIVE' | 'ARCHIVED';
