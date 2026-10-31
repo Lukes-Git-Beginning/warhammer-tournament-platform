@@ -6,8 +6,9 @@ deploy on Alex's go, then the live test on RizzOttoverse (step 4). Decisions bel
 **Rollout (Alex 2026-10-31: test it in a hidden channel first).** The deploy ships in testing mode (AdminConfig
 `discord_open_play_rollout = { live, testerDiscordIds }`, default not live), so the community sees nothing:
 `/join` is registered for server admins only (`default_member_permissions: "0"`) and not in DMs; `/join`, the
-panel and ticker buttons answer non-testers "not open yet"; a match gets match cards only when both players are
-testers (listed Discord ids or site admins), everyone else keeps the usual match-found DM. The ticker channel is a
+panel and ticker buttons answer non-testers "not open yet"; only testers (listed Discord ids or site admins) get
+match cards, the other player in a tester's match keeps the usual match-found DM (so one tester can test against
+any real opponent). The ticker channel is a
 private channel only the testers and the bot can see; no ping role while testing. No CHANGELOG entry for the test
 deploy (it posts publicly); the entry comes with go-live. Go-live = Admin → Settings → Discord Open Play → "Live for
 everyone" (re-registers `/join` for everyone and in DMs).

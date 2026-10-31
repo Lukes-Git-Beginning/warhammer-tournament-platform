@@ -626,13 +626,15 @@ function linkButton(label: string, url: string) {
 /**
  * DM both players when an Open Play match is created. Result reporting happens on
  * the website (a replay is mandatory there), so this is a notification with a link
- * button to the match page — no result/cancel buttons.
+ * button to the match page — no result/cancel buttons. `skip`: Discord ids that already
+ * got a Discord Open Play match card instead.
  */
 export async function notifyMatchFoundWithButtons(
   matchId: string,
   p1: { discordId: string; username: string },
   p2: { discordId: string; username: string },
   mapName: string | null,
+  skip: readonly string[] = [],
 ): Promise<void> {
   const token = getToken();
   if (!token) return;
@@ -646,7 +648,9 @@ export async function notifyMatchFoundWithButtons(
     components: [actionRow([linkButton('Open match', matchUrl)])],
   });
 
-  const [ch1, ch2] = await Promise.all([openDmChannel(p1.discordId), openDmChannel(p2.discordId)]);
+  const [ch1, ch2] = await Promise.all(
+    [p1, p2].map((p) => (skip.includes(p.discordId) ? Promise.resolve(null) : openDmChannel(p.discordId))),
+  );
 
   await Promise.allSettled([
     ch1 ? discordRequest('POST', `/channels/${ch1}/messages`, buildDm(p2)) : Promise.resolve(),

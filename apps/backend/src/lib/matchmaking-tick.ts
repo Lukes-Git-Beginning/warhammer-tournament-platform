@@ -401,17 +401,19 @@ export async function announceMatch(
     ]);
     if (p1?.discord_id && p2?.discord_id) {
       // 1v1: each player gets an interactive match card DM (pick, lobby, result + replay right in
-      // Discord). The plain match-found DM is the fallback when the cards can't be sent.
-      // (Dynamic import: discord-open-play reads this module's queue keys.)
+      // Discord). The plain match-found DM goes to whoever didn't get a card (before go-live: everyone
+      // but the testers). (Dynamic import: discord-open-play reads this module's queue keys.)
       setImmediate(() =>
         void (async () => {
           const { sendMatchCards } = await import('./discord-open-play.js');
-          if (await sendMatchCards(fastify, matchId).catch(() => false)) return;
+          const carded = await sendMatchCards(fastify, matchId).catch((): string[] => []);
+          if (carded.length === 2) return;
           await notifyMatchFoundWithButtons(
             matchId,
             { discordId: p1.discord_id!, username: p1.username },
             { discordId: p2.discord_id!, username: p2.username },
             mapName,
+            carded,
           );
         })().catch((err) => fastify.log.error({ err, matchId }, '[matchmaking-tick] match DM failed (non-fatal)')),
       );

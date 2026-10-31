@@ -10,14 +10,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '@rizzotto/db';
 import { buildApp } from '../src/app.js';
-import { QUEUE_KEY, JOINED_AT_KEY, QUEUE_PREFS_KEY } from '../src/lib/matchmaking-tick.js';
+import { QUEUE_KEY, JOINED_AT_KEY, QUEUE_PREFS_KEY, announceMatch } from '../src/lib/matchmaking-tick.js';
 import { createOpenPlayMatch } from '../src/lib/create-open-play-match.js';
 import { handleOpenPlayInteraction, type Interaction } from '../src/lib/discord-open-play-interactions.js';
 import {
   renderJoinDm,
   renderMatchCard,
   renderTickerPost,
-  sendMatchCards,
   syncTicker,
   GUILDS_CONFIG_KEY,
   ROLLOUT_CONFIG_KEY,
@@ -355,14 +354,16 @@ describe('rollout: testers only until go-live', () => {
     await waitForWebhook(i.token);
   });
 
-  it('match cards only when both players are testers (otherwise the usual match-found DM)', async () => {
+  it('a tester gets the match card, his opponent the usual match-found DM', async () => {
     const a = await player('dop_gate_a');
     const b = await player('dop_gate_b');
     const { matchId } = await createOpenPlayMatch(prisma, a.id, b.id, 'QUEUE', 'DOMINATION', 'ONE_V_ONE', 'BO1');
     await setRollout({ live: false, testerDiscordIds: [a.discord_id] });
-    expect(await sendMatchCards(app, matchId)).toBe(false);
-    await setRollout({ live: false, testerDiscordIds: [a.discord_id, b.discord_id] });
-    expect(await sendMatchCards(app, matchId)).toBe(true);
-    await app.redis.del(`rizzotto:dop:card:${matchId}:${a.id}`, `rizzotto:dop:card:${matchId}:${b.id}`);
+    await announceMatch(app, matchId, null, a.id, b.id, 'ONE_V_ONE');
+    const dmTo = (u: TestUser) => calls.filter((c) => c.method === 'POST' && c.url.endsWith(`/channels/dm-${u.discord_id}/messages`));
+    await vi.waitFor(() => expect(dmTo(a).length + dmTo(b).length).toBe(2), { timeout: 8000, interval: 50 });
+    expect(String((dmTo(a)[0]!.body as { content: string }).content)).toContain('**Open Play vs');
+    expect(String((dmTo(b)[0]!.body as { content: string }).content)).toContain('Match found!');
+    await app.redis.del(`rizzotto:dop:card:${matchId}:${a.id}`);
   });
 });

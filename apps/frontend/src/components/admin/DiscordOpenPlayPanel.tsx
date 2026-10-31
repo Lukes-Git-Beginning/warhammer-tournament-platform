@@ -119,7 +119,7 @@ export function DiscordOpenPlayPanel() {
         </div>
         <p className="mb-2 max-w-2xl text-xs text-stone-400">
           While testing, only the testers below and site admins can use it: <code>/join</code> shows for server admins only,
-          everyone else gets &quot;not open yet&quot; from the buttons, and match cards go out only when both players are testers.
+          everyone else gets &quot;not open yet&quot; from the buttons, and only testers get match cards (their opponents get the usual match-found DM).
         </p>
         <label className="block max-w-md text-xs text-stone-500">
           Tester Discord ids (one per line)

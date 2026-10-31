@@ -125,8 +125,8 @@ export async function getOpenPlayGuilds(fastify: FastifyInstance): Promise<OpenP
 /**
  * Rollout. Until `live` is switched on (the default is off) Discord Open Play runs for testers only:
  * the listed Discord ids and site admins. `/join` then shows for server admins only and not in DMs,
- * the panel and ticker buttons tell everyone else it isn't open yet, and a match gets match cards
- * only when both players are testers (everyone else keeps the usual match-found DM).
+ * the panel and ticker buttons tell everyone else it isn't open yet, and only testers get match
+ * cards (the other player in a tester's match keeps the usual match-found DM).
  */
 export const ROLLOUT_CONFIG_KEY = 'discord_open_play_rollout';
 
@@ -460,24 +460,27 @@ export async function sendMatchCard(fastify: FastifyInstance, matchId: string, u
 }
 
 /**
- * Match found (1v1): send both players their match card, and turn a join DM that still says
- * "in the queue" into a pointer to it. Returns false when the cards can't replace the old DM
- * (no bot, 2v2), so the caller sends the classic match-found DM instead.
+ * Match found (1v1): send each player who may use Discord Open Play (everyone once live, testers
+ * before) his match card, and turn a join DM that still says "in the queue" into a pointer to it.
+ * Returns the Discord ids that were handled; the caller sends the classic match-found DM to the
+ * rest (no bot, 2v2, not a tester, card refused).
  */
-export async function sendMatchCards(fastify: FastifyInstance, matchId: string): Promise<boolean> {
-  if (!isBotConfigured()) return false;
+export async function sendMatchCards(fastify: FastifyInstance, matchId: string): Promise<string[]> {
+  if (!isBotConfigured()) return [];
   const match = await fastify.prisma.match.findUnique({ where: { id: matchId }, select: { player1_id: true, player2_id: true, competitor_format: true } });
-  if (!match?.player1_id || !match.player2_id || match.competitor_format !== 'ONE_V_ONE') return false;
-  const players = await fastify.prisma.user.findMany({ where: { id: { in: [match.player1_id, match.player2_id] } }, select: { discord_id: true } });
-  const discordIds = players.map((p) => p.discord_id).filter((id): id is string => !!id);
-  if (discordIds.length < 2 || !(await areOpenPlayTesters(fastify, discordIds))) return false;
+  if (!match?.player1_id || !match.player2_id || match.competitor_format !== 'ONE_V_ONE') return [];
+  const players = await fastify.prisma.user.findMany({ where: { id: { in: [match.player1_id, match.player2_id] } }, select: { id: true, discord_id: true } });
+  const handled: string[] = [];
   await Promise.allSettled(
-    [match.player1_id, match.player2_id].map(async (uid) => {
-      await sendMatchCard(fastify, matchId, uid);
-      await refreshJoinDm(fastify, uid, '✅ Match found. Your match card is the message below.');
+    players.map(async (p) => {
+      if (!p.discord_id || !(await areOpenPlayTesters(fastify, [p.discord_id]))) return;
+      // DMs closed counts as handled: the classic DM would bounce the same way.
+      if (!(await sendMatchCard(fastify, matchId, p.id))) return;
+      handled.push(p.discord_id);
+      await refreshJoinDm(fastify, p.id, '✅ Match found. Your match card is the message below.');
     }),
   );
-  return true;
+  return handled;
 }
 
 /** Re-render both players' cards in place where they changed. Best-effort, never throws. */
