@@ -89,7 +89,18 @@ async function checkAndPromoteBye(tx: TxClient, matchId: string): Promise<void> 
   if (m.bracket_side === 'GRAND_FINAL') return;
   if (m.player1_id !== null && m.player2_id !== null) return;
   const present = m.player1_id ?? m.player2_id;
-  if (present === null) return;
+  if (present === null) {
+    // Every feeder ended without sending anyone (withdrawals): there is nothing to play here.
+    // Close it without a winner, so the next match promotes its other player instead of waiting.
+    const feeders = await tx.match.findMany({
+      where: { tournament_id: m.tournament_id, deleted_at: null, OR: [{ next_match_id: matchId }, { loser_next_match_id: matchId }] },
+      select: { status: true },
+    });
+    if (feeders.length === 0 || feeders.some((f) => f.status !== 'COMPLETED' && f.status !== 'BYE' && f.status !== 'FORFEIT')) return;
+    await tx.match.update({ where: { id: matchId }, data: { status: 'FORFEIT', winner_id: null, score: 'W/O' } });
+    if (m.next_match_id) await checkAndPromoteBye(tx, m.next_match_id);
+    return;
+  }
   const pendingFeeders = await tx.match.count({
     where: {
       tournament_id: m.tournament_id,
@@ -117,9 +128,11 @@ async function handleGrandFinalProgression(
   gf: { id: string; next_match_id: string | null; player1_id: string | null },
   winnerId: string | null,
   loserId: string | null,
+  loserWithdrew = false,
 ): Promise<void> {
   if (gf.next_match_id === null) return;
-  if (winnerId === gf.player1_id) {
+  // A withdrawn loser gets no bracket reset: the reset is settled for the winner straight away.
+  if (winnerId === gf.player1_id || loserWithdrew) {
     await tx.match.update({
       where: { id: gf.next_match_id },
       data: { status: 'FORFEIT', player1_id: winnerId, player2_id: loserId, winner_id: winnerId },
@@ -150,6 +163,12 @@ export interface CompleteMatchOpts {
    * no real game — games are the statistical unit). Used for playoff-phase drops.
    */
   walkover?: boolean;
+  /**
+   * The loser withdrew from the tournament (an elimination drop): he is not sent on to the losers
+   * bracket and gets no Grand Final reset. The losers-bracket match he would have fed promotes its
+   * other player on a bye instead.
+   */
+  loserWithdrew?: boolean;
 }
 
 /**
@@ -310,12 +329,12 @@ export async function completeMatch(
     }
 
     if (match.loser_next_match_id && winnerId !== null && loserId !== null) {
-      await advanceToSlot(tx, match.loser_next_match_id, loserId, src, 'loser');
+      if (!opts.loserWithdrew) await advanceToSlot(tx, match.loser_next_match_id, loserId, src, 'loser');
       await checkAndPromoteBye(tx, match.loser_next_match_id);
     }
 
     if (isGFSource) {
-      await handleGrandFinalProgression(tx, match, winnerId, loserId);
+      await handleGrandFinalProgression(tx, match, winnerId, loserId, opts.loserWithdrew);
     }
 
     // Ensure a game-level record exists so all statistics derive from MatchGame rows
@@ -425,4 +444,71 @@ export async function completeMatch(
     await resetContactedSet(fastify);
     setImmediate(() => void runMatchmakingTick(fastify));
   }
+}
+
+/**
+ * Elimination drop (Single / Double Elimination): take a withdrawn competitor out of one of his
+ * open bracket matches, so the bracket keeps moving without anyone having to act.
+ * - Opponent present and still in → walkover: the opponent advances. Unplayed games are deleted;
+ *   a game already played (e.g. game 1 of a Bo3) stays, it was a real game.
+ * - No opponent yet (the other feeder is still running) → the slot is cleared, so whoever arrives
+ *   advances on a bye. A Grand Final never promotes byes, so there the match keeps the withdrawn
+ *   flag and the survivor (or a host) settles it with void-dropped.
+ * - Opponent withdrew too → nobody advances; the next matches promote their other player once
+ *   their feeders are done.
+ * Returns the competitor who advanced by walkover, or null.
+ */
+export async function withdrawFromBracketMatch(
+  fastify: FastifyInstance,
+  opts: { matchId: string; withdrawnId: string; opponentWithdrew: boolean; actorId: string },
+): Promise<string | null> {
+  const m = await fastify.prisma.match.findFirst({
+    where: { id: opts.matchId, deleted_at: null },
+    select: { id: true, player1_id: true, player2_id: true, next_match_id: true, loser_next_match_id: true, bracket_side: true },
+  });
+  if (!m) return null;
+  const opponentId = m.player1_id === opts.withdrawnId ? m.player2_id : m.player1_id;
+
+  if (!opponentId) {
+    if (m.bracket_side === 'GRAND_FINAL') {
+      await fastify.prisma.match.update({ where: { id: m.id }, data: { withdrawn_player_id: opts.withdrawnId } });
+      return null;
+    }
+    const slot: 'player1_id' | 'player2_id' = m.player1_id === opts.withdrawnId ? 'player1_id' : 'player2_id';
+    await fastify.prisma.$transaction(async (tx) => {
+      await tx.matchGame.deleteMany({ where: { match_id: m.id } });
+      await tx.match.update({ where: { id: m.id }, data: { [slot]: null } });
+    });
+    return null;
+  }
+
+  const keptGames = await fastify.prisma.matchGame.count({ where: { match_id: m.id, status: 'COMPLETED' } });
+  await fastify.prisma.matchGame.deleteMany({ where: { match_id: m.id, status: { not: 'COMPLETED' } } });
+
+  if (opts.opponentWithdrew) {
+    await fastify.prisma.$transaction(async (tx) => {
+      await tx.match.update({
+        where: { id: m.id },
+        data: { status: 'FORFEIT', winner_id: null, score: 'W/O', withdrawn_player_id: opts.withdrawnId },
+      });
+      if (m.next_match_id) await checkAndPromoteBye(tx, m.next_match_id);
+      if (m.loser_next_match_id) await checkAndPromoteBye(tx, m.loser_next_match_id);
+    });
+    return null;
+  }
+
+  await fastify.prisma.match.update({ where: { id: m.id }, data: { withdrawn_player_id: opts.withdrawnId } });
+  await completeMatch(fastify, {
+    matchId: m.id,
+    winnerId: opponentId,
+    actorId: opts.actorId,
+    walkover: true,
+    loserWithdrew: true,
+  });
+  // A walkover writes no stats; a game played before the drop still belongs in them.
+  if (keptGames > 0) {
+    const activeVersion = await fastify.prisma.gameVersion.findFirst({ where: { is_active: true }, select: { id: true } });
+    if (activeVersion) await recomputeFactionStats(fastify.prisma, activeVersion.id);
+  }
+  return opponentId;
 }

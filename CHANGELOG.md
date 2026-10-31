@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/); the plat
 
 **Versioning** (SemVer, adapted for continuous deploy): `Fix → patch (1.x.Y)` · `Update / new capability → minor (1.X.0)` · `New pillar → major`. **v1.0.0** = the public launch (2026-06-27, 21:00 CEST); everything before was Beta (0.x). Every deploy wave since launch is versioned below, oldest at the bottom.
 
+## [2.28.1] — 2026-10-31
+
+### Fixed
+- **The faction pick in game 2 and 3 of a series can be reopened.** Leaving the faction picker in a later game of a Bo3 could leave no way back to it, because the game showed as decided with the factions from game 1. Matrix and Free Pick tournaments were affected; in 1v3 and 2v2 Blind Pick tournaments it could happen in game 1 too.
+- **Dropping a player from a Single or Double Elimination tournament now moves the bracket on.** His opponent wins their match by walkover and advances right away, also in the middle of a series (games already played are kept). A dropped player is no longer sent to the losers bracket, and whoever would have met him there gets a bye.
+
 ## [2.28.0] — 2026-10-30
 
 ### Added

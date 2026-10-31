@@ -17,6 +17,9 @@ import { Button } from '@/components/ui/button';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { LobbyCodeField } from './LobbyCodeField';
 
+// Modes whose factions are picked anew for every game of a series (Open Play too).
+const PER_GAME_PICK_MODES = new Set(['BPT', 'BPT_2V2', 'MATRIX', 'FREE_PICK', 'ONE_V_THREE']);
+
 // Where TWW3 writes battle replays, shown on the "Attach Replay" upload as a hint.
 const REPLAY_LOCATION_HINT =
   'Replays are saved to %APPDATA%\\The Creative Assembly\\Warhammer3\\replays (your hidden AppData\\Roaming folder). Auto-saved replays are kept there too.';
@@ -216,19 +219,24 @@ export function GameTile({
     (game.status === 'PENDING' || game.status === 'ONGOING') && !game.reportedWinnerId;
   const showWithdrawnBanner = isSurvivor && gameUnresolved;
 
-  // Resolve faction IDs — prefer MatchGame fields, then BlindPick reveal (BPT),
-  // then BracketNode (which has TournamentParticipant as final fallback).
+  // Resolve faction IDs — prefer MatchGame fields, then BlindPick reveal (BPT), then this game's
+  // matrix / Free Pick result, then BracketNode (which has TournamentParticipant as final fallback).
+  // The BracketNode factions are per MATCH (game 1's pick), so a later game of a mode that picks
+  // per game must not inherit them: its tile would show game 1's factions before its own pick.
+  const nodeFallback = game.gameNumber === 1 || !(isOpenPlay || PER_GAME_PICK_MODES.has(tournamentMode ?? ''));
   const p1FactionId =
-    game.player1FactionId ?? game.blindPick?.player1FactionId ?? matchPlayer1FactionId ?? null;
+    game.player1FactionId ?? game.blindPick?.player1FactionId ?? game.pickedFactions?.player1FactionId ??
+    (nodeFallback ? matchPlayer1FactionId : null) ?? null;
   const p2FactionId =
-    game.player2FactionId ?? game.blindPick?.player2FactionId ?? matchPlayer2FactionId ?? null;
+    game.player2FactionId ?? game.blindPick?.player2FactionId ?? game.pickedFactions?.player2FactionId ??
+    (nodeFallback ? matchPlayer2FactionId : null) ?? null;
   const p1Faction = p1FactionId ? (factions[p1FactionId] ?? null) : null;
   const p2Faction = p2FactionId ? (factions[p2FactionId] ?? null) : null;
-  // 2v2: the teammate's faction per side — same 3-level fallback (game → blind reveal → BracketNode).
+  // 2v2: the teammate's faction per side — same fallback (game → blind reveal → BracketNode).
   const p1FactionId2 =
-    game.player1FactionId2 ?? game.blindPick?.player1FactionId2 ?? matchPlayer1FactionId2 ?? null;
+    game.player1FactionId2 ?? game.blindPick?.player1FactionId2 ?? (nodeFallback ? matchPlayer1FactionId2 : null) ?? null;
   const p2FactionId2 =
-    game.player2FactionId2 ?? game.blindPick?.player2FactionId2 ?? matchPlayer2FactionId2 ?? null;
+    game.player2FactionId2 ?? game.blindPick?.player2FactionId2 ?? (nodeFallback ? matchPlayer2FactionId2 : null) ?? null;
   const p1Faction2 = p1FactionId2 ? (factions[p1FactionId2] ?? null) : null;
   const p2Faction2 = p2FactionId2 ? (factions[p2FactionId2] ?? null) : null;
   const myId = isPlayer1 ? player1Id : isPlayer2 ? player2Id : null;
@@ -248,15 +256,19 @@ export function GameTile({
   const rightFaction2 = swap ? p1Faction2 : p2Faction2;
 
   // Blind pick is required for BPT tournaments and for any match that has a
-  // MatchBlindPick row (Open Play matches always get one on creation).
-  const needsBlindPick = tournamentMode === 'BPT' || !!game.blindPick;
+  // MatchBlindPick row (Open Play matches always get one on creation). A tournament
+  // game's row only appears with the first lock, so the mode decides before that.
+  const needsBlindPick = tournamentMode === 'BPT' || tournamentMode === 'BPT_2V2' || !!game.blindPick;
   const isFreePick = tournamentMode === 'FREE_PICK';
+  // The server says per game whether its faction step is done (factionsDecided); the
+  // local check is the fallback for a game the API didn't flag.
   const decisionComplete = Boolean(
     game.decision?.pickedMapId &&
-      (!needsBlindPick || game.blindPick?.revealedAt) &&
-      // MATRIX + FREE_PICK need both factions resolved (not just the map) — so a
-      // random/auto map can't mark the match "done" before the faction is picked.
-      ((tournamentMode !== 'MATRIX' && !isFreePick) || (p1FactionId != null && p2FactionId != null)),
+      (game.factionsDecided ??
+        ((!needsBlindPick || game.blindPick?.revealedAt) &&
+          // MATRIX + FREE_PICK need both factions resolved (not just the map) — so a
+          // random/auto map can't mark the match "done" before the faction is picked.
+          ((tournamentMode !== 'MATRIX' && !isFreePick) || (p1FactionId != null && p2FactionId != null)))),
   );
 
   // #2 — Faction-pick timer. Once one player locks their blind pick, the other has this long to

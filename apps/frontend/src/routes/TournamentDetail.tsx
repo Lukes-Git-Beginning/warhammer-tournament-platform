@@ -1158,6 +1158,7 @@ export function TournamentDetail() {
           }}
           tournamentSlug={tournament.slug}
           tournamentMode={tournament.mode}
+          tournamentFormat={tournament.format}
           competitors={bracket.competitors}
         />
         </div>

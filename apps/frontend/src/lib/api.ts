@@ -2784,6 +2784,12 @@ export interface GameDto {
     player1FactionId2: string | null;
     player2FactionId2: string | null;
   } | null;
+  /** Whether this game's own faction step (blind pick, matrix, Free Pick) is done. Absent on the
+   *  virtual game the API returns before a Bo1's first row exists. */
+  factionsDecided?: boolean;
+  /** This game's factions known so far (decided matrix cell, Free Pick fixed faction); never an
+   *  unrevealed blind pick, never another game's. */
+  pickedFactions?: { player1FactionId: string | null; player2FactionId: string | null } | null;
 }
 
 export function getMatchGames(matchId: string): Promise<{ games: GameDto[]; player1Id: string | null; player2Id: string | null; withdrawnPlayerId: string | null }> {
