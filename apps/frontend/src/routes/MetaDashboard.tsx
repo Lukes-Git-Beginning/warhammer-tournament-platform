@@ -20,8 +20,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import type { FactionWithStatsDto, DuoStatDto } from '@rizzotto/types';
 
 const BATTLE_TYPES: { value: BattleType; label: string }[] = [
-  { value: 'DOMINATION', label: 'Domination' },
   { value: 'DOMQUEST', label: 'Domquest' },
+  { value: 'DOMINATION', label: 'Domination' },
   { value: 'CONQUEST', label: 'Conquest' },
   { value: 'LAND_BATTLE', label: 'Land Battle' },
   { value: 'SIEGE', label: 'Siege' },

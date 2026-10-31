@@ -102,7 +102,7 @@ const join = (u: TestUser, body?: unknown) =>
   app.inject({ method: 'POST', url: '/api/open-play/queue', cookies: cookie(u), payload: (body ?? {}) as object });
 
 const DEFAULTS = {
-  battleTypes: ['DOMINATION', 'DOMQUEST', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'],
+  battleTypes: ['DOMQUEST', 'DOMINATION', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'],
   matchFormats: ['BO1', 'BO3'],
   competitorFormat: 'ONE_V_ONE',
   teamId: null,

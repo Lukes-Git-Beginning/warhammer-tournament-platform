@@ -184,8 +184,8 @@ export function OpenPlayPage() {
 // ---------------------------------------------------------------------------
 
 const OP_BATTLE_TYPES: { value: BattleType; label: string }[] = [
-  { value: 'DOMINATION', label: 'Domination' },
   { value: 'DOMQUEST', label: 'Domquest' },
+  { value: 'DOMINATION', label: 'Domination' },
   { value: 'CONQUEST', label: 'Conquest' },
   { value: 'LAND_BATTLE', label: 'Land Battle' },
   { value: 'SIEGE', label: 'Siege' },

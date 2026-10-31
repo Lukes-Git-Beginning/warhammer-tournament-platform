@@ -3,8 +3,8 @@ import { isBattleType } from '@rizzotto/types';
 
 const OPTIONS: { value: SkillScope; label: string }[] = [
   { value: 'OVERALL', label: 'Overall' },
-  { value: 'DOMINATION', label: 'Domination' },
   { value: 'DOMQUEST', label: 'Domquest' },
+  { value: 'DOMINATION', label: 'Domination' },
   { value: 'CONQUEST', label: 'Conquest' },
   { value: 'LAND_BATTLE', label: 'Land Battle' },
   { value: 'SIEGE', label: 'Siege' },

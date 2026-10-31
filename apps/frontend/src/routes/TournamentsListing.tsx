@@ -273,11 +273,11 @@ export function TournamentsListing() {
           <FilterChip active={!battleType} onClick={() => setBattleType(undefined)}>
             All
           </FilterChip>
-          <FilterChip active={battleType === 'DOMINATION'} onClick={() => setBattleType('DOMINATION')}>
-            Domination
-          </FilterChip>
           <FilterChip active={battleType === 'DOMQUEST'} onClick={() => setBattleType('DOMQUEST')}>
             Domquest
+          </FilterChip>
+          <FilterChip active={battleType === 'DOMINATION'} onClick={() => setBattleType('DOMINATION')}>
+            Domination
           </FilterChip>
           <FilterChip active={battleType === 'CONQUEST'} onClick={() => setBattleType('CONQUEST')}>
             Conquest

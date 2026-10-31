@@ -414,16 +414,17 @@ export type DuoMetaResponse = z.infer<typeof DuoMetaResponseSchema>;
  * Every battle type, in display order — the single list the apps build their enums, selectors,
  * labels and per-type loops from. Adding a type here (plus the Prisma `BattleType` enum) reaches
  * all of them; only genuinely type-specific rules (Siege's Bo2 points format, required mods, the
- * questionnaire) need their own entry.
+ * questionnaire) need their own entry. Domquest comes first, as in the arena mod's map setup (Alex,
+ * 2026-11-01); the order is also the default queue preference order.
  */
-export const BATTLE_TYPES = ['DOMINATION', 'DOMQUEST', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'] as const;
+export const BATTLE_TYPES = ['DOMQUEST', 'DOMINATION', 'CONQUEST', 'LAND_BATTLE', 'SIEGE'] as const;
 export const BattleTypeSchema = z.enum(BATTLE_TYPES);
 export type BattleType = (typeof BATTLE_TYPES)[number];
 
 /** User-facing name of each battle type ("Land Battle", not "LAND_BATTLE"). */
 export const BATTLE_TYPE_LABELS: Record<BattleType, string> = {
-  DOMINATION: 'Domination',
   DOMQUEST: 'Domquest',
+  DOMINATION: 'Domination',
   CONQUEST: 'Conquest',
   LAND_BATTLE: 'Land Battle',
   SIEGE: 'Siege',

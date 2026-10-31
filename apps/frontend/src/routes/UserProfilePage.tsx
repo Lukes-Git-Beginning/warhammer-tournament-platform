@@ -209,8 +209,8 @@ function StatsSection({ userId, wins, losses, gamesPlayed, versionId, battleType
 
 const SCOPE_OPTIONS: { value: SkillScope; label: string }[] = [
   { value: 'OVERALL', label: 'Overall' },
-  { value: 'DOMINATION', label: 'Domination' },
   { value: 'DOMQUEST', label: 'Domquest' },
+  { value: 'DOMINATION', label: 'Domination' },
   { value: 'CONQUEST', label: 'Conquest' },
   { value: 'LAND_BATTLE', label: 'Land Battle' },
   { value: 'SIEGE', label: 'Siege' },
