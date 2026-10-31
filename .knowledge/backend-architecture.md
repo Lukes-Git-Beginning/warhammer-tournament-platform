@@ -317,3 +317,15 @@ if (!isAdminOrMod && !isHost) return reply.code(403)...
   - **Kontext (3 Stats-Schreibpfade):** `match-games.ts` (GameTile, **schon game-level**), `routes/matches.ts` (Legacy-Einzelergebnis, legt 1 Game an → effektiv game-level), `match-result-service.ts` (`resolveMatchResult`, Doppel-Report, **match-level**). Der Recompute aus der Wahrheitsquelle (`MatchGame`) macht diese Inkonsistenz irrelevant.
 - **Stale-Open-Play-Cron** (`plugins/cron.ts`, `staleOpenPlayTask`, stündlich :15): canceled `type=OPEN_PLAY, status=ONGOING` Matches älter als `STALE_OPEN_PLAY_HOURS` (24 h) → `CANCELLED`. Behebt ewig offene Ladder-Matches (kein Timeout-Mechanismus vorher).
 - **Profil-Turnierzahl** (`routes/users.ts`): `tournaments_played` = distinct Turniere mit ≥1 `COMPLETED` `MatchGame` des Spielers (statt `tournamentResult.count`). Teilnahme-basiert: unabhängig von Finalisierung/Drop; Draw zählt (gespieltes Game), reiner FORFEIT/Drop nicht.
+
+## Discord Open Play (2026-10-31, branch feat/discord-open-play)
+
+Plan: `plans/discord-open-play.md`. No Gateway: everything runs over the interactions endpoint (`routes/discord-interactions.ts`), which hands every interaction to `handleOpenPlayInteraction()` first.
+
+- **`lib/open-play-queue-service.ts`** — `joinOpenPlayQueue()` / `leaveOpenPlayQueue()`: the ONE way into/out of the queue (site route, join DM, "Queue again", opt-in). All checks live here (account, Steam, cooldown, queued, active match), so no entry point can skip one.
+- **`lib/discord-open-play.ts`** — join DM render (queue settings as on the site, saved on every change), match card render per player (pick → lobby/result → mismatch/confirm → over), ticker reconcile `syncTicker()`, `/join` registration at boot (`registerDiscordCommands`), `callAsUser()` = runs a site route via `fastify.inject` with a short-lived JWT (match actions from a DM go through exactly the site's routes), `replayMultipart()`.
+- **`lib/discord-open-play-interactions.ts`** — handlers: `/join` + `jp_find` (panel), `oq_*` (join DM), `tk:<offer>` (ticker → `claimQueueOffer`), `mc_*` (match card), modal submits `mc_lobbyset` / `mc_report` (replay via the modal File Upload component, downloaded from the attachment URL).
+- **Card sync:** global `onResponse` hook in `app.ts` (2xx POST/PATCH on `/api/(open-play/)?matches/:id/…` → `refreshMatchCards`), plus the per-minute `discordOpenPlayTask` cron (`syncTicker` + `reconcileMatchCards`). Edits are hash-guarded (no PATCH when nothing changed).
+- **Match found (1v1):** `announceMatch()` sends match cards (`sendMatchCards`); the classic `notifyMatchFoundWithButtons` is the fallback (2v2, no bot).
+- **Config:** AdminConfig `discord_open_play_guilds` = `[{ guildId, label?, tickerChannelId, pingRoleId? }]` (Admin → Settings → Discord Open Play); `POST /api/admin/discord-open-play/panel { guildId }` posts the pinned "Find a game" panel.
+- **Redis:** `rizzotto:dop:join:<userId>` (join DM ids), `rizzotto:dop:card:<matchId>:<userId>` (card ids + render hash), `rizzotto:dop:ticker` (queueId → posts), `rizzotto:dop:ping:<guildId>` (ping-role gap), `rizzotto:dop:pending:<discordId>` (join after setup → `onSteamLinked`).

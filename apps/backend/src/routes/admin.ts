@@ -55,6 +55,7 @@ import {
 } from '../lib/announcements.js';
 import { mergeTournamentSources, mergeOverviewSources, type CountedRef } from '../lib/referrals.js';
 import { maybeSendSeriesInvite } from '../lib/series-notify.js';
+import { getOpenPlayGuilds, postJoinPanel } from '../lib/discord-open-play.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -1827,6 +1828,27 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (fastify.redis) await invalidate(fastify.redis, 'admin:config:*');
     return config;
+  });
+
+  // POST /api/admin/discord-open-play/panel — post the "Find a game" panel in a configured server's
+  // ticker channel (the admin pins it there). Servers are configured under discord_open_play_guilds.
+  fastify.post('/api/admin/discord-open-play/panel', async (request, reply) => {
+    const parsed = z.object({ guildId: z.string().min(1) }).safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    if (!isBotConfigured()) {
+      return reply.code(503).send({ error: 'ServiceUnavailable', message: 'The Discord bot is not configured', statusCode: 503 });
+    }
+    const guild = (await getOpenPlayGuilds(fastify)).find((g) => g.guildId === parsed.data.guildId);
+    if (!guild) {
+      return reply.code(404).send({ error: 'NotFound', message: 'That server is not configured', statusCode: 404 });
+    }
+    const messageId = await postJoinPanel(guild.tickerChannelId);
+    if (!messageId) {
+      return reply.code(502).send({ error: 'BadGateway', message: 'Discord refused the post. Check that RizzBOTto can send messages in the ticker channel.', statusCode: 502 });
+    }
+    return reply.code(200).send({ messageId });
   });
 
   // -------------------------------------------------------------------------

@@ -2000,6 +2000,14 @@ export function putAdminConfig(key: string, value: unknown): Promise<AdminConfig
   });
 }
 
+/** Post the Discord Open Play "Find a game" panel in a configured server's ticker channel. */
+export function postDiscordJoinPanel(guildId: string): Promise<{ messageId: string }> {
+  return apiFetch('/api/admin/discord-open-play/panel', {
+    method: 'POST',
+    body: JSON.stringify({ guildId }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Standard Ruleset (public — admin-editable community ruleset)
 // ---------------------------------------------------------------------------

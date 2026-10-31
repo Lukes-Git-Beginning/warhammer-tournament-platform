@@ -433,7 +433,7 @@ export async function getNonGuildMemberIds(discordIds: string[]): Promise<Set<st
  * Open (or fetch existing) DM channel for a Discord user.
  * Returns the channel ID or null on failure.
  */
-async function openDmChannel(discordUserId: string): Promise<string | null> {
+export async function openDmChannel(discordUserId: string): Promise<string | null> {
   try {
     const resp = await discordRequest('POST', '/users/@me/channels', {
       recipient_id: discordUserId,

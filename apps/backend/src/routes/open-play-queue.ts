@@ -1,22 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { logQueueActivity } from '../lib/queue-activity.js';
-import {
-  QUEUE_KEY,
-  JOINED_AT_KEY,
-  JOIN_SCRIPT,
-  QUEUE_PREFS_KEY,
-  ALL_BATTLE_TYPES,
-  ALL_QUEUE_MATCH_FORMATS,
-  runMatchmakingTick,
-} from '../lib/matchmaking-tick.js';
-import {
-  findQueueableTeam,
-  getStoredQueuePrefs,
-  resolveStoredActor,
-  saveQueuePrefs,
-  type StoredQueuePrefs,
-} from '../lib/queue-prefs.js';
+import { QUEUE_KEY, ALL_BATTLE_TYPES, ALL_QUEUE_MATCH_FORMATS } from '../lib/matchmaking-tick.js';
+import { getStoredQueuePrefs, saveQueuePrefs, type StoredQueuePrefs } from '../lib/queue-prefs.js';
+import { joinOpenPlayQueue, leaveOpenPlayQueue } from '../lib/open-play-queue-service.js';
 
 // Queue join preferences: battle types (multi-select), series lengths (Bo1/Bo3 multi-select) and
 // team size. For 2v2 the CAPTAIN queues on behalf of their ACTIVE team (team-as-actor, committed
@@ -40,134 +26,33 @@ const QueuePrefsSchema = z.object({
   competitorFormat: z.enum(['ONE_V_ONE', 'TWO_V_TWO']),
   teamId: z.string().uuid().nullable(),
 });
-import { getQueueTimeoutRemaining, recordQueueLeave } from '../lib/queue-penalty.js';
 import { cancelOpenPlayMatch } from '../lib/cancel-open-play-match.js';
 import { slotsActiveAtWhere } from '../lib/availability-time.js';
 import { isCompetitorMember } from '../lib/competitors.js';
-import { notifyQueueTimeout, notifyQueueWarning, notifyQueueAbuseToStaff } from '../lib/discord-notify.js';
 
 const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
-  // POST /api/open-play/queue — join queue
+  // POST /api/open-play/queue — join queue (all checks live in joinOpenPlayQueue, shared with Discord)
   fastify.post(
     '/api/open-play/queue',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
-      const userId = request.user.sub;
-
       const parsedPrefs = QueueJoinSchema.safeParse(request.body ?? {});
       if (!parsedPrefs.success) {
         return reply.code(400).send({ error: 'BadRequest', message: parsedPrefs.error.message, statusCode: 400 });
       }
-      if (!fastify.redis) {
-        return reply.code(503).send({ error: 'ServiceUnavailable', message: 'Queue service unavailable', statusCode: 503 });
-      }
-
-      // Settings = the request body where given, else the player's stored settings.
-      const body = parsedPrefs.data;
-      const stored = await getStoredQueuePrefs(fastify.prisma, userId);
-      const effective: StoredQueuePrefs = {
-        battleTypes: body.battleTypes ?? stored.battleTypes,
-        matchFormats: body.matchFormats ?? stored.matchFormats,
-        competitorFormat: body.competitorFormat ?? stored.competitorFormat,
-        teamId: body.teamId ?? (body.competitorFormat === 'TWO_V_TWO' ? null : stored.teamId),
-      };
-
-      // The queued id is the ACTOR: the user for 1v1, the captain's ACTIVE team for 2v2
-      // (team-as-actor — the captain queues the committed duo).
-      let queueId = userId;
-      let format: 'ONE_V_ONE' | 'TWO_V_TWO' = 'ONE_V_ONE';
-      let fellBackTo1v1 = false;
-      if (body.competitorFormat === 'TWO_V_TWO') {
-        // Explicit 2v2 request: an invalid team is an error the player has to see.
-        const teamId = await findQueueableTeam(fastify.prisma, userId, body.teamId);
-        if (!teamId) {
-          const message = body.teamId
-            ? 'That team is not an active team you captain with two accepted members'
-            : 'You must be the captain of an active team with two accepted members to queue for 2v2';
-          return reply.code(400).send({ error: 'BadRequest', message, statusCode: 400 });
-        }
-        queueId = teamId;
-        format = 'TWO_V_TWO';
-        effective.teamId = teamId;
-      } else if (effective.competitorFormat === 'TWO_V_TWO') {
-        // 2v2 came from the stored settings: if the team is no longer valid, play 1v1 this time
-        // (the stored preference is left untouched).
-        const actor = await resolveStoredActor(fastify.prisma, userId, effective);
-        queueId = actor.queueId;
-        format = actor.format;
-        fellBackTo1v1 = actor.fellBackTo1v1;
-      }
-      const prefs = {
-        format,
-        battleTypes: effective.battleTypes,
-        matchFormats: effective.matchFormats,
-      };
-
-      // #14: reject a re-join while the queue-abuse cooldown is still running.
-      const cooldownSec = await getQueueTimeoutRemaining(fastify.redis, userId);
-      if (cooldownSec > 0) {
-        return reply.code(429).send({
-          error: 'TooManyRequests',
-          message: `You're on a short queue cooldown for leaving too many times in quick succession. Try again in about ${Math.ceil(cooldownSec / 60)} min.`,
-          statusCode: 429,
+      const result = await joinOpenPlayQueue(fastify, request.user.sub, parsedPrefs.data);
+      if (!result.ok) {
+        return reply.code(result.statusCode).send({
+          error: result.error,
+          message: result.message,
+          statusCode: result.statusCode,
+          ...(result.code === 'STEAM_REQUIRED' ? { code: result.code } : {}),
         });
       }
-
-      const pos = await fastify.redis.lpos(QUEUE_KEY, queueId);
-      if (pos !== null) {
-        return reply.code(409).send({ error: 'Conflict', message: 'Already in queue', statusCode: 409 });
+      if (result.matched) {
+        return reply.code(200).send({ matched: true, match_id: result.matchId, fellBackTo1v1: result.fellBackTo1v1 });
       }
-
-      const activeMatch = await fastify.prisma.match.findFirst({
-        where: {
-          type: 'OPEN_PLAY',
-          status: { in: ['ONGOING', 'AWAITING_CONFIRMATION'] },
-          deleted_at: null,
-          OR: [{ player1_id: queueId }, { player2_id: queueId }],
-        },
-        select: { id: true },
-      });
-      if (activeMatch) {
-        return reply.code(409).send({ error: 'Conflict', message: 'You already have an active Open Play match', statusCode: 409 });
-      }
-
-      // Join the queue atomically (dup-checked), then run one synchronous
-      // matchmaking tick so an instant FIFO match — or a fresh DM wave + hold —
-      // happens before we reply. If the tick paired this user off, report it.
-      const joined = (await fastify.redis.eval(
-        JOIN_SCRIPT, 2, QUEUE_KEY, JOINED_AT_KEY, queueId, String(Date.now()),
-      )) as number;
-      if (joined !== 1) {
-        return reply.code(409).send({ error: 'Conflict', message: 'Already in queue', statusCode: 409 });
-      }
-
-      // Record the actor's battle-type / team-size selection for preference-aware matching.
-      await fastify.redis.hset(QUEUE_PREFS_KEY, queueId, JSON.stringify(prefs));
-
-      // Open Play page: this selection becomes the player's stored settings.
-      if (body.save) await saveQueuePrefs(fastify.prisma, userId, effective);
-
-      await logQueueActivity(fastify.prisma, 'JOIN', userId);
-      await runMatchmakingTick(fastify);
-
-      // The tick removes matched players from the queue — if we're gone, we matched.
-      const stillQueued = await fastify.redis.lpos(QUEUE_KEY, queueId);
-      if (stillQueued === null) {
-        const match = await fastify.prisma.match.findFirst({
-          where: {
-            type: 'OPEN_PLAY',
-            status: 'ONGOING',
-            deleted_at: null,
-            OR: [{ player1_id: queueId }, { player2_id: queueId }],
-          },
-          select: { id: true },
-          orderBy: { created_at: 'desc' },
-        });
-        if (match) return reply.code(200).send({ matched: true, match_id: match.id, fellBackTo1v1 });
-      }
-
-      const position = await fastify.redis.llen(QUEUE_KEY);
-      return reply.code(200).send({ matched: false, position, fellBackTo1v1 });
+      return reply.code(200).send({ matched: false, position: result.position, fellBackTo1v1: result.fellBackTo1v1 });
     },
   );
 
@@ -206,54 +91,7 @@ const openPlayQueueRoutes: FastifyPluginAsync = async (fastify) => {
     '/api/open-play/queue',
     { preHandler: fastify.authenticate },
     async (request, reply) => {
-      const userId = request.user.sub;
-      // The queued id is the user (1v1) or the captain's ACTIVE team (2v2) — clear both.
-      const leaveTeam = fastify.redis
-        ? await fastify.prisma.team.findFirst({ where: { captain_id: userId, status: 'ACTIVE' }, select: { id: true } })
-        : null;
-      const candidates = leaveTeam ? [userId, leaveTeam.id] : [userId];
-      // Read the join timestamp before clearing it, to measure the stint (#14).
-      let joinedAtRaw: string | null = null;
-      let removed = 0;
-      if (fastify.redis) {
-        for (const id of candidates) {
-          const ja = await fastify.redis.hget(JOINED_AT_KEY, id);
-          const r = await fastify.redis.lrem(QUEUE_KEY, 0, id);
-          if (r > 0) {
-            removed += r;
-            joinedAtRaw = ja;
-          }
-          await fastify.redis.hdel(JOINED_AT_KEY, id);
-          await fastify.redis.hdel(QUEUE_PREFS_KEY, id);
-        }
-      }
-      if (removed > 0) {
-        await logQueueActivity(fastify.prisma, 'LEAVE', userId);
-        // #14: a short stint counts toward the abuse threshold; every 3 within 24h trips
-        // one escalation step — education-first: L1 warns only, sanctions start at L2.
-        if (fastify.redis && joinedAtRaw) {
-          const outcome = await recordQueueLeave(fastify.redis, userId, Number(joinedAtRaw), Date.now());
-          if (outcome.tripped) {
-            // Surface the escalation in the admin Queue Activity tab (with the level).
-            await logQueueActivity(
-              fastify.prisma,
-              outcome.timeoutSec > 0 ? 'TIMEOUT' : 'WARNING',
-              userId,
-              { level: outcome.level },
-            );
-            const u = await fastify.prisma.user.findUnique({
-              where: { id: userId },
-              select: { username: true, discord_id: true },
-            });
-            if (u?.discord_id) {
-              if (outcome.timeoutSec > 0) void notifyQueueTimeout(u.discord_id, outcome.timeoutSec);
-              else void notifyQueueWarning(u.discord_id);
-            }
-            // Sanctions (level ≥ 2) also notify staff.
-            if (outcome.level >= 2) void notifyQueueAbuseToStaff(u?.username ?? userId, outcome.level, outcome.timeoutSec);
-          }
-        }
-      }
+      await leaveOpenPlayQueue(fastify, request.user.sub);
       return reply.code(204).send();
     },
   );

@@ -1,7 +1,7 @@
 # Discord Open Play: `/join`, ticker, matches in DMs (Vermin League merge)
 
-Status: **DESIGN, not built** (2026-10-30, entry switched to `/join` 2026-10-31). Decisions below are Alex's; open
-points are marked.
+Status: **BUILT for 1v1, not deployed** (2026-10-31): steps 1–3 below, tested with a stubbed Discord API. Next:
+deploy on Alex's go, then the live test on RizzOttoverse (step 4). Decisions below are Alex's; open points are marked.
 
 ## Why
 
@@ -23,7 +23,7 @@ built.
 ## Decisions (Alex, 2026-10-30/31)
 
 1. **The entry is `/join`, not `!join`.** The UE admins confirmed (2026-10-31) that the switch is no problem for
-   their players. So the bot needs **no Gateway connection and no Message Content intent**: commands, buttons,
+   their players. `/join` (and the panel button) opens a join DM with the full queue settings, as on the site. So the bot needs **no Gateway connection and no Message Content intent**: commands, buttons,
    selects and modals all arrive over the existing interactions endpoint.
 2. **One channel per server, the ticker.** Only the bot posts there. `/join` and the panel button leave no message
    in the channel, so every open request notifies exactly once (the ticker post).
@@ -60,17 +60,20 @@ the configured channels.
 
 ### 3. Entry: `/join` and the panel button
 
-- `/join` runs the **shared join checks** (account, Steam linked, not banned, no cooldown, not queued, no active
-  Open Play match) and answers **privately** (ephemeral) with the **join panel**: battle types (multi-select, preset
-  from the saved queue prefs), Bo1/Bo3, buttons "Join" and "Join and save as default".
-- Options for a direct join: `/join battle_type:Conquest format:Bo3`. Discord shows them as dropdowns, so no
-  command words to learn.
+- `/join` and the panel's "Find a game" button do the same thing: the bot sends the **join DM** and answers
+  privately "Check your DMs" (or why it couldn't: DMs closed, not set up, cooldown, already queued).
+- `/join` has no options. Most players pick two or more of the five battle types, which a slash option can't do.
+  It works in every channel of the server and in the bot DM; a server admin can limit it to channels under Server
+  Settings → Integrations → RizzBOTto.
+- **Join DM** = the queue entry exactly as on the site, preset from the stored queue settings:
+  battle types (multi-select), match format Bo1/Bo3 (multi-select), team size 1v1/2v2 (single select; 2v2 also
+  picks the team when the captain has more than one), then "Join queue" (also saves the selection as the stored
+  settings, like the Open Play page). The DM is edited in place: settings → "In the queue: Land Battle, Conquest ·
+  Bo1, Bo3 · 1v1" with "Leave queue" → match card (§6).
 - **Panel message**: Admin → "Post join panel" makes the bot post one message in the ticker channel with a "Find a
-  game" button (opens the same private join panel) and a short how-to. The admin pins it. For players who don't
-  know slash commands.
-- After joining, the bot DMs a short "You're in the queue: Land Battle · Bo3" with a "Leave queue" button. If that
-  DM fails (DMs closed), the private reply says so and points to the site, because the match card needs DMs.
-- Failures (cooldown, already queued, banned) answer privately with the reason.
+  game" button and a short how-to. The admin pins it.
+- The shared join checks run when "Join queue" is pressed (account, Steam linked, not banned, no cooldown, not
+  queued, no active Open Play match), through the same function as the site's join.
 - Old VL channel: the bot can't read it, so the UE admin locks it and pins a pointer to the ticker channel.
 
 ### 4. Registration for new players
@@ -103,7 +106,7 @@ format, map, game n of N and the deadlines, plus a link button "Open on rizzotto
 |---|---|
 | Faction pick | String select of the allowed factions (Open Play bans removed). Discord allows 25 options; past that, two steps. Locks through the same function as the site. |
 | Lobby | "Set lobby code" opens a modal (code + password). The opponent's code shows once set. |
-| Result | "I won" / "They won" opens a modal with a **file upload** field for the `.replay` (≤ 5 MB). Same report function as the site: verification, held mismatch, dispute. |
+| Result | "I won" / "They won" / "Draw" (where the format allows one) opens a modal with a **file upload** field for the `.replay` (≤ 5 MB), whatever the result. Same report function as the site: verification, held mismatch, dispute. |
 | Opponent reported | "Confirm" / "Dispute". |
 | Any time | "Cancel match". |
 
@@ -114,24 +117,24 @@ format, map, game n of N and the deadlines, plus a link button "Open on rizzotto
 - Sync: both cards are re-rendered whenever the match changes (pick, lobby, report, finalize, cancel), from the
   same place that emits the socket events. A pick on the site updates the DM and vice versa.
 
-### 7. One service layer
+### 7. One code path
 
-Move the logic that sits inline in route handlers into lib functions callable with a userId, so the routes and the
-Discord handlers share it:
-
-- queue join (HTTP route and `joinQueueViaDiscord` today differ, see §8)
-- blind-pick lock (`routes/match-decision.ts`)
-- lobby code and password (`routes/match-games.ts`)
-- result report incl. `settleVerifiedReport`, opponent confirm, reject, escalate (`routes/match-games.ts`)
+- The queue: `lib/open-play-queue-service.ts` (`joinOpenPlayQueue` / `leaveOpenPlayQueue`), used by the site route
+  and every Discord entry. This closed the cooldown bypass in §8.
+- Match actions (blind-pick lock, lobby code and password, result + replay, assert, confirm, reject, escalate,
+  cancel): the DM handlers call the site's own routes as the player (`callAsUser`, `fastify.inject` with a
+  short-lived token), so there is no second copy of that logic to keep in sync. The replay goes in as the same
+  multipart upload the site sends.
+- Card sync: an `onResponse` hook re-renders the cards after any successful change to a match (site or DM), and a
+  per-minute reconcile catches crons and staff edits.
 
 ### 8. Fixes found while mapping the flow
 
-- **`joinQueueViaDiscord`** (buttons "Queue again" `op_queue` and `av_optin`) skips the cooldown and the
-  active-match checks of the HTTP join, so a player on a strike cooldown can queue through the button. Live today.
-- **`av_join`** creates a Domination 1v1 Bo1 match no matter what both players queued for. Only reachable from
-  old DMs (the wave now sends `av_offer`), so remove or route it through `claimQueueOffer`.
-- **No backend route enforces the Steam link.** `requireSteamLink` exists but is unused; the frontend gate is the
-  only one. The shared join checks add it.
+- **Fixed:** `joinQueueViaDiscord` (buttons "Queue again" `op_queue` and `av_optin`) skipped the cooldown and the
+  active-match checks; it now goes through `joinOpenPlayQueue`.
+- **Fixed:** `av_join` created a Domination 1v1 Bo1 match whatever both had queued for; retired (old DMs get a
+  pointer to `/join`).
+- **Fixed:** the queue join now checks the Steam link on the server (it was only the frontend gate).
 - `notifyMatchFoundWithButtons` calls `discordRequest` directly and bypasses `sendDm`'s opt-out and caps. Check
   whether that is intended (a match DM arguably should always go out).
 - Noted, not in scope: 2v2 no-show penalties assume 1v1 ids; 2v2 members can't join the live socket room; a
@@ -163,6 +166,7 @@ Each step deploys on Alex's go.
 
 ## What Alex and the UE admin set up
 
+- Ping role (optional): set it to "Allow anyone to @mention this role", or the bot can't ping it.
 - Alex, on RizzOttoverse: a ticker channel where only the bot may send messages (members keep View Channel, Read
   Message History and Use Application Commands), optionally a ping role; enter them in Admin, post the panel and
   pin it.

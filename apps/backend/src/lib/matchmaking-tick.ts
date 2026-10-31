@@ -177,6 +177,9 @@ export async function runMatchmakingTick(fastify: FastifyInstance): Promise<void
     fastify.log.error({ err }, '[matchmaking-tick] tick failed');
   } finally {
     await redis.eval(RELEASE_LOCK_SCRIPT, 1, TICK_LOCK_KEY, token).catch(() => {});
+    // The Discord ticker shows exactly the open entries; the tick may have joined or paired some.
+    // (Dynamic import: discord-open-play reads this module's queue keys.)
+    void import('./discord-open-play.js').then((m) => m.syncTicker(fastify)).catch(() => {});
   }
 }
 
@@ -397,13 +400,20 @@ export async function announceMatch(
       prisma.user.findUnique({ where: { id: p2Id }, select: { username: true, discord_id: true } }),
     ]);
     if (p1?.discord_id && p2?.discord_id) {
+      // 1v1: each player gets an interactive match card DM (pick, lobby, result + replay right in
+      // Discord). The plain match-found DM is the fallback when the cards can't be sent.
+      // (Dynamic import: discord-open-play reads this module's queue keys.)
       setImmediate(() =>
-        void notifyMatchFoundWithButtons(
-          matchId,
-          { discordId: p1.discord_id!, username: p1.username },
-          { discordId: p2.discord_id!, username: p2.username },
-          mapName,
-        ),
+        void (async () => {
+          const { sendMatchCards } = await import('./discord-open-play.js');
+          if (await sendMatchCards(fastify, matchId).catch(() => false)) return;
+          await notifyMatchFoundWithButtons(
+            matchId,
+            { discordId: p1.discord_id!, username: p1.username },
+            { discordId: p2.discord_id!, username: p2.username },
+            mapName,
+          );
+        })().catch((err) => fastify.log.error({ err, matchId }, '[matchmaking-tick] match DM failed (non-fatal)')),
       );
     }
     await Promise.all([

@@ -17,6 +17,7 @@ import { reconcileSwissTournaments } from '../lib/tournament-utils.js';
 import { getSupporterRoleConfig, refreshSupporterFromDiscord } from '../lib/supporter-service.js';
 import { syncKofiGoal } from '../lib/kofi-goal-sync.js';
 import { SITE_TZ } from '../lib/site-time.js';
+import { reconcileMatchCards, refreshJoinDm, syncTicker } from '../lib/discord-open-play.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -235,6 +236,8 @@ export default fp(
             if (joinedAt === null || Number(joinedAt) < cutoffMs) {
               await fastify.redis.lrem(key, 0, userId);
               await fastify.redis.hdel(joinedAtKey, userId);
+              // A Discord join DM that still says "in the queue" shows the settings again.
+              void refreshJoinDm(fastify, userId, 'Your queue entry timed out after 30 minutes. Join again whenever you like.');
             }
           }
         } catch (err) {
@@ -305,6 +308,24 @@ export default fp(
           }
         } catch (err) {
           fastify.log.error({ err }, 'Stale open-play cancel cron failed');
+        }
+      },
+      { timezone: 'UTC' },
+    );
+
+    // -----------------------------------------------------------------------
+    // Discord Open Play — every minute: the ticker shows exactly the open queue entries, and every
+    // match card shows its match as it is now (catches changes made on the site, by a cron or by
+    // staff). Both are reconciles, so no path that changes a match needs its own Discord hook.
+    // -----------------------------------------------------------------------
+    const discordOpenPlayTask = cron.schedule(
+      '*/1 * * * *',
+      async () => {
+        try {
+          await syncTicker(fastify);
+          await reconcileMatchCards(fastify);
+        } catch (err) {
+          fastify.log.error({ err }, 'Discord Open Play reconcile cron failed');
         }
       },
       { timezone: 'UTC' },
@@ -622,7 +643,7 @@ export default fp(
       { timezone: SITE_TZ },
     );
 
-    fastify.decorate('cronTasks', [snapshotTask, playerSkillSnapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask, kofiGoalSyncTask, accessLogPurgeTask, botMessagePurgeTask]);
+    fastify.decorate('cronTasks', [snapshotTask, playerSkillSnapshotTask, checkinTask, gameConfirmTask, blindPickTask, matchupExpiryTask, queueCleanupTask, reQueueReminderTask, staleOpenPlayTask, discordOpenPlayTask, autoSwissTask, baliReconcileTask, matchupReminderTask, scheduledMatchupActivationTask, supporterRefreshTask, kofiGoalSyncTask, accessLogPurgeTask, botMessagePurgeTask]);
 
     fastify.addHook('onClose', async () => {
       snapshotTask.stop();
@@ -634,6 +655,7 @@ export default fp(
       queueCleanupTask.stop();
       reQueueReminderTask.stop();
       staleOpenPlayTask.stop();
+      discordOpenPlayTask.stop();
       autoSwissTask.stop();
       baliReconcileTask.stop();
       matchupReminderTask.stop();

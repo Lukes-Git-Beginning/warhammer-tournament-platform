@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { buildApp } from './app.js';
+import { registerDiscordCommands } from './lib/discord-open-play.js';
 import { invalidate } from './lib/cache.js';
 import { publishNewChangelogOnBoot } from './lib/changelog-publish.js';
 import { maybeBackfillGsHistoryOnBoot } from './lib/gs-history-backfill.js';
@@ -54,6 +55,8 @@ async function main(): Promise<void> {
     // Fire-and-forget: RizzBOTto auto-publishes any CHANGELOG versions added since the last
     // deploy to the Discord changelog channel. Never blocks or fails startup.
     void publishNewChangelogOnBoot(app.prisma, app.log);
+    // Fire-and-forget: (re-)register the global /join command (idempotent; only with a bot token).
+    void registerDiscordCommands(app);
     // Fire-and-forget: on the first boot after deploy the timeless GS history is empty, so
     // reconstruct it day-by-day from launch in the background (guarded to run exactly once,
     // then the daily snapshot cron takes over). Never blocks or fails startup.

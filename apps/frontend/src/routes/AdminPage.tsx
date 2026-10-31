@@ -15,6 +15,7 @@ import { MapPoolEditor } from '@/components/admin/MapPoolEditor.js';
 import { FactionManager } from '@/components/admin/FactionManager.js';
 import { TournamentDefaultsEditor } from '@/components/admin/TournamentDefaultsEditor.js';
 import { FeatureFlagsPanel } from '@/components/admin/FeatureFlagsPanel.js';
+import { DiscordOpenPlayPanel } from '@/components/admin/DiscordOpenPlayPanel.js';
 import { WelcomeBannerEditor } from '@/components/admin/WelcomeBannerEditor.js';
 import { StandardRulesetEditor } from '@/components/admin/StandardRulesetEditor.js';
 import { RuleDocumentsEditor } from '@/components/admin/RuleDocumentsEditor.js';
@@ -126,6 +127,11 @@ function SettingsTab() {
       {/* Section: Feature Flags */}
       <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-5">
         <FeatureFlagsPanel />
+      </section>
+
+      {/* Section: Discord Open Play (ticker servers + join panel) */}
+      <section className="rounded-md border border-rizzotto-iron-700 bg-rizzotto-iron-900/60 p-5">
+        <DiscordOpenPlayPanel />
       </section>
 
       {/* Section: Welcome Banner */}

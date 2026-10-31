@@ -43,6 +43,7 @@ import openPlayQueueRoutes from './routes/open-play-queue.js';
 import availabilityRoutes from './routes/availability.js';
 import scheduledMatchupsRoutes from './routes/scheduled-matchups.js';
 import discordInteractionsRoutes from './routes/discord-interactions.js';
+import { refreshMatchCards } from './lib/discord-open-play.js';
 import activeMatchesRoutes from './routes/active-matches.js';
 import skillRoutes from './routes/skill.js';
 import supporterRoutes from './routes/supporters.js';
@@ -149,6 +150,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   if (withDraft && withRedis) await app.register(draftPlugin);
   if (withSocket) await app.register(socketPlugin);
   if (withCron) await app.register(cronPlugin);
+
+  // Discord Open Play: a match changed (site or DM: pick, lobby, report, confirm, cancel, …) →
+  // re-render the players' match cards. Only matches that have cards are touched (two Redis reads).
+  const MATCH_CHANGE_URL = /^\/api\/(?:open-play\/)?matches\/([0-9a-f-]{36})\//;
+  app.addHook('onResponse', async (request, reply) => {
+    if (reply.statusCode >= 300 || (request.method !== 'POST' && request.method !== 'PATCH')) return;
+    const matchId = MATCH_CHANGE_URL.exec(request.url)?.[1];
+    if (matchId) void refreshMatchCards(app, matchId);
+  });
 
   await app.register(authRoutes);
   await app.register(userRoutes);
