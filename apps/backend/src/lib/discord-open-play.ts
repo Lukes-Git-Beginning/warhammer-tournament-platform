@@ -24,6 +24,7 @@ import {
   type QueuePrefs,
 } from './queue-matching.js';
 import { getStoredQueuePrefs } from './queue-prefs.js';
+import { startOfSiteDay } from './site-time.js';
 import { openPlayBannedFactionIds } from './standard-ruleset.js';
 
 // ---------------------------------------------------------------------------
@@ -67,12 +68,16 @@ const noMentions = { parse: [] as string[] };
 const JOIN_DM_KEY = (userId: string) => `rizzotto:dop:join:${userId}`;
 const CARD_KEY = (matchId: string, userId: string) => `rizzotto:dop:card:${matchId}:${userId}`;
 const TICKER_KEY = 'rizzotto:dop:ticker';
+const TICKER_CLOSED_KEY = 'rizzotto:dop:ticker:closed';
 const PING_KEY = (guildId: string) => `rizzotto:dop:ping:${guildId}`;
+const PANEL_HASH_KEY = (guildId: string) => `rizzotto:dop:panel:${guildId}`;
 export const PENDING_JOIN_KEY = (discordId: string) => `rizzotto:dop:pending:${discordId}`;
 
 const JOIN_DM_TTL = 24 * 3600;
 const CARD_TTL = 7 * 24 * 3600;
 const PING_GAP_SEC = 5 * 60;
+/** A closed ticker post stays this long (saying how it ended), then the bot deletes it. */
+const TICKER_CLOSED_TTL_MS = 15 * 60_000;
 const PENDING_TTL = 15 * 60;
 
 interface StoredMessage {
@@ -558,14 +563,58 @@ export function renderTickerPost(prefs: QueuePrefs, pingRoleId?: string | null):
 
 interface TickerState {
   posts: { channelId: string; messageId: string }[];
+  /** When the request was posted: a match created after it means the request was taken. */
+  postedAt?: number;
+  /** "Land Battle, Siege · Bo1 · 1v1", for the closed line. */
+  summary?: string;
+}
+
+interface ClosedTickerPost {
+  queueId: string;
+  matched: boolean;
+  deleteAt: number;
+}
+
+/** How a request ended: "Matched" with what is being played, or a quiet "no longer looking". */
+async function renderClosedTickerPost(
+  fastify: FastifyInstance,
+  queueId: string,
+  s: TickerState,
+): Promise<{ message: DiscordMessage; matched: boolean }> {
+  const match = await fastify.prisma.match.findFirst({
+    where: {
+      type: 'OPEN_PLAY',
+      deleted_at: null,
+      created_at: { gte: new Date(s.postedAt ?? Date.now() - TICKER_CLOSED_TTL_MS) },
+      OR: [{ player1_id: queueId }, { player2_id: queueId }],
+    },
+    orderBy: { created_at: 'desc' },
+    select: { created_at: true, match_format: true, competitor_format: true, games: { where: { game_number: 1 }, select: { battle_type: true } } },
+  });
+  if (!match) {
+    return { matched: false, message: { content: `-# No longer looking${s.summary ? ` · ${s.summary}` : ''}`, components: [], allowed_mentions: noMentions } };
+  }
+  const battleType = match.games[0]?.battle_type;
+  const what = [battleType ? (BT_LABEL[battleType] ?? battleType) : null, FORMAT_LABEL[match.match_format ?? 'BO1'], sizeLabel(match.competitor_format)];
+  return {
+    matched: true,
+    message: {
+      content: `⚔️ **Matched:** ${what.filter(Boolean).join(' · ')} · <t:${Math.floor(match.created_at.getTime() / 1000)}:R>`,
+      components: [],
+      allowed_mentions: noMentions,
+    },
+  };
 }
 
 let tickerRunning = false;
 
 /**
- * Make every configured ticker channel show exactly the open queue entries: post the new ones,
- * delete the ones that closed (matched, left, timed out). Called after every tick and leave, and
- * each minute; a reconcile, so no queue path needs its own hook.
+ * Make every configured ticker channel show the open queue entries: post the new ones, and turn the
+ * ones that closed into one line (matched, or no longer looking) that the bot deletes after 15
+ * minutes. So whoever follows a ping still sees what happened, while the channel stays short and
+ * the pinned panel stays in view. A player who queues again loses his "no longer looking" lines at
+ * once. Also keeps the panels' live line current. Called after every tick and leave, and each
+ * minute; a reconcile, so no queue path needs its own hook.
  */
 export async function syncTicker(fastify: FastifyInstance): Promise<void> {
   const redis = fastify.redis;
@@ -576,16 +625,29 @@ export async function syncTicker(fastify: FastifyInstance): Promise<void> {
     const ids = await redis.lrange(QUEUE_KEY, 0, -1);
     const open = new Set(ids);
     const state = await redis.hgetall(TICKER_KEY);
+    const now = Date.now();
 
     for (const [queueId, raw] of Object.entries(state)) {
       if (open.has(queueId)) continue;
       const s = JSON.parse(raw) as TickerState;
-      await Promise.allSettled(s.posts.map((p) => discordRequest('DELETE', `/channels/${p.channelId}/messages/${p.messageId}`)));
+      const closed = await renderClosedTickerPost(fastify, queueId, s);
+      for (const p of s.posts) {
+        await discordRequest('PATCH', `/channels/${p.channelId}/messages/${p.messageId}`, closed.message).catch(() => null);
+        const entry: ClosedTickerPost = { queueId, matched: closed.matched, deleteAt: now + TICKER_CLOSED_TTL_MS };
+        await redis.hset(TICKER_CLOSED_KEY, `${p.channelId}/${p.messageId}`, JSON.stringify(entry));
+      }
       await redis.hdel(TICKER_KEY, queueId);
     }
-    if (guilds.length === 0) return;
 
-    for (const queueId of ids) {
+    for (const [key, raw] of Object.entries(await redis.hgetall(TICKER_CLOSED_KEY))) {
+      const c = JSON.parse(raw) as ClosedTickerPost;
+      if (c.deleteAt > now && (c.matched || !open.has(c.queueId))) continue;
+      const [channelId, messageId] = key.split('/');
+      await discordRequest('DELETE', `/channels/${channelId}/messages/${messageId}`).catch(() => null);
+      await redis.hdel(TICKER_CLOSED_KEY, key);
+    }
+
+    for (const queueId of guilds.length > 0 ? ids : []) {
       if (state[queueId]) continue;
       const prefs = parseQueuePrefs(await redis.hget(QUEUE_PREFS_KEY, queueId));
       const posts: TickerState['posts'] = [];
@@ -595,8 +657,10 @@ export async function syncTicker(fastify: FastifyInstance): Promise<void> {
         const messageId = await postMessage(g.tickerChannelId, renderTickerPost(prefs, ping ? g.pingRoleId : null));
         if (messageId) posts.push({ channelId: g.tickerChannelId, messageId });
       }
-      await redis.hset(TICKER_KEY, queueId, JSON.stringify({ posts } satisfies TickerState));
+      await redis.hset(TICKER_KEY, queueId, JSON.stringify({ posts, postedAt: now, summary: describePrefs(prefs) } satisfies TickerState));
     }
+
+    await refreshPanels(fastify, guilds, ids.length);
   } catch (err) {
     fastify.log.warn({ err }, '[discord-open-play] syncTicker failed (non-fatal)');
   } finally {
@@ -604,20 +668,74 @@ export async function syncTicker(fastify: FastifyInstance): Promise<void> {
   }
 }
 
-/** The pinned panel in a ticker channel: how to join, plus a "Find a game" button. */
-export function renderJoinPanel(): DiscordMessage {
+interface PanelStats {
+  matchesToday: number;
+  queued: number;
+}
+
+/** The pinned panel in a ticker channel: how to join, a "Find a game" button and a live line. */
+export function renderJoinPanel(stats?: PanelStats): DiscordMessage {
+  const live = stats
+    ? `\n\n📊 Today: **${stats.matchesToday}** ${stats.matchesToday === 1 ? 'match' : 'matches'} · **${stats.queued}** in the queue right now`
+    : '';
   return {
     content:
       `**Find an Open Play game**\nType \`/join\` anywhere on this server, or press the button. RizzBOTto sends you a DM where you ` +
       `pick battle types, Bo1/Bo3 and team size, then you play the whole match in that DM or on rizzotto.gg.\n` +
-      `Open requests show up in this channel. Click one to take the match.`,
+      `Open requests show up in this channel. Click one to take the match.${live}`,
     components: [row(btn('Find a game', 'jp_find', PRIMARY), linkBtn('How Open Play works', `${siteUrl()}/how-to-play`))],
     allowed_mentions: noMentions,
   };
 }
 
-export async function postJoinPanel(channelId: string): Promise<string | null> {
-  return postMessage(channelId, renderJoinPanel());
+/** The posted panel per server (guildId → message), so its live line can be kept current. */
+export const PANELS_CONFIG_KEY = 'discord_open_play_panels';
+type PanelRefs = Record<string, { channelId: string; messageId: string }>;
+
+async function getPanels(fastify: FastifyInstance): Promise<PanelRefs> {
+  const row = await fastify.prisma.adminConfig.findUnique({ where: { key: PANELS_CONFIG_KEY } });
+  const value = row?.value as unknown;
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as PanelRefs) : {};
+}
+
+async function panelStats(fastify: FastifyInstance, queued: number): Promise<PanelStats> {
+  const matchesToday = await fastify.prisma.match.count({
+    where: { type: 'OPEN_PLAY', deleted_at: null, status: { not: 'CANCELLED' }, created_at: { gte: startOfSiteDay(new Date()) } },
+  });
+  return { matchesToday, queued };
+}
+
+/** Post the panel in a server's ticker channel, replacing the one posted there before. */
+export async function postJoinPanel(fastify: FastifyInstance, guild: OpenPlayGuild): Promise<string | null> {
+  const queued = fastify.redis ? await fastify.redis.llen(QUEUE_KEY) : 0;
+  const messageId = await postMessage(guild.tickerChannelId, renderJoinPanel(await panelStats(fastify, queued)));
+  if (!messageId) return null;
+  const panels = await getPanels(fastify);
+  const previous = panels[guild.guildId];
+  if (previous) await discordRequest('DELETE', `/channels/${previous.channelId}/messages/${previous.messageId}`).catch(() => null);
+  panels[guild.guildId] = { channelId: guild.tickerChannelId, messageId };
+  await fastify.prisma.adminConfig.upsert({
+    where: { key: PANELS_CONFIG_KEY },
+    create: { key: PANELS_CONFIG_KEY, value: panels as never },
+    update: { value: panels as never },
+  });
+  await fastify.redis?.del(PANEL_HASH_KEY(guild.guildId));
+  return messageId;
+}
+
+/** Edit each configured server's panel when its live line changed (edits don't notify anyone). */
+async function refreshPanels(fastify: FastifyInstance, guilds: OpenPlayGuild[], queued: number): Promise<void> {
+  const panels = await getPanels(fastify);
+  const targets = guilds.filter((g) => panels[g.guildId]);
+  if (targets.length === 0 || !fastify.redis) return;
+  const panel = renderJoinPanel(await panelStats(fastify, queued));
+  const hash = hashOf(panel);
+  for (const g of targets) {
+    if ((await fastify.redis.get(PANEL_HASH_KEY(g.guildId))) === hash) continue;
+    const ref = panels[g.guildId]!;
+    const res = await discordRequest('PATCH', `/channels/${ref.channelId}/messages/${ref.messageId}`, panel);
+    if (res.ok) await fastify.redis.set(PANEL_HASH_KEY(g.guildId), hash, 'EX', 24 * 3600);
+  }
 }
 
 // ---------------------------------------------------------------------------

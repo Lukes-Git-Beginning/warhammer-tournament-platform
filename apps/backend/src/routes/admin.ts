@@ -1844,7 +1844,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!guild) {
       return reply.code(404).send({ error: 'NotFound', message: 'That server is not configured', statusCode: 404 });
     }
-    const messageId = await postJoinPanel(guild.tickerChannelId);
+    const messageId = await postJoinPanel(fastify, guild);
     if (!messageId) {
       return reply.code(502).send({ error: 'BadGateway', message: 'Discord refused the post. Check that RizzBOTto can send messages in the ticker channel.', statusCode: 502 });
     }

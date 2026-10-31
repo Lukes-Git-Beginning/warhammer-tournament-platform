@@ -100,8 +100,14 @@ the configured channels.
 - On every queue JOIN (site, `/join`, panel, DM buttons) the bot posts to every configured ticker channel, anonymous
   like the availability DM: "Someone is looking for a game: Land Battle · Bo3", one button per offer (battle type ×
   format). A click claims the offer like `av_offer` does (`claimQueueOffer`).
-- When the entry closes (matched, left, timed out) the post is deleted, so the channel only shows open requests and
-  the panel. Post ids per queue entry and guild live in Redis. Deleting its own posts needs no extra permission.
+- When the entry closes the post is edited to how it ended and deleted 15 minutes later (Alex 2026-10-31: whoever
+  follows a ping must not find an empty channel, but the channel should stay short so the pinned panel stays in
+  view; Discord pins don't stick to the top). Matched: "⚔️ Matched: Land Battle · Bo3 · 1v1 · 3 minutes ago" (a match
+  created for that queue id after the post). Left or timed out: a small grey "No longer looking · …" line, removed
+  at once when the same player queues again (join/leave spam). Post ids per queue entry and guild live in Redis.
+  Editing and deleting its own posts needs no extra permission, and edits don't notify.
+- The panel carries a live line, "📊 Today: 12 matches · 2 in the queue right now" (Open Play matches created since
+  site midnight, not cancelled), edited in place when it changes. Posting the panel again replaces the old one.
 - Notifications: whoever sets the channel to "All messages" gets one push per open request. A ping role
   (`pingRoleId`) is optional and mentioned at most once per few minutes per guild (like the 5-minute cap on the DM
   wave). A mention inside the same post adds no second notification.

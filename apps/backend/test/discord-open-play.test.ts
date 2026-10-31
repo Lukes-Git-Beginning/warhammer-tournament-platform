@@ -20,13 +20,15 @@ import {
   registerDiscordCommands,
   syncTicker,
   GUILDS_CONFIG_KEY,
+  PANELS_CONFIG_KEY,
+  postJoinPanel,
   ROLLOUT_CONFIG_KEY,
 } from '../src/lib/discord-open-play.js';
 import { joinOpenPlayQueue } from '../src/lib/open-play-queue-service.js';
 import { createTestUser, cleanupUsers, type TestUser } from './helpers/db-fixtures.js';
 
 const MM_KEYS = ['rizzotto:mm:hold', 'rizzotto:mm:ratelimit', 'rizzotto:mm:contacted', 'rizzotto:mm:tick:lock'];
-const DOP_KEYS = ['rizzotto:dop:ticker'];
+const DOP_KEYS = ['rizzotto:dop:ticker', 'rizzotto:dop:ticker:closed', 'rizzotto:dop:panel:1'];
 const ALL_KEYS = [QUEUE_KEY, JOINED_AT_KEY, QUEUE_PREFS_KEY, ...MM_KEYS, ...DOP_KEYS];
 
 let app: FastifyInstance;
@@ -34,6 +36,7 @@ let users: TestUser[] = [];
 const saved = new Map<string, { type: string; value: string[] | Record<string, string> | string | null }>();
 let savedGuildConfig: unknown = undefined;
 let savedRollout: unknown = undefined;
+let savedPanels: unknown = undefined;
 
 async function setRollout(value: { live: boolean; testerDiscordIds: string[] }) {
   await prisma.adminConfig.upsert({
@@ -106,6 +109,7 @@ beforeAll(async () => {
   }
   savedGuildConfig = (await prisma.adminConfig.findUnique({ where: { key: GUILDS_CONFIG_KEY } }))?.value;
   savedRollout = (await prisma.adminConfig.findUnique({ where: { key: ROLLOUT_CONFIG_KEY } }))?.value;
+  savedPanels = (await prisma.adminConfig.findUnique({ where: { key: PANELS_CONFIG_KEY } }))?.value;
   await setRollout({ live: true, testerDiscordIds: [] }); // the rollout gate has its own tests below
   await app.redis.del(...ALL_KEYS);
 });
@@ -124,7 +128,7 @@ afterEach(async () => {
   users = [];
   calls = [];
   await app.redis.del(...ALL_KEYS);
-  await prisma.adminConfig.deleteMany({ where: { key: GUILDS_CONFIG_KEY } });
+  await prisma.adminConfig.deleteMany({ where: { key: { in: [GUILDS_CONFIG_KEY, PANELS_CONFIG_KEY] } } });
 });
 
 afterAll(async () => {
@@ -138,6 +142,9 @@ afterAll(async () => {
     await prisma.adminConfig.create({ data: { key: GUILDS_CONFIG_KEY, value: savedGuildConfig as never } });
   }
   await prisma.adminConfig.deleteMany({ where: { key: ROLLOUT_CONFIG_KEY } });
+  if (savedPanels !== undefined) {
+    await prisma.adminConfig.create({ data: { key: PANELS_CONFIG_KEY, value: savedPanels as never } });
+  }
   if (savedRollout !== undefined) {
     await prisma.adminConfig.create({ data: { key: ROLLOUT_CONFIG_KEY, value: savedRollout as never } });
   }
@@ -224,23 +231,76 @@ describe('ticker', () => {
     expect(labels).toEqual(['Conquest Bo1', 'Conquest Bo3', 'Siege Bo2']);
   });
 
-  it('shows exactly the open entries: posts new ones, deletes closed ones', async () => {
-    await prisma.adminConfig.create({ data: { key: GUILDS_CONFIG_KEY, value: [{ guildId: '1', tickerChannelId: 'tick-1' }] as never } });
-    const u = await player('dop_ticker');
+  const tickerPosts = () => calls.filter((c) => c.method === 'POST' && c.url.endsWith('/channels/tick-1/messages'));
+  const edits = () => calls.filter((c) => c.method === 'PATCH' && c.url.includes('/channels/tick-1/messages/'));
+  const deletes = () => calls.filter((c) => c.method === 'DELETE' && c.url.includes('/channels/tick-1/messages/'));
+  const content = (c: Call) => String((c.body as { content: string }).content);
+
+  async function queue(u: TestUser) {
     await app.redis.rpush(QUEUE_KEY, u.id);
     await app.redis.hset(QUEUE_PREFS_KEY, u.id, JSON.stringify({ format: 'ONE_V_ONE', battleTypes: ['LAND_BATTLE'], matchFormats: ['BO3'] }));
+  }
+
+  it('posts open entries; a closed one becomes "no longer looking", gone at once when he queues again', async () => {
+    await prisma.adminConfig.create({ data: { key: GUILDS_CONFIG_KEY, value: [{ guildId: '1', tickerChannelId: 'tick-1' }] as never } });
+    const u = await player('dop_ticker');
+    await queue(u);
 
     await syncTicker(app);
-    const post = calls.find((c) => c.method === 'POST' && c.url.endsWith('/channels/tick-1/messages'));
-    expect(post).toBeDefined();
-    expect(customIds((post!.body as { components: object[] }).components)).toEqual(['tk:L:3:1']);
+    expect(tickerPosts()).toHaveLength(1);
+    expect(customIds((tickerPosts()[0]!.body as { components: object[] }).components)).toEqual(['tk:L:3:1']);
 
     await syncTicker(app); // nothing new
-    expect(calls.filter((c) => c.method === 'POST' && c.url.endsWith('/channels/tick-1/messages'))).toHaveLength(1);
+    expect(tickerPosts()).toHaveLength(1);
 
     await app.redis.lrem(QUEUE_KEY, 0, u.id);
     await syncTicker(app);
-    expect(calls.some((c) => c.method === 'DELETE' && c.url.includes('/channels/tick-1/messages/'))).toBe(true);
+    expect(content(edits()[0]!)).toBe('-# No longer looking · Land Battle · Bo3 · 1v1');
+    expect((edits()[0]!.body as { components: object[] }).components).toEqual([]);
+    expect(deletes()).toHaveLength(0);
+
+    await queue(u);
+    await syncTicker(app);
+    expect(deletes()).toHaveLength(1);
+    expect(tickerPosts()).toHaveLength(2);
+  });
+
+  it('a taken request says "Matched" and is deleted after 15 minutes', async () => {
+    await prisma.adminConfig.create({ data: { key: GUILDS_CONFIG_KEY, value: [{ guildId: '1', tickerChannelId: 'tick-1' }] as never } });
+    const u = await player('dop_ticker_m');
+    const other = await player('dop_ticker_o');
+    await queue(u);
+    await syncTicker(app);
+
+    await createOpenPlayMatch(prisma, u.id, other.id, 'AVAILABILITY', 'LAND_BATTLE', 'ONE_V_ONE', 'BO3');
+    await app.redis.lrem(QUEUE_KEY, 0, u.id);
+    await syncTicker(app);
+    expect(content(edits()[0]!)).toMatch(/^⚔️ \*\*Matched:\*\* Land Battle · Bo3 · 1v1 · <t:\d+:R>$/);
+
+    await syncTicker(app); // still within the 15 minutes
+    expect(deletes()).toHaveLength(0);
+    const closed = await app.redis.hgetall('rizzotto:dop:ticker:closed');
+    for (const [key, raw] of Object.entries(closed)) {
+      await app.redis.hset('rizzotto:dop:ticker:closed', key, JSON.stringify({ ...JSON.parse(raw), deleteAt: Date.now() - 1 }));
+    }
+    await syncTicker(app);
+    expect(deletes()).toHaveLength(1);
+  });
+
+  it('the panel carries a live line that follows the queue', async () => {
+    const guild = { guildId: '1', tickerChannelId: 'tick-1' };
+    await prisma.adminConfig.create({ data: { key: GUILDS_CONFIG_KEY, value: [guild] as never } });
+    const panelId = await postJoinPanel(app, guild);
+    expect(content(tickerPosts()[0]!)).toContain('**0** in the queue right now');
+
+    await queue(await player('dop_panel'));
+    await syncTicker(app);
+    const panelEdit = calls.find((c) => c.method === 'PATCH' && c.url.endsWith(`/channels/tick-1/messages/${panelId}`));
+    expect(content(panelEdit!)).toContain('**1** in the queue right now');
+
+    // Posting the panel again replaces the old one.
+    await postJoinPanel(app, guild);
+    expect(calls.some((c) => c.method === 'DELETE' && c.url.endsWith(`/channels/tick-1/messages/${panelId}`))).toBe(true);
   });
 });
 
