@@ -1125,6 +1125,12 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: 'Forbidden', message: 'Only the surviving player or a tournament manager can void this match', statusCode: 403 });
       }
 
+      // A settled match (e.g. an elimination walkover the drop already applied) is not voided
+      // again: a second walkover would advance the survivor twice.
+      if (!['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED'].includes(match.status)) {
+        return reply.code(409).send({ error: 'Conflict', message: 'This match is already settled', statusCode: 409 });
+      }
+
       // Guard: must have a withdrawn player set (or one participant is WITHDREW),
       // and no confirmed result yet.
       const hasResult = match.games.some((g) => g.reported_winner_id !== null || g.winner_id !== null);
@@ -1162,8 +1168,11 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         match.phase === 'PLAYOFF_SF' ||
         match.phase === 'PLAYOFF_FINAL' ||
         match.phase === 'PLAYOFF_THIRD_PLACE';
+      // SE/DE matches carry no phase tag (by design), but they are bracket matches all the same: a
+      // void there is a walkover that advances the survivor, never a group-style FORFEIT.
+      const isElimination = format === 'SINGLE_ELIMINATION' || format === 'DOUBLE_ELIMINATION';
 
-      if (isPlayoffPhase) {
+      if (isPlayoffPhase || isElimination) {
         if (!survivorId) {
           return reply.code(422).send({ error: 'UnprocessableEntity', message: 'Cannot determine survivor for walkover', statusCode: 422 });
         }
@@ -1191,7 +1200,7 @@ const matchRoutes: FastifyPluginAsync = async (fastify) => {
         } else {
           await fastify.prisma.match.update({ where: { id: matchId }, data: { withdrawn_player_id: droppedParticipant } });
           await fastify.prisma.matchGame.deleteMany({ where: { match_id: matchId } });
-          await completeMatch(fastify, { matchId, winnerId: survivorId, actorId: callerId, walkover: true });
+          await completeMatch(fastify, { matchId, winnerId: survivorId, actorId: callerId, walkover: true, loserWithdrew: isElimination });
         }
       } else if (format === 'BALANCED_LIECHTENSTEIN') {
         // BaLi group phase: CANCELLED → re-pair the survivor.

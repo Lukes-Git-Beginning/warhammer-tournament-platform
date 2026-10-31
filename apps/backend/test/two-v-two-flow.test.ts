@@ -458,7 +458,7 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     return { id, slug, matchId: match.matchId as string };
   }
 
-  it('a 2v2 team drop flags the open match with the TEAM id (survivor gets the walkover prompt)', async () => {
+  it('a 2v2 team drop from an elimination bracket is a walkover for the other TEAM', async () => {
     const host = await createAdminHost('DropHost');
     const a = await makeActiveTeam('DropA');
     const b = await makeActiveTeam('DropB');
@@ -472,17 +472,20 @@ describe('2v2 — permanent team lifecycle + team-as-actor', () => {
     });
     expect(dropped.statusCode).toBe(200);
 
-    // The flag must be the dropped TEAM id, not the captain's user id — that is what the match slots
-    // hold, so the survivor's "opponent withdrew — did you play?" prompt keys on it correctly.
-    const flagged = await prisma.match.findUnique({ where: { id: matchId }, select: { withdrawn_player_id: true } });
-    expect(flagged?.withdrawn_player_id).toBe(a.teamId);
-    expect(flagged?.withdrawn_player_id).not.toBe(a.captain.id);
+    // The flag and the walkover key on the TEAM ids, not the captain's user id — that is what the
+    // match slots hold. Single Elimination settles the drop at once: team B goes through.
+    const settled = await prisma.match.findUnique({ where: { id: matchId }, select: { withdrawn_player_id: true, status: true, winner_id: true } });
+    expect(settled?.withdrawn_player_id).toBe(a.teamId);
+    expect(settled?.withdrawn_player_id).not.toBe(a.captain.id);
+    expect(settled?.status).toBe('FORFEIT');
+    expect(settled?.winner_id).toBe(b.teamId);
 
-    // The surviving team's CAPTAIN (team-as-actor) may void it — a teammate may not.
+    // Void auth is team-as-actor: a teammate is refused, the surviving CAPTAIN passes the check and
+    // only finds the match already settled (no second walkover).
     const byMate = await app.inject({ method: 'POST', url: `/api/matches/${matchId}/void-dropped`, cookies: cookieFor(b.partner.id) });
     expect(byMate.statusCode).toBe(403);
     const byCaptain = await app.inject({ method: 'POST', url: `/api/matches/${matchId}/void-dropped`, cookies: cookieFor(b.captain.id) });
-    expect(byCaptain.statusCode).toBe(200);
+    expect(byCaptain.statusCode).toBe(409);
   });
 
   it('2v2 add-late enters a whole ACTIVE team (captain row + team_id), and rejects a bare userId', async () => {

@@ -2,7 +2,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { emitParticipantChange, emitBracketUpdate } from '../lib/emit.js';
 import { canManageTournament, createLateJoinerBye } from '../lib/tournament-utils.js';
-import { notifyHostsOfWithdrawal, notifyHostsLateJoinRequest, notifyLateJoinDecision, notifyOpponentOfWithdrawal } from '../lib/discord-notify.js';
+import { notifyHostsOfWithdrawal, notifyHostsLateJoinRequest, notifyLateJoinDecision, notifyOpponentOfWithdrawal, notifyOpponentWalkover } from '../lib/discord-notify.js';
+import { withdrawFromBracketMatch } from '../lib/complete-match.js';
 import { countReserve } from '../lib/competitive-finals.js';
 import { addLateParticipant, setParticipantFactionOp } from '../lib/tournament-management.js';
 import { reapplyDynamicSizing } from '../lib/auto-swiss-service.js';
@@ -1366,7 +1367,7 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
 
       const tournament = await fastify.prisma.tournament.findFirst({
         where: { slug, deleted_at: null },
-        select: { id: true, status: true, host_id: true, championship_kind: true },
+        select: { id: true, status: true, host_id: true, championship_kind: true, format: true },
       });
       if (!tournament) {
         return reply.code(404).send({ error: 'NotFound', message: 'Tournament not found', statusCode: 404 });
@@ -1430,9 +1431,13 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
       // Mark any open unreported group matches of the dropped player so the
       // survivor can decide: played → report normally, not played → void.
       // Format-agnostic: applies to BaLi + Swiss + Auto Swiss group matches.
+      // Single / Double Elimination is different: a drop there always means the opponent goes
+      // through, so the dropped player is taken out of his open match right away (walkover, see
+      // withdrawFromBracketMatch), also mid-series after a reported game.
       // 2v2: match slots hold the opaque COMPETITOR id (the team), not the captain's user id —
       // so match/withdrawal handling keys on `competitorId`, not `userId` (team-as-actor).
       const competitorId = participant.team_id ?? userId;
+      const isElimination = tournament.format === 'SINGLE_ELIMINATION' || tournament.format === 'DOUBLE_ELIMINATION';
       try {
         const OPEN_FOR_VOID = ['PENDING', 'ONGOING', 'AWAITING_CONFIRMATION', 'DISPUTED'] as const;
         const openMatches = await fastify.prisma.match.findMany({
@@ -1440,8 +1445,8 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
             tournament_id: tournament.id,
             deleted_at: null,
             status: { in: [...OPEN_FOR_VOID] },
-            // No game has a reported or confirmed winner yet.
-            games: { none: { reported_winner_id: { not: null } } },
+            // No game has a reported or confirmed winner yet (elimination: any open match).
+            ...(isElimination ? {} : { games: { none: { reported_winner_id: { not: null } } } }),
             // Every open match of the dropped competitor — group (phase null / SWISS) AND
             // playoff (PLAYOFF_*). Previously this filtered to group phase only, so a
             // playoff-phase drop silently skipped the opponent (no DM, no game-tile banner).
@@ -1465,6 +1470,20 @@ const participantRoutes: FastifyPluginAsync = async (fastify) => {
                 select: { status: true },
               })
             : null;
+
+          if (isElimination) {
+            const advancedId = await withdrawFromBracketMatch(fastify, {
+              matchId: m.id,
+              withdrawnId: competitorId,
+              opponentWithdrew: survivorStatus?.status === 'WITHDREW',
+              actorId: callerId,
+            });
+            if (advancedId) {
+              const advancedUserId = (await captainMap(fastify.prisma, [advancedId])).get(advancedId) ?? advancedId;
+              void notifyOpponentWalkover(m.id, advancedUserId);
+            }
+            continue;
+          }
 
           if (!survivorId || survivorStatus?.status === 'WITHDREW') {
             // Double-drop: cancel the match outright.

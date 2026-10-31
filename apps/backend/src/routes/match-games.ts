@@ -29,6 +29,45 @@ const LobbyPasswordBodySchema = z.object({
 // Helpers
 // ---------------------------------------------------------------------------
 
+type GameFactionMatrix = {
+  decided_at: Date | null;
+  picked_cell: string | null;
+  p1_factions: string[];
+  p2_factions: string[];
+} | null;
+
+/** The factions a decided matrix (MATRIX / Free Pick / 1v3) resolved for its own game. */
+function decidedMatrixFactions(matrix: GameFactionMatrix): { p1: string | null; p2: string | null } | null {
+  if (!matrix?.decided_at || !matrix.picked_cell) return null;
+  const [row, col] = matrix.picked_cell.split(',').map(Number);
+  return { p1: matrix.p1_factions[row ?? 0] ?? null, p2: matrix.p2_factions[col ?? 0] ?? null };
+}
+
+/**
+ * Whether THIS game's faction step is done, per mode — the same steps the decision page walks
+ * (resolvePhase). A game tile must not read it off the match-level factions: those carry game 1's
+ * pick, so game 2 of a Bo3 looked decided right after its map and lost the way back to the picker.
+ */
+function gameFactionsDecided(
+  mode: string | null,
+  game: { blind_pick: { revealed_at: Date | null } | null; faction_matrix: GameFactionMatrix },
+  freePickFixed: { p1: string | null; p2: string | null } | null,
+): boolean {
+  switch (mode) {
+    case 'MATRIX':
+    case 'ONE_V_THREE':
+      return Boolean(game.faction_matrix?.decided_at);
+    case 'FREE_PICK':
+      return Boolean(freePickFixed?.p1 && freePickFixed?.p2) || Boolean(game.faction_matrix?.decided_at);
+    case 'BPT':
+    case 'BPT_2V2':
+      return Boolean(game.blind_pick?.revealed_at);
+    default:
+      // Open Play always has a blind pick row; committed-faction modes have no faction step.
+      return game.blind_pick ? Boolean(game.blind_pick.revealed_at) : true;
+  }
+}
+
 function serializeGame(game: {
   id: string;
   game_number: number;
@@ -67,7 +106,13 @@ function serializeGame(game: {
     player1_faction_id_2: string | null;
     player2_faction_id_2: string | null;
   } | null;
-}, includeSensitive: boolean) {
+  faction_matrix: GameFactionMatrix;
+}, includeSensitive: boolean, mode: string | null, freePickFixed: { p1: string | null; p2: string | null } | null) {
+  // This game's own factions so far, never another game's and never an unrevealed blind pick:
+  // a decided matrix cell, else a Free Pick player's registered (fixed) faction.
+  const matrixPick = decidedMatrixFactions(game.faction_matrix);
+  const ownP1 = matrixPick?.p1 ?? freePickFixed?.p1 ?? null;
+  const ownP2 = matrixPick?.p2 ?? freePickFixed?.p2 ?? null;
   return {
     id: game.id,
     gameNumber: game.game_number,
@@ -130,6 +175,8 @@ function serializeGame(game: {
             : null,
         }
       : null,
+    factionsDecided: gameFactionsDecided(mode, game, freePickFixed),
+    pickedFactions: ownP1 || ownP2 ? { player1FactionId: ownP1, player2FactionId: ownP2 } : null,
   };
 }
 
@@ -153,6 +200,7 @@ const GAME_SELECT = {
   verification: true,
   map_decision: true,
   blind_pick: true,
+  faction_matrix: { select: { decided_at: true, picked_cell: true, p1_factions: true, p2_factions: true } },
 } as const;
 
 // Read a stored replay buffer from its /uploads/replays/<match>/<file> url.
@@ -386,10 +434,24 @@ const matchGamesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      // Free Pick: a player who registered a fixed faction plays it in every game.
+      const mode = match.tournament?.mode ?? null;
+      let freePickFixed: { p1: string | null; p2: string | null } | null = null;
+      if (mode === 'FREE_PICK' && match.tournament_id) {
+        const parts = await fastify.prisma.tournamentParticipant.findMany({
+          where: { tournament_id: match.tournament_id, deleted_at: null, user_id: { in: [match.player1_id, match.player2_id].filter((x): x is string => x != null) } },
+          select: { user_id: true, faction_id: true },
+        });
+        freePickFixed = {
+          p1: parts.find((p) => p.user_id === match.player1_id)?.faction_id ?? null,
+          p2: parts.find((p) => p.user_id === match.player2_id)?.faction_id ?? null,
+        };
+      }
+
       // For Bo1 with no game row yet, return a virtual pending game
       const games =
         gameRows.length > 0
-          ? gameRows.map((g) => serializeGame(g, includeLobbyCodes))
+          ? gameRows.map((g) => serializeGame(g, includeLobbyCodes, mode, freePickFixed))
           : [
               {
                 id: null,

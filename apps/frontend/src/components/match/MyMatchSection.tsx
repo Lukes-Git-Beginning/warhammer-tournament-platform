@@ -47,6 +47,8 @@ interface Props {
   tournamentSlug: string;
   /** Tournament mode (e.g. 'BPT') — forwarded to GameTile for blind-pick logic */
   tournamentMode?: string;
+  /** Tournament format — Single / Double Elimination matches are bracket matches without a phase tag. */
+  tournamentFormat?: string;
   /** Resolved competitor info (2v2 team rosters) — lets a team member find their team's match. */
   competitors?: Record<string, BracketCompetitor>;
 }
@@ -55,7 +57,7 @@ interface Props {
  * Shows the current user's active match tile(s) above the Bracket.
  * Only renders when the user has a PENDING or ONGOING match in the tournament.
  */
-export function MyMatchSection({ currentUserId, matches, playerNames, tournamentSlug, tournamentMode, competitors }: Props) {
+export function MyMatchSection({ currentUserId, matches, playerNames, tournamentSlug, tournamentMode, tournamentFormat, competitors }: Props) {
   // A 2v2 slot is a Team id, so match on team membership (not id equality).
   const myMatch = matches.find(
     (m) =>
@@ -74,6 +76,7 @@ export function MyMatchSection({ currentUserId, matches, playerNames, tournament
       playerNames={playerNames}
       tournamentSlug={tournamentSlug}
       tournamentMode={tournamentMode}
+      tournamentFormat={tournamentFormat}
       competitors={competitors}
     />
   );
@@ -85,6 +88,7 @@ function MyMatchInner({
   playerNames,
   tournamentSlug,
   tournamentMode,
+  tournamentFormat,
   competitors,
 }: {
   match: BracketNode;
@@ -92,6 +96,7 @@ function MyMatchInner({
   playerNames: Record<string, string>;
   tournamentSlug: string;
   tournamentMode?: string;
+  tournamentFormat?: string;
   competitors?: Record<string, BracketCompetitor>;
 }) {
   useMatchDecisionSocket(match.matchId);
@@ -175,7 +180,11 @@ function MyMatchInner({
               factions={factions}
               tournamentMode={tournamentMode}
               withdrawnPlayerId={data.withdrawnPlayerId}
-              isPlayoffMatch={match.phase?.startsWith('PLAYOFF') ?? false}
+              isPlayoffMatch={
+                (match.phase?.startsWith('PLAYOFF') ?? false) ||
+                tournamentFormat === 'SINGLE_ELIMINATION' ||
+                tournamentFormat === 'DOUBLE_ELIMINATION'
+              }
             />
           ))}
           {(() => {
