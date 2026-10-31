@@ -122,6 +122,40 @@ export async function getOpenPlayGuilds(fastify: FastifyInstance): Promise<OpenP
   );
 }
 
+/**
+ * Rollout. Until `live` is switched on (the default is off) Discord Open Play runs for testers only:
+ * the listed Discord ids and site admins. `/join` then shows for server admins only and not in DMs,
+ * the panel and ticker buttons tell everyone else it isn't open yet, and a match gets match cards
+ * only when both players are testers (everyone else keeps the usual match-found DM).
+ */
+export const ROLLOUT_CONFIG_KEY = 'discord_open_play_rollout';
+
+export interface OpenPlayRollout {
+  live: boolean;
+  testerDiscordIds: string[];
+}
+
+export async function getOpenPlayRollout(fastify: FastifyInstance): Promise<OpenPlayRollout> {
+  const row = await fastify.prisma.adminConfig.findUnique({ where: { key: ROLLOUT_CONFIG_KEY } });
+  const value = row?.value as { live?: unknown; testerDiscordIds?: unknown } | null | undefined;
+  return {
+    live: value?.live === true,
+    testerDiscordIds: Array.isArray(value?.testerDiscordIds)
+      ? value.testerDiscordIds.filter((id): id is string => typeof id === 'string')
+      : [],
+  };
+}
+
+/** Whether all these Discord users may use Discord Open Play (everyone, once it is live). */
+export async function areOpenPlayTesters(fastify: FastifyInstance, discordIds: string[]): Promise<boolean> {
+  const rollout = await getOpenPlayRollout(fastify);
+  if (rollout.live) return true;
+  const rest = [...new Set(discordIds)].filter((id) => !rollout.testerDiscordIds.includes(id));
+  if (rest.length === 0) return true;
+  const admins = await fastify.prisma.user.count({ where: { discord_id: { in: rest }, role: 'ADMIN', deleted_at: null } });
+  return admins === rest.length;
+}
+
 // ---------------------------------------------------------------------------
 // Labels
 // ---------------------------------------------------------------------------
@@ -434,6 +468,9 @@ export async function sendMatchCards(fastify: FastifyInstance, matchId: string):
   if (!isBotConfigured()) return false;
   const match = await fastify.prisma.match.findUnique({ where: { id: matchId }, select: { player1_id: true, player2_id: true, competitor_format: true } });
   if (!match?.player1_id || !match.player2_id || match.competitor_format !== 'ONE_V_ONE') return false;
+  const players = await fastify.prisma.user.findMany({ where: { id: { in: [match.player1_id, match.player2_id] } }, select: { discord_id: true } });
+  const discordIds = players.map((p) => p.discord_id).filter((id): id is string => !!id);
+  if (discordIds.length < 2 || !(await areOpenPlayTesters(fastify, discordIds))) return false;
   await Promise.allSettled(
     [match.player1_id, match.player2_id].map(async (uid) => {
       await sendMatchCard(fastify, matchId, uid);
@@ -614,22 +651,31 @@ export async function onSteamLinked(fastify: FastifyInstance, userId: string): P
 // ---------------------------------------------------------------------------
 
 /** Register the global `/join` command (bulk overwrite, idempotent). Only with a bot token. */
-export async function registerDiscordCommands(fastify: FastifyInstance): Promise<void> {
+/**
+ * Register `/join` (on boot and when the rollout changes). Before go-live it is limited to server
+ * admins (default_member_permissions "0"; they can open it to a role or channel under Server
+ * Settings → Integrations) and to servers, so nobody else sees it.
+ */
+export async function registerDiscordCommands(fastify: FastifyInstance): Promise<boolean> {
   const appId = process.env.DISCORD_CLIENT_ID;
-  if (!appId || !isBotConfigured()) return;
+  if (!appId || !isBotConfigured()) return false;
   try {
+    const { live } = await getOpenPlayRollout(fastify);
     const res = await discordRequest('PUT', `/applications/${appId}/commands`, [
       {
         name: 'join',
         type: 1,
         description: 'Find an Open Play game: set up your queue in a DM',
-        contexts: [0, 1],
+        contexts: live ? [0, 1] : [0],
         integration_types: [0],
+        default_member_permissions: live ? null : '0',
       },
     ]);
     if (!res.ok) fastify.log.warn({ status: res.status, body: await res.text() }, '[discord-open-play] command registration failed');
+    return res.ok;
   } catch (err) {
     fastify.log.warn({ err }, '[discord-open-play] command registration failed (non-fatal)');
+    return false;
   }
 }
 

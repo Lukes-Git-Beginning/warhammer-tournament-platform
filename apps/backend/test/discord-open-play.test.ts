@@ -13,7 +13,15 @@ import { buildApp } from '../src/app.js';
 import { QUEUE_KEY, JOINED_AT_KEY, QUEUE_PREFS_KEY } from '../src/lib/matchmaking-tick.js';
 import { createOpenPlayMatch } from '../src/lib/create-open-play-match.js';
 import { handleOpenPlayInteraction, type Interaction } from '../src/lib/discord-open-play-interactions.js';
-import { renderJoinDm, renderMatchCard, renderTickerPost, syncTicker, GUILDS_CONFIG_KEY } from '../src/lib/discord-open-play.js';
+import {
+  renderJoinDm,
+  renderMatchCard,
+  renderTickerPost,
+  sendMatchCards,
+  syncTicker,
+  GUILDS_CONFIG_KEY,
+  ROLLOUT_CONFIG_KEY,
+} from '../src/lib/discord-open-play.js';
 import { joinOpenPlayQueue } from '../src/lib/open-play-queue-service.js';
 import { createTestUser, cleanupUsers, type TestUser } from './helpers/db-fixtures.js';
 
@@ -25,6 +33,15 @@ let app: FastifyInstance;
 let users: TestUser[] = [];
 const saved = new Map<string, { type: string; value: string[] | Record<string, string> | string | null }>();
 let savedGuildConfig: unknown = undefined;
+let savedRollout: unknown = undefined;
+
+async function setRollout(value: { live: boolean; testerDiscordIds: string[] }) {
+  await prisma.adminConfig.upsert({
+    where: { key: ROLLOUT_CONFIG_KEY },
+    create: { key: ROLLOUT_CONFIG_KEY, value: value as never },
+    update: { value: value as never },
+  });
+}
 
 // ---- Discord HTTP stub -------------------------------------------------------------------------
 type Call = { method: string; url: string; body: unknown };
@@ -87,6 +104,8 @@ beforeAll(async () => {
     else if (type === 'string') saved.set(key, { type, value: await app.redis.get(key) });
   }
   savedGuildConfig = (await prisma.adminConfig.findUnique({ where: { key: GUILDS_CONFIG_KEY } }))?.value;
+  savedRollout = (await prisma.adminConfig.findUnique({ where: { key: ROLLOUT_CONFIG_KEY } }))?.value;
+  await setRollout({ live: true, testerDiscordIds: [] }); // the rollout gate has its own tests below
   await app.redis.del(...ALL_KEYS);
 });
 
@@ -116,6 +135,10 @@ afterAll(async () => {
   }
   if (savedGuildConfig !== undefined) {
     await prisma.adminConfig.create({ data: { key: GUILDS_CONFIG_KEY, value: savedGuildConfig as never } });
+  }
+  await prisma.adminConfig.deleteMany({ where: { key: ROLLOUT_CONFIG_KEY } });
+  if (savedRollout !== undefined) {
+    await prisma.adminConfig.create({ data: { key: ROLLOUT_CONFIG_KEY, value: savedRollout as never } });
   }
   await app.close();
   vi.unstubAllGlobals();
@@ -301,5 +324,45 @@ describe('match card', () => {
     expect(String((webhookCalls(report.token)[0]!.body as { content: string }).content)).toContain('not a replay file');
     const game = await prisma.matchGame.findFirstOrThrow({ where: { match_id: matchId, game_number: 1 } });
     expect(game.reported_at).toBeNull();
+  });
+});
+
+// ---- rollout -----------------------------------------------------------------------------------
+describe('rollout: testers only until go-live', () => {
+  afterEach(() => setRollout({ live: true, testerDiscordIds: [] }));
+
+  it('/join, the panel and the ticker tell everyone else it is not open yet', async () => {
+    const u = await player('dop_gate');
+    await setRollout({ live: false, testerDiscordIds: [] });
+    for (const data of [{ name: 'join' }, { custom_id: 'jp_find' }, { custom_id: 'tk:L:3:1' }]) {
+      const res = (await handleOpenPlayInteraction(app, interaction(u, data.name ? 2 : 3, data))) as { type: number; data: { content: string } };
+      expect(res.type).toBe(4);
+      expect(res.data.content).toContain("isn't open yet");
+    }
+
+    await setRollout({ live: false, testerDiscordIds: [u.discord_id] });
+    const i = interaction(u, 2, { name: 'join' });
+    expect(((await handleOpenPlayInteraction(app, i)) as { type: number }).type).toBe(5);
+    await waitForWebhook(i.token);
+  });
+
+  it('site admins count as testers', async () => {
+    const u = await player('dop_gate_admin');
+    await prisma.user.update({ where: { id: u.id }, data: { role: 'ADMIN' } });
+    await setRollout({ live: false, testerDiscordIds: [] });
+    const i = interaction(u, 3, { custom_id: 'jp_find' });
+    expect(((await handleOpenPlayInteraction(app, i)) as { type: number }).type).toBe(5);
+    await waitForWebhook(i.token);
+  });
+
+  it('match cards only when both players are testers (otherwise the usual match-found DM)', async () => {
+    const a = await player('dop_gate_a');
+    const b = await player('dop_gate_b');
+    const { matchId } = await createOpenPlayMatch(prisma, a.id, b.id, 'QUEUE', 'DOMINATION', 'ONE_V_ONE', 'BO1');
+    await setRollout({ live: false, testerDiscordIds: [a.discord_id] });
+    expect(await sendMatchCards(app, matchId)).toBe(false);
+    await setRollout({ live: false, testerDiscordIds: [a.discord_id, b.discord_id] });
+    expect(await sendMatchCards(app, matchId)).toBe(true);
+    await app.redis.del(`rizzotto:dop:card:${matchId}:${a.id}`, `rizzotto:dop:card:${matchId}:${b.id}`);
   });
 });

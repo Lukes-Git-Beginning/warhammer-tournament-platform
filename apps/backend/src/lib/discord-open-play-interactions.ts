@@ -5,6 +5,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import {
+  areOpenPlayTesters,
   callAsUser,
   lobbyModal,
   refreshMatchCards,
@@ -197,7 +198,7 @@ function handleTicker(fastify: FastifyInstance, i: Interaction, discordId: strin
     const result = await claimQueueOffer(fastify, user.id, offer);
     const text =
       result.status === 'matched'
-        ? `⚔️ Match found vs **${result.opponentName}**! Your match card is in your DMs.`
+        ? `⚔️ Match found vs **${result.opponentName}**! Check your DMs.`
         : result.status === 'blocked'
           ? result.message
           : 'Someone else just took that game.';
@@ -334,14 +335,20 @@ export async function handleOpenPlayInteraction(fastify: FastifyInstance, i: Int
   const discordId = i.member?.user.id ?? i.user?.id;
   if (!discordId) return null;
 
+  // The ways in (before go-live, testers only). Join DMs and match cards only ever reach players
+  // who came through here, so their buttons need no check of their own.
+  const notOpenYet = () => ephemeral("Open Play on Discord isn't open yet. You can join the queue on rizzotto.gg/open-play.");
   if (i.type === APPLICATION_COMMAND) {
-    return i.data?.name === 'join' ? startJoin(fastify, i, discordId) : null;
+    if (i.data?.name !== 'join') return null;
+    return (await areOpenPlayTesters(fastify, [discordId])) ? startJoin(fastify, i, discordId) : notOpenYet();
   }
 
   const [action = '', ...parts] = (i.data?.custom_id ?? '').split(':');
   if (i.type === MESSAGE_COMPONENT) {
-    if (action === 'jp_find') return startJoin(fastify, i, discordId);
-    if (action === 'tk') return handleTicker(fastify, i, discordId, parts);
+    if (action === 'jp_find' || action === 'tk') {
+      if (!(await areOpenPlayTesters(fastify, [discordId]))) return notOpenYet();
+      return action === 'jp_find' ? startJoin(fastify, i, discordId) : handleTicker(fastify, i, discordId, parts);
+    }
     if (!action.startsWith('oq_') && !action.startsWith('mc_')) return null;
   } else if (i.type !== MODAL_SUBMIT) {
     return null;

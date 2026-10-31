@@ -55,7 +55,7 @@ import {
 } from '../lib/announcements.js';
 import { mergeTournamentSources, mergeOverviewSources, type CountedRef } from '../lib/referrals.js';
 import { maybeSendSeriesInvite } from '../lib/series-notify.js';
-import { getOpenPlayGuilds, postJoinPanel } from '../lib/discord-open-play.js';
+import { getOpenPlayGuilds, postJoinPanel, registerDiscordCommands, ROLLOUT_CONFIG_KEY } from '../lib/discord-open-play.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -1849,6 +1849,35 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(502).send({ error: 'BadGateway', message: 'Discord refused the post. Check that RizzBOTto can send messages in the ticker channel.', statusCode: 502 });
     }
     return reply.code(200).send({ messageId });
+  });
+
+  // PUT /api/admin/discord-open-play/rollout — testers only (live: false) or everyone (live: true).
+  // Re-registers `/join`, which is admin-only and server-only until go-live.
+  fastify.put('/api/admin/discord-open-play/rollout', async (request, reply) => {
+    const parsed = z
+      .object({ live: z.boolean(), testerDiscordIds: z.array(z.string().regex(/^\d{17,20}$/)).max(50) })
+      .safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BadRequest', message: parsed.error.message, statusCode: 400 });
+    }
+    const value = { live: parsed.data.live, testerDiscordIds: [...new Set(parsed.data.testerDiscordIds)] };
+    await fastify.prisma.adminConfig.upsert({
+      where: { key: ROLLOUT_CONFIG_KEY },
+      create: { key: ROLLOUT_CONFIG_KEY, value: value as never, updated_by: request.user.sub },
+      update: { value: value as never, updated_by: request.user.sub },
+    });
+    await fastify.prisma.auditLog.create({
+      data: {
+        entity_type: 'AdminConfig',
+        entity_id: ROLLOUT_CONFIG_KEY,
+        action: 'config_update',
+        actor_id: request.user.sub,
+        new_value: value as never,
+      },
+    });
+    if (fastify.redis) await invalidate(fastify.redis, 'admin:config:*');
+    const commandUpdated = await registerDiscordCommands(fastify);
+    return reply.code(200).send({ ...value, commandUpdated });
   });
 
   // -------------------------------------------------------------------------

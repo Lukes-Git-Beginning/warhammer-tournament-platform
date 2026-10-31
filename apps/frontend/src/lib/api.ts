@@ -2008,6 +2008,19 @@ export function postDiscordJoinPanel(guildId: string): Promise<{ messageId: stri
   });
 }
 
+export interface DiscordOpenPlayRollout {
+  live: boolean;
+  testerDiscordIds: string[];
+}
+
+/** Discord Open Play for testers only (live: false) or everyone; also re-registers `/join`. */
+export function putDiscordOpenPlayRollout(rollout: DiscordOpenPlayRollout): Promise<DiscordOpenPlayRollout & { commandUpdated: boolean }> {
+  return apiFetch('/api/admin/discord-open-play/rollout', {
+    method: 'PUT',
+    body: JSON.stringify(rollout),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Standard Ruleset (public — admin-editable community ruleset)
 // ---------------------------------------------------------------------------

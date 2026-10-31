@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getAdminConfig, postDiscordJoinPanel, putAdminConfig } from '@/lib/api.js';
+import { getAdminConfig, postDiscordJoinPanel, putAdminConfig, putDiscordOpenPlayRollout, type DiscordOpenPlayRollout } from '@/lib/api.js';
 import { Button } from '@/components/ui/button';
 
 const CONFIG_KEY = 'discord_open_play_guilds';
+const ROLLOUT_KEY = 'discord_open_play_rollout';
 
 interface OpenPlayGuild {
   guildId: string;
@@ -14,11 +15,13 @@ interface OpenPlayGuild {
 
 const EMPTY: OpenPlayGuild = { guildId: '', label: '', tickerChannelId: '', pingRoleId: '' };
 const isSnowflake = (v: string) => /^\d{17,20}$/.test(v.trim());
+const splitIds = (v: string) => v.split(/[\s,]+/).filter(Boolean);
 
 /**
- * Discord Open Play servers: per server the ticker channel (open queue requests are posted there,
- * only the bot writes) and an optional ping role. "Post join panel" puts the pinned "Find a game"
- * message into the ticker channel. Ids come from Discord with Developer Mode on (right-click → Copy ID).
+ * Discord Open Play: the rollout (testers only until it goes live) and per server the ticker
+ * channel (open queue requests are posted there, only the bot writes) and an optional ping role.
+ * "Post join panel" puts the pinned "Find a game" message into the ticker channel. Ids come from
+ * Discord with Developer Mode on (right-click → Copy ID).
  */
 export function DiscordOpenPlayPanel() {
   const queryClient = useQueryClient();
@@ -27,13 +30,37 @@ export function DiscordOpenPlayPanel() {
     queryFn: () => getAdminConfig(CONFIG_KEY),
     retry: false,
   });
+  const { data: rolloutData } = useQuery({
+    queryKey: ['admin-config', ROLLOUT_KEY],
+    queryFn: () => getAdminConfig(ROLLOUT_KEY),
+    retry: false,
+  });
 
   const [guilds, setGuilds] = useState<OpenPlayGuild[]>([]);
+  const [live, setLive] = useState(false);
+  const [testers, setTesters] = useState('');
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (Array.isArray(data?.value)) setGuilds(data.value as OpenPlayGuild[]);
   }, [data]);
+
+  useEffect(() => {
+    const value = rolloutData?.value as Partial<DiscordOpenPlayRollout> | undefined;
+    if (!value) return;
+    setLive(value.live === true);
+    setTesters((value.testerDiscordIds ?? []).join('\n'));
+  }, [rolloutData]);
+
+  const rollout = useMutation({
+    mutationFn: () => putDiscordOpenPlayRollout({ live, testerDiscordIds: splitIds(testers) }),
+    onSuccess: (res) => {
+      setStatus(res.commandUpdated ? 'Status saved.' : 'Status saved, but /join could not be updated on Discord.');
+      void queryClient.invalidateQueries({ queryKey: ['admin-config', ROLLOUT_KEY] });
+    },
+    onError: (err: Error) => setStatus(err.message),
+  });
+  const testersValid = splitIds(testers).every(isSnowflake);
 
   const save = useMutation({
     mutationFn: (next: OpenPlayGuild[]) =>
@@ -78,6 +105,30 @@ export function DiscordOpenPlayPanel() {
         Servers where players use <code>/join</code> and see open queue requests. Only RizzBOTto should be able to send messages
         in the ticker channel. Ids: Discord settings → Advanced → Developer Mode, then right-click → Copy ID.
       </p>
+
+      <div className="mb-4 rounded border border-rizzotto-iron-700 p-3">
+        <div className="mb-2 flex flex-wrap gap-4 text-sm text-rizzotto-stone-200">
+          <label className="flex items-center gap-2">
+            <input type="radio" checked={!live} onChange={() => setLive(false)} />
+            Testing
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" checked={live} onChange={() => setLive(true)} />
+            Live for everyone
+          </label>
+        </div>
+        <p className="mb-2 max-w-2xl text-xs text-stone-400">
+          While testing, only the testers below and site admins can use it: <code>/join</code> shows for server admins only,
+          everyone else gets &quot;not open yet&quot; from the buttons, and match cards go out only when both players are testers.
+        </p>
+        <label className="block max-w-md text-xs text-stone-500">
+          Tester Discord ids (one per line)
+          <textarea className={input} rows={3} value={testers} onChange={(e) => setTesters(e.target.value)} />
+        </label>
+        <Button variant="forge" size="sm" className="mt-2" disabled={!testersValid || rollout.isPending} onClick={() => rollout.mutate()}>
+          Save status
+        </Button>
+      </div>
 
       {isLoading ? (
         <div className="py-4 text-sm text-stone-400">Loading…</div>

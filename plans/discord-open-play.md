@@ -3,6 +3,15 @@
 Status: **BUILT for 1v1, not deployed** (2026-10-31): steps 1–3 below, tested with a stubbed Discord API. Next:
 deploy on Alex's go, then the live test on RizzOttoverse (step 4). Decisions below are Alex's; open points are marked.
 
+**Rollout (Alex 2026-10-31: test it in a hidden channel first).** The deploy ships in testing mode (AdminConfig
+`discord_open_play_rollout = { live, testerDiscordIds }`, default not live), so the community sees nothing:
+`/join` is registered for server admins only (`default_member_permissions: "0"`) and not in DMs; `/join`, the
+panel and ticker buttons answer non-testers "not open yet"; a match gets match cards only when both players are
+testers (listed Discord ids or site admins), everyone else keeps the usual match-found DM. The ticker channel is a
+private channel only the testers and the bot can see; no ping role while testing. No CHANGELOG entry for the test
+deploy (it posts publicly); the entry comes with go-live. Go-live = Admin → Settings → Discord Open Play → "Live for
+everyone" (re-registers `/join` for everyone and in DMs).
+
 ## Why
 
 Humanboy and the Under Empire (UE) admins agreed that Open Play replaces the Vermin League (VL) once it offers
