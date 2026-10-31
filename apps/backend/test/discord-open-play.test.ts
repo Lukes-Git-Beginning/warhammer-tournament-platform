@@ -17,6 +17,7 @@ import {
   renderJoinDm,
   renderMatchCard,
   renderTickerPost,
+  registerDiscordCommands,
   syncTicker,
   GUILDS_CONFIG_KEY,
   ROLLOUT_CONFIG_KEY,
@@ -64,6 +65,7 @@ const discordFetch = vi.fn(async (input: string | URL | Request, init?: RequestI
   calls.push({ method, url, body });
   if (url.startsWith('https://cdn.test/')) return new Response(attachmentBody, { status: 200 });
   if (url.endsWith('/users/@me/channels')) return jsonResponse(200, { id: `dm-${(body as { recipient_id: string }).recipient_id}` });
+  if (url.endsWith('/applications/@me')) return jsonResponse(200, { id: 'bot-app' });
   if (method === 'POST' && /\/channels\/[^/]+\/messages$/.test(url)) return jsonResponse(200, { id: `msg-${nextMessageId++}` });
   if (method === 'DELETE') return jsonResponse(204, null);
   return jsonResponse(200, {});
@@ -343,6 +345,19 @@ describe('rollout: testers only until go-live', () => {
     const i = interaction(u, 2, { name: 'join' });
     expect(((await handleOpenPlayInteraction(app, i)) as { type: number }).type).toBe(5);
     await waitForWebhook(i.token);
+  });
+
+  it('/join is registered for server admins only until go-live', async () => {
+    await setRollout({ live: false, testerDiscordIds: [] });
+    expect(await registerDiscordCommands(app)).toBeNull();
+    const testing = calls.find((c) => c.method === 'PUT')!;
+    expect(testing.url).toMatch(/\/applications\/bot-app\/commands$/);
+    expect((testing.body as { default_member_permissions: string | null; contexts: number[] }[])[0]).toMatchObject({ default_member_permissions: '0', contexts: [0] });
+
+    calls = [];
+    await setRollout({ live: true, testerDiscordIds: [] });
+    expect(await registerDiscordCommands(app)).toBeNull();
+    expect((calls.find((c) => c.method === 'PUT')!.body as object[])[0]).toMatchObject({ default_member_permissions: null, contexts: [0, 1] });
   });
 
   it('site admins count as testers', async () => {

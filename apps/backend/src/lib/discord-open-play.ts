@@ -653,16 +653,24 @@ export async function onSteamLinked(fastify: FastifyInstance, userId: string): P
 // /join command registration
 // ---------------------------------------------------------------------------
 
-/** Register the global `/join` command (bulk overwrite, idempotent). Only with a bot token. */
 /**
- * Register `/join` (on boot and when the rollout changes). Before go-live it is limited to server
- * admins (default_member_permissions "0"; they can open it to a role or channel under Server
- * Settings → Integrations) and to servers, so nobody else sees it.
+ * Register the global `/join` command (bulk overwrite, idempotent; on boot and when the rollout
+ * changes). Before go-live it is limited to server admins (default_member_permissions "0"; they
+ * can open it to a role or channel under Server Settings → Integrations) and to servers, so nobody
+ * else sees it. Returns null when done, else Discord's reason (shown in the admin panel).
  */
-export async function registerDiscordCommands(fastify: FastifyInstance): Promise<boolean> {
-  const appId = process.env.DISCORD_CLIENT_ID;
-  if (!appId || !isBotConfigured()) return false;
+export async function registerDiscordCommands(fastify: FastifyInstance): Promise<string | null> {
+  if (!isBotConfigured()) return 'The Discord bot is not configured';
+  const failed = async (res: Response) => {
+    const error = `Discord ${res.status}: ${(await res.text()).slice(0, 300)}`;
+    fastify.log.warn({ error }, '[discord-open-play] command registration failed');
+    return error;
+  };
   try {
+    // The bot token's own application: the login app (DISCORD_CLIENT_ID) need not be the bot's.
+    const appRes = await discordRequest('GET', '/applications/@me');
+    if (!appRes.ok) return failed(appRes);
+    const appId = ((await appRes.json()) as { id: string }).id;
     const { live } = await getOpenPlayRollout(fastify);
     const res = await discordRequest('PUT', `/applications/${appId}/commands`, [
       {
@@ -674,11 +682,10 @@ export async function registerDiscordCommands(fastify: FastifyInstance): Promise
         default_member_permissions: live ? null : '0',
       },
     ]);
-    if (!res.ok) fastify.log.warn({ status: res.status, body: await res.text() }, '[discord-open-play] command registration failed');
-    return res.ok;
+    return res.ok ? null : failed(res);
   } catch (err) {
     fastify.log.warn({ err }, '[discord-open-play] command registration failed (non-fatal)');
-    return false;
+    return err instanceof Error ? err.message : 'Command registration failed';
   }
 }
 

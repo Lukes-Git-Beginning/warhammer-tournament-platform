@@ -2014,7 +2014,9 @@ export interface DiscordOpenPlayRollout {
 }
 
 /** Discord Open Play for testers only (live: false) or everyone; also re-registers `/join`. */
-export function putDiscordOpenPlayRollout(rollout: DiscordOpenPlayRollout): Promise<DiscordOpenPlayRollout & { commandUpdated: boolean }> {
+export function putDiscordOpenPlayRollout(
+  rollout: DiscordOpenPlayRollout,
+): Promise<DiscordOpenPlayRollout & { commandUpdated: boolean; commandError: string | null }> {
   return apiFetch('/api/admin/discord-open-play/rollout', {
     method: 'PUT',
     body: JSON.stringify(rollout),

@@ -1876,8 +1876,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
     if (fastify.redis) await invalidate(fastify.redis, 'admin:config:*');
-    const commandUpdated = await registerDiscordCommands(fastify);
-    return reply.code(200).send({ ...value, commandUpdated });
+    const commandError = await registerDiscordCommands(fastify);
+    return reply.code(200).send({ ...value, commandUpdated: commandError === null, commandError });
   });
 
   // -------------------------------------------------------------------------

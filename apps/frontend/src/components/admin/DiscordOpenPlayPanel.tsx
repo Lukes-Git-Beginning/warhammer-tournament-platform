@@ -55,7 +55,7 @@ export function DiscordOpenPlayPanel() {
   const rollout = useMutation({
     mutationFn: () => putDiscordOpenPlayRollout({ live, testerDiscordIds: splitIds(testers) }),
     onSuccess: (res) => {
-      setStatus(res.commandUpdated ? 'Status saved.' : 'Status saved, but /join could not be updated on Discord.');
+      setStatus(res.commandUpdated ? 'Status saved.' : `Status saved, but /join could not be updated on Discord (${res.commandError ?? 'unknown error'}).`);
       void queryClient.invalidateQueries({ queryKey: ['admin-config', ROLLOUT_KEY] });
     },
     onError: (err: Error) => setStatus(err.message),
