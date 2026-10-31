@@ -117,7 +117,7 @@ export interface OpenPlayGuild {
   pingRoleId?: string | null;
 }
 
-export async function getOpenPlayGuilds(fastify: FastifyInstance): Promise<OpenPlayGuild[]> {
+export async function getOpenPlayGuilds(fastify: Pick<FastifyInstance, 'prisma'>): Promise<OpenPlayGuild[]> {
   const row = await fastify.prisma.adminConfig.findUnique({ where: { key: GUILDS_CONFIG_KEY } });
   const value = row?.value as unknown;
   if (!Array.isArray(value)) return [];

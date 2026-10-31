@@ -9,6 +9,7 @@ import { prisma } from '@rizzotto/db';
 import { buildApp } from '../src/app.js';
 import { createTestUser, cleanupUsers } from './helpers/db-fixtures.js';
 import { flagDiscordInvites } from '../src/lib/discord-invite.js';
+import { GUILDS_CONFIG_KEY } from '../src/lib/discord-open-play.js';
 
 let app: FastifyInstance;
 beforeAll(async () => {
@@ -93,6 +94,33 @@ describe('weekly Discord prompt', () => {
     expect(await due(member.id)).toBeNull(); // on the server: a pending prompt is dropped
     expect(await due(unknown.id)).toBeNull(); // the bot couldn't tell: no prompt
     expect(await due(noSteam.id)).toBeNull(); // not fully registered
+  });
+
+  it('no prompt for players on a partner server with our bot', async () => {
+    const partner = await createTestUser();
+    const away = await createTestUser();
+    createdUserIds.push(partner.id, away.id);
+    await Promise.all([withSteam(partner.id), withSteam(away.id)]);
+    await prisma.user.update({ where: { id: partner.id }, data: { discord_invite_due_at: new Date(0) } });
+    const savedGuilds = (await prisma.adminConfig.findUnique({ where: { key: GUILDS_CONFIG_KEY } }))?.value;
+    await prisma.adminConfig.upsert({
+      where: { key: GUILDS_CONFIG_KEY },
+      create: { key: GUILDS_CONFIG_KEY, value: [{ guildId: 'ue', tickerChannelId: 't' }] as never },
+      update: { value: [{ guildId: 'ue', tickerChannelId: 't' }] as never },
+    });
+    try {
+      // Neither is on the RizzOttoverse; only `partner` is on the partner server.
+      const onServer = async (id: string, guildId?: string) =>
+        id === partner.discord_id || id === away.discord_id ? guildId === 'ue' && id === partner.discord_id : null;
+      await flagDiscordInvites(prisma, onServer);
+    } finally {
+      await prisma.adminConfig.deleteMany({ where: { key: GUILDS_CONFIG_KEY } });
+      if (savedGuilds !== undefined) await prisma.adminConfig.create({ data: { key: GUILDS_CONFIG_KEY, value: savedGuilds as never } });
+    }
+    const due = async (id: string) =>
+      (await prisma.user.findUniqueOrThrow({ where: { id }, select: { discord_invite_due_at: true } })).discord_invite_due_at;
+    expect(await due(partner.id)).toBeNull(); // a pending prompt is dropped too
+    expect(await due(away.id)).not.toBeNull();
   });
 
   it('shows the prompt while it is due, and clicking it away clears it until the next check', async () => {

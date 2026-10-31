@@ -7,11 +7,14 @@ import { discordRequest, resolveGuildId } from './discord-notify.js';
 /** A stored answer younger than this is reused; an older one (or none) is checked again. */
 export const MEMBERSHIP_RECHECK_MS = 24 * 60 * 60 * 1000;
 
-/** Is this Discord user on the server? true / false, or null when the bot can't tell (no token, no guild, error). */
-export async function fetchGuildMembership(discordId: string): Promise<boolean | null> {
+/**
+ * Is this Discord user on the server (the RizzOttoverse, or `guild` when given)? true / false, or null
+ * when the bot can't tell (no token, no guild, error).
+ */
+export async function fetchGuildMembership(discordId: string, guild?: string): Promise<boolean | null> {
   const token = process.env.DISCORD_BOT_TOKEN;
   if (!token) return null;
-  const guildId = await resolveGuildId();
+  const guildId = guild ?? (await resolveGuildId());
   if (!guildId) return null;
   try {
     // Through the paced request queue: the weekly check asks once per registered player.
