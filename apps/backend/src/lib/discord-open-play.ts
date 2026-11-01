@@ -24,6 +24,8 @@ import {
   type QueuePrefs,
 } from './queue-matching.js';
 import { getStoredQueuePrefs } from './queue-prefs.js';
+import { mapNameFromTerrain } from './replay-maps.js';
+import { parseReplayMeta } from './replay-parser.js';
 import { startOfSiteDay } from './site-time.js';
 import { openPlayBannedFactionIds } from './standard-ruleset.js';
 
@@ -302,6 +304,40 @@ type Verification = {
 
 const BLIND_PICK_TIMEOUT_SEC = 5 * 60; // Open Play — mirrors blind-pick-auto-resolve.ts
 
+// Card pieces shared by the real card and the preview card, so the preview shows the real thing.
+const cardHeader = (opp: string, battleType: string, matchFormat: string | null, series = '') =>
+  `⚔️ **Open Play vs ${opp}** · ${BT_LABEL[battleType] ?? battleType} · ${FORMAT_LABEL[matchFormat ?? 'BO1'] ?? 'Bo1'}${series}`;
+const PICK_TEXT = 'Pick your faction. It stays hidden until both of you have picked.';
+const playText = (mine: string, oppName: string, theirs: string, code: string | null, password: string | null) =>
+  `You: **${mine}** vs ${oppName}: **${theirs}**` +
+  (code ? `\nLobby: \`${code}\`${password ? ` · password \`${password}\`` : ''}` : `\nNo lobby code yet. One of you hosts and sets it here.`) +
+  `\n\nAfter the battle, report the result and attach the replay.`;
+/** Lobby + result buttons: `mc_lobby:<match>:<game>` on a real card, `pv_lobby` on the preview. */
+const playRow = (ns: 'mc' | 'pv', suffix: string, hasLobby: boolean) =>
+  row(btn(hasLobby ? 'Change lobby code' : 'Set lobby code', `${ns}_lobby${suffix}`), btn('I won', `${ns}_won${suffix}`, SUCCESS), btn('They won', `${ns}_lost${suffix}`, SECONDARY));
+
+/** The faction select; two halves when more factions are allowed than Discord's 25 options. */
+function factionPickRows(customId: string, allowed: { id: string; name: string }[]): object[] {
+  const options = (list: { id: string; name: string }[]) => list.map((f) => ({ label: f.name, value: f.id }));
+  if (allowed.length <= 25) return [row(select(customId, options(allowed), 1, 1, 'Pick your faction'))];
+  const half = Math.ceil(allowed.length / 2);
+  const [a, b] = [allowed.slice(0, half), allowed.slice(half)];
+  return [
+    row(select(`${customId}:a`, options(a), 1, 1, `Pick your faction (${a[0]!.name[0]}–${a[a.length - 1]!.name[0]})`)),
+    row(select(`${customId}:b`, options(b), 1, 1, `Pick your faction (${b[0]!.name[0]}–${b[b.length - 1]!.name[0]})`)),
+  ];
+}
+
+/** The factions a 1v1 Open Play game of this battle type may pick (the Standard Ruleset's bans out). */
+async function allowedFactions(fastify: FastifyInstance, battleType: QueueBattleType): Promise<{ id: string; name: string }[]> {
+  const [factions, banned] = await Promise.all([
+    fastify.prisma.faction.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    openPlayBannedFactionIds({ tournament_id: null, competitor_format: 'ONE_V_ONE', battle_type: battleType }),
+  ]);
+  const out = new Set(banned);
+  return factions.filter((f) => !out.has(f.id));
+}
+
 /**
  * One player's match card for a 1v1 Open Play match: opponent, battle type, format, map, game n of N
  * and the actions of the current step. Null for anything that isn't a 1v1 Open Play match.
@@ -360,9 +396,12 @@ export async function renderMatchCard(fastify: FastifyInstance, matchId: string,
   const mapId = current?.map_decision?.picked_map_id ?? null;
   const map = mapId ? await prisma.map.findUnique({ where: { id: mapId }, select: { name: true } }) : null;
 
-  const header =
-    `⚔️ **Open Play vs ${opp}** · ${BT_LABEL[battleType] ?? battleType} · ${FORMAT_LABEL[match.match_format ?? 'BO1'] ?? 'Bo1'}` +
-    (totalGames > 1 ? ` · Game ${current?.game_number ?? 1} of ${totalGames} · ${won}–${lost}` : '');
+  const header = cardHeader(
+    opp,
+    battleType,
+    match.match_format,
+    totalGames > 1 ? ` · Game ${current?.game_number ?? 1} of ${totalGames} · ${won}–${lost}` : '',
+  );
   const mapLine = map ? `\n🗺️ Map: **${map.name}**` : '';
   const siteLink = linkBtn('Open on rizzotto.gg', `${siteUrl()}/matches/${match.id}`);
   const id = `${match.id}:${current?.game_number ?? 1}`;
@@ -370,7 +409,9 @@ export async function renderMatchCard(fastify: FastifyInstance, matchId: string,
   const msg = (body: string, components: object[]): DiscordMessage => ({
     content: `${header}${mapLine}\n\n${body}`,
     components,
-    allowed_mentions: noMentions,
+    // Lists the opponent so Discord can resolve the mention to his name. Nobody gets pinged: the
+    // opponent isn't in this DM.
+    allowed_mentions: { parse: [], users: opponent?.discord_id ? [opponent.discord_id] : [] },
   });
 
   if (match.status === 'CANCELLED') return msg('This match was cancelled.', [row(siteLink)]);
@@ -425,30 +466,15 @@ export async function renderMatchCard(fastify: FastifyInstance, matchId: string,
       const deadline = myLock && !oppLock ? `\n${oppName} has until <t:${Math.floor(myLock.getTime() / 1000) + BLIND_PICK_TIMEOUT_SEC}:R> to pick.` : '';
       return msg(`🔒 You picked **${factionName(myFaction)}**. Waiting for ${oppName}…${deadline}`, [cancelRow]);
     }
-    const banned = new Set(await openPlayBannedFactionIds({ tournament_id: null, competitor_format: 'ONE_V_ONE', battle_type: battleType }));
-    const allowed = factions.filter((f) => !banned.has(f.id));
     const timer = oppLock ? `\n⏱ ${oppName} has picked. You have until <t:${Math.floor(oppLock.getTime() / 1000) + BLIND_PICK_TIMEOUT_SEC}:R>, or the match is cancelled.` : '';
-    const pickRows =
-      allowed.length <= 25
-        ? [row(select(`mc_pick:${id}`, allowed.map((f) => ({ label: f.name, value: f.id })), 1, 1, 'Pick your faction'))]
-        : [
-            row(select(`mc_pick:${id}:a`, allowed.slice(0, Math.ceil(allowed.length / 2)).map((f) => ({ label: f.name, value: f.id })), 1, 1, `Pick your faction (${allowed[0]!.name[0]}–${allowed[Math.ceil(allowed.length / 2) - 1]!.name[0]})`)),
-            row(select(`mc_pick:${id}:b`, allowed.slice(Math.ceil(allowed.length / 2)).map((f) => ({ label: f.name, value: f.id })), 1, 1, `Pick your faction (${allowed[Math.ceil(allowed.length / 2)]!.name[0]}–${allowed[allowed.length - 1]!.name[0]})`)),
-          ];
-    return msg(`Pick your faction. It stays hidden until both of you have picked.${timer}`, [...pickRows, cancelRow]);
+    return msg(`${PICK_TEXT}${timer}`, [...factionPickRows(`mc_pick:${id}`, await allowedFactions(fastify, battleType)), cancelRow]);
   }
 
   // Revealed, not reported yet: lobby + result.
-  const lobby = current.lobby_code
-    ? `\nLobby: \`${current.lobby_code}\`${current.lobby_password ? ` · password \`${current.lobby_password}\`` : ''}`
-    : `\nNo lobby code yet. One of you hosts and sets it here.`;
-  return msg(
-    `You: **${factionName(myFaction)}** vs ${oppName}: **${factionName(oppFaction)}**${lobby}\n\nAfter the battle, report the result and attach the replay.`,
-    [
-      row(btn(current.lobby_code ? 'Change lobby code' : 'Set lobby code', `mc_lobby:${id}`), btn('I won', `mc_won:${id}`, SUCCESS), btn('They won', `mc_lost:${id}`, SECONDARY)),
-      cancelRow,
-    ],
-  );
+  return msg(playText(factionName(myFaction), oppName, factionName(oppFaction), current.lobby_code, current.lobby_password), [
+    playRow('mc', `:${id}`, !!current.lobby_code),
+    cancelRow,
+  ]);
 }
 
 /** Send a NEW match card DM (a new message notifies; edits don't). Stores it for later edits. */
@@ -533,6 +559,101 @@ export async function reconcileMatchCards(fastify: FastifyInstance): Promise<voi
 }
 
 // ---------------------------------------------------------------------------
+// Preview card (Admin → Discord Open Play → "Send me a preview card")
+// ---------------------------------------------------------------------------
+
+/**
+ * A match card against nobody, to see and click through every step before the cards go out to
+ * everyone: faction pick, lobby code, result with the replay upload (the replay is read like on the
+ * site), match over. It touches no match, queue or stats; its state lives in Redis.
+ */
+const PREVIEW_KEY = (userId: string) => `rizzotto:dop:preview:${userId}`;
+const PREVIEW_TTL = 24 * 3600;
+const PREVIEW_RIVAL = 'RizzBOTto';
+
+export interface PreviewState {
+  battleType: QueueBattleType;
+  mapName: string | null;
+  myFaction?: string;
+  rivalFaction?: string;
+  lobbyCode?: string | null;
+  lobbyPassword?: string | null;
+  result?: 'w' | 'l';
+  /** What the uploaded replay showed, for the "match over" step. */
+  replay?: string;
+}
+
+export async function getPreviewState(fastify: FastifyInstance, userId: string): Promise<PreviewState | null> {
+  const raw = await fastify.redis?.get(PREVIEW_KEY(userId));
+  return raw ? (JSON.parse(raw) as PreviewState) : null;
+}
+
+/** Store the preview's new state and render it. */
+export async function savePreviewState(fastify: FastifyInstance, userId: string, s: PreviewState): Promise<DiscordMessage> {
+  await fastify.redis?.set(PREVIEW_KEY(userId), JSON.stringify(s), 'EX', PREVIEW_TTL);
+  return renderPreviewCard(fastify, s);
+}
+
+/** A fresh preview: the first battle type of the queue on a random map of it, nothing picked yet. */
+async function newPreviewState(fastify: FastifyInstance): Promise<PreviewState> {
+  const battleType = ALL_BATTLE_TYPES[0]!;
+  const maps = await fastify.prisma.map.findMany({ where: { battle_type: battleType, available: true, deleted_at: null }, select: { name: true } });
+  return { battleType, mapName: maps.length ? maps[Math.floor(Math.random() * maps.length)]!.name : null };
+}
+
+/** The player picked: RizzBOTto picks at once (any allowed faction), and both are revealed. */
+export async function pickPreviewFactions(fastify: FastifyInstance, userId: string, s: PreviewState, factionId: string): Promise<DiscordMessage> {
+  const allowed = await allowedFactions(fastify, s.battleType);
+  const rival = allowed[Math.floor(Math.random() * allowed.length)]?.id;
+  return savePreviewState(fastify, userId, { ...s, myFaction: factionId, rivalFaction: rival });
+}
+
+export async function restartPreview(fastify: FastifyInstance, userId: string): Promise<DiscordMessage> {
+  return savePreviewState(fastify, userId, await newPreviewState(fastify));
+}
+
+/** One line on what a replay file shows: players with their factions, map, when it was recorded. */
+export async function describeReplay(fastify: FastifyInstance, file: Buffer): Promise<string> {
+  const meta = parseReplayMeta(file);
+  if (meta.players.length === 0) return 'No players could be read from this file. On a real card the replay check would flag it.';
+  const factions = await fastify.prisma.faction.findMany({ select: { id: true, name: true } });
+  const faction = (id: string | null) => (id ? factions.find((f) => f.id === id)?.name ?? id : 'unknown faction');
+  const players = meta.players.map((p) => `**${p.name}** (${faction(p.faction)})`).join(' vs ');
+  const map = mapNameFromTerrain(meta.mapTerrain);
+  const when = meta.recordedAt ? `, recorded <t:${Math.floor(meta.recordedAt.getTime() / 1000)}:f>` : '';
+  return `Read from your replay: ${players}${map ? ` on **${map}**` : ''}${when}.`;
+}
+
+export async function renderPreviewCard(fastify: FastifyInstance, s: PreviewState): Promise<DiscordMessage> {
+  const header = `-# 🧪 Preview: not a real match. ${PREVIEW_RIVAL} plays the other side.\n${cardHeader(`**${PREVIEW_RIVAL}**`, s.battleType, 'BO1')}`;
+  const mapLine = s.mapName ? `\n🗺️ Map: **${s.mapName}**` : '';
+  const siteLink = linkBtn('Open on rizzotto.gg', `${siteUrl()}/open-play`);
+  const cancelRow = row(btn('Cancel match', 'pv_cancel', DANGER), siteLink);
+  const msg = (body: string, components: object[]): DiscordMessage => ({ content: `${header}${mapLine}\n\n${body}`, components, allowed_mentions: noMentions });
+
+  if (s.result) {
+    const result = s.result === 'w' ? 'You won 1–0. GG!' : `${PREVIEW_RIVAL} won 1–0. GG!`;
+    return msg(`**Match over.** ${result}${s.replay ? `\n\n${s.replay}` : ''}`, [
+      row(btn('Find another game', 'jp_find', PRIMARY), btn('Start the preview again', 'pv_again'), siteLink),
+    ]);
+  }
+  if (!s.myFaction) return msg(PICK_TEXT, [...factionPickRows('pv_pick', await allowedFactions(fastify, s.battleType)), cancelRow]);
+  const factions = await fastify.prisma.faction.findMany({ where: { id: { in: [s.myFaction, s.rivalFaction ?? ''] } }, select: { id: true, name: true } });
+  const name = (id?: string) => factions.find((f) => f.id === id)?.name ?? 'unknown';
+  return msg(playText(name(s.myFaction), PREVIEW_RIVAL, name(s.rivalFaction), s.lobbyCode ?? null, s.lobbyPassword ?? null), [
+    playRow('pv', '', !!s.lobbyCode),
+    cancelRow,
+  ]);
+}
+
+/** DM a fresh preview card to a player (an admin, from the admin panel). */
+export async function sendPreviewCard(fastify: FastifyInstance, user: { id: string; discord_id: string }): Promise<'sent' | 'closed' | 'failed'> {
+  if (!isBotConfigured() || !fastify.redis) return 'failed';
+  const posted = await postDm(user.discord_id, await restartPreview(fastify, user.id));
+  return posted === 'closed' ? 'closed' : posted ? 'sent' : 'failed';
+}
+
+// ---------------------------------------------------------------------------
 // Ticker
 // ---------------------------------------------------------------------------
 
@@ -575,7 +696,11 @@ interface ClosedTickerPost {
   deleteAt: number;
 }
 
-/** How a request ended: "Matched" with what is being played, or a quiet "no longer looking". */
+/**
+ * How a request ended: "Matched" with who plays what, or a quiet "no longer looking". The names
+ * only show once matched (so the two can find each other); an open or abandoned request stays
+ * anonymous. The names are mentions, but in an edit, which Discord never notifies.
+ */
 async function renderClosedTickerPost(
   fastify: FastifyInstance,
   queueId: string,
@@ -589,19 +714,37 @@ async function renderClosedTickerPost(
       OR: [{ player1_id: queueId }, { player2_id: queueId }],
     },
     orderBy: { created_at: 'desc' },
-    select: { created_at: true, match_format: true, competitor_format: true, games: { where: { game_number: 1 }, select: { battle_type: true } } },
+    select: {
+      created_at: true,
+      player1_id: true,
+      player2_id: true,
+      match_format: true,
+      competitor_format: true,
+      games: { where: { game_number: 1 }, select: { battle_type: true } },
+    },
   });
   if (!match) {
     return { matched: false, message: { content: `-# No longer looking${s.summary ? ` · ${s.summary}` : ''}`, components: [], allowed_mentions: noMentions } };
   }
+  const sides = [match.player1_id, match.player2_id].filter((id): id is string => !!id);
+  // 1v1: the players (as mentions when they have Discord); 2v2: the team names.
+  const named =
+    match.competitor_format === 'TWO_V_TWO'
+      ? (await fastify.prisma.team.findMany({ where: { id: { in: sides } }, select: { id: true, name: true } })).map((t) => ({ id: t.id, label: `**${t.name}**`, discordId: null }))
+      : (await fastify.prisma.user.findMany({ where: { id: { in: sides } }, select: { id: true, username: true, discord_id: true } })).map((u) => ({
+          id: u.id,
+          label: u.discord_id ? `<@${u.discord_id}>` : `**${u.username}**`,
+          discordId: u.discord_id,
+        }));
+  const who = sides.map((id) => named.find((n) => n.id === id)?.label).filter(Boolean).join(' vs ');
   const battleType = match.games[0]?.battle_type;
   const what = [battleType ? (BT_LABEL[battleType] ?? battleType) : null, FORMAT_LABEL[match.match_format ?? 'BO1'], sizeLabel(match.competitor_format)];
   return {
     matched: true,
     message: {
-      content: `⚔️ **Matched:** ${what.filter(Boolean).join(' · ')} · <t:${Math.floor(match.created_at.getTime() / 1000)}:R>`,
+      content: `⚔️ **Matched:** ${who ? `${who} · ` : ''}${what.filter(Boolean).join(' · ')} · <t:${Math.floor(match.created_at.getTime() / 1000)}:R>`,
       components: [],
-      allowed_mentions: noMentions,
+      allowed_mentions: { parse: [], users: named.map((n) => n.discordId).filter((id): id is string => !!id) },
     },
   };
 }
@@ -683,7 +826,7 @@ export function renderJoinPanel(stats?: PanelStats): DiscordMessage {
       `**Find an Open Play game**\nType \`/join\` anywhere on this server, or press the button. RizzBOTto sends you a DM where you ` +
       `pick battle types, Bo1/Bo3 and team size, then you play the whole match in that DM or on rizzotto.gg.\n` +
       `Open requests show up in this channel. Click one to take the match.${live}`,
-    components: [row(btn('Find a game', 'jp_find', PRIMARY), linkBtn('How Open Play works', `${siteUrl()}/how-to-play`))],
+    components: [row(btn('Find a game', 'jp_find', PRIMARY), linkBtn('How Open Play works', `${siteUrl()}/open-play`))],
     allowed_mentions: noMentions,
   };
 }

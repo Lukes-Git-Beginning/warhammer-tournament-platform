@@ -12,7 +12,7 @@ import { prisma } from '@rizzotto/db';
 import { buildApp } from '../src/app.js';
 import { QUEUE_KEY, JOINED_AT_KEY, QUEUE_PREFS_KEY, announceMatch } from '../src/lib/matchmaking-tick.js';
 import { createOpenPlayMatch } from '../src/lib/create-open-play-match.js';
-import { handleOpenPlayInteraction, type Interaction } from '../src/lib/discord-open-play-interactions.js';
+import { deleteOriginalLater, handleOpenPlayInteraction, type Interaction } from '../src/lib/discord-open-play-interactions.js';
 import {
   renderJoinDm,
   renderMatchCard,
@@ -23,6 +23,7 @@ import {
   PANELS_CONFIG_KEY,
   postJoinPanel,
   ROLLOUT_CONFIG_KEY,
+  sendPreviewCard,
 } from '../src/lib/discord-open-play.js';
 import { joinOpenPlayQueue } from '../src/lib/open-play-queue-service.js';
 import { createTestUser, cleanupUsers, type TestUser } from './helpers/db-fixtures.js';
@@ -272,10 +273,15 @@ describe('ticker', () => {
     await queue(u);
     await syncTicker(app);
 
+    // Anonymous while open; the names show once matched.
+    expect(content(tickerPosts()[0]!)).not.toContain(u.discord_id);
     await createOpenPlayMatch(prisma, u.id, other.id, 'AVAILABILITY', 'LAND_BATTLE', 'ONE_V_ONE', 'BO3');
     await app.redis.lrem(QUEUE_KEY, 0, u.id);
     await syncTicker(app);
-    expect(content(edits()[0]!)).toMatch(/^⚔️ \*\*Matched:\*\* Land Battle · Bo3 · 1v1 · <t:\d+:R>$/);
+    expect(content(edits()[0]!)).toBe(
+      `⚔️ **Matched:** <@${u.discord_id}> vs <@${other.discord_id}> · Land Battle · Bo3 · 1v1 · ${content(edits()[0]!).match(/<t:\d+:R>$/)![0]}`,
+    );
+    expect((edits()[0]!.body as { allowed_mentions: { users: string[] } }).allowed_mentions.users).toEqual([u.discord_id, other.discord_id]);
 
     await syncTicker(app); // still within the 15 minutes
     expect(deletes()).toHaveLength(0);
@@ -385,6 +391,72 @@ describe('match card', () => {
     expect(String((webhookCalls(report.token)[0]!.body as { content: string }).content)).toContain('not a replay file');
     const game = await prisma.matchGame.findFirstOrThrow({ where: { match_id: matchId, game_number: 1 } });
     expect(game.reported_at).toBeNull();
+  });
+});
+
+// ---- preview card ------------------------------------------------------------------------------
+describe('preview card', () => {
+  const dmPosts = (u: TestUser) => calls.filter((c) => c.method === 'POST' && c.url.endsWith(`/channels/dm-${u.discord_id}/messages`));
+  type Response = { type: number; data: { content: string; components: object[]; custom_id?: string } };
+
+  it('walks pick → lobby → result with the replay upload, without touching any match', async () => {
+    const u = await player('dop_preview');
+    expect(await sendPreviewCard(app, u)).toBe('sent');
+    const start = dmPosts(u)[0]!.body as { content: string; components: object[] };
+    expect(start.content).toContain('🧪 Preview');
+    expect(start.content).toContain('Pick your faction');
+    expect(customIds(start.components)).toEqual(expect.arrayContaining(['pv_cancel']));
+    const pickId = customIds(start.components)[0]!;
+    expect(pickId).toMatch(/^pv_pick/);
+    const faction = flat(start.components)[0]!.options![0]!.value;
+
+    const msg = { id: 'pv-1', channel_id: `dm-${u.discord_id}` };
+    const picked = (await handleOpenPlayInteraction(app, interaction(u, 3, { custom_id: pickId, values: [faction] }, msg))) as Response;
+    expect(picked.type).toBe(7);
+    expect(customIds(picked.data.components)).toEqual(['pv_lobby', 'pv_won', 'pv_lost', 'pv_cancel']);
+
+    const form = (await handleOpenPlayInteraction(app, interaction(u, 3, { custom_id: 'pv_lobby' }, msg))) as Response;
+    expect([form.type, form.data.custom_id]).toEqual([9, 'pv_lobbyset']);
+    const lobby = (await handleOpenPlayInteraction(app, interaction(u, 5, {
+      custom_id: 'pv_lobbyset',
+      components: [{ type: 18, component: { type: 4, custom_id: 'code', value: 'XYZ' } }],
+    }, msg))) as Response;
+    expect(lobby.data.content).toContain('Lobby: `XYZ`');
+
+    const report = (await handleOpenPlayInteraction(app, interaction(u, 3, { custom_id: 'pv_won' }, msg))) as Response;
+    expect([report.type, report.data.custom_id]).toEqual([9, 'pv_report:w']);
+
+    const replay = Buffer.alloc(64);
+    replay[0] = 0xcb;
+    replay[1] = 0xab;
+    replay.writeUInt32LE(Math.floor(Date.now() / 1000), 8);
+    attachmentBody = replay;
+    const upload = interaction(u, 5, {
+      custom_id: 'pv_report:w',
+      components: [{ type: 18, component: { type: 19, custom_id: 'replay', values: ['att1'] } }],
+      resolved: { attachments: { att1: { id: 'att1', filename: 'battle.replay', size: replay.length, url: 'https://cdn.test/battle.replay' } } },
+    }, msg);
+    await handleOpenPlayInteraction(app, upload);
+    await waitForWebhook(upload.token);
+    const done = String((webhookCalls(upload.token)[0]!.body as { content: string }).content);
+    expect(done).toContain('**Match over.** You won 1–0. GG!');
+    expect(done).toContain('No players could be read from this file');
+    expect(calls.some((c) => c.url === 'https://cdn.test/battle.replay')).toBe(true);
+
+    expect(await prisma.match.count({ where: { OR: [{ player1_id: u.id }, { player2_id: u.id }] } })).toBe(0);
+    await app.redis.del(`rizzotto:dop:preview:${u.id}`);
+  });
+});
+
+describe('channel confirmations', () => {
+  it('delete themselves later', async () => {
+    const u = await player('dop_ttl');
+    const i = interaction(u, 3, { custom_id: 'jp_find' });
+    deleteOriginalLater(i, 10);
+    await vi.waitFor(() => expect(webhookCalls(i.token).some((c) => c.method === 'DELETE' && c.url.endsWith('/messages/@original'))).toBe(true), {
+      timeout: 2000,
+      interval: 20,
+    });
   });
 });
 

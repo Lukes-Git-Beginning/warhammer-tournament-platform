@@ -102,8 +102,9 @@ the configured channels.
   format). A click claims the offer like `av_offer` does (`claimQueueOffer`).
 - When the entry closes the post is edited to how it ended and deleted 15 minutes later (Alex 2026-10-31: whoever
   follows a ping must not find an empty channel, but the channel should stay short so the pinned panel stays in
-  view; Discord pins don't stick to the top). Matched: "⚔️ Matched: Land Battle · Bo3 · 1v1 · 3 minutes ago" (a match
-  created for that queue id after the post). Left or timed out: a small grey "No longer looking · …" line, removed
+  view; Discord pins don't stick to the top). Matched: "⚔️ Matched: @A vs @B · Land Battle · Bo3 · 1v1 · 3 minutes
+  ago" (a match created for that queue id after the post). Names only once matched, so the two can find each other
+  (Alex 2026-11-01: anonymous until the match); mentions in an edit notify nobody, 2v2 shows the team names. Left or timed out: a small grey "No longer looking · …" line, removed
   at once when the same player queues again (join/leave spam). Post ids per queue entry and guild live in Redis.
   Editing and deleting its own posts needs no extra permission, and edits don't notify.
 - The panel carries a live line, "📊 Today: 12 matches · 2 in the queue right now" (Open Play matches created since
@@ -112,6 +113,8 @@ the configured channels.
   (`pingRoleId`) is optional and mentioned at most once per few minutes per guild (like the 5-minute cap on the DM
   wave). A mention inside the same post adds no second notification.
 - A click by an unregistered player answers privately with the setup button (§4).
+- The private "Only you can see this" confirmations in the channel ("Check your DMs", "Match found vs …") delete
+  themselves after 5 minutes (Alex 2026-11-01); errors stay until dismissed.
 
 ### 6. Match in DMs
 
@@ -132,6 +135,9 @@ format, map, game n of N and the deadlines, plus a link button "Open on rizzotto
 - Bo3: the card moves on to the next game (new map, new pick), as on the site.
 - Sync: both cards are re-rendered whenever the match changes (pick, lobby, report, finalize, cancel), from the
   same place that emits the socket events. A pick on the site updates the DM and vice versa.
+- Preview (Admin → Discord Open Play → "Send me a preview card", 2026-11-01): a card against RizzBOTto with every
+  step clickable (pick, lobby, result with the real File Upload, the replay read like on the site, match over). No
+  match, queue or stats are touched; state in Redis `rizzotto:dop:preview:<userId>`, buttons `pv_*`.
 
 ### 7. One code path
 

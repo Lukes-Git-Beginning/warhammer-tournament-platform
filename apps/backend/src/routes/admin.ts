@@ -55,7 +55,7 @@ import {
 } from '../lib/announcements.js';
 import { mergeTournamentSources, mergeOverviewSources, type CountedRef } from '../lib/referrals.js';
 import { maybeSendSeriesInvite } from '../lib/series-notify.js';
-import { getOpenPlayGuilds, postJoinPanel, registerDiscordCommands, ROLLOUT_CONFIG_KEY } from '../lib/discord-open-play.js';
+import { getOpenPlayGuilds, postJoinPanel, registerDiscordCommands, ROLLOUT_CONFIG_KEY, sendPreviewCard } from '../lib/discord-open-play.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Faction sigil uploads go to the frontend's public/icons/factions/ directory
@@ -1849,6 +1849,24 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(502).send({ error: 'BadGateway', message: 'Discord refused the post. Check that RizzBOTto can send messages in the ticker channel.', statusCode: 502 });
     }
     return reply.code(200).send({ messageId });
+  });
+
+  // POST /api/admin/discord-open-play/preview-card — DM the admin a match card against nobody, to
+  // click through every step (faction pick, lobby, result + replay upload) without a real match.
+  fastify.post('/api/admin/discord-open-play/preview-card', async (request, reply) => {
+    if (!isBotConfigured()) {
+      return reply.code(503).send({ error: 'ServiceUnavailable', message: 'The Discord bot is not configured', statusCode: 503 });
+    }
+    const me = await fastify.prisma.user.findUnique({ where: { id: request.user.sub }, select: { id: true, discord_id: true } });
+    if (!me?.discord_id) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'Your account has no Discord id', statusCode: 400 });
+    }
+    const result = await sendPreviewCard(fastify, { id: me.id, discord_id: me.discord_id });
+    if (result !== 'sent') {
+      const message = result === 'closed' ? 'RizzBOTto cannot DM you. Allow DMs from server members, then try again.' : 'Discord refused the DM.';
+      return reply.code(502).send({ error: 'BadGateway', message, statusCode: 502 });
+    }
+    return reply.code(200).send({ sent: true });
   });
 
   // PUT /api/admin/discord-open-play/rollout — testers only (live: false) or everyone (live: true).

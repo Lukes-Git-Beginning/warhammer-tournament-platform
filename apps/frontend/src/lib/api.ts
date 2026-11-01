@@ -2023,6 +2023,11 @@ export function putDiscordOpenPlayRollout(
   });
 }
 
+/** DM the signed-in admin a preview match card (every step clickable, no real match). */
+export function postDiscordPreviewCard(): Promise<{ sent: true }> {
+  return apiFetch('/api/admin/discord-open-play/preview-card', { method: 'POST', body: JSON.stringify({}) });
+}
+
 // ---------------------------------------------------------------------------
 // Standard Ruleset (public — admin-editable community ruleset)
 // ---------------------------------------------------------------------------
